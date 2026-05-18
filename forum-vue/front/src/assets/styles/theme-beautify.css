@@ -1,0 +1,159 @@
+/* 
+  全局美化样式 theme-beautify.css 
+  旨在打破默认 Tabler 扁平化呆板感，注入现代玻璃拟态与活力。
+*/
+
+/* --- Navbar (顶部导航) 透明与磨砂玻璃化 --- */
+.navbar {
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  background-color: rgba(255, 255, 255, 0.45) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+}
+
+
+/* --- Card (帖子主体区) 毛玻璃与立体漂浮感 --- */
+.card {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background-color: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 16px 40px rgba(234, 182, 219, 0.15) !important; /* 带有微粉色光晕的投影 */
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+
+/* --- List Group (帖子列表项) 交互动效改进 --- */
+.list-group-item {
+  background-color: transparent !important;
+  border-color: rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  margin-bottom: 4px;
+  border-radius: 12px !important;
+}
+
+
+.list-group-item:hover {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  transform: translateY(-2px) scale(1.005);
+  box-shadow: 0 8px 24px rgba(234, 182, 219, 0.2);
+  z-index: 10;
+}
+
+
+/* 列表里的标题文本（增加质感） */
+.list-group-item .text-body.d-block {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #2c3e50 !important;
+  transition: color 0.3s;
+}
+
+
+.list-group-item:hover .text-body.d-block {
+  color: #ff6b81 !important; /* 主题色猛男粉点缀 */
+}
+
+/* --- Avatar (头像) 圆润与外发光 --- */
+.avatar {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 2px solid #fff;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+
+.list-group-item:hover .avatar {
+  transform: rotate(5deg) scale(1.1);
+  box-shadow: 0 6px 16px rgba(255, 105, 180, 0.4);
+}
+
+/* --- offcanvas (右侧私信弹窗) 玻璃化 --- */
+.offcanvas {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.05);
+}
+
+
+/* --- 全局隐藏滚动条 (保持可滚动但不可见) --- */
+html {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari and Opera */
+}
+
+
+/* --- 解决多层 Navbar 下拉菜单被遮挡的 Z-index 问题 --- */
+header, .navbar {
+  position: relative;
+}
+/* 强行使页面第一排导航悬浮层级最高 */
+body > .page > header:nth-of-type(1) {
+  z-index: 1050 !important;
+}
+body > .page > header:nth-of-type(2) {
+  z-index: 1040 !important;
+}
+
+/* --- 统一的主题渐变按钮增强与颜色全局替换 --- */
+/* 将蓝色的主要按钮或元素全局统一为粉色调 */
+.btn-primary, .bg-blue, .bg-primary, .btn-info {
+  background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 15px rgba(255, 117, 140, 0.4) !important;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover, .bg-blue:hover, .bg-primary:hover, .btn-info:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 117, 140, 0.6) !important;
+}
+
+/* 描边按钮统一：例如 btn-outline-primary */
+.btn-outline-primary, .btn-outline-blue, .btn-outline-info {
+  color: #ff758c !important;
+  border-color: #ff758c !important;
+  background-color: transparent !important;
+}
+
+.btn-outline-primary:hover, .btn-outline-blue:hover, .btn-outline-info:hover {
+  background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+}
+
+/* 文本颜色统一：例如文字链接或强调色 */
+.text-blue, .text-primary, 
+a.text-blue, a.text-primary,
+.nav-link.active, .nav-link:hover {
+  color: #ff758c !important;
+}
+
+/* --- 发光标签增强 (红点) --- */
+.badge.bg-red {
+  box-shadow: 0 0 10px rgba(214, 57, 57, 0.6);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(214, 57, 57, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(214, 57, 57, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 57, 57, 0); }
+}
+
+/* --- 私信列表层级提升 (确保在最顶层) --- */
+.offcanvas {
+  z-index: 2500 !important;
+}
+
+.offcanvas-backdrop {
+  z-index: 2490 !important;
+}

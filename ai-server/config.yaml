@@ -1,0 +1,119 @@
+# ai-server 本地开发配置（直连宿主机映射端口：mysql/redis/rabbitmq/postgres 见 nginx/docker-compose）
+# 密钥勿写入本文件：请设 Windows 用户环境变量或 scripts/dev-secrets.ps1（见 WINDOWS-ENV.md）
+# Docker 部署：容器内 config.docker.yaml + nginx/.env 注入 DASHSCOPE_API_KEY 等
+
+server:
+  host: 0.0.0.0
+  port: 5000
+
+logging:
+  level: INFO
+
+dashscope:
+  api_key: ""
+  # qwen3.6 / qwen3-vl 需走 OpenAI 兼容端点（旧版 ChatTongyi 会报 url error）
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  # z-image-turbo 生图（勿与 base_url 混用；走 multimodal-generation）
+  image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+  # 模型分配（名称以 Dashscope 控制台为准，可按环境微调）
+  model_text: "qwen3.6-flash"                   # 文本审核 / 摘要（默认与 flash 对齐）
+  model_text_flash: "qwen3.6-flash"             # 看板娘等低成本对话
+  model_text_deep: "qwen3.6-max-preview"       # 看板娘深度文本（VIP）
+  model_vision: "qwen3-vl-flash"                # 图片审核（视觉，首选）
+  model_vision_fallback: "qwen3-vl-plus"       # 视觉兜底（flash 无法处理时）
+  model_rerank: "qwen3-vl-rerank"              # RAG rerank
+  model_embedding_rag: "tongyi-embedding-vision-flash"  # RAG 向量（见 price.md）
+  model_image_normal: "z-image-turbo"                   # 普通生图（Dashscope，0.1元/张）
+
+redis:
+  host: localhost
+  port: 63790
+  password: "123456"
+  db: 0
+  socket_timeout: 2
+
+rabbitmq:
+  host: localhost
+  port: 56720
+  virtual_host: forum-demo
+  username: nuonuo
+  password: "123456"
+  # 与 Java 侧 RabbitMQConfigure 保持一致
+  exchange: "t_exchange_1"
+  audit_task_queue: "q-audit-article"
+  audit_task_routing_key: "forum.audit.article"
+  audit_result_routing_key: "forum.audit.result"
+  # 消费并发: 单线程消费足够, 单帖审核内部已并行图片
+  prefetch: 1
+
+postgres:
+  # LangGraph 检查点存储 (PostgresSaver), Docker 映射端口 54320 -> 容器内 5432
+  # 容器初始化时设置 POSTGRES_USER=langgraph, POSTGRES_DB=langgraph_db
+  host: 127.0.0.1
+  port: 54320
+  user: langgraph
+  password: "123456"
+  db: langgraph_db
+  # PostgresSaver 首次启动自动 CREATE TABLE
+  auto_setup: true
+
+audit:
+  # LangGraph 单次审核内部最大并发图片审任务数 (cover + gallery 一并审)
+  max_image_workers: 3
+  # 任务幂等标记 key 前缀; 与 Java 侧 REDIS_KEY_AUDIT_TASK_STATE 保持一致
+  task_state_key_prefix: "ai_audit:task_state:"
+  # SETNX 标记 TTL (秒)
+  task_state_ttl: 3600
+  # 单图片审核超时
+  image_audit_timeout: 30
+  # 文本审核超时
+  text_audit_timeout: 30
+  # 摘要生成最小正文长度 (低于此不调 LLM)
+  summary_min_len: 50
+
+cache:
+  # 文本语义近似缓存: 精确缓存命中后跳过 LLM
+  exact_prefix: "ai_audit:cache:exact:"
+  list_key: "ai_audit:text_list"
+  ttl: 86400
+  list_max: 100
+  candidate_topk: 50
+  semantic_threshold: 0.7
+
+rag:
+  max_candidates: 100
+  doc_truncate: 800
+  relevance_threshold: 0.15
+  top_n: 50
+
+image:
+  max_bytes: 10485760  # 10MB
+  allowed_formats: ["jpeg", "jpg", "png", "gif", "webp", "bmp"]
+
+# 看板娘对话 (由 Java BFF 转发; 可选内网密钥, 与 forum.mascot.internal-key 对齐)
+# 密钥留空则不校验 X-Internal-Key; 也可用环境变量 MASCOT_INTERNAL_KEY 覆盖
+mascot:
+  internal_key: ""
+  max_user_message_len: 2000
+  max_history_turns: 8
+
+# DeepSeek OpenAI 兼容（写作 / 封面要点）; 密钥用环境变量 DEEPSEEK_API_KEY 覆盖
+deepseek:
+  base_url: "https://api.deepseek.com/v1"
+  api_key: ""
+  model_flash: "deepseek-v4-flash"
+  model_pro: "deepseek-v4-pro"
+
+# HuanAPI：生图 + Gemini 风格 messages; 密钥 HUANAPI_IMAGE_KEY / HUANAPI_GEMINI_KEY
+huanapi:
+  base_url: "https://www.huanapi.com"
+  image_key: ""
+  gemini_key: ""
+  # 进阶生图（HuanAPI）
+  model_image_premium: "gpt-image-2"
+  model_gemini_flash: "gemini-3-flash"
+  model_gemini_pro: "gemini-3.1-pro"
+
+# Java BFF 调用 /api/v1/ai/* 时校验 X-Internal-Key；可与 mascot 共用 MASCOT_INTERNAL_KEY
+ai_hub:
+  internal_key: ""

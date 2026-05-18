@@ -1,0 +1,18 @@
+/target/
+/.idea/
+*.iml
+.DS_Store
+/bin/
+/.settings/
+/.classpath/
+/.project/
+/logs/
+*.log
+application-local.yml
+application-local.properties
+# application-prod.yml 需随仓库发布（Docker prod profile）
+log.txt
+details.txt
+cp.txt
+editor.ps1
+src/main/java/org/example/forumdemo/common/constant/OssConstant.java

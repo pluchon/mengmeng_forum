@@ -1,0 +1,39 @@
+@import '@arco-themes/vue-gi-demo/index.less';
+
+@import './a-alert.less';
+@import './a-card.less';
+@import './a-descriptions.less';
+@import './a-form.less';
+@import './a-input-number.less';
+@import './a-input.less';
+@import './a-menu.less';
+@import './a-message.less';
+@import './a-modal.less';
+@import './a-page-header.less';
+@import './a-pagination.less';
+@import './a-picker.less';
+@import './a-scrollbar.less';
+@import './a-space.less';
+@import './a-steps.less';
+@import './a-switch.less';
+@import './a-table.less';
+@import './a-tabs.less';
+@import './a-tree.less';
+
+.app-menu-dark:extend(body[arco-theme='dark']) {
+  --color-menu-dark-bg: #222222;
+}
+
+// 禁止文本复制
+.arco-link,
+.arco-menu-title,
+.arco-menu-item-inner,
+.arco-tabs-tab-title,
+.arco-breadcrumb-item,
+.arco-checkbox-label {
+  user-select: none;
+}
+
+.arco-menu .arco-menu-item {
+  display: inline-flex;
+}

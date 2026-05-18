@@ -1,0 +1,207 @@
+<template>
+  <el-dialog
+    v-model="visible"
+    class="emoji-shop-detail-dialog"
+    width="620px"
+    align-center
+    destroy-on-close
+    :show-close="false"
+    @closed="close"
+  >
+    <template #header>
+      <div class="emoji-shop-detail-dialog__head">
+        <span class="emoji-shop-detail-dialog__title">{{ dialogTitle }}</span>
+        <el-button text circle aria-label="关闭" @click="close">
+          <el-icon><Close /></el-icon>
+        </el-button>
+      </div>
+    </template>
+
+    <div v-loading="loading" class="emoji-shop-detail-dialog__body">
+      <template v-if="detail">
+        <div class="emoji-shop-detail-dialog__split">
+          <aside class="emoji-shop-detail-dialog__preview">
+            <div class="emoji-shop-detail-dialog__main-img">
+              <img v-if="previewUrl" :src="previewUrl" alt="" />
+              <el-icon v-else class="emoji-shop-detail-dialog__img-ph"><Picture /></el-icon>
+            </div>
+            <div v-if="detail.imageUrls?.length" class="emoji-shop-detail-dialog__thumbs">
+              <button
+                v-for="(url, idx) in detail.imageUrls"
+                :key="idx"
+                type="button"
+                class="emoji-shop-detail-dialog__thumb"
+                :class="{ 'is-active': previewIndex === idx }"
+                @click="setPreview(idx)"
+              >
+                <img :src="url" alt="" />
+              </button>
+            </div>
+            <p class="emoji-shop-detail-dialog__thumb-hint">点击预览包内表情</p>
+          </aside>
+
+          <section class="emoji-shop-detail-dialog__info">
+            <div class="emoji-shop-detail-dialog__info-top">
+              <div>
+                <h2 class="emoji-shop-detail-dialog__name">{{ detail.name }}</h2>
+                <div
+                  v-if="detail.uploadUserId"
+                  class="emoji-shop-detail-dialog__author"
+                  role="link"
+                  tabindex="0"
+                  @click="goUploaderProfile"
+                  @keydown.enter.prevent="goUploaderProfile"
+                >
+                  <UserAvatarVip
+                    :size="20"
+                    :src="detail.uploadUserAvatarUrl"
+                    :vip-tier="uploaderVipTier"
+                    :vip-expire-at="detail.uploadUserVipExpireAt"
+                  />
+                  <span>{{ detail.uploadUserNickname || ('用户' + detail.uploadUserId) }}</span>
+                </div>
+              </div>
+              <el-tag :type="statusLabel.type" round effect="light" size="small">
+                {{ statusLabel.text }}
+              </el-tag>
+            </div>
+
+            <div class="emoji-shop-detail-dialog__stats">
+              <span class="emoji-shop-detail-dialog__stat-pill">
+                <el-icon><ShoppingCart /></el-icon>
+                已售 {{ detail.salesCount ?? 0 }}
+              </span>
+              <span class="emoji-shop-detail-dialog__stat-pill">
+                <el-icon><Picture /></el-icon>
+                共 {{ imageCount }} 张
+              </span>
+              <span class="emoji-shop-detail-dialog__stat-pill">
+                <el-icon><Calendar /></el-icon>
+                {{ createDateText }}
+              </span>
+            </div>
+
+            <hr class="emoji-shop-detail-dialog__sep" />
+
+            <div class="emoji-shop-detail-dialog__section-label">表情包说明</div>
+            <p class="emoji-shop-detail-dialog__section-text">{{ descriptionText }}</p>
+
+            <hr class="emoji-shop-detail-dialog__sep" />
+
+            <div class="emoji-shop-detail-dialog__footer">
+              <div class="emoji-shop-detail-dialog__price-row">
+                <div>
+                  <div class="emoji-shop-detail-dialog__price-label">价格</div>
+                  <div class="emoji-shop-detail-dialog__price-value">
+                    {{ priceText.main }}
+                    <span v-if="priceText.unit" class="emoji-shop-detail-dialog__price-unit">{{ priceText.unit }}</span>
+                  </div>
+                </div>
+                <div v-if="userStore.isLoggedIn" class="emoji-shop-detail-dialog__balance">
+                  <div class="emoji-shop-detail-dialog__price-label">当前余额</div>
+                  <div class="emoji-shop-detail-dialog__balance-value">{{ wallet.balance }} 积分</div>
+                </div>
+              </div>
+
+              <el-button
+                v-if="detail.owned"
+                type="success"
+                class="emoji-shop-detail-dialog__buy-btn"
+                disabled
+                round
+              >
+                已拥有
+              </el-button>
+              <el-button
+                v-else-if="isAuthor"
+                type="info"
+                class="emoji-shop-detail-dialog__buy-btn"
+                disabled
+                round
+              >
+                您是作者，无需购买~
+              </el-button>
+              <el-button
+                v-else-if="canPurchase"
+                type="primary"
+                class="emoji-shop-detail-dialog__buy-btn"
+                round
+                :disabled="purchaseDisabled"
+                :loading="purchasing"
+                @click="onPurchase"
+              >
+                {{ purchaseLabel }}
+              </el-button>
+              <el-button
+                v-else-if="!userStore.isLoggedIn"
+                type="primary"
+                class="emoji-shop-detail-dialog__buy-btn"
+                round
+                @click="router.push('/sign-in')"
+              >
+                登录后购买
+              </el-button>
+
+              <div
+                v-if="Number(userStore.isAdmin) === 1 && detail.status"
+                class="emoji-shop-detail-dialog__admin"
+              >
+                <el-button v-if="detail.status === 1" size="small" round @click="setShelf(2)">下架</el-button>
+                <el-button v-else size="small" round @click="setShelf(1)">上架</el-button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </template>
+    </div>
+  </el-dialog>
+</template>
+
+<script setup>
+import { useRouter } from 'vue-router'
+import { Close, Picture, ShoppingCart, Calendar } from '@element-plus/icons-vue'
+import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import { useEmojiShopDetailDialog } from '@scripts/components/emoji-shop/EmojiShopDetailDialog'
+
+const router = useRouter()
+
+const props = defineProps({
+  onPurchased: { type: Function, default: null },
+  onClosed: { type: Function, default: null },
+})
+
+const {
+  visible,
+  loading,
+  purchasing,
+  detail,
+  previewIndex,
+  previewUrl,
+  imageCount,
+  uploaderVipTier,
+  statusLabel,
+  createDateText,
+  dialogTitle,
+  descriptionText,
+  priceText,
+  userStore,
+  wallet,
+  isAuthor,
+  canPurchase,
+  purchaseDisabled,
+  purchaseLabel,
+  setPreview,
+  open,
+  close,
+  goUploaderProfile,
+  onPurchase,
+  setShelf,
+} = useEmojiShopDetailDialog({
+  onPurchased: (id) => props.onPurchased?.(id),
+  onClosed: () => props.onClosed?.(),
+})
+
+defineExpose({ open, close })
+</script>
+
+<style scoped src="@/assets/styles/emoji-shop-detail-dialog.css"></style>

@@ -1,0 +1,95 @@
+# Docker Compose 内网服务名（由 nginx/docker-compose 使用）
+server:
+  host: 0.0.0.0
+  port: 5000
+
+logging:
+  level: INFO
+
+dashscope:
+  api_key: ""
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+  model_text: "qwen3.6-flash"
+  model_text_flash: "qwen3.6-flash"
+  model_text_deep: "qwen3.6-max-preview"
+  model_vision: "qwen3-vl-flash"
+  model_vision_fallback: "qwen3-vl-plus"
+  model_rerank: "qwen3-vl-rerank"
+  model_embedding_rag: "tongyi-embedding-vision-flash"
+  model_image_normal: "z-image-turbo"
+
+redis:
+  host: redis
+  port: 6379
+  password: "123456"
+  db: 0
+  socket_timeout: 2
+
+rabbitmq:
+  host: rabbitmq
+  port: 5672
+  virtual_host: forum-demo
+  username: nuonuo
+  password: "123456"
+  exchange: "t_exchange_1"
+  audit_task_queue: "q-audit-article"
+  audit_task_routing_key: "forum.audit.article"
+  audit_result_routing_key: "forum.audit.result"
+  prefetch: 1
+
+postgres:
+  host: postgres
+  port: 5432
+  user: langgraph
+  password: "123456"
+  db: langgraph_db
+  auto_setup: true
+
+audit:
+  max_image_workers: 3
+  task_state_key_prefix: "ai_audit:task_state:"
+  task_state_ttl: 3600
+  image_audit_timeout: 30
+  text_audit_timeout: 30
+  summary_min_len: 50
+
+cache:
+  exact_prefix: "ai_audit:cache:exact:"
+  list_key: "ai_audit:text_list"
+  ttl: 86400
+  list_max: 100
+  candidate_topk: 50
+  semantic_threshold: 0.7
+
+rag:
+  max_candidates: 100
+  doc_truncate: 800
+  relevance_threshold: 0.15
+  top_n: 50
+
+image:
+  max_bytes: 10485760
+  allowed_formats: ["jpeg", "jpg", "png", "gif", "webp", "bmp"]
+
+mascot:
+  internal_key: ""
+  max_user_message_len: 2000
+  max_history_turns: 8
+
+deepseek:
+  base_url: "https://api.deepseek.com/v1"
+  api_key: ""
+  model_flash: "deepseek-v4-flash"
+  model_pro: "deepseek-v4-pro"
+
+huanapi:
+  base_url: "https://www.huanapi.com"
+  image_key: ""
+  gemini_key: ""
+  model_image_premium: "gpt-image-2"
+  model_gemini_flash: "gemini-3-flash"
+  model_gemini_pro: "gemini-3.1-pro"
+
+ai_hub:
+  internal_key: ""

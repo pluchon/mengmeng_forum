@@ -1,0 +1,252 @@
+.shell-main-outlet .emoji-shop-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.emoji-shop-page {
+  position: relative;
+  flex: 1;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff7f9;
+}
+
+.emoji-shop-page > :not(.particle-hero) {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.emoji-shop-inner {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 20px 48px;
+  box-sizing: border-box;
+}
+
+.emoji-shop-header {
+  margin-bottom: 16px;
+}
+
+.emoji-shop-title-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.emoji-shop-title-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.emoji-shop-title {
+  margin: 0 0 6px;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1d2129;
+  line-height: 1.2;
+}
+
+.emoji-shop-desc {
+  margin: 0;
+  font-size: 14px;
+  color: #86909c;
+  line-height: 1.5;
+}
+
+.emoji-shop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.emoji-shop-sort-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.emoji-shop-sort-tab {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.emoji-shop-sort-tab:hover {
+  color: var(--primary-red, #ff2442);
+  border-color: #ffc9d4;
+}
+
+.emoji-shop-sort-tab.is-active {
+  color: #fff;
+  background: var(--primary-red, #ff2442);
+  border-color: var(--primary-red, #ff2442);
+}
+
+.emoji-shop-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.emoji-shop-search-wrap {
+  width: 280px;
+  max-width: 100%;
+}
+
+.emoji-shop-search :deep(.el-input__wrapper) {
+  height: 40px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+  transition: box-shadow 0.2s ease;
+}
+
+.emoji-shop-search-wrap.is-vip:focus-within :deep(.el-input__wrapper) {
+  box-shadow:
+    0 0 0 1px rgba(26, 26, 26, 0.95) inset,
+    0 0 0 2px rgba(201, 162, 39, 0.92) inset,
+    0 0 0 3px rgba(201, 162, 39, 0.28),
+    0 0 12px rgba(201, 162, 39, 0.22) !important;
+}
+
+.emoji-shop-upload-btn {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.emoji-shop-upload-btn:hover {
+  color: var(--primary-red, #ff2442);
+  border-color: #ffc9d4;
+  background: #fffafb;
+}
+
+.emoji-shop-upload-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.emoji-shop-divider {
+  border: none;
+  border-top: 1px solid #e5e6eb;
+  margin: 0 0 20px;
+}
+
+.emoji-shop-masonry {
+  margin-top: 0;
+}
+
+.emoji-shop-cover-placeholder {
+  min-height: 180px;
+}
+
+.emoji-shop-card-info .note-title {
+  margin-bottom: 8px;
+}
+
+.emoji-shop-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.emoji-shop-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-red, #ff2442);
+}
+
+.emoji-shop-card-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.emoji-shop-sales {
+  font-size: 12px;
+  color: #86909c;
+}
+
+.emoji-shop-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.emoji-shop-author-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  object-fit: contain;
+  opacity: 0.65;
+}
+
+.emoji-shop-author-name {
+  font-size: 12px;
+  color: #86909c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emoji-shop-empty {
+  padding: 32px 0;
+}
+
+.emoji-shop-pagination {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+}
+
+.emoji-shop-pagination :deep(.el-pagination) {
+  justify-content: center;
+}
+
+.emoji-shop-form-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  background: transparent;
+}
