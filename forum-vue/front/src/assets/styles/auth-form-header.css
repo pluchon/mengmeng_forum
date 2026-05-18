@@ -1,0 +1,24 @@
+/* 登录 / 注册 / 找回：标题区与登录页一致 */
+.form-header-block {
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.site-title {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: #1a1a1a;
+}
+
+.site-tagline {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: #909399;
+  letter-spacing: 1px;
+}
+
+.site-divider {
+  margin: 16px 0 12px;
+}

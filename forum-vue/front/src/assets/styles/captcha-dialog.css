@@ -1,0 +1,212 @@
+﻿/* ── 对话框 ── */
+.behavior-captcha-dialog :deep(.el-dialog__body) {
+  padding: 8px 20px 12px;
+}
+
+/* ── 错误 ── */
+.captcha-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0;
+  color: #f56c6c;
+  font-size: 14px;
+}
+.captcha-error__icon { font-size: 18px; }
+
+/* ── 链接样式 ── */
+.cap-link {
+  color: #409eff;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 13px;
+  transition: opacity 0.15s;
+}
+.cap-link:hover { opacity: 0.75; text-decoration: underline; }
+.cap-link--danger { color: #f56c6c; }
+
+/* ── 通用面板 ── */
+.cap-panel { user-select: none; }
+
+.cap-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #555;
+  flex-wrap: wrap;
+}
+
+/* ── 图片容器 ── */
+.cap-img-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e4e7ed;
+  cursor: default;
+}
+.cap-bg-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
+  pointer-events: none;
+}
+
+/* ── 底部工具栏 ── */
+.cap-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #909399;
+}
+.cap-refresh-icon {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: #909399;
+  transition: color 0.15s;
+}
+.cap-refresh-icon:hover { color: #409eff; }
+.cap-footer-switch { margin-left: auto; }
+
+/* ════════ 滑块拼图 ════════ */
+.slider-tpl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  max-height: 100%;
+  touch-action: none;
+  cursor: grab;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.3));
+}
+.slider-tpl:active { cursor: grabbing; }
+
+.slider-progress {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: rgba(64,158,255,.12);
+  pointer-events: none;
+}
+
+.slider-rail {
+  position: relative;
+  height: 42px;
+  margin-top: 10px;
+  background: #f2f3f5;
+  border-radius: 21px;
+  border: 1px solid #e4e7ed;
+  overflow: hidden;
+}
+.slider-rail-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #c0c4cc;
+  pointer-events: none;
+}
+.slider-track {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(64,158,255,.3), rgba(64,158,255,.1));
+  border-radius: 21px 0 0 21px;
+  pointer-events: none;
+}
+.slider-btn {
+  position: absolute;
+  left: 0; top: 2px;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  color: #409eff;
+  font-size: 18px;
+  transition: background .15s, box-shadow .15s, color .15s;
+}
+.slider-btn.dragging {
+  cursor: grabbing;
+  background: #409eff;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(64,158,255,.5);
+}
+
+/* ════════ 点击文字 ════════ */
+.click-tip {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 0;
+}
+.click-tip-label {
+  font-size: 13px;
+  color: #555;
+  white-space: nowrap;
+}
+/* 天爱返回的提示图（包含需要点击的文字图片） */
+.click-tip-img {
+  height: 32px;
+  width: auto;
+  border-radius: 6px;
+  vertical-align: middle;
+  border: 1px solid rgba(103,126,234,.3);
+  background: rgba(103,126,234,.06);
+}
+.click-progress {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 2px;
+}
+
+.cap-img-wrap { cursor: crosshair; }
+
+.click-dot {
+  position: absolute;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(103,126,234,.88);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: dotPop .2s cubic-bezier(.34,1.56,.64,1);
+  font-size: 11px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.click-submitting-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #409eff;
+}
+
+/* ── 骨架 ── */
+.captcha-skeleton { padding: 8px 0 16px; }
+
+@keyframes dotPop {
+  from { transform: translate(-50%,-50%) scale(0.3); opacity: 0; }
+  to   { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+}

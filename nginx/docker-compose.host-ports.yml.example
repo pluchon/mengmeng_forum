@@ -1,0 +1,21 @@
+# 可选：docker-compose.prod.yml 已默认将中间件绑到 127.0.0.1。
+# 仅当需要改端口或覆盖绑定方式时，复制为 docker-compose.host-ports.yml 并修改下方 ports。
+# docker compose -f docker-compose.yaml -f docker-compose.prod.yml -f docker-compose.host-ports.yml up -d
+
+services:
+  mysql:
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-33061}:3306"
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-63790}:6379"
+
+  rabbitmq:
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56720}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672"
+
+  postgres:
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-54320}:5432"

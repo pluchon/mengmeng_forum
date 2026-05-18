@@ -1,0 +1,226 @@
+.emoji-shop-detail-dialog :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 14px 16px 12px;
+  border-bottom: 0.5px solid #e5e6eb;
+}
+
+.emoji-shop-detail-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.emoji-shop-detail-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.emoji-shop-detail-dialog__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.emoji-shop-detail-dialog__body {
+  min-height: 320px;
+}
+
+.emoji-shop-detail-dialog__split {
+  display: flex;
+  min-height: 380px;
+}
+
+.emoji-shop-detail-dialog__preview {
+  width: 260px;
+  flex-shrink: 0;
+  background: #f7f8fa;
+  border-right: 0.5px solid #e5e6eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.emoji-shop-detail-dialog__main-img {
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  background: #fff;
+  border: 0.5px solid #e5e6eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.emoji-shop-detail-dialog__main-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.emoji-shop-detail-dialog__img-ph {
+  font-size: 72px;
+  color: #c9cdd4;
+}
+
+.emoji-shop-detail-dialog__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.emoji-shop-detail-dialog__thumb {
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border-radius: 10px;
+  background: #fff;
+  border: 0.5px solid #e5e6eb;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.emoji-shop-detail-dialog__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.emoji-shop-detail-dialog__thumb.is-active {
+  border: 2px solid var(--primary-red, #ff2442);
+}
+
+.emoji-shop-detail-dialog__thumb-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #86909c;
+}
+
+.emoji-shop-detail-dialog__info {
+  flex: 1;
+  min-width: 0;
+  padding: 1.25rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.emoji-shop-detail-dialog__info-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.emoji-shop-detail-dialog__name {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.emoji-shop-detail-dialog__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #86909c;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.emoji-shop-detail-dialog__author:hover {
+  color: var(--primary-red, #ff2442);
+}
+
+.emoji-shop-detail-dialog__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.emoji-shop-detail-dialog__stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #4e5969;
+  background: #f2f3f5;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.emoji-shop-detail-dialog__sep {
+  border: none;
+  border-top: 0.5px solid #e5e6eb;
+  margin: 14px 0;
+}
+
+.emoji-shop-detail-dialog__section-label {
+  font-size: 12px;
+  color: #86909c;
+  margin-bottom: 6px;
+}
+
+.emoji-shop-detail-dialog__section-text {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #1d2129;
+  line-height: 1.6;
+}
+
+.emoji-shop-detail-dialog__footer {
+  margin-top: auto;
+}
+
+.emoji-shop-detail-dialog__price-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.emoji-shop-detail-dialog__price-label {
+  font-size: 11px;
+  color: #86909c;
+  margin-bottom: 2px;
+}
+
+.emoji-shop-detail-dialog__price-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--primary-red, #ff2442);
+}
+
+.emoji-shop-detail-dialog__price-unit {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.emoji-shop-detail-dialog__balance {
+  text-align: right;
+}
+
+.emoji-shop-detail-dialog__balance-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.emoji-shop-detail-dialog__buy-btn {
+  width: 100%;
+}
+
+.emoji-shop-detail-dialog__admin {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

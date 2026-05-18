@@ -1,0 +1,44 @@
+"""
+Dashscope 对话客户端工厂（OpenAI 兼容模式）.
+Rerank 仍走 dashscope SDK.
+"""
+from __future__ import annotations
+
+import logging
+
+from clients.dashscope_chat_client import DashscopeChatModel
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+_DS = settings.dashscope
+
+
+def text_llm(temperature: float = 0.0, *, model_name: str | None = None) -> DashscopeChatModel:
+    """文本审核 / 摘要"""
+    model = model_name or _DS.get("model_text", "qwen3.6-flash")
+    return DashscopeChatModel(model_name=model, temperature=temperature)
+
+
+def vision_llm(temperature: float = 0.0, *, model_name: str | None = None) -> DashscopeChatModel:
+    """视觉模型: 图片描述"""
+    model = model_name or _DS.get("model_vision", "qwen3-vl-flash")
+    return DashscopeChatModel(model_name=model, temperature=temperature)
+
+
+def vision_llm_fallback(temperature: float = 0.0) -> DashscopeChatModel:
+    plus = _DS.get("model_vision_fallback", "qwen3-vl-plus")
+    return vision_llm(temperature=temperature, model_name=plus)
+
+
+def dashscope_chat_model(model_key: str, temperature: float, *, default: str) -> DashscopeChatModel:
+    name = _DS.get(model_key) or default
+    return DashscopeChatModel(model_name=name, temperature=temperature)
+
+
+def rerank_model_name() -> str:
+    return _DS.get("model_rerank", "qwen3-vl-rerank")
+
+
+def dashscope_api_key() -> str:
+    return _DS.get("api_key")

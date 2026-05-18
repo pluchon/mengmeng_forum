@@ -1,0 +1,63 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# Build
+target/
+dist/
+node_modules/
+.DS_Store
+
+# Logs
+logs/
+nginx/logs/
+*.log
+
+# System
+Thumbs.db
+desktop.ini
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Vue/Vite
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- 密钥 / 环境（开源前勿提交）---
+.env
+.env.*
+!.env.example
+**/.env
+!**/.env.example
+scripts/dev-secrets.ps1
+ai-server/config.local.yaml
+
+# TLS 私钥与证书（仅保留 README 说明，证书文件本地放置）
+nginx/ssl/*.pem
+nginx/ssl/*.key
+*.pem
+*.key
+
+# 部署产物（export-images 生成，体积大且可能含本地配置）
+nginx/package/
+
+# 误提交的密钥备忘文件
+**/passwords.txt
+**/secrets.txt
+**/*credentials*
+
+# Docker 镜像导出
+*.tar

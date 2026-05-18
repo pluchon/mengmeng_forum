@@ -1,0 +1,157 @@
+﻿@keyframes lottery-stage-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Teleport / popper：抽奖页弹层与全局 tooltip 文案（不受 scoped 影响） */
+.lottery-tooltip-inner {
+  max-width: 280px;
+  line-height: 1.55;
+}
+
+.lottery-dialog.el-dialog {
+  background: linear-gradient(160deg, rgba(26, 26, 46, 0.97), rgba(22, 33, 62, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.lottery-dialog .el-dialog__header {
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.12);
+  margin-right: 0;
+}
+
+.lottery-dialog .el-dialog__title {
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.lottery-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.lottery-dialog .el-dialog__body {
+  color: rgba(255, 255, 255, 0.85);
+  padding-top: 14px;
+}
+
+.lottery-dialog .el-dialog__footer {
+  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.lottery-surprise-dialog-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.lottery-dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.lottery-dialog-footer--solo {
+  justify-content: center;
+}
+
+.lottery-history-footnote {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.lottery-history-empty {
+  text-align: center;
+  padding: 18px 8px 12px;
+}
+
+.lottery-history-empty-icon {
+  width: 48px;
+  height: 48px;
+  filter: brightness(0) invert(1);
+  opacity: 0.35;
+  margin-bottom: 10px;
+}
+
+.lottery-history-empty p {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.lottery-history-empty-sub {
+  margin: 8px 0 0 !important;
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.48) !important;
+}
+
+.lottery-history-table.el-table {
+  --el-table-bg-color: rgba(255, 255, 255, 0.04);
+  --el-table-tr-bg-color: rgba(255, 255, 255, 0.04);
+  --el-table-header-bg-color: rgba(255, 255, 255, 0.08);
+  --el-table-row-hover-bg-color: rgba(245, 185, 66, 0.12);
+  --el-table-border-color: rgba(255, 255, 255, 0.12);
+  --el-table-text-color: rgba(255, 255, 255, 0.88);
+  --el-table-header-text-color: rgba(255, 255, 255, 0.75);
+  /* 斑马纹行默认浅色背景在深色弹窗上会呈现「发白」，与文案对比异常 */
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.065);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.lottery-dialog--history .lottery-history-table.el-table--striped .el-table__body tr.el-table__row--striped > td.el-table__cell {
+  background-color: rgba(255, 255, 255, 0.065);
+}
+
+.lottery-surprise-reward-wrap {
+  padding: 0 0 4px;
+}
+
+.lottery-surprise-reward-photo {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.lottery-surprise-reward-photo img {
+  display: block;
+  width: 100%;
+  vertical-align: middle;
+}
+
+.lottery-surprise-reward-banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72));
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+}
+
+.lottery-surprise-reward-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+}
