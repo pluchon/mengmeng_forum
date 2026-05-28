@@ -306,43 +306,126 @@ flowchart TD
 
 ---
 
+## 本地开发（可选）
+
+```powershell
+# 仅中间件 + Nginx（Java / AI / 前端在宿主机）
+cd nginx
+copy .env.dev.example .env
+docker compose -f docker-compose.dev.yaml up -d
+```
+
+用户端：`forum-vue/front` → `npm install` → `npm run dev`（默认 `http://localhost:5173`）。  
+管理端：`forum-vue-admin/admin` → 同样方式。  
+后端：`forum-demo` 默认 `http://localhost:10086`。  
+AI：`ai-server` 见该目录 `config.yaml` / `config.docker.yaml`。
+
+`nginx/conf.d.local/` 将 API 反代到 `host.docker.internal:10086`；生产用 `conf.d/`。
+
+---
+
 ## 生产部署（Docker Compose）
 
-部署相关都在 `nginx/` 目录下，推荐按文档走。
+栈：**Vite 构建前端 → Docker 打镜像 → Compose 编排 → Nginx 反代 + 挂载 `dist/`**。服务器**只上传** `nginx/package/` 整目录，不要上传整个 `nginx/` 或仓库根目录。
 
-### 打包（Windows）
+### 本机打包
 
 ```powershell
 cd nginx
 .\scripts\make-package.ps1
 ```
 
-生成的部署包在 `nginx/package/`，把这个目录整体上传到服务器 `~/package/`。
+产物：`nginx\package\`（含 `dist/`、`images/*.tar`、`conf.d/`、`ssl/` 模板、`.env.example`、`start.sh`）。  
+自检：`package\dist\user\index.html` 存在；`package\images\` 下三个 tar 都在；用户端前端使用 **Vite 6**（勿用 Vite 8，否则可能出现 `Ye is not a function`）。
 
-### 服务器启动
+仅更新前端（本机已有镜像时）：
+
+```powershell
+.\scripts\build-all.ps1 -SkipDocker -SkipBackend
+.\scripts\export-images.ps1
+```
+
+### 上传到服务器
+
+整目录传到 `~/package/`。**不要**只覆盖几个 `assets/*.js`（会与 `index.html` 混版本导致白屏）。
+
+若服务器上已有旧包，建议先备份 `.env` 和 `ssl/`，再整包替换；或至少：
+
+```bash
+rm -rf ~/package/dist/user/assets ~/package/dist/admin/assets
+# 再上传本次 package 里的完整 dist/
+```
+
+### 服务器首次 / 重装 package 目录
 
 ```bash
 cd ~/package
-cp .env.example .env && nano .env
-chmod +x start.sh
+cp .env.example .env && nano .env   # JWT、MySQL、OSS、各 AI Key 等
+# HTTPS：将证书放入 ssl/（勿提交仓库）
+#   www.nuonuoya.cn.pem / .key
+#   admin.nuonuoya.cn.pem / .key
+
+chmod +x start.sh verify-frontend-dist.sh
+./verify-frontend-dist.sh .
 ./start.sh
 ```
 
-Nginx 使用 volume 挂载方式加载前端构建产物：
+`./start.sh` 会 `docker load` 三个 tar 并 `docker compose up -d --force-recreate`（**不带 `-v`**，不删数据卷）。首次启动约 2～5 分钟，后端未就绪时可能短暂 502，刷新即可。
+
+**`start.sh` 若卡在 `chmod: logs/... Operation not permitted`**：旧日志属 root，脚本会因此中断。先执行：
+
+```bash
+cd ~/package
+sudo rm -rf logs && mkdir -p logs/backend
+./start.sh
+```
+
+或手动：`chmod -R a+rX dist conf.d ssl` 后执行 `docker load` 与 `docker compose ... up -d`。
+
+Nginx 挂载：
 
 - `./dist/user` → `/usr/share/nginx/user`
 - `./dist/admin` → `/usr/share/nginx/admin`
 
-### 生产中间件端口映射（只绑 127.0.0.1）
+### 数据与 Navicat
 
-生产 overlay 在 `nginx/docker-compose.prod.yml`，中间件端口默认只对本机开放，方便配 SSH 隧道：
+| 操作 | 数据 |
+|------|------|
+| `./start.sh` / `up --force-recreate` | **保留**（Docker 卷在） |
+| `docker compose down`（无 `-v`） | **保留** |
+| `docker compose down -v` | **删除** MySQL/Redis 等卷 |
 
-- MySQL：`127.0.0.1:33061`
-- Redis：`127.0.0.1:63790`
-- PostgreSQL：`127.0.0.1:54320`
-- RabbitMQ：AMQP `127.0.0.1:56720`，管理台 `127.0.0.1:15672`
+生产中间件端口只绑 **127.0.0.1**，需 **SSH 隧道** 后用 Navicat：
 
-更详细的部署说明见：`nginx/DEPLOY-SERVER.md`
+| 服务 | 端口 |
+|------|------|
+| MySQL | 33061 |
+| Redis | 63790 |
+| PostgreSQL | 54320 |
+| RabbitMQ 管理台 | 15672 |
+
+须同时加载：`docker-compose.yaml` + `docker-compose.prod.yml`。
+
+空库初始化可执行 `package/sql/create.sql`；增量见 `forum-demo/src/main/resources/sql/migrate-*.sql`。
+
+### 部署验证
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
+curl -s http://127.0.0.1/healthz
+curl -I https://www.nuonuoya.cn
+```
+
+容器内 `dist` 为空（Snap Docker 读不到 `~/home`）时：
+
+```bash
+sudo snap connect docker:home
+sudo snap restart docker
+cd ~/package
+docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d --force-recreate nginx
+```
+
+或把部署目录迁到 `/opt/forum/package`。
 
 ---
 
@@ -374,17 +457,19 @@ Nginx 使用 volume 挂载方式加载前端构建产物：
 
 ### 1) 刚启动访问 502 / WebSocket 失败
 
-后端 Spring Boot 启动需要 20~30 秒，Nginx 可能先起来，刷新即可。
+后端 Spring Boot 启动需要 20~30 秒，Nginx 可能先起来，刷新即可。新包会在后端 **healthy** 后再起 Nginx，可减轻首次 502。
 
-（部署包里已经做了健康检查，尽量减少首次 502）
+### 2) 白屏 / `xxx is not a function` / `Ye is not a function`
 
-### 2) Navicat 连不上 MySQL
+`index.html` 与 `assets/*.js` 不是同一次构建；或曾用 Vite 8 打包。处理：本机 `make-package.ps1` 后**整包**上传 `dist/`，服务器 `./verify-frontend-dist.sh .` 通过后再 `./start.sh`。浏览器强刷；`chat-integration.*.js` 为浏览器插件可忽略。
 
-生产端口只绑 `127.0.0.1`，需要配 SSH 隧道；并且必须用 `docker-compose.prod.yml` 启动。
+### 3) Navicat 连不上 MySQL
 
-### 3) 管理端登录提示“需要管理员权限”
+生产端口只绑 `127.0.0.1`，需 SSH 隧道；须带 `docker-compose.prod.yml` 启动。
 
-管理端硬门槛是 `user.is_admin = 1`。普通注册用户默认是 0，需要在数据库里提升为管理员，并绑定 `role_admin`（如你提供的迁移脚本）。
+### 4) 管理端登录提示“需要管理员权限”
+
+管理端要求 `user.is_admin = 1`，需在库中提升并绑定 `role_admin`。
 
 ---
 

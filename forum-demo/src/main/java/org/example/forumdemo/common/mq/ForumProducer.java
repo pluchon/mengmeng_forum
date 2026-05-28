@@ -36,10 +36,7 @@ public class ForumProducer {
         send(messageRabbitTemplate, Constant.ROUTING_KEY_QUEUE_2, message);
     }
 
-    /**
-     * 发送帖子异步审核任务到 q-audit-article, 由 Python LangGraph 消费.
-     * 调用方需先把 article.audit_task_id 与 taskId 关联, 以便消费回执时双向校验.
-     */
+    // 发送帖子异步审核任务，让langgraph进行调用消费
     public void sendArticleAuditTask(Object task) {
         send(auditRabbitTemplate, Constant.ROUTING_KEY_AUDIT_TASK, task);
     }

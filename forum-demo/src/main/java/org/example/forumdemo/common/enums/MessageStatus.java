@@ -2,7 +2,7 @@ package org.example.forumdemo.common.enums;
 
 import lombok.Getter;
 
-// 私信状态枚举，code 值与 Constant.MESSAGE_STATE_* 字节常量对齐
+// 私信状态
 @Getter
 public enum MessageStatus {
     UN_READ(0, "未读"),
@@ -17,7 +17,7 @@ public enum MessageStatus {
         this.message = message;
     }
 
-    /** 根据 code 反查枚举，找不到返回 null */
+    // 反查枚举
     public static MessageStatus fromCode(int code) {
         for (MessageStatus s : values()) {
             if (s.code == code){

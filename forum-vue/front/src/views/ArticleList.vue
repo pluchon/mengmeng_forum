@@ -25,7 +25,7 @@
               <div class="article-title">{{ item.article.title }}</div>
               <div class="article-meta">
                 <span>{{ item.user?.nickname }}</span>
-                <span>{{ item.article.createTime }}</span>
+                <span>{{ formatForumDateTimeShanghai(item.article.createTime) }}</span>
               </div>
             </div>
           </div>
@@ -47,6 +47,7 @@
 
 <script setup>
 import { useArticleList } from '@scripts/views/ArticleList'
+import { formatForumDateTimeShanghai } from '@/utils/datetime'
 
 const {
   articleList,

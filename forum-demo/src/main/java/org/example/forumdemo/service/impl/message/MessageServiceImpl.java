@@ -15,7 +15,7 @@ import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.UserMuteGuard;
-import org.example.forumdemo.common.websocket.WebSocketPushService;
+import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Message;
 import org.example.forumdemo.entity.db.User;
@@ -588,12 +588,7 @@ public class MessageServiceImpl implements MessageService {
     }
 
     private boolean isChatMediaUnderPrefix(String mediaUrl, String allowedPathPrefix) {
-        String normalizedUrl = mediaUrl == null ? "" : mediaUrl.trim();
-        String urlPrefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
-        String expected = urlPrefix + allowedPathPrefix;
-        return StringUtils.hasLength(normalizedUrl) && StringUtils.hasLength(urlPrefix)
-                && normalizedUrl.startsWith(urlPrefix)
-                && normalizedUrl.startsWith(expected);
+        return ossConfig.matchesPublicObjectUrl(mediaUrl, allowedPathPrefix);
     }
 
     /**

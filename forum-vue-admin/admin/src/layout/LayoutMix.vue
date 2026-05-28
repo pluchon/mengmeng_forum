@@ -32,11 +32,13 @@
       </header>
       <Tabs v-if="appStore.tabVisible" />
       <Main />
+      <SiteIcpBar />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import SiteIcpBar from '@/components/SiteIcpBar.vue'
 import { useDevice } from '@/hooks'
 import { useLevelMenu } from '@/layout/hooks/useLevelMenu'
 import { useAppStore } from '@/stores'

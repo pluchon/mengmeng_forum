@@ -70,6 +70,17 @@ function handleNotifyMessage(notifyData) {
   }
 }
 
+/** 与后端 WebSocketConfigure 注册路径 /ws/notify 一致 */
+function buildNotifyWsUrl(token) {
+  const envBase = (import.meta.env.VITE_WS_BASE_URL || '').trim().replace(/\/+$/, '')
+  if (envBase) {
+    const base = envBase.endsWith('/ws') ? envBase : `${envBase}/ws`
+    return `${base}/notify?token=${encodeURIComponent(token)}`
+  }
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${wsProtocol}//${location.host}/ws/notify?token=${encodeURIComponent(token)}`
+}
+
 export function useWebSocket() {
   const initWebSocket = () => {
     const userStore = useUserStore()
@@ -78,11 +89,7 @@ export function useWebSocket() {
     if (sharedSocket?.readyState === WebSocket.OPEN) return
     if (sharedSocket?.readyState === WebSocket.CONNECTING) return
 
-    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsBase = import.meta.env.VITE_WS_BASE_URL
-      ? import.meta.env.VITE_WS_BASE_URL
-      : `${wsProtocol}//${location.host}/ws`
-    const wsUrl = `${wsBase}/notify?token=${encodeURIComponent(userStore.token)}`
+    const wsUrl = buildNotifyWsUrl(userStore.token)
 
     sharedSocket = new WebSocket(wsUrl)
     attachHandlers(sharedSocket)

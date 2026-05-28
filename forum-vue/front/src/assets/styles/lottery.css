@@ -63,6 +63,47 @@
   display: none;
 }
 
+.lottery-demo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 236, 179, 0.96) 0%, rgba(255, 213, 128, 0.92) 100%);
+  border: 2px solid rgba(245, 158, 11, 0.85);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.lottery-demo-banner__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #b45309;
+}
+
+.lottery-demo-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lottery-demo-banner__title {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #92400e;
+  letter-spacing: 0.04em;
+}
+
+.lottery-demo-banner__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #78350f;
+  font-weight: 500;
+}
+
 .lottery-topbar {
   display: flex;
   align-items: center;

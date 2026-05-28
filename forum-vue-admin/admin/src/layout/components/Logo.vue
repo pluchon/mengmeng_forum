@@ -5,7 +5,7 @@
 <template>
   <section class="system-logo" :class="{ collapsed: props.collapsed }" @click="handleHomeNavigation">
     <img class="logo" src="@/assets/images/logo.gif" />
-    <span v-if="!props.hideName" class="system-name g-line-1">萌萌论坛管理</span>
+    <span v-if="!props.hideName" class="system-name g-line-1">技术分享管理</span>
   </section>
 </template>
 

@@ -161,9 +161,10 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setFeatured(true);
         p.setFeatures(List.of(
                 feat("DeepSeek V4 Flash 会员期内不限次", true),
-                feat("高级大模型写作 每日 50 次", true),
-                feat("AI 生图 每日 25 次（普通 15 + 高级 10）", true),
-                feat("深度模型 Token 本周期各 500K（通义/DeepSeek/Gemini）", true),
+                feat("文本：通义 / DeepSeek / Gemini / Claude Haiku", true),
+                feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
+                feat("高级写作 50 次/日 · 生图 25 次/日", true),
+                feat("深度 Token：通义/DeepSeek/Gemini/Claude", true),
                 feat("AI 伴读（即将上线）", false)));
         applyPlanButton(p, curTier, active, 1);
         return p;
@@ -181,9 +182,10 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setFeatured(false);
         p.setFeatures(List.of(
                 feat("DeepSeek V4 Flash 会员期内不限次", true),
-                feat("高级大模型写作 每日 300 次", true),
-                feat("AI 生图 每日 100 次（普通 50 + 高级 50）", true),
-                feat("深度模型 Token 本周期（通义 1M / DeepSeek 2M / Gemini 2M）", true),
+                feat("文本：通义 / DeepSeek / Gemini / Claude（含 Sonnet）", true),
+                feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
+                feat("高级写作 300 次/日 · 生图 100 次/日", true),
+                feat("深度 Token 配额全面提升", true),
                 feat("AI 伴读（即将上线）", false)));
         applyPlanButton(p, curTier, active, 2);
         return p;

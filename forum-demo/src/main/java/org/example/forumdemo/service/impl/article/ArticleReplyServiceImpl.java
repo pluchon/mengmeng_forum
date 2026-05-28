@@ -77,7 +77,10 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
         // 通知楼主
-        String summary = content.length() > 50 ? content.substring(0, 50) : content;
+        String summary = null;
+        if (content != null) {
+            summary = content.length() > 50 ? content.substring(0, 50) : content;
+        }
         String postUsername = userService.getUserInfoById(loginUserId).getUsername();
         forumProducer.sendReplyNotify(new ReplyNotifyMqVO("", articleId, loginUserId,
                 postUsername, article.getUserId(), summary, System.currentTimeMillis()));
@@ -116,8 +119,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteReply(Long replyId, Long loginUserId) {
         ArticleReply reply = articleReplyMapper.selectById(replyId);
-        if (reply == null || (reply.getDeleteState() != null && reply.getDeleteState() == 1)
-                || (reply.getState() != null && reply.getState() == 1)) {
+        if (reply == null || (reply.getDeleteState() != null && reply.getDeleteState() == 1) || (reply.getState() != null && reply.getState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
         // 校验帖子存在 + 权限：必须是回复作者本人，或者是帖子楼主

@@ -8,7 +8,7 @@
   >
     <div class="home-xhs-layout">
       <aside v-if="!isShellBare" class="home-xhs-sidebar">
-        <div class="home-sidebar-brand">萌萌论坛</div>
+        <div class="home-sidebar-brand">{{ siteName }}</div>
         <el-scrollbar class="home-xhs-sidebar-scroll">
           <el-menu
             :key="'cat-' + $route.path + '-' + menuActiveKey"
@@ -172,24 +172,13 @@
               >
                 积分 {{ pointsBalance }}
               </el-tag>
-              <el-tooltip content="论坛公告" placement="bottom">
+              <el-tooltip content="站点公告" placement="bottom">
                 <el-button circle class="home-icon-btn" aria-label="公告" @click="showAnnouncement">
                   <el-icon><Notification /></el-icon>
                 </el-button>
               </el-tooltip>
             </template>
             <template v-else>
-              <el-tooltip :content="mascotUi.pointerPassThrough ? '关闭鼠标穿透（可点击看板娘）' : '开启鼠标穿透（点击穿透看板娘）'" placement="bottom">
-                <el-button
-                  text
-                  class="home-tool-btn home-mascot-pass-btn"
-                  :class="{ 'is-active': mascotUi.pointerPassThrough }"
-                  @click="mascotUi.togglePointerPassThrough()"
-                >
-                  <el-icon><Pointer /></el-icon>
-                  <span>鼠标穿透</span>
-                </el-button>
-              </el-tooltip>
               <el-dropdown trigger="click" placement="bottom-end">
                 <el-button text class="home-tool-btn home-more-top">
                   更多
@@ -216,9 +205,9 @@
             </keep-alive>
           </router-view>
         </div>
+        <SiteIcpBar v-if="!isShellBare" />
       </section>
     </div>
-
     <AnnouncementBoard ref="announcementRef" />
   </div>
 </template>
@@ -230,6 +219,8 @@ import { Pointer } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
+import SiteIcpBar from '@/components/layout/SiteIcpBar.vue'
+import { SITE_NAME as siteName } from '@/constants/site'
 import { provideHomeShellContext } from '@/composables/useHomeShell'
 import { useMascotUiStore } from '@/stores/mascotUi'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'

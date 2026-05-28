@@ -158,7 +158,7 @@
                 </div>
 
                 <div class="content-meta">
-                  <span>{{ article.createTime }}</span>
+                  <span>{{ formatForumDateTimeShanghai(article.createTime) }}</span>
                 </div>
               </div>
 
@@ -211,7 +211,7 @@
                     </div>
                     <div class="comment-text" v-html="item.articleReply.content"></div>
                     <div class="comment-footer">
-                      <span class="time">{{ item.articleReply.createTime }}</span>
+                      <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
                       <img
                         :src="replyIconUrl"
                         alt=""
@@ -427,6 +427,7 @@ const {
   showLikersDialog,
   submitReply,
   toggleFavorite,
+  formatForumDateTimeShanghai,
 } = useArticleDetail()
 </script>
 

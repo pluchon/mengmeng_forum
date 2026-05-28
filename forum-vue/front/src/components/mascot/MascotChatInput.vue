@@ -39,22 +39,27 @@
           @command="(c) => emit('update:imageQuality', c)"
         >
           <span class="mascot-model-selector" role="button" tabindex="0">
-            <img :src="drawingIcon" alt="" class="mascot-llm-ico">
-            <span>{{ imageQuality === 'premium' ? '进阶 · gpt-image-2' : '普通 · z-image-turbo' }}</span>
+            <img :src="activeImageOption?.icon" alt="" class="mascot-llm-ico">
+            <span class="mascot-llm-meta mascot-llm-meta--inline">
+              <span class="mascot-llm-txt">{{ activeImageOption?.label ?? '生图' }}</span>
+              <span v-if="activeImageOption?.hint" class="mascot-llm-hint">{{ activeImageOption.hint }}</span>
+            </span>
             <span class="mascot-llm-caret">▾</span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="normal">
+              <el-dropdown-item
+                v-for="o in imageOptions"
+                :key="o.id"
+                :command="o.id"
+                :disabled="o.vipOnly && !vip"
+              >
                 <span class="mascot-llm-row">
-                  <img :src="iconQwen" alt="" class="mascot-llm-ico">
-                  <span>普通 · z-image-turbo（10 积分/张）</span>
-                </span>
-              </el-dropdown-item>
-              <el-dropdown-item command="premium" :disabled="!vip">
-                <span class="mascot-llm-row">
-                  <img :src="iconOpenai" alt="" class="mascot-llm-ico">
-                  <span>进阶 · gpt-image-2（10 积分/张）</span>
+                  <img :src="o.icon" alt="" class="mascot-llm-ico">
+                  <span class="mascot-llm-meta mascot-llm-meta--menu">
+                    <span class="mascot-llm-txt">{{ o.label }}</span>
+                    <span class="mascot-llm-hint">{{ o.hint }}</span>
+                  </span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -67,8 +72,11 @@
           @command="(c) => emit('update:llm', c)"
         >
           <span class="mascot-model-selector" role="button" tabindex="0">
-            <img v-if="activeOption?.icon" :src="activeOption.icon" alt="" class="mascot-llm-ico">
-            <span>{{ activeOption?.label ?? '模型' }}</span>
+            <img v-if="activeTextOption?.icon" :src="activeTextOption.icon" alt="" class="mascot-llm-ico">
+            <span class="mascot-llm-meta mascot-llm-meta--inline">
+              <span class="mascot-llm-txt">{{ activeTextOption?.label ?? '模型' }}</span>
+              <span v-if="activeTextOption?.hint" class="mascot-llm-hint">{{ activeTextOption.hint }}</span>
+            </span>
             <span class="mascot-llm-caret">▾</span>
           </span>
           <template #dropdown>
@@ -98,14 +106,14 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import { Loading, Promotion } from '@element-plus/icons-vue'
-import iconQwen from '@/assets/svg/qwen-color.svg'
-import iconOpenai from '@/assets/svg/openai.svg'
+import { findImageQualityOption, findTextLlmOption } from '@/constants/aiModels'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   llm: { type: String, default: 'qwen-flash' },
   imageQuality: { type: String, default: 'normal' },
   options: { type: Array, default: () => [] },
+  imageOptions: { type: Array, default: () => [] },
   mode: { type: String, default: 'writing' },
   loading: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
@@ -126,8 +134,8 @@ const emit = defineEmits([
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
-const activeOption = computed(() => props.options.find(o => o.id === props.llm))
-const drawingIcon = computed(() => (props.imageQuality === 'premium' ? iconOpenai : iconQwen))
+const activeTextOption = computed(() => findTextLlmOption(props.llm) || props.options.find(o => o.id === props.llm))
+const activeImageOption = computed(() => findImageQualityOption(props.imageQuality) || props.imageOptions[0])
 
 function resizeTextarea() {
   const el = textareaRef.value
@@ -241,28 +249,6 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
   gap: 8px;
 }
 
-.mascot-tool-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(210, 200, 245, 0.75);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.mascot-tool-btn:hover:not(:disabled) {
-  background: rgba(167, 139, 250, 0.12);
-}
-
-.mascot-tool-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .mascot-model-selector {
   display: inline-flex;
   align-items: center;
@@ -274,23 +260,33 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
   color: rgba(220, 210, 255, 0.88);
   cursor: pointer;
   background: rgba(40, 30, 80, 0.45);
+  max-width: min(100%, 280px);
 }
 
 .mascot-llm-caret {
   opacity: 0.65;
   font-size: 10px;
+  flex-shrink: 0;
 }
 
 .mascot-llm-ico {
   width: 16px;
   height: 16px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 
 .mascot-llm-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.mascot-llm-meta--inline {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
 }
 
 .mascot-llm-meta--menu {

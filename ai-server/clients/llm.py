@@ -40,5 +40,9 @@ def rerank_model_name() -> str:
     return _DS.get("model_rerank", "qwen3-vl-rerank")
 
 
+def embedding_model_name() -> str:
+    return _DS.get("model_embedding_rag", "tongyi-embedding-vision-flash")
+
+
 def dashscope_api_key() -> str:
     return _DS.get("api_key")

@@ -150,6 +150,7 @@ public class PointsServiceImpl implements PointsService {
         return list;
     }
 
+    // 查询用户端现有积分
     private int selectBalance(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -158,8 +159,8 @@ public class PointsServiceImpl implements PointsService {
         return user.getPoints() == null ? 0 : user.getPoints();
     }
 
-    private void insertLog(Long userId, int delta, int balanceAfter, Byte sourceType,
-                           Long relatedId, String remark) {
+    // 写入积分流水
+    private void insertLog(Long userId, int delta, int balanceAfter, Byte sourceType, Long relatedId, String remark) {
         PointsLog row = new PointsLog();
         row.setUserId(userId);
         row.setDelta(delta);

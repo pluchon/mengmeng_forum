@@ -15,6 +15,7 @@ import {
   replaceArticleImages,
 } from '@/api/article'
 import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
+import { extractApiErrorMessage } from '@/api/httpError'
 import { isArticleEditingLocked } from '@/utils/articleStatus'
 import WangEditor from '@/components/common/WangEditor.vue'
 import { marked } from 'marked'
@@ -222,6 +223,10 @@ export function useArticleCreate() {
     switchMode(mode)
   }
 
+  function applyAiContent(text) {
+    form.content = text || ''
+  }
+
   // 封面处理
   function handleCoverChange(file) {
     coverFile.value = file.raw
@@ -405,7 +410,11 @@ export function useArticleCreate() {
         ElMessage.success('草稿已保存')
         const target = `/article/${articleId}/cover`
         router.replace(target)
+      } else if (res?.message) {
+        ElMessage.error(res.message)
       }
+    } catch (err) {
+      ElMessage.error(extractApiErrorMessage(err, '保存草稿失败'))
     } finally {
       submitting.value = false
     }
@@ -446,7 +455,7 @@ export function useArticleCreate() {
         router.push(`/article/${articleId}/audit${q}`)
       }
     } catch (err) {
-      ElMessage.error('发布异常')
+      ElMessage.error(extractApiErrorMessage(err, '提交审核失败'))
     } finally {
       submitting.value = false
     }
@@ -460,6 +469,7 @@ export function useArticleCreate() {
     Picture,
     Plus,
     WangEditor,
+    applyAiContent,
     cascaderOptions,
     coverPreview,
     editorMode,

@@ -4,7 +4,7 @@
 
     <div class="vip-inner">
       <header class="vip-topbar">
-        <h1 class="vip-title">萌萌论坛 · 会员方案</h1>
+        <h1 class="vip-title">萌萌技术分享笔记 · 会员方案</h1>
       </header>
 
       <div class="vip-plan-grid">
@@ -98,8 +98,8 @@
               <div class="vip-quota-item__main">
                 <div class="vip-model-name">
                   <img
-                    v-if="item.iconProvider"
-                    :src="providerIcon(item.iconProvider)"
+                    v-if="item.iconProvider || item.modelCode"
+                    :src="providerIcon(item.iconProvider, item.modelCode)"
                     alt=""
                     class="vip-model-icon"
                   >

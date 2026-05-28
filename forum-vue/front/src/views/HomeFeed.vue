@@ -16,7 +16,7 @@
       <span v-else class="home-board-empty">该分类下暂无板块</span>
     </div>
 
-    <main class="home-xhs-main">
+    <main class="home-xhs-main home-xhs-main--feed">
       <div v-if="showCheckinHomeStrip && !isHotFeed" class="checkin-home-strip animate-fade-up">
         <el-card
           class="checkin-home-card"
@@ -72,101 +72,66 @@
         </div>
       </div>
 
-      <div v-else-if="isHotFeed" class="home-masonry">
-        <div v-for="row in hotFeedList" :key="row.article?.id" class="home-masonry-item">
-          <el-card
-            class="note-card note-card--masonry animate-fade-up"
-            :body-style="{ padding: '0px' }"
-            shadow="hover"
-            @click="$router.push(`/article/${row.article.id}`)"
+      <div
+        v-else-if="feedList.length"
+        ref="masonryRef"
+        class="home-masonry"
+      >
+        <div
+          v-for="(col, colIdx) in masonryColumns"
+          :key="'m-col-' + colIdx"
+          class="home-masonry-column"
+        >
+          <div
+            v-for="entry in col"
+            :key="entry.article?.id"
+            class="home-masonry-item"
           >
-            <div class="note-cover note-cover--fluid">
-              <img
-                v-if="coverImageUrl(row)"
-                class="note-cover-img"
-                :src="coverImageUrl(row)"
-                :alt="row.article?.title || ''"
-                loading="lazy"
-              />
-              <div
-                v-else
-                class="note-cover-placeholder"
-                :style="{
-                  background: getRandomPastel(),
-                  minHeight: placeholderMinHeight(row.article?.id),
-                }"
-              >
-                <span class="cover-title">{{ (row.article?.title || '').substring(0, 12) }}</span>
-              </div>
-            </div>
-            <div class="note-info">
-              <h3 class="note-title">{{ row.article?.title }}</h3>
-              <div class="note-footer">
-                <div class="author">
-                  <UserAvatarVip
-                    :size="22"
-                    :src="row.user?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(row.user?.vipTier) || 0"
-                    :vip-expire-at="row.user?.vipExpireAt"
-                  />
-                  <span class="nickname">{{ row.user?.nickname }}</span>
-                </div>
-                <div class="likes">
-                  <LikeCountIcon />
-                  <span>{{ row.article?.likeCount }}</span>
+            <el-card
+              class="note-card note-card--masonry animate-fade-up"
+              :body-style="{ padding: '0px' }"
+              shadow="hover"
+              @click="$router.push(`/article/${entry.article.id}`)"
+            >
+              <div class="note-cover note-cover--fluid">
+                <img
+                  v-if="coverImageUrl(entry)"
+                  class="note-cover-img"
+                  :src="coverImageUrl(entry)"
+                  :alt="entry.article?.title || ''"
+                  loading="lazy"
+                />
+                <div
+                  v-else
+                  class="note-cover-placeholder"
+                  :style="{
+                    background: getRandomPastel(),
+                    minHeight: placeholderMinHeight(entry.article?.id),
+                  }"
+                >
+                  <span class="cover-title">{{ (entry.article?.title || '').substring(0, 12) }}</span>
                 </div>
               </div>
-            </div>
-          </el-card>
-        </div>
-      </div>
-
-      <div v-else class="home-masonry">
-        <div v-for="item in articleList" :key="item.article.id" class="home-masonry-item">
-          <el-card
-            class="note-card note-card--masonry animate-fade-up"
-            :body-style="{ padding: '0px' }"
-            shadow="hover"
-            @click="$router.push(`/article/${item.article.id}`)"
-          >
-            <div class="note-cover note-cover--fluid">
-              <img
-                v-if="coverImageUrl(item)"
-                class="note-cover-img"
-                :src="coverImageUrl(item)"
-                :alt="item.article.title"
-                loading="lazy"
-              />
-              <div
-                v-else
-                class="note-cover-placeholder"
-                :style="{
-                  background: getRandomPastel(),
-                  minHeight: placeholderMinHeight(item.article?.id),
-                }"
-              >
-                <span class="cover-title">{{ item.article.title.substring(0, 12) }}</span>
-              </div>
-            </div>
-            <div class="note-info">
-              <h3 class="note-title">{{ item.article.title }}</h3>
-              <div class="note-footer">
-                <div class="author">
-                  <UserAvatarVip
-                    :size="22"
-                    :src="item.user?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(item.user?.vipTier) || 0"
-                    :vip-expire-at="item.user?.vipExpireAt"
-                  />
-                  <span class="nickname">{{ item.user.nickname }}</span>
-                </div>
-                <div class="likes">
-                  <LikeCountIcon />
-                  <span>{{ item.article.likeCount }}</span>
+              <div class="note-info">
+                <h3 class="note-title">{{ entry.article?.title }}</h3>
+                <div class="note-footer">
+                  <div class="author">
+                    <UserAvatarVip
+                      :size="22"
+                      :src="entry.user?.avatarUrl || defaultAvatar"
+                      :vip-tier="Number(entry.user?.vipTier) || 0"
+                      :vip-expire-at="entry.user?.vipExpireAt"
+                    />
+                    <span class="nickname">{{ entry.user?.nickname }}</span>
+                  </div>
+                  <div class="likes">
+                    <LikeCountIcon />
+                    <span>{{ entry.article?.likeCount }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </el-card>
+            </el-card>
+          </div>
         </div>
       </div>
 
@@ -182,7 +147,7 @@
       </div>
 
       <el-empty
-        v-if="!loading && ((isHotFeed && hotFeedList.length === 0) || (!isHotFeed && articleList.length === 0))"
+        v-if="!loading && feedList.length === 0"
         :description="isHotFeed ? '暂无热帖' : '这里还没有笔记哦'"
       />
     </main>
@@ -192,10 +157,12 @@
 <script setup>
 defineOptions({ name: 'HomeFeed' })
 
+import { computed } from 'vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { useHomeShellContext } from '@/composables/useHomeShell'
+import { useHomeMasonry } from '@/composables/useHomeMasonry'
 
 const {
   CircleCheck,
@@ -220,6 +187,13 @@ const {
   showCheckinHomeStrip,
   total,
 } = useHomeShellContext()
+
+const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleList.value))
+
+const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
+  columnWidth: 220,
+  gap: 16,
+})
 </script>
 
 <style scoped>

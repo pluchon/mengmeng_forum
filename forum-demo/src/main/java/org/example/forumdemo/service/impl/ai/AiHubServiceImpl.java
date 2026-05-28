@@ -54,10 +54,10 @@ public class AiHubServiceImpl implements AiHubService {
                 throw new IllegalStateException("bad http status");
             }
             Map resp = response.getBody();
-            Object codeObj = resp.get("code");
-            int code = codeObj instanceof Number ? ((Number) codeObj).intValue() : -1;
+            int code = parseHubCode(resp.get("code"));
             if (code != 200) {
                 String msg = resp.get("msg") != null ? String.valueOf(resp.get("msg")) : "ai hub error";
+                log.warn("AI Hub 业务码异常 path={} code={} msg={}", path, code, msg);
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, msg));
             }
             Object data = resp.get("data");
@@ -70,9 +70,24 @@ public class AiHubServiceImpl implements AiHubService {
         } catch (ApplicationException e) {
             throw e;
         } catch (Exception e) {
-            log.warn("AI Hub 调用失败: {}", e.getMessage());
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE));
+            log.warn("AI Hub 调用失败 path={}: {}", path, e.getMessage(), e);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE,
+                    "AI 服务调用失败: " + (e.getMessage() != null ? e.getMessage() : "unknown")));
         }
+    }
+
+    private static int parseHubCode(Object codeObj) {
+        if (codeObj instanceof Number n) {
+            return n.intValue();
+        }
+        if (codeObj != null) {
+            try {
+                return Integer.parseInt(String.valueOf(codeObj).trim());
+            } catch (NumberFormatException ignored) {
+                return -1;
+            }
+        }
+        return -1;
     }
 
     @Override

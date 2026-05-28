@@ -22,6 +22,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { shanghaiCalendarYmd } from '@/utils/datetime'
 import { blockIfMuted } from '@/utils/userMute'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
+import { DEFAULT_AVATAR } from '@/utils/constants'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
 import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
 import userSearchIconUrl from '@/assets/svg/用户.svg?url'
@@ -42,7 +43,7 @@ export function useHome() {
 
   const { streakDays, totalPoints, todaySigned, loaded: checkinLoaded } = storeToRefs(checkinSnapshotStore)
   const { balance: pointsBalance } = storeToRefs(pointsWalletStore)
-  const defaultAvatar = '/src/assets/images/avatar01.jpeg'
+  const defaultAvatar = DEFAULT_AVATAR
 
   const loading = ref(false)
   const articleList = ref([])

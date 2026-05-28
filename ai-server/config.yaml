@@ -18,12 +18,13 @@ dashscope:
   # 模型分配（名称以 Dashscope 控制台为准，可按环境微调）
   model_text: "qwen3.6-flash"                   # 文本审核 / 摘要（默认与 flash 对齐）
   model_text_flash: "qwen3.6-flash"             # 看板娘等低成本对话
-  model_text_deep: "qwen3.6-max-preview"       # 看板娘深度文本（VIP）
+  model_text_deep: "qwen3.7-max"                # 看板娘深度文本（VIP）
   model_vision: "qwen3-vl-flash"                # 图片审核（视觉，首选）
   model_vision_fallback: "qwen3-vl-plus"       # 视觉兜底（flash 无法处理时）
   model_rerank: "qwen3-vl-rerank"              # RAG rerank
   model_embedding_rag: "tongyi-embedding-vision-flash"  # RAG 向量（见 price.md）
   model_image_normal: "z-image-turbo"                   # 普通生图（Dashscope，0.1元/张）
+  model_image_premium: "wanx2.1-t2i-plus"             # 进阶生图（Dashscope 万相）
 
 redis:
   host: localhost
@@ -81,10 +82,16 @@ cache:
   semantic_threshold: 0.7
 
 rag:
-  max_candidates: 100
-  doc_truncate: 800
-  relevance_threshold: 0.15
+  max_candidates: 150
+  doc_truncate: 1200
+  relevance_threshold: 0.12
   top_n: 50
+  # 融合 rerank 与关键词/向量预筛（0~1 权重，越大越信 rerank）
+  rerank_weight: 0.72
+  keyword_weight: 0.18
+  embedding_weight: 0.10
+  embedding_top_k: 80
+  min_keyword_overlap: 0.08
 
 image:
   max_bytes: 10485760  # 10MB
@@ -104,15 +111,30 @@ deepseek:
   model_flash: "deepseek-v4-flash"
   model_pro: "deepseek-v4-pro"
 
-# HuanAPI：生图 + Gemini 风格 messages; 密钥 HUANAPI_IMAGE_KEY / HUANAPI_GEMINI_KEY
+# HuanAPI：Gemini 文本 / GPT Image / Claude（密钥用环境变量，勿写入本文件）
 huanapi:
   base_url: "https://www.huanapi.com"
-  image_key: ""
   gemini_key: ""
-  # 进阶生图（HuanAPI）
+  image_key: ""
+  claude_key: ""
+  model_gemini_deep: "gemini-3.1-pro"
   model_image_premium: "gpt-image-2"
-  model_gemini_flash: "gemini-3-flash"
-  model_gemini_pro: "gemini-3.1-pro"
+  model_claude_haiku: "claude-haiku-4-5"
+  model_claude_sonnet: "claude-sonnet-4-6"
+
+# Tavily 联网搜索（MCP 工具 tavily_search）；密钥用环境变量 TAVILY_API_KEY
+tavily:
+  enabled: true
+  api_key: ""
+  max_results: 5
+  search_depth: basic
+  timeout: 25
+
+# MCP 工具开关（看板娘写作 / 生图按需调用，站点帮助不启用）
+mcp:
+  enabled: true
+  tools:
+    - tavily_search
 
 # Java BFF 调用 /api/v1/ai/* 时校验 X-Internal-Key；可与 mascot 共用 MASCOT_INTERNAL_KEY
 ai_hub:

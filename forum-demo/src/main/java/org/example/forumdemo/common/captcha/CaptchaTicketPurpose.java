@@ -1,8 +1,7 @@
 package org.example.forumdemo.common.captcha;
 
-/**
- * 行为验证码通过后签发的一次性票据用途（须与消费端校验一致）。
- */
+// 验证码票据，存入缓存，前端拿着这个票据才可以进行验证码的调用~
+// 尽可能减少人机刷验证码接口~
 public final class CaptchaTicketPurpose {
 
     public static final String SMS_SEND = "SMS_SEND";

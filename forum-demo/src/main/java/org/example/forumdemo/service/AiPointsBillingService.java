@@ -213,11 +213,13 @@ public class AiPointsBillingService {
         }
         return switch (llmRoute.trim().toLowerCase(Locale.ROOT)) {
             case "qwen-flash" -> "qwen3.6-flash";
-            case "qwen-deep" -> "qwen3.6-max-preview";
+            case "qwen-deep" -> Constant.AI_MODEL_QWEN_DEEP;
             case "deepseek-flash" -> "deepseek-v4-flash";
             case "deepseek-deep" -> "deepseek-v4-pro";
-            case "gemini-flash" -> "gemini-3-flash";
-            case "gemini-deep" -> "gemini-3.1-pro";
+            case "gemini-deep" -> Constant.AI_MODEL_GEMINI_DEEP;
+            case "claude-haiku" -> Constant.AI_MODEL_CLAUDE_HAIKU;
+            case "claude-sonnet" -> Constant.AI_MODEL_CLAUDE_SONNET;
+            case "gpt-image-2" -> Constant.AI_MODEL_IMAGE_PREMIUM;
             default -> llmRoute;
         };
     }

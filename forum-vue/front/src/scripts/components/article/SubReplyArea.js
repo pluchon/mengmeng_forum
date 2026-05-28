@@ -70,8 +70,8 @@ export function useSubReplyArea(props) {
 
   async function submitSub() {
     if (!userStore.isLoggedIn) {
-      router.push('/sign-in')
-      return
+      const { ensureLoggedIn } = await import('@/utils/loginPrompt')
+      if (!(await ensureLoggedIn('回复需要登录'))) return
     }
     if (blockIfMuted(userStore)) return
     const content = inputContent.value.trim()

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.SysDept;
 import org.example.forumdemo.entity.db.SysRole;
 import org.example.forumdemo.entity.db.SysUserRole;
@@ -54,7 +55,7 @@ public class AdminSystemUserServiceImpl implements AdminSystemUserService {
     @Override
     public PageResult<AdminSysUserRowVO> pageUsers(Integer page, Integer size, Integer pageNum, Integer pageSize,
                                                    String username, String status, String userFilter) {
-        Page<User> p = org.example.forumdemo.common.util.AdminPagination.of(page, size, pageNum, pageSize);
+        Page<User> p = AdminPagination.of(page, size, pageNum, pageSize);
         LambdaQueryWrapper<User> w = Wrappers.lambdaQuery(User.class);
         String filter = StringUtils.hasText(userFilter) ? userFilter.trim() : "";
         if ("deleted".equals(filter)) {

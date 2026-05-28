@@ -10,7 +10,7 @@ import org.example.forumdemo.common.enums.LotteryPrizeCatalogStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.AdminPagination;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.LotteryActivity;
 import org.example.forumdemo.entity.db.LotteryActivityPrize;
 import org.example.forumdemo.entity.db.LotteryDrawRecord;

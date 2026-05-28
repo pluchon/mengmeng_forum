@@ -4,7 +4,7 @@
       <div class="header-left">
         <router-link to="/" class="logo">
           <img src="/picture.ico" alt="logo">
-          <span class="logo-text">萌萌论坛</span>
+          <span class="logo-text">{{ siteName }}</span>
         </router-link>
       </div>
 
@@ -21,7 +21,7 @@
 
       <div class="header-right">
         <template v-if="userStore.isLoggedIn">
-          <el-tooltip content="论坛公告" placement="bottom">
+          <el-tooltip content="站点公告" placement="bottom">
             <el-icon class="icon-btn notice-icon" @click="showAnnouncement"><Notification /></el-icon>
           </el-tooltip>
           <router-link
@@ -104,6 +104,7 @@ import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
 import { useTheHeader } from '@scripts/components/layout/TheHeader'
+import { SITE_NAME as siteName } from '@/constants/site'
 
 const {
   AnnouncementBoard,

@@ -327,6 +327,18 @@
   opacity: 0.5;
 }
 
+.cover-seg-btn--with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cover-model-icon--seg {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
 .cover-regen-btn {
   display: inline-flex;
   align-items: center;

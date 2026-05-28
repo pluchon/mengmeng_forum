@@ -47,8 +47,13 @@ class Settings:
         raw["deepseek"] = ds
 
         hu = raw.get("huanapi", {}) or {}
+        hu["base_url"] = os.environ.get("HUANAPI_BASE_URL", hu.get("base_url"))
         hu["image_key"] = os.environ.get("HUANAPI_IMAGE_KEY", hu.get("image_key"))
         hu["gemini_key"] = os.environ.get("HUANAPI_GEMINI_KEY", hu.get("gemini_key"))
+        hu["claude_key"] = os.environ.get(
+            "HUANAPI_CLAUDE_KEY",
+            hu.get("claude_key") or hu.get("gemini_key"),
+        )
         raw["huanapi"] = hu
 
         ah = raw.get("ai_hub", {}) or {}
@@ -57,6 +62,10 @@ class Settings:
             os.environ.get("MASCOT_INTERNAL_KEY", ah.get("internal_key", mc.get("internal_key", ""))),
         )
         raw["ai_hub"] = ah
+
+        tv = raw.get("tavily", {}) or {}
+        tv["api_key"] = os.environ.get("TAVILY_API_KEY", tv.get("api_key"))
+        raw["tavily"] = tv
 
     @property
     def server(self) -> dict[str, Any]: return self.raw.get("server", {})
@@ -94,6 +103,14 @@ class Settings:
     @property
     def ai_hub(self) -> dict[str, Any]:
         return self.raw.get("ai_hub", {})
+
+    @property
+    def tavily(self) -> dict[str, Any]:
+        return self.raw.get("tavily", {})
+
+    @property
+    def mcp(self) -> dict[str, Any]:
+        return self.raw.get("mcp", {})
 
     def pg_url(self) -> str:
         """LangGraph PostgresSaver 用的 conn string"""

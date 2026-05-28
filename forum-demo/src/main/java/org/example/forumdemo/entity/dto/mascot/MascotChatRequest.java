@@ -31,6 +31,6 @@ public class MascotChatRequest {
     @Schema(description = "功能：writing | help | reading")
     private String skill;
 
-    @Schema(description = "文本对话后端路由：qwen-flash | qwen-deep | deepseek-flash | deepseek-deep | gemini-flash | gemini-deep（深度档服务端会对非 VIP 降级）")
+    @Schema(description = "文本对话后端路由：qwen-flash | qwen-deep | deepseek-flash | deepseek-deep（深度档服务端会对非 VIP 降级；旧 gemini-* 会映射为通义）")
     private String llmProvider;
 }

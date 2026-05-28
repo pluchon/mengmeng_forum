@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.AdminPagination;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.SysRole;
 import org.example.forumdemo.entity.db.SysRoleMenu;
 import org.example.forumdemo.entity.vo.admin.AdminRoleRowVO;

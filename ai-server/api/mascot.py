@@ -54,6 +54,11 @@ def mascot_chat():
     tier = str(data.get("tier") or "basic").lower()
     if tier not in ("basic", "vip"):
         tier = "basic"
+    vip_tier_raw = data.get("vip_tier", data.get("vipTier", 0))
+    try:
+        vip_tier = max(0, min(2, int(vip_tier_raw)))
+    except (TypeError, ValueError):
+        vip_tier = 0
 
     history = data.get("history")
     if not isinstance(history, list):
@@ -77,6 +82,7 @@ def mascot_chat():
             history=clean_history,
             llm_provider=llm_provider,
             skill=skill,
+            vip_tier=vip_tier,
         )
     except Exception:
         logger.exception("mascot chat 异常")
@@ -91,6 +97,7 @@ def mascot_chat():
                 "live2d": result.get("live2d") or {},
                 "suggested_appearance": result.get("suggested_appearance"),
                 "usage": result.get("usage") or {},
+                "mcp_used": bool(result.get("mcp_used")),
             }
         ),
         200,

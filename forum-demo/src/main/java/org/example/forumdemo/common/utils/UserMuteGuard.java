@@ -5,9 +5,7 @@ import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 
-/**
- * 禁言用户（state=1）不可发帖、回复、私信等。
- */
+// 用户禁言
 public final class UserMuteGuard {
 
     private static final byte MUTED = 1;

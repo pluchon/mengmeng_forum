@@ -1,8 +1,9 @@
 package org.example.forumdemo.common.enums;
 
-/**
- * 奖品库上架状态（lottery_prize.catalog_status）.
- */
+import lombok.Getter;
+
+// 奖品库的状态
+@Getter
 public enum LotteryPrizeCatalogStatus {
 
     DRAFT((byte) 0, "草稿"),
@@ -17,18 +18,11 @@ public enum LotteryPrizeCatalogStatus {
         this.label = label;
     }
 
-    public byte getCode() {
-        return code;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
     public static boolean isOnShelf(Byte code) {
         return code != null && code == ON_SHELF.code;
     }
 
+    // 反查枚举，后续会用到
     public static LotteryPrizeCatalogStatus fromCode(Byte code) {
         if (code == null) {
             return null;

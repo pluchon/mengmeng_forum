@@ -57,4 +57,5 @@ else
   docker compose build ai-server
 fi
 
-echo -e "\n完成。启动: cd nginx && docker compose up -d"
+echo -e "\n完成。本地: cd nginx && docker compose up -d"
+echo -e "服务器: 运行 export-images 脚本，只上传 nginx/package/ 目录"

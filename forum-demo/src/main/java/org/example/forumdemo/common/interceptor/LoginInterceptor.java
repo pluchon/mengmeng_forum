@@ -1,6 +1,7 @@
 package org.example.forumdemo.common.interceptor;
 
 import io.jsonwebtoken.Claims;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,7 @@ import java.util.List;
 @Component
 public class LoginInterceptor implements HandlerInterceptor {
 
-    @jakarta.annotation.Resource
+    @Resource
     private UserMapper userMapper;
 
     // 不需要强制登录也能解析 Token 的公开 API 路径（与 Configurer 中的部分排除逻辑对应）
@@ -49,10 +50,12 @@ public class LoginInterceptor implements HandlerInterceptor {
     //登录前的校验
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 浏览器的预发起请求，此时不会携带令牌，以免直接校验的时候产生的空令牌
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
         String jwtToken = request.getHeader(Constant.JWT_NAME);
+        // 获取我们的请求路径
         String uri = request.getRequestURI();
         Claims jwtClaims = null;
         if (jwtToken != null && !jwtToken.isEmpty()) {
@@ -72,7 +75,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             Long userId = Long.valueOf(jwtClaims.get(Constant.JWT_USER_ID).toString());
             user.setId(userId);
             user.setUsername(jwtClaims.get(Constant.JWT_USER_NAME, String.class));
-            // 补全 VIP / 管理员等字段：否则后端无法正确判断权限与配额
+            // VIP / 管理员 的判断校验
             try {
                 User dbUser = userMapper.selectById(userId);
                 if (dbUser != null) {
@@ -97,6 +100,7 @@ public class LoginInterceptor implements HandlerInterceptor {
         return false;
     }
 
+    // 检测游客模式下是否是我们的定义好的公开路径，如果不是就进行拦截
     private boolean isOptionalPath(String uri) {
         return OPTIONAL_PATHS.stream().anyMatch(uri::startsWith);
     }

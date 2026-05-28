@@ -41,7 +41,7 @@ public class AdminContentArticleController {
                 title, boardId, status, state, deleteState));
     }
 
-    @Operation(summary = "帖子只读预览（正文+相册）")
+    @Operation(summary = "帖子只读预览")
     @GetMapping("/preview")
     public Result<AdminArticlePreviewVO> preview(@RequestParam Long id) {
         return Result.success(adminContentArticleService.previewArticle(id));
@@ -54,7 +54,7 @@ public class AdminContentArticleController {
         return Result.success();
     }
 
-    @Operation(summary = "设置帖子审核禁用状态(state)")
+    @Operation(summary = "设置帖子审核禁用状态")
     @PostMapping("/setState")
     public Result<Void> setState(@RequestBody AdminSetArticleStateRequest body) {
         adminContentArticleService.setState(body);

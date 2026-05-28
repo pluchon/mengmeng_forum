@@ -22,6 +22,7 @@ public class RabbitMQConfigure {
     }
 
     // ========================= 队列 =========================
+    // 使用仲裁队列可以达到很好的流量削峰效果，而且也能够自动归档到死信队列，后续也可以拓展我们的分布式
 
     // 仲裁队列 1：帖子回复通知，最多积压 100 条，超限则死信，这样就保证了我们的数据安全与高可用状态
     @Bean("q-queue-1")
@@ -43,8 +44,9 @@ public class RabbitMQConfigure {
                 .build();
     }
 
-    // 仲裁队列 3：Java 投递的帖子异步审核任务
-    // maxLength 给 200, 短时段批量发布能扛住积压; 单条 payload 包含 articleId / 文本 / 图片 URL 数组
+    // 我们的消息审核机制没有走队列，直接走了HTTP的请求
+
+    // 仲裁队列 3：Java 投递的帖子异步审核任务，只给200，防止我们服务端压力过大
     @Bean("q-audit-article")
     public Queue auditArticleQueue() {
         return QueueBuilder.durable(Constant.QUORUM_QUEUE_AUDIT_TASK)
@@ -54,7 +56,7 @@ public class RabbitMQConfigure {
                 .build();
     }
 
-    // 仲裁队列 4：Python 回执 Java 的审核结果
+    // 仲裁队列 4：langgraph 返回的结果，投递给这个队列，Java端可以进行处理
     @Bean("q-audit-result")
     public Queue auditResultQueue() {
         return QueueBuilder.durable(Constant.QUORUM_QUEUE_AUDIT_RESULT)
@@ -64,18 +66,15 @@ public class RabbitMQConfigure {
                 .build();
     }
 
-    // 死信队列：统一存储流出的死信消息，普通持久化队列即可。
-    // 现阶段小项目共用一条死信队列即可：上游用不同的业务 RoutingKey
-    // (forum.notify.reply / forum.notify.message) 进入仲裁队列后，
-    // 即使死信进入死信交换机，消费者也能根据原始 routing key 区分来源。
-    // 如果未来某一类死信业务量明显增大或处理逻辑差异较大，再拆成两条独立的死信队列。
+    // 死信队列：统一存储流出的死信消息，普通持久化队列即可，通过routing key 进行区分
     @Bean("d-queue")
     public Queue deathQueue() {
         return QueueBuilder.durable(Constant.D_QUORUM_QUEUE_1).build();
     }
 
     // ========================= 绑定 =========================
-    // 帖子回复模块
+
+    // 帖子回复
     // 仲裁队列1 -> 主题交换机，RoutingKey = forum.notify.reply
     @Bean("binding-queue-1")
     public Binding bindingQueue1() {
@@ -89,12 +88,14 @@ public class RabbitMQConfigure {
         return BindingBuilder.bind(quorumQueue2()).to(topicExchange()).with(Constant.ROUTING_KEY_QUEUE_2);
     }
 
+    // Java发送给langgraph任务，通过主题交换机路由到对应的队列
     // 帖子审核任务: 仲裁队列3 <- 主题交换机, RoutingKey = forum.audit.article
     @Bean("binding-audit-task")
     public Binding bindingAuditTaskQueue() {
         return BindingBuilder.bind(auditArticleQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_AUDIT_TASK);
     }
 
+    // 处理langgraph返回的结果，Python端通过交换机路由到对应的队列
     // 帖子审核结果: 仲裁队列4 <- 主题交换机, RoutingKey = forum.audit.result
     @Bean("binding-audit-result")
     public Binding bindingAuditResultQueue() {
@@ -102,7 +103,6 @@ public class RabbitMQConfigure {
     }
 
     // 死信队列 -> 死信交换机，RoutingKey = forum.dead.#
-    // 我们目前先接收所有业务类型的死信
     @Bean("binding-dead")
     public Binding bindingDeadQueue() {
         return BindingBuilder.bind(deathQueue()).to(deathExchange()).with(Constant.ROUTING_KEY_DEAD);

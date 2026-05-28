@@ -48,8 +48,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(NoResourceFoundException.class)
     public void handleNotFoundException(NoResourceFoundException e) {
-        // 保持沉默，避免在控制台输出冗长的堆栈信息
-        log.info("资源未找到 (404)，已屏蔽冗长日志: {}", e.getResourcePath());
+        log.info("资源未找到 (404): {}", e.getResourcePath());
     }
 
     /**

@@ -15,6 +15,7 @@
         <div
           ref="stageHost"
           class="mascot-stage-host"
+          :style="stageHostStyle"
           @pointerdown="onStagePointerDown"
         />
         <img
@@ -51,7 +52,7 @@
             <div class="mascot-scale-pop__hint">{{ uiLabels.scaleHint }}</div>
             <el-slider
               v-model="stageScale"
-              :min="0.55"
+              :min="0.35"
               :max="1.45"
               :step="0.01"
               show-tooltip
@@ -226,6 +227,7 @@
                 v-model:llm="selectedLlm"
                 v-model:image-quality="imageQuality"
                 :options="llmOptions"
+                :image-options="imageModelOptions"
                 :mode="activeNav"
                 :loading="loading"
                 :disabled="activeNav === 'reading'"
@@ -327,6 +329,7 @@ const {
   historyLoading,
   historySessions,
   imageQuality,
+  imageModelOptions,
   initOml2dStage,
   inputPlaceholder,
   isVip,
@@ -375,6 +378,7 @@ const {
   setSessionForNav,
   skillSessionIds,
   stageHost,
+  stageHostStyle,
   stageHovered,
   stageScale,
   stageUseFallback,

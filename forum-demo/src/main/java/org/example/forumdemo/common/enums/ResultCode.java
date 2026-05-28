@@ -2,7 +2,7 @@ package org.example.forumdemo.common.enums;
 
 import lombok.Getter;
 
-// 定义枚举类的状态码
+// 状态码集合
 @Getter
 public enum ResultCode {
     SUCCESS(0, "成功"),

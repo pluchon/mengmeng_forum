@@ -748,8 +748,8 @@ CREATE TABLE `forum_ai_model_price` (
 INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `price_yuan`, `vip_only`, `enabled`, `remark`) VALUES
 ('qwen3.6-flash', 'dashscope', 'per_1m_input', 1.200000, 0, 1, '中国内地'),
 ('qwen3.6-flash', 'dashscope', 'per_1m_output', 7.200000, 0, 1, '中国内地'),
-('qwen3.6-max-preview', 'dashscope', 'per_1m_input', 9.000000, 1, 1, '中国内地<=128K'),
-('qwen3.6-max-preview', 'dashscope', 'per_1m_output', 54.000000, 1, 1, '中国内地<=128K'),
+('qwen3.7-max', 'dashscope', 'per_1m_input', 9.000000, 1, 1, '中国内地<=128K'),
+('qwen3.7-max', 'dashscope', 'per_1m_output', 54.000000, 1, 1, '中国内地<=128K'),
 ('qwen3-vl-flash', 'dashscope', 'per_1m_input', 0.150000, 0, 1, '视觉审核'),
 ('qwen3-vl-flash', 'dashscope', 'per_1m_output', 1.500000, 0, 1, '视觉审核'),
 ('qwen3-vl-plus', 'dashscope', 'per_1m_input', 1.000000, 0, 1, '视觉兜底'),
@@ -759,12 +759,15 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 ('deepseek-v4-flash', 'deepseek', 'per_1m_output', 2.000000, 0, 1, '缓存未命中'),
 ('deepseek-v4-pro', 'deepseek', 'per_1m_input', 3.000000, 1, 1, '缓存未命中'),
 ('deepseek-v4-pro', 'deepseek', 'per_1m_output', 6.000000, 1, 1, '缓存未命中'),
-('gemini-3-flash', 'huanapi', 'per_1m_input', 1.400000, 0, 1, 'HuanAPI'),
-('gemini-3-flash', 'huanapi', 'per_1m_output', 8.400000, 0, 1, 'HuanAPI'),
-('gemini-3.1-pro', 'huanapi', 'per_1m_input', 1.400000, 1, 1, 'HuanAPI'),
-('gemini-3.1-pro', 'huanapi', 'per_1m_output', 8.400000, 1, 1, 'HuanAPI'),
 ('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 1, 'prompt_extend=false'),
-('gpt-image-2', 'huanapi', 'per_image', 0.100000, 1, 1, '进阶生图');
+('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)'),
+('gpt-image-2', 'huanapi', 'per_image', 0.200000, 1, 1, 'GPT Image 进阶生图'),
+('gemini-3.1-pro', 'huanapi', 'per_1m_input', 2.000000, 1, 1, 'Gemini Pro'),
+('gemini-3.1-pro', 'huanapi', 'per_1m_output', 8.000000, 1, 1, 'Gemini Pro'),
+('claude-haiku-4-5', 'huanapi', 'per_1m_input', 1.000000, 1, 1, 'Claude Haiku PRO+'),
+('claude-haiku-4-5', 'huanapi', 'per_1m_output', 4.000000, 1, 1, 'Claude Haiku PRO+'),
+('claude-sonnet-4-6', 'huanapi', 'per_1m_input', 3.000000, 1, 1, 'Claude Sonnet MAX+'),
+('claude-sonnet-4-6', 'huanapi', 'per_1m_output', 12.000000, 1, 1, 'Claude Sonnet MAX+');
 
 -- ----------------------------
 -- 19.3 AI 调用明细 (forum_ai_usage_log)
@@ -831,7 +834,7 @@ CREATE TABLE `forum_companion_message` (
     `role` varchar(16) NOT NULL COMMENT 'user|assistant',
     `content` text COMMENT '文本内容',
     `msg_type` varchar(16) NOT NULL DEFAULT 'text' COMMENT 'text|image',
-    `image_url` varchar(512) DEFAULT NULL COMMENT '生图URL',
+    `image_url` varchar(1024) DEFAULT NULL COMMENT '生图URL(OSS)',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
@@ -1050,7 +1053,7 @@ CREATE TABLE `forum_vip_quota_config` (
     `quota_type` varchar(32) NOT NULL COMMENT 'unlimited|daily_count|token_period',
     `daily_bucket` varchar(32) DEFAULT NULL COMMENT '日配额桶',
     `model_code` varchar(64) DEFAULT NULL COMMENT 'token_period 时按模型汇总 forum_ai_usage_log',
-    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|gemini|openai',
+    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|gemini|claude|openai|huanapi',
     `daily_limit` int DEFAULT NULL COMMENT '日次数上限',
     `token_limit` bigint DEFAULT NULL COMMENT '周期 Token 上限',
     `tier_tag` varchar(16) DEFAULT NULL COMMENT 'PRO|MAX|免费 角标',
@@ -1063,20 +1066,22 @@ CREATE TABLE `forum_vip_quota_config` (
 INSERT INTO `forum_vip_quota_config`
 (`vip_tier`, `quota_key`, `group_label`, `display_name`, `quota_type`, `daily_bucket`, `model_code`, `icon_provider`, `daily_limit`, `token_limit`, `tier_tag`, `sort_order`) VALUES
 (1, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
-(1, 'advanced_llm', '写作配额 · 每日', '高级大模型写作', 'daily_count', 'advanced_llm', NULL, 'qwen', 45, NULL, 'PRO', 20),
-(1, 'image_normal', 'AI 生图 · 每日', '通义 z-image-turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 10, NULL, 'PRO', 30),
-(1, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（高级）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 3, NULL, 'PRO', 40),
-(1, 'token_qwen_deep', '本期 Token 配额', '通义千问 · 深度', 'token_period', NULL, 'qwen3.6-max-preview', 'qwen', NULL, 500000, 'PRO', 50),
-(1, 'token_deepseek_deep', '本期 Token 配额', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 450000, 'PRO', 60),
-(1, 'token_gemini_deep', '本期 Token 配额', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 200000, 'PRO', 70),
+(1, 'advanced_llm', '写作配额 · 每日', '高级大模型写作（通义/Gemini/Claude）', 'daily_count', 'advanced_llm', NULL, 'qwen', 50, NULL, 'PRO', 20),
+(1, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 15, NULL, 'PRO', 30),
+(1, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 10, NULL, 'PRO', 40),
+(1, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 500000, 'PRO', 50),
+(1, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 450000, 'PRO', 60),
+(1, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 300000, 'PRO', 70),
+(1, 'token_claude_haiku', '本期 Token 配额 · 文本', 'Claude Haiku', 'token_period', NULL, 'claude-haiku-4-5', 'claude', NULL, 250000, 'PRO', 80),
 (2, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
-(2, 'advanced_llm', '写作配额 · 每日', '高级大模型写作', 'daily_count', 'advanced_llm', NULL, 'qwen', 150, NULL, 'MAX', 20),
-(2, 'image_normal', 'AI 生图 · 每日', '通义 z-image-turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 30, NULL, 'MAX', 30),
-(2, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（高级）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 8, NULL, 'MAX', 40),
-(2, 'token_qwen_deep', '本期 Token 配额', '通义千问 · 深度', 'token_period', NULL, 'qwen3.6-max-preview', 'qwen', NULL, 2000000, 'MAX', 50),
-(2, 'token_deepseek_deep', '本期 Token 配额', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60),
-(2, 'token_gemini_deep', '本期 Token 配额', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 650000, 'MAX', 70);
-
+(2, 'advanced_llm', '写作配额 · 每日', '高级大模型写作（通义/Gemini/Claude）', 'daily_count', 'advanced_llm', NULL, 'qwen', 300, NULL, 'MAX', 20),
+(2, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 50, NULL, 'MAX', 30),
+(2, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 50, NULL, 'MAX', 40),
+(2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50),
+(2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60),
+(2, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 800000, 'MAX', 70),
+(2, 'token_claude_haiku', '本期 Token 配额 · 文本', 'Claude Haiku', 'token_period', NULL, 'claude-haiku-4-5', 'claude', NULL, 500000, 'MAX', 80),
+(2, 'token_claude_sonnet', '本期 Token 配额 · 文本', 'Claude Sonnet', 'token_period', NULL, 'claude-sonnet-4-6', 'claude', NULL, 400000, 'MAX', 90);
 
 -- ----------------------------
 -- 25. 管理后台 RBAC（菜单 / 角色 / 部门 / 字典），供 forum-vue-admin 对接

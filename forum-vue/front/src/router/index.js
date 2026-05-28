@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
+import { promptLogin } from '@/utils/loginPrompt'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -181,7 +182,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from) => {
+router.beforeEach(async (to, from) => {
   const userStore = useUserStore()
   const isLoggedIn = userStore.isLoggedIn
 
@@ -190,7 +191,9 @@ router.beforeEach((to, from) => {
   }
 
   if (to.meta.requiresAuth && !isLoggedIn) {
-    return '/sign-in'
+    const ok = await promptLogin('该页面需要登录后才能访问，是否前往登录？')
+    if (ok) return false
+    return from.name ? false : '/'
   }
   if (isLoggedIn && (to.path === '/sign-in' || to.path === '/sign-up')) {
     return '/'

@@ -8,7 +8,7 @@ import jakarta.annotation.Resource;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.AdminPagination;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleImage;
 import org.example.forumdemo.entity.db.ArticleReply;
@@ -32,10 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -208,17 +205,17 @@ public class AdminContentArticleServiceImpl implements AdminContentArticleServic
     }
 
     private Map<Long, User> loadUsers(List<Long> ids) {
-        if (ids.isEmpty()) {
+        if (ids.isEmpty()){
             return Map.of();
         }
-        return userMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(User::getId, Function.identity()));
+        return userMapper.selectByIds(ids).stream().collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
     private Map<Long, Board> loadBoards(List<Long> ids) {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return boardMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(Board::getId, Function.identity()));
+        return boardMapper.selectByIds(ids).stream().collect(Collectors.toMap(Board::getId, Function.identity()));
     }
 
     private AdminArticleRowVO toRow(Article a, Map<Long, User> users, Map<Long, Board> boards) {

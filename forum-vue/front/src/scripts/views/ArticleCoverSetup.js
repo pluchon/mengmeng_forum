@@ -19,13 +19,11 @@ import { aiCoverHints, aiImage } from '@/api/ai'
 import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
 import { ARTICLE_STATUS, isArticleEditingLocked } from '@/utils/articleStatus'
 import { useUserStore } from '@/stores/user'
+import { COVER_IMAGE_QUALITY_OPTIONS } from '@/constants/aiModels'
+import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
 
 export const COVER_PROMPT_MAX = 200
-
-export const IMAGE_MODEL_OPTIONS = [
-  { value: 'normal', label: '通义 z-image-turbo（标准）', short: '通义' },
-  { value: 'premium', label: 'GPT Image 2（高清）', short: 'GPT' },
-]
+export const IMAGE_MODEL_OPTIONS = COVER_IMAGE_QUALITY_OPTIONS
 
 function stripHtml(html) {
   if (!html || typeof html !== 'string') return ''
@@ -178,6 +176,8 @@ export function useArticleCoverSetup() {
       return
     }
     aiGenerating.value = true
+    const usePremium = imageQuality.value === 'premium'
+    if (usePremium) showGptImageSlowToast()
     try {
       const res = await aiImage({ prompt, quality: imageQuality.value })
       const payload = res.data || {}
@@ -193,6 +193,7 @@ export function useArticleCoverSetup() {
       hasAiGenerated.value = true
       ElMessage.success('已生成封面并载入预览')
     } finally {
+      if (usePremium) dismissGptImageSlowToast()
       aiGenerating.value = false
     }
   }
@@ -309,7 +310,7 @@ export function useArticleCoverSetup() {
     }
     try {
       await ElMessageBox.confirm(
-        '是否提交内容审核？通过后帖子将自动发布并在论坛展示。',
+        '是否提交内容审核？通过后笔记将自动发布并在本站展示。',
         '提交审核',
         { confirmButtonText: '提交审核', cancelButtonText: '取消', type: 'info' },
       )

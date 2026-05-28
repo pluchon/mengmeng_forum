@@ -8,10 +8,8 @@ import org.example.forumdemo.entity.db.User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-/**
- * 管理后台路径拦截：必须已登录且 user.is_admin = 1。
- * 登录接口 {@code POST /admin/login} 在配置中排除。
- */
+// 管理员拦截器
+// 我们的JWT令牌是经过重新签发更新的
 @Slf4j
 @Component
 public class AdminAuthInterceptor implements HandlerInterceptor {

@@ -61,7 +61,7 @@ public class UserServiceImpl implements UserService {
     private PointsService pointsService;
 
     // ============================================================
-    // 注册
+    // 注册，使用事务保证原子性
     // ============================================================
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -80,7 +80,7 @@ public class UserServiceImpl implements UserService {
             log.warn("用户 {} 注册时密码强度不达标", userName);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        // 直接查库校验用户名是否存在（不走 queryUserByUserName，避免抛找不到异常）
+        // 直接查库校验用户名是否存在（不走 queryUserByUserName，避免抛出无法查找的异常）
         User existing = userMapper.selectOne(new QueryWrapper<User>().lambda()
                 .eq(User::getUsername, userName).ne(User::getDeleteState, 1));
         if (existing != null) {
@@ -92,6 +92,10 @@ public class UserServiceImpl implements UserService {
         String salt = UUIDUtils.UUID32();
         register.setSalt(salt);
         register.setPassword(MD5Utils.md5SaltHigh(password, salt));
+        // 我们敏感信息都有两个字段，一个是可逆的密文，一个是哈希。
+        // 可逆的密文是为了还原数据的，但是每一次生成都不确定，无法建立索引
+        // 不可逆的哈希密文每一次都是固定的，因此便于建立索引
+        // 这里的都是注册的时候选填的内容
         if (StringUtils.hasLength(req.getPhoneNum())) {
             register.setPhoneNum(PiiUtils.encrypt(req.getPhoneNum()));
             register.setPhoneHash(PiiUtils.hmac(req.getPhoneNum()));
@@ -101,12 +105,10 @@ public class UserServiceImpl implements UserService {
             register.setEmailHash(PiiUtils.hmac(req.getEmail()));
         }
         userMapper.insert(register);
-        pointsService.addPoints(
-                register.getId(),
-                Constant.POINTS_REGISTER_BONUS_AMOUNT,
-                Constant.POINTS_SOURCE_REGISTER_BONUS,
-                register.getId(),
-                "新用户注册赠送积分");
+        // 注册的新用户默认都给指定的初始积分
+        pointsService.addPoints(register.getId(), Constant.POINTS_REGISTER_BONUS_AMOUNT,
+                Constant.POINTS_SOURCE_REGISTER_BONUS, register.getId(), "新用户注册赠送积分");
+        // 立即把用户信息存入缓存
         storeUserNameMapping(register.getUsername(), register.getId());
         // 注册成功后立刻为用户创建默认收藏夹; 失败仅记日志, 不影响注册主流程,
         // 因为首次收藏时 ensureDefaultFolder 仍会兜底补创建
@@ -151,16 +153,20 @@ public class UserServiceImpl implements UserService {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
+        // 先从缓存查
         User user = getRedis(userId);
         if (user != null) {
             return user;
         }
+        // 再从库里查
         user = userMapper.selectOne(new QueryWrapper<User>().lambda()
                 .eq(User::getId, userId).ne(User::getDeleteState, 1));
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
+        // 把查到的最新结果放入缓存
         storeRedis(user);
+        // 返回结果之前进行脱敏
         return toSafeUser(user);
     }
 
@@ -181,7 +187,7 @@ public class UserServiceImpl implements UserService {
         }
         // 区分邮箱登录 / 用户名登录：邮箱不走用户名缓存
         User user = account.contains("@") ? loadUserByEmail(account) : loadUserByUsername(account);
-        // 缓存中不存盐值与密码哈希，必要时回库取完整记录
+        // 缓存中不存盐值与密码哈希，必要时回库取完整记录，获取盐值，便于查询加密后的密码
         if (user.getSalt() == null || user.getPassword() == null) {
             user = userMapper.selectOne(new QueryWrapper<User>().lambda()
                     .eq(User::getId, user.getId()).ne(User::getDeleteState, 1));
@@ -194,7 +200,9 @@ public class UserServiceImpl implements UserService {
         claims.put(Constant.JWT_USER_NAME, user.getUsername());
         user.setToken(JWTUtils.genJwt(claims));
         log.info("用户 {} 登录校验通过", user.getUsername());
+        //用户完整信息存入缓存
         storeRedis(user);
+        //用户简要信息存入缓存
         storeUserNameMapping(user.getUsername(), user.getId());
         return toSafeUser(user);
     }
@@ -255,7 +263,9 @@ public class UserServiceImpl implements UserService {
     // ============================================================
     @Override
     public User modifyUser(ModifyUserRequest req, Long userId) {
+        // 获取旧的用户信息
         User oldUser = queryUserByUserId(userId);
+        // 获取新旧用户名
         String oldUserName = oldUser.getUsername();
         String newUserName = req.getUserName();
         if (StringUtils.hasLength(newUserName) && !isValidUserName(newUserName)) {
@@ -266,6 +276,7 @@ public class UserServiceImpl implements UserService {
         User update = new User();
         update.setUsername(newUserName);
         update.setNickname(req.getNickName());
+        // 针对特殊字段进行设置
         if (StringUtils.hasLength(req.getEmail())) {
             update.setEmail(PiiUtils.encrypt(req.getEmail()));
             update.setEmailHash(PiiUtils.hmac(req.getEmail()));
@@ -281,6 +292,7 @@ public class UserServiceImpl implements UserService {
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
+        // 更新缓存中的简单的用户信息，仅限于用户名变化的时候
         if (StringUtils.hasLength(newUserName) && !newUserName.equals(oldUserName)) {
             deleteUserNameMapping(oldUserName);
             storeUserNameMapping(newUserName, userId);
@@ -288,6 +300,7 @@ public class UserServiceImpl implements UserService {
         }
         // 详细信息缓存失效，下一次查询会从 DB 重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
+        // 再把现在的最新的用户详细信息放入缓存
         return queryUserByUserId(userId);
     }
 
@@ -296,6 +309,7 @@ public class UserServiceImpl implements UserService {
         if (userId == null || mascotModelId == null || mascotModelId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        // 从看板娘的数据库中获取到关键信息
         ForumMascotModel m = forumMascotModelMapper.selectById(mascotModelId);
         if (m == null || (m.getDeleteState() != null && m.getDeleteState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
@@ -309,6 +323,7 @@ public class UserServiceImpl implements UserService {
         if (n <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
+        // 删除用户信息，同步我们用户看板娘的最新状态
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
     }
 
@@ -385,6 +400,7 @@ public class UserServiceImpl implements UserService {
         map.put("state", user.getState() == null ? "0" : String.valueOf(user.getState().intValue()));
         // 敏感信息（password / salt）不入缓存
         stringRedisTemplate.opsForHash().putAll(redisKey, map);
+        // 设置过期时间，防止存在内存中过久，我们一般设置为5分钟
         stringRedisTemplate.expire(redisKey, Constant.REDIS_TTL_USER_INFO, TimeUnit.SECONDS);
     }
 
@@ -445,6 +461,7 @@ public class UserServiceImpl implements UserService {
         return s == null ? "" : s;
     }
 
+    // 解密我们的用户邮箱信息，并加密我们的手机号信息返回给前端
     private User toSafeUser(User user) {
         if (user == null) {
             return null;

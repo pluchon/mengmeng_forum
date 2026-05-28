@@ -1,8 +1,16 @@
-﻿<template>
+<template>
   <div v-loading="loading" class="lottery-page animate-fade-in">
     <div class="lottery-bg" :style="{ backgroundImage: `url(${bgUrl})` }" />
 
     <div class="lottery-inner">
+      <div class="lottery-demo-banner" role="alert">
+        <el-icon class="lottery-demo-banner__icon" :size="20"><WarningFilled /></el-icon>
+        <div class="lottery-demo-banner__body">
+          <strong class="lottery-demo-banner__title">演示说明</strong>
+          <p class="lottery-demo-banner__text">{{ LOTTERY_DEMO_NOTICE }}</p>
+        </div>
+      </div>
+
       <header class="lottery-topbar">
         <div class="lottery-title-block">
           <el-icon :size="26" color="#f5b942"><Trophy /></el-icon>
@@ -441,10 +449,12 @@ import {
   Present,
   TrendCharts,
   InfoFilled,
+  WarningFilled,
   MagicStick,
   Coin,
   Grid,
 } from '@element-plus/icons-vue'
+import { LOTTERY_DEMO_NOTICE } from '@/constants/site'
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import {
   getLotteryActivities,

@@ -1,63 +1,93 @@
-# IDE
+# IDE / OS
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *.iml
-
-# Build
-target/
-dist/
-node_modules/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.classpath
+.project
+.settings/
+/bin/
 .DS_Store
-
-# Logs
-logs/
-nginx/logs/
-*.log
-
-# System
 Thumbs.db
 desktop.ini
 
-# Maven
+# Java / Maven (forum-demo)
+target/
 .mvn/
 mvnw
 mvnw.cmd
+application-local.yml
+application-local.properties
+forum-demo/log.txt
+forum-demo/details.txt
+forum-demo/cp.txt
+forum-demo/editor.ps1
+forum-demo/pushout.txt
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyc
-
-# Vue/Vite
+# Node / Vue (forum-vue, forum-vue-admin)
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
 .vite/
+.parcel-cache/
+.cache/
+.eslintcache
+.stylelintcache
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# --- 密钥 / 环境（开源前勿提交）---
+# Python (ai-server)
+__pycache__/
+*.py[cod]
+*.pyc
+.Python
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+logs/
+**/logs/
+*.log
+
+# Secrets / env
 .env
 .env.*
 !.env.example
-**/.env
 !**/.env.example
 scripts/dev-secrets.ps1
 ai-server/config.local.yaml
+**/passwords.txt
+**/secrets.txt
+**/*credentials*
 
-# TLS 私钥与证书（仅保留 README 说明，证书文件本地放置）
+# TLS (keep directory, ignore key material)
 nginx/ssl/*.pem
 nginx/ssl/*.key
 *.pem
 *.key
 
-# 部署产物（export-images 生成，体积大且可能含本地配置）
+# Deploy artifacts (generated locally)
 nginx/package/
-
-# 误提交的密钥备忘文件
-**/passwords.txt
-**/secrets.txt
-**/*credentials*
-
-# Docker 镜像导出
+nginx/dist/
 *.tar
+*.tar.gz
+
+# Misc
+*.bak
+*.tmp
+*~

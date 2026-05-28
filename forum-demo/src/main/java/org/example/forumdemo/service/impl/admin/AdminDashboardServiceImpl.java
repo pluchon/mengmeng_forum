@@ -57,6 +57,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     /** 生图模型（与 ai-server config.yaml / forum_ai_model_price 一致） */
     private static final Set<String> IMAGE_MODEL_CODES = Set.of(
             "z-image-turbo",
+            "wanx2.1-t2i-plus",
             "gpt-image-2"
     );
 
@@ -398,17 +399,17 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         String c = code.trim();
         return switch (c) {
             case "qwen3.6-flash" -> "Qwen3.6 Flash";
-            case "qwen3.6-max-preview" -> "Qwen3.6 Max";
+            case "qwen3.7-max", "qwen3.6-max-preview" -> "Qwen Max";
             case "qwen3-vl-flash" -> "Qwen3-VL Flash";
             case "qwen3-vl-plus" -> "Qwen3-VL Plus";
             case "qwen3-vl-rerank" -> "Qwen3-VL Rerank";
             case "tongyi-embedding-vision-flash" -> "Embedding Vision";
             case "deepseek-v4-flash" -> "DeepSeek V4 Flash";
             case "deepseek-v4-pro" -> "DeepSeek V4 Pro";
-            case "gemini-3-flash" -> "Gemini 3 Flash";
-            case "gemini-3.1-pro" -> "Gemini 3.1 Pro";
-            case "z-image-turbo" -> "Z-Image Turbo";
-            case "gpt-image-2" -> "GPT Image 2";
+            case "gemini-3.1-pro" -> "Gemini Pro";
+            case "z-image-turbo" -> "通义 Z-Image";
+            case "wanx2.1-t2i-plus" -> "通义万相进阶";
+            case "gpt-image-2" -> "通义万相进阶";
             default -> c;
         };
     }
