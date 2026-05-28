@@ -10,13 +10,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
- * 仅承载内存字节的 MultipartFile 实现。
- * 用于把 {@link org.example.forumdemo.common.utils.ImageCompressor} 压缩后的 byte[] 包装回
- * MultipartFile 接口, 让后续的 OSS 上传 / AI 审核可以无缝复用现有方法签名。
- *
- * 注意: 该实现并不持有原始磁盘文件, isEmpty / getSize / getInputStream 全部基于 byte[]。
- */
+// 处理http协议中的分块单表传输
+// 也就是把内存中的字节流数组输出位MultipartFile
 public class InMemoryMultipartFile implements MultipartFile {
 
     private final String name;

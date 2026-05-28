@@ -69,19 +69,19 @@
                   />
                   <div class="cover-prompt-footer">
                     <div class="cover-model-row">
-                      <img :src="iconAi" alt="" class="cover-model-icon" aria-hidden="true">
                       <div class="cover-seg">
                         <button
                           v-for="opt in IMAGE_MODEL_OPTIONS"
                           :key="opt.value"
                           type="button"
-                          class="cover-seg-btn"
+                          class="cover-seg-btn cover-seg-btn--with-icon"
                           :class="{ on: imageQuality === opt.value }"
                           :title="opt.label"
                           :disabled="!isVip"
                           @click="setImageModel(opt.value)"
                         >
-                          {{ opt.short }}
+                          <img v-if="opt.icon" :src="opt.icon" alt="" class="cover-model-icon cover-model-icon--seg">
+                          <span>{{ opt.short }}</span>
                         </button>
                       </div>
                       <button

@@ -38,8 +38,10 @@ public class SearchServiceImpl implements SearchService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
-    /** RAG 候选侧截取文本长度上限, 防大富文本撑爆 rerank 单次请求 */
-    private static final int RAG_TEXT_TRUNCATE = 500;
+    /** RAG 候选侧正文摘录上限（与 Python doc_truncate 对齐前先做结构化截取） */
+    private static final int RAG_TEXT_TRUNCATE = 1200;
+    private static final int RAG_EXCERPT_HEAD = 700;
+    private static final int RAG_EXCERPT_TAIL = 400;
 
     @Autowired
     private ArticleMapper articleMapper;
@@ -74,15 +76,7 @@ public class SearchServiceImpl implements SearchService {
         }
 
         // ============ 第二路: AI 语义召回（先宽松召回，再由 RAG 排序；支持「四川」≈「川西」等） ============
-        List<Article> candidates = articleMapper.selectList(new QueryWrapper<Article>().lambda()
-                .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .and(w -> w.like(Article::getTitle, kw)
-                        .or().like(Article::getContent, kw)
-                        .or().apply("LOCATE({0}, title) > 0", kw.length() >= 2 ? kw.substring(0, 1) : kw))
-                .orderByDesc(Article::getUpdateTime)
-                .last("LIMIT " + Constant.SEARCH_RAG_CANDIDATE_LIMIT));
+        List<Article> candidates = articleMapper.selectList(buildArticleRagCandidateQuery(kw));
         if (candidates.isEmpty()) {
             candidates = articleMapper.selectList(new QueryWrapper<Article>().lambda()
                     .ne(Article::getDeleteState, DELETE_TRUE)
@@ -143,14 +137,7 @@ public class SearchServiceImpl implements SearchService {
             }
         }
 
-        List<User> candidates = userMapper.selectList(new QueryWrapper<User>().lambda()
-                .ne(User::getDeleteState, DELETE_TRUE)
-                .ne(User::getState, STATE_FORBIDDEN)
-                .and(w -> w.like(User::getUsername, kw)
-                        .or().like(User::getNickname, kw)
-                        .or().apply("LOCATE({0}, nickname) > 0", kw.length() >= 2 ? kw.substring(0, 1) : kw))
-                .orderByDesc(User::getUpdateTime)
-                .last("LIMIT " + Constant.SEARCH_RAG_CANDIDATE_LIMIT));
+        List<User> candidates = userMapper.selectList(buildUserRagCandidateQuery(kw));
         if (candidates.isEmpty()) {
             candidates = userMapper.selectList(new QueryWrapper<User>().lambda()
                     .ne(User::getDeleteState, DELETE_TRUE)
@@ -198,12 +185,105 @@ public class SearchServiceImpl implements SearchService {
         return new PageResult<>(Collections.emptyList(), 0L, p, s, 0L, false);
     }
 
-    /** RAG 召回侧文本: 取标题 + 正文前 N 字 (剥 HTML), 配合 Python 端 rerank. */
+    private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Article> buildArticleRagCandidateQuery(String kw) {
+        List<String> tokens = tokenizeKeyword(kw);
+        return new QueryWrapper<Article>().lambda()
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .ne(Article::getState, STATE_FORBIDDEN)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                .and(w -> {
+                    w.like(Article::getTitle, kw).or().like(Article::getContent, kw);
+                    for (String t : tokens) {
+                        w.or().like(Article::getTitle, t).or().like(Article::getContent, t);
+                    }
+                    if (kw.length() >= 2) {
+                        w.or().apply("LOCATE({0}, title) > 0", kw.substring(0, 1));
+                    }
+                })
+                .orderByDesc(Article::getUpdateTime)
+                .last("LIMIT " + Constant.SEARCH_RAG_CANDIDATE_LIMIT);
+    }
+
+    private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User> buildUserRagCandidateQuery(String kw) {
+        List<String> tokens = tokenizeKeyword(kw);
+        return new QueryWrapper<User>().lambda()
+                .ne(User::getDeleteState, DELETE_TRUE)
+                .ne(User::getState, STATE_FORBIDDEN)
+                .and(w -> {
+                    w.like(User::getUsername, kw).or().like(User::getNickname, kw).or().like(User::getRemark, kw);
+                    for (String t : tokens) {
+                        w.or().like(User::getUsername, t).or().like(User::getNickname, t).or().like(User::getRemark, t);
+                    }
+                    if (kw.length() >= 2) {
+                        w.or().apply("LOCATE({0}, nickname) > 0", kw.substring(0, 1));
+                    }
+                })
+                .orderByDesc(User::getUpdateTime)
+                .last("LIMIT " + Constant.SEARCH_RAG_CANDIDATE_LIMIT);
+    }
+
+    private List<String> tokenizeKeyword(String kw) {
+        if (!StringUtils.hasText(kw)) {
+            return Collections.emptyList();
+        }
+        String[] parts = kw.trim().split("[\\s,，、；;|/\\\\]+");
+        List<String> out = new ArrayList<>();
+        for (String p : parts) {
+            String t = p.trim();
+            if (t.length() < 2) {
+                continue;
+            }
+            if (!out.contains(t)) {
+                out.add(t);
+            }
+            if (out.size() >= 8) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    private static String stripHtml(String html) {
+        if (html == null) {
+            return "";
+        }
+        return html.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static String buildExcerpt(String plain, int maxLen) {
+        if (plain == null || plain.isEmpty()) {
+            return "";
+        }
+        if (plain.length() <= maxLen) {
+            return plain;
+        }
+        if (maxLen <= RAG_EXCERPT_HEAD + RAG_EXCERPT_TAIL + 8) {
+            return plain.substring(0, maxLen);
+        }
+        String head = plain.substring(0, RAG_EXCERPT_HEAD);
+        String tail = plain.substring(plain.length() - RAG_EXCERPT_TAIL);
+        return head + "\n…\n" + tail;
+    }
+
+    /** RAG 召回侧文本: 标题 + 头尾摘录 + 互动信号，供 Python 融合排序. */
     private String buildRagText(Article a) {
         String title = a.getTitle() == null ? "" : a.getTitle();
-        String raw = a.getContent() == null ? "" : a.getContent().replaceAll("<[^>]+>", "");
-        if (raw.length() > RAG_TEXT_TRUNCATE) raw = raw.substring(0, RAG_TEXT_TRUNCATE);
-        return (title + "\n" + raw).trim();
+        String plain = stripHtml(a.getContent());
+        String body = buildExcerpt(plain, RAG_TEXT_TRUNCATE);
+        StringBuilder sb = new StringBuilder();
+        if (!title.isBlank()) {
+            sb.append("标题: ").append(title).append('\n');
+        }
+        if (!body.isBlank()) {
+            sb.append("正文:\n").append(body).append('\n');
+        }
+        if (a.getReplyCount() != null && a.getReplyCount() > 0) {
+            sb.append("回复数: ").append(a.getReplyCount()).append('\n');
+        }
+        if (a.getLikeCount() != null && a.getLikeCount() > 0) {
+            sb.append("点赞数: ").append(a.getLikeCount()).append('\n');
+        }
+        return sb.toString().trim();
     }
 
     /** 按候选缓存批量装配; 候选里没的 articleId 会再去 DB 拉一次, 兜底极少出现. */
@@ -252,15 +332,22 @@ public class SearchServiceImpl implements SearchService {
         return new PageResult<>(Collections.emptyList(), 0L, p, s, 0L, false);
     }
 
-    /** RAG 侧用户文本: 昵称 + 用户名 + 简介截断 */
+    /** RAG 侧用户文本: 昵称 + 用户名 + 简介摘录 */
     private String buildUserRagText(User u) {
         String nick = u.getNickname() == null ? "" : u.getNickname();
         String name = u.getUsername() == null ? "" : u.getUsername();
-        String remark = u.getRemark() == null ? "" : u.getRemark();
-        if (remark.length() > RAG_TEXT_TRUNCATE) {
-            remark = remark.substring(0, RAG_TEXT_TRUNCATE);
+        String remark = buildExcerpt(u.getRemark() == null ? "" : u.getRemark(), RAG_TEXT_TRUNCATE);
+        StringBuilder sb = new StringBuilder();
+        if (!nick.isBlank()) {
+            sb.append("昵称: ").append(nick).append('\n');
         }
-        return (nick + "\n" + name + "\n" + remark).trim();
+        if (!name.isBlank()) {
+            sb.append("用户名: ").append(name).append('\n');
+        }
+        if (!remark.isBlank()) {
+            sb.append("简介: ").append(remark);
+        }
+        return sb.toString().trim();
     }
 
     private List<UserBriefVO> buildUserBriefList(List<Long> ids, List<User> candidates) {

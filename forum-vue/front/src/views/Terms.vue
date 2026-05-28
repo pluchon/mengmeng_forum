@@ -1,10 +1,11 @@
 <template>
-  <div class="privacy-page shell-page-scroll">
+  <div ref="pageRef" class="privacy-page shell-page-scroll">
+    <ParticleSea embedded :host-ref="pageRef" />
     <div class="privacy-container animate-fade-up">
       <main class="privacy-content">
         <div class="hero-section">
           <h1>用户协议</h1>
-          <p>使用萌萌论坛前，请仔细阅读以下条款。注册、登录或使用本平台服务即表示您同意本协议。</p>
+          <p>使用萌萌技术分享笔记前，请仔细阅读以下条款。注册、登录或使用本平台服务即表示您同意本协议。</p>
           <div class="update-tag">最近更新：2026-05-14</div>
         </div>
 
@@ -48,14 +49,18 @@
       </main>
 
       <footer class="privacy-footer">
-        版权所有 © 2026 <strong>萌萌论坛</strong>。保留所有权利。
+        <SiteIcpLink variant="footer" />
       </footer>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import ParticleSea from '@/components/common/ParticleSea.vue'
+import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
 import { useTerms } from '@scripts/views/Terms'
 
+const pageRef = ref(null)
 const { Link, termsData } = useTerms()
 </script>

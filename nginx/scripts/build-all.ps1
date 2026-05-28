@@ -55,7 +55,7 @@ function Sync-Live2dAssets {
     $src = Join-Path $repoRoot "live2d\live2d-master"
     $dst = Join-Path $nginxRoot "dist\user\live2d-assets"
     if (-not (Test-Path $src)) {
-        Write-Host "WARN: Live2D models not found at $src — skip live2d-assets sync" -ForegroundColor Yellow
+        Write-Host "WARN: Live2D models not found at $src 鈥?skip live2d-assets sync" -ForegroundColor Yellow
         return
     }
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
@@ -122,8 +122,11 @@ if ($SkipFront) {
     Sync-Live2dAssets
 }
 
-Step "Done"
-Write-Host "  nginx/dist/user   - user SPA + live2d-assets" -ForegroundColor Yellow
+Step "Done (local workspace)"
+Write-Host "  nginx/dist/user   - user SPA (local compose / export source)" -ForegroundColor Yellow
 Write-Host "  nginx/dist/admin  - admin SPA" -ForegroundColor Yellow
 Write-Host "  forum-backend:latest / forum-ai-server:latest" -ForegroundColor Yellow
-Write-Host "Start: cd nginx; docker compose up -d" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Local dev:  cd nginx; docker compose up -d" -ForegroundColor DarkGray
+Write-Host "Server:     .\scripts\make-package.ps1" -ForegroundColor Green
+Write-Host "            upload ONLY nginx\package\  (not the whole nginx folder)" -ForegroundColor Green

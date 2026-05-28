@@ -54,7 +54,7 @@ public class Constant {
 
     // =================== Redis Key 前缀 ===================
     // 用户详情 Hash 缓存前缀，格式：user_info:{userId}
-    /** WebSocket 跨实例推送 Redis Pub/Sub 频道 */
+    //WebSocket 跨实例推送 Redis Pub/Sub 频道
     public static final String WS_PUSH_CHANNEL = "forum:ws:push";
 
     public static final String REDIS_KEY_USER_INFO = "user_info:";
@@ -156,23 +156,15 @@ public class Constant {
     public static final long REDIS_TTL_BOARD_LIST = 3600L;
 
     // =================== AI 服务路由地址 ===================
-    public static final String AI_IMAGE_URL = "http://localhost:5000/api/v1/validate-image";
-    public static final String AI_TEXT_URL = "http://localhost:5000/api/v1/validate-text";
-    public static final String AI_SUMMARY_URL = "http://localhost:5000/api/v1/summarize";
-    // RAG 帖子语义检索: DB 标题模糊未命中时由 SearchService 调用
-    // 入参 {query, candidates:[{articleId,text}]}, 出参 {results:[{articleId,score}]}
-    public static final String AI_ARTICLE_SEARCH_URL = "http://localhost:5000/api/v1/article-rag-search";
-    /** RAG 用户语义检索: 入参 {query, candidates:[{userId,text}]}, 出参 {results:[{userId,score}]} */
-    public static final String AI_USER_SEARCH_URL = "http://localhost:5000/api/v1/user-rag-search";
+    // 同步审核 / RAG / 摘要基址见 forum.ai.hub-base-url（AiHubUrls），勿再写死 localhost
 
-    /** 看板娘对话: Java BFF -> Python ai-server, URL 以 application.yml forum.mascot.ai-url 为准 (此处仅作文档占位) */
-    public static final String AI_MASCOT_CHAT_URL = "http://localhost:5000/api/v1/mascot/chat";
+    /** 看板娘对话: Java BFF -> Python ai-server, URL 以 application.yml forum.mascot.ai-url 为准 */
 
     /** 普通用户看板娘每日对话计数: mascot:daily:chat:{yyyyMMdd}:{userId} */
     public static final String REDIS_KEY_MASCOT_DAILY_CHAT = "mascot:daily:chat:";
 
     // RAG 检索召回侧粗筛: 取最近 N=100 篇已发布帖子做候选; 太大会让 rerank 调用超时
-    public static final int SEARCH_RAG_CANDIDATE_LIMIT = 100;
+    public static final int SEARCH_RAG_CANDIDATE_LIMIT = 150;
     // 单次返回的最大 RAG 结果数 (上限保护, 防超大 pageSize 把 rerank 打满)
     public static final int SEARCH_RAG_MAX_RESULTS = 50;
     // 搜索响应的 source 标识
@@ -180,24 +172,22 @@ public class Constant {
     public static final String SEARCH_SOURCE_RAG   = "rag";
     public static final String SEARCH_SOURCE_EMPTY = "empty";
 
-    // =================== OSS 业务路径前缀 ===================
-    // 所有业务路径都挂在 forum_db_item/ 主目录下，控制台层级清晰、便于权限管理
-    public static final String OSS_PATH_AVATAR     = "forum_db_item/forum_avatar_picture/";
-    public static final String OSS_PATH_COVER      = "forum_db_item/forum_cover_picture/";
-    public static final String OSS_PATH_BACKGROUND = "forum_db_item/forum_profile_background_picture/";
-    public static final String OSS_PATH_ARTICLE_IMAGE = "forum_db_item/forum_article_picture/";
-    /** 公告中心卡片配图：对象名 {发布者用户ID}_{公告ID}_{yyyyMMddHHmmss}.{ext}，新建未落库时公告ID 用 0 */
-    public static final String OSS_PATH_NOTICE_PICTURE = "forum_db_item/forum_notice_picture/";
-    /** 抽奖活动封面: 建议文件名 {活动ID}_{publisherId}_{yyyyMMddHHmmss}.ext */
-    public static final String OSS_PATH_LOTTERY_ACTIVITY = "forum_db_item/forum_activity_picture/";
-    /** 抽奖奖品图: 建议文件名 {活动ID}_{奖品ID}_{yyyyMMddHHmmss}.ext */
-    public static final String OSS_PATH_LOTTERY_PRIZE = "forum_db_item/forum_prize_picture/";
-    // 聊天图片消息: 由发送者临时上传, 收藏只是引用同一 URL 不复制对象
-    public static final String OSS_PATH_CHAT_MESSAGE = "forum_db_item/forum_chat_picture/message/";
-    // 聊天表情(用户自上传到收藏库的图)
-    public static final String OSS_PATH_CHAT_EMOJI   = "forum_db_item/forum_chat_picture/emoji/";
-    // 表情商城商品图(封面 + 表情包内单张图均落到此目录)
-    public static final String OSS_PATH_EMOJI_SHOP   = "forum_db_item/forum_emoji_shop/";
+    // =================== OSS 业务路径前缀（相对 key；根前缀见 oss.root-prefix / OSS_ROOT_PREFIX） ===================
+    public static final String OSS_PATH_AVATAR     = "forum_avatar_picture/";
+    public static final String OSS_PATH_COVER      = "forum_cover_picture/";
+    public static final String OSS_PATH_BACKGROUND = "forum_profile_background_picture/";
+    public static final String OSS_PATH_ARTICLE_IMAGE = "forum_article_picture/";
+    /** 公告中心卡片配图：对象名 {发布者用户ID}_{公告ID}_{yyyyMMddHHmmss}.{ext} */
+    public static final String OSS_PATH_NOTICE_PICTURE = "forum_notice_picture/";
+    public static final String OSS_PATH_LOTTERY_ACTIVITY = "forum_activity_picture/";
+    public static final String OSS_PATH_LOTTERY_PRIZE = "forum_prize_picture/";
+    public static final String OSS_PATH_CHAT_MESSAGE = "forum_chat_picture/message/";
+    public static final String OSS_PATH_CHAT_EMOJI   = "forum_chat_picture/emoji/";
+    public static final String OSS_PATH_EMOJI_SHOP   = "forum_emoji_shop/";
+    /** 看板娘 / AI 生图落库（避免超长外链或 data URL 写入 DB） */
+    public static final String OSS_PATH_COMPANION_AI = "forum_companion_ai_picture/";
+    /** 旧版统一根目录（兼容历史 URL 校验） */
+    public static final String OSS_LEGACY_ROOT = "forum_db_item/";
 
     // =================== 帖子相册 ===================
     // 帖子相册图片上限: 单个帖子最多 15 张, 由 ArticleService.replaceArticleImages 强约束
@@ -282,6 +272,15 @@ public class Constant {
     /** 陪伴对话默认估算 token（无 usage 回传时） */
     public static final int AI_ESTIMATE_CHAT_INPUT_TOKENS = 2000;
     public static final int AI_ESTIMATE_CHAT_OUTPUT_TOKENS = 1000;
+
+    /** 生图：普通档 Dashscope；进阶档 GPT Image（HuanAPI） */
+    public static final String AI_MODEL_IMAGE_NORMAL = "z-image-turbo";
+    public static final String AI_MODEL_IMAGE_PREMIUM = "gpt-image-2";
+    /** HuanAPI 文本模型 */
+    public static final String AI_MODEL_QWEN_DEEP = "qwen3.7-max";
+    public static final String AI_MODEL_GEMINI_DEEP = "gemini-3.1-pro";
+    public static final String AI_MODEL_CLAUDE_HAIKU = "claude-haiku-4-5";
+    public static final String AI_MODEL_CLAUDE_SONNET = "claude-sonnet-4-6";
 
     /** 抽奖页彩蛋一次性发放的积分数量 */
     public static final int POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT = 200;

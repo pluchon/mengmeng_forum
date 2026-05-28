@@ -12,12 +12,13 @@ dashscope:
   image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
   model_text: "qwen3.6-flash"
   model_text_flash: "qwen3.6-flash"
-  model_text_deep: "qwen3.6-max-preview"
+  model_text_deep: "qwen3.7-max"
   model_vision: "qwen3-vl-flash"
   model_vision_fallback: "qwen3-vl-plus"
   model_rerank: "qwen3-vl-rerank"
   model_embedding_rag: "tongyi-embedding-vision-flash"
   model_image_normal: "z-image-turbo"
+  model_image_premium: "wanx2.1-t2i-plus"
 
 redis:
   host: redis
@@ -63,10 +64,15 @@ cache:
   semantic_threshold: 0.7
 
 rag:
-  max_candidates: 100
-  doc_truncate: 800
-  relevance_threshold: 0.15
+  max_candidates: 150
+  doc_truncate: 1200
+  relevance_threshold: 0.12
   top_n: 50
+  rerank_weight: 0.72
+  keyword_weight: 0.18
+  embedding_weight: 0.10
+  embedding_top_k: 80
+  min_keyword_overlap: 0.08
 
 image:
   max_bytes: 10485760
@@ -85,11 +91,25 @@ deepseek:
 
 huanapi:
   base_url: "https://www.huanapi.com"
-  image_key: ""
   gemini_key: ""
+  image_key: ""
+  claude_key: ""
+  model_gemini_deep: "gemini-3.1-pro"
   model_image_premium: "gpt-image-2"
-  model_gemini_flash: "gemini-3-flash"
-  model_gemini_pro: "gemini-3.1-pro"
+  model_claude_haiku: "claude-haiku-4-5"
+  model_claude_sonnet: "claude-sonnet-4-6"
+
+tavily:
+  enabled: true
+  api_key: ""
+  max_results: 5
+  search_depth: basic
+  timeout: 25
+
+mcp:
+  enabled: true
+  tools:
+    - tavily_search
 
 ai_hub:
   internal_key: ""

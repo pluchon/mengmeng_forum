@@ -10,16 +10,25 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.LotteryImagePathUtils;
+import org.example.forumdemo.common.utils.LotteryImagePathUtils;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.ImageCompressor;
 import org.example.forumdemo.common.utils.InMemoryMultipartFile;
 import org.example.forumdemo.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.net.URI;
+import java.util.Base64;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -78,8 +87,115 @@ public class FileServiceImpl implements FileService {
         return uploadImage(file, userId, Constant.OSS_PATH_EMOJI_SHOP);
     }
 
+    private static final Pattern DATA_URL_PATTERN = Pattern.compile(
+            "^data:([\\w/+.-]+);base64,(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    @Override
+    public String uploadCompanionAiImageFromRemote(Long userId, String sourceUrl) {
+        if (sourceUrl == null || sourceUrl.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址为空"));
+        }
+        String trimmed = sourceUrl.trim();
+        if (trimmed.length() <= 500 && ossConfig.isBucketConfigured()) {
+            String urlPrefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
+            if (!urlPrefix.isEmpty() && trimmed.startsWith(urlPrefix)) {
+                return trimmed;
+            }
+        }
+        ResolvedImage img = trimmed.regionMatches(true, 0, "data:", 0, 5)
+                ? parseDataUrl(trimmed)
+                : downloadRemoteImage(trimmed);
+        String ext = extFromContentType(img.contentType());
+        String filename = userId + "_ai_" + IdUtil.fastSimpleUUID().substring(0, 8) + ext;
+        MultipartFile file = new InMemoryMultipartFile("file", filename, img.contentType(), img.bytes());
+        return uploadImage(file, userId, Constant.OSS_PATH_COMPANION_AI);
+    }
+
+    private record ResolvedImage(byte[] bytes, String contentType) {}
+
+    private ResolvedImage parseDataUrl(String dataUrl) {
+        Matcher m = DATA_URL_PATTERN.matcher(dataUrl.trim());
+        if (!m.matches()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "无效的图片 data URL"));
+        }
+        String contentType = m.group(1).toLowerCase(Locale.ROOT);
+        if (!Constant.IMAGE_SUPPORTED_TYPES.contains(contentType)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED));
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(m.group(2).replaceAll("\\s+", ""));
+        } catch (IllegalArgumentException e) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片 Base64 解码失败"));
+        }
+        if (bytes.length == 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片内容为空"));
+        }
+        return new ResolvedImage(bytes, contentType);
+    }
+
+    private ResolvedImage downloadRemoteImage(String url) {
+        if (!url.regionMatches(true, 0, "https://", 0, 8) && !url.regionMatches(true, 0, "http://", 0, 7)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅支持 http(s) 或 data 图片地址"));
+        }
+        try {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(15_000);
+            factory.setReadTimeout(120_000);
+            RestTemplate rt = new RestTemplate(factory);
+            ResponseEntity<byte[]> resp = rt.exchange(URI.create(url), HttpMethod.GET, null, byte[].class);
+            byte[] bytes = resp.getBody();
+            if (bytes == null || bytes.length == 0) {
+                throw new ApplicationException("下载 AI 图片失败: 响应为空");
+            }
+            String contentType = resp.getHeaders().getContentType() != null
+                    ? resp.getHeaders().getContentType().toString()
+                    : guessContentTypeFromUrl(url);
+            if (contentType != null && contentType.contains(";")) {
+                contentType = contentType.substring(0, contentType.indexOf(';')).trim();
+            }
+            if (contentType == null || !Constant.IMAGE_SUPPORTED_TYPES.contains(contentType)) {
+                contentType = guessContentTypeFromUrl(url);
+            }
+            if (!Constant.IMAGE_SUPPORTED_TYPES.contains(contentType)) {
+                contentType = "image/png";
+            }
+            return new ResolvedImage(bytes, contentType);
+        } catch (ApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("下载 AI 生图失败 url={}: {}", url.length() > 120 ? url.substring(0, 120) + "..." : url, e.getMessage());
+            throw new ApplicationException("下载 AI 图片失败: " + e.getMessage());
+        }
+    }
+
+    private static String guessContentTypeFromUrl(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.contains(".png")) {
+            return "image/png";
+        }
+        if (lower.contains(".gif")) {
+            return "image/gif";
+        }
+        if (lower.contains(".webp")) {
+            return "image/webp";
+        }
+        return "image/jpeg";
+    }
+
+    private static String extFromContentType(String contentType) {
+        if (Constant.IMAGE_TYPE_GIF.equalsIgnoreCase(contentType)) {
+            return ".gif";
+        }
+        if ("image/png".equalsIgnoreCase(contentType)) {
+            return ".png";
+        }
+        return ".jpg";
+    }
+
     @Override
     public String uploadLotteryPrizePicture(MultipartFile file, long activityId, long prizeId) {
+        ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
         if (!AiAuditUtils.isImageAllowed(uploadFile)) {
@@ -87,8 +203,9 @@ public class FileServiceImpl implements FileService {
         }
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
         String ts = LotteryImagePathUtils.nowTs();
-        String objectName = Constant.OSS_PATH_LOTTERY_PRIZE
-                + LotteryImagePathUtils.prizeImageObjectName(activityId, prizeId, ts, ext);
+        String objectName = ossConfig.objectKey(
+                Constant.OSS_PATH_LOTTERY_PRIZE,
+                LotteryImagePathUtils.prizeImageObjectName(activityId, prizeId, ts, ext));
         OSS ossClient = buildOssClient();
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();
@@ -107,6 +224,7 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public String uploadLotteryActivityPicture(MultipartFile file, long activityId, long publisherUserId) {
+        ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
         if (!AiAuditUtils.isImageAllowed(uploadFile)) {
@@ -114,7 +232,9 @@ public class FileServiceImpl implements FileService {
         }
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
         String ts = LotteryImagePathUtils.nowTs();
-        String objectName = LotteryImagePathUtils.activityCoverRelative(activityId, publisherUserId, ts, ext);
+        String objectName = ossConfig.objectKey(
+                Constant.OSS_PATH_LOTTERY_ACTIVITY,
+                LotteryImagePathUtils.activityCoverObjectName(activityId, publisherUserId, ts, ext));
         OSS ossClient = buildOssClient();
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();
@@ -133,13 +253,15 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public String uploadNoticePicture(MultipartFile file, Long publisherUserId, Long noticeId) {
+        ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
         if (!AiAuditUtils.isImageAllowed(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
-        String objectName = Constant.OSS_PATH_NOTICE_PICTURE
-                + buildNoticePictureObjectName(uploadFile, publisherUserId, noticeId != null ? noticeId : 0L);
+        String objectName = ossConfig.objectKey(
+                Constant.OSS_PATH_NOTICE_PICTURE,
+                buildNoticePictureObjectName(uploadFile, publisherUserId, noticeId != null ? noticeId : 0L));
         OSS ossClient = buildOssClient();
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();
@@ -180,14 +302,22 @@ public class FileServiceImpl implements FileService {
         return publisherUserId + "_" + noticeId + "_" + timeStr + extName;
     }
 
+    private void ensureOssReady() {
+        if (!ossConfig.isBucketConfigured()) {
+            throw new ApplicationException(
+                    "OSS 未配置：请设置环境变量 OSS_BUCKET_NAME 与 OSS_URL_PREFIX（勿使用占位符 your-forum-oss-bucket）");
+        }
+    }
+
     /** 共用上传逻辑: 参数校验 + (可选)压缩 + AI 审核 + OSS 写入 */
     private String uploadImage(MultipartFile file, Long userId, String pathPrefix) {
+        ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
         if (!AiAuditUtils.isImageAllowed(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
-        String objectName = pathPrefix + buildObjectName(uploadFile, userId);
+        String objectName = ossConfig.objectKey(pathPrefix, buildObjectName(uploadFile, userId));
         OSS ossClient = buildOssClient();
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();

@@ -3,6 +3,7 @@ package org.example.forumdemo.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.example.forumdemo.entity.db.User;
 
@@ -39,7 +40,7 @@ public interface UserMapper extends BaseMapper<User> {
     /**
      * 抽奖事务内锁定用户行，避免并发抽奖绕过保底计数。
      */
-    @org.apache.ibatis.annotations.Select("SELECT * FROM user WHERE id = #{userId} AND delete_state = 0 FOR UPDATE")
+    @Select("SELECT * FROM user WHERE id = #{userId} AND delete_state = 0 FOR UPDATE")
     User selectByIdForUpdate(@Param("userId") Long userId);
 
     @Update("UPDATE user SET lottery_pity_draws = 0 WHERE id = #{userId} AND delete_state = 0")

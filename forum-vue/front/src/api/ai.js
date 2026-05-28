@@ -27,6 +27,19 @@ export function aiImage(data) {
 }
 
 /**
+ * AI 辅助写作（Java BFF -> ai-server）
+ * @param {{ kind: string, messages: Array<{ role: string, content: string }> }} data
+ */
+export function aiWrite(data) {
+  return request({
+    url: '/ai/write',
+    method: 'post',
+    data,
+    timeout: 120000,
+  })
+}
+
+/**
  * 预估 AI 消耗积分
  * @param {{ skill?: string, route?: string, quality?: string }} params
  */

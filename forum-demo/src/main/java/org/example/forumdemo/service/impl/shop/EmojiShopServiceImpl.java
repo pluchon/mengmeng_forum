@@ -117,7 +117,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 }
             }
         }
-
         EmojiShop shop = new EmojiShop();
         shop.setName(name);
         shop.setDescription(StringUtils.hasLength(description) ? description : null);
@@ -127,7 +126,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         shop.setSalesCount(0);
         shop.setStatus(Constant.SHOP_STATUS_ONLINE);
         emojiShopMapper.insert(shop);
-
         int sort = 0;
         for (String url : imageUrls) {
             EmojiItem item = new EmojiItem();
@@ -341,14 +339,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
      * 额外拒绝 ".." / 反斜杠 / 控制字符等可能绕过前缀语义的路径段(防 CDN 端规范化后实际指向别处).
      */
     private void validateShopUrl(String url, String hint) {
-        String normalized = url == null ? "" : url.trim();
-        String urlPrefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
-        String expected = urlPrefix + Constant.OSS_PATH_EMOJI_SHOP;
-        boolean prefixOk = StringUtils.hasLength(normalized) && StringUtils.hasLength(urlPrefix)
-                && normalized.startsWith(expected);
-        boolean safePath = !normalized.contains("..") && !normalized.contains("\\")
-                && !containsControlChar(normalized);
-        if (!prefixOk || !safePath) {
+        if (!ossConfig.matchesPublicObjectUrl(url, Constant.OSS_PATH_EMOJI_SHOP)) {
             log.warn("商城 URL 校验失败: {}", hint);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }

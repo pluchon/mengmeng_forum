@@ -20,9 +20,11 @@ const app = createApp(App)
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 
-// 注册所有图标
+// 注册所有图标（跳过非组件导出，避免生产构建偶发 undefined）
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
+  if (typeof component === 'object' || typeof component === 'function') {
+    app.component(key, component)
+  }
 }
 
 app.use(pinia)

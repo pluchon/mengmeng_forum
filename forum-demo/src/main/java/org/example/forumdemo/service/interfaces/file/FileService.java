@@ -32,4 +32,9 @@ public interface FileService {
      * 文件名 活动ID_发布者ID_yyyyMMddHHmmss.ext（新建活动可传 activityId=0）
      */
     String uploadLotteryActivityPicture(MultipartFile file, long activityId, long publisherUserId);
+
+    /**
+     * 将 AI 生图结果（https 或 data URL）转存 OSS，返回适合入库的短链接。
+     */
+    String uploadCompanionAiImageFromRemote(Long userId, String sourceUrl);
 }

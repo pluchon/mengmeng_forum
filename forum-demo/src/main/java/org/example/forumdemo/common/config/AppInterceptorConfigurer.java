@@ -17,7 +17,7 @@ public class AppInterceptorConfigurer implements WebMvcConfigurer {
     @Resource
     private LoginInterceptor loginInterceptor;
 
-    /** 后台管理端：仅允许 is_admin=1 的用户访问 /admin/**（登录接口除外） */
+    //后台管理端进行管理员字段的校验，仅允许is_admin=1
     @Resource
     private AdminAuthInterceptor adminAuthInterceptor;
 
@@ -58,7 +58,6 @@ public class AppInterceptorConfigurer implements WebMvcConfigurer {
                 .excludePathPatterns("/**.ico") // favicon
                 // 仅排除真正的静态资源
                 .excludePathPatterns("/ws/**");
-
         registry.addInterceptor(adminAuthInterceptor)
                 .addPathPatterns("/admin/**")
                 .excludePathPatterns("/admin/login");

@@ -12,9 +12,10 @@ from flask import jsonify, request
 from api import api
 from clients.dashscope_image import dashscope_text_to_image
 from clients.deepseek_client import deepseek_chat_completion
-from clients.huanapi_client import huanapi_images, normalize_huanapi_v1_base
+from clients.huanapi_client import huanapi_images
 from config import settings
 from graphs.ai_write_graph import run_ai_write
+from utils.image_mcp import enrich_image_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -99,16 +100,42 @@ def ai_image():
         return jsonify({"code": 400, "msg": "prompt required"}), 400
     if quality not in ("normal", "premium"):
         return jsonify({"code": 400, "msg": "quality must be normal|premium"}), 400
+    mcp_used = False
     try:
+        prompt, mcp_used = enrich_image_prompt(prompt)
         if quality == "normal":
             url, usage = dashscope_text_to_image(prompt)
         else:
             hu = settings.huanapi
-            model = hu.get("model_image_premium") or "gpt-image-2"
-            base = normalize_huanapi_v1_base(str(hu.get("base_url") or "https://www.huanapi.com"))
-            key = hu.get("image_key") or ""
-            url, usage = huanapi_images(base, key, model, prompt[:4000])
-    except Exception:
+            base = str(hu.get("base_url") or "https://www.huanapi.com")
+            img_key = str(hu.get("image_key") or "").strip()
+            if not img_key:
+                return jsonify({
+                    "code": 503,
+                    "msg": "GPT 生图未配置（HUANAPI_IMAGE_KEY）",
+                }), 503
+            premium_model = str(hu.get("model_image_premium") or "gpt-image-2").strip()
+            if premium_model != "gpt-image-2":
+                logger.warning(
+                    "huanapi.model_image_premium=%r，将使用官方模型名 gpt-image-2",
+                    premium_model,
+                )
+            url, usage = huanapi_images(base, img_key, "gpt-image-2", prompt)
+    except Exception as exc:
         logger.exception("ai_image 失败 quality=%s", quality)
-        return jsonify({"code": 500, "msg": "image generation failed"}), 500
-    return jsonify({"code": 200, "msg": "ok", "data": {"url": url, "usage": usage}})
+        msg = "image generation failed"
+        if quality == "premium":
+            detail = str(exc).strip()
+            if "SSLError" in detail or "SSL" in detail:
+                msg = (
+                    "无法连接 HuanAPI（SSL/网络异常），请检查本机网络、代理或防火墙；"
+                    "可在环境变量 HUANAPI_BASE_URL 指定网关地址"
+                )
+            elif detail:
+                msg = detail[:500]
+        return jsonify({"code": 500, "msg": msg}), 500
+    return jsonify({
+        "code": 200,
+        "msg": "ok",
+        "data": {"url": url, "usage": usage, "mcp_used": mcp_used},
+    })

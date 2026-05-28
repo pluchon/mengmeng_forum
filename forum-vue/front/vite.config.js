@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
       include: ['oh-my-live2d'],
     },
     resolve: {
+      // 避免多份 @vue/shared 导致 Element Plus 的 isFunction 绑定错乱
+      dedupe: ['vue', '@vue/shared'],
       alias: {
         '@': path.resolve(__dirname, 'src'),
         '@scripts': path.resolve(__dirname, 'src/scripts'),

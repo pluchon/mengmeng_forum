@@ -13,7 +13,6 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import { useApp } from '@scripts/App'
 import ParticleSea from '@/components/common/ParticleSea.vue'
 import MascotDock from '@/components/mascot/MascotDock.vue'
@@ -23,10 +22,9 @@ const {
   TheHeader,
   isAuthPage,
   showGlobalHeader,
+  showMascot,
   zhCn,
 } = useApp()
-
-const showMascot = computed(() => import.meta.env.VITE_ENABLE_MASCOT === 'true')
 </script>
 
 <style scoped>

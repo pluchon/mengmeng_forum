@@ -23,7 +23,7 @@
             <el-icon>
               <CircleCheck />
             </el-icon>
-            <span>萌萌论坛 · 管理后台</span>
+            <span>萌萌技术分享笔记 · 管理后台</span>
           </header>
 
           <el-form
@@ -86,6 +86,8 @@
               </el-button>
             </el-form-item>
           </el-form>
+
+          <SiteIcpLink variant="auth" />
         </div>
 
         <a
@@ -117,6 +119,7 @@ import {
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import type { FormInstance, FormRules } from 'element-plus'
 import AdminParticleSea from '@/components/AdminParticleSea.vue'
+import SiteIcpLink from '@/components/SiteIcpLink.vue'
 import backToFrontIcon from '@/assets/svg/回到用户端登录.svg'
 import { useLoading, useTheme } from '@/hooks'
 import { useTabsStore, useUserStore } from '@/stores'

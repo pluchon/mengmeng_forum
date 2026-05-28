@@ -64,6 +64,12 @@
             <div class="editor-field-label editor-field-label--inline">
               <span class="editor-req">*</span> 内容
             </div>
+            <div class="editor-content-head-tools">
+            <ArticleAiWriteAssist
+              :editor-mode="editorMode"
+              :title="form.title"
+              @apply="applyAiContent"
+            />
             <div class="editor-mode-seg" role="tablist" aria-label="编辑器模式">
               <button
                 type="button"
@@ -85,6 +91,7 @@
               >
                 Markdown
               </button>
+            </div>
             </div>
           </div>
 
@@ -180,10 +187,12 @@
 <script setup>
 import { InfoFilled, Picture } from '@element-plus/icons-vue'
 import ArticleCreateGallerySection from '@/components/article/ArticleCreateGallerySection.vue'
+import ArticleAiWriteAssist from '@/components/article/ArticleAiWriteAssist.vue'
 import { useArticleCreate } from '@scripts/views/ArticleCreate'
 
 const {
   WangEditor,
+  applyAiContent,
   bindGalleryItemsRef,
   canAddGallery,
   cascaderOptions,

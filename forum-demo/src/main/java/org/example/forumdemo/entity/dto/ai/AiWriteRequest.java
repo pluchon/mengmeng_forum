@@ -7,7 +7,7 @@ import java.util.List;
 @Data
 public class AiWriteRequest {
     /**
-     * deepseek_flash / deepseek_pro / gemini_flash / gemini_pro
+     * deepseek_flash | deepseek_pro | qwen_flash | qwen_pro | gemini_pro | claude_haiku | claude_sonnet
      */
     private String kind;
     private List<AiChatMessage> messages;

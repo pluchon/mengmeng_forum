@@ -228,12 +228,25 @@
   color: #86909c;
 }
 
-/* Privacy Page Specifics */
+/* Privacy / Terms — 与表情商城相同的经典粒子海背景 */
 .privacy-page {
+  position: relative;
+  flex: 1;
   min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: #fff7f9;
+}
+
+.privacy-page > :not(.particle-hero) {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .privacy-container {
@@ -305,7 +318,9 @@
 }
 
 .policy-card {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
   border-radius: 24px;
   padding: 50px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
@@ -454,12 +469,23 @@
 }
 
 .privacy-footer {
-  height: 80px;
+  min-height: 80px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  gap: 8px 16px;
   color: #86909c;
   font-size: 14px;
+}
+
+.privacy-icp {
+  color: #86909c;
+  text-decoration: none;
+}
+
+.privacy-icp:hover {
+  color: var(--primary-red, #ff2442);
 }
 
 @media (max-width: 640px) {

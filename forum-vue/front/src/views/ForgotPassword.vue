@@ -58,6 +58,8 @@
               重置密码并登录
             </el-button>
 
+            <SiteIcpLink variant="auth" />
+
             <div class="footer-links">
               <el-button link class="back-link" @click="$router.push('/sign-in')">
                 <el-icon><ArrowLeft /></el-icon>
@@ -78,6 +80,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
 import { useForgotPassword } from '@scripts/views/ForgotPassword'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
 

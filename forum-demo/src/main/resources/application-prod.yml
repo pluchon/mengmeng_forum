@@ -83,9 +83,4 @@ logging:
   level:
     root: WARN
     org.example.forumdemo: INFO
-  file:
-    name: /app/logs/forum-demo.log
-  logback:
-    rollingpolicy:
-      max-file-size: 50MB
-      max-history: 30
+  # 生产容器用控制台日志，避免挂载 logs/backend 时 uid 1000 无写权限

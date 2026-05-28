@@ -53,18 +53,24 @@ public class MailCodeServiceImpl implements MailCodeService {
         if (!RegexUtil.checkMail(email)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        // 记录一个冷标记，防止用户频繁盗刷接口，时间为60S
         String cooldownKey = Constant.REDIS_KEY_MAIL_COOLDOWN + email;
         if (stringRedisTemplate.hasKey(cooldownKey)) {
+            // 证明60S内缓存中存在了这个冷标记，也就是说已经发送过验证码了
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_RATE_LIMIT));
         }
+        // 在内存中记录发送次数
         String countKey = Constant.REDIS_KEY_MAIL_COUNT + email;
         Long count = stringRedisTemplate.opsForValue().increment(countKey);
+        // 首次发送，给一个30分钟内的次数限制
         if (count != null && count == 1) {
             stringRedisTemplate.expire(countKey, Constant.REDIS_TTL_MAIL_COUNT, TimeUnit.SECONDS);
         }
+        // 已经达到了最大的发送数量
         if (count != null && count > Constant.MAIL_MAX_COUNT) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_RATE_LIMIT));
         }
+        // 获取6位数端验证码
         String code = CaptchaUtils.getCapthca(6);
         stringRedisTemplate.opsForValue().set(prefix + email, code, TIMEOUT, TimeUnit.SECONDS);
         stringRedisTemplate.opsForValue().set(cooldownKey, "1", 60L, TimeUnit.SECONDS);
@@ -72,6 +78,7 @@ public class MailCodeServiceImpl implements MailCodeService {
         String content = "您的验证码是：" + code + "，5分钟内有效。若非本人操作请忽略。";
         Boolean sendSuccess = mailUtil.sendSampleMail(email, subject, content);
         if (!sendSuccess) {
+            // 如果发送不成功，要把缓存中的刚刚设置的验证码的信息删了
             stringRedisTemplate.delete(prefix + email);
             stringRedisTemplate.delete(cooldownKey);
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));

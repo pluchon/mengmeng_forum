@@ -8,7 +8,7 @@ import jakarta.annotation.Resource;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.AdminPagination;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.ArticleReply;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.admin.AdminSetArticleStateRequest;
@@ -65,9 +65,8 @@ public class AdminContentReplyServiceImpl implements AdminContentReplyService {
         Page<ArticleReply> result = articleReplyMapper.selectPage(p, w);
         List<ArticleReply> records = result.getRecords();
         List<Long> uids = records.stream().map(ArticleReply::getPostUserId).filter(Objects::nonNull).distinct().toList();
-        Map<Long, User> users = uids.isEmpty()
-                ? Map.of()
-                : userMapper.selectBatchIds(uids).stream().collect(Collectors.toMap(User::getId, Function.identity()));
+        Map<Long, User> users = uids.isEmpty() ? Map.of()
+                : userMapper.selectByIds(uids).stream().collect(Collectors.toMap(User::getId, Function.identity()));
         List<AdminArticleReplyRowVO> rows = records.stream().map(r -> toRow(r, users)).toList();
         return new PageResult<>(rows, result.getTotal(), (int) result.getCurrent(), (int) result.getSize(),
                 result.getPages(), result.hasNext());
@@ -75,8 +74,7 @@ public class AdminContentReplyServiceImpl implements AdminContentReplyService {
 
     @Override
     public void setDeleteState(AdminSetDeleteStateRequest req) {
-        if (req.getId() == null || req.getDeleteState() == null
-                || (req.getDeleteState() != 0 && req.getDeleteState() != 1)) {
+        if (req.getId() == null || req.getDeleteState() == null || (req.getDeleteState() != 0 && req.getDeleteState() != 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         int n = articleReplyMapper.update(null, new LambdaUpdateWrapper<ArticleReply>()

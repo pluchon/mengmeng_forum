@@ -5,12 +5,14 @@
       <Header></Header>
       <Tabs v-if="appStore.tabVisible"></Tabs>
       <Main></Main>
+      <SiteIcpBar />
     </a-layout>
   </a-layout>
 </template>
 
 <script setup lang="ts">
 import { useAppStore } from '@/stores'
+import SiteIcpBar from '@/components/SiteIcpBar.vue'
 import Asider from './components/Asider/index.vue'
 import Header from './components/Header/index.vue'
 import Main from './components/Main.vue'
@@ -27,6 +29,8 @@ const appStore = useAppStore()
   height: 100%;
 
   &__right {
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
 }

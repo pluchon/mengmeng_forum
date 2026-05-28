@@ -11,10 +11,12 @@
     </a-row>
     <Tabs v-if="appStore.tabVisible"></Tabs>
     <Main></Main>
+    <SiteIcpBar />
   </div>
 </template>
 
 <script setup lang="ts">
+import SiteIcpBar from '@/components/SiteIcpBar.vue'
 import { useMenu } from '@/layout/hooks/useMenu'
 import { useAppStore } from '@/stores'
 import HeaderRightBar from './components/HeaderRightBar/index.vue'

@@ -189,28 +189,23 @@ public class LotteryServiceImpl implements LotteryService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_LOTTERY_TIMES_INVALID));
         }
         LotteryActivity activity = resolveActivity(dto.getActivityId());
-
         User lockedUser = userMapper.selectByIdForUpdate(userId);
         if (lockedUser == null || (lockedUser.getDeleteState() != null && lockedUser.getDeleteState() != 0)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         int pity = lockedUser.getLotteryPityDraws() == null ? 0 : lockedUser.getLotteryPityDraws();
-
         int totalCost = activity.getCostPointsPerDraw() * times;
         String costRemark = times == 1 ? "积分抽奖·单抽" : "积分抽奖·十连";
         pointsService.deductPoints(userId, totalCost, Constant.POINTS_SOURCE_LOTTERY_COST,
                 activity.getId(), costRemark);
-
         String batchKey = times > 1 ? UUID.randomUUID().toString().replace("-", "") : null;
         List<LotteryDrawItemVO> results = new ArrayList<>(times);
         boolean tenHasRare = false;
         for (int i = 0; i < times; i++) {
             boolean forceGrand = pity >= Constant.LOTTERY_HARD_PITY_AFTER_MISSES;
             boolean forceRareOnly = times == 10 && i == times - 1 && !tenHasRare;
-            LotteryDrawItemVO item =
-                    executeOneDraw(userId, activity.getId(), batchKey, forceGrand, forceRareOnly);
+            LotteryDrawItemVO item = executeOneDraw(userId, activity.getId(), batchKey, forceGrand, forceRareOnly);
             results.add(item);
-
             boolean jackpotWin = Boolean.TRUE.equals(item.getJackpot());
             if (jackpotWin) {
                 pity = 0;
@@ -223,7 +218,6 @@ public class LotteryServiceImpl implements LotteryService {
                 tenHasRare = true;
             }
         }
-
         int balanceAfter = pointsService.getWallet(userId).getBalance();
         return new LotteryDrawResultVO(balanceAfter, batchKey, results, pity);
     }

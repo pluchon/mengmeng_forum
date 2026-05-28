@@ -6,7 +6,7 @@ import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-//API界面的工具
+//API调试界面的工具
 @Configuration
 public class SwaggerConfig {
 
@@ -15,7 +15,7 @@ public class SwaggerConfig {
         return new OpenAPI().info(new Info()
                 .title("萌萌论坛测试")          // 文档标题
                 .description("论坛项目接口文档")    // 文档描述
-                .version("v1.1.0")                // 版本号
+                .version("v1.0")                // 版本号
                 .contact(new Contact().name("Forum Team").email("dev@example.com")));
     }
 }

@@ -24,7 +24,7 @@
           <div class="result-meta">
             <span class="author">{{ item.user?.nickname || '匿名用户' }}</span>
             <span class="dot">·</span>
-            <span>{{ item.article?.createTime || '' }}</span>
+            <span>{{ formatForumDateTimeShanghai(item.article?.createTime) }}</span>
           </div>
         </el-card>
 
@@ -47,6 +47,7 @@
 
 <script setup>
 import { useSearchArticle } from '@scripts/views/SearchArticle'
+import { formatForumDateTimeShanghai } from '@/utils/datetime'
 
 const {
   bannerText,

@@ -15,6 +15,8 @@ public class ApplicationException extends RuntimeException {
         this.errorResult = errorResult;
     }
 
+    // 必须显示的调用父类方法，才能够得到父类的各种异常传递排查
+
     public ApplicationException(String message) {
         super(message);
     }

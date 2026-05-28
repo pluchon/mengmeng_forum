@@ -15,6 +15,8 @@ import { DEFAULT_AVATAR } from '@/utils/constants'
 import { sanitizeHtml } from '@/utils/security'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
+import { formatForumDateTimeShanghai } from '@/utils/datetime'
+import { ensureLoggedIn } from '@/utils/loginPrompt'
 import aiIconUrl from '@/assets/svg/AI.svg?url'
 import replyIconUrl from '@/assets/svg/回复.svg?url'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
@@ -319,7 +321,7 @@ export function useArticleDetail() {
   }
 
   async function handleLike() {
-    if (!userStore.isLoggedIn) return router.push('/sign-in')
+    if (!(await ensureLoggedIn('点赞需要登录'))) return
     try {
       const res = isLiked.value 
         ? await unlikeArticle(article.value.id) 
@@ -362,7 +364,7 @@ export function useArticleDetail() {
   }
 
   async function toggleFavorite() {
-    if (!userStore.isLoggedIn) return router.push('/sign-in')
+    if (!(await ensureLoggedIn('点赞需要登录'))) return
     if (!article.value?.id) return
 
     if (isFavorited.value) {
@@ -410,7 +412,7 @@ export function useArticleDetail() {
   }
 
   async function submitReply() {
-    if (!userStore.isLoggedIn) return router.push('/sign-in')
+    if (!(await ensureLoggedIn('点赞需要登录'))) return
     if (blockIfMuted(userStore)) return
     if (!replyContent.value.trim()) return
     try {
@@ -450,7 +452,7 @@ export function useArticleDetail() {
   }
 
   async function handleReplyTo(item) {
-    if (!userStore.isLoggedIn) return router.push('/sign-in')
+    if (!(await ensureLoggedIn('点赞需要登录'))) return
     const rid = Number(item?.articleReply?.id)
     const area = subReplyAreaByReplyId.get(rid)
     if (area?.openReplyTo) {
@@ -542,5 +544,6 @@ export function useArticleDetail() {
     showLikersDialog,
     submitReply,
     toggleFavorite,
+    formatForumDateTimeShanghai,
   }
 }

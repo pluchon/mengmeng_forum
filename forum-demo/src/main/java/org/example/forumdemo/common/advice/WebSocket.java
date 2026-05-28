@@ -18,12 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class WebSocket extends TextWebSocketHandler {
 
-    //我的结论是，我们websocket处理的是聊天，一旦我们前端退出聊天界面，这个session就会断
-    //当我们再次打开，session就会连接成功
-    //我们引入消息队列，如果我和对方没有建立起连接，这个消息就会跑到rabbitmq的队列中等待被消费
-    //私信界面，如果我和对方都在线，则我们的websocket建立了连接
-    //一旦对方下线，就算对方不在线，我们把消息放入数据库，直接从数据库加载消息了
-
     @Autowired
     private OnlineUserManageUtil onlineUserManageUtil;
 
@@ -32,6 +26,7 @@ public class WebSocket extends TextWebSocketHandler {
 
     // 活跃 session 集合，用于心跳扫描
     private final ConcurrentHashMap<String, WebSocketSession> activeSessions = new ConcurrentHashMap<>();
+
     // 记录每个 session 最后一次收到 ping 的时间戳
     private final ConcurrentHashMap<String, Long> lastPingTime = new ConcurrentHashMap<>();
 
@@ -61,7 +56,7 @@ public class WebSocket extends TextWebSocketHandler {
 
     // 连接异常：下线清理
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
         cleanup(session);
         Long userId = resolveUserId(session);
         if (userId != null) {
@@ -82,6 +77,7 @@ public class WebSocket extends TextWebSocketHandler {
     }
 
     // 每 30 秒扫描一次，踢出超过 90 秒没有心跳的死连接
+    // 如果客户端因为各种原因的连接断开，如果不及时的清理，就会导致资源极大的占用与浪费
     @Scheduled(fixedDelay = 30_000)
     public void evictStaleSessions() {
         long now = System.currentTimeMillis();
@@ -112,8 +108,7 @@ public class WebSocket extends TextWebSocketHandler {
         lastPingTime.remove(session.getId());
     }
 
-    // 从 attributes 取 userId
-    // 由 TokenHandshakeInterceptor 鉴权后写入，数据可信
+    // 校验用户ID是否是Long类型，避免我们的空指针异常
     private Long resolveUserId(WebSocketSession session) {
         Object userId = session.getAttributes().get(Constant.JWT_USER_ID);
         return userId instanceof Long ? (Long) userId : null;

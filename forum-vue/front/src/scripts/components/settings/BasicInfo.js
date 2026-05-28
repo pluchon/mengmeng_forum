@@ -96,7 +96,7 @@ export function useBasicInfo() {
         const aiRes = await validateText(profileForm.remark)
         if (aiRes.code === 0 && aiRes.data && !aiRes.data.isAllowed) {
           return ElMessage.warning(
-            '内容违规: ' + (aiRes.data.reason || '签名内容不符合社区规范'),
+            '内容违规: ' + (aiRes.data.reason || '签名内容不符合平台规范'),
           )
         }
       } catch (err) {

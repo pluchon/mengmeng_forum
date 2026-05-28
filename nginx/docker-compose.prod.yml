@@ -1,25 +1,27 @@
-# 2核4G 等小内存服务器生产叠加
-# - 中间件仅绑定 127.0.0.1（SSH 隧道 / Navicat 连库，不暴露公网）
-# - 限制 ai-server / backend 内存
-# 用法: docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d
-# 双实例: docker compose -f docker-compose.yaml -f docker-compose.prod.yml --profile dual up -d
+# Production overlay: bind middleware to 127.0.0.1 on host + memory limits
+# 勿使用 ports: !reset（Compose 合并会清空端口且不写回，导致 Navicat 连不上）
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d
+#
+# 宿主机（SSH 隧道 / 本机）默认端口：
+#   MySQL 33061  Redis 63790  Postgres 54320
+#   RabbitMQ AMQP 56720  管理台 15672
 
 services:
   mysql:
-    ports: !reset
+    ports:
       - "127.0.0.1:${MYSQL_HOST_PORT:-33061}:3306"
 
   redis:
-    ports: !reset
+    ports:
       - "127.0.0.1:${REDIS_HOST_PORT:-63790}:6379"
 
   rabbitmq:
-    ports: !reset
+    ports:
       - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56720}:5672"
       - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672"
 
   postgres:
-    ports: !reset
+    ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-54320}:5432"
 
   ai-server:

@@ -11,12 +11,8 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.utils.AiAuditUtils;
+import org.example.forumdemo.common.utils.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.example.forumdemo.common.utils.MailUtil;
-import org.example.forumdemo.common.utils.OnlineUserManageUtil;
-import org.example.forumdemo.common.utils.PageUtils;
-import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleImage;
 import org.example.forumdemo.entity.db.ArticleLike;
@@ -34,6 +30,7 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleImageMapper;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
+import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.board.BoardService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
@@ -101,7 +98,7 @@ public class ArticleServiceImpl implements ArticleService {
     private MailUtil mailUtil;
 
     @Autowired
-    private org.example.forumdemo.common.websocket.WebSocketPushService webSocketPushService;
+    private WebSocketPushService webSocketPushService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -136,7 +133,8 @@ public class ArticleServiceImpl implements ArticleService {
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        org.example.forumdemo.common.utils.UserMuteGuard.assertCanPost(user);
+        // 查看用户是否被禁言了
+        UserMuteGuard.assertCanPost(user);
         Article add = new Article();
         add.setUserId(userId);
         add.setTitle(req.getTitle());
@@ -177,6 +175,7 @@ public class ArticleServiceImpl implements ArticleService {
                 .eq(Article::getStatus, ArticleStatus.APPROVED.getCode())
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .ne(Article::getState, STATE_FORBIDDEN)
+                // 设置发布状态
                 .set(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .set(Article::getAuditFinishedAt, new Date()));
         if (result <= 0) {
@@ -199,8 +198,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
         Article articleInfo = selectArticleByArticleId(articleId);
         // 草稿仅作者本人可见
-        if (!ArticleStatus.isPublished(articleInfo.getStatus())
-                && !Objects.equals(loginUserId, articleInfo.getUserId())) {
+        if (!ArticleStatus.isPublished(articleInfo.getStatus()) && !Objects.equals(loginUserId, articleInfo.getUserId())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
         // 先 +1 再返回，让前端拿到的是包含本次访问的最新值
@@ -267,7 +265,7 @@ public class ArticleServiceImpl implements ArticleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UPDATE_ARTICLE));
         }
         User editor = userService.queryUserByUserId(loginUserId);
-        org.example.forumdemo.common.utils.UserMuteGuard.assertCanPost(editor);
+        UserMuteGuard.assertCanPost(editor);
         if (ArticleStatus.isEditingLocked(article.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
         }
@@ -412,20 +410,17 @@ public class ArticleServiceImpl implements ArticleService {
     // 用户主页帖子列表
     // ============================================================
     @Override
-    public PageResult<Article> queryArticleListByUserIdWithPage(Long userId, Long loginUserId,
-                                                                Integer pageNum, Integer pageSize) {
+    public PageResult<Article> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
         Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner));
-        return new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize,
-                result.getPages(), result.hasNext());
+        return new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
 
     @Override
-    public ArticleListByUserIdPageResponse queryArticleListByUserIdWithPageAndUserInfo(Long userId, Long loginUserId,
-                                                                                       Integer pageNum, Integer pageSize) {
+    public ArticleListByUserIdPageResponse queryArticleListByUserIdWithPageAndUserInfo(Long userId, Long loginUserId, Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
@@ -452,8 +447,7 @@ public class ArticleServiceImpl implements ArticleService {
      */
     private QueryWrapper<Article> buildUserArticleWrapper(Long userId, boolean isOwner) {
         QueryWrapper<Article> wrapper = new QueryWrapper<>();
-        wrapper.lambda().eq(Article::getUserId, userId)
-                .ne(Article::getDeleteState, DELETE_TRUE).ne(Article::getState, STATE_FORBIDDEN);
+        wrapper.lambda().eq(Article::getUserId, userId).ne(Article::getDeleteState, DELETE_TRUE).ne(Article::getState, STATE_FORBIDDEN);
         if (!isOwner) {
             wrapper.lambda().eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode());
         }
@@ -478,8 +472,7 @@ public class ArticleServiceImpl implements ArticleService {
                 .ne(Article::getState, STATE_FORBIDDEN)
                 .orderByDesc(Article::getUpdateTime);
         Page<Article> result = articleMapper.selectPage(page, wrapper);
-        return new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize,
-                result.getPages(), result.hasNext());
+        return new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
 
     // ============================================================
@@ -496,6 +489,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (set != null && !set.isEmpty()) {
             return filterPublishedHotIdsOrderPreserving(set, n);
         }
+        // 查询之前要进行热帖榜单的重算
         rebuildHotArticleRanking();
         Set<String> reload = stringRedisTemplate.opsForZSet().reverseRange(Constant.REDIS_KEY_HOT_ARTICLES, 0, overFetch - 1);
         if (reload == null || reload.isEmpty()) {
@@ -621,7 +615,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
         int minLen = Math.min(sNorm.length(), pNorm.length());
         if (minLen < 20) {
-            return sNorm.equals(pNorm);
+            return false;
         }
         return pNorm.length() > 40 && (sNorm.contains(pNorm) || pNorm.contains(sNorm));
     }
@@ -759,7 +753,9 @@ public class ArticleServiceImpl implements ArticleService {
                 .orderByAsc(ArticleImage::getId));
         if (rows.isEmpty()) return Collections.emptyList();
         List<String> urls = new ArrayList<>(rows.size());
-        for (ArticleImage r : rows) urls.add(r.getImageUrl());
+        for (ArticleImage r : rows){
+            urls.add(r.getImageUrl());
+        }
         return urls;
     }
 
@@ -768,15 +764,8 @@ public class ArticleServiceImpl implements ArticleService {
      * 与商城 / 聊天图的校验策略一致.
      */
     private void validateArticleImageUrl(String url) {
-        String normalized = url == null ? "" : url.trim();
-        String urlPrefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
-        String expected = urlPrefix + Constant.OSS_PATH_ARTICLE_IMAGE;
-        boolean prefixOk = StringUtils.hasLength(normalized) && StringUtils.hasLength(urlPrefix)
-                && normalized.startsWith(expected);
-        boolean safePath = !normalized.contains("..") && !normalized.contains("\\")
-                && !containsControlChar(normalized);
-        if (!prefixOk || !safePath) {
-            log.warn("帖子相册 URL 非法: {}", normalized);
+        if (!ossConfig.matchesPublicObjectUrl(url, Constant.OSS_PATH_ARTICLE_IMAGE)) {
+            log.warn("帖子相册 URL 非法: {}", url);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
     }
@@ -813,7 +802,7 @@ public class ArticleServiceImpl implements ArticleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         User author = userService.queryUserByUserId(loginUserId);
-        org.example.forumdemo.common.utils.UserMuteGuard.assertCanPost(author);
+        UserMuteGuard.assertCanPost(author);
         Article article = articleMapper.selectOne(new QueryWrapper<Article>().lambda()
                 .eq(Article::getId, articleId)
                 .ne(Article::getDeleteState, DELETE_TRUE)
@@ -832,19 +821,16 @@ public class ArticleServiceImpl implements ArticleService {
         if (curRetry >= Constant.ARTICLE_AUDIT_MAX_RETRY) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_RETRY_LIMIT));
         }
-
         String taskId = UUID.randomUUID().toString();
         Byte oldStatus = article.getStatus();
         boolean wasPublished = ArticleStatus.isPublished(oldStatus);
-
         int updated = articleMapper.update(null, new UpdateWrapper<Article>().lambda()
                 .eq(Article::getId, articleId)
                 .eq(Article::getStatus, oldStatus)
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .set(Article::getStatus, ArticleStatus.PENDING_AUDIT.getCode())
                 .set(Article::getAuditTaskId, taskId)
-                .set(Article::getAuditNotifyEmail,
-                        Boolean.TRUE.equals(notifyEmail) ? AUDIT_NOTIFY_EMAIL_ON : AUDIT_NOTIFY_EMAIL_OFF)
+                .set(Article::getAuditNotifyEmail, Boolean.TRUE.equals(notifyEmail) ? AUDIT_NOTIFY_EMAIL_ON : AUDIT_NOTIFY_EMAIL_OFF)
                 .set(Article::getAuditRetryCount, curRetry + 1)
                 .set(Article::getAuditSubmittedAt, new Date())
                 .set(Article::getAuditFinishedAt, null)
@@ -853,10 +839,8 @@ public class ArticleServiceImpl implements ArticleService {
             // 并发下另一个请求已经把状态改了, 拒绝本次
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_STATUS_INVALID));
         }
-
         // 收集图片: cover + gallery; cover 单独传, gallery 列表传 vl 模型逐张审
         List<String> imageUrls = queryArticleImageUrls(articleId);
-
         ArticleAuditTaskMqVO task = new ArticleAuditTaskMqVO(
                 taskId,
                 articleId,
@@ -870,7 +854,6 @@ public class ArticleServiceImpl implements ArticleService {
         // 先发 MQ: 失败抛异常会回滚 DB CAS, 同时本方法尚未做"下榜+减计数"副作用, 数据保持一致.
         // 副作用必须放在 MQ 之后, 否则 MQ 失败回滚 DB 时, Redis/计数已经被错误地减掉.
         forumProducer.sendArticleAuditTask(task);
-
         // 已发布回审: 在 MQ 已确认投递成功后再把帖子从热帖榜 / 用户帖数 / 板块帖数中下线,
         // 避免审核未通过 / 挂掉时它继续"在线".
         if (wasPublished) {
@@ -878,7 +861,6 @@ public class ArticleServiceImpl implements ArticleService {
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
         }
-
         log.info("提交审核成功: articleId={}, userId={}, taskId={}, retry={}/{}",
                 articleId, loginUserId, taskId, curRetry + 1, Constant.ARTICLE_AUDIT_MAX_RETRY);
         return taskId;

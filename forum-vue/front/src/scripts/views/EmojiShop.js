@@ -72,10 +72,10 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
     if (row) row.owned = true
   }
 
-  function goUpload() {
+  async function goUpload() {
     if (!userStore.isLoggedIn) {
-      router.push('/sign-in')
-      return
+      const { ensureLoggedIn } = await import('@/utils/loginPrompt')
+      if (!(await ensureLoggedIn('上传表情包需要登录'))) return
     }
     uploadDialogRef.value?.open()
     router.replace({ path: '/emoji-shop', query: { ...route.query, upload: '1' } }).catch(() => {})

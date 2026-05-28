@@ -26,16 +26,21 @@ import {
   setMascotModel,
 } from '@/api/mascot'
 import { aiImage, aiPriceEstimate } from '@/api/ai'
+import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
 import { DEFAULT_AVATAR } from '@/utils/constants'
-import iconDeepseek from '@/assets/svg/deepseek-color.svg'
-import iconQwen from '@/assets/svg/qwen-color.svg'
-import iconGemini from '@/assets/svg/gemini-color.svg'
+import {
+  MASCOT_TEXT_LLM_OPTIONS,
+  MASCOT_IMAGE_QUALITY_OPTIONS,
+  MASCOT_FLASH_LLM_IDS,
+  findImageQualityOption,
+} from '@/constants/aiModels'
 import companionXiaomai from '@/assets/images/xiaomai.png'
 import companionMiku from '@/assets/images/miku.png'
 
 export function useMascotDock() {
   const OFFSET_KEY = 'mascot_dock_offset_v1'
-  const SCALE_KEY = 'mascot_stage_scale_v1'
+  const SCALE_KEY = 'mascot_stage_scale_v2'
+  const ANCHOR_KEY = 'mascot_stage_anchored_v2'
   const LLM_WRITING_KEY = 'mascot_llm_writing_v3'
   const LLM_HELP_KEY = 'mascot_llm_help_v3'
   const IMAGE_QUALITY_KEY = 'mascot_image_quality_v1'
@@ -62,15 +67,9 @@ export function useMascotDock() {
     untitledSession: '未命名会话',
   }
   
-  /** 与 ai-server mascot_graph 路由一致；深度档 VIP 可用 */
-  const ALL_LLM_OPTIONS = [
-    { id: 'qwen-flash', label: '通义千问', hint: 'qwen3.6-flash', icon: iconQwen, vipOnly: false },
-    { id: 'deepseek-flash', label: 'DeepSeek', hint: 'deepseek-v4-flash', icon: iconDeepseek, vipOnly: false },
-    { id: 'gemini-flash', label: 'Gemini', hint: 'gemini-3-flash', icon: iconGemini, vipOnly: false },
-    { id: 'qwen-deep', label: '通义千问 · 深度', hint: 'qwen3.6-max-preview', icon: iconQwen, vipOnly: true },
-    { id: 'deepseek-deep', label: 'DeepSeek · 深度', hint: 'deepseek-v4-pro', icon: iconDeepseek, vipOnly: true },
-    { id: 'gemini-deep', label: 'Gemini · 深度', hint: 'gemini-3.1-pro', icon: iconGemini, vipOnly: true },
-  ]
+  /** 文本模型（写作/帮助）；生图模型见 IMAGE_MODEL_OPTIONS */
+  const ALL_LLM_OPTIONS = MASCOT_TEXT_LLM_OPTIONS
+  const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
   const userStore = useUserStore()
   const pointsWallet = usePointsWalletStore()
@@ -116,7 +115,7 @@ export function useMascotDock() {
     { id: 'appearance', label: '形象选择', icon: UserFilled },
   ]
   
-  const FLASH_LLM = ['qwen-flash', 'deepseek-flash', 'gemini-flash']
+  const FLASH_LLM = MASCOT_FLASH_LLM_IDS
   
   function llmStorageKey() {
     return activeNav.value === 'help' ? LLM_HELP_KEY : LLM_WRITING_KEY
@@ -137,10 +136,13 @@ export function useMascotDock() {
         selectedLlmWriting.value = v
     },
   })
+
+  const activeImageOption = computed(() => findImageQualityOption(imageQuality.value) || IMAGE_MODEL_OPTIONS[0])
+
   const scalePopoverOpen = ref(false)
   
   const dragOffset = ref({ x: 0, y: 0 })
-  const stageScale = ref(1)
+  const stageScale = ref(0.5)
   
   let stageGesture = false
   let stageMoved = false
@@ -161,10 +163,16 @@ export function useMascotDock() {
     }
   })
   
+  const vipTierNum = computed(() => {
+    if (Number(userStore.isAdmin) === 1)
+      return 2
+    return Number(userStore.vipTier) || 0
+  })
+
   const isVip = computed(() => {
     if (Number(userStore.isAdmin) === 1)
       return true
-    const t = Number(userStore.vipTier) || 0
+    const t = vipTierNum.value
     if (t <= 0)
       return false
     const expRaw = userStore.vipExpireAt
@@ -175,9 +183,21 @@ export function useMascotDock() {
       return true
     return Date.now() <= exp
   })
+
+  const imageModelOptions = computed(() => {
+    const tier = vipTierNum.value
+    return IMAGE_MODEL_OPTIONS.filter((o) => !o.vipOnly || tier >= 1)
+  })
   
   const llmOptions = computed(() => {
-    const list = ALL_LLM_OPTIONS.filter(o => !o.vipOnly || isVip.value)
+    const tier = vipTierNum.value
+    const list = ALL_LLM_OPTIONS.filter((o) => {
+      if (o.maxOnly && tier < 2)
+        return false
+      if (o.vipOnly && tier < 1)
+        return false
+      return true
+    })
     if (activeNav.value === 'help')
       return list.filter(o => FLASH_LLM.includes(o.id))
     return list
@@ -351,26 +371,55 @@ export function useMascotDock() {
     return t > 0 ? t : 1
   })
   
+  function anchorStageToViewportBottomRight() {
+    dragOffset.value = { x: 0, y: 0 }
+  }
+
+  function clampDragOffset() {
+    if (typeof window === 'undefined') return
+    const wrapW = stageSize.value.w
+    const wrapH = stageSize.value.h
+    const margin = 12
+    const minX = -(window.innerWidth - wrapW - margin * 2)
+    const minY = -(window.innerHeight - wrapH - margin * 2)
+    dragOffset.value = {
+      x: Math.min(0, Math.max(minX, dragOffset.value.x)),
+      y: Math.min(0, Math.max(minY, dragOffset.value.y)),
+    }
+  }
+
   function loadSavedOffset() {
     try {
-      const raw = sessionStorage.getItem(OFFSET_KEY)
-      if (raw) {
-        const o = JSON.parse(raw)
-        if (typeof o.x === 'number' && typeof o.y === 'number') {
-          dragOffset.value = { x: o.x, y: o.y }
+      const anchored = sessionStorage.getItem(ANCHOR_KEY)
+      if (!anchored) {
+        anchorStageToViewportBottomRight()
+        sessionStorage.setItem(ANCHOR_KEY, '1')
+      } else {
+        const raw = sessionStorage.getItem(OFFSET_KEY)
+        if (raw) {
+          const o = JSON.parse(raw)
+          if (typeof o.x === 'number' && typeof o.y === 'number') {
+            dragOffset.value = { x: o.x, y: o.y }
+          }
         }
       }
       const rawS = sessionStorage.getItem(SCALE_KEY)
       if (rawS) {
         const s = parseFloat(rawS)
-        if (!Number.isNaN(s) && s >= 0.55 && s <= 1.45) {
+        if (!Number.isNaN(s) && s >= 0.35 && s <= 1.45) {
           stageScale.value = s
         }
       }
       const w = localStorage.getItem(LLM_WRITING_KEY)
       const h = localStorage.getItem(LLM_HELP_KEY)
       const legacy = localStorage.getItem('mascot_llm_provider_v1')
-      const legacyMap = { qwen: 'qwen-flash', deepseek: 'deepseek-flash', gemini: 'gemini-flash' }
+      const legacyMap = {
+        qwen: 'qwen-flash',
+        deepseek: 'deepseek-flash',
+        gemini: 'gemini-deep',
+        claude: 'claude-haiku',
+        openai: 'qwen-flash',
+      }
       const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
       if (w && ALL_LLM_OPTIONS.some(x => x.id === w))
         selectedLlmWriting.value = w
@@ -387,6 +436,7 @@ export function useMascotDock() {
     catch {
       /* ignore */
     }
+    clampDragOffset()
   }
   
   function saveOffset() {
@@ -428,15 +478,37 @@ export function useMascotDock() {
       saveLlmPrefs()
     }
   }, { immediate: true })
+
+  watch(imageModelOptions, (opts) => {
+    if (!opts.some((x) => x.id === imageQuality.value)) {
+      imageQuality.value = opts[0]?.id || 'normal'
+      saveLlmPrefs()
+    }
+  }, { immediate: true })
   
   watch([activeNav, selectedLlm, imageQuality, () => userStore.isLoggedIn], () => {
     if (assistantOpen.value)
       refreshEstimate()
   }, { immediate: false })
+
+  watch(stageScale, () => {
+    applyStageScaleToLib()
+    clampDragOffset()
+  })
   
+  const stageSize = computed(() => ({
+    w: Math.round(STAGE_BASE_W * stageScale.value),
+    h: Math.round(STAGE_BASE_H * stageScale.value),
+  }))
+
   const stageWrapStyle = computed(() => ({
-    width: `${Math.round(STAGE_BASE_W * stageScale.value)}px`,
-    height: `${Math.round(STAGE_BASE_H * stageScale.value)}px`,
+    width: `${stageSize.value.w}px`,
+    height: `${stageSize.value.h}px`,
+  }))
+
+  const stageHostStyle = computed(() => ({
+    width: `${stageSize.value.w}px`,
+    height: `${stageSize.value.h}px`,
   }))
   
   const rootStyle = computed(() => ({
@@ -444,19 +516,21 @@ export function useMascotDock() {
   }))
   
   function applyStageScaleToLib() {
+    const { w, h } = stageSize.value
     try {
-      oml2d.value?.setStageStyle?.({
-        width: Math.round(STAGE_BASE_W * stageScale.value),
-        height: Math.round(STAGE_BASE_H * stageScale.value),
-      })
+      oml2d.value?.setStageStyle?.({ width: w, height: h })
     } catch {
       /* ignore */
     }
+    const idx = catalog.value.findIndex((m) => m.code === activeCode.value)
+    if (idx >= 0) applyModelMetricsForIndex(idx)
   }
   
   function onScaleSliderChange() {
     saveScale()
     applyStageScaleToLib()
+    clampDragOffset()
+    saveOffset()
   }
   
   function onStageLeave() {
@@ -506,6 +580,7 @@ export function useMascotDock() {
     window.removeEventListener('pointerup', onStagePointerUp)
     window.removeEventListener('pointercancel', onStagePointerUp)
     if (stageMoved) {
+      clampDragOffset()
       saveOffset()
     }
     else {
@@ -521,15 +596,17 @@ export function useMascotDock() {
   }
   
   function modelStageMetrics(m) {
+    const s = stageScale.value
     const needsBoost = m.code === 'xiaomai'
     const baseScale = Number(m.modelScale) || 0.1
-    const scale = needsBoost
+    let scale = needsBoost
       ? Math.min(0.35, Math.max(baseScale * 1.45, baseScale + 0.04))
       : baseScale
-    const posY = needsBoost ? Math.max(0, (m.posY ?? 72) - 10) : (m.posY ?? 72)
-    let posX = m.posX ?? 0
+    scale *= s
+    const posY = (needsBoost ? Math.max(0, (m.posY ?? 72) - 10) : (m.posY ?? 72)) * s
+    let posX = (m.posX ?? 0) * s
     if (m.code === 'snow_miku')
-      posX -= 48
+      posX -= 90 * s
     return {
       scale,
       position: [posX, posY],
@@ -544,7 +621,7 @@ export function useMascotDock() {
         path: live2dAssetUrl(m.modelRelPath),
         scale,
         position,
-        stageStyle: { width: STAGE_BASE_W, height: STAGE_BASE_H },
+        stageStyle: { width: stageSize.value.w, height: stageSize.value.h },
       }
     })
   }
@@ -793,7 +870,6 @@ export function useMascotDock() {
       const { loadOml2d } = await import('oh-my-live2d')
       oml2d.value = loadOml2d({
         parentElement: stageHost.value,
-        dockedPosition: 'right',
         sayHello: false,
         menus: { disable: true },
         statusBar: { disable: true },
@@ -885,7 +961,13 @@ export function useMascotDock() {
     try {
       if (activeNav.value === 'drawing') {
         const q = imageQuality.value === 'premium' && isVip.value ? 'premium' : 'normal'
-        const res = await aiImage({ prompt: text, quality: q, sessionId: sessionId.value || getSessionForNav('drawing') })
+        if (q === 'premium') showGptImageSlowToast()
+        let res
+        try {
+          res = await aiImage({ prompt: text, quality: q, sessionId: sessionId.value || getSessionForNav('drawing') })
+        } finally {
+          if (q === 'premium') dismissGptImageSlowToast()
+        }
         const data = res.data || {}
         const url = data.url || data.payload?.url
         if (!url) {
@@ -956,6 +1038,8 @@ export function useMascotDock() {
     loadSavedOffset()
     await nextTick()
     await initOml2dStage()
+    clampDragOffset()
+    saveOffset()
   })
   
   onBeforeUnmount(() => {
@@ -966,6 +1050,9 @@ export function useMascotDock() {
   return {
     DEFAULT_AVATAR,
     ALL_LLM_OPTIONS,
+    IMAGE_MODEL_OPTIONS,
+    activeImageOption,
+    imageModelOptions,
     FLASH_LLM,
     GUEST_MASCOT_CODE_KEY,
     IMAGE_QUALITY_KEY,
@@ -1051,6 +1138,7 @@ export function useMascotDock() {
     skillSessionIds,
     stageHost,
     stageHovered,
+    stageHostStyle,
     stageScale,
     stageUseFallback,
     stageWrapStyle,

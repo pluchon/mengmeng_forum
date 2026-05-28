@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '../router'
 import { useUserStore } from '../stores/user'
+import { extractApiErrorMessage } from '@/api/httpError'
 
 const request = axios.create({
   // 开发环境下使用代理，因此不需要配置写死的 base URL，由 vite.config 代理
@@ -66,8 +67,11 @@ request.interceptors.response.use(
         const userStore = useUserStore()
         userStore.logout() // 包含 router.push('/sign-in')
       } else {
-        ElMessage.error(`请求错误 ${status}: ${error.message}`)
+        const msg = extractApiErrorMessage(error, `请求失败（${status}）`)
+        ElMessage.error(msg)
       }
+    } else if (error.code !== undefined && typeof error.message === 'string') {
+      ElMessage.error(error.message || '操作失败')
     } else {
       ElMessage.error('网络错误或服务器无响应，请稍后再试')
     }

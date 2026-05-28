@@ -11,6 +11,7 @@ import {
 } from '@/utils/articleStatus'
 import editIconUrl from '@/assets/svg/编辑.svg?url'
 import deleteIconUrl from '@/assets/svg/删除.svg?url'
+import { formatForumDateOnlyShanghai } from '@/utils/datetime'
 
 const FETCH_PAGE_SIZE = 200
 const LIST_PAGE_SIZE = 10
@@ -253,12 +254,7 @@ export function useCreativeCenter() {
     })
   }
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—'
-    const date = new Date(dateStr)
-    if (Number.isNaN(date.getTime())) return '—'
-    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
-  }
+  const formatDate = (dateStr) => formatForumDateOnlyShanghai(dateStr)
 
   function postTitle(row) {
     const a = row.article

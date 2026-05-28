@@ -237,6 +237,14 @@
   margin-bottom: 10px;
 }
 
+.editor-content-head-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
 .editor-mode-seg {
   display: inline-flex;
   border: 0.5px solid var(--color-border-tertiary, #e5e6eb);

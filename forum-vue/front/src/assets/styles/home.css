@@ -594,23 +594,37 @@
   background: #f7f8fa;
 }
 
-/* 帖子区：Grid 从左到右逐行排布，列宽固定 220px，高度随封面变化（非 CSS columns 的纵向换列） */
+.home-xhs-main--feed {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* 帖子区：flex 等宽多列瀑布流，列宽由 JS 计算后平分整行 */
 .home-masonry {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 220px);
-  justify-content: start;
-  align-items: start;
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
   width: 100%;
   box-sizing: border-box;
 }
 
+.home-masonry-column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .home-masonry--loading {
   min-height: 240px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 .home-masonry-item {
-  min-width: 0;
   width: 100%;
 }
 

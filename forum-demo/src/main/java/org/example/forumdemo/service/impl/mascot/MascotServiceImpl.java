@@ -106,15 +106,46 @@ public class MascotServiceImpl implements MascotService {
         return companionMemoryService.normalizeSkill(request.getSkill());
     }
 
-    private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill) {
+    private String normalizeLlmRoute(String route) {
+        if (route == null || route.isBlank()) {
+            return "qwen-flash";
+        }
+        return route.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private int effectiveVipTier(User user) {
+        Byte tier = user.getVipTier();
+        int t = tier != null ? tier.intValue() : 0;
+        if (treatAdminAsVip && user.getIsAdmin() != null && user.getIsAdmin() == 1) {
+            return Math.max(t, Constant.VIP_TIER_MAX.intValue());
+        }
+        if (!isVip(user)) {
+            return 0;
+        }
+        return Math.max(t, Constant.VIP_TIER_PRO.intValue());
+    }
+
+    private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, User user) {
         String route = request.getLlmProvider() != null ? request.getLlmProvider().trim().toLowerCase(Locale.ROOT) : "";
+        route = route.replace('_', '-');
         if ("help".equals(skill)) {
-            if (!vip || route.isBlank() || route.contains("deep")) {
+            if (!vip || route.isBlank() || route.contains("deep")
+                    || route.startsWith("gemini") || route.startsWith("claude")) {
                 return "qwen-flash";
             }
         }
         if (route.isBlank()) {
             return "qwen-flash";
+        }
+        int tier = effectiveVipTier(user);
+        if (route.startsWith("claude-sonnet") && tier < Constant.VIP_TIER_MAX) {
+            return tier >= Constant.VIP_TIER_PRO ? "claude-haiku" : "qwen-flash";
+        }
+        if ((route.startsWith("gemini") || route.startsWith("claude")) && tier < Constant.VIP_TIER_PRO) {
+            return "qwen-flash";
+        }
+        if (route.contains("deep") && tier < Constant.VIP_TIER_PRO) {
+            return route.replace("-deep", "-flash");
         }
         return route;
     }
@@ -134,7 +165,9 @@ public class MascotServiceImpl implements MascotService {
                 aiQuotaService.consumeDeepseekWrite(user);
                 reservedDeepseek[0] = true;
             }
-        } else if (route.startsWith("gemini")) {
+        } else if (route.startsWith("qwen-deep")
+                || route.startsWith("gemini")
+                || route.startsWith("claude")) {
             aiQuotaService.consumeAdvancedLlm(user);
             reservedAdvanced[0] = true;
         }
@@ -237,7 +270,7 @@ public class MascotServiceImpl implements MascotService {
             reservedBasic = true;
         }
 
-        String route = resolveLlmRoute(request, vip, skill);
+        String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
         aiPointsBillingService.ensureBalance(user,
                 aiPointsBillingService.estimatePoints(fallbackModel,
@@ -266,6 +299,11 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("session_id", String.valueOf(dbSessionId));
         pyBody.put("appearance", normalizeAppearanceForPy(request));
         pyBody.put("tier", vip ? "vip" : "basic");
+        int vipTier = user.getVipTier() != null ? user.getVipTier().intValue() : 0;
+        if (vip && vipTier <= 0) {
+            vipTier = 1;
+        }
+        pyBody.put("vip_tier", vipTier);
         pyBody.put("skill", skill);
         pyBody.put("history", toPyHistory(mergedHistory));
         pyBody.put("llm_provider", route);

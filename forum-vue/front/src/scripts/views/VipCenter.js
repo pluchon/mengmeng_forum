@@ -2,17 +2,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getVipCenter, getVipQuota, vipSubscribe } from '@/api/vip'
 import { useUserStore } from '@/stores/user'
-import iconDeepseek from '@/assets/svg/deepseek-color.svg'
-import iconQwen from '@/assets/svg/qwen-color.svg'
-import iconGemini from '@/assets/svg/gemini-color.svg'
-import iconOpenai from '@/assets/svg/openai.svg'
-
-const PROVIDER_ICONS = {
-  deepseek: iconDeepseek,
-  qwen: iconQwen,
-  gemini: iconGemini,
-  openai: iconOpenai,
-}
+import { resolveAiIcon } from '@/constants/aiModels'
 
 export function useVipCenter() {
   const userStore = useUserStore()
@@ -40,8 +30,8 @@ export function useVipCenter() {
     return `周期重置于 ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
 
-  function providerIcon(provider) {
-    return PROVIDER_ICONS[provider] || iconQwen
+  function providerIcon(provider, modelCode) {
+    return resolveAiIcon(provider, modelCode)
   }
 
   function formatCount(n) {

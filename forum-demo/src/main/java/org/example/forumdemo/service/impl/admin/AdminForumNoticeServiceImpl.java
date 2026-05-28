@@ -10,7 +10,7 @@ import jakarta.annotation.Resource;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.util.AdminPagination;
+import org.example.forumdemo.common.utils.AdminPagination;
 import org.example.forumdemo.entity.db.Category;
 import org.example.forumdemo.entity.db.ForumNotice;
 import org.example.forumdemo.entity.dto.admin.AdminForumNoticeSaveRequest;

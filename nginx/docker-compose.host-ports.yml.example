@@ -1,5 +1,5 @@
-# 可选：docker-compose.prod.yml 已默认将中间件绑到 127.0.0.1。
-# 仅当需要改端口或覆盖绑定方式时，复制为 docker-compose.host-ports.yml 并修改下方 ports。
+# 可选：docker-compose.prod.yml 已默认将中间件绑到 127.0.0.1（勿在 prod 里使用 ports: !reset）。
+# 仅当需要改端口时，复制为 docker-compose.host-ports.yml 并修改下方 ports。
 # docker compose -f docker-compose.yaml -f docker-compose.prod.yml -f docker-compose.host-ports.yml up -d
 
 services:

@@ -18,7 +18,7 @@ services:
       - ./logs:/var/log/nginx
     depends_on:
       backend-1:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       # 官方 nginx 镜像无 wget/curl，用进程检测（/healthz 仍由 conf.d 提供）
       test: ["CMD-SHELL", "test -f /var/run/nginx.pid && kill -0 $(cat /var/run/nginx.pid)"]
@@ -49,20 +49,33 @@ services:
       SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-forum-demo}
       FORUM_AI_HUB_BASE_URL: http://ai-server:5000
       FORUM_MASCOT_AI_URL: http://ai-server:5000/api/v1/mascot/chat
+      FORUM_MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}
+      FORUM_AI_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       PII_CRYPTO_SECRET: ${PII_CRYPTO_SECRET:-local_dev_pii_secret_change_before_prod_deploy}
       JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_before_prod_deploy}
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-}
+      OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
+      OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/notice/center/list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
     volumes:
       - ./logs/backend:/app/logs
     depends_on:
       mysql:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
-        condition: service_started
-      ai-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - forum-net
 
@@ -97,15 +110,22 @@ services:
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      HUANAPI_IMAGE_KEY: ${HUANAPI_IMAGE_KEY:-}
       HUANAPI_GEMINI_KEY: ${HUANAPI_GEMINI_KEY:-}
+      HUANAPI_IMAGE_KEY: ${HUANAPI_IMAGE_KEY:-}
+      HUANAPI_CLAUDE_KEY: ${HUANAPI_CLAUDE_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}
+      AI_HUB_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-123456}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
     depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - forum-net
 
@@ -113,8 +133,7 @@ services:
     image: mysql:9.7.0
     container_name: forum-mysql
     restart: unless-stopped
-    ports:
-      - "${MYSQL_HOST_PORT:-33061}:3306"
+    # 宿主机端口见 docker-compose.prod.yml（生产）或 docker-compose.dev.yaml（本地）
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
       MYSQL_DATABASE: forum_db
@@ -135,8 +154,6 @@ services:
     image: redis:8.0
     container_name: forum-redis
     restart: unless-stopped
-    ports:
-      - "${REDIS_HOST_PORT:-63790}:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - forum_redis_data:/data
@@ -152,9 +169,6 @@ services:
     image: rabbitmq:4.3-management
     container_name: forum-rabbitmq
     restart: unless-stopped
-    ports:
-      - "${RABBITMQ_AMQP_PORT:-56720}:5672"
-      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-123456}
@@ -174,8 +188,6 @@ services:
     image: postgres:17
     container_name: forum-postgres
     restart: unless-stopped
-    ports:
-      - "${POSTGRES_HOST_PORT:-54320}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-langgraph}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}

@@ -5,8 +5,7 @@
         <div class="auth-layout">
           <div class="auth-form-side">
             <div class="form-header-block">
-              <h1 class="site-title">加入萌萌论坛</h1>
-              <p class="site-tagline">开启您的全新社交与知识共享体验</p>
+              <h1 class="site-title">{{ SITE_NAME }}</h1>
               <el-divider class="site-divider" />
             </div>
 
@@ -50,6 +49,7 @@
                   <span class="link" @click="$router.push('/privacy')">隐私政策</span>
                 </el-checkbox>
               </div>
+              <SiteIcpLink variant="auth" />
 
               <div class="submit-bar">
                 <el-button type="primary" class="flat-submit-btn" :loading="loading" @click="handleSignUp">
@@ -77,6 +77,8 @@
 import { ref } from 'vue'
 import { useSignUp } from '@scripts/views/SignUp'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
+import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
+import { SITE_NAME } from '@/constants/site'
 
 const captchaDialogRef = ref()
 

@@ -96,3 +96,13 @@ export function formatCheckinLogInstantShanghai(row) {
   const raw = row.createTime ?? row.updateTime ?? row.checkinDate
   return formatCheckinLogDateTimeShanghai(raw)
 }
+
+/** 论坛通用时间展示（东八区墙钟），适用于帖子/评论 createTime */
+export function formatForumDateTimeShanghai(input) {
+  return formatCheckinLogDateTimeShanghai(input)
+}
+
+/** 仅日期部分（东八区） */
+export function formatForumDateOnlyShanghai(input) {
+  return formatCheckinLogDateOnly(input)
+}

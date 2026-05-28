@@ -9,8 +9,8 @@
 
           <div class="form-side">
             <div class="form-header-block">
-              <h1 class="site-title">萌萌论坛</h1>
-              <p class="site-tagline">发现一万种可能</p>
+              <h1 class="site-title">{{ SITE_NAME }}</h1>
+              <p class="site-tagline">{{ SITE_TAGLINE }}</p>
               <el-divider class="site-divider" />
             </div>
 
@@ -248,6 +248,7 @@
                   >隐私政策</a>
                 </el-checkbox>
               </div>
+              <SiteIcpLink variant="auth" />
             </div>
           </div>
         </div>
@@ -262,6 +263,8 @@
 import { ref } from 'vue'
 import { useSignIn } from '@scripts/views/SignIn'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
+import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
+import { SITE_NAME, SITE_TAGLINE } from '@/constants/site'
 
 const captchaDialogRef = ref()
 

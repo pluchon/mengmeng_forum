@@ -1,10 +1,11 @@
 <template>
-  <div class="privacy-page shell-page-scroll">
+  <div ref="pageRef" class="privacy-page shell-page-scroll">
+    <ParticleSea embedded :host-ref="pageRef" />
     <div class="privacy-container animate-fade-up">
       <main class="privacy-content">
         <div class="hero-section">
           <h1>隐私政策</h1>
-          <p>萌萌论坛重视您的隐私。注册或使用本平台前，请仔细阅读以下内容。</p>
+          <p>萌萌技术分享笔记重视您的隐私。注册或使用本平台前，请仔细阅读以下内容。</p>
           <div class="update-tag">最近更新：2026-05-14</div>
         </div>
 
@@ -48,14 +49,18 @@
       </main>
 
       <footer class="privacy-footer">
-        版权所有 © 2026 <strong>萌萌论坛</strong>。保留所有权利。
+        <SiteIcpLink variant="footer" />
       </footer>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import ParticleSea from '@/components/common/ParticleSea.vue'
+import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
 import { usePrivacy } from '@scripts/views/Privacy'
 
+const pageRef = ref(null)
 const { Link, policyData } = usePrivacy()
 </script>
