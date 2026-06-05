@@ -1,17 +1,10 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ZoomIn,
-  EditPen,
+  ChatLineRound,
   Picture,
-  Reading,
-  QuestionFilled,
   UserFilled,
-  MagicStick,
-  Refresh,
-  CopyDocument,
-  Sunny,
-  List,
   Brush,
   Avatar,
 } from '@element-plus/icons-vue'
@@ -19,11 +12,12 @@ import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { useMascotUiStore } from '@/stores/mascotUi'
 import {
-  getCompanionMessages,
-  getCompanionSessions,
   getMascotPublicModels,
-  postMascotChat,
+  getMascotQuotaHint,
+  streamMascotChat,
   setMascotModel,
+  getCompanionSessions,
+  getCompanionMessages,
 } from '@/api/mascot'
 import { aiImage, aiPriceEstimate } from '@/api/ai'
 import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
@@ -34,13 +28,41 @@ import {
   MASCOT_FLASH_LLM_IDS,
   findImageQualityOption,
 } from '@/constants/aiModels'
-import companionXiaomai from '@/assets/images/xiaomai.png'
-import companionMiku from '@/assets/images/miku.png'
+import { clientOssUrl } from '@/utils/clientOss'
+import { pickThinkingPhrase, startThinkingRotation } from '@/utils/mascotThinking'
+import { pickMascotIdlePhrase } from '@/utils/mascotIdleTips'
+import { formatAiUsageLine, usageStatsFromApi } from '@/utils/aiUsageDisplay'
+import { marked } from 'marked'
+
+marked.setOptions({ gfm: true, breaks: true })
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** 看板娘 AI 回复：Markdown → HTML（表格、列表、加粗等） */
+function renderMascotMarkdown(content) {
+  const raw = (content || '').trim()
+  if (!raw) return ''
+  try {
+    return marked.parse(raw, { async: false })
+  } catch {
+    return `<p>${escapeHtml(raw)}</p>`
+  }
+}
+
+const companionXiaomai = clientOssUrl('xiaomai.webp')
+const companionMiku = clientOssUrl('miku.webp')
 
 export function useMascotDock() {
   const OFFSET_KEY = 'mascot_dock_offset_v1'
   const SCALE_KEY = 'mascot_stage_scale_v2'
   const ANCHOR_KEY = 'mascot_stage_anchored_v2'
+  const LLM_CHAT_KEY = 'mascot_llm_chat_v1'
   const LLM_WRITING_KEY = 'mascot_llm_writing_v3'
   const LLM_HELP_KEY = 'mascot_llm_help_v3'
   const IMAGE_QUALITY_KEY = 'mascot_image_quality_v1'
@@ -52,22 +74,37 @@ export function useMascotDock() {
     ariaRoot: '看板娘',
     scaleTitle: '缩放显示',
     scaleHint: '拖动滑块调整看板娘显示大小',
-    brandTitle: '陪伴助手',
-    statusOnline: '在线 · 陪伴助手',
+    brandTitle: '小萌',
+    statusOnline: '在线',
+    statusOffline: '不在线',
     defaultNickname: '用户',
-    historyBtn: '历史记录',
+    sessionListTitle: '会话',
+    newSession: '新建会话',
     guest: '未登录',
     appearanceEmpty: '暂无上架模型，请管理员在后台配置并上架。',
     applyAppearance: '选用此形象',
     today: '今天',
     openImageInNewTab: '在新标签打开',
     typing: '正在输入',
-    quickChipsGroup: '快捷指令',
-    historyEmpty: '当前功能暂无历史会话',
-    untitledSession: '未命名会话',
+    regenerate: '重新生成',
+    sessionEmpty: '暂无会话，点击 + 新建',
+    untitledSession: '新会话',
+    alreadyNewSession: '当前已是新会话，直接输入即可开始对话',
+    chatEmptyHint: '暂无消息，在下方输入开始对话',
+  }
+
+  const LOCAL_SESSIONS_KEY_PREFIX = 'mascot_local_sessions_v3'
+  const LEGACY_SESSIONS_KEY = 'mascot_local_sessions_v2'
+
+  function localSessionsStorageKey() {
+    const uid = userStore.id
+    if (uid != null && uid !== '') {
+      return `${LOCAL_SESSIONS_KEY_PREFIX}_${uid}`
+    }
+    return `${LOCAL_SESSIONS_KEY_PREFIX}_guest`
   }
   
-  /** 文本模型（写作/帮助）；生图模型见 IMAGE_MODEL_OPTIONS */
+  /** 文本模型（对话与帮助）；生图模型见 IMAGE_MODEL_OPTIONS */
   const ALL_LLM_OPTIONS = MASCOT_TEXT_LLM_OPTIONS
   const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
@@ -80,8 +117,8 @@ export function useMascotDock() {
   const oml2d = ref(null)
   
   const assistantOpen = ref(false)
-  /** writing | drawing | reading | help | appearance */
-  const activeNav = ref('writing')
+  /** chat | drawing | appearance */
+  const activeNav = ref('chat')
   const catalog = ref([])
   const activeCode = ref('lafei')
   const pendingCode = ref('lafei')
@@ -89,51 +126,99 @@ export function useMascotDock() {
   const draft = ref('')
   const loading = ref(false)
   const sessionId = ref('')
-  const skillSessionIds = ref({
-    writing: '',
-    help: '',
-    drawing: '',
-    reading: '',
+  const localSessionsByMode = ref({
+    chat: [],
+    drawing: [],
   })
-  const historyDrawerOpen = ref(false)
-  const historyLoading = ref(false)
-  const historySessions = ref([])
+  const activeLocalSessionId = ref({
+    chat: '',
+    drawing: '',
+  })
   const activeSkill = ref('chat')
   
-  const selectedLlmWriting = ref('qwen-flash')
-  const selectedLlmHelp = ref('qwen-flash')
+  const selectedLlmChat = ref('qwen-flash')
   const imageQuality = ref('normal')
   const estimatePoints = ref(null)
   const estimateLoading = ref(false)
+  const usePointsBilling = ref(false)
+  const quotaHint = ref({ percent: 0, canUsePointsPay: false, quotaLabel: '' })
+
+  const estimateHintText = computed(() => {
+    if (estimateLoading.value) return '正在估算…'
+    if (usePointsBilling.value && estimatePoints.value != null) {
+      return `萌币扣费模式：预估约 ${estimatePoints.value} 积分/次`
+    }
+    if (isVip.value) {
+      const p = quotaHint.value?.percent ?? 0
+      const label = quotaHint.value?.quotaLabel || '会员额度'
+      return p > 0 ? `${label} 已用 ${p}%（默认走额度，不扣萌币）` : '默认使用会员额度，不扣萌币'
+    }
+    return '默认使用每日免费次数，不扣萌币'
+  })
+
+  const showPointsPayButton = computed(() => {
+    return isVip.value
+      && activeNav.value !== 'drawing'
+      && activeNav.value !== 'appearance'
+      && Boolean(quotaHint.value?.canUsePointsPay)
+  })
   const stageHovered = ref(false)
+  let chatStreamAbort = null
+  let stopThinkingRotation = null
+  let idleTipsTimer = null
+
+  function stopMascotIdleTips() {
+    if (idleTipsTimer) {
+      clearInterval(idleTipsTimer)
+      idleTipsTimer = null
+    }
+  }
+
+  function startMascotIdleTips() {
+    stopMascotIdleTips()
+    const show = () => {
+      if (assistantOpen.value || stageUseFallback.value) return
+      const inst = oml2d.value
+      if (!inst?.tipsMessage) return
+      try {
+        inst.tipsMessage(pickMascotIdlePhrase(), 4200, 0)
+      } catch {
+        /* ignore */
+      }
+    }
+    setTimeout(show, 4000)
+    idleTipsTimer = setInterval(show, 26000 + Math.floor(Math.random() * 14000))
+  }
+
+  function clearThinkingRotation() {
+    if (stopThinkingRotation) {
+      stopThinkingRotation()
+      stopThinkingRotation = null
+    }
+  }
   
   const modeTabs = [
-    { id: 'writing', label: '写作', icon: EditPen },
+    { id: 'chat', label: '对话与帮助', icon: ChatLineRound },
     { id: 'drawing', label: '画图', icon: Picture },
-    { id: 'reading', label: '伴读', icon: Reading },
-    { id: 'help', label: '站点帮助', icon: QuestionFilled },
     { id: 'appearance', label: '形象选择', icon: UserFilled },
   ]
   
   const FLASH_LLM = MASCOT_FLASH_LLM_IDS
   
   function llmStorageKey() {
-    return activeNav.value === 'help' ? LLM_HELP_KEY : LLM_WRITING_KEY
+    return LLM_CHAT_KEY
   }
   
   function currentLlmStorageKey() {
-    return activeNav.value === 'help' ? LLM_HELP_KEY : LLM_WRITING_KEY
+    return LLM_CHAT_KEY
   }
   
   const selectedLlm = computed({
     get() {
-      return activeNav.value === 'help' ? selectedLlmHelp.value : selectedLlmWriting.value
+      return selectedLlmChat.value
     },
     set(v) {
-      if (activeNav.value === 'help')
-        selectedLlmHelp.value = v
-      else
-        selectedLlmWriting.value = v
+      selectedLlmChat.value = v
     },
   })
 
@@ -150,14 +235,10 @@ export function useMascotDock() {
   
   const inputPlaceholder = computed(() => {
     switch (activeNav.value) {
-      case 'writing':
-        return '示范：我想让你帮我写一段论坛发帖草稿，主题是：春节活动安利'
+      case 'chat':
+        return '示范：帮我写发帖草稿 / 积分怎么获得 / 四川雪山好美（可代写也可问站点功能）'
       case 'drawing':
         return '示范：描述你想生成的图片，例如：赛博朋克风格的猫咪头像'
-      case 'reading':
-        return '伴读功能开发中，敬请期待'
-      case 'help':
-        return '示范：请用简短条目介绍一下本论坛的常用功能和使用技巧'
       default:
         return '说点什么…'
     }
@@ -198,57 +279,175 @@ export function useMascotDock() {
         return false
       return true
     })
-    if (activeNav.value === 'help')
-      return list.filter(o => FLASH_LLM.includes(o.id))
     return list
   })
   
-  const quickChips = computed(() => {
-    if (activeNav.value === 'writing') {
-      return [
-        { label: '帮我优化', text: '请帮我优化上面这段内容的表达', icon: MagicStick },
-        { label: '重新生成', text: '请根据上文重新生成一版', icon: Refresh },
-        { label: '复制全文', text: '请把完整正文再输出一遍，方便我复制', icon: CopyDocument },
-        { label: '换个方向', text: '请换一个写作角度或风格再写', icon: Sunny },
-        { label: '加分点列表', text: '请改成条理清晰的分点列表', icon: List },
-      ]
-    }
-    if (activeNav.value === 'help') {
-      return [
-        { label: '如何发帖', text: '论坛发帖流程是怎样的？', icon: EditPen },
-        { label: '积分规则', text: '积分怎么获得和消耗？', icon: QuestionFilled },
-        { label: 'VIP 权益', text: 'VIP 有哪些权益？', icon: UserFilled },
-        { label: '版规摘要', text: '请简要说明社区版规要点', icon: List },
-      ]
-    }
-    if (activeNav.value === 'drawing') {
-      return [
-        { label: '写实风格', text: '写实摄影风格，', icon: Picture },
-        { label: '动漫插画', text: '日系动漫插画风格，', icon: Brush },
-        { label: 'Q版头像', text: '可爱 Q 版头像，', icon: Avatar },
-        { label: '换一张', text: '换一张不同构图的：', icon: Refresh },
-      ]
-    }
-    return []
+  const sessionListForNav = computed(() => {
+    const nav = activeNav.value
+    if (nav === 'appearance') return []
+    return [...(localSessionsByMode.value[nav] || [])]
   })
-  
-  
-  function sessionKeyForNav(nav) {
+
+  function newLocalSessionId() {
+    return typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  function migrateSessionsPayload(data) {
+    if (!data || typeof data !== 'object') return data
+    const byMode = data.byMode && typeof data.byMode === 'object' ? data.byMode : {}
+    const active = data.active && typeof data.active === 'object' ? data.active : {}
+    if (Array.isArray(byMode.chat)) {
+      return {
+        byMode: {
+          chat: byMode.chat,
+          drawing: Array.isArray(byMode.drawing) ? byMode.drawing : [],
+        },
+        active: {
+          chat: active.chat || '',
+          drawing: active.drawing || '',
+        },
+      }
+    }
+    const legacy = [
+      ...(Array.isArray(byMode.writing) ? byMode.writing : []),
+      ...(Array.isArray(byMode.help) ? byMode.help : []),
+    ].sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0))
+    return {
+      byMode: {
+        chat: legacy,
+        drawing: Array.isArray(byMode.drawing) ? byMode.drawing : [],
+      },
+      active: {
+        chat: active.writing || active.help || active.chat || '',
+        drawing: active.drawing || '',
+      },
+    }
+  }
+
+  function applySessionsPayload(data) {
+    if (!data || typeof data !== 'object') return
+    const migrated = migrateSessionsPayload(data)
+    if (migrated.byMode) {
+      localSessionsByMode.value = {
+        chat: Array.isArray(migrated.byMode.chat) ? migrated.byMode.chat : [],
+        drawing: Array.isArray(migrated.byMode.drawing) ? migrated.byMode.drawing : [],
+      }
+    }
+    if (migrated.active) {
+      activeLocalSessionId.value = {
+        chat: migrated.active.chat || '',
+        drawing: migrated.active.drawing || '',
+      }
+    }
+  }
+
+  function saveLocalSessionsToStorage() {
+    try {
+      const payload = JSON.stringify({
+        byMode: localSessionsByMode.value,
+        active: activeLocalSessionId.value,
+      })
+      localStorage.setItem(localSessionsStorageKey(), payload)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function loadLocalSessionsFromStorage() {
+    try {
+      let raw = localStorage.getItem(localSessionsStorageKey())
+      if (!raw) {
+        raw = sessionStorage.getItem(LEGACY_SESSIONS_KEY)
+        if (raw) {
+          sessionStorage.removeItem(LEGACY_SESSIONS_KEY)
+        }
+      }
+      if (!raw) return
+      applySessionsPayload(JSON.parse(raw))
+      saveLocalSessionsToStorage()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function persistCurrentMessages() {
+    const nav = activeNav.value
+    if (nav === 'appearance') return
+    const id = activeLocalSessionId.value[nav]
+    if (!id) return
+    const list = [...(localSessionsByMode.value[nav] || [])]
+    const idx = list.findIndex((s) => String(s.id) === String(id))
+    if (idx < 0) return
+    const firstUser = messages.value.find((m) => m.role === 'user' && m.type !== 'image')
+    const title = (firstUser?.content || '').trim().slice(0, 28) || uiLabels.untitledSession
+    const prevLen = (list[idx].messages || []).length
+    const nextLen = messages.value.length
+    list[idx] = {
+      ...list[idx],
+      messages: messages.value.map((m) => ({ ...m })),
+      title,
+      updateTime: nextLen > prevLen ? Date.now() : (list[idx].updateTime || Date.now()),
+    }
+    localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
+    saveLocalSessionsToStorage()
+  }
+
+  function ensureActiveSession(nav) {
     const n = nav || activeNav.value
     if (n === 'appearance') return ''
-    return n
+    let list = [...(localSessionsByMode.value[n] || [])]
+    let id = activeLocalSessionId.value[n]
+    if (!id || !list.some((s) => s.id === id)) {
+      if (list.length) {
+        id = list[0].id
+      } else {
+        id = newLocalSessionId()
+        list.unshift({ id, title: uiLabels.untitledSession, messages: [], updateTime: Date.now() })
+        localSessionsByMode.value = { ...localSessionsByMode.value, [n]: list }
+        saveLocalSessionsToStorage()
+      }
+      activeLocalSessionId.value = { ...activeLocalSessionId.value, [n]: id }
+    }
+    sessionId.value = id
+    return id
   }
-  
-  function getSessionForNav(nav) {
-    const k = sessionKeyForNav(nav)
-    return k ? (skillSessionIds.value[k] || '') : ''
+
+  function cacheSessionMessages(nav, id, msgs) {
+    const list = [...(localSessionsByMode.value[nav] || [])]
+    const idx = list.findIndex((s) => String(s.id) === String(id))
+    if (idx < 0) return
+    list[idx] = {
+      ...list[idx],
+      messages: msgs.map((m) => ({ ...m })),
+    }
+    localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
+    saveLocalSessionsToStorage()
   }
-  
-  function setSessionForNav(nav, id) {
-    const k = sessionKeyForNav(nav)
-    if (!k) return
-    skillSessionIds.value = { ...skillSessionIds.value, [k]: id ? String(id) : '' }
-    sessionId.value = id ? String(id) : ''
+
+  async function selectLocalSession(id) {
+    persistCurrentMessages()
+    const nav = activeNav.value
+    const sess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
+    if (!sess) return
+    activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: sess.id }
+    sessionId.value = sess.id
+    if (userStore.isLoggedIn && /^\d+$/.test(String(id))) {
+      try {
+        const res = await getCompanionMessages(id)
+        if (res.code === 0 && Array.isArray(res.data)) {
+          messages.value = mapVoToMessages(res.data)
+          cacheSessionMessages(nav, id, messages.value)
+          scrollFsToBottom()
+          return
+        }
+      } catch {
+        /* fallback local */
+      }
+    }
+    messages.value = (sess.messages || []).map((m) => ({ ...m }))
+    scrollFsToBottom()
   }
   
   function mapVoToMessages(rows) {
@@ -261,25 +460,94 @@ export function useMascotDock() {
     }))
   }
   
+  async function syncServerSessions(nav) {
+    if (!userStore.isLoggedIn || nav === 'appearance' || nav === 'drawing') return
+    try {
+      const res = await getCompanionSessions('chat')
+      if (res.code !== 0 || !Array.isArray(res.data) || !res.data.length) return
+      const local = [...(localSessionsByMode.value.chat || [])]
+      const byId = new Map(local.map((s) => [String(s.id), s]))
+      const merged = [...local]
+      for (const s of res.data) {
+        const id = String(s.id)
+        const title = (s.title || '').trim() || uiLabels.untitledSession
+        const updateTime = s.updateTime ? new Date(s.updateTime).getTime() : Date.now()
+        if (byId.has(id)) {
+          const old = byId.get(id)
+          byId.set(id, { ...old, title, updateTime })
+          const idx = merged.findIndex((x) => String(x.id) === id)
+          if (idx >= 0) merged[idx] = byId.get(id)
+        } else {
+          const row = { id, title, messages: [], updateTime }
+          byId.set(id, row)
+          merged.push(row)
+        }
+      }
+      localSessionsByMode.value = { ...localSessionsByMode.value, chat: merged }
+      saveLocalSessionsToStorage()
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function loadMessagesForNav(nav) {
-    const sid = getSessionForNav(nav)
-    if (!userStore.isLoggedIn || !sid || nav === 'appearance') {
+    if (nav === 'appearance') {
       messages.value = []
       return
     }
-    try {
-      const res = await getCompanionMessages(sid)
-      messages.value = mapVoToMessages(res?.data || [])
-    } catch {
-      messages.value = []
+    ensureActiveSession(nav)
+    const id = activeLocalSessionId.value[nav]
+    if (userStore.isLoggedIn && /^\d+$/.test(String(id))) {
+      try {
+        const res = await getCompanionMessages(id)
+        if (res.code === 0 && Array.isArray(res.data)) {
+          messages.value = mapVoToMessages(res.data)
+          cacheSessionMessages(nav, id, messages.value)
+          scrollFsToBottom()
+          return
+        }
+      } catch {
+        /* fallback local */
+      }
     }
+    const sess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
+    messages.value = sess ? (sess.messages || []).map((m) => ({ ...m })) : []
     scrollFsToBottom()
   }
-  
-  const historyDrawerTitle = computed(() => {
-    const tab = modeTabs.find(t => t.id === activeNav.value)
-    return `历史记录 · ${tab?.label || activeNav.value}`
-  })
+
+  function buildExcludeArticleIds() {
+    const ids = new Set()
+    for (const m of messages.value) {
+      for (const a of m.relatedArticles || []) {
+        const n = Number(a.articleId)
+        if (Number.isFinite(n) && n > 0) ids.add(n)
+      }
+    }
+    return [...ids]
+  }
+
+  function applyServerSessionId(meta) {
+    if (!userStore.isLoggedIn || !meta?.sessionId) return
+    const sid = String(meta.sessionId)
+    if (!/^\d+$/.test(sid)) return
+    const nav = activeNav.value
+    if (nav === 'appearance') return
+    sessionId.value = sid
+    activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: sid }
+    const list = [...(localSessionsByMode.value[nav] || [])]
+    const idx = list.findIndex((s) => String(s.id) === sid)
+    if (idx < 0) {
+      const firstUser = messages.value.find((m) => m.role === 'user' && m.type !== 'image')
+      list.push({
+        id: sid,
+        title: (firstUser?.content || '').trim().slice(0, 28) || uiLabels.untitledSession,
+        messages: [],
+        updateTime: Date.now(),
+      })
+    }
+    localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
+    saveLocalSessionsToStorage()
+  }
   
   function formatSessionTime(t) {
     if (!t) return ''
@@ -288,40 +556,59 @@ export function useMascotDock() {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
   
-  async function openHistoryDrawer() {
-    if (!userStore.isLoggedIn || activeNav.value === 'appearance') return
-    historyDrawerOpen.value = true
-    historyLoading.value = true
-    try {
-      const res = await getCompanionSessions(activeNav.value)
-      historySessions.value = Array.isArray(res?.data) ? res.data : []
-    } catch {
-      historySessions.value = []
-    } finally {
-      historyLoading.value = false
-    }
-  }
-  
-  async function loadHistorySession(id) {
-    setSessionForNav(activeNav.value, id)
-    historyDrawerOpen.value = false
-    await loadMessagesForNav(activeNav.value)
-  }
-  
   function formatMsgTime(ts) {
     if (!ts) return ''
     const d = new Date(ts)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
+
+  function notifyAiBilling(payload) {
+    if (!payload) return
+    if (payload.billingMode === 'points' && Number(payload.pointsCost) > 0) {
+      ElMessage.success(`已扣 ${payload.pointsCost} 萌币`)
+      pointsWallet.refresh?.()
+    }
+  }
+
+  async function refreshQuotaHint() {
+    if (!userStore.isLoggedIn || !isVip.value || activeNav.value === 'drawing') {
+      quotaHint.value = { percent: 0, canUsePointsPay: false, quotaLabel: '' }
+      return
+    }
+    try {
+      const res = await getMascotQuotaHint(selectedLlm.value)
+      quotaHint.value = res?.data || { percent: 0, canUsePointsPay: false, quotaLabel: '' }
+    } catch {
+      quotaHint.value = { percent: 0, canUsePointsPay: false, quotaLabel: '' }
+    }
+  }
+
+  async function togglePointsPay() {
+    if (usePointsBilling.value) {
+      usePointsBilling.value = false
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        '当前模型会员额度即将用尽。开启后将按实际 token 消耗萌币积分，费用可能较高，请谨慎开启。确认继续？',
+        '使用萌币积分',
+        { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' },
+      )
+      usePointsBilling.value = true
+      refreshEstimate()
+    } catch {
+      /* cancelled */
+    }
+  }
   
   async function refreshEstimate() {
-    if (!userStore.isLoggedIn || activeNav.value === 'appearance' || activeNav.value === 'reading') {
+    if (!userStore.isLoggedIn || activeNav.value === 'appearance') {
       estimatePoints.value = null
       return
     }
     estimateLoading.value = true
     try {
-      const skill = activeNav.value === 'drawing' ? 'drawing' : (activeNav.value === 'help' ? 'help' : 'writing')
+      const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
       const res = await aiPriceEstimate({
         skill,
         route: selectedLlm.value,
@@ -337,20 +624,27 @@ export function useMascotDock() {
     }
   }
   
-  function clearMessages() {
-    messages.value = []
-    setSessionForNav(activeNav.value, '')
+  function isCurrentSessionEmpty() {
+    return messages.value.length === 0
   }
 
   function startNewSession() {
-    clearMessages()
+    const nav = activeNav.value
+    if (nav === 'appearance') return
+    if (isCurrentSessionEmpty()) {
+      ElMessage.info(uiLabels.alreadyNewSession)
+      return
+    }
+    persistCurrentMessages()
+    const id = newLocalSessionId()
+    const sess = { id, title: uiLabels.untitledSession, messages: [], updateTime: Date.now() }
+    const list = [sess, ...(localSessionsByMode.value[nav] || [])]
+    localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
+    activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: id }
+    sessionId.value = id
+    messages.value = []
     draft.value = ''
-  }
-  
-  function applyChip(chip) {
-    const text = typeof chip === 'string' ? chip : (chip?.text || chip?.label || '')
-    if (!text) return
-    draft.value = text
+    saveLocalSessionsToStorage()
   }
   
   const companionAvatarSrc = computed(() => {
@@ -410,6 +704,7 @@ export function useMascotDock() {
           stageScale.value = s
         }
       }
+      const chat = localStorage.getItem(LLM_CHAT_KEY)
       const w = localStorage.getItem(LLM_WRITING_KEY)
       const h = localStorage.getItem(LLM_HELP_KEY)
       const legacy = localStorage.getItem('mascot_llm_provider_v1')
@@ -417,18 +712,15 @@ export function useMascotDock() {
         qwen: 'qwen-flash',
         deepseek: 'deepseek-flash',
         gemini: 'gemini-deep',
-        claude: 'claude-haiku',
+        claude: 'qwen-deep',
         openai: 'qwen-flash',
       }
       const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
-      if (w && ALL_LLM_OPTIONS.some(x => x.id === w))
-        selectedLlmWriting.value = w
-      else if (leg)
-        selectedLlmWriting.value = leg
-      if (h && FLASH_LLM.includes(h))
-        selectedLlmHelp.value = h
+      const pick = chat || w || h || leg
+      if (pick && ALL_LLM_OPTIONS.some(x => x.id === pick))
+        selectedLlmChat.value = pick
       else
-        selectedLlmHelp.value = 'qwen-flash'
+        selectedLlmChat.value = 'qwen-flash'
       const q = localStorage.getItem(IMAGE_QUALITY_KEY)
       if (q === 'normal' || q === 'premium')
         imageQuality.value = q
@@ -457,8 +749,7 @@ export function useMascotDock() {
   
   function saveLlmPrefs() {
     try {
-      localStorage.setItem(LLM_WRITING_KEY, selectedLlmWriting.value)
-      localStorage.setItem(LLM_HELP_KEY, selectedLlmHelp.value)
+      localStorage.setItem(LLM_CHAT_KEY, selectedLlmChat.value)
       localStorage.setItem(IMAGE_QUALITY_KEY, imageQuality.value)
     }
     catch {
@@ -466,15 +757,12 @@ export function useMascotDock() {
     }
   }
   
-  watch([selectedLlmWriting, selectedLlmHelp, imageQuality], () => saveLlmPrefs())
+  watch([selectedLlmChat, imageQuality], () => saveLlmPrefs())
   
   watch(llmOptions, (opts) => {
     const cur = selectedLlm.value
     if (!opts.some(x => x.id === cur)) {
-      if (activeNav.value === 'help')
-        selectedLlmHelp.value = 'qwen-flash'
-      else
-        selectedLlmWriting.value = 'qwen-flash'
+      selectedLlmChat.value = 'qwen-flash'
       saveLlmPrefs()
     }
   }, { immediate: true })
@@ -487,8 +775,13 @@ export function useMascotDock() {
   }, { immediate: true })
   
   watch([activeNav, selectedLlm, imageQuality, () => userStore.isLoggedIn], () => {
-    if (assistantOpen.value)
+    if (assistantOpen.value) {
       refreshEstimate()
+      refreshQuotaHint()
+    }
+    if (!showPointsPayButton.value) {
+      usePointsBilling.value = false
+    }
   }, { immediate: false })
 
   watch(stageScale, () => {
@@ -732,16 +1025,17 @@ export function useMascotDock() {
   
   function navToSkill(nav) {
     const map = {
-      writing: 'writing',
+      chat: 'chat',
       drawing: 'drawing',
-      reading: 'reading',
-      help: 'help',
       appearance: 'chat',
     }
     activeSkill.value = map[nav] || 'chat'
   }
   
-  function selectNav(nav) {
+  async function selectNav(nav) {
+    if (activeNav.value !== 'appearance' && activeNav.value !== nav) {
+      persistCurrentMessages()
+    }
     activeNav.value = nav
     if (nav === 'appearance') {
       pendingCode.value = activeCode.value || resolveInitialCode() || (catalog.value[0]?.code ?? '')
@@ -749,9 +1043,12 @@ export function useMascotDock() {
     }
     navToSkill(nav)
     draft.value = ''
-    sessionId.value = getSessionForNav(nav)
-    loadMessagesForNav(nav)
+    if (userStore.isLoggedIn) {
+      await syncServerSessions(nav)
+    }
+    await loadMessagesForNav(nav)
     refreshEstimate()
+    refreshQuotaHint()
   }
   
   async function onPreviewPick(code) {
@@ -879,6 +1176,7 @@ export function useMascotDock() {
       await waitOml2dLoad(oml2d.value)
       applyStageScaleToLib()
       applyModelMetricsForIndex(idx)
+      startMascotIdleTips()
     }
     catch (e) {
       enableStageFallback(e)
@@ -909,21 +1207,206 @@ export function useMascotDock() {
   
   watch(messages, () => scrollFsToBottom(), { deep: true })
   
-  function onAssistantOpened() {
-    sessionId.value = getSessionForNav(activeNav.value)
+  async function onAssistantOpened() {
     if (userStore.isLoggedIn) {
       pointsWallet.refresh()
-      if (activeNav.value !== 'appearance')
-        loadMessagesForNav(activeNav.value)
+    }
+    loadLocalSessionsFromStorage()
+    if (activeNav.value !== 'appearance') {
+      await syncServerSessions(activeNav.value)
+      await loadMessagesForNav(activeNav.value)
     }
     scrollFsToBottom()
     refreshEstimate()
+    refreshQuotaHint()
   }
   
   function onSkillForSend() {
     navToSkill(activeNav.value)
   }
   
+  function buildChatHistory() {
+    const rows = messages.value
+      .filter((m) => m.type !== 'image')
+      .map((m) => ({ role: m.role, content: m.content }))
+    if (rows.length && rows[rows.length - 1].role === 'user') {
+      return rows.slice(0, -1)
+    }
+    return rows
+  }
+
+  async function regenerateAssistant(index) {
+    const i = Number(index)
+    if (!Number.isFinite(i) || i < 0 || messages.value[i]?.role !== 'assistant') return
+    if (!userStore.isLoggedIn) {
+      ElMessage.warning('请先登录')
+      return
+    }
+    if (activeNav.value === 'drawing' && !isVip.value) {
+      ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
+      return
+    }
+    let userIdx = i - 1
+    while (userIdx >= 0 && messages.value[userIdx].role !== 'user') userIdx -= 1
+    if (userIdx < 0) return
+    const userText = messages.value[userIdx].content
+    messages.value = messages.value.slice(0, i)
+    persistCurrentMessages()
+    await sendInternal(userText, { skipPushUser: true })
+  }
+
+  async function sendInternal(text, { skipPushUser = false } = {}) {
+    onSkillForSend()
+    ensureActiveSession(activeNav.value)
+    const sid = sessionId.value
+    loading.value = true
+    const now = Date.now()
+    if (!skipPushUser) {
+      messages.value.push({ role: 'user', content: text, type: 'text', at: now })
+    }
+
+    const history = buildChatHistory()
+
+    const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
+
+    try {
+      if (activeNav.value === 'drawing') {
+        const q = imageQuality.value === 'premium' && isVip.value ? 'premium' : 'normal'
+        if (q === 'premium') showGptImageSlowToast()
+        let res
+        try {
+          res = await aiImage({
+            prompt: text,
+            quality: q,
+            sessionId: sid,
+            ephemeral: true,
+          })
+        } finally {
+          if (q === 'premium') dismissGptImageSlowToast()
+        }
+        const data = res.data || {}
+        const url = data.url || data.payload?.url
+        if (!url) throw new Error('image url missing')
+        const imgStats = usageStatsFromApi(data)
+        messages.value.push({
+          role: 'assistant',
+          type: 'image',
+          url,
+          at: Date.now(),
+          usageStats: imgStats,
+        })
+        notifyAiBilling(data)
+        const inst = oml2d.value
+        if (inst?.tipsMessage) inst.tipsMessage('生成完成', 3000, 1)
+        refreshEstimate()
+        persistCurrentMessages()
+        return
+      }
+
+      if (chatStreamAbort) {
+        chatStreamAbort()
+        chatStreamAbort = null
+      }
+      clearThinkingRotation()
+      const assistantIdx = messages.value.length
+      const llmForThinking = selectedLlm.value
+      messages.value.push({
+        role: 'assistant',
+        content: '',
+        type: 'text',
+        at: Date.now(),
+        streaming: true,
+        thinkingText: pickThinkingPhrase(llmForThinking),
+        relatedArticles: [],
+      })
+      stopThinkingRotation = startThinkingRotation(llmForThinking, (text) => {
+        const row = messages.value[assistantIdx]
+        if (row?.streaming && !(row.content || '').length) {
+          row.thinkingText = text
+        }
+      })
+      await new Promise((resolve, reject) => {
+        chatStreamAbort = streamMascotChat(
+          {
+            message: text,
+            sessionId: sid,
+            mascotModelCode: activeCode.value,
+            llmProvider: selectedLlm.value,
+            skill,
+            history,
+            ephemeral: !userStore.isLoggedIn,
+            excludeArticleIds: buildExcludeArticleIds(),
+            clientDatetime: new Date().toISOString(),
+            usePointsBilling: usePointsBilling.value,
+          },
+          {
+            onChunk(piece) {
+              const row = messages.value[assistantIdx]
+              if (!row) return
+              if (row.thinkingText) row.thinkingText = ''
+              clearThinkingRotation()
+              row.content = (row.content || '') + piece
+              scrollFsToBottom()
+            },
+            onMeta(meta) {
+              applyServerSessionId(meta)
+              const row = messages.value[assistantIdx]
+              if (meta?.relatedArticles?.length && row) {
+                const sorted = [...meta.relatedArticles]
+                  .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+                  .slice(0, 5)
+                row.relatedArticles = sorted
+              }
+              const stats = usageStatsFromApi(meta)
+              if (stats && row) row.usageStats = stats
+              notifyAiBilling(meta)
+            },
+            onDone() {
+              clearThinkingRotation()
+              const row = messages.value[assistantIdx]
+              if (row) {
+                row.streaming = false
+                row.thinkingText = ''
+                if (!row.content?.trim()) row.content = '…'
+              }
+              chatStreamAbort = null
+              refreshEstimate()
+              persistCurrentMessages()
+              const inst = oml2d.value
+              const reply = row?.content || ''
+              if (inst?.tipsMessage && reply) {
+                inst.tipsMessage(reply.length > 100 ? `${reply.slice(0, 100)}…` : reply, 4500, 1)
+              }
+              resolve()
+            },
+            onError(msg) {
+              clearThinkingRotation()
+              chatStreamAbort = null
+              const row = messages.value[assistantIdx]
+              if (row) {
+                row.streaming = false
+                row.thinkingText = ''
+                if (!row.content?.trim()) {
+                  messages.value.splice(assistantIdx, 1)
+                }
+              }
+              if (msg) ElMessage.error(String(msg))
+              reject(new Error(msg || 'stream failed'))
+            },
+          },
+        )
+      })
+    } catch (e) {
+      if (!skipPushUser) messages.value.pop()
+      else if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'assistant') {
+        messages.value.pop()
+      }
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function send() {
     const text = draft.value.trim()
     if (!text) return
@@ -931,87 +1414,20 @@ export function useMascotDock() {
       ElMessage.warning('请先登录')
       return
     }
-    onSkillForSend()
-    if (activeNav.value === 'reading') {
-      ElMessage.info('伴读功能开发中，敬请期待')
+    if (activeNav.value === 'drawing' && !isVip.value) {
+      ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
       return
     }
-    if (activeNav.value !== 'help' && !isVip.value) {
-      ElMessage.warning('写作与画图需 VIP；站点帮助所有登录用户可用')
+    if (usePointsBilling.value && estimatePoints.value != null
+        && pointsWallet.balance < estimatePoints.value) {
+      ElMessage.warning('萌币余额不足，请先充值或赚取积分')
       return
     }
-  
-    if (estimatePoints.value != null && pointsWallet.balance < estimatePoints.value) {
-      ElMessage.warning('积分余额不足，请先充值或赚取积分')
-      return
-    }
-    const sid = sessionId.value || getSessionForNav(activeNav.value)
-    loading.value = true
-    const now = Date.now()
-    messages.value.push({ role: 'user', content: text, type: 'text', at: now })
     draft.value = ''
-  
-    const history = messages.value.slice(0, -1).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }))
-  
-    const skill = activeNav.value === 'help' ? 'help' : (activeNav.value === 'writing' ? 'writing' : 'writing')
-  
     try {
-      if (activeNav.value === 'drawing') {
-        const q = imageQuality.value === 'premium' && isVip.value ? 'premium' : 'normal'
-        if (q === 'premium') showGptImageSlowToast()
-        let res
-        try {
-          res = await aiImage({ prompt: text, quality: q, sessionId: sessionId.value || getSessionForNav('drawing') })
-        } finally {
-          if (q === 'premium') dismissGptImageSlowToast()
-        }
-        const data = res.data || {}
-        const url = data.url || data.payload?.url
-        if (!url) {
-          throw new Error('image url missing')
-        }
-        messages.value.push({ role: 'assistant', type: 'image', url, at: Date.now() })
-        if (data.sessionId) setSessionForNav('drawing', data.sessionId)
-        if (data.pointsCost != null) {
-          ElMessage.success(`已扣 ${data.pointsCost} 积分`)
-        }
-        const inst = oml2d.value
-        if (inst?.tipsMessage) {
-          inst.tipsMessage('生成完成', 3000, 1)
-        }
-        refreshEstimate()
-        return
-      }
-  
-      const res = await postMascotChat({
-        message: text,
-        sessionId: sid,
-        mascotModelCode: activeCode.value,
-        llmProvider: selectedLlm.value,
-        skill,
-        history,
-      })
-      const data = res.data || {}
-      const reply = data.reply ?? ''
-      messages.value.push({ role: 'assistant', content: reply, type: 'text', at: Date.now() })
-      if (data.sessionId) setSessionForNav(activeNav.value, data.sessionId)
-      if (data.pointsCost != null) {
-        ElMessage.success(`已扣 ${data.pointsCost} 积分`)
-      }
-      refreshEstimate()
-  
-      const inst = oml2d.value
-      if (inst?.tipsMessage && reply) {
-        inst.tipsMessage(reply.length > 100 ? `${reply.slice(0, 100)}…` : reply, 4500, 1)
-      }
-    } catch (e) {
-      messages.value.pop()
+      await sendInternal(text)
+    } catch {
       draft.value = text
-    } finally {
-      loading.value = false
     }
   }
   
@@ -1034,7 +1450,21 @@ export function useMascotDock() {
     },
   )
   
+  watch(
+    () => userStore.id,
+    async (id, prev) => {
+      if (id && id !== prev) {
+        loadLocalSessionsFromStorage()
+        if (assistantOpen.value && activeNav.value !== 'appearance') {
+          await syncServerSessions(activeNav.value)
+          await loadMessagesForNav(activeNav.value)
+        }
+      }
+    },
+  )
+
   onMounted(async () => {
+    loadLocalSessionsFromStorage()
     loadSavedOffset()
     await nextTick()
     await initOml2dStage()
@@ -1043,6 +1473,12 @@ export function useMascotDock() {
   })
   
   onBeforeUnmount(() => {
+    stopMascotIdleTips()
+    clearThinkingRotation()
+    if (chatStreamAbort) {
+      chatStreamAbort()
+      chatStreamAbort = null
+    }
     onStagePointerUp()
     clearOml2dStageHost()
   })
@@ -1056,6 +1492,7 @@ export function useMascotDock() {
     FLASH_LLM,
     GUEST_MASCOT_CODE_KEY,
     IMAGE_QUALITY_KEY,
+    LLM_CHAT_KEY,
     LLM_HELP_KEY,
     LLM_WRITING_KEY,
     OFFSET_KEY,
@@ -1066,28 +1503,28 @@ export function useMascotDock() {
     activeNav,
     activeSkill,
     applyAppearance,
-    applyChip,
     applyStageScaleToLib,
     assistantOpen,
     buildModelsPayload,
     catalog,
-    clearMessages,
     startNewSession,
     companionAvatarSrc,
     currentLlmStorageKey,
     draft,
     dragOffset,
     ensureSessionId,
+    estimateHintText,
     estimateLoading,
     estimatePoints,
+    showPointsPayButton,
+    usePointsBilling,
+    togglePointsPay,
     fetchCatalog,
+    formatAiUsageLine,
     formatMsgTime,
     formatSessionTime,
-    getSessionForNav,
-    historyDrawerOpen,
-    historyDrawerTitle,
-    historyLoading,
-    historySessions,
+    sessionListForNav,
+    selectLocalSession,
     imageQuality,
     initOml2dStage,
     inputPlaceholder,
@@ -1095,7 +1532,6 @@ export function useMascotDock() {
     live2dAssetUrl,
     llmOptions,
     llmStorageKey,
-    loadHistorySession,
     loadMessagesForNav,
     loadSavedOffset,
     loading,
@@ -1113,10 +1549,10 @@ export function useMascotDock() {
     onStagePointerDown,
     onStagePointerMove,
     onStagePointerUp,
-    openHistoryDrawer,
+    regenerateAssistant,
+    renderMascotMarkdown,
     pendingCode,
     pointsWallet,
-    quickChips,
     refreshEstimate,
     resolveInitialCode,
     ringVipTier,
@@ -1129,13 +1565,9 @@ export function useMascotDock() {
     scrollbarFs,
     selectNav,
     selectedLlm,
-    selectedLlmHelp,
-    selectedLlmWriting,
+    selectedLlmChat,
     send,
     sessionId,
-    sessionKeyForNav,
-    setSessionForNav,
-    skillSessionIds,
     stageHost,
     stageHovered,
     stageHostStyle,

@@ -174,9 +174,10 @@ export function useParticleSea(options = {}) {
     const host = unref(hostRef)
     if (host) {
       const rect = host.getBoundingClientRect()
+      const scrollH = Number(host.scrollHeight) || 0
       return {
         w: Math.max(1, Math.floor(rect.width)),
-        h: Math.max(1, Math.floor(rect.height)),
+        h: Math.max(1, Math.floor(Math.max(rect.height, scrollH))),
       }
     }
     return { w: window.innerWidth, h: window.innerHeight }
@@ -210,10 +211,8 @@ export function useParticleSea(options = {}) {
       await ocean.start()
       return
     }
-    if (embedded.value) {
-      bindHostResize()
-      classic.start()
-    }
+    if (embedded.value) bindHostResize()
+    classic.start()
   }
 
   onMounted(async () => {

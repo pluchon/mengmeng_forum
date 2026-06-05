@@ -1,0 +1,12 @@
+{
+  "folders": [
+    { "path": "forum-demo", "name": "forum-demo (Java)" },
+    { "path": "forum-vue/front", "name": "forum-vue" },
+    { "path": "ai-server", "name": "ai-server" }
+  ],
+  "settings": {
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.import.maven.enabled": true,
+    "files.encoding": "utf8"
+  }
+}

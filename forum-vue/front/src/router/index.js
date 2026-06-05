@@ -68,9 +68,7 @@ const router = createRouter({
         },
         {
           path: 'article/:id/audit',
-          name: 'articleAuditPending',
-          component: () => import('../views/ArticleAuditPending.vue'),
-          meta: { requiresAuth: true },
+          redirect: '/',
         },
         {
           path: 'article/:id',
@@ -142,14 +140,12 @@ const router = createRouter({
         },
         {
           path: 'search/user',
-          name: 'searchUser',
-          component: () => import('../views/SearchUser.vue'),
-          meta: { public: true },
+          redirect: (to) => ({ path: '/search', query: { ...to.query, tab: 'user' } }),
         },
         {
           path: 'search',
-          name: 'searchArticle',
-          component: () => import('../views/SearchArticle.vue'),
+          name: 'unifiedSearch',
+          component: () => import('../views/UnifiedSearchFeed.vue'),
           meta: { public: true },
         },
         {

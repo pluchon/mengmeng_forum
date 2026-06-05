@@ -1,6 +1,7 @@
 -- 全库初始化脚本（执行即删库重建 forum_db；勿与 PostgreSQL 的 postgres_ai_session.sql 混跑）
--- 含 forum_notice、forum_ai_model_usage_daily 等与 Java 实体一致。
--- 已有库增量（菜单 hidden、lottery_prize.stock_quantity 等）见同目录 migrate-existing-2026.sql，勿与本文件混跑。
+-- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、管理端 RBAC、抽奖演示）。
+-- 不含用户/帖子等业务数据；生产数据请走注册与运营后台维护。
+-- 结构变更请整库重跑本脚本，勿做增量 patch。
 DROP DATABASE IF EXISTS `forum_db`;
 CREATE DATABASE `forum_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -107,6 +108,8 @@ CREATE TABLE `article` (
                            `reply_count` int NOT NULL DEFAULT 0 COMMENT '回复数',
                            `like_count` int NOT NULL DEFAULT 0 COMMENT '点赞数',
                            `cover_img` varchar(255) DEFAULT NULL COMMENT '封面图URL',
+                           `media_type` tinyint NOT NULL DEFAULT 0 COMMENT '帖子媒体类型: 0图片相册 1视频(单个)',
+                           `video_url` varchar(500) DEFAULT NULL COMMENT '视频URL(仅 media_type=1 时有效, OSS: forum_vedio/article_vedio/)',
                            `content_type` tinyint NOT NULL DEFAULT 0 COMMENT '内容类型: 0富文本 1Markdown',
                            `favorite_count` int NOT NULL DEFAULT 0 COMMENT '收藏数(被加入收藏夹的总次数, 跨用户去重为 1)',
                            `sub_reply_count` int NOT NULL DEFAULT 0 COMMENT '楼中楼回复数(独立于 reply_count, 楼层数仍只算一级回复)',
@@ -127,10 +130,58 @@ CREATE TABLE `article` (
 
 -- ----------------------------
 -- 3.0 帖子搜索与 RAG / Redis（forum-demo + ai-server；非本脚本创建的 KV/向量结构）
---   已发布帖子的标题、正文片段、作者昵称/用户名等由异步任务或 ai-server 写入语义索引（常见落地为 Redis 或向量库），供搜索增强与 rerank。
+--   已发布帖子仅将「标题 + 检索词扩展」写入向量索引（不含正文），模型 qwen3-vl-embedding；用户所选标签名会并入检索词。
 --   用户端「AI 搜索」模式请求 forum-demo /search/article?ai=1 时将跳过标题 LIKE，直接走 RAG 召回链路。
 -- ----------------------------
 
+
+-- ----------------------------
+-- 3.0a 帖子标签（预设 + 用户反馈 + 关联，每帖最多 5 个由业务层约束）
+-- ----------------------------
+DROP TABLE IF EXISTS `forum_article_tag_link`;
+DROP TABLE IF EXISTS `forum_article_tag_request`;
+DROP TABLE IF EXISTS `forum_article_tag`;
+CREATE TABLE `forum_article_tag` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '标签ID',
+    `name` varchar(16) NOT NULL COMMENT '标签名',
+    `color_key` varchar(24) NOT NULL DEFAULT 'sky' COMMENT 'sky|rose|amber|mint|violet|slate|orange|teal',
+    `scope_type` tinyint NOT NULL DEFAULT 0 COMMENT '0全站 1分类 2版块',
+    `scope_id` bigint NOT NULL DEFAULT 0 COMMENT '分类或版块ID',
+    `sort` int NOT NULL DEFAULT 0,
+    `state` tinyint NOT NULL DEFAULT 0 COMMENT '0正常 1禁用',
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_tag_scope_name` (`scope_type`, `scope_id`, `name`),
+    KEY `idx_tag_scope` (`scope_type`, `scope_id`, `delete_state`, `state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='帖子预设标签';
+
+CREATE TABLE `forum_article_tag_link` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `article_id` bigint NOT NULL,
+    `tag_id` bigint NOT NULL,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_article_tag` (`article_id`, `tag_id`),
+    KEY `idx_tag_article` (`tag_id`, `article_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='帖子标签关联';
+
+CREATE TABLE `forum_article_tag_request` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `board_id` bigint NOT NULL,
+    `category_id` bigint NOT NULL DEFAULT 0,
+    `proposed_name` varchar(16) NOT NULL,
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '0待审 1通过 2拒绝',
+    `audit_message` varchar(200) DEFAULT NULL,
+    `approved_tag_id` bigint DEFAULT NULL,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_tag_req_user` (`user_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户申请新标签';
 
 -- ----------------------------
 -- 3.1 帖子相册图片表 (article_image)
@@ -243,7 +294,6 @@ CREATE TABLE `category` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '分类编号, 主键, 自增',
     `name` varchar(50) NOT NULL COMMENT '分类名称',
     `description` varchar(200) DEFAULT NULL COMMENT '分类描述',
-    `icon` varchar(100) DEFAULT NULL COMMENT '分类图标',
     `sort` int NOT NULL DEFAULT 0 COMMENT '排序优先级',
     `state` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常, 1禁用',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
@@ -252,35 +302,76 @@ CREATE TABLE `category` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分类表';
 
-INSERT INTO `category` (`name`, `description`, `icon`, `sort`) VALUES
-('代码世界', '编程技术、开发经验分享', '💻', 1),
-('美好生活', '生活方式、日常分享', '🌸', 2),
-('舌尖美食', '美食探店、食谱分享', '🍜', 3),
-('影音娱乐', '电影、音乐、游戏', '🎬', 4),
-('运动健康', '健身、运动、健康生活', '💪', 5);
+-- 分类 + 版块（大众化社区结构；全新库执行本脚本后分类 ID=1～8、版块 ID=1～27 与下列顺序一致）
+INSERT INTO `category` (`name`, `description`, `sort`) VALUES
+('二次元', '番剧动画、同人、COS、手办与宅文化', 1),
+('游戏', '手游、单机、电竞与攻略交流', 2),
+('生活日常', '穿搭美妆、美食、旅行与居家', 3),
+('影视综艺', '电影剧集、综艺与音乐', 4),
+('学习职场', '考研考公、职场与自学', 5),
+('情感树洞', '倾诉、恋爱与人际', 6),
+('科技数码', '手机电脑、装机与 AI 玩机', 7),
+('萌宠', '猫狗异宠与养宠日常', 8);
 
--- 插入版块种子数据
 INSERT INTO `board` (`name`, `category_id`, `article_count`, `sort`, `state`, `delete_state`) VALUES
-('Java',         1, 0, 1, 0, 0),
-('Python',       1, 0, 2, 0, 0),
-('前端',         1, 0, 3, 0, 0),
-('数据库',        1, 0, 4, 0, 0),
-('算法',         1, 0, 5, 0, 0),
-('生活日记',       2, 0, 1, 0, 0),
-('旅行分享',       2, 0, 2, 0, 0),
-('宠物日常',       2, 0, 3, 0, 0),
-('家居装修',       2, 0, 4, 0, 0),
-('美食探店',       3, 0, 1, 0, 0),
-('家常菜谱',       3, 0, 2, 0, 0),
-('烘焙甜品',       3, 0, 3, 0, 0),
-('奶茶咖啡',       3, 0, 4, 0, 0),
-('电影推荐',       4, 0, 1, 0, 0),
-('音乐分享',       4, 0, 2, 0, 0),
-('游戏交流',       4, 0, 3, 0, 0),
-('综艺娱乐',       4, 0, 4, 0, 0),
-('健身打卡',       5, 0, 1, 0, 0),
-('跑步骑行',       5, 0, 2, 0, 0),
-('瑜伽冥想',       5, 0, 3, 0, 0);
+('新番讨论',   1, 0, 1, 0, 0),
+('同人安利',   1, 0, 2, 0, 0),
+('COS返图',    1, 0, 3, 0, 0),
+('手办模玩',   1, 0, 4, 0, 0),
+('声优宅舞',   1, 0, 5, 0, 0),
+('手游',       2, 0, 1, 0, 0),
+('单机主机',   2, 0, 2, 0, 0),
+('电竞赛事',   2, 0, 3, 0, 0),
+('游戏攻略',   2, 0, 4, 0, 0),
+('穿搭美妆',   3, 0, 1, 0, 0),
+('美食探店',   3, 0, 2, 0, 0),
+('旅行打卡',   3, 0, 3, 0, 0),
+('家居收纳',   3, 0, 4, 0, 0),
+('影视综评',   4, 0, 1, 0, 0),
+('综艺吐槽',   4, 0, 2, 0, 0),
+('音乐分享',   4, 0, 3, 0, 0),
+('考研考公',   5, 0, 1, 0, 0),
+('职场交流',   5, 0, 2, 0, 0),
+('自学技能',   5, 0, 3, 0, 0),
+('倾诉树洞',   6, 0, 1, 0, 0),
+('恋爱八卦',   6, 0, 2, 0, 0),
+('手机平板',   7, 0, 1, 0, 0),
+('电脑装机',   7, 0, 2, 0, 0),
+('AI玩机',     7, 0, 3, 0, 0),
+('云吸猫',     8, 0, 1, 0, 0),
+('遛狗日记',   8, 0, 2, 0, 0),
+('养宠问答',   8, 0, 3, 0, 0);
+
+-- 帖子标签种子（scope_type: 0全站 1分类 2版块）
+INSERT INTO `forum_article_tag` (`name`, `color_key`, `scope_type`, `scope_id`, `sort`, `state`, `delete_state`) VALUES
+('吐槽', 'rose', 0, 0, 1, 0, 0),
+('安利', 'sky', 0, 0, 2, 0, 0),
+('求推荐', 'mint', 0, 0, 3, 0, 0),
+('晒图', 'amber', 0, 0, 4, 0, 0),
+('杂谈', 'slate', 0, 0, 5, 0, 0),
+('无剧透', 'mint', 1, 1, 10, 0, 0),
+('补番清单', 'sky', 1, 1, 11, 0, 0),
+('本子安利', 'violet', 1, 1, 12, 0, 0),
+('抽卡晒欧', 'amber', 1, 2, 10, 0, 0),
+('攻略', 'teal', 1, 2, 11, 0, 0),
+('ootd', 'rose', 1, 3, 10, 0, 0),
+('探店', 'orange', 1, 3, 11, 0, 0),
+('剧评', 'slate', 1, 4, 10, 0, 0),
+('备考', 'violet', 1, 5, 10, 0, 0),
+('树洞', 'slate', 1, 6, 10, 0, 0),
+('开箱', 'sky', 1, 7, 10, 0, 0),
+('云吸猫', 'rose', 1, 8, 10, 0, 0),
+('本周新番', 'sky', 2, 1, 1, 0, 0),
+('CP向', 'rose', 2, 2, 1, 0, 0),
+('场照', 'violet', 2, 3, 1, 0, 0),
+('景品', 'amber', 2, 4, 1, 0, 0),
+('原神', 'sky', 2, 6, 1, 0, 0),
+('Steam', 'slate', 2, 7, 1, 0, 0),
+('低卡食谱', 'mint', 2, 11, 1, 0, 0),
+('穷游', 'teal', 2, 12, 1, 0, 0),
+('考研', 'violet', 2, 17, 1, 0, 0),
+('英短', 'rose', 2, 25, 1, 0, 0),
+('柯基', 'orange', 2, 26, 1, 0, 0);
 
 -- ----------------------------
 -- 9.1 收藏夹表 (user_favorite_folder)
@@ -332,8 +423,6 @@ CREATE TABLE `article_favorite` (
     INDEX `idx_folder_id` (`folder_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='帖子收藏记录表';
 
-SET FOREIGN_KEY_CHECKS = 1;
-
 -- ----------------------------
 -- 10. 签到积分规则表 (checkin_rule)
 -- 存放每个月每天的签到积分规则
@@ -351,103 +440,13 @@ CREATE TABLE `checkin_rule` (
                                 UNIQUE INDEX `uix_month_day` (`month`, `day_number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='签到积分规则表';
 
--- 默认规则插入 (month=0)，覆盖全年366天
--- 积分规则：按月份+日期确定性伪随机积分 (10~99)
--- 1月 (31天)
+-- 兜底规则 month=0（未配置 1~12 月时回退）；可按月插入 1~12 覆盖
 INSERT INTO checkin_rule (month, day_number, points) VALUES
-(1,1,54),(1,2,61),(1,3,68),(1,4,75),(1,5,82),(1,6,89),(1,7,96),
-(1,8,13),(1,9,20),(1,10,27),(1,11,34),(1,12,41),(1,13,48),(1,14,55),
-(1,15,62),(1,16,69),(1,17,76),(1,18,83),(1,19,90),(1,20,97),(1,21,14),
-(1,22,21),(1,23,28),(1,24,35),(1,25,42),(1,26,49),(1,27,56),(1,28,63),
-(1,29,70),(1,30,77),(1,31,84);
-
--- 2月 (29天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(2,1,91),(2,2,98),(2,3,15),(2,4,22),(2,5,29),(2,6,36),(2,7,43),
-(2,8,50),(2,9,57),(2,10,64),(2,11,71),(2,12,78),(2,13,85),(2,14,92),
-(2,15,99),(2,16,16),(2,17,23),(2,18,30),(2,19,37),(2,20,44),(2,21,51),
-(2,22,58),(2,23,65),(2,24,72),(2,25,79),(2,26,86),(2,27,93),(2,28,10),
-(2,29,17);
-
--- 3月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(3,1,38),(3,2,45),(3,3,52),(3,4,59),(3,5,66),(3,6,73),(3,7,80),
-(3,8,87),(3,9,94),(3,10,11),(3,11,18),(3,12,25),(3,13,32),(3,14,39),
-(3,15,46),(3,16,53),(3,17,60),(3,18,67),(3,19,74),(3,20,81),(3,21,88),
-(3,22,95),(3,23,12),(3,24,19),(3,25,26),(3,26,33),(3,27,40),(3,28,47),
-(3,29,54),(3,30,61),(3,31,68);
-
--- 4月 (30天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(4,1,75),(4,2,82),(4,3,89),(4,4,96),(4,5,13),(4,6,20),(4,7,27),
-(4,8,34),(4,9,41),(4,10,48),(4,11,55),(4,12,62),(4,13,69),(4,14,76),
-(4,15,83),(4,16,90),(4,17,97),(4,18,14),(4,19,21),(4,20,28),(4,21,35),
-(4,22,42),(4,23,49),(4,24,56),(4,25,63),(4,26,70),(4,27,77),(4,28,84),
-(4,29,91),(4,30,98);
-
--- 5月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(5,1,22),(5,2,29),(5,3,36),(5,4,43),(5,5,50),(5,6,57),(5,7,64),
-(5,8,71),(5,9,78),(5,10,85),(5,11,92),(5,12,99),(5,13,16),(5,14,23),
-(5,15,30),(5,16,37),(5,17,44),(5,18,51),(5,19,58),(5,20,65),(5,21,72),
-(5,22,79),(5,23,86),(5,24,93),(5,25,10),(5,26,17),(5,27,24),(5,28,31),
-(5,29,38),(5,30,45),(5,31,52);
-
--- 6月 (30天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(6,1,59),(6,2,66),(6,3,73),(6,4,80),(6,5,87),(6,6,94),(6,7,11),
-(6,8,18),(6,9,25),(6,10,32),(6,11,39),(6,12,46),(6,13,53),(6,14,60),
-(6,15,67),(6,16,74),(6,17,81),(6,18,88),(6,19,95),(6,20,12),(6,21,19),
-(6,22,26),(6,23,33),(6,24,40),(6,25,47),(6,26,54),(6,27,61),(6,28,68),
-(6,29,75),(6,30,82);
-
--- 7月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(7,1,96),(7,2,13),(7,3,20),(7,4,27),(7,5,34),(7,6,41),(7,7,48),
-(7,8,55),(7,9,62),(7,10,69),(7,11,76),(7,12,83),(7,13,90),(7,14,97),
-(7,15,14),(7,16,21),(7,17,28),(7,18,35),(7,19,42),(7,20,49),(7,21,56),
-(7,22,63),(7,23,70),(7,24,77),(7,25,84),(7,26,91),(7,27,98),(7,28,15),
-(7,29,22),(7,30,29),(7,31,36);
-
--- 8月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(8,1,43),(8,2,50),(8,3,57),(8,4,64),(8,5,71),(8,6,78),(8,7,85),
-(8,8,92),(8,9,99),(8,10,16),(8,11,23),(8,12,30),(8,13,37),(8,14,44),
-(8,15,51),(8,16,58),(8,17,65),(8,18,72),(8,19,79),(8,20,86),(8,21,93),
-(8,22,10),(8,23,17),(8,24,24),(8,25,31),(8,26,38),(8,27,45),(8,28,52),
-(8,29,59),(8,30,66),(8,31,73);
-
--- 9月 (30天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(9,1,80),(9,2,87),(9,3,94),(9,4,11),(9,5,18),(9,6,25),(9,7,32),
-(9,8,39),(9,9,46),(9,10,53),(9,11,60),(9,12,67),(9,13,74),(9,14,81),
-(9,15,88),(9,16,95),(9,17,12),(9,18,19),(9,19,26),(9,20,33),(9,21,40),
-(9,22,47),(9,23,54),(9,24,61),(9,25,68),(9,26,75),(9,27,82),(9,28,89),
-(9,29,96),(9,30,13);
-
--- 10月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(10,1,27),(10,2,34),(10,3,41),(10,4,48),(10,5,55),(10,6,62),(10,7,69),
-(10,8,76),(10,9,83),(10,10,90),(10,11,97),(10,12,14),(10,13,21),(10,14,28),
-(10,15,35),(10,16,42),(10,17,49),(10,18,56),(10,19,63),(10,20,70),(10,21,77),
-(10,22,84),(10,23,91),(10,24,98),(10,25,15),(10,26,22),(10,27,29),(10,28,36),
-(10,29,43),(10,30,50),(10,31,57);
-
--- 11月 (30天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(11,1,64),(11,2,71),(11,3,78),(11,4,85),(11,5,92),(11,6,99),(11,7,16),
-(11,8,23),(11,9,30),(11,10,37),(11,11,44),(11,12,51),(11,13,58),(11,14,65),
-(11,15,72),(11,16,79),(11,17,86),(11,18,93),(11,19,10),(11,20,17),(11,21,24),
-(11,22,31),(11,23,38),(11,24,45),(11,25,52),(11,26,59),(11,27,66),(11,28,73),
-(11,29,80),(11,30,87);
-
--- 12月 (31天)
-INSERT INTO checkin_rule (month, day_number, points) VALUES
-(12,1,11),(12,2,18),(12,3,25),(12,4,32),(12,5,39),(12,6,46),(12,7,53),
-(12,8,60),(12,9,67),(12,10,74),(12,11,81),(12,12,88),(12,13,95),(12,14,12),
-(12,15,19),(12,16,26),(12,17,33),(12,18,40),(12,19,47),(12,20,54),(12,21,61),
-(12,22,68),(12,23,75),(12,24,82),(12,25,89),(12,26,96),(12,27,13),(12,28,20),
-(12,29,27),(12,30,34),(12,31,41);
+(0,1,50),(0,2,50),(0,3,50),(0,4,50),(0,5,50),(0,6,50),(0,7,50),
+(0,8,50),(0,9,50),(0,10,50),(0,11,50),(0,12,50),(0,13,50),(0,14,50),
+(0,15,50),(0,16,50),(0,17,50),(0,18,50),(0,19,50),(0,20,50),(0,21,50),
+(0,22,50),(0,23,50),(0,24,50),(0,25,50),(0,26,50),(0,27,50),(0,28,50),
+(0,29,50),(0,30,50),(0,31,50);
 
 -- ----------------------------
 -- 11. 连续签到奖励表 (checkin_streak_reward)
@@ -702,26 +701,42 @@ CREATE TABLE `forum_notice` (
     KEY `idx_notice_list` (`notice_kind`, `category_scope`, `publish_state`, `delete_state`, `pin_top`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='论坛公告中心(模板化内容)';
 
--- 种子: 入站必看(新用户)、全站版规、分类「代码世界」补充版规(示例)
+-- 公告中心种子（notice_kind: 0入站 1活动 4规范；注册引导会指向 notice_kind=0）
 INSERT INTO `forum_notice` (`notice_kind`, `category_scope`, `template_id`, `sidebar_key`, `title`, `subtitle`, `content_markdown`, `body_json`, `sort`, `pin_top`, `publish_state`, `delete_state`) VALUES
-(0, 0, 'welcome_hero_right', 'onboarding_welcome', '欢迎来到萌萌论坛', '在这里，发现更美好的生活方式',
- '# 欢迎加入萌萌论坛\n\n请阅读下方说明，遵守社区规范。',
+(0, 0, 'welcome_hero_right', 'onboarding_welcome', '欢迎来到萌萌论坛', '在这里，发现更有趣的社区生活',
+ '# 欢迎加入萌萌论坛\n\n请先阅读下方说明，遵守社区规范。发帖、评论与私信均需实名登录账号。',
  JSON_OBJECT(
    'highlights', JSON_ARRAY(
-     JSON_OBJECT('label', '友好互动', 'labelColor', '#f53f3f', 'text', '拒绝冷漠，在这里分享你的快乐。'),
-     JSON_OBJECT('label', '优质内容', 'labelColor', '#00b42a', 'text', '鼓励深度创作，碰撞灵感。')
+     JSON_OBJECT('label', '友好互动', 'labelColor', '#f53f3f', 'text', '尊重他人，拒绝人身攻击与引战。'),
+     JSON_OBJECT('label', '优质内容', 'labelColor', '#00b42a', 'text', '鼓励原创与深度分享，少灌水多干货。'),
+     JSON_OBJECT('label', '安全上网', 'labelColor', '#165dff', 'text', '勿泄露隐私，勿传播违法与低俗内容。')
    ),
    'coverImageUrl', ''
  ),
  0, 1, 1, 0),
-(4, 0, 'plain_sections', 'rules_general', '全站发帖与评论规范', '适用于所有分类与版块;各分类可有补充说明。',
- '## 全站规范\n\n请文明发言，禁止人身攻击与违法内容。',
+(1, 0, 'plain_sections', 'activity_lottery', '积分幸运抽上线', '单次 30 积分，十连有稀有保底',
+ '## 活动说明\n\n- 单次抽奖消耗 **30 积分**，积分奖即时到账。\n- **十连**时至少获得 1 件稀有档（大奖 / 周边 / VIP 体验）。\n- 累计 **50 抽**未中神秘大奖时，下一次必出神秘大奖档。\n- 周边与 VIP 类奖品通过站内信发放，请留意通知中心。',
+ JSON_OBJECT('sections', JSON_ARRAY(
+   JSON_OBJECT('title', '奖池', 'body', '谢谢参与、积分奖、安慰奖、周边、神秘大奖（含 VIP/高积分子项）。'),
+   JSON_OBJECT('title', '概率', 'body', '按活动权重动态计算；某档售罄后自动剔除并重算。')
+ )),
+ 10, 0, 1, 0),
+(1, 0, 'plain_sections', 'activity_checkin', '每日签到', '连续签到积分更多',
+ '## 签到规则\n\n每日签到可获得积分，连续签到天数越高奖励越多（具体数额以签到页展示为准）。积分可用于抽奖、表情商城与 AI 功能。',
  JSON_OBJECT('sections', JSON_ARRAY()),
- 0, 0, 1, 0),
-(4, 1, 'plain_sections', 'rules_category_1', '「代码世界」分类版规', '本分类下 Java/Python/前端 等版块适用以下补充规则。',
- '## 本分类补充\n\n技术讨论请标注环境版本，避免无信息提问。',
+ 11, 0, 1, 0),
+(4, 0, 'plain_sections', 'rules_general', '全站发帖与评论规范', '适用于所有分类与版块',
+ '## 全站规范\n\n1. 禁止违法、色情、暴力、广告刷屏与盗图盗文。\n2. 标题需与正文相关，勿标题党。\n3. 引战、歧视、泄露他人隐私一律删除并视情节禁言。\n4. 帖子发布后进入审核，通过后方公开展示。',
  JSON_OBJECT('sections', JSON_ARRAY()),
- 0, 0, 1, 0);
+ 20, 0, 1, 0),
+(4, 0, 'plain_sections', 'rules_post_tag', '帖子标签说明', '每帖最多 5 个标签',
+ '## 标签用法\n\n发帖时可选择版块推荐标签，也可提交新标签（AI 审核通过后入库）。标签会用于搜索与推荐，请勿恶意堆砌无关标签。',
+ JSON_OBJECT('sections', JSON_ARRAY()),
+ 21, 0, 1, 0),
+(4, 1, 'plain_sections', 'rules_category_acg', '「二次元」版块说明', '同人、番剧、COS 等内容规范',
+ '## 本分类补充\n\n- 转载需注明出处，尊重版权与角色名。\n- COS / 返图请避免无关广告引流。\n- 剧透内容请在标题或开头标注。',
+ JSON_OBJECT('sections', JSON_ARRAY()),
+ 30, 0, 1, 0);
 
 
 -- ----------------------------
@@ -745,6 +760,7 @@ CREATE TABLE `forum_ai_model_price` (
     UNIQUE KEY `uk_model_bill_unit` (`model_code`, `bill_unit`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI模型单价目录';
 
+-- 配置种子：AI 计费单价（非业务演示数据，上线前请按厂商价目维护）
 INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `price_yuan`, `vip_only`, `enabled`, `remark`) VALUES
 ('qwen3.6-flash', 'dashscope', 'per_1m_input', 1.200000, 0, 1, '中国内地'),
 ('qwen3.6-flash', 'dashscope', 'per_1m_output', 7.200000, 0, 1, '中国内地'),
@@ -985,7 +1001,7 @@ INSERT INTO `lottery_prize` (`id`, `name`, `prize_type`, `prize_value`, `stock_q
     (1, '谢谢参与', 0, 0, -1, 1, 0, NULL),
     (2, '神秘大奖', 1, 0, -1, 1, 1, NULL),
     (3, '周边小礼品A', 2, 0, -1, 1, 0, NULL),
-    (4, '安慰券', 3, 0, -1, 1, 0, NULL),
+    (4, '安慰奖', 3, 0, -1, 1, 0, NULL),
     (5, '10积分', 4, 10, -1, 1, 0, NULL),
     (6, '50积分', 4, 50, -1, 1, 0, NULL),
     (7, 'VIP体验1天', 5, 1, -1, 1, 0, NULL),
@@ -1066,21 +1082,17 @@ CREATE TABLE `forum_vip_quota_config` (
 INSERT INTO `forum_vip_quota_config`
 (`vip_tier`, `quota_key`, `group_label`, `display_name`, `quota_type`, `daily_bucket`, `model_code`, `icon_provider`, `daily_limit`, `token_limit`, `tier_tag`, `sort_order`) VALUES
 (1, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
-(1, 'advanced_llm', '写作配额 · 每日', '高级大模型写作（通义/Gemini/Claude）', 'daily_count', 'advanced_llm', NULL, 'qwen', 50, NULL, 'PRO', 20),
 (1, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 15, NULL, 'PRO', 30),
 (1, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 10, NULL, 'PRO', 40),
 (1, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 500000, 'PRO', 50),
 (1, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 450000, 'PRO', 60),
 (1, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 300000, 'PRO', 70),
-(1, 'token_claude_haiku', '本期 Token 配额 · 文本', 'Claude Haiku', 'token_period', NULL, 'claude-haiku-4-5', 'claude', NULL, 250000, 'PRO', 80),
 (2, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
-(2, 'advanced_llm', '写作配额 · 每日', '高级大模型写作（通义/Gemini/Claude）', 'daily_count', 'advanced_llm', NULL, 'qwen', 300, NULL, 'MAX', 20),
 (2, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 50, NULL, 'MAX', 30),
 (2, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 50, NULL, 'MAX', 40),
 (2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50),
 (2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60),
 (2, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 800000, 'MAX', 70),
-(2, 'token_claude_haiku', '本期 Token 配额 · 文本', 'Claude Haiku', 'token_period', NULL, 'claude-haiku-4-5', 'claude', NULL, 500000, 'MAX', 80),
 (2, 'token_claude_sonnet', '本期 Token 配额 · 文本', 'Claude Sonnet', 'token_period', NULL, 'claude-sonnet-4-6', 'claude', NULL, 400000, 'MAX', 90);
 
 -- ----------------------------
@@ -1244,3 +1256,5 @@ SELECT 1, `id` FROM `sys_menu`;
 -- 绑定管理员账号：将首个 is_admin=1 的用户赋予 role_admin（若无则跳过）
 INSERT INTO `sys_user_role` (`user_id`, `role_id`)
 SELECT `id`, 1 FROM `user` WHERE `is_admin` = 1 AND `delete_state` = 0 LIMIT 1;
+
+SET FOREIGN_KEY_CHECKS = 1;

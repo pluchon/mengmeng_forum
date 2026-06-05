@@ -1,6 +1,6 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElLoading } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, Plus } from '@element-plus/icons-vue'
 import { useBoardStore } from '@/stores/board'
 import { useUserStore } from '@/stores/user'
@@ -13,6 +13,9 @@ import {
   updateArticleCoverByUrl,
   uploadArticleImage,
   replaceArticleImages,
+  uploadArticleVideo,
+  setArticleVideo,
+  clearArticleVideo,
 } from '@/api/article'
 import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
 import { extractApiErrorMessage } from '@/api/httpError'
@@ -21,7 +24,6 @@ import WangEditor from '@/components/common/WangEditor.vue'
 import { marked } from 'marked'
 import { stripSingleOuterParagraph } from '@/utils/htmlNormalize'
 import {
-  getBatchImageUploadLoadingText,
   openImageUploadLoading,
   validateLocalImageFile,
 } from '@/utils/imageUploadFeedback'
@@ -54,7 +56,18 @@ export function useArticleCreate() {
   const mdTextareaRef = ref(null)
   /** 笔记相册（article_image），与正文独立；顺序即展示顺序 */
   const galleryUrls = ref([])
+  /** 媒体模式：相册 / 视频（二选一） */
+  const mediaMode = ref('gallery') // gallery | video
+  /** 单视频 URL（服务端落库到 article.video_url） */
+  const videoUrl = ref('')
+  const videoUploading = ref(false)
+  const videoUploadProgress = ref(0)
+  const videoUploadError = ref('')
+  let pendingVideoUpload = null
+  const galleryUploading = ref(false)
+  const tagIds = ref([])
   const galleryInputRef = ref(null)
+  const videoInputRef = ref(null)
   const galleryItemsRef = ref(null)
   const galleryStripOverflow = ref(false)
   const galleryStripFadeLeft = ref(false)
@@ -62,9 +75,13 @@ export function useArticleCreate() {
 
   const canAddGallery = computed(() => galleryUrls.value.length < MAX_ARTICLE_GALLERY)
 
+  const mdUndoStack = ref([])
+  const mdRedoStack = ref([])
+  let mdUndoGuard = false
+
   function updateGalleryStripState() {
     const el = galleryItemsRef.value
-    if (!el || editorMode.value !== 'markdown') return
+    if (!el) return
     const overflow = el.scrollWidth > el.clientWidth + 2
     const fadeLeft = overflow && el.scrollLeft > 4
     galleryStripOverflow.value = overflow
@@ -72,7 +89,6 @@ export function useArticleCreate() {
   }
 
   function scrollGalleryToEnd() {
-    if (editorMode.value !== 'markdown') return
     const el = galleryItemsRef.value
     if (!el) return
     el.scrollLeft = el.scrollWidth
@@ -106,6 +122,7 @@ export function useArticleCreate() {
       content,
       contentType: Number(form.contentType) || 0,
       coverImg: form.coverImg,
+      tagIds: [...tagIds.value],
     }
   }
 
@@ -128,21 +145,32 @@ export function useArticleCreate() {
   }
 
   watch(galleryUrls, () => {
-    nextTick(() => {
-      if (editorMode.value === 'markdown') scrollGalleryToEnd()
-    })
+    nextTick(scrollGalleryToEnd)
   }, { deep: true })
 
-  watch(editorMode, (mode) => {
+  watch(editorMode, () => {
     nextTick(() => {
-      if (mode === 'markdown') {
-        scrollGalleryToEnd()
-        bindGalleryOverflowWatch()
-      } else {
-        resetGalleryStripState()
-      }
+      scrollGalleryToEnd()
+      bindGalleryOverflowWatch()
     })
   })
+
+  let lastMdContent = form.content
+  watch(
+    () => form.content,
+    (val) => {
+      if (editorMode.value !== 'markdown' || mdUndoGuard) {
+        lastMdContent = val
+        return
+      }
+      if (val !== lastMdContent) {
+        mdUndoStack.value.push(lastMdContent)
+        if (mdUndoStack.value.length > 80) mdUndoStack.value.shift()
+        mdRedoStack.value = []
+        lastMdContent = val
+      }
+    },
+  )
 
   onBeforeUnmount(() => {
     galleryResizeObserver?.disconnect()
@@ -168,7 +196,7 @@ export function useArticleCreate() {
         const a = res.data.article
         if (isArticleEditingLocked(a.status)) {
           ElMessage.info('该帖子正在审核中，请稍候')
-          router.replace(`/article/${route.params.id}/audit`)
+          router.replace('/')
           return
         }
         const ct = Number(a.contentType) || 0
@@ -182,6 +210,11 @@ export function useArticleCreate() {
         editorMode.value = ct === 1 ? 'markdown' : 'rich'
         coverPreview.value = a.coverImg
         galleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
+        videoUrl.value = a.videoUrl || ''
+        const isVideoPost = Number(a.mediaType) === 1 || Boolean(String(a.videoUrl || '').trim())
+        mediaMode.value = isVideoPost ? 'video' : 'gallery'
+        const tags = Array.isArray(res.data.tags) ? res.data.tags : []
+        tagIds.value = tags.map((t) => t.id).filter(Boolean)
 
         // 设置级联选择器回显
         if (form.boardId) {
@@ -194,6 +227,34 @@ export function useArticleCreate() {
       }
     }
   })
+
+  async function setMediaMode(mode) {
+    if (mediaMode.value === mode) return
+    if (mode === 'gallery' && videoUrl.value) {
+      try {
+        await ElMessageBox.confirm('切换到相册将移除已上传的视频，是否继续？', '切换媒体类型', {
+          type: 'warning',
+          confirmButtonText: '继续',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      videoUrl.value = ''
+    } else if (mode === 'video' && galleryUrls.value.length) {
+      try {
+        await ElMessageBox.confirm('切换到视频将清空相册图片，是否继续？', '切换媒体类型', {
+          type: 'warning',
+          confirmButtonText: '继续',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      galleryUrls.value = []
+    }
+    mediaMode.value = mode
+  }
 
   // 级联选择器处理
   const cascaderOptions = computed(() => {
@@ -208,7 +269,19 @@ export function useArticleCreate() {
   })
 
   function handleBoardChange(val) {
-    form.boardId = val?.length ? val[val.length - 1] : ''
+    if (!Array.isArray(val) || val.length < 2) {
+      form.boardId = ''
+      tagIds.value = []
+      if (val?.length === 1) {
+        ElMessage.warning('请选择具体版块，不能只选分类')
+      }
+      return
+    }
+    const next = val[val.length - 1]
+    if (next !== form.boardId) {
+      tagIds.value = []
+    }
+    form.boardId = next
   }
 
   // 模式切换
@@ -218,9 +291,40 @@ export function useArticleCreate() {
 
   function setEditorMode(mode) {
     if (editorMode.value === mode) return
-    if (mode === 'rich') resetGalleryStripState()
     editorMode.value = mode
     switchMode(mode)
+    nextTick(() => {
+      scrollGalleryToEnd()
+      bindGalleryOverflowWatch()
+    })
+  }
+
+  function onMdKeydown(e) {
+    if (editorMode.value !== 'markdown') return
+    const isMod = e.ctrlKey || e.metaKey
+    if (!isMod) return
+    const key = String(e.key || '').toLowerCase()
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!mdUndoStack.value.length) return
+      mdUndoGuard = true
+      mdRedoStack.value.push(form.content)
+      form.content = mdUndoStack.value.pop()
+      lastMdContent = form.content
+      mdUndoGuard = false
+      return
+    }
+    if ((key === 'z' && e.shiftKey) || key === 'y') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!mdRedoStack.value.length) return
+      mdUndoGuard = true
+      mdUndoStack.value.push(form.content)
+      form.content = mdRedoStack.value.pop()
+      lastMdContent = form.content
+      mdUndoGuard = false
+    }
   }
 
   function applyAiContent(text) {
@@ -250,9 +354,7 @@ export function useArticleCreate() {
   function removeGalleryAt(index) {
     if (index < 0 || index >= galleryUrls.value.length) return
     galleryUrls.value.splice(index, 1)
-    nextTick(() => {
-      if (editorMode.value === 'markdown') scrollGalleryToEnd()
-    })
+    nextTick(scrollGalleryToEnd)
   }
 
   async function onGalleryFilesSelected(e) {
@@ -260,6 +362,10 @@ export function useArticleCreate() {
     if (!raw?.length) return
     const files = Array.from(raw)
     e.target.value = ''
+    if (mediaMode.value === 'video') {
+      ElMessage.warning('当前为视频模式，请切换到相册后再上传图片')
+      return
+    }
     const room = MAX_ARTICLE_GALLERY - galleryUrls.value.length
     if (room <= 0) {
       ElMessage.warning(`相册最多 ${MAX_ARTICLE_GALLERY} 张`)
@@ -276,10 +382,8 @@ export function useArticleCreate() {
         return
       }
     }
-    const loading = openImageUploadLoading(
-      take[0],
-      getBatchImageUploadLoadingText(take, `正在上传相册图（共 ${take.length} 张）…`),
-    )
+    galleryUploading.value = true
+    ElMessage.info(`相册 ${take.length} 张图在后台上传，可先继续编辑正文`)
     try {
       for (const file of take) {
         const res = await uploadArticleImage(file)
@@ -291,17 +395,40 @@ export function useArticleCreate() {
           return
         }
       }
+      ElMessage.success('相册图片上传完成')
     } catch (err) {
-      ElMessage.error('图片上传异常')
+      ElMessage.error(extractApiErrorMessage(err, '图片上传异常'))
     } finally {
-      loading.close()
+      galleryUploading.value = false
+    }
+  }
+
+  async function waitForPendingVideoUpload() {
+    if (pendingVideoUpload) {
+      await pendingVideoUpload
     }
   }
 
   async function syncGalleryToServer(articleId) {
     const id = Number(articleId)
     if (!id || Number.isNaN(id)) return { ok: false }
+    if (mediaMode.value === 'video') {
+      if (!videoUrl.value) {
+        ElMessage.warning('请先上传视频')
+        return { ok: false }
+      }
+      try {
+        const bind = await setArticleVideo(id, videoUrl.value)
+        if (bind.code === 0) return { ok: true }
+        ElMessage.error(bind.message || '视频绑定失败')
+        return { ok: false }
+      } catch {
+        ElMessage.error('视频绑定异常')
+        return { ok: false }
+      }
+    }
     try {
+      await clearArticleVideo(id)
       const res = await replaceArticleImages({
         articleId: id,
         imageUrls: [...galleryUrls.value],
@@ -313,6 +440,73 @@ export function useArticleCreate() {
       ElMessage.error('相册保存异常')
       return { ok: false }
     }
+  }
+
+  function openVideoPicker() {
+    if (mediaMode.value !== 'video') {
+      ElMessage.warning('请先切换到视频模式')
+      return
+    }
+    videoInputRef.value?.click()
+  }
+
+  function removeVideo() {
+    if (videoUploading.value) {
+      ElMessage.warning('视频仍在上传，请等待完成后再移除')
+      return
+    }
+    videoUrl.value = ''
+    videoUploadError.value = ''
+    videoUploadProgress.value = 0
+  }
+
+  function onVideoFileSelected(e) {
+    const raw = e.target?.files
+    if (!raw?.length) return
+    const file = raw[0]
+    e.target.value = ''
+    if (mediaMode.value !== 'video') {
+      ElMessage.warning('请先切换到视频模式')
+      return
+    }
+    if (videoUploading.value) {
+      ElMessage.warning('已有视频在上传，请等待完成')
+      return
+    }
+    const sizeMb = (file.size / 1024 / 1024).toFixed(1)
+    videoUploadError.value = ''
+    videoUploadProgress.value = 0
+    videoUploading.value = true
+    ElMessage.info(
+      sizeMb >= 200
+        ? `视频约 ${sizeMb}MB，超过 200MB 将后台处理，请勿重复点击`
+        : `视频约 ${sizeMb}MB，上传中，可先写正文`,
+    )
+    pendingVideoUpload = uploadArticleVideo(file, {
+      onUploadProgress: (ev) => {
+        if (!ev.total) return
+        const pct = Math.round((ev.loaded / ev.total) * 100)
+        videoUploadProgress.value = ev.loaded >= ev.total ? 100 : Math.min(99, pct)
+      },
+    })
+      .then((res) => {
+        if (res.code === 0 && res.data) {
+          videoUrl.value = String(res.data)
+          videoUploadProgress.value = 100
+          ElMessage.success('视频上传成功')
+        } else {
+          videoUploadError.value = res.message || '视频上传失败'
+          ElMessage.error(videoUploadError.value)
+        }
+      })
+      .catch((err) => {
+        videoUploadError.value = extractApiErrorMessage(err, '视频上传异常')
+        ElMessage.error(videoUploadError.value)
+      })
+      .finally(() => {
+        videoUploading.value = false
+        pendingVideoUpload = null
+      })
   }
 
   // Markdown 预览
@@ -350,11 +544,7 @@ export function useArticleCreate() {
       }
     }
 
-    const loading = ElLoading.service({
-      lock: true,
-      text: getBatchImageUploadLoadingText(files, '正在上传插图，请稍候…'),
-      background: 'rgba(255,255,255,0.72)',
-    })
+    ElMessage.info('插图在后台上传，可先继续编辑正文')
     try {
       for (const file of files) {
         const placeholder = `![上传中...](uploading-${Date.now()})`
@@ -371,8 +561,8 @@ export function useArticleCreate() {
           form.content = form.content.replace(placeholder, `![上传异常](${file.name})`)
         }
       }
-    } finally {
-      loading.close()
+    } catch {
+      ElMessage.error('插图上传异常')
     }
   }
 
@@ -382,12 +572,27 @@ export function useArticleCreate() {
       ElMessage.warning('标题、内容和版块缺一不可哦')
       return false
     }
+    if (galleryUploading.value) {
+      ElMessage.warning('相册图片仍在上传，请稍候再保存')
+      return false
+    }
+    if (mediaMode.value === 'video') {
+      if (videoUploading.value) {
+        ElMessage.warning('视频仍在上传，请稍候再保存')
+        return false
+      }
+      if (!videoUrl.value) {
+        ElMessage.warning('请先上传视频')
+        return false
+      }
+    }
 
     // 内容合规审核在「提交审核」时由后端 LangGraph 异步完成，此处不再做同步 AI 校验
     return true
   }
 
   async function handleSaveDraft() {
+    await waitForPendingVideoUpload()
     if (!await validateAndPrepare()) return
     submitting.value = true
     try {
@@ -400,7 +605,8 @@ export function useArticleCreate() {
         const articleId = isEdit.value ? route.params.id : res.data
         const gal = await syncGalleryToServer(articleId)
         if (!gal.ok) {
-          ElMessage.warning('正文已保存，但笔记相册未同步成功，可重新保存一次')
+          const mediaHint = mediaMode.value === 'video' ? '视频' : '笔记相册'
+          ElMessage.warning(`正文已保存，但${mediaHint}未同步成功，可重新保存一次`)
         }
         // edit 模式下用户若用了内嵌封面 uploader, 先把封面同步上去再跳转, 让 cover 页能展示最新预览
         const cov = await runCoverUploadToArticle(articleId)
@@ -421,6 +627,7 @@ export function useArticleCreate() {
   }
 
   async function handlePublish() {
+    await waitForPendingVideoUpload()
     if (!await validateAndPrepare()) return
     submitting.value = true
     try {
@@ -441,7 +648,8 @@ export function useArticleCreate() {
       if (articleId) {
         const gal = await syncGalleryToServer(articleId)
         if (!gal.ok) {
-          ElMessage.warning('帖子已保存，但笔记相册未同步成功，请修正后重新提交审核')
+          const mediaHint = mediaMode.value === 'video' ? '视频' : '笔记相册'
+          ElMessage.warning(`帖子已保存，但${mediaHint}未同步成功，请修正后重新提交审核`)
           return
         }
         const cov = await runCoverUploadToArticle(articleId)
@@ -451,8 +659,7 @@ export function useArticleCreate() {
 
         const audit = await submitArticleForAuditWithPrompt(articleId)
         if (!audit.ok) return
-        const q = audit.taskId ? `?taskId=${encodeURIComponent(audit.taskId)}` : ''
-        router.push(`/article/${articleId}/audit${q}`)
+        router.push('/')
       }
     } catch (err) {
       ElMessage.error(extractApiErrorMessage(err, '提交审核失败'))
@@ -482,6 +689,13 @@ export function useArticleCreate() {
     galleryStripFadeLeft,
     galleryStripOverflow,
     galleryUrls,
+    mediaMode,
+    videoUrl,
+    videoUploading,
+    videoUploadProgress,
+    videoUploadError,
+    galleryUploading,
+    videoInputRef,
     handleBoardChange,
     handleCancel,
     handleCoverChange,
@@ -494,12 +708,18 @@ export function useArticleCreate() {
     mdTextareaRef,
     mdWrap,
     onGalleryFilesSelected,
+    openVideoPicker,
+    removeVideo,
+    onVideoFileSelected,
     openGalleryPicker,
     removeGalleryAt,
     renderedPreview,
     selectedBoard,
     submitting,
+    tagIds,
     setEditorMode,
+    setMediaMode,
+    onMdKeydown,
     switchMode,
     updateGalleryStripState,
   }

@@ -464,11 +464,13 @@ import {
 } from '@/api/lottery'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import EChart from '@/components/common/EChart.vue'
-import bgUrl from '@/assets/images/goods.jpg'
 import recordIconUrl from '@/assets/svg/抽奖记录.svg?url'
 import switchActivityIconUrl from '@/assets/svg/修改.svg?url'
-import surpriseTeaserImg from '@/assets/images/抽奖惊喜.jpg'
-import surpriseRewardImg from '@/assets/images/抽奖.jpg'
+import { clientOssUrl } from '@/utils/clientOss'
+
+const bgUrl = clientOssUrl('goods.webp')
+const surpriseTeaserImg = clientOssUrl('抽奖惊喜.webp')
+const surpriseRewardImg = clientOssUrl('抽奖.webp')
 
 const CHART_PALETTE = ['#6b7280', '#34d399', '#a78bfa', '#f59e0b', '#f97316', '#ec4899', '#60a5fa', '#93c5fd']
 

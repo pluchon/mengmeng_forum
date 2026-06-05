@@ -4,9 +4,21 @@ import lombok.Data;
 
 @Data
 public class AiImageRequest {
+
     private String prompt;
+
     /** normal | premium */
     private String quality;
-    /** 陪伴助手画图会话 id（可选） */
+
+    /** companion drawing session id (optional) */
     private String sessionId;
+
+    /** article id for cover image generation (optional) */
+    private Long articleId;
+
+    /** skip persisting to companion session table */
+    private Boolean ephemeral;
+
+    /** use points billing when quota is exhausted */
+    private Boolean usePointsBilling;
 }

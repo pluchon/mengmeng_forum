@@ -28,9 +28,21 @@ public class MascotChatRequest {
     @Schema(description = "前几轮对话, 由前端维护")
     private List<MascotHistoryTurn> history;
 
-    @Schema(description = "功能：writing | help | reading")
+    @Schema(description = "功能：chat（对话与帮助，服务端自动路由）| writing | help | drawing")
     private String skill;
 
     @Schema(description = "文本对话后端路由：qwen-flash | qwen-deep | deepseek-flash | deepseek-deep（深度档服务端会对非 VIP 降级；旧 gemini-* 会映射为通义）")
     private String llmProvider;
+
+    @Schema(description = "为 true 时不写入陪伴助手会话表，仅依赖 history 维持上下文")
+    private Boolean ephemeral;
+
+    @Schema(description = "浏览器本地时间 ISO-8601，供看板娘 MCP 感知当前日期时段")
+    private String clientDatetime;
+
+    @Schema(description = "会员配额将用尽时主动改用萌萌币扣费（需前端确认后传 true）")
+    private Boolean usePointsBilling;
+
+    @Schema(description = "本会话已推荐过的帖子 ID，用于换一批相关推荐")
+    private List<Long> excludeArticleIds;
 }

@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.vo.ForumNoticeCenterItemVO;
-import org.example.forumdemo.service.interfaces.ForumNoticeReadService;
+import org.example.forumdemo.service.interfaces.message.ForumNoticeReadService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

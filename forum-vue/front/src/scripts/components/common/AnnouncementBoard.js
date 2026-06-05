@@ -84,6 +84,10 @@ export function useAnnouncementBoard() {
 
   const coverSrc = computed(() => bodyInfo.value.cover?.trim() || '')
 
+  function selectNotice(n) {
+    if (n?.id != null) activeTab.value = String(n.id)
+  }
+
   const show = async () => {
     visible.value = true
     loading.value = true
@@ -114,6 +118,7 @@ export function useAnnouncementBoard() {
     loading,
     mdHtml,
     notices,
+    selectNotice,
     show,
     visible,
   }

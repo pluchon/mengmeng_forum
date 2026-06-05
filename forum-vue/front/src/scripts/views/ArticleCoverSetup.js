@@ -1,4 +1,4 @@
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
@@ -16,7 +16,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getArticleDetail, uploadCoverFile, updateArticleCoverByUrl } from '@/api/article'
 import { aiCoverHints, aiImage } from '@/api/ai'
-import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
+import { submitArticleForAuditWithPrompt, auditSubmitMessageBoxOptions } from '@/composables/useArticleAuditSubmit'
 import { ARTICLE_STATUS, isArticleEditingLocked } from '@/utils/articleStatus'
 import { useUserStore } from '@/stores/user'
 import { COVER_IMAGE_QUALITY_OPTIONS } from '@/constants/aiModels'
@@ -63,6 +63,7 @@ export function useArticleCoverSetup() {
   const title = ref('')
   const articleContent = ref('')
   const coverPreview = ref('')
+  const coverPreviewKey = ref(0)
   const coverFile = ref(null)
   const articleStatus = ref(null)
   const processing = ref(false)
@@ -147,8 +148,13 @@ export function useArticleCoverSetup() {
       const payload = res.data || {}
       const content = payload.content ?? payload.payload
       if (typeof content === 'string' && content.trim()) {
-        aiPrompt.value = content.trim().slice(0, COVER_PROMPT_MAX)
-        ElMessage.success('已填入推荐要点，可修改后再生成封面')
+        const oneLine = content
+          .trim()
+          .split(/\n+/)
+          .map((s) => s.replace(/^[\d.、\-\s]+/, '').trim())
+          .find(Boolean) || content.trim().replace(/\s+/g, ' ')
+        aiPrompt.value = oneLine.slice(0, COVER_PROMPT_MAX)
+        ElMessage.success('已填入封面绘图提示词，可微调后生成')
       } else {
         ElMessage.warning('未拿到配图要点，请手动填写画面描述')
       }
@@ -179,7 +185,13 @@ export function useArticleCoverSetup() {
     const usePremium = imageQuality.value === 'premium'
     if (usePremium) showGptImageSlowToast()
     try {
-      const res = await aiImage({ prompt, quality: imageQuality.value })
+      const articleId = Number(route.params.id)
+      const res = await aiImage({
+        prompt,
+        quality: imageQuality.value,
+        ephemeral: true,
+        articleId: Number.isFinite(articleId) ? articleId : undefined,
+      })
       const payload = res.data || {}
       const url = payload.url ?? payload.payload?.url
       if (!url) {
@@ -187,10 +199,16 @@ export function useArticleCoverSetup() {
         return
       }
       revokeIfBlobUrl(coverPreview.value)
-      const file = await imageUrlToFile(url)
-      coverFile.value = file
-      coverPreview.value = URL.createObjectURL(file)
+      coverPreview.value = url
+      coverPreviewKey.value = Date.now()
       hasAiGenerated.value = true
+      await nextTick()
+      try {
+        coverFile.value = await imageUrlToFile(url)
+      } catch {
+        coverFile.value = null
+        ElMessage.warning('封面已显示；提交时将使用图片链接绑定')
+      }
       ElMessage.success('已生成封面并载入预览')
     } finally {
       if (usePremium) dismissGptImageSlowToast()
@@ -236,6 +254,16 @@ export function useArticleCoverSetup() {
   }
 
   async function uploadCoverIfNeeded(articleId) {
+    const remote = coverPreview.value && /^https?:\/\//i.test(coverPreview.value)
+    if (!coverFile.value && remote) {
+      const bindRes = await updateArticleCoverByUrl(articleId, coverPreview.value)
+      if (bindRes.code !== 0) {
+        ElMessage.error(bindRes.message || '封面绑定失败')
+        return { ok: false }
+      }
+      ElMessage.success('封面已更新')
+      return { ok: true }
+    }
     if (!coverFile.value) return { ok: true, skipped: true }
     const pre = validateLocalImageFile(coverFile.value)
     if (!pre.ok) {
@@ -270,7 +298,7 @@ export function useArticleCoverSetup() {
     try {
       if (isArticleEditingLocked(articleStatus.value)) {
         ElMessage.warning('帖子正在审核中，暂时无法修改')
-        router.push(`/article/${articleId}/audit`)
+        router.push('/')
         return
       }
 
@@ -292,8 +320,7 @@ export function useArticleCoverSetup() {
 
       const audit = await submitArticleForAuditWithPrompt(articleId)
       if (!audit.ok) return
-      const q = audit.taskId ? `?taskId=${encodeURIComponent(audit.taskId)}` : ''
-      router.push(`/article/${articleId}/audit${q}`)
+      router.push('/')
     } finally {
       processing.value = false
     }
@@ -312,7 +339,12 @@ export function useArticleCoverSetup() {
       await ElMessageBox.confirm(
         '是否提交内容审核？通过后笔记将自动发布并在本站展示。',
         '提交审核',
-        { confirmButtonText: '提交审核', cancelButtonText: '取消', type: 'info' },
+        {
+          confirmButtonText: '提交审核',
+          cancelButtonText: '取消',
+          type: 'info',
+          ...auditSubmitMessageBoxOptions,
+        },
       )
     } catch {
       return
@@ -339,6 +371,7 @@ export function useArticleCoverSetup() {
     articleTextPlain,
     canRegenerate,
     coverPreview,
+    coverPreviewKey,
     downloadCoverImage,
     fetchCoverHints,
     finishAndSubmitAudit,

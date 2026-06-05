@@ -1,34 +1,12 @@
-@import './auth-form-header.css';
+@import './auth-split-layout.css';
 
-/* 容器与基础布局 */
 .auth-page {
-  width: 100vw;
   height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent; /* 必须透明，否则看不到粒子背景 */
-  perspective: 1000px;
-}
-
-.auth-container {
-  z-index: 10;
-  width: 100%;
-  display: flex;
-  justify-content: center;
+  padding: 0;
+  overflow: hidden;
 }
 
 .auth-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  width: 1040px;
-  min-height: 700px;
-  border-radius: 40px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  display: flex;
-  overflow: hidden;
-  position: relative;
   transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -56,57 +34,17 @@
   transform: rotate(90deg) scale(1.1);
 }
 
-.auth-layout {
-  display: flex;
-  width: 100%;
-}
-
-/* 左侧：仅配图 + 淡阴影遮罩 */
-.brand-side {
-  width: 480px;
-  position: relative;
-  flex-shrink: 0;
-  overflow: hidden;
-  background-image: url('../images/login.jpg');
-  background-size: cover;
-  background-position: center;
-}
-
-.image-mask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.12) 0%,
-    rgba(0, 0, 0, 0.22) 45%,
-    rgba(0, 0, 0, 0.28) 100%
-  );
-}
-
-/* 右侧表单区 */
-.form-side {
-  flex: 1;
-  padding: 36px 52px 44px;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-/* Tabs：占满剩余高度，导航居中 */
+/* Tabs：内容区垂直居中，导航置顶 */
 .auth-tabs--stretch {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
 }
 
 .auth-tabs--stretch :deep(.el-tabs__header) {
-  margin: 0 0 14px;
+  margin: 0 0 18px;
 }
 
 .auth-tabs--stretch :deep(.el-tabs__content) {
@@ -133,7 +71,7 @@
 }
 
 .email-tab-pane-inner {
-  min-height: 240px;
+  min-height: 200px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -163,7 +101,7 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .labeled-auth-form :deep(.el-form-item__label) {
@@ -214,8 +152,9 @@
 }
 
 .action-section {
-  margin-top: auto;
-  padding-top: 20px;
+  margin-top: 8px;
+  padding-top: 4px;
+  width: 100%;
 }
 
 .action-primary-login {
@@ -296,11 +235,11 @@
 }
 
 .auth-tabs :deep(.el-tabs__item) {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #999;
-  height: 52px;
-  padding: 0 18px !important;
+  height: 48px;
+  padding: 0 14px !important;
 }
 
 .auth-tabs :deep(.el-tabs__item.is-active) {
@@ -376,14 +315,14 @@
 
 .email-mode-tiles {
   display: flex;
-  gap: 28px;
+  gap: 20px;
   justify-content: center;
   flex-wrap: wrap;
 }
 
 .email-mode-tile {
-  width: 148px;
-  height: 148px;
+  width: 132px;
+  height: 132px;
   margin: 0;
   padding: 14px 12px;
   box-sizing: border-box;
@@ -483,7 +422,7 @@
 }
 
 .policy-bar {
-  margin-top: 22px;
+  margin-top: 18px;
   text-align: center;
 }
 
@@ -512,13 +451,8 @@
   min-width: 0;
 }
 
-@media (max-width: 1100px) {
-  .auth-card { width: 95vw; min-height: 600px; }
-  .brand-side { display: none; }
-}
-
 @media (max-width: 900px) {
-  .brand-side { display: none; }
-  .auth-card { width: 440px; }
-  .form-side { padding: 32px 28px 40px; }
+  .auth-tabs--stretch :deep(.el-tabs__header) {
+    margin-bottom: 16px;
+  }
 }

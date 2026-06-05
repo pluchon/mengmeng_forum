@@ -20,6 +20,7 @@ export function useWangEditor(props, emit) {
 
   const editorRef = shallowRef()
   const content = ref(props.modelValue)
+  let destroying = false
 
   const toolbarConfig = computed(() => {
     if (props.toolbarSlim || props.toolbarSuppressImage) {
@@ -43,10 +44,17 @@ export function useWangEditor(props, emit) {
           if (items) {
             for (let i = 0; i < items.length; i++) {
               if (items[i].type?.startsWith('image/')) {
-                ElMessage.warning('富文本模式不支持插入图片，请使用下方笔记相册')
+                ElMessage.warning('富文本模式不支持插入图片，请使用下方相册')
+                event.preventDefault()
                 return false
               }
             }
+          }
+          const plain = event.clipboardData?.getData('text/plain')
+          if (plain != null) {
+            event.preventDefault()
+            editor.insertText(plain.replace(/\r\n/g, '\n'))
+            return false
           }
           return true
         },
@@ -83,6 +91,7 @@ export function useWangEditor(props, emit) {
   })
 
   function handleChange(editor) {
+    if (destroying) return
     let html = editor.getHtml()
     html = html.replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '')
     emit('update:modelValue', html)
@@ -96,13 +105,18 @@ export function useWangEditor(props, emit) {
   }
 
   watch(() => props.modelValue, (newVal) => {
-    if (newVal && editorRef.value) {
-      editorRef.value.setHtml(newVal)
-    }
+    const editor = editorRef.value
+    if (!editor || destroying) return
+    const current = editor.getHtml()
+    const next = newVal || ''
+    if (current === next) return
+    editor.setHtml(next)
   }, { immediate: false })
 
   onBeforeUnmount(() => {
+    destroying = true
     editorRef.value?.destroy()
+    editorRef.value = null
   })
 
   return {

@@ -79,51 +79,41 @@
       >
         <div v-if="!isShellBare" class="home-main-top">
           <div class="home-search-wrap">
-            <div class="home-search-inner" :class="{ 'home-search-inner--ai-rag': aiSearchMode }">
+            <div
+              class="home-search-inner"
+              :class="{ 'home-search-inner--ai-rag': aiSearchMode }"
+            >
+            <div class="home-search-bar">
               <el-input
                 v-model="searchQuery"
                 :placeholder="searchInputPlaceholder"
                 class="home-xhs-search"
                 size="large"
-                clearable
+                :clearable="false"
                 @keyup.enter="submitSearch"
               >
                 <template #prefix>
-                  <span class="home-search-prefix">
+                  <div class="home-search-prefix-inner">
                     <el-icon class="home-search-prefix-icon"><Search /></el-icon>
                     <span
-                      class="home-search-mode-trigger"
                       role="button"
                       tabindex="0"
-                      :aria-label="searchTargetMode === 'article' ? '当前：搜帖子，点击切换搜用户' : '当前：搜用户，点击切换搜帖子'"
-                      @click.stop="toggleSearchTargetMode"
-                      @keydown.enter.prevent="toggleSearchTargetMode"
-                    >
-                      <img
-                        :src="searchTargetMode === 'article' ? articleSearchIconUrl : userSearchIconUrl"
-                        alt=""
-                        class="home-search-mode-icon"
-                      />
-                    </span>
-                  </span>
-                </template>
-                <template #suffix>
-                  <span
-                    class="home-search-ai-trigger"
-                    role="button"
-                    tabindex="0"
-                    aria-label="切换 AI 语义搜索"
-                    @click.stop="toggleAiSearchMode"
-                    @keydown.enter.prevent="toggleAiSearchMode"
-                  >
-                    <img :src="aiSearchIconUrl" alt="" class="home-search-ai-icon" />
-                  </span>
+                      class="home-search-mode-text"
+                      :class="{ 'is-ai': aiSearchMode }"
+                      @click.stop="toggleAiSearchMode"
+                      @keydown.enter.prevent="toggleAiSearchMode"
+                    >{{ aiSearchMode ? 'AI增强搜索' : '普通搜索' }}</span>
+                  </div>
                 </template>
               </el-input>
+              <button type="button" class="home-search-submit-btn" @click="submitSearch">
+                搜索
+              </button>
+            </div>
             </div>
           </div>
           <div class="home-main-tools">
-            <el-tooltip :content="mascotUi.pointerPassThrough ? '关闭鼠标穿透（可点击看板娘）' : '开启鼠标穿透（点击穿透看板娘）'" placement="bottom">
+            <el-tooltip :content="mascotUi.pointerPassThrough ? '关闭看板娘鼠标穿透' : '开启看板娘鼠标穿透'" placement="bottom">
               <el-button
                 text
                 class="home-tool-btn home-mascot-pass-btn"
@@ -131,27 +121,29 @@
                 @click="mascotUi.togglePointerPassThrough()"
               >
                 <el-icon><Pointer /></el-icon>
-                <span>鼠标穿透</span>
+                <span class="home-tool-btn__text">点击看板娘鼠标穿透</span>
               </el-button>
             </el-tooltip>
-            <el-dropdown v-if="userStore.isLoggedIn" trigger="click" placement="bottom-end">
-              <el-button text class="home-tool-btn home-more-top">
-                更多
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="$router.push('/checkin')">每日签到</el-dropdown-item>
-                  <el-dropdown-item @click="$router.push('/emoji-shop')">表情商城</el-dropdown-item>
-                  <el-dropdown-item @click="$router.push('/lottery')">积分抽奖</el-dropdown-item>
-                  <el-dropdown-item divided @click="$router.push('/vip')">会员中心</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
             <template v-if="userStore.isLoggedIn">
+              <el-button text class="home-tool-btn" @click="$router.push('/checkin')">
+                <el-icon><Calendar /></el-icon>
+                <span class="home-tool-btn__text">每日签到</span>
+              </el-button>
+              <el-button text class="home-tool-btn" @click="$router.push('/emoji-shop')">
+                <el-icon><Goods /></el-icon>
+                <span class="home-tool-btn__text">表情商城</span>
+              </el-button>
+              <el-button text class="home-tool-btn" @click="$router.push('/lottery')">
+                <el-icon><Present /></el-icon>
+                <span class="home-tool-btn__text">积分抽奖</span>
+              </el-button>
+              <el-button text class="home-tool-btn" @click="$router.push('/vip')">
+                <el-icon><Medal /></el-icon>
+                <span class="home-tool-btn__text">会员中心</span>
+              </el-button>
               <el-button text class="home-tool-btn" @click="goToCreative">
                 <el-icon><EditPen /></el-icon>
-                <span>创作中心</span>
+                <span class="home-tool-btn__text">创作中心</span>
               </el-button>
               <div class="home-msg-notify-wrap">
                 <el-badge :value="msgUnread" :hidden="msgUnread === 0" class="home-msg-badge">
@@ -170,27 +162,24 @@
                 @click="$router.push('/points')"
                 @keydown.enter="$router.push('/points')"
               >
+                <el-icon class="home-points-tag-icon"><Coin /></el-icon>
                 积分 {{ pointsBalance }}
               </el-tag>
-              <el-tooltip content="站点公告" placement="bottom">
-                <el-button circle class="home-icon-btn" aria-label="公告" @click="showAnnouncement">
+              <el-tooltip content="公告与活动中心" placement="bottom">
+                <el-button circle class="home-icon-btn" aria-label="公告与活动" @click="showAnnouncement">
                   <el-icon><Notification /></el-icon>
                 </el-button>
               </el-tooltip>
             </template>
             <template v-else>
-              <el-dropdown trigger="click" placement="bottom-end">
-                <el-button text class="home-tool-btn home-more-top">
-                  更多
-                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click="$router.push('/emoji-shop')">表情商城</el-dropdown-item>
-                    <el-dropdown-item divided @click="$router.push('/vip')">会员中心</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <el-button text class="home-tool-btn" @click="$router.push('/emoji-shop')">
+                <el-icon><Goods /></el-icon>
+                <span class="home-tool-btn__text">表情商城</span>
+              </el-button>
+              <el-button text class="home-tool-btn" @click="$router.push('/vip')">
+                <el-icon><Medal /></el-icon>
+                <span class="home-tool-btn__text">会员中心</span>
+              </el-button>
               <el-button type="primary" round size="small" @click="$router.push('/sign-in')">
                 登录 / 注册
               </el-button>
@@ -215,7 +204,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Pointer } from '@element-plus/icons-vue'
+import { Calendar, Coin, EditPen, Goods, Medal, Message, Notification, Pointer, Present, Search } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
@@ -235,15 +224,8 @@ const isShellBare = computed(() => route.matched.some((r) => r.meta?.shellBare))
 const isShellParticle = computed(() => route.matched.some((r) => r.meta?.shellParticle))
 
 const {
-  ArrowDown,
-  EditPen,
-  Message,
-  Notification,
-  Search,
-  aiSearchIconUrl,
   aiSearchMode,
   announcementRef,
-  articleSearchIconUrl,
   categoriesWithId,
   defaultAvatar,
   effectiveVipTier,
@@ -254,14 +236,11 @@ const {
   pointsBalance,
   searchInputPlaceholder,
   searchQuery,
-  searchTargetMode,
   selectCategoryMenu,
   showAnnouncement,
   sidebarMenuActive,
   submitSearch,
   toggleAiSearchMode,
-  toggleSearchTargetMode,
-  userSearchIconUrl,
   userStore,
 } = provideHomeShellContext()
 </script>

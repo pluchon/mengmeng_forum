@@ -5,6 +5,7 @@ AI Hub: /api/v1/ai/write | cover-hints | image
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from flask import jsonify, request
@@ -52,12 +53,16 @@ def ai_write():
     messages = _clean_messages(data.get("messages"))
     if not kind or not messages:
         return jsonify({"code": 400, "msg": "kind and messages required"}), 400
+    from clients.usage_util import attach_latency
+
+    t0 = time.perf_counter()
     try:
         content, usage = run_ai_write(kind, messages)
-    except Exception:
+    except Exception as ex:
         logger.exception("ai_write 失败 kind=%s", kind)
-        return jsonify({"code": 500, "msg": "ai write failed"}), 500
-    return jsonify({"code": 200, "msg": "ok", "data": {"content": content, "usage": usage}})
+        msg = str(ex).strip()[:400] or "ai write failed"
+        return jsonify({"code": 500, "msg": msg}), 500
+    return jsonify({"code": 200, "msg": "ok", "data": {"content": content, "usage": attach_latency(usage, t0)}})
 
 
 @api.route("/ai/cover-hints", methods=["POST"])
@@ -71,8 +76,12 @@ def ai_cover_hints():
     article = article[:12000]
     ds = settings.deepseek
     system = (
-        "你是论坛编辑助手。根据正文列出 3～6 条「封面配图」要点（简短词组或短语），"
-        "每条一行，不要编号以外的冗长解释。"
+        "你是论坛封面配图助手。根据用户正文提炼一个且仅一个「AI 绘图提示词」，"
+        "必须严格使用以下单行模板（不要换行、不要列表、不要编号、不要引号包裹整句）：\n"
+        "帮我画一张论坛帖子封面图，主题是【用不超过12字概括核心主题】，"
+        "画面元素【用不超过20字描述1个主视觉，禁止并列多个无关主题】，"
+        "风格【写实/插画/二次元/水彩四选一】，氛围【温馨/热血/治愈/悬疑四选一】。\n"
+        "禁止输出第二套方案、禁止 markdown、禁止解释。"
     )
     messages: list[dict[str, str]] = [
         {"role": "system", "content": system},
@@ -100,7 +109,10 @@ def ai_image():
         return jsonify({"code": 400, "msg": "prompt required"}), 400
     if quality not in ("normal", "premium"):
         return jsonify({"code": 400, "msg": "quality must be normal|premium"}), 400
+    from clients.usage_util import attach_latency
+
     mcp_used = False
+    t0 = time.perf_counter()
     try:
         prompt, mcp_used = enrich_image_prompt(prompt)
         if quality == "normal":
@@ -137,5 +149,5 @@ def ai_image():
     return jsonify({
         "code": 200,
         "msg": "ok",
-        "data": {"url": url, "usage": usage, "mcp_used": mcp_used},
+        "data": {"url": url, "usage": attach_latency(usage, t0), "mcp_used": mcp_used},
     })

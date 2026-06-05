@@ -29,10 +29,9 @@ spring:
 
   servlet:
     multipart:
-      # 服务器硬上限: 单文件 30MB, 单请求 30MB
-      # 业务侧期望 ≤ 5MB, 5~30MB 区间会在 FileServiceImpl 内部走 thumbnailator 自动压缩
-      max-file-size: 30MB
-      max-request-size: 30MB
+      # 与 nginx client_max_body_size(350m) 对齐；视频 >100MB 走 ffmpeg 压缩后再上传 OSS
+      max-file-size: 350MB
+      max-request-size: 350MB
 
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}

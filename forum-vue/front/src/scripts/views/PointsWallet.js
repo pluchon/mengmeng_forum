@@ -12,7 +12,7 @@ import {
   ArrowDown,
   Medal,
 } from '@element-plus/icons-vue'
-import summaryCardBg from '@/assets/images/积分卡片.png'
+import { clientOssUrl } from '@/utils/clientOss'
 import iconPrevUrl from '@/assets/svg/后退.svg?url'
 import iconNextUrl from '@/assets/svg/前进.svg?url'
 import { getPointsDaily, getPointsLog } from '@/api/points'
@@ -228,6 +228,7 @@ function logIconMeta(row) {
 }
 
 export function usePointsWallet() {
+  const summaryCardBg = clientOssUrl('积分卡片.webp')
   const wallet = usePointsWalletStore()
 
   const dailyLoading = ref(false)

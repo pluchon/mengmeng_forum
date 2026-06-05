@@ -8,4 +8,9 @@ public interface VipCenterService {
     VipCenterVO center(Long userId);
 
     VipQuotaPanelVO quota(Long userId);
+
+    /**
+     * 当前模型路由对应配额使用率（0–100），供看板娘「使用萌币」按钮展示。
+     */
+    java.util.Map<String, Object> quotaHintForLlmRoute(Long userId, String llmRoute);
 }

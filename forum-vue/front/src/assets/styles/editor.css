@@ -279,6 +279,10 @@
   background: #fff;
 }
 
+.editor-workspace--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (max-width: 860px) {
   .editor-workspace {
     grid-template-columns: 1fr;
@@ -320,7 +324,7 @@
 .editor-gallery-pane-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
 }
 

@@ -5,12 +5,12 @@ import { useUserStore } from '@/stores/user'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { getArticleListWithUser } from '@/api/article'
 import { getMyLikeList } from '@/api/like'
-import { getMyFavoriteFolders, getUserFavoriteFolders } from '@/api/favorite'
+import { getFavoriteFolderArticles, getMyFavoriteFolders, getUserFavoriteFolders } from '@/api/favorite'
 import { uploadProfileBackground, updateBackgroundUrl } from '@/api/settings'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
-import defaultBg from '@/assets/images/profileb_back.jpg'
+import { clientOssUrl } from '@/utils/clientOss'
 
 export function useProfile() {
   const route = useRoute()
@@ -18,6 +18,7 @@ export function useProfile() {
   const userStore = useUserStore()
   const messageCenterUi = useMessageCenterUiStore()
   const defaultAvatar = DEFAULT_AVATAR
+  const defaultBg = clientOssUrl('profileb_back.webp')
 
   const userInfo = ref(null)
   const articles = ref([])
@@ -28,6 +29,11 @@ export function useProfile() {
   const likedArticles = ref([])
   const favoriteFolders = ref([])
   const loadingFavorites = ref(false)
+  const favoriteDialogVisible = ref(false)
+  const favoriteDialogLoading = ref(false)
+  const favoriteDialogTitle = ref('收藏')
+  const favoriteDialogItems = ref([])
+  const activeFavoriteFolderId = ref(null)
 
   watch(activeTab, (tab) => {
     if (tab === 'liked' && likedArticles.value.length === 0) {
@@ -120,6 +126,48 @@ export function useProfile() {
     }
   }
 
+  async function openFavoriteDialog(folder) {
+    const fid = folder?.id
+    if (!fid) return
+    activeFavoriteFolderId.value = fid
+    favoriteDialogTitle.value = folder.name || '收藏'
+    favoriteDialogVisible.value = true
+    favoriteDialogLoading.value = true
+    favoriteDialogItems.value = []
+    try {
+      const res = await getFavoriteFolderArticles(fid, { pageNum: 1, pageSize: 50 })
+      if (res.code === 0) {
+        favoriteDialogItems.value = res.data?.records || []
+      }
+    } finally {
+      favoriteDialogLoading.value = false
+    }
+  }
+
+  function favoriteCoverStyle(article) {
+    if (article?.coverImg) {
+      return {
+        backgroundImage: `url(${article.coverImg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    }
+    return { background: 'hsl(330, 70%, 94%)' }
+  }
+
+  function favoriteSnippet(article) {
+    const raw = String(article?.content || '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, '')
+      .trim()
+    return raw ? raw.slice(0, 15) : '暂无正文'
+  }
+
+  function openArticleFromFavorite(row) {
+    const id = row?.article?.id
+    if (id) router.push(`/article/${id}`)
+  }
+
   function coverStyle(article) {
     if (article?.coverImg) {
       return {
@@ -200,9 +248,17 @@ export function useProfile() {
     handleChat,
     isMe,
     likedArticles,
+    favoriteCoverStyle,
+    favoriteDialogItems,
+    favoriteDialogLoading,
+    favoriteDialogTitle,
+    favoriteDialogVisible,
     favoriteFolders,
+    favoriteSnippet,
     loadFavoriteFolders,
     loadingFavorites,
+    openArticleFromFavorite,
+    openFavoriteDialog,
     loading,
     total,
     triggerBgUpload,

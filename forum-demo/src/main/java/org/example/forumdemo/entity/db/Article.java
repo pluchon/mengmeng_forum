@@ -45,6 +45,12 @@ public class Article {
     @Schema(description = "封面图URL")
     private String coverImg;
 
+    @Schema(description = "帖子媒体类型: 0图片相册 1视频(单个)", example = "0")
+    private Byte mediaType;
+
+    @Schema(description = "视频URL(仅 media_type=1 时有效)")
+    private String videoUrl;
+
     @Schema(description = "内容类型: 0富文本 1Markdown", example = "0")
     private Byte contentType;
 

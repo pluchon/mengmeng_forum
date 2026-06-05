@@ -1,84 +1,91 @@
 <template>
   <el-dialog
     v-model="visible"
-    width="900px"
-    class="pro-announcement-dialog"
+    width="min(1080px, 94vw)"
+    class="pro-announcement-dialog activity-center-dialog"
     :show-close="false"
     destroy-on-close
     append-to-body
   >
-    <div class="announcement-header">
-      <el-icon :size="24"><Bell /></el-icon>
-      <span class="header-title">公告中心</span>
+    <button type="button" class="activity-center-close" aria-label="关闭" @click="visible = false">
+      <el-icon :size="18"><Close /></el-icon>
+    </button>
+
+    <div class="activity-center-header">
+      <span class="activity-center-title">公告与活动中心</span>
     </div>
 
     <div v-if="loading" class="announcement-loading">
-      加载公告中…
+      加载中…
     </div>
     <div v-else-if="!notices.length" class="announcement-empty">
-      暂无已发布公告，请稍后再来查看。
+      暂无已发布公告或活动。
     </div>
 
-    <div v-else class="announcement-body-shell">
-      <el-tabs v-model="activeTab" tab-position="left" class="announcement-tabs">
-      <el-tab-pane v-for="n in notices" :key="n.id" :name="String(n.id)">
-        <template #label>
-          <div class="tab-label">
-            <el-icon><component :is="iconForKind(n.noticeKind)" /></el-icon>
-            <span class="tab-label-text">{{ n.title }}</span>
-          </div>
-        </template>
+    <div v-else class="activity-center-body">
+      <el-scrollbar class="activity-center-list-scroll">
+        <button
+          v-for="n in notices"
+          :key="n.id"
+          type="button"
+          class="activity-center-list-item"
+          :class="{ 'is-active': String(n.id) === activeTab }"
+          @click="selectNotice(n)"
+        >
+          <span
+            class="activity-kind-tag"
+            :class="Number(n.noticeKind) === 1 ? 'is-event' : 'is-notice'"
+          >
+            {{ Number(n.noticeKind) === 1 ? '活动' : '公告' }}
+          </span>
+          <span class="activity-list-text">
+            <span class="activity-list-title">{{ n.title }}</span>
+            <span v-if="n.updateTime" class="activity-list-updated">更新于 {{ n.updateTime }}</span>
+          </span>
+        </button>
+      </el-scrollbar>
 
-        <div v-if="current && String(current.id) === String(n.id)" class="content-view" :class="{ 'content-plain': !isHeroTemplate }">
-          <div class="content-text">
-            <h2 class="view-title">{{ n.title }}</h2>
-            <p v-if="n.subtitle" class="view-subtitle">{{ n.subtitle }}</p>
-            <p v-if="n.updateTime" class="view-updated">更新于 {{ n.updateTime }}</p>
+      <div v-if="current" class="activity-center-content">
+        <h2 class="view-title">{{ current.title }}</h2>
+        <p v-if="current.subtitle" class="view-subtitle">{{ current.subtitle }}</p>
+        <p v-if="current.updateTime" class="view-updated">更新于 {{ current.updateTime }}</p>
 
-            <div v-if="featureRows.length" class="feature-list">
-              <div v-for="(feat, idx) in featureRows" :key="idx" class="feature-item">
-                <el-tag :type="feat.tagType" size="small" effect="dark" round class="status-tag">
-                  {{ feat.label }}
-                </el-tag>
-                <span class="feature-desc">{{ feat.text }}</span>
-              </div>
-            </div>
-
-            <div class="markdown-body announcement-md" v-html="mdHtml" />
-          </div>
-
-          <div v-if="isHeroTemplate && coverSrc" class="content-media">
-            <el-image :src="coverSrc" fit="cover" class="view-img" />
+        <div v-if="featureRows.length" class="feature-list">
+          <div v-for="(feat, idx) in featureRows" :key="idx" class="feature-item">
+            <el-tag :type="feat.tagType" size="small" effect="dark" round class="status-tag">
+              {{ feat.label }}
+            </el-tag>
+            <span class="feature-desc">{{ feat.text }}</span>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
-    </div>
 
-    <template #footer>
-      <div class="announcement-footer">
-        <el-button type="primary" round class="explore-btn" @click="visible = false">
-          开始探索之旅
-        </el-button>
+        <div class="markdown-body announcement-md" v-html="mdHtml" />
+
+        <div v-if="isHeroTemplate && coverSrc" class="content-media activity-cover">
+          <el-image :src="coverSrc" fit="cover" class="view-img" />
+        </div>
       </div>
-    </template>
+      <div v-else class="activity-center-content activity-center-content--empty">
+        请选择左侧条目查看详情
+      </div>
+    </div>
   </el-dialog>
 </template>
 
 <script setup>
+import { Close } from '@element-plus/icons-vue'
 import { useAnnouncementBoard } from '@scripts/components/common/AnnouncementBoard'
 
 const {
-  Bell,
   activeTab,
   coverSrc,
   current,
   featureRows,
-  iconForKind,
   isHeroTemplate,
   loading,
   mdHtml,
   notices,
+  selectNotice,
   show,
   visible,
 } = useAnnouncementBoard()
@@ -95,21 +102,16 @@ defineExpose({ show })
   font-size: 14px;
 }
 
-.tab-label-text {
-  display: inline-block;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
+.activity-center-content--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-placeholder);
+  font-size: 14px;
 }
 
-.content-view.content-plain {
-  flex-direction: column;
-}
-
-.content-plain .content-text {
-  max-width: 100%;
+.activity-cover {
+  margin-top: 16px;
 }
 
 .announcement-md {
@@ -128,22 +130,5 @@ defineExpose({ show })
 
 .announcement-md :deep(p) {
   margin: 0.5em 0;
-}
-
-.announcement-md :deep(ul),
-.announcement-md :deep(ol) {
-  padding-left: 1.25em;
-}
-
-.announcement-md :deep(pre) {
-  padding: 10px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
-  overflow: auto;
-}
-
-.announcement-md-empty {
-  margin: 0;
-  color: var(--el-text-color-placeholder);
 }
 </style>

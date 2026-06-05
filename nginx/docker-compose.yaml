@@ -58,6 +58,7 @@ services:
       OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-}
       OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
       OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
+      FORUM_FFMPEG_URL: http://ffmpeg:8099
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
@@ -76,6 +77,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      ffmpeg:
+        condition: service_started
     networks:
       - forum-net
 
@@ -119,6 +122,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-123456}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-}
+      OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
+      OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
+      FORUM_FFMPEG_URL: http://ffmpeg:8099
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,6 +135,16 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    networks:
+      - forum-net
+
+  ffmpeg:
+    build:
+      context: ./ffmpeg
+      dockerfile: Dockerfile
+    image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
+    container_name: forum-ffmpeg
+    restart: unless-stopped
     networks:
       - forum-net
 

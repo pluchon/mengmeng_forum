@@ -1,7 +1,7 @@
 <template>
   <div class="mascot-panel-input" :class="{ 'mascot-panel-input--drawing': mode === 'drawing' }">
-    <p v-if="estimatePoints != null" class="mascot-estimate-hint">
-      预估消耗约 <strong>{{ estimatePoints }}</strong> 积分
+    <p v-if="estimateHint" class="mascot-estimate-hint">
+      {{ estimateHint }}
       <span v-if="estimateLoading" class="mascot-estimate-hint__loading">…</span>
     </p>
 
@@ -97,6 +97,16 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+
+        <button
+          v-if="showPointsPayButton"
+          type="button"
+          class="mascot-points-pay-btn"
+          :class="{ 'is-active': pointsPayActive }"
+          @click="emit('toggle-points-pay')"
+        >
+          {{ pointsPayActive ? '已用萌币' : '使用萌币积分' }}
+        </button>
       </div>
       <span class="mascot-counter" aria-live="polite">{{ charCount }} / 2000</span>
     </div>
@@ -114,7 +124,7 @@ const props = defineProps({
   imageQuality: { type: String, default: 'normal' },
   options: { type: Array, default: () => [] },
   imageOptions: { type: Array, default: () => [] },
-  mode: { type: String, default: 'writing' },
+  mode: { type: String, default: 'chat' },
   loading: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '说点什么…' },
@@ -122,6 +132,9 @@ const props = defineProps({
   showModelPicker: { type: Boolean, default: true },
   estimatePoints: { type: Number, default: null },
   estimateLoading: { type: Boolean, default: false },
+  estimateHint: { type: String, default: '' },
+  showPointsPayButton: { type: Boolean, default: false },
+  pointsPayActive: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -130,6 +143,7 @@ const emit = defineEmits([
   'update:imageQuality',
   'send',
   'clear',
+  'toggle-points-pay',
 ])
 
 const textareaRef = ref(null)
@@ -141,7 +155,7 @@ function resizeTextarea() {
   const el = textareaRef.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 100)}px`
+  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
 }
 
 function onInput(e) {
@@ -164,65 +178,66 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px 12px;
-  background: linear-gradient(165deg, rgba(72, 56, 140, 0.55) 0%, rgba(42, 32, 88, 0.72) 100%);
-  border-top: 1px solid rgba(167, 139, 250, 0.22);
+  background: var(--el-bg-color, #fff);
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  flex-shrink: 0;
 }
 
 .mascot-estimate-hint {
   margin: 0;
   font-size: 11px;
-  color: rgba(220, 210, 255, 0.75);
+  color: var(--el-text-color-secondary, #909399);
 }
 
 .mascot-estimate-hint strong {
-  color: #e9b4ff;
+  color: var(--el-text-color-primary, #303133);
   font-weight: 600;
 }
 
 .mascot-input-shell {
   position: relative;
-  border-radius: 14px;
-  background: rgba(30, 22, 62, 0.65);
-  border: 1px solid rgba(167, 139, 250, 0.28);
-  padding: 10px 44px 10px 12px;
-  min-height: 44px;
+  border-radius: 12px;
+  background: var(--el-fill-color-blank, #fff);
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  padding: 8px 44px 8px 12px;
+  min-height: 40px;
 }
 
 .mascot-input-box {
   display: block;
   width: 100%;
-  min-height: 24px;
-  max-height: 100px;
+  min-height: 22px;
+  max-height: 120px;
   padding: 0;
   border: none;
   background: transparent;
-  color: #f3eeff;
+  color: var(--el-text-color-primary, #303133);
   font-size: 13px;
   line-height: 1.55;
   resize: none;
+  overflow-y: hidden;
   outline: none;
   font-family: inherit;
 }
 
 .mascot-input-box::placeholder {
-  color: rgba(200, 190, 235, 0.45);
+  color: var(--el-text-color-placeholder, #a8abb2);
 }
 
 .mascot-send-btn {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 34px;
-  height: 34px;
+  right: 6px;
+  bottom: 6px;
+  width: 32px;
+  height: 32px;
   border: none;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #c084fc, #7c3aed);
+  border-radius: 8px;
+  background: var(--el-color-primary, #409eff);
   color: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
 }
 
 .mascot-send-btn:disabled {
@@ -232,7 +247,7 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
 
 .mascot-input-divider {
   height: 1px;
-  background: rgba(167, 139, 250, 0.22);
+  background: var(--el-border-color-lighter, #ebeef5);
   margin: 0 2px;
 }
 
@@ -255,11 +270,11 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
   gap: 5px;
   padding: 4px 10px;
   border-radius: 20px;
-  border: 1px solid rgba(167, 139, 250, 0.35);
+  border: 1px solid var(--el-border-color, #dcdfe6);
   font-size: 11px;
-  color: rgba(220, 210, 255, 0.88);
+  color: var(--el-text-color-regular, #606266);
   cursor: pointer;
-  background: rgba(40, 30, 80, 0.45);
+  background: var(--el-fill-color-light, #f5f7fa);
   max-width: min(100%, 280px);
 }
 
@@ -306,6 +321,23 @@ watch(() => props.modelValue, () => nextTick(resizeTextarea))
 
 .mascot-counter {
   font-size: 11px;
-  color: rgba(200, 190, 235, 0.5);
+  color: var(--el-text-color-placeholder, #a8abb2);
+}
+
+.mascot-points-pay-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 36, 66, 0.45);
+  background: #fff;
+  color: #ff2442;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mascot-points-pay-btn.is-active {
+  background: rgba(255, 36, 66, 0.1);
+  border-color: #ff2442;
 }
 </style>

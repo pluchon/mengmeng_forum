@@ -32,9 +32,11 @@ public class ArticleDetailResponse {
     // 相册图URL列表, 按 sort 升序; 老帖 / 无图帖返回空数组
     private List<String> imageUrls;
 
-    /** 兼容旧的 6 参构造调用; imageUrls 默认空数组, 调用方按需 setImageUrls(...) 注入 */
-    public ArticleDetailResponse(UserBriefVO user, Article article, Board board,
-                                 Boolean isOwner, Boolean isLiked, Boolean isFavorited) {
-        this(user, article, board, isOwner, isLiked, isFavorited, Collections.emptyList());
+    /** 帖子标签（扁平展示） */
+    private List<ArticleTagVO> tags;
+
+    /** 兼容旧的 6 参构造调用; imageUrls/tags 默认空列表, 调用方按需 set 注入 */
+    public ArticleDetailResponse(UserBriefVO user, Article article, Board board, Boolean isOwner, Boolean isLiked, Boolean isFavorited) {
+        this(user, article, board, isOwner, isLiked, isFavorited, Collections.emptyList(), Collections.emptyList());
     }
 }

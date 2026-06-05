@@ -23,12 +23,14 @@ import {
   getSessionList,
   getMessageList,
   getMessageDetailById,
+  getUnReadCount,
   sendMessage,
   markRead,
   recallMessage,
   uploadChatImage,
   sendImageMessage,
 } from '@/api/message'
+import { getUserIsOnline } from '@/api/user'
 import {
   getSystemMessageList,
   getSystemMessageUnreadCount,
@@ -105,6 +107,9 @@ export function useMessageView() {
   const messages = ref([])
   const sendContent = ref('')
   const sending = ref(false)
+  const peerOnline = ref(false)
+  const selfOnline = ref(false)
+  let onlinePollTimer = null
 
   const dialogVisible = computed({
     get: () => messageCenterUi.visible,
@@ -320,16 +325,28 @@ export function useMessageView() {
   }
 
   onMounted(() => {
-    if (messageCenterUi.visible) bootstrap()
+    if (messageCenterUi.visible) {
+      bootstrap()
+      startOnlinePolling()
+    }
+  })
+
+  onUnmounted(() => {
+    stopOnlinePolling()
   })
 
   watch(() => messageCenterUi.visible, (v) => {
-    if (v) bootstrap()
-    else {
+    if (v) {
+      bootstrap()
+      startOnlinePolling()
+    } else {
+      stopOnlinePolling()
       currentSession.value = null
       currentSystemGroup.value = null
       messages.value = []
       focusedConvKey.value = null
+      peerOnline.value = false
+      selfOnline.value = false
     }
   })
 
@@ -363,7 +380,7 @@ export function useMessageView() {
       await nextTick()
       scrollToBottom()
       await markRead(fromId)
-      loadSessions()
+      await syncPmUnreadFromServer()
     } else {
       loadSessions()
     }
@@ -394,6 +411,12 @@ export function useMessageView() {
     messageStore.clearReadReceiptSignal()
   })
 
+  async function onDialogOpened() {
+    if (currentSession.value && !currentSession.value._virtual && messages.value.length) {
+      await scrollToBottom()
+    }
+  }
+
   function handleClose() {
     messageCenterUi.close()
     if (router.currentRoute.value.name === 'messages') {
@@ -416,26 +439,76 @@ export function useMessageView() {
     })
     if (res.code === 0) {
       messages.value = unwrapPageRecords(res.data)
-      await nextTick()
-      scrollToBottom()
+      await scrollToBottom()
     }
+  }
+
+  async function refreshOnlineStatus() {
+    const selfId = userStore.id
+    if (selfId) {
+      try {
+        const res = await getUserIsOnline(selfId)
+        selfOnline.value = res?.code === 0 && res.data === true
+      } catch {
+        selfOnline.value = false
+      }
+    }
+    const peerId = currentSession.value?.user?.id
+    if (peerId && !currentSession.value?._virtual) {
+      try {
+        const res = await getUserIsOnline(peerId)
+        peerOnline.value = res?.code === 0 && res.data === true
+      } catch {
+        peerOnline.value = false
+      }
+    } else {
+      peerOnline.value = false
+    }
+  }
+
+  function startOnlinePolling() {
+    stopOnlinePolling()
+    refreshOnlineStatus()
+    onlinePollTimer = setInterval(refreshOnlineStatus, 20_000)
+  }
+
+  function stopOnlinePolling() {
+    if (onlinePollTimer) {
+      clearInterval(onlinePollTimer)
+      onlinePollTimer = null
+    }
+  }
+
+  async function syncPmUnreadFromServer() {
+    try {
+      const res = await getUnReadCount()
+      if (res?.code === 0) {
+        messageStore.setUnreadCount(Number(res.data) || 0, { keepTip: messageStore.showTip })
+      }
+    } catch {
+      /* ignore */
+    }
+    await loadSessions()
   }
 
   async function selectPmSession(session) {
     currentSystemGroup.value = null
     currentSession.value = session
     focusedConvKey.value = `pm-${session.user?.id}`
+    await refreshOnlineStatus()
     if (session._virtual) {
       messages.value = []
       await nextTick()
       return
     }
     await loadMessagesForPeer(session.user?.id)
-    const prevUnread = session.unReadMessage || 0
-    if (prevUnread > 0) {
+    await scrollToBottom()
+    if ((session.unReadMessage || 0) > 0) {
       await markRead(session.user?.id)
       session.unReadMessage = 0
-      messageStore.decrementUnread(prevUnread)
+      const listItem = sessionList.value.find((s) => s.user?.id === session.user?.id)
+      if (listItem) listItem.unReadMessage = 0
+      await syncPmUnreadFromServer()
     }
   }
 
@@ -464,10 +537,10 @@ export function useMessageView() {
     }
   }
 
-  function selectListItem(item) {
+  async function selectListItem(item) {
     focusedConvKey.value = item.key
-    if (item.kind === 'pm') selectPmSession(item.session)
-    else if (item.kind === 'sys-group') selectSysGroup(item)
+    if (item.kind === 'pm') await selectPmSession(item.session)
+    else if (item.kind === 'sys-group') await selectSysGroup(item)
   }
 
   function onConvFocus(item) {
@@ -741,14 +814,18 @@ export function useMessageView() {
     return {}
   }
 
-  function scrollToBottom() {
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        if (msgScrollbar.value && msgContainer.value) {
-          msgScrollbar.value.setScrollTop(msgContainer.value.scrollHeight + 200)
-        }
-      })
-    })
+  async function scrollToBottom() {
+    await nextTick()
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    const apply = () => {
+      if (msgScrollbar.value && msgContainer.value) {
+        msgScrollbar.value.setScrollTop(msgContainer.value.scrollHeight + 200)
+      }
+    }
+    apply()
+    setTimeout(apply, 0)
+    setTimeout(apply, 80)
   }
 
   function formatTime(time) {
@@ -827,13 +904,16 @@ export function useMessageView() {
     onConvBlur,
     onConvFocus,
     onDialogBlurRoot,
+    onDialogOpened,
     onEmojiPopoverShow,
     onEmojiTabChange,
     onEmojiStickerFileChange,
     openArticleFromSystem,
     parseSystemMessageContent,
+    peerOnline,
     scrollToBottom,
     searchQuery,
+    selfOnline,
     selectListItem,
     sendContent,
     sendMessageFromEmoji,

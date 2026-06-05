@@ -32,6 +32,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -92,6 +93,92 @@ public class VipCenterServiceImpl implements VipCenterService {
     }
 
     @Override
+    public Map<String, Object> quotaHintForLlmRoute(Long userId, String llmRoute) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("percent", 0);
+        out.put("canUsePointsPay", false);
+        out.put("quotaLabel", "");
+        User user = requireUser(userId);
+        if (!vipActive(user) || (!Constant.VIP_TIER_PRO.equals(user.getVipTier())
+                && !Constant.VIP_TIER_MAX.equals(user.getVipTier()))) {
+            return out;
+        }
+        String route = llmRoute != null ? llmRoute.trim().toLowerCase(Locale.ROOT).replace('_', '-') : "";
+        VipQuotaPanelVO panel = buildQuotaPanel(user);
+        String modelCode = resolveModelCodeFromRoute(route);
+        int percent = 0;
+        String label = "";
+        for (VipQuotaGroupVO g : panel.getGroups()) {
+            if (g.getItems() == null) {
+                continue;
+            }
+            for (VipQuotaItemVO item : g.getItems()) {
+                if ("unlimited".equals(item.getQuotaType())) {
+                    if (route.startsWith("deepseek") && item.getModelCode() != null
+                            && item.getModelCode().startsWith("deepseek")) {
+                        out.put("percent", 0);
+                        out.put("canUsePointsPay", false);
+                        out.put("quotaLabel", item.getDisplayName());
+                        return out;
+                    }
+                    continue;
+                }
+                boolean match = false;
+                if ("token_period".equals(item.getQuotaType()) && modelCode != null
+                        && modelCode.equals(item.getModelCode())) {
+                    match = true;
+                }
+                if ("daily_count".equals(item.getQuotaType()) && routeNeedsAdvancedDaily(route)
+                        && "advanced_llm".equals(item.getQuotaKey())) {
+                    match = true;
+                }
+                if (match) {
+                    percent = item.getPercent() != null ? item.getPercent() : 0;
+                    label = item.getDisplayName();
+                    break;
+                }
+            }
+            if (label != null && !label.isEmpty() && percent > 0) {
+                break;
+            }
+        }
+        if (label.isEmpty() && modelCode != null) {
+            for (VipQuotaGroupVO g : panel.getGroups()) {
+                for (VipQuotaItemVO item : g.getItems()) {
+                    if (modelCode.equals(item.getModelCode())) {
+                        percent = item.getPercent() != null ? item.getPercent() : 0;
+                        label = item.getDisplayName();
+                        break;
+                    }
+                }
+            }
+        }
+        out.put("percent", percent);
+        out.put("quotaLabel", label);
+        out.put("canUsePointsPay", percent >= 95);
+        return out;
+    }
+
+    private static boolean routeNeedsAdvancedDaily(String route) {
+        return route.startsWith("qwen-deep") || route.startsWith("gemini") || route.startsWith("claude");
+    }
+
+    private static String resolveModelCodeFromRoute(String route) {
+        if (route == null || route.isBlank()) {
+            return "qwen3.6-flash";
+        }
+        return switch (route) {
+            case "qwen-flash" -> "qwen3.6-flash";
+            case "qwen-deep" -> "qwen3.7-max";
+            case "deepseek-flash" -> "deepseek-v4-flash";
+            case "deepseek-deep" -> "deepseek-v4-pro";
+            case "gemini-deep" -> "gemini-3.1-pro";
+            case "claude-sonnet" -> "claude-sonnet-4-6";
+            default -> route;
+        };
+    }
+
+    @Override
     public VipQuotaPanelVO quota(Long userId) {
         User user = requireUser(userId);
         if (!vipActive(user)) {
@@ -137,8 +224,7 @@ public class VipCenterServiceImpl implements VipCenterService {
                 feat("封面「推荐配图要点」单独调用", true),
                 feat("高级大模型写作", false),
                 feat("AI 生图", false),
-                feat("深度模型 Token 配额", false),
-                feat("AI 伴读", false)));
+                feat("深度模型 Token 配额", false)));
         if (!active || curTier == 0) {
             p.setButtonState("current");
             p.setButtonLabel("当前方案");
@@ -161,11 +247,10 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setFeatured(true);
         p.setFeatures(List.of(
                 feat("DeepSeek V4 Flash 会员期内不限次", true),
-                feat("文本：通义 / DeepSeek / Gemini / Claude Haiku", true),
+                feat("文本：通义 / DeepSeek / Gemini / Claude", true),
                 feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
                 feat("高级写作 50 次/日 · 生图 25 次/日", true),
-                feat("深度 Token：通义/DeepSeek/Gemini/Claude", true),
-                feat("AI 伴读（即将上线）", false)));
+                feat("深度 Token：通义/DeepSeek/Gemini/Claude", true)));
         applyPlanButton(p, curTier, active, 1);
         return p;
     }
@@ -185,8 +270,7 @@ public class VipCenterServiceImpl implements VipCenterService {
                 feat("文本：通义 / DeepSeek / Gemini / Claude（含 Sonnet）", true),
                 feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
                 feat("高级写作 300 次/日 · 生图 100 次/日", true),
-                feat("深度 Token 配额全面提升", true),
-                feat("AI 伴读（即将上线）", false)));
+                feat("深度 Token 配额全面提升", true)));
         applyPlanButton(p, curTier, active, 2);
         return p;
     }
@@ -233,6 +317,9 @@ public class VipCenterServiceImpl implements VipCenterService {
 
         Map<String, VipQuotaGroupVO> groupMap = new LinkedHashMap<>();
         for (ForumVipQuotaConfig cfg : configs) {
+            if (isHiddenQuota(cfg)) {
+                continue;
+            }
             VipQuotaItemVO item = toItem(cfg, daily, tokenByModel, window);
             groupMap.computeIfAbsent(cfg.getGroupLabel(), k -> {
                 VipQuotaGroupVO g = new VipQuotaGroupVO();
@@ -243,6 +330,20 @@ public class VipCenterServiceImpl implements VipCenterService {
         }
         panel.setGroups(new ArrayList<>(groupMap.values()));
         return panel;
+    }
+
+    /** Claude Haiku 已下线，不在会员中心展示配额。 */
+    private boolean isHiddenQuota(ForumVipQuotaConfig cfg) {
+        if (cfg == null) {
+            return true;
+        }
+        if ("token_claude_haiku".equals(cfg.getQuotaKey())) {
+            return true;
+        }
+        if ("advanced_llm".equals(cfg.getQuotaKey())) {
+            return true;
+        }
+        return Constant.AI_MODEL_CLAUDE_HAIKU.equals(cfg.getModelCode());
     }
 
     private VipQuotaItemVO toItem(ForumVipQuotaConfig cfg, AiUsageDaily daily,

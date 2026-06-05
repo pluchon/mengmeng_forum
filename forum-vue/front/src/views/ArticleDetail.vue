@@ -17,8 +17,23 @@
           <div class="media-section">
             <div class="media-stage">
               <div class="media-placeholder" :style="{ background: detailCoverBg }">
+                <video
+                  v-if="isVideoArticle && articleVideoUrl"
+                  ref="detailVideoRef"
+                  :key="articleVideoUrl"
+                  class="media-video-main"
+                  :src="articleVideoUrl"
+                  autoplay
+                  controls
+                  controlslist="nodownload noplaybackrate noremoteplayback"
+                  disablepictureinpicture
+                  playsinline
+                  preload="auto"
+                  @contextmenu.prevent
+                  @ended="replayDetailVideo"
+                />
                 <el-image
-                  v-if="activeGalleryUrl"
+                  v-else-if="activeGalleryUrl"
                   :src="activeGalleryUrl"
                   fit="contain"
                   class="media-gallery-main"
@@ -29,7 +44,7 @@
                 />
                 <div v-else class="cover-content">
                   <el-icon :size="120" color="rgba(0,0,0,0.03)"><PictureFilled /></el-icon>
-                  <p class="media-empty-hint">暂无相册图片</p>
+                  <p class="media-empty-hint">{{ isVideoArticle ? '暂无视频' : '暂无相册图片' }}</p>
                 </div>
               </div>
             </div>
@@ -133,32 +148,41 @@
                 <div class="content-text" v-html="renderedContent"></div>
 
                 <div class="ai-summary-box animate-fade-up">
-                  <div class="ai-header">
-                    <div class="ai-header-left">
-                      <div class="ai-icon-pulse" />
-                      <span class="ai-tag">AI 智能导读</span>
+                  <div class="ai-guide-header">
+                    <div class="ai-guide-title">
+                      <el-icon class="ai-guide-wand" :size="18"><MagicStick /></el-icon>
+                      <span>AI智能导读</span>
                     </div>
-                    <button
-                      type="button"
-                      class="ai-summary-icon-btn"
+                    <el-button
+                      size="small"
+                      class="ai-guide-gen-btn"
+                      :loading="aiLoading"
                       :disabled="aiLoading"
-                      aria-label="生成或刷新 AI 摘要"
                       @click="loadAiSummary"
                     >
-                      <img :src="aiIconUrl" alt="" class="ai-summary-icon-img" :class="{ 'is-loading': aiLoading }" />
-                    </button>
+                      生成摘要
+                    </el-button>
                   </div>
-                  <p v-if="aiLoading" class="ai-text">正在分析内容并生成摘要…</p>
-                  <p
-                    v-else-if="aiSummary"
-                    class="ai-text"
-                    :class="{ 'ai-text-placeholder': aiSummaryIsHint }"
-                  >{{ aiSummary }}</p>
-                  <p v-else class="ai-text ai-text-placeholder">点击上方按钮，使用 AI 深度解读文章要点</p>
+                  <textarea
+                    ref="aiSummaryAreaRef"
+                    v-model="aiSummary"
+                    readonly
+                    class="ai-summary-textarea"
+                    :class="{ 'is-hint': aiSummaryIsHint }"
+                    :placeholder="aiLoading ? '正在生成摘要…' : '点击「生成摘要」获取 AI 智能导读'"
+                  />
                 </div>
 
                 <div class="content-meta">
-                  <span>{{ formatForumDateTimeShanghai(article.createTime) }}</span>
+                  <span class="content-meta__time">{{ formatForumDateTimeShanghai(article.createTime) }}</span>
+                  <span
+                    v-for="t in articleTags"
+                    :key="'at-' + t.id"
+                    class="article-detail-tag"
+                    :class="`article-detail-tag--${t.colorKey || 'sky'}`"
+                  >
+                    {{ t.name }}
+                  </span>
                 </div>
               </div>
 
@@ -212,22 +236,11 @@
                     <div class="comment-text" v-html="item.articleReply.content"></div>
                     <div class="comment-footer">
                       <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
-                      <img
-                        :src="replyIconUrl"
-                        alt=""
-                        class="detail-plain-svg detail-plain-svg--reply"
-                        role="button"
-                        tabindex="0"
-                        aria-label="回复"
-                        @click="handleReplyTo(item)"
-                        @keydown.enter.prevent="handleReplyTo(item)"
-                      />
                     </div>
                     <SubReplyArea
-                      :ref="(el) => registerSubReplyAreaRef(item.articleReply.id, el)"
                       :reply-id="item.articleReply.id"
                       :article-id="article.id"
-                      :vip-gold-focus="isVipGold"
+                      :read-only="true"
                     />
                   </div>
                 </div>
@@ -374,14 +387,20 @@ const {
   PictureFilled,
   Share,
   SubReplyArea,
-  aiIconUrl,
+  MagicStick,
   aiLoading,
   aiSummary,
+  aiSummaryAreaRef,
   aiSummaryIsHint,
   article,
+  articleTags,
   activeGalleryIndex,
   activeGalleryUrl,
   articleGalleryUrls,
+  articleVideoUrl,
+  detailVideoRef,
+  isVideoArticle,
+  replayDetailVideo,
   author,
   closeDetailDialog,
   confirmFavorite,
@@ -402,7 +421,6 @@ const {
   favoriteFoldersLoading,
   favoriteSaving,
   handleLike,
-  handleReplyTo,
   isLiked,
   isOwner,
   isFavorited,
@@ -415,10 +433,8 @@ const {
   loadFavoriteFolders,
   onGalleryStripScroll,
   ownerAuditNotice,
-  registerSubReplyAreaRef,
   renderedContent,
   replies,
-  replyIconUrl,
   sendIconUrl,
   replyContent,
   replyCountDisplay,

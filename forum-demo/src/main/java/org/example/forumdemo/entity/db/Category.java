@@ -24,9 +24,6 @@ public class Category {
     @Schema(description = "分类描述")
     private String description;
 
-    @Schema(description = "分类图标")
-    private String icon;
-
     @Schema(description = "排序优先级", example = "1")
     @JsonIgnore
     private Integer sort;

@@ -8,7 +8,7 @@ $secretsFile = Join-Path $PSScriptRoot "dev-secrets.ps1"
 if (-not (Test-Path $secretsFile)) {
     Write-Host "未找到 scripts/dev-secrets.ps1" -ForegroundColor Yellow
     Write-Host "请执行: copy scripts\dev-secrets.ps1.example scripts\dev-secrets.ps1" -ForegroundColor Yellow
-    Write-Host "或在 Windows 用户环境变量中配置，见 WINDOWS-ENV.md" -ForegroundColor Yellow
+    Write-Host "或在 Windows 用户环境变量中配置 DASHSCOPE_API_KEY 等，见 README「配置说明」" -ForegroundColor Yellow
     return
 }
 

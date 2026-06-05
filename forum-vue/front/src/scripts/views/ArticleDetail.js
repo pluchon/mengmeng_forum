@@ -1,10 +1,10 @@
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, Share, PictureFilled, CollectionTag, Close } from '@element-plus/icons-vue'
+import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
-import { getArticleDetail, getAiSummary, getAuditStatus, getLatestLikers } from '@/api/article'
+import { getArticleDetail, streamArticleGuide, getAuditStatus, getLatestLikers } from '@/api/article'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
 import { getReplyList, submitReply as apiSubmitReply } from '@/api/reply'
 import { likeArticle, unlikeArticle } from '@/api/like'
@@ -17,8 +17,6 @@ import { unwrapPageRecords } from '@/utils/apiData'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
-import aiIconUrl from '@/assets/svg/AI.svg?url'
-import replyIconUrl from '@/assets/svg/回复.svg?url'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
 import likersMenuListIconUrl from '@/assets/svg/列表.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
@@ -40,6 +38,15 @@ export function useArticleDetail() {
   const aiSummary = ref('')
   const aiSummaryIsHint = ref(false)
   const aiLoading = ref(false)
+  const aiSummaryAreaRef = ref(null)
+  let guideStreamAbort = null
+
+  function resizeAiSummaryArea() {
+    const el = aiSummaryAreaRef.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.max(72, el.scrollHeight)}px`
+  }
 
   function isAiSummaryHintMessage(text) {
     const t = String(text || '')
@@ -63,16 +70,6 @@ export function useArticleDetail() {
   const replyContent = ref('')
   const detailCoverBg = ref('#ffffff')
 
-  /** @type {Map<number, { openReplyTo?: (u: unknown) => Promise<void> }>} */
-  const subReplyAreaByReplyId = new Map()
-
-  function registerSubReplyAreaRef(replyId, el) {
-    const id = Number(replyId)
-    if (Number.isNaN(id)) return
-    if (el) subReplyAreaByReplyId.set(id, el)
-    else subReplyAreaByReplyId.delete(id)
-  }
-
   const showLikersDialog = ref(false)
   const loadingLikers = ref(false)
   const latestLikers = ref([])
@@ -86,6 +83,8 @@ export function useArticleDetail() {
   const dialogOpen = ref(true)
 
   /** 笔记相册 URL（与 article 正文独立） */
+  const articleTags = ref([])
+
   const articleGalleryUrls = ref([])
   const activeGalleryIndex = ref(0)
   const galleryStripRef = ref(null)
@@ -99,6 +98,31 @@ export function useArticleDetail() {
     if (!urls.length) return ''
     const i = Math.min(Math.max(0, activeGalleryIndex.value), urls.length - 1)
     return urls[i] || ''
+  })
+
+  const articleVideoUrl = computed(() => String(article.value?.videoUrl || '').trim())
+  const detailVideoRef = ref(null)
+
+  function replayDetailVideo(e) {
+    const v = e?.target || detailVideoRef.value
+    if (!v) return
+    v.currentTime = 0
+    v.play().catch(() => {})
+  }
+
+  watch([articleVideoUrl, dialogOpen], () => {
+    if (!dialogOpen.value || !articleVideoUrl.value) return
+    nextTick(() => {
+      const v = detailVideoRef.value
+      if (!v) return
+      v.currentTime = 0
+      v.play().catch(() => {})
+    })
+  })
+
+  const isVideoArticle = computed(() => {
+    if (Number(article.value?.mediaType) === 1) return true
+    return !!articleVideoUrl.value && !articleGalleryUrls.value.length
   })
 
   function updateGalleryStripState() {
@@ -178,17 +202,17 @@ export function useArticleDetail() {
         type: 'success',
         title: '审核通过',
         description: '帖子正在发布，请稍候刷新页面。',
-        buttonText: '查看审核进度',
-        path: `/article/${id}/audit`,
+        buttonText: '返回首页',
+        path: '/',
       }
     }
     if (s === ARTICLE_STATUS.PENDING_AUDIT) {
       return {
         type: 'warning',
         title: '审核中',
-        description: '内容正在由系统异步审核，通过后帖子会自动发布。',
-        buttonText: '查看审核进度',
-        path: `/article/${id}/audit`,
+        description: '内容正在由系统异步审核，通过后帖子会自动发布，结果将通过站内信通知。',
+        buttonText: '返回首页',
+        path: '/',
       }
     }
     if (s === ARTICLE_STATUS.REJECTED) {
@@ -229,6 +253,7 @@ export function useArticleDetail() {
     aiSummary.value = ''
     aiSummaryIsHint.value = false
     articleGalleryUrls.value = []
+    articleTags.value = []
     activeGalleryIndex.value = 0
     try {
       const res = await getArticleDetail(articleId)
@@ -236,6 +261,7 @@ export function useArticleDetail() {
         article.value = res.data.article
         author.value = res.data.user
         board.value = res.data.board
+        articleTags.value = Array.isArray(res.data.tags) ? res.data.tags : []
         isLiked.value = res.data.isLiked || false
         isOwner.value = res.data.isOwner || false
         isFavorited.value = res.data.isFavorited || false
@@ -431,35 +457,41 @@ export function useArticleDetail() {
   }
 
   async function loadAiSummary() {
+    if (!article.value?.id) return
+    if (guideStreamAbort) {
+      guideStreamAbort()
+      guideStreamAbort = null
+    }
     aiLoading.value = true
-    try {
-      const res = await getAiSummary(article.value.id)
-      if (res.code === 0) {
-        const text = typeof res.data === 'string' ? res.data : (res.data?.summary ?? '')
-        if (isSummaryLikelyArticleBody(text, article.value?.content)) {
-          aiSummary.value = 'AI 返回内容与正文过于相似，请充实正文后再尝试智能导读。'
-          aiSummaryIsHint.value = true
-        } else {
-          aiSummary.value = text
-          aiSummaryIsHint.value = isAiSummaryHintMessage(text)
-        }
-      } else {
-        ElMessage.error(res.message || '获取摘要失败')
-      }
-    } finally {
-      aiLoading.value = false
-    }
-  }
-
-  async function handleReplyTo(item) {
-    if (!(await ensureLoggedIn('点赞需要登录'))) return
-    const rid = Number(item?.articleReply?.id)
-    const area = subReplyAreaByReplyId.get(rid)
-    if (area?.openReplyTo) {
-      await area.openReplyTo(item.user ?? null)
-      return
-    }
-    ElMessage.warning('楼中楼未加载完成，请稍后重试')
+    aiSummary.value = ''
+    aiSummaryIsHint.value = false
+    await nextTick()
+    resizeAiSummaryArea()
+    await new Promise((resolve) => {
+      guideStreamAbort = streamArticleGuide(article.value.id, {
+        onChunk: (piece) => {
+          aiSummary.value += piece
+          aiSummaryIsHint.value = isAiSummaryHintMessage(aiSummary.value)
+          nextTick(resizeAiSummaryArea)
+        },
+        onDone: () => {
+          if (isSummaryLikelyArticleBody(aiSummary.value, article.value?.content)) {
+            aiSummary.value = 'AI 返回内容与正文过于相似，请充实正文后再尝试智能导读。'
+            aiSummaryIsHint.value = true
+          }
+          nextTick(resizeAiSummaryArea)
+          aiLoading.value = false
+          guideStreamAbort = null
+          resolve()
+        },
+        onError: (msg) => {
+          ElMessage.error(msg || '生成摘要失败')
+          aiLoading.value = false
+          guideStreamAbort = null
+          resolve()
+        },
+      })
+    })
   }
 
   const isVipGold = computed(() => {
@@ -488,16 +520,23 @@ export function useArticleDetail() {
     ChatDotRound,
     Close,
     CollectionTag,
+    MagicStick,
     PictureFilled,
     Share,
     SubReplyArea,
     aiLoading,
     aiSummary,
+    aiSummaryAreaRef,
     aiSummaryIsHint,
     activeGalleryIndex,
     activeGalleryUrl,
     article,
+    articleTags,
     articleGalleryUrls,
+    articleVideoUrl,
+    detailVideoRef,
+    isVideoArticle,
+    replayDetailVideo,
     author,
     confirmFavorite,
     closeDetailDialog,
@@ -517,8 +556,6 @@ export function useArticleDetail() {
     favoriteFoldersLoading,
     favoriteSaving,
     handleLike,
-    handleReplyTo,
-    registerSubReplyAreaRef,
     isLiked,
     isOwner,
     isFavorited,
@@ -530,12 +567,10 @@ export function useArticleDetail() {
     loading,
     loadingLikers,
     loadFavoriteFolders,
-    aiIconUrl,
     onGalleryStripScroll,
     ownerAuditNotice,
     renderedContent,
     replies,
-    replyIconUrl,
     sendIconUrl,
     replyContent,
     replyCountDisplay,

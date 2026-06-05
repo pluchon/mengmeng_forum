@@ -1,15 +1,24 @@
 <template>
   <div class="auth-page">
     <div class="auth-container animate-fade-up">
-      <div class="auth-card">
+      <div class="auth-card auth-card--tall">
         <div class="auth-layout">
-          <div class="auth-form-side">
-            <div class="form-header-block">
-              <h1 class="site-title">{{ SITE_NAME }}</h1>
-              <el-divider class="site-divider" />
-            </div>
+          <div class="brand-side">
+            <img
+              class="brand-side__img"
+              :src="registerBg"
+              alt=""
+              loading="eager"
+              decoding="async"
+            >
+            <div class="image-mask" aria-hidden="true" />
+          </div>
 
-            <el-form ref="formRef" :model="regForm" :rules="rules" label-position="top">
+          <div class="form-side form-side--auth-relaxed form-side--signup">
+            <p class="form-side__brand-mobile">注册账号</p>
+
+            <div class="form-side__main">
+            <el-form ref="formRef" :model="regForm" :rules="rules" label-position="top" class="signup-form">
               <div class="form-grid">
                 <el-form-item label="用户名" prop="userName" class="flat-form-item">
                   <el-input v-model="regForm.userName" placeholder="登录唯一账号" />
@@ -49,7 +58,6 @@
                   <span class="link" @click="$router.push('/privacy')">隐私政策</span>
                 </el-checkbox>
               </div>
-              <SiteIcpLink variant="auth" />
 
               <div class="submit-bar">
                 <el-button type="primary" class="flat-submit-btn" :loading="loading" @click="handleSignUp">
@@ -60,11 +68,9 @@
                   直接登录
                 </el-button>
               </div>
+              <SiteIcpLink variant="auth" />
             </div>
-          </div>
-
-          <div class="auth-brand-side">
-            <div class="image-mask" />
+            </div>
           </div>
         </div>
       </div>
@@ -78,9 +84,10 @@ import { ref } from 'vue'
 import { useSignUp } from '@scripts/views/SignUp'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
 import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
-import { SITE_NAME } from '@/constants/site'
+import { REGISTER_WEBP_URL } from '@/utils/clientOss'
 
 const captchaDialogRef = ref()
+const registerBg = REGISTER_WEBP_URL
 
 const {
   agreed,

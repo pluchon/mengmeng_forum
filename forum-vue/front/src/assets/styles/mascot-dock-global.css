@@ -1,4 +1,4 @@
-﻿.mascot-fs-dialog.el-dialog {
+.mascot-fs-dialog.el-dialog {
   border-radius: 16px;
   overflow: hidden;
   border: 0.5px solid var(--el-border-color-lighter, rgba(255, 255, 255, 0.12));
@@ -10,11 +10,22 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.mascot-fs-dialog .el-dialog__body {
+.mascot-fs-dialog.mascot-fs-dialog--wide.el-dialog {
+  max-width: min(1080px, 94vw);
+  height: calc(100vh - 8vh);
+  max-height: calc(100vh - 8vh);
+  margin-bottom: 4vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mascot-fs-dialog.mascot-fs-dialog--wide .el-dialog__body {
   padding-top: 12px;
   display: flex;
   flex-direction: column;
-  max-height: min(78vh, 720px);
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
 }
 

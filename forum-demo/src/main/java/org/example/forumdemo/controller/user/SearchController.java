@@ -25,8 +25,7 @@ public class SearchController {
     private SearchService searchService;
 
     @Operation(summary = "搜索帖子",
-            description = "DB 标题模糊匹配命中即返回(source=db); 命中 0 走 RAG 召回(source=rag); 两路均空 source=empty. " +
-                    "ai=true 时跳过 DB 标题路，直接 RAG（与首页「AI 搜索」框一致）。RAG 走 Python AI 服务 rerank。")
+            description = "普通模式: 标题/正文 LIKE(source=db)。ai=true: 仅 Redis RAG 向量库召回(source=rag)，不走 MySQL 模糊匹配。")
     @GetMapping("/article")
     public Result<SearchArticleResponse> searchArticle(@RequestParam String keyword,
                                                        @RequestParam(defaultValue = "1") Integer pageNum,
@@ -37,8 +36,7 @@ public class SearchController {
     }
 
     @Operation(summary = "搜索用户",
-            description = "DB 用户名/昵称 LIKE 命中即返回(source=db); 命中 0 走 RAG 召回(source=rag); 均空 source=empty. " +
-                    "ai=true 时跳过 DB，直接 RAG（与帖子 AI 搜索一致）。RAG 走 Python AI 服务 rerank。")
+            description = "普通模式: 用户名/昵称 LIKE(source=db)，无结果 source=empty。ai=true: RAG 语义匹配(source=rag)，无相关结果 source=empty。")
     @GetMapping("/user")
     public Result<SearchUserResponse> searchUser(@RequestParam String keyword,
                                                  @RequestParam(defaultValue = "1") Integer pageNum,

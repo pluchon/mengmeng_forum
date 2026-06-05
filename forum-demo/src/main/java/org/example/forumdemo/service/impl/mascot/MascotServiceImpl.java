@@ -10,8 +10,8 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
-import org.example.forumdemo.service.AiPointsBillingService;
-import org.example.forumdemo.service.CompanionMemoryService;
+import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
+import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,8 +22,19 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -62,6 +73,12 @@ public class MascotServiceImpl implements MascotService {
 
     @Resource
     private CompanionMemoryService companionMemoryService;
+
+    @Resource
+    private ObjectMapper objectMapper;
+
+    @Resource
+    private MascotArticleRagHelper mascotArticleRagHelper;
 
     private boolean isVip(User user) {
         Byte tier = user.getVipTier();
@@ -134,12 +151,13 @@ public class MascotServiceImpl implements MascotService {
                 return "qwen-flash";
             }
         }
+        // chat 由 Python 路由；深度模型仍受 VIP 档位约束（下方 tier 判断）
         if (route.isBlank()) {
             return "qwen-flash";
         }
         int tier = effectiveVipTier(user);
         if (route.startsWith("claude-sonnet") && tier < Constant.VIP_TIER_MAX) {
-            return tier >= Constant.VIP_TIER_PRO ? "claude-haiku" : "qwen-flash";
+            return "qwen-flash";
         }
         if ((route.startsWith("gemini") || route.startsWith("claude")) && tier < Constant.VIP_TIER_PRO) {
             return "qwen-flash";
@@ -153,8 +171,8 @@ public class MascotServiceImpl implements MascotService {
     private String featureCode(String skill) {
         return switch (skill) {
             case "help" -> "companion_help";
-            case "reading" -> "companion_reading";
             case "drawing" -> "companion_image";
+            case "chat" -> "companion_chat";
             default -> "companion_writing";
         };
     }
@@ -237,8 +255,32 @@ public class MascotServiceImpl implements MascotService {
             }
             Object est = um.get("estimated");
             dto.setEstimated(est instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(est)));
+            aiPointsBillingService.applyLatencyFromMap(dto, um);
         }
         return aiPointsBillingService.normalizeUsage(dto, fallbackModel);
+    }
+
+    private Map<String, Object> billMascotUsage(User user, String skill, AiModelUsageDTO usage, String relatedId,
+                                                boolean usePointsBilling) {
+        return aiPointsBillingService.bill(
+                user,
+                featureCode(skill),
+                usage,
+                relatedId,
+                Constant.POINTS_SOURCE_AI_COMPANION,
+                usePointsBilling);
+    }
+
+    private void reserveUsageQuota(User user, boolean vip, String skill, String route,
+                                 boolean[] reservedDeepseek, boolean[] reservedAdvanced) {
+        if (vip && ("writing".equals(skill) || "chat".equals(skill))) {
+            reserveAiQuota(user, route, reservedDeepseek, reservedAdvanced);
+            return;
+        }
+        if (!vip && route.startsWith("deepseek") && !aiQuotaService.hasUnlimitedDeepseek(user)) {
+            aiQuotaService.consumeDeepseekWrite(user);
+            reservedDeepseek[0] = true;
+        }
     }
 
     private static Integer intVal(Object o) {
@@ -259,29 +301,29 @@ public class MascotServiceImpl implements MascotService {
     @SuppressWarnings("rawtypes")
     public Map<String, Object> chat(User user, MascotChatRequest request) {
         String skill = normalizeSkill(request);
-        if ("reading".equals(skill)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "伴读功能开发中"));
-        }
+        boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
 
         boolean vip = isVip(user);
+        boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
         boolean reservedBasic = false;
-        if (!vip) {
+        String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
+        String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
+
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(user,
+                    aiPointsBillingService.estimatePoints(fallbackModel,
+                            Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                            Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+        } else if (!vip) {
             reserveBasicSlot(user.getId());
             reservedBasic = true;
         }
 
-        String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
-        String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
-        aiPointsBillingService.ensureBalance(user,
-                aiPointsBillingService.estimatePoints(fallbackModel,
-                        Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                        Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
-
         boolean[] reservedDeepseek = {false};
         boolean[] reservedAdvanced = {false};
-        if (vip && "writing".equals(skill)) {
+        if (!usePoints) {
             try {
-                reserveAiQuota(user, route, reservedDeepseek, reservedAdvanced);
+                reserveUsageQuota(user, vip, skill, route, reservedDeepseek, reservedAdvanced);
             } catch (ApplicationException ex) {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
@@ -290,13 +332,24 @@ public class MascotServiceImpl implements MascotService {
             }
         }
 
-        Long dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
-        List<MascotHistoryTurn> dbHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
-        List<MascotHistoryTurn> mergedHistory = dbHistory.isEmpty() ? request.getHistory() : dbHistory;
+        Long dbSessionId = null;
+        List<MascotHistoryTurn> mergedHistory;
+        if (ephemeral) {
+            mergedHistory = request.getHistory() != null ? request.getHistory() : List.of();
+        } else {
+            dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
+            List<MascotHistoryTurn> dbHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
+            mergedHistory = dbHistory.isEmpty() ? request.getHistory() : dbHistory;
+        }
+
+        String pySessionKey = ephemeral
+                ? (request.getSessionId() != null && !request.getSessionId().isBlank()
+                ? request.getSessionId().trim() : String.valueOf(user.getId()))
+                : String.valueOf(dbSessionId);
 
         Map<String, Object> pyBody = new HashMap<>();
         pyBody.put("message", request.getMessage().trim());
-        pyBody.put("session_id", String.valueOf(dbSessionId));
+        pyBody.put("session_id", pySessionKey);
         pyBody.put("appearance", normalizeAppearanceForPy(request));
         pyBody.put("tier", vip ? "vip" : "basic");
         int vipTier = user.getVipTier() != null ? user.getVipTier().intValue() : 0;
@@ -307,6 +360,9 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("skill", skill);
         pyBody.put("history", toPyHistory(mergedHistory));
         pyBody.put("llm_provider", route);
+        if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
+            pyBody.put("client_datetime", request.getClientDatetime().trim());
+        }
 
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
@@ -350,15 +406,9 @@ public class MascotServiceImpl implements MascotService {
         }
 
         AiModelUsageDTO usage = parseUsage(body, fallbackModel);
-        int pointsCost = aiPointsBillingService.calcPoints(usage);
-        int balanceAfter;
+        Map<String, Object> billing;
         try {
-            balanceAfter = aiPointsBillingService.charge(
-                    user,
-                    featureCode(skill),
-                    usage,
-                    String.valueOf(dbSessionId),
-                    Constant.POINTS_SOURCE_AI_COMPANION);
+            billing = billMascotUsage(user, skill, usage, pySessionKey, usePoints);
         } catch (ApplicationException ex) {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
@@ -368,19 +418,283 @@ public class MascotServiceImpl implements MascotService {
         }
 
         String reply = body.get("reply") != null ? String.valueOf(body.get("reply")) : "";
-        companionMemoryService.appendTextMessage(dbSessionId, "user", request.getMessage().trim());
-        companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
+        if (!ephemeral && dbSessionId != null) {
+            companionMemoryService.appendTextMessage(dbSessionId, "user", request.getMessage().trim());
+            companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
+        }
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("sessionId", String.valueOf(dbSessionId));
+        data.put("sessionId", pySessionKey);
         data.put("reply", reply);
         data.put("live2d", body.get("live2d") instanceof Map ? body.get("live2d") : Map.of());
         data.put("suggestedAppearance", body.get("suggested_appearance"));
         data.put("tier", vip ? "vip" : "basic");
-        data.put("pointsCost", pointsCost);
-        data.put("balanceAfter", balanceAfter);
+        data.put("pointsCost", billing.get("pointsCost"));
+        data.put("balanceAfter", billing.get("balanceAfter"));
+        data.put("billingMode", billing.get("billingMode"));
+        data.put("usageStats", billing.get("usageStats"));
         data.put("modelCode", usage.getModelCode());
         data.put("estimated", usage.getEstimated());
         return data;
+    }
+
+    private String mascotStreamAiUrl() {
+        if (mascotAiUrl == null || mascotAiUrl.isBlank()) {
+            return "http://localhost:5000/api/v1/mascot/chat/stream";
+        }
+        String u = mascotAiUrl.trim();
+        if (u.endsWith("/chat")) {
+            return u + "/stream";
+        }
+        if (u.endsWith("/chat/")) {
+            return u + "stream";
+        }
+        return u.replaceAll("/chat$", "/chat/stream");
+    }
+
+    private void sendMascotSse(SseEmitter emitter, Map<String, Object> payload) throws Exception {
+        emitter.send(SseEmitter.event().data(objectMapper.writeValueAsString(payload)));
+    }
+
+    @Override
+    public void streamChat(User user, MascotChatRequest request, SseEmitter emitter) {
+        String skill = normalizeSkill(request);
+        boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
+        boolean vip = isVip(user);
+        boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
+        boolean reservedBasic = false;
+        String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
+        String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
+
+        if (usePoints) {
+            try {
+                aiPointsBillingService.ensureBalance(user,
+                        aiPointsBillingService.estimatePoints(fallbackModel,
+                                Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                                Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+            } catch (ApplicationException ex) {
+                try {
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "balance"));
+                    emitter.complete();
+                } catch (Exception e) {
+                    emitter.completeWithError(ex);
+                }
+                return;
+            }
+        } else if (!vip) {
+            try {
+                reserveBasicSlot(user.getId());
+                reservedBasic = true;
+            } catch (ApplicationException ex) {
+                try {
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
+                    emitter.complete();
+                } catch (Exception ignored) {
+                    emitter.completeWithError(ex);
+                }
+                return;
+            }
+        }
+
+        boolean[] reservedDeepseek = {false};
+        boolean[] reservedAdvanced = {false};
+        if (!usePoints) {
+            try {
+                reserveUsageQuota(user, vip, skill, route, reservedDeepseek, reservedAdvanced);
+            } catch (ApplicationException ex) {
+                if (reservedBasic) {
+                    releaseBasicSlot(user.getId());
+                }
+                try {
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
+                    emitter.complete();
+                } catch (Exception e) {
+                    emitter.completeWithError(ex);
+                }
+                return;
+            }
+        }
+
+        Long dbSessionId = null;
+        List<MascotHistoryTurn> mergedHistory;
+        if (ephemeral) {
+            mergedHistory = request.getHistory() != null ? request.getHistory() : List.of();
+        } else {
+            dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
+            List<MascotHistoryTurn> dbHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
+            mergedHistory = dbHistory.isEmpty()
+                    ? (request.getHistory() != null ? request.getHistory() : List.of())
+                    : dbHistory;
+        }
+        String pySessionKey = ephemeral
+                ? (request.getSessionId() != null && !request.getSessionId().isBlank()
+                ? request.getSessionId().trim() : String.valueOf(user.getId()))
+                : String.valueOf(dbSessionId);
+        final Long persistSessionId = dbSessionId;
+        final String userMessage = request.getMessage().trim();
+        final StringBuilder replyBuffer = new StringBuilder();
+
+        Map<String, Object> pyBody = new HashMap<>();
+        pyBody.put("message", userMessage);
+        pyBody.put("session_id", pySessionKey);
+        pyBody.put("appearance", normalizeAppearanceForPy(request));
+        pyBody.put("tier", vip ? "vip" : "basic");
+        int vipTier = user.getVipTier() != null ? user.getVipTier().intValue() : 0;
+        if (vip && vipTier <= 0) {
+            vipTier = 1;
+        }
+        pyBody.put("vip_tier", vipTier);
+        pyBody.put("skill", skill);
+        pyBody.put("history", toPyHistory(mergedHistory));
+        pyBody.put("llm_provider", route);
+        if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
+            pyBody.put("client_datetime", request.getClientDatetime().trim());
+        }
+
+        CompletableFuture<List<Map<String, Object>>> relatedFuture = null;
+        if ("writing".equals(skill) || "help".equals(skill) || "chat".equals(skill)) {
+            String ragQuery = userMessage;
+            List<Long> excludeIds = request.getExcludeArticleIds() != null
+                    ? request.getExcludeArticleIds() : List.of();
+            relatedFuture = CompletableFuture.supplyAsync(
+                    () -> mascotArticleRagHelper.recommendRelatedArticles(ragQuery, excludeIds));
+        }
+
+        final AtomicBoolean relatedMetaSent = new AtomicBoolean(false);
+        if (relatedFuture != null) {
+            relatedFuture.whenComplete((related, ex) -> {
+                if (ex != null || related == null || related.isEmpty()) {
+                    return;
+                }
+                if (relatedMetaSent.compareAndSet(false, true)) {
+                    try {
+                        Map<String, Object> earlyMeta = new LinkedHashMap<>();
+                        earlyMeta.put("relatedArticles", related);
+                        sendMascotSse(emitter, Map.of("meta", earlyMeta));
+                    } catch (Exception sendEx) {
+                        log.warn("推送相关帖子 meta 失败: {}", sendEx.getMessage());
+                    }
+                }
+            });
+        }
+
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) URI.create(mascotStreamAiUrl()).toURL().openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            if (internalKey != null && !internalKey.isBlank()) {
+                conn.setRequestProperty("X-Internal-Key", internalKey);
+            }
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(180_000);
+            byte[] body = objectMapper.writeValueAsBytes(pyBody);
+            conn.getOutputStream().write(body);
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) {
+                if (reservedBasic) {
+                    releaseBasicSlot(user.getId());
+                }
+                releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用"));
+                emitter.complete();
+                return;
+            }
+
+            AiModelUsageDTO usage = null;
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data:")) {
+                        continue;
+                    }
+                    String payload = line.substring(5).trim();
+                    if ("[DONE]".equals(payload)) {
+                        break;
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> chunk = objectMapper.readValue(payload, Map.class);
+                    if (chunk.get("error") != null) {
+                        sendMascotSse(emitter, Map.of("error", String.valueOf(chunk.get("error"))));
+                        break;
+                    }
+                    Object textObj = chunk.get("text");
+                    if (textObj != null) {
+                        String piece = String.valueOf(textObj);
+                        if (!piece.isEmpty()) {
+                            replyBuffer.append(piece);
+                            sendMascotSse(emitter, Map.of("text", piece));
+                        }
+                    }
+                    Object usageObj = chunk.get("usage");
+                    if (usageObj instanceof Map<?, ?> um) {
+                        Map<String, Object> usageMap = new HashMap<>();
+                        um.forEach((k, v) -> usageMap.put(String.valueOf(k), v));
+                        usage = parseUsage(Map.of("usage", usageMap), fallbackModel);
+                    }
+                }
+            }
+
+            if (usage == null) {
+                usage = aiPointsBillingService.normalizeUsage(new AiModelUsageDTO(), fallbackModel);
+                usage.setEstimated(true);
+            }
+            Map<String, Object> billing;
+            try {
+                billing = billMascotUsage(user, skill, usage, pySessionKey, usePoints);
+            } catch (ApplicationException ex) {
+                if (reservedBasic) {
+                    releaseBasicSlot(user.getId());
+                }
+                releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
+                emitter.complete();
+                return;
+            }
+
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("sessionId", pySessionKey);
+            meta.put("pointsCost", billing.get("pointsCost"));
+            meta.put("balanceAfter", billing.get("balanceAfter"));
+            meta.put("billingMode", billing.get("billingMode"));
+            meta.put("usageStats", billing.get("usageStats"));
+            meta.put("modelCode", usage.getModelCode());
+            meta.put("llmRoute", route);
+            if (relatedFuture != null) {
+                try {
+                    List<Map<String, Object>> related = relatedFuture.get(12, TimeUnit.SECONDS);
+                    if (related != null && !related.isEmpty()) {
+                        meta.put("relatedArticles", related);
+                        relatedMetaSent.set(true);
+                    }
+                } catch (Exception ex) {
+                    log.warn("看板娘帖子推荐超时或失败: {}", ex.getMessage());
+                }
+            }
+            if (!ephemeral && persistSessionId != null) {
+                companionMemoryService.appendTextMessage(persistSessionId, "user", userMessage);
+                companionMemoryService.appendTextMessage(persistSessionId, "assistant", replyBuffer.toString());
+            }
+            sendMascotSse(emitter, Map.of("meta", meta));
+            emitter.complete();
+        } catch (Exception e) {
+            log.warn("看板娘流式调用失败: {}", e.getMessage());
+            if (reservedBasic) {
+                releaseBasicSlot(user.getId());
+            }
+            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            try {
+                sendMascotSse(emitter, Map.of("error", "对话失败，请稍后重试"));
+                emitter.complete();
+            } catch (Exception ex) {
+                emitter.completeWithError(e);
+            }
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
     }
 }

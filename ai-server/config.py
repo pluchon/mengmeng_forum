@@ -14,7 +14,8 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_PATH = Path(os.environ.get("AI_SERVER_CONFIG", "config.yaml")).resolve()
+_AI_SERVER_ROOT = Path(__file__).resolve().parent
+_CONFIG_PATH = Path(os.environ.get("AI_SERVER_CONFIG", str(_AI_SERVER_ROOT / "config.yaml"))).resolve()
 
 
 def _load() -> dict[str, Any]:
@@ -67,6 +68,24 @@ class Settings:
         tv["api_key"] = os.environ.get("TAVILY_API_KEY", tv.get("api_key"))
         raw["tavily"] = tv
 
+        bm = raw.get("baidu_map", {}) or {}
+        bm["api_key"] = os.environ.get("BAIDU_MAP_API_KEY", bm.get("api_key"))
+        raw["baidu_map"] = bm
+
+        oss = raw.get("oss", {}) or {}
+        oss["access_key_id"] = os.environ.get("ALIYUN_ACCESS_KEY_ID", oss.get("access_key_id", ""))
+        oss["access_key_secret"] = os.environ.get(
+            "ALIYUN_ACCESS_KEY_SECRET", oss.get("access_key_secret", "")
+        )
+        oss["bucket_name"] = os.environ.get("OSS_BUCKET_NAME", oss.get("bucket_name", ""))
+        oss["url_prefix"] = os.environ.get("OSS_URL_PREFIX", oss.get("url_prefix", ""))
+        oss["root_prefix"] = os.environ.get("OSS_ROOT_PREFIX", oss.get("root_prefix", ""))
+        raw["oss"] = oss
+
+        ff = raw.get("ffmpeg", {}) or {}
+        ff["base_url"] = os.environ.get("FORUM_FFMPEG_URL", ff.get("base_url", "http://ffmpeg:8099"))
+        raw["ffmpeg"] = ff
+
     @property
     def server(self) -> dict[str, Any]: return self.raw.get("server", {})
     @property
@@ -111,6 +130,18 @@ class Settings:
     @property
     def mcp(self) -> dict[str, Any]:
         return self.raw.get("mcp", {})
+
+    @property
+    def baidu_map(self) -> dict[str, Any]:
+        return self.raw.get("baidu_map", {})
+
+    @property
+    def oss(self) -> dict[str, Any]:
+        return self.raw.get("oss", {})
+
+    @property
+    def ffmpeg(self) -> dict[str, Any]:
+        return self.raw.get("ffmpeg", {})
 
     def pg_url(self) -> str:
         """LangGraph PostgresSaver 用的 conn string"""

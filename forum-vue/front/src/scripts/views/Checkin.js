@@ -3,8 +3,7 @@ import { ElMessage } from 'element-plus'
 import { doCheckin, getCheckinInfo, getCheckinLog, getCheckinRule } from '@/api/checkin'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { unwrapPageRecords } from '@/utils/apiData'
-import checkinHero from '@/assets/images/checkin.jpg'
-import statCardBg from '@/assets/images/签到页小卡片背景.png'
+import { clientOssUrl } from '@/utils/clientOss'
 import iconPrevUrl from '@/assets/svg/后退.svg?url'
 import iconNextUrl from '@/assets/svg/前进.svg?url'
 import iconTodayUrl from '@/assets/svg/今天.svg?url'
@@ -16,8 +15,8 @@ const REWARD_TIP_DISMISS_KEY = 'checkin_reward_tip_dismissed'
 
 export function useCheckin() {
   const checkinSnapshotStore = useCheckinSnapshotStore()
-  const heroImageUrl = checkinHero
-  const statCardBgUrl = statCardBg
+  const heroImageUrl = clientOssUrl('checkin.webp')
+  const statCardBgUrl = clientOssUrl('签到页小卡片背景.webp')
 
   const loading = ref(true)
   const submitting = ref(false)

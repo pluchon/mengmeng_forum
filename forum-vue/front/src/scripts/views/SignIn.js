@@ -172,14 +172,7 @@ export function useSignIn(captchaDialogRef) {
 
   const afterLoginSuccess = () => {
     ElMessage.success('欢迎回来')
-    if (route.query.first === '1') {
-      announcementRef.value?.show()
-      setTimeout(() => {
-        router.push('/')
-      }, 1500)
-    } else {
-      router.push('/')
-    }
+    router.push('/')
   }
 
   const handleLogin = async () => {

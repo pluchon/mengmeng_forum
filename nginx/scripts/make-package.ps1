@@ -32,6 +32,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & (Join-Path $scriptsDir "export-images.ps1")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& (Join-Path $scriptsDir "verify-package.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $pkg = Join-Path $nginxRoot "package"
 Write-Host ""
 Write-Host "Done. Upload this folder to server ~/package :" -ForegroundColor Green

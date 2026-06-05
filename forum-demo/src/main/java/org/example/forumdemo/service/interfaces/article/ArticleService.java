@@ -68,6 +68,12 @@ public interface ArticleService {
      */
     void replaceArticleImages(Long articleId, Long loginUserId, java.util.List<String> imageUrls);
 
+    /** 设置帖子为视频帖并绑定视频URL（仅作者；会清空相册图） */
+    void setArticleVideo(Long articleId, Long loginUserId, String videoUrl);
+
+    /** 清空视频并切回图片帖（仅作者） */
+    void clearArticleVideo(Long articleId, Long loginUserId);
+
     /** 按 sort 升序返回某帖子未删除的相册图URL列表; 无图返回空数组. */
     java.util.List<String> queryArticleImageUrls(Long articleId);
 

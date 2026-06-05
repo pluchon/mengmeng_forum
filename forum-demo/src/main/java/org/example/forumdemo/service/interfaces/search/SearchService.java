@@ -5,10 +5,8 @@ import org.example.forumdemo.entity.vo.search.SearchUserResponse;
 
 /**
  * 帖子搜索:
- *  1) 先 DB title LIKE %kw% 做精筛(分页), 命中即返回, source=db
- *  2) DB 命中 0 -> Python AI 服务 RAG 召回, source=rag
- *  3) 两路都为空 -> source=empty
- *  preferAiRag=true（前端 AI 搜索）时跳过步骤 1，直接走 RAG。
+ *  普通模式: DB 标题/正文 LIKE 模糊匹配，无结果即 empty（不走 RAG）
+ *  AI 模式: 向量 + RAG 语义召回（如「四川西部」≈「川西」），无相关结果即 empty
  * 不强制登录: 匿名用户也能搜.
  */
 public interface SearchService {
@@ -16,7 +14,7 @@ public interface SearchService {
     SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag);
 
     /**
-     * 用户搜索: 先 DB 用户名/昵称 LIKE（非 AI 模式）; 未命中或 AI 模式走 RAG.
+     * 用户搜索: 普通模式 DB 用户名/昵称 LIKE；AI 模式 RAG 语义匹配。均无结果则 empty.
      */
     SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag);
 }

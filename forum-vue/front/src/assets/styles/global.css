@@ -141,3 +141,37 @@ h1, h2, h3 {
   background: #ddd;
   border-radius: 10px;
 }
+
+/* 提交审核确认框：灰色扁平主按钮（MessageBox 挂载在 body） */
+.audit-submit-msgbox .audit-submit-msgbox__confirm,
+.audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary {
+  background: #f2f3f5 !important;
+  border: none !important;
+  color: #4e5969 !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  font-weight: 600;
+  padding: 10px 20px;
+}
+
+.audit-submit-msgbox .audit-submit-msgbox__confirm:hover,
+.audit-submit-msgbox .audit-submit-msgbox__confirm:focus,
+.audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary:hover,
+.audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary:focus {
+  background: #e5e6eb !important;
+  color: #1d2129 !important;
+  border: none !important;
+}
+
+.audit-submit-msgbox .audit-submit-msgbox__cancel {
+  background: transparent !important;
+  border: none !important;
+  color: #86909c !important;
+  box-shadow: none !important;
+  font-weight: 500;
+}
+
+.audit-submit-msgbox .audit-submit-msgbox__cancel:hover {
+  color: #4e5969 !important;
+  background: transparent !important;
+}
