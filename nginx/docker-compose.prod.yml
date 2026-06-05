@@ -1,10 +1,7 @@
 # Production overlay: bind middleware to 127.0.0.1 on host + memory limits
-# 勿使用 ports: !reset（Compose 合并会清空端口且不写回，导致 Navicat 连不上）
 # Usage: docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d
 #
-# 宿主机（SSH 隧道 / 本机）默认端口：
-#   MySQL 33061  Redis 63790  Postgres 54320
-#   RabbitMQ AMQP 56720  管理台 15672
+# 宿主机（SSH 隧道）默认端口：MySQL 33061  Redis 63790  Postgres 54320  RabbitMQ 56720/15672
 
 services:
   mysql:
@@ -24,14 +21,27 @@ services:
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-54320}:5432"
 
+  nginx:
+    pull_policy: never
+
+  backend-1:
+    image: ${FORUM_BACKEND_IMAGE:-forum-backend:latest}
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
   ai-server:
+    image: ${FORUM_AI_IMAGE:-forum-ai-server:latest}
+    pull_policy: never
+    build: !reset null
     deploy:
       resources:
         limits:
           memory: 768M
 
-  backend-1:
-    deploy:
-      resources:
-        limits:
-          memory: 1024M
+  ffmpeg:
+    image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
+    pull_policy: never
+    build: !reset null

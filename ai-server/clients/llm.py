@@ -41,7 +41,12 @@ def rerank_model_name() -> str:
 
 
 def embedding_model_name() -> str:
-    return _DS.get("model_embedding_rag", "tongyi-embedding-vision-flash")
+    return _DS.get("model_embedding_rag", "qwen3-vl-embedding")
+
+
+def embedding_text_fallback_model_name() -> str:
+    """TextEmbedding API 专用；勿填 qwen3-vl-embedding / qwen3-vl-rerank."""
+    return _DS.get("model_embedding_text_fallback", "text-embedding-v3")
 
 
 def dashscope_api_key() -> str:

@@ -63,6 +63,16 @@ public class FileController {
         return Result.successData(fileService.uploadArticleImage(file, loginUser.getId()));
     }
 
+    @Operation(summary = "上传帖子视频", description = "上传单个视频到 OSS；大于100MB会触发压缩；返回 URL 后再调 /article/setArticleVideo 落库")
+    @PostMapping("/uploadArticleVideo")
+    public Result<String> uploadArticleVideo(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null){
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadArticleVideo(file, loginUser.getId()));
+    }
+
     @Operation(summary = "上传聊天图片消息", description = "发送方先上传图片获得OSS URL，再调 /message/sendImage 发送")
     @PostMapping("/uploadChatImage")
     public Result<String> uploadChatImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {

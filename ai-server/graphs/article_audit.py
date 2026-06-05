@@ -7,6 +7,8 @@
      ├─► validate_text  ─── reject ──► finalize (REJECTED)
      │       │ pass
      ├─► validate_images ── reject ──► finalize (REJECTED)
+     │       │ pass (+ video_url)
+     ├─► validate_video  ── reject ──► finalize (REJECTED)  [qwen3-vl-plus]
      │       │ pass
      ├─► summarize  ────────────────► finalize (APPROVED)
      │
@@ -45,6 +47,7 @@ from graphs.state import AuditState
 from utils import cache as semantic_cache
 from utils.html import clean_html
 from utils.image import fetch_image_bytes, to_data_url, validate_image_bytes
+from utils.video_audit import audit_video_url
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +87,9 @@ def node_validate_text(state: AuditState) -> AuditState:
     title = state.get("title", "") or ""
     content = state.get("content", "") or ""
     plain = clean_html(content)
+    max_chars = int(settings.audit.get("text_audit_max_chars", 12000))
+    if len(plain) > max_chars:
+        plain = plain[:max_chars] + "…"
 
     new_state: AuditState = {"plain_text": plain}
 
@@ -136,27 +142,44 @@ def _describe_image(image_bytes: bytes) -> str:
     return _extract_text(resp)
 
 
+def _audit_image_bytes(img_bytes: bytes, *, source: str = "") -> dict:
+    """对已下载的图片 bytes 做视觉描述 + 文本审核."""
+    if not img_bytes:
+        return {"url": source, "allow": False, "reason": "图片无法拉取或格式不支持"}
+    desc = _describe_image(img_bytes)
+    if not desc:
+        return {"url": source, "allow": False, "reason": "图片识别失败"}
+    try:
+        chain = IMAGE_AUDIT_TEMPLATE | text_llm()
+        resp = chain.invoke({"desc": desc})
+    except Exception:
+        logger.exception("[graph:image] 审核 LLM 失败")
+        return {"url": source, "allow": False, "reason": "图片审核服务异常", "error": True}
+    text = _extract_text(resp)
+    allowed = text.startswith("是")
+    return {"url": source, "allow": allowed,
+            "reason": "" if allowed else f"图片不合规({desc[:30]})"}
+
+
 def _audit_single_image(url: str) -> dict:
     """拉远程图 -> 视觉描述 -> 文本审核"""
     if not url:
         return {"url": url, "allow": True, "reason": "skip empty"}
     img_bytes = fetch_image_bytes(url)
     if not img_bytes:
-        # 图片拉不下来 -> 视为拒绝(不让坏 URL 蒙混过关)
         return {"url": url, "allow": False, "reason": "图片无法拉取或格式不支持"}
-    desc = _describe_image(img_bytes)
-    if not desc:
-        return {"url": url, "allow": False, "reason": "图片识别失败"}
-    try:
-        chain = IMAGE_AUDIT_TEMPLATE | text_llm()
-        resp = chain.invoke({"desc": desc})
-    except Exception:
-        logger.exception("[graph:image] 审核 LLM 失败")
-        return {"url": url, "allow": False, "reason": "图片审核服务异常", "error": True}
-    text = _extract_text(resp)
-    allowed = text.startswith("是")
-    return {"url": url, "allow": allowed,
-            "reason": "" if allowed else f"图片不合规({desc[:30]})"}
+    return _audit_image_bytes(img_bytes, source=url)
+
+
+def node_validate_video(state: AuditState) -> AuditState:
+    url = (state.get("video_url") or "").strip()
+    if not url:
+        return {"video_result": {"allow": True, "reason": "skip empty"}}
+    result = audit_video_url(
+        url,
+        image_audit_fn=lambda b: _audit_image_bytes(b, source=url),
+    )
+    return {"video_result": result}
 
 
 def node_validate_images(state: AuditState) -> AuditState:
@@ -215,11 +238,27 @@ def route_after_images(state: AuditState) -> str:
             return "error"
         if not r.get("allow"):
             return "reject"
+    if (state.get("video_url") or "").strip():
+        return "video"
+    return "pass"
+
+
+def route_after_video(state: AuditState) -> str:
+    vr = state.get("video_result") or {}
+    if vr.get("error"):
+        return "error"
+    if not vr.get("allow"):
+        return "reject"
     return "pass"
 
 
 def node_to_rejected_text(state: AuditState) -> AuditState:
     reason = (state.get("text_result") or {}).get("reason", "内容违规")
+    return {"final_status": _FINAL_REJECTED, "final_reason": reason}
+
+
+def node_to_rejected_video(state: AuditState) -> AuditState:
+    reason = (state.get("video_result") or {}).get("reason", "视频违规")
     return {"final_status": _FINAL_REJECTED, "final_reason": reason}
 
 
@@ -242,6 +281,10 @@ def node_to_error(state: AuditState) -> AuditState:
             if r.get("error"):
                 reason = r.get("reason", "审核服务异常")
                 break
+        if not (state.get("text_result") or {}).get("error"):
+            vr = state.get("video_result") or {}
+            if vr.get("error"):
+                reason = vr.get("reason", "视频审核服务异常")
     return {"final_status": _FINAL_ERROR, "final_reason": reason}
 
 
@@ -258,9 +301,11 @@ def build_graph():
     g = StateGraph(AuditState)
     g.add_node("validate_text", node_validate_text)
     g.add_node("validate_images", node_validate_images)
+    g.add_node("validate_video", node_validate_video)
     g.add_node("summarize", node_summarize)
     g.add_node("reject_text", node_to_rejected_text)
     g.add_node("reject_image", node_to_rejected_image)
+    g.add_node("reject_video", node_to_rejected_video)
     g.add_node("error", node_to_error)
     g.add_node("approved", node_to_approved)
     g.add_node("finalize", node_finalize)
@@ -273,13 +318,20 @@ def build_graph():
     })
     g.add_conditional_edges("validate_images", route_after_images, {
         "pass": "summarize",
+        "video": "validate_video",
         "reject": "reject_image",
+        "error": "error",
+    })
+    g.add_conditional_edges("validate_video", route_after_video, {
+        "pass": "summarize",
+        "reject": "reject_video",
         "error": "error",
     })
     g.add_edge("summarize", "approved")
     g.add_edge("approved", "finalize")
     g.add_edge("reject_text", "finalize")
     g.add_edge("reject_image", "finalize")
+    g.add_edge("reject_video", "finalize")
     g.add_edge("error", "finalize")
     g.add_edge("finalize", END)
     return g
@@ -324,6 +376,7 @@ def run_audit(task: dict) -> dict:
         "content": task.get("content", ""),
         "cover_url": task.get("coverUrl"),
         "image_urls": task.get("imageUrls") or [],
+        "video_url": task.get("videoUrl"),
         "submitted_at": task.get("submittedAt", 0),
     }
     cfg = {"configurable": {"thread_id": f"audit:{task['articleId']}:{task['taskId']}"}}

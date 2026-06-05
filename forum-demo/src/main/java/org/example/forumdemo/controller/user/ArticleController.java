@@ -17,9 +17,12 @@ import org.example.forumdemo.entity.vo.article.ArticleDetailResponse;
 import org.example.forumdemo.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.example.forumdemo.entity.vo.article.AuditStatusResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
+import org.example.forumdemo.service.impl.article.ArticleGuideStreamService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +33,9 @@ import java.util.Map;
 public class ArticleController {
     @Autowired
     private ArticleService articleService;
+
+    @Autowired
+    private ArticleGuideStreamService articleGuideStreamService;
 
     @Operation(summary = "创建帖子草稿", description = "文章内容先入库为草稿，返回帖子ID；封面上传和发布动作走独立接口")
     @PostMapping("/createDraft")
@@ -166,6 +172,16 @@ public class ArticleController {
         return Result.successData(articleService.getArticleSummary(articleId));
     }
 
+    @Operation(summary = "流式生成帖子 AI 智能导读")
+    @GetMapping(value = "/streamGuide", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamGuide(@RequestParam Long articleId) {
+        SseEmitter emitter = new SseEmitter(180_000L);
+        emitter.onTimeout(emitter::complete);
+        emitter.onError((e) -> emitter.complete());
+        new Thread(() -> articleGuideStreamService.streamArticleGuide(articleId, emitter), "article-guide-stream").start();
+        return emitter;
+    }
+
     @Operation(summary = "通过URL直接更新帖子封面", description = "传入帖子ID和已上传的图片URL，直接写入数据库")
     @PostMapping("/updateCoverUrl")
     public Result<String> updateCoverUrl(@RequestParam Long articleId, @RequestParam String coverUrl, HttpServletRequest httpServletRequest) {
@@ -188,5 +204,27 @@ public class ArticleController {
         }
         articleService.replaceArticleImages(req.getArticleId(), loginUser.getId(), req.getImageUrls());
         return Result.success("相册已更新");
+    }
+
+    @Operation(summary = "设置帖子视频", description = "把帖子切换为视频帖并绑定视频URL；会自动清空相册图；封面仍需走图片封面接口")
+    @PostMapping("/setArticleVideo")
+    public Result<String> setArticleVideo(@RequestParam Long articleId, @RequestParam String videoUrl, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        articleService.setArticleVideo(articleId, loginUser.getId(), videoUrl);
+        return Result.success("视频已绑定");
+    }
+
+    @Operation(summary = "清空帖子视频", description = "把帖子切回图片帖并清空视频URL（不影响封面）；相册由 replaceArticleImages 再维护")
+    @PostMapping("/clearArticleVideo")
+    public Result<String> clearArticleVideo(@RequestParam Long articleId, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        articleService.clearArticleVideo(articleId, loginUser.getId());
+        return Result.success("视频已清空");
     }
 }

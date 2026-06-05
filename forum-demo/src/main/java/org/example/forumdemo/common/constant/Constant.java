@@ -177,6 +177,8 @@ public class Constant {
     public static final String OSS_PATH_COVER      = "forum_cover_picture/";
     public static final String OSS_PATH_BACKGROUND = "forum_profile_background_picture/";
     public static final String OSS_PATH_ARTICLE_IMAGE = "forum_article_picture/";
+    /** 帖子视频：对象名 {userId}_{yyyyMMddHHmmss}.mp4（大于100MB时先压缩） */
+    public static final String OSS_PATH_ARTICLE_VIDEO = "forum_vedio/article_vedio/";
     /** 公告中心卡片配图：对象名 {发布者用户ID}_{公告ID}_{yyyyMMddHHmmss}.{ext} */
     public static final String OSS_PATH_NOTICE_PICTURE = "forum_notice_picture/";
     public static final String OSS_PATH_LOTTERY_ACTIVITY = "forum_activity_picture/";
@@ -186,6 +188,11 @@ public class Constant {
     public static final String OSS_PATH_EMOJI_SHOP   = "forum_emoji_shop/";
     /** 看板娘 / AI 生图落库（避免超长外链或 data URL 写入 DB） */
     public static final String OSS_PATH_COMPANION_AI = "forum_companion_ai_picture/";
+
+    /** AI 生图：文章封面 */
+    public static final String OSS_PATH_AI_GENERATION_ARTICLE = "forum_ai_generation/article/";
+    /** AI 生图：看板娘 / 陪伴对话 */
+    public static final String OSS_PATH_AI_GENERATION_SESSION = "forum_ai_generation/session/";
     /** 旧版统一根目录（兼容历史 URL 校验） */
     public static final String OSS_LEGACY_ROOT = "forum_db_item/";
 
@@ -230,6 +237,10 @@ public class Constant {
     public static final String REDIS_KEY_ARTICLE_SUMMARY = "article_summary:";
     // 帖子摘要TTL：3600s（1小时）
     public static final long REDIS_TTL_ARTICLE_SUMMARY = 3600L;
+
+    /** 用户触发的 AI 智能导读缓存（与审核摘要 article_summary 分离，避免覆盖引发并发问题） */
+    public static final String REDIS_KEY_ARTICLE_GUIDE = "article_guide:";
+    public static final long REDIS_TTL_ARTICLE_GUIDE = 604800L;
 
     // =================== AI 摘要提示语常量 ===================
     public static final String SUMMARY_ARTICLE_NOT_FOUND = "帖子不存在或已被删除。";
@@ -339,4 +350,7 @@ public class Constant {
     public static final Byte SYSTEM_MSG_TYPE_AUDIT_PASS  = 1;
     public static final Byte SYSTEM_MSG_TYPE_AUDIT_FAIL  = 2;
     public static final Byte SYSTEM_MSG_TYPE_AUDIT_ERROR = 3;
+    /** 用户申请的新帖子标签已通过审核 */
+    public static final Byte SYSTEM_MSG_TYPE_TAG_APPROVED = 4;
+    public static final String SYSTEM_MSG_TITLE_TAG_APPROVED = "标签申请已通过";
 }

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -44,6 +45,11 @@ def lc_messages_to_openai(messages: list[BaseMessage]) -> list[dict[str, Any]]:
                             "type": "image_url",
                             "image_url": {"url": str(item["image"])},
                         })
+                    elif "video" in item:
+                        parts.append({
+                            "type": "video_url",
+                            "video_url": {"url": str(item["video"])},
+                        })
                     elif "text" in item:
                         parts.append({"type": "text", "text": str(item["text"])})
                 out.append({"role": "user", "content": parts if parts else ""})
@@ -82,6 +88,61 @@ def dashscope_chat_completion(
     raise ValueError(f"Dashscope 响应无法解析: {data!r}"[:500])
 
 
+def dashscope_stream_text(
+    model: str,
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float = 0.3,
+    timeout: int = 180,
+) -> Iterator[tuple[str, Any]]:
+    """流式事件：('text', 片段) 或 ('usage', dict)。"""
+    api_key = settings.dashscope.get("api_key") or ""
+    base = dashscope_compat_base()
+    url = f"{base}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    with requests.post(url, headers=headers, json=payload, timeout=timeout, stream=True) as r:
+        if not r.ok:
+            logger.warning("Dashscope stream HTTP %s: %s", r.status_code, r.text[:500])
+            r.raise_for_status()
+        for raw in r.iter_lines(decode_unicode=True):
+            if not raw or not raw.startswith("data:"):
+                continue
+            data = raw[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if chunk.get("usage"):
+                yield ("usage", usage_from_openai_style(chunk, model))
+                continue
+            delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
+            text = delta.get("content")
+            if text:
+                yield ("text", str(text))
+
+
+def dashscope_stream_text_legacy(
+    model: str,
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float = 0.3,
+    timeout: int = 180,
+) -> Iterator[str]:
+    """兼容旧调用：仅 yield 文本片段。"""
+    for event in dashscope_stream_text(model, messages, temperature=temperature, timeout=timeout):
+        if event[0] == "text":
+            yield event[1]
+
+
 class DashscopeChatModel(BaseChatModel):
     """LangChain Runnable，供 Prompt | model 与 .invoke(messages) 使用。"""
 
@@ -99,10 +160,14 @@ class DashscopeChatModel(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        from config import settings
+
         openai_msgs = lc_messages_to_openai(messages)
+        timeout = int(settings.audit.get("text_audit_timeout", 180))
         text, _ = dashscope_chat_completion(
             self.model_name,
             openai_msgs,
             temperature=self.temperature,
+            timeout=timeout,
         )
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])

@@ -35,7 +35,7 @@
                     <el-icon><Picture /></el-icon>
                   </div>
                   <div class="cover-upload-text">点击或拖拽图片到此处</div>
-                  <div class="cover-upload-hint">建议 16:9 横图，JPG / PNG / WebP，≤ 5MB</div>
+                  <div class="cover-upload-hint">支持JPG/PNG/WebP，建议图片大小不超过5MB</div>
                 </div>
               </el-upload>
             </div>
@@ -124,6 +124,7 @@
             <div class="cover-preview-frame">
               <img
                 v-if="coverPreview"
+                :key="coverPreviewKey"
                 :src="coverPreview"
                 alt="封面预览"
                 class="cover-preview-img"
@@ -167,7 +168,7 @@
                 @click="finishAndSubmitAudit"
               >
                 <el-icon><CircleCheck /></el-icon>
-                {{ isPublished ? '保存封面' : '完成并提交审核' }}
+                {{ isPublished ? '保存封面' : '上传封面并提交审核' }}
               </el-button>
             </div>
           </footer>
@@ -199,6 +200,7 @@ const {
   articleTextPlain,
   canRegenerate,
   coverPreview,
+  coverPreviewKey,
   downloadCoverImage,
   fetchCoverHints,
   finishAndSubmitAudit,

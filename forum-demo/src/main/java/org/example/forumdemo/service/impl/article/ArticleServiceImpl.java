@@ -41,7 +41,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -112,6 +111,12 @@ public class ArticleServiceImpl implements ArticleService {
     @org.springframework.context.annotation.Lazy
     private ArticleService self;
 
+    @Autowired
+    private org.example.forumdemo.service.interfaces.ai.AiHubService aiHubService;
+
+    @Autowired
+    private org.example.forumdemo.service.interfaces.article.ArticleTagService articleTagService;
+
     /** 状态 / 删除标记：1 表示禁用 / 已删除 */
     private static final byte STATE_FORBIDDEN = 1;
     private static final byte DELETE_TRUE = 1;
@@ -145,6 +150,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (articleMapper.insert(add) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
+        articleTagService.bindArticleTags(add.getId(), req.getBoardId(), req.getTagIds());
         return add.getId();
     }
 
@@ -231,6 +237,7 @@ public class ArticleServiceImpl implements ArticleService {
         ArticleDetailResponse resp = new ArticleDetailResponse(
                 new UserBriefVO(userInfo), articleInfo, boardInfo, isOwner, isLiked, isFavorited);
         resp.setImageUrls(queryArticleImageUrls(articleId));
+        resp.setTags(articleTagService.listByArticleId(articleId));
         return resp;
     }
 
@@ -307,6 +314,9 @@ public class ArticleServiceImpl implements ArticleService {
             stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
+        }
+        if (req.getTagIds() != null) {
+            articleTagService.bindArticleTags(articleId, article.getBoardId(), req.getTagIds());
         }
     }
 
@@ -693,6 +703,13 @@ public class ArticleServiceImpl implements ArticleService {
         if (ArticleStatus.isEditingLocked(article.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
         }
+        // 视频帖清空相册：setArticleVideo 已处理；空列表 replace 仅用于相册帖
+        if (article.getMediaType() != null && article.getMediaType() == 1) {
+            if (imageUrls == null || imageUrls.isEmpty()) {
+                return;
+            }
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频帖不支持相册图"));
+        }
         boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
         // 入参规整: null 视作空数组, 保留入参顺序但允许重复
         List<String> urls = imageUrls == null ? Collections.emptyList() : new ArrayList<>(imageUrls);
@@ -710,6 +727,12 @@ public class ArticleServiceImpl implements ArticleService {
         for (String url : urls) {
             validateArticleImageUrl(url);
         }
+        // 切换为图片帖：清空视频字段（幂等）
+        articleMapper.update(null, new UpdateWrapper<Article>().lambda()
+                .eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .set(Article::getMediaType, (byte) 0)
+                .set(Article::getVideoUrl, null));
         // 软删旧记录, 再插入新行; 写在同一事务里, 任一步失败回滚
         articleImageMapper.update(null, new UpdateWrapper<ArticleImage>().lambda()
                 .eq(ArticleImage::getArticleId, articleId)
@@ -739,6 +762,92 @@ public class ArticleServiceImpl implements ArticleService {
             }
         }
         log.info("帖子相册替换完成: articleId={}, count={}, userId={}", articleId, urls.size(), loginUserId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void setArticleVideo(Long articleId, Long loginUserId, String videoUrl) {
+        if (articleId == null || articleId <= 0 || loginUserId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (videoUrl == null || videoUrl.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址为空"));
+        }
+        Article article = articleMapper.selectOne(new QueryWrapper<Article>().lambda()
+                .eq(Article::getId, articleId).ne(Article::getDeleteState, 1).last("FOR UPDATE"));
+        if (article == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
+        }
+        if (!article.getUserId().equals(loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        if (ArticleStatus.isEditingLocked(article.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
+        }
+        boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        // 清空相册图（软删）
+        articleImageMapper.update(null, new UpdateWrapper<ArticleImage>().lambda()
+                .eq(ArticleImage::getArticleId, articleId)
+                .ne(ArticleImage::getDeleteState, 1)
+                .set(ArticleImage::getDeleteState, DELETE_TRUE));
+        // 设置为视频帖
+        UpdateWrapper<Article> uw = new UpdateWrapper<>();
+        uw.lambda()
+                .eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .set(Article::getMediaType, (byte) 1)
+                .set(Article::getVideoUrl, videoUrl.trim());
+        if (wasPublished) {
+            uw.lambda().set(Article::getStatus, ArticleStatus.DRAFT.getCode());
+        }
+        if (articleMapper.update(null, uw) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        if (wasPublished) {
+            stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
+            boardService.deleteOneById(article.getBoardId());
+            userService.deleteOneById(loginUserId);
+            stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+        }
+        log.info("帖子视频已绑定: articleId={}, userId={}", articleId, loginUserId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void clearArticleVideo(Long articleId, Long loginUserId) {
+        if (articleId == null || articleId <= 0 || loginUserId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        Article article = articleMapper.selectOne(new QueryWrapper<Article>().lambda()
+                .eq(Article::getId, articleId).ne(Article::getDeleteState, 1).last("FOR UPDATE"));
+        if (article == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
+        }
+        if (!article.getUserId().equals(loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        if (ArticleStatus.isEditingLocked(article.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
+        }
+        boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        UpdateWrapper<Article> uw = new UpdateWrapper<>();
+        uw.lambda()
+                .eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .set(Article::getMediaType, (byte) 0)
+                .set(Article::getVideoUrl, null);
+        if (wasPublished) {
+            uw.lambda().set(Article::getStatus, ArticleStatus.DRAFT.getCode());
+        }
+        if (articleMapper.update(null, uw) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        if (wasPublished) {
+            stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
+            boardService.deleteOneById(article.getBoardId());
+            userService.deleteOneById(loginUserId);
+            stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+        }
     }
 
     @Override
@@ -841,6 +950,11 @@ public class ArticleServiceImpl implements ArticleService {
         }
         // 收集图片: cover + gallery; cover 单独传, gallery 列表传 vl 模型逐张审
         List<String> imageUrls = queryArticleImageUrls(articleId);
+        String videoUrl = null;
+        if (article.getMediaType() != null && article.getMediaType() == 1
+                && StringUtils.hasText(article.getVideoUrl())) {
+            videoUrl = article.getVideoUrl().trim();
+        }
         ArticleAuditTaskMqVO task = new ArticleAuditTaskMqVO(
                 taskId,
                 articleId,
@@ -849,6 +963,7 @@ public class ArticleServiceImpl implements ArticleService {
                 article.getContent(),
                 StringUtils.hasText(article.getCoverImg()) ? article.getCoverImg() : null,
                 imageUrls,
+                videoUrl,
                 System.currentTimeMillis()
         );
         // 先发 MQ: 失败抛异常会回滚 DB CAS, 同时本方法尚未做"下榜+减计数"副作用, 数据保持一致.
@@ -970,6 +1085,21 @@ public class ArticleServiceImpl implements ArticleService {
                     result.getSummary(),
                     Constant.REDIS_TTL_ARTICLE_SUMMARY,
                     TimeUnit.SECONDS);
+        }
+        Article published = latest != null ? latest : articleMapper.selectById(articleId);
+        if (published != null) {
+            User author = userService.getUserInfoById(userId);
+            Map<String, Object> ragPayload = new HashMap<>();
+            ragPayload.put("articleId", articleId);
+            ragPayload.put("title", published.getTitle());
+            ragPayload.put("content", published.getContent());
+            ragPayload.put("mediaType", published.getMediaType() != null ? published.getMediaType().intValue() : 0);
+            ragPayload.put("videoUrl", published.getVideoUrl());
+            ragPayload.put("coverUrl", published.getCoverImg());
+            ragPayload.put("summary", result.getSummary());
+            ragPayload.put("authorNickname", author != null ? author.getNickname() : "");
+            ragPayload.put("tagNames", articleTagService.tagNamesByArticleId(articleId));
+            aiHubService.indexArticleRag(ragPayload);
         }
         notifyAuditResult(article, result,
                 Constant.SYSTEM_MSG_TYPE_AUDIT_PASS,

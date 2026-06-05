@@ -104,6 +104,7 @@
                 <div
                   v-else
                   class="note-cover-placeholder"
+                  :class="{ 'note-cover-placeholder--video': Number(entry.article?.mediaType) === 1 }"
                   :style="{
                     background: getRandomPastel(),
                     minHeight: placeholderMinHeight(entry.article?.id),
@@ -111,6 +112,7 @@
                 >
                   <span class="cover-title">{{ (entry.article?.title || '').substring(0, 12) }}</span>
                 </div>
+                <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
               </div>
               <div class="note-info">
                 <h3 class="note-title">{{ entry.article?.title }}</h3>

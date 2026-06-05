@@ -34,6 +34,8 @@ public class LoginInterceptor implements HandlerInterceptor {
             "/reply/select",
             "/category/getCategoryWithBoards",
             "/category/articles",
+            "/article/tag/list",
+            "/article/tag/suggest",
             "/board/topBoardList",
             "/board/selectBoardBy",
             "/board/selectBoardListByBoardIdWithPage",

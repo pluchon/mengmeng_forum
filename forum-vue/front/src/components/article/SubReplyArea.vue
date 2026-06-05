@@ -62,7 +62,7 @@
       </div>
     </el-collapse-transition>
 
-    <div class="sub-input-box" :class="{ 'vip-sub-input-gold': vipGoldFocus }">
+    <div v-if="!readOnly" class="sub-input-box" :class="{ 'vip-sub-input-gold': vipGoldFocus }">
       <el-input
         ref="subInputRef"
         v-model="inputContent"
@@ -104,6 +104,8 @@ const props = defineProps({
   articleId: { type: [Number, String], required: true },
   /** 会员：楼中楼输入框在获得焦点时显示金色描边 */
   vipGoldFocus: { type: Boolean, default: false },
+  /** 只读展示历史楼中楼，不显示回复输入框 */
+  readOnly: { type: Boolean, default: false },
 })
 
 const {

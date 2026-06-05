@@ -36,7 +36,6 @@ export const AI_MODEL_ICONS_BY_CODE = {
 export const MASCOT_TEXT_LLM_OPTIONS = [
   { id: 'qwen-flash', label: '通义千问', hint: 'qwen3.6-flash', icon: iconQwen, kind: 'text', vipOnly: false },
   { id: 'deepseek-flash', label: 'DeepSeek', hint: 'deepseek-v4-flash', icon: iconDeepseek, kind: 'text', vipOnly: false },
-  { id: 'claude-haiku', label: 'Claude', hint: 'claude-haiku-4-5', icon: iconClaude, kind: 'text', vipOnly: true, maxOnly: false },
   { id: 'qwen-deep', label: '通义千问 · 深度', hint: 'qwen3.7-max', icon: iconQwen, kind: 'text', vipOnly: true },
   { id: 'deepseek-deep', label: 'DeepSeek · 深度', hint: 'deepseek-v4-pro', icon: iconDeepseek, kind: 'text', vipOnly: true },
   { id: 'gemini-deep', label: 'Gemini · 深度', hint: 'gemini-3.1-pro', icon: iconGemini, kind: 'text', vipOnly: true },
@@ -81,7 +80,6 @@ export function llmRouteToWriteKind(routeId) {
     'deepseek-flash': 'deepseek_flash',
     'deepseek-deep': 'deepseek_pro',
     'gemini-deep': 'gemini_pro',
-    'claude-haiku': 'claude_haiku',
     'claude-sonnet': 'claude_sonnet',
   }
   return map[routeId] || null

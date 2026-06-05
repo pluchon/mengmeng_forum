@@ -112,6 +112,11 @@ if (-not $SkipDocker) {
     $envExample = Join-Path $nginxRoot ".env.example"
     Sync-EnvFromExample -EnvFile $envFile -EnvExample $envExample
 
+    Step "Docker build forum-ffmpeg:latest"
+    docker build -t forum-ffmpeg:latest (Join-Path $nginxRoot "ffmpeg")
+    if ($LASTEXITCODE -ne 0) { throw "forum-ffmpeg image build failed" }
+    Write-Host "Image forum-ffmpeg:latest ready" -ForegroundColor Green
+
     Step "Docker build forum-ai-server"
     docker build -t forum-ai-server:latest (Join-Path $repoRoot "ai-server")
     if ($LASTEXITCODE -ne 0) { throw "ai-server image build failed" }
@@ -125,7 +130,7 @@ if ($SkipFront) {
 Step "Done (local workspace)"
 Write-Host "  nginx/dist/user   - user SPA (local compose / export source)" -ForegroundColor Yellow
 Write-Host "  nginx/dist/admin  - admin SPA" -ForegroundColor Yellow
-Write-Host "  forum-backend:latest / forum-ai-server:latest" -ForegroundColor Yellow
+Write-Host "  forum-backend:latest / forum-ai-server:latest / forum-ffmpeg:latest" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Local dev:  cd nginx; docker compose up -d" -ForegroundColor DarkGray
 Write-Host "Server:     .\scripts\make-package.ps1" -ForegroundColor Green

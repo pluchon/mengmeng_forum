@@ -58,37 +58,56 @@
 
       <hr class="emoji-shop-divider" />
 
-      <div v-loading="loading" class="home-masonry emoji-shop-masonry" :class="{ 'home-masonry--loading': loading }">
-        <div v-for="item in records" :key="item.id" class="home-masonry-item">
-          <el-card
-            class="note-card note-card--masonry emoji-shop-card"
-            :body-style="{ padding: '0px' }"
-            shadow="hover"
-            @click="goDetail(item.id)"
-          >
-            <div class="note-cover note-cover--fluid">
-              <img
-                v-if="item.coverUrl"
-                class="note-cover-img"
-                :src="item.coverUrl"
-                :alt="item.name"
-                loading="lazy"
-              />
-              <div v-else class="note-cover-placeholder emoji-shop-cover-placeholder">
-                <span class="cover-title">{{ (item.name || '').slice(0, 8) }}</span>
+      <div v-if="loading" class="home-masonry home-masonry--loading emoji-shop-masonry">
+        <div v-for="i in 8" :key="i" class="home-masonry-item">
+          <el-skeleton animated>
+            <template #template>
+              <el-skeleton-item variant="image" style="width: 100%; height: 160px; border-radius: 12px 12px 0 0" />
+              <div style="padding: 12px">
+                <el-skeleton-item variant="h3" style="width: 70%" />
+                <el-skeleton-item variant="text" style="width: 40%; margin-top: 8px" />
               </div>
-            </div>
-            <div class="note-info emoji-shop-card-info">
-              <h3 class="note-title">{{ item.name }}</h3>
-              <div class="emoji-shop-card-meta">
-                <span class="emoji-shop-price">{{ formatPrice(item.price) }}</span>
-                <div class="emoji-shop-card-tags">
-                  <el-tag v-if="item.owned" type="success" size="small" effect="plain">已拥有</el-tag>
-                  <span class="emoji-shop-sales">售 {{ item.salesCount ?? 0 }}</span>
+            </template>
+          </el-skeleton>
+        </div>
+      </div>
+      <div v-else-if="records.length" ref="masonryRef" class="home-masonry emoji-shop-masonry">
+        <div
+          v-for="(col, colIdx) in masonryColumns"
+          :key="colIdx"
+          class="home-masonry-column"
+        >
+          <div v-for="item in col" :key="item.id" class="home-masonry-item">
+            <el-card
+              class="note-card note-card--masonry emoji-shop-card"
+              :body-style="{ padding: '0px' }"
+              shadow="hover"
+              @click="goDetail(item.id)"
+            >
+              <div class="note-cover note-cover--fluid emoji-shop-card-cover">
+                <img
+                  v-if="item.coverUrl"
+                  class="note-cover-img"
+                  :src="item.coverUrl"
+                  :alt="item.name"
+                  loading="lazy"
+                />
+                <div v-else class="note-cover-placeholder emoji-shop-cover-placeholder">
+                  <span class="cover-title">{{ (item.name || '').slice(0, 8) }}</span>
                 </div>
               </div>
-            </div>
-          </el-card>
+              <div class="note-info emoji-shop-card-info">
+                <h3 class="note-title">{{ item.name }}</h3>
+                <div class="emoji-shop-card-meta">
+                  <span class="emoji-shop-price">{{ formatPrice(item.price) }}</span>
+                  <div class="emoji-shop-card-tags">
+                    <el-tag v-if="item.owned" type="success" size="small" effect="plain">已拥有</el-tag>
+                    <span class="emoji-shop-sales">售 {{ item.salesCount ?? 0 }}</span>
+                  </div>
+                </div>
+              </div>
+            </el-card>
+          </div>
         </div>
       </div>
 
@@ -121,6 +140,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useHomeMasonry } from '@/composables/useHomeMasonry'
 import ParticleSea from '@/components/common/ParticleSea.vue'
 import EmojiShopDetailDialog from '@/components/emoji-shop/EmojiShopDetailDialog.vue'
 import EmojiShopUploadDialog from '@/components/emoji-shop/EmojiShopUploadDialog.vue'
@@ -154,6 +174,11 @@ const {
   onDetailPurchased,
   loadList,
 } = useEmojiShop(detailDialogRef, uploadDialogRef)
+
+const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(records, {
+  columnWidth: 200,
+  gap: 16,
+})
 </script>
 
 <style scoped src="@/assets/styles/emoji-shop.css"></style>

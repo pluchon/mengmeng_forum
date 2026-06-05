@@ -17,6 +17,7 @@ import org.example.forumdemo.service.interfaces.captcha.CaptchaTicketService;
 import org.example.forumdemo.service.interfaces.user.MailCodeService;
 import org.example.forumdemo.service.interfaces.user.PasswordResetService;
 import org.example.forumdemo.service.interfaces.user.SMSCodeService;
+import org.example.forumdemo.common.utils.OnlineUserManageUtil;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
@@ -43,6 +44,9 @@ public class UserController {
     // 则我们自动把该票据进行作废处理
     @Autowired
     private CaptchaTicketService captchaTicketService;
+
+    @Autowired
+    private OnlineUserManageUtil onlineUserManageUtil;
 
     @Operation(summary = "用户注册", description = "传入用户名、密码、昵称完成注册")
     @PostMapping("/register")
@@ -182,5 +186,14 @@ public class UserController {
             passwordResetService.resetBySms(phoneNumber, code, newPassword);
         }
         return Result.success("密码重置成功！");
+    }
+
+    @Operation(summary = "查询用户是否在线", description = "基于 WebSocket 连接状态")
+    @GetMapping("/isOnline")
+    public Result<Boolean> isOnline(@RequestParam Long userId) {
+        if (userId == null) {
+            return Result.successData(false);
+        }
+        return Result.successData(onlineUserManageUtil.isOnline(userId));
     }
 }

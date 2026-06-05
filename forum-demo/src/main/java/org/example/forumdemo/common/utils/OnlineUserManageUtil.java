@@ -30,6 +30,15 @@ public class OnlineUserManageUtil {
         manage.remove(userId);
     }
 
+    /** 用户是否在线（WebSocket 已连接） */
+    public boolean isOnline(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        WebSocketSession session = manage.get(userId);
+        return session != null && session.isOpen();
+    }
+
     // 向指定用户推送文本消息，用户不在线返回 false
     public boolean sendMessage(Long userId, String payload) {
         WebSocketSession session = manage.get(userId);

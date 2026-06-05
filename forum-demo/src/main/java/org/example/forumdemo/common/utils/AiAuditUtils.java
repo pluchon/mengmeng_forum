@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -190,6 +191,63 @@ public class AiAuditUtils {
         } catch (Exception e) {
             // 12. 柔性降级（Resilience）：RAG 属于体验增值业务，AI 挂了也不能耽误普通搜索，故捕获异常并降级返回空列表
             log.warn("RAG 搜索调用失败, 降级为空结果: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * RAG 帖子语义重排，保留 articleId 与 score（供看板娘「你可能感兴趣」等场景）.
+     */
+    @SuppressWarnings("rawtypes")
+    public static List<Map<String, Object>> ragSearchArticlesRanked(
+            String query, List<Map<String, Object>> candidates) {
+        if (query == null || query.trim().isEmpty() || candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            Map<String, Object> body = new HashMap<>();
+            body.put("query", query);
+            body.put("candidates", candidates);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> resp = restTemplate.postForEntity(AiHubUrls.articleRagSearchUrl(), req, Map.class);
+            if (resp.getStatusCode() != HttpStatus.OK || resp.getBody() == null) {
+                return Collections.emptyList();
+            }
+            Object results = resp.getBody().get("results");
+            if (!(results instanceof List<?>)) {
+                return Collections.emptyList();
+            }
+            List<Map<String, Object>> ranked = new ArrayList<>();
+            for (Object item : (List<?>) results) {
+                if (!(item instanceof Map<?, ?> m)) {
+                    continue;
+                }
+                Object idObj = m.get("articleId");
+                if (idObj == null) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("articleId", idObj);
+                Object scoreObj = m.get("score");
+                if (scoreObj instanceof Number n) {
+                    row.put("score", n.doubleValue());
+                } else if (scoreObj != null) {
+                    try {
+                        row.put("score", Double.parseDouble(String.valueOf(scoreObj)));
+                    } catch (NumberFormatException ignore) {
+                        row.put("score", 0.0);
+                    }
+                } else {
+                    row.put("score", 0.0);
+                }
+                ranked.add(row);
+            }
+            return ranked;
+        } catch (Exception e) {
+            log.warn("RAG 重排(含分数)调用失败: {}", e.getMessage());
             return Collections.emptyList();
         }
     }

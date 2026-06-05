@@ -14,6 +14,6 @@ public class UpdateArticleRequest {
     private String title;
     private String content;
 
-    // TODO: 加一个字段，表示我们可以更改该帖子的类型，比如是markdown还是富文本
-    // private Byte contentType;
+    /** 帖子标签 ID，最多 5 个 */
+    private java.util.List<Long> tagIds;
 }

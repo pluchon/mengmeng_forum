@@ -11,6 +11,8 @@ public interface FileService {
     String uploadBackground(MultipartFile file, Long userId);
     // 上传帖子内容图片，返回OSS URL
     String uploadArticleImage(MultipartFile file, Long userId);
+    // 上传帖子视频（单个），返回OSS URL；大于100MB会走FFmpeg压缩
+    String uploadArticleVideo(MultipartFile file, Long userId);
     // 上传聊天图片消息(发送方临时上传, 后续走 /message/sendImage)
     String uploadChatImage(MultipartFile file, Long userId);
     // 上传聊天表情(用户自上传到收藏库)
@@ -35,6 +37,8 @@ public interface FileService {
 
     /**
      * 将 AI 生图结果（https 或 data URL）转存 OSS，返回适合入库的短链接。
+     * @param ossPath 如 forum_ai_generation/article/
+     * @param baseName 不含扩展名，如 12_345_1735123456789
      */
-    String uploadCompanionAiImageFromRemote(Long userId, String sourceUrl);
+    String uploadAiGeneratedImageFromRemote(Long userId, String sourceUrl, String ossPath, String baseName);
 }

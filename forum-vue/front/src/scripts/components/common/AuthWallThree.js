@@ -6,9 +6,9 @@ export async function createAuthWallThree(canvas) {
   const THREE = await import('three')
 
   const SEPARATION = 118
-  const AMOUNTX = 36
-  const AMOUNTY = 36
-  const COUNT = AMOUNTX * AMOUNTY
+  const PAD_CELLS = 34
+  const MIN_CELLS = 72
+  const MAX_CELLS = 120
 
   let animationId = null
   let count = 0
@@ -26,9 +26,11 @@ export async function createAuthWallThree(canvas) {
     1,
     10000,
   )
-  camera.position.z = 1000
+  camera.position.z = 1550
 
-  const positions = new Float32Array(COUNT * 3)
+  let amountX = 0
+  let amountY = 0
+  let positions = new Float32Array(0)
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
 
@@ -53,6 +55,24 @@ export async function createAuthWallThree(canvas) {
   renderer.setClearColor(0xd9dee6, 1)
   renderer.setSize(window.innerWidth, window.innerHeight, false)
 
+  function computeGrid(w, h) {
+    const baseX = Math.ceil(w / SEPARATION) + PAD_CELLS
+    const baseY = Math.ceil(h / SEPARATION) + PAD_CELLS
+    return {
+      x: Math.max(MIN_CELLS, Math.min(MAX_CELLS, baseX)),
+      y: Math.max(MIN_CELLS, Math.min(MAX_CELLS, baseY)),
+    }
+  }
+
+  function ensureGeometry(w, h) {
+    const grid = computeGrid(w, h)
+    if (grid.x === amountX && grid.y === amountY) return
+    amountX = grid.x
+    amountY = grid.y
+    positions = new Float32Array(amountX * amountY * 3)
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  }
+
   function onMouseMove(event) {
     mouseX = event.clientX - windowHalfX()
     mouseY = event.clientY - windowHalfY()
@@ -61,6 +81,7 @@ export async function createAuthWallThree(canvas) {
   function onResize() {
     const w = window.innerWidth
     const h = Math.max(1, window.innerHeight)
+    ensureGeometry(w, h)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
     renderer.setSize(w, h, false)
@@ -74,12 +95,12 @@ export async function createAuthWallThree(canvas) {
     camera.lookAt(0, 0, 0)
 
     let i = 0
-    for (let ix = 0; ix < AMOUNTX; ix++) {
-      for (let iy = 0; iy < AMOUNTY; iy++) {
-        positions[i] = ix * SEPARATION - (AMOUNTX * SEPARATION) / 2
+    for (let ix = 0; ix < amountX; ix++) {
+      for (let iy = 0; iy < amountY; iy++) {
+        positions[i] = ix * SEPARATION - (amountX * SEPARATION) / 2
         positions[i + 1] =
           Math.sin((ix + count) * 0.3) * 50 + Math.sin((iy + count) * 0.5) * 50
-        positions[i + 2] = iy * SEPARATION - (AMOUNTY * SEPARATION) / 2
+        positions[i + 2] = iy * SEPARATION - (amountY * SEPARATION) / 2
         i += 3
       }
     }

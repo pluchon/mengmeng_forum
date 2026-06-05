@@ -37,7 +37,7 @@
                 />
               </div>
               <div v-if="isMe" class="action-btns">
-                <el-button round @click="$router.push('/settings')">编辑资料</el-button>
+                <el-button round class="profile-edit-btn" @click="$router.push('/settings')">编辑资料</el-button>
               </div>
               <div v-else class="action-btns">
                 <el-button round @click="handleChat">私信</el-button>
@@ -69,6 +69,7 @@
                     >
                       <div class="note-cover" :style="coverStyle(item)">
                         <span v-if="!item.coverImg" class="cover-text">{{ item.title?.substring(0, 1) }}</span>
+                        <div v-if="Number(item.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
                       </div>
                       <div class="note-info">
                         <h3 class="note-title">{{ item.title }}</h3>
@@ -85,36 +86,26 @@
             </el-tab-pane>
 
             <el-tab-pane label="收藏" name="collect">
-              <div class="profile-content" v-loading="loadingFavorites">
+              <div class="profile-content profile-fav-list" v-loading="loadingFavorites">
                 <el-card
                   v-for="f in favoriteFolders"
                   :key="f.id"
-                  class="note-card animate-fade-up"
-                  shadow="hover"
-                  :body-style="{ padding: '14px 14px' }"
-                  @click="$router.push(`/favorites/folder/${f.id}`)"
+                  class="profile-fav-folder-card animate-fade-up"
+                  shadow="never"
+                  :body-style="{ padding: '14px 16px' }"
                 >
-                  <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center">
+                  <div class="profile-fav-folder-row">
                     <div>
-                      <div style="font-weight: 900; color: #1d2129">
-                        {{ f.name }}
-                        <el-tag v-if="Number(f.isDefault) === 1" size="small" type="danger" effect="light" round style="margin-left: 8px">
-                          默认
-                        </el-tag>
-                      </div>
-                      <div style="margin-top: 6px; font-size: 12px; color: #86909c">
+                      <div class="profile-fav-folder-name">{{ f.name }}</div>
+                      <div class="profile-fav-folder-meta">
                         {{ Number(f.isPublic) === 1 ? '公开' : '私密' }} · {{ f.itemCount ?? 0 }} 条
                       </div>
                     </div>
-                    <el-button text type="primary" @click.stop="$router.push(`/favorites/folder/${f.id}`)">查看</el-button>
+                    <button type="button" class="profile-fav-view-btn" @click="openFavoriteDialog(f)">查看</button>
                   </div>
                 </el-card>
 
-                <el-empty v-if="!loadingFavorites && favoriteFolders.length === 0" description="暂无收藏夹" />
-
-                <div style="margin-top: 12px">
-                  <el-button v-if="isMe" type="primary" round @click="$router.push('/favorites')">管理我的收藏夹</el-button>
-                </div>
+                <el-empty v-if="!loadingFavorites && favoriteFolders.length === 0" description="暂无收藏" />
               </div>
             </el-tab-pane>
 
@@ -129,9 +120,9 @@
                     :md="6"
                   >
                     <el-card
-                      class="note-card animate-fade-up"
+                      class="note-card note-card--outlined animate-fade-up"
                       :body-style="{ padding: '0px' }"
-                      shadow="hover"
+                      shadow="never"
                       @click="$router.push(`/article/${item.article?.id || item.id}`)"
                     >
                       <div class="note-cover" :style="coverStyle(item.article || item)">
@@ -139,6 +130,7 @@
                           v-if="!(item.article || item).coverImg"
                           class="cover-text"
                         >{{ (item.article?.title || item.title)?.substring(0, 1) }}</span>
+                        <div v-if="Number((item.article || item).mediaType) === 1" class="note-cover-play" aria-hidden="true" />
                       </div>
                       <div class="note-info">
                         <h3 class="note-title">{{ item.article?.title || item.title }}</h3>
@@ -165,6 +157,41 @@
       style="display: none"
       @change="handleBgUpload"
     >
+
+    <el-dialog
+      v-model="favoriteDialogVisible"
+      class="profile-fav-dialog"
+      width="min(920px, 94vw)"
+      align-center
+      destroy-on-close
+      :title="favoriteDialogTitle"
+    >
+      <div v-loading="favoriteDialogLoading" class="profile-fav-dialog-body">
+        <div
+          v-for="row in favoriteDialogItems"
+          :key="row.article?.id"
+          class="profile-fav-item-row"
+          role="button"
+          tabindex="0"
+          @click="openArticleFromFavorite(row)"
+          @keydown.enter.prevent="openArticleFromFavorite(row)"
+        >
+          <div class="profile-fav-item-cover" :style="favoriteCoverStyle(row.article)">
+            <img v-if="row.article?.coverImg" :src="row.article.coverImg" alt="">
+          </div>
+          <div class="profile-fav-item-main">
+            <div class="profile-fav-item-title">{{ row.article?.title }}</div>
+            <div class="profile-fav-item-stats">
+              <span>赞 {{ row.article?.likeCount ?? 0 }}</span>
+              <span>评 {{ row.article?.replyCount ?? 0 }}</span>
+              <span>藏 {{ row.article?.favoriteCount ?? 0 }}</span>
+            </div>
+            <div class="profile-fav-item-snippet">{{ favoriteSnippet(row.article) }}</div>
+          </div>
+        </div>
+        <el-empty v-if="!favoriteDialogLoading && !favoriteDialogItems.length" description="暂无收藏帖子" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -188,9 +215,17 @@ const {
   handleChat,
   isMe,
   likedArticles,
+  favoriteCoverStyle,
+  favoriteDialogItems,
+  favoriteDialogLoading,
+  favoriteDialogTitle,
+  favoriteDialogVisible,
   favoriteFolders,
+  favoriteSnippet,
   loadingFavorites,
   loading,
+  openArticleFromFavorite,
+  openFavoriteDialog,
   total,
   triggerBgUpload,
   userInfo,

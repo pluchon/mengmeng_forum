@@ -18,14 +18,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.example.forumdemo.entity.vo.mascot.CompanionMessageVO;
 import org.example.forumdemo.entity.vo.mascot.CompanionSessionVO;
-import org.example.forumdemo.service.CompanionMemoryService;
+import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
+import org.example.forumdemo.service.interfaces.vip.VipCenterService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -44,6 +47,21 @@ public class MascotController {
 
     @Autowired
     private CompanionMemoryService companionMemoryService;
+
+    @Autowired
+    private VipCenterService vipCenterService;
+
+    @Operation(summary = "当前模型配额使用率", description = "会员 PRO/MAX：用于「使用萌币积分」按钮（≥95% 可开启）")
+    @GetMapping("/quota-hint")
+    public Result<Map<String, Object>> quotaHint(
+            @RequestParam(required = false) String llmProvider,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(vipCenterService.quotaHintForLlmRoute(user.getId(), llmProvider));
+    }
 
     @Operation(summary = "上架中的看板娘模型列表", description = "无需登录；前端用于 Live2D 选择与展示")
     @GetMapping("/public/models")
@@ -80,6 +98,26 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotService.chat(user, request));
+    }
+
+    @Operation(summary = "看板娘流式对话", description = "SSE 流式返回；data 含 text / meta / error")
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(
+            @Valid @RequestBody MascotChatRequest request,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        SseEmitter emitter = new SseEmitter(180_000L);
+        if (user == null) {
+            try {
+                emitter.send(SseEmitter.event().data("{\"error\":\"未登录\"}"));
+                emitter.complete();
+            } catch (Exception ignored) {
+                emitter.completeWithError(new IllegalStateException("unlogin"));
+            }
+            return emitter;
+        }
+        new Thread(() -> mascotService.streamChat(user, request, emitter), "mascot-chat-stream").start();
+        return emitter;
     }
 
     @Operation(summary = "陪伴助手会话列表", description = "按功能 skill 分页返回当前用户会话")

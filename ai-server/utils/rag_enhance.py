@@ -17,6 +17,14 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 _RAG = settings.rag
+
+
+def _field(obj, key: str, default=None):
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fa5]{2,}|[a-zA-Z0-9_]{2,}")
 
 
@@ -78,13 +86,15 @@ def rerank_documents(query: str, documents: list[str], *, top_n: int) -> list[tu
         logger.exception("RAG rerank 调用异常")
         return []
 
-    if resp.status_code != 200 or not getattr(resp, "output", None) or not resp.output.results:
+    output = _field(resp, "output")
+    results = _field(output, "results") or []
+    if resp.status_code != 200 or not results:
         return []
 
     out: list[tuple[int, float]] = []
-    for item in resp.output.results:
-        idx = getattr(item, "index", None)
-        score = float(getattr(item, "relevance_score", 0.0) or 0.0)
+    for item in results:
+        idx = _field(item, "index")
+        score = float(_field(item, "relevance_score") or 0.0)
         if idx is None or idx < 0 or idx >= len(documents):
             continue
         out.append((int(idx), score))

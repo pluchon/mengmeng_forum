@@ -47,8 +47,7 @@ export function useTheHeader() {
       const [msgRes, sysRes] = await Promise.all([getUnReadCount(), getSystemMessageUnreadCount()])
       const privateCount = msgRes?.code === 0 ? Number(msgRes.data) || 0 : 0
       const systemCount = sysRes?.code === 0 ? Number(sysRes.data) || 0 : 0
-      const prev = Number(messageStore.unreadCount) || 0
-      messageStore.setUnreadCount(Math.max(privateCount, prev), { keepTip: messageStore.showTip })
+      messageStore.setUnreadCount(privateCount, { keepTip: messageStore.showTip })
       messageStore.setSystemUnreadCount(systemCount)
     } catch {}
   }
@@ -82,11 +81,7 @@ export function useTheHeader() {
       if (!messageStore.incomingSignal?.seq) return
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
-        const prev = Number(messageStore.unreadCount) || 0
         await fetchUnread()
-        if ((Number(messageStore.unreadCount) || 0) < prev) {
-          messageStore.unreadCount = prev
-        }
         messageStore.showTip = true
       }, 500)
     },
@@ -120,7 +115,15 @@ export function useTheHeader() {
   const submitSearch = () => {
     const kw = searchQuery.value?.trim()
     if (!kw) return
-    router.push({ path: '/search', query: { keyword: kw } })
+    const query = { keyword: kw }
+    try {
+      if (localStorage.getItem('luntan_home_ai_search') === '1') {
+        query.ai = '1'
+      }
+    } catch {
+      /* ignore */
+    }
+    router.push({ path: '/search', query })
   }
 
   return {

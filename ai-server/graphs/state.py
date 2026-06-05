@@ -16,12 +16,14 @@ class AuditState(TypedDict, total=False):
     content: str
     cover_url: str | None
     image_urls: list[str]
+    video_url: str | None
     submitted_at: int
 
     # 中间产物
     plain_text: str
     text_result: dict[str, Any]            # {"allow": bool, "reason": str}
     image_results: list[dict[str, Any]]    # [{"url", "allow", "reason"}]
+    video_result: dict[str, Any]           # {"url", "allow", "reason"}
     summary: str
 
     # 终态

@@ -44,11 +44,14 @@ def to_data_url(image_data: bytes, fmt: str) -> str:
 
 
 def fetch_image_bytes(url: str, timeout: int = 15) -> bytes | None:
-    """从公开 URL 拉图(OSS 已加上对外读权限). 失败返回 None."""
+    """从 OSS 拉图；私有桶会先签名再拉取."""
     if not url:
         return None
     try:
-        resp = requests.get(url, timeout=timeout, stream=True)
+        from utils.oss_media import presign_get_url
+
+        fetch_url = presign_get_url(url)
+        resp = requests.get(fetch_url, timeout=timeout, stream=True)
         resp.raise_for_status()
         data = resp.content
         if len(data) > _MAX_BYTES:

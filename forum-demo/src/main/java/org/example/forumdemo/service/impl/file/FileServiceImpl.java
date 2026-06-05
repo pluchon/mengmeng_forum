@@ -72,6 +72,33 @@ public class FileServiceImpl implements FileService {
         return uploadImage(file, userId, Constant.OSS_PATH_ARTICLE_IMAGE);
     }
 
+    /** 仅超过 200MB 才走 ffmpeg（119MB 级游戏录像全量重编码在弱 CPU 上可能 30min+） */
+    private static final long VIDEO_COMPRESS_THRESHOLD = 200L * 1024 * 1024;
+    private static final long VIDEO_HARD_MAX_SIZE = 600L * 1024 * 1024;
+
+    @Override
+    public String uploadArticleVideo(MultipartFile file, Long userId) {
+        ensureOssReady();
+        validateVideoFile(file);
+        MultipartFile uploadFile = maybeCompressVideo(file);
+        String objectName = ossConfig.objectKey(Constant.OSS_PATH_ARTICLE_VIDEO, buildVideoObjectName(userId));
+        OSS ossClient = buildOssClient();
+        try (InputStream inputStream = uploadFile.getInputStream()) {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType("video/mp4");
+            metadata.setContentLength(uploadFile.getSize());
+            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
+            log.info("OSS 视频上传成功, userId={}, key={}, size={}MB",
+                    userId, objectName, uploadFile.getSize() / 1024 / 1024);
+            return ossConfig.getUrlPrefix() + objectName;
+        } catch (Exception e) {
+            log.error("OSS 视频上传失败, userId={}, key={}", userId, objectName, e);
+            throw new ApplicationException("视频上传 OSS 失败: " + e.getMessage());
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
     @Override
     public String uploadChatImage(MultipartFile file, Long userId) {
         return uploadImage(file, userId, Constant.OSS_PATH_CHAT_MESSAGE);
@@ -91,24 +118,34 @@ public class FileServiceImpl implements FileService {
             "^data:([\\w/+.-]+);base64,(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     @Override
-    public String uploadCompanionAiImageFromRemote(Long userId, String sourceUrl) {
+    public String uploadAiGeneratedImageFromRemote(Long userId, String sourceUrl, String ossPath, String baseName) {
         if (sourceUrl == null || sourceUrl.isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址为空"));
+        }
+        if (ossPath == null || ossPath.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "OSS 路径为空"));
+        }
+        if (baseName == null || baseName.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "文件名为空"));
         }
         String trimmed = sourceUrl.trim();
         if (trimmed.length() <= 500 && ossConfig.isBucketConfigured()) {
             String urlPrefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
             if (!urlPrefix.isEmpty() && trimmed.startsWith(urlPrefix)) {
-                return trimmed;
+                String folder = ossPath.endsWith("/") ? ossPath : ossPath + "/";
+                if (trimmed.contains(folder)) {
+                    return trimmed;
+                }
             }
         }
         ResolvedImage img = trimmed.regionMatches(true, 0, "data:", 0, 5)
                 ? parseDataUrl(trimmed)
                 : downloadRemoteImage(trimmed);
         String ext = extFromContentType(img.contentType());
-        String filename = userId + "_ai_" + IdUtil.fastSimpleUUID().substring(0, 8) + ext;
+        String safeBase = baseName.replaceAll("[^a-zA-Z0-9_-]", "_");
+        String filename = safeBase + ext;
         MultipartFile file = new InMemoryMultipartFile("file", filename, img.contentType(), img.bytes());
-        return uploadImage(file, userId, Constant.OSS_PATH_COMPANION_AI);
+        return uploadImage(file, userId, ossPath);
     }
 
     private record ResolvedImage(byte[] bytes, String contentType) {}
@@ -415,5 +452,84 @@ public class FileServiceImpl implements FileService {
 
     private OSS buildOssClient() {
         return new OSSClientBuilder().build(ossConfig.getEndpoint(), ossConfig.getAccessKeyId(), ossConfig.getAccessKeySecret());
+    }
+
+    private void validateVideoFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "上传视频不能为空"));
+        }
+        if (file.getSize() > VIDEO_HARD_MAX_SIZE) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "视频不能超过 " + (VIDEO_HARD_MAX_SIZE / 1024 / 1024) + "MB"));
+        }
+        String contentType = file.getContentType();
+        if (contentType == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "无法识别视频类型"));
+        }
+        String lower = contentType.toLowerCase(Locale.ROOT);
+        if (!(lower.startsWith("video/") || lower.equals("application/octet-stream"))) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅支持视频文件上传"));
+        }
+    }
+
+    /** 视频对象名: {userId}_{yyyyMMddHHmmss}.mp4 */
+    private String buildVideoObjectName(Long userId) {
+        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+                .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        return userId + "_" + timeStr + ".mp4";
+    }
+
+    /**
+     * >200MB 走 ffmpeg（优先 remux 不重编码），否则原样上传 OSS。
+     */
+    private MultipartFile maybeCompressVideo(MultipartFile file) {
+        if (file.getSize() <= VIDEO_COMPRESS_THRESHOLD) {
+            return file;
+        }
+        long t0 = System.currentTimeMillis();
+        long inMb = file.getSize() / 1024 / 1024;
+        String baseUrl = System.getenv().getOrDefault("FORUM_FFMPEG_URL", "http://ffmpeg:8099");
+        String url = baseUrl.endsWith("/") ? baseUrl + "compress" : baseUrl + "/compress";
+        log.info("视频开始压缩 name={} size={}MB ffmpeg={}", file.getOriginalFilename(), inMb, baseUrl);
+        try {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(30_000);
+            factory.setReadTimeout(1_800_000);
+            RestTemplate rt = new RestTemplate(factory);
+            org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            body.add("file", new org.springframework.core.io.InputStreamResource(file.getInputStream()) {
+                @Override
+                public String getFilename() {
+                    return file.getOriginalFilename() == null ? "upload" : file.getOriginalFilename();
+                }
+                @Override
+                public long contentLength() {
+                    return file.getSize();
+                }
+            });
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+            org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> req =
+                    new org.springframework.http.HttpEntity<>(body, headers);
+            ResponseEntity<byte[]> resp = rt.postForEntity(url, req, byte[].class);
+            byte[] bytes = resp.getBody();
+            if (!resp.getStatusCode().is2xxSuccessful() || bytes == null || bytes.length == 0) {
+                throw new ApplicationException("视频压缩失败: 空响应");
+            }
+            log.info("视频压缩完成 name={} in={}MB out={}MB 耗时={}ms",
+                    file.getOriginalFilename(), inMb, bytes.length / 1024 / 1024, System.currentTimeMillis() - t0);
+            return new InMemoryMultipartFile("file", replaceExtension(file.getOriginalFilename(), ".mp4"), "video/mp4", bytes);
+        } catch (ApplicationException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            if (e.getStatusCode().value() == 503) {
+                throw new ApplicationException("视频处理队列繁忙，请稍后再试（不要重复点击上传）");
+            }
+            log.error("视频压缩服务 HTTP {}: {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw new ApplicationException("视频压缩失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("视频压缩服务调用失败: {}", e.getMessage());
+            throw new ApplicationException("视频压缩失败: " + e.getMessage());
+        }
     }
 }

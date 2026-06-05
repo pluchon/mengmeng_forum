@@ -4,15 +4,12 @@
       <div class="auth-card">
         <div class="auth-layout">
           <div class="brand-side">
-            <div class="image-mask" />
+            <img class="brand-side__img" :src="loginBg" alt="" loading="eager" decoding="async">
+            <div class="image-mask" aria-hidden="true" />
           </div>
 
           <div class="form-side">
-            <div class="form-header-block">
-              <h1 class="site-title">{{ SITE_NAME }}</h1>
-              <p class="site-tagline">{{ SITE_TAGLINE }}</p>
-              <el-divider class="site-divider" />
-            </div>
+            <p class="form-side__brand-mobile">{{ SITE_NAME }}</p>
 
             <el-tabs v-model="loginTab" class="auth-tabs auth-tabs--stretch auth-tabs--center">
               <el-tab-pane label="验证码登录" name="phone">
@@ -79,9 +76,7 @@
                         @keyup.enter="handleLogin"
                       />
                       <el-button
-                        class="pwd-forgot-inline"
-                        link
-                        type="primary"
+                        class="code-btn pwd-forgot-inline"
                         title="找回密码"
                         @click="$router.push('/forgot-password')"
                       >
@@ -165,9 +160,7 @@
                               @keyup.enter="handleLogin"
                             />
                             <el-button
-                              class="pwd-forgot-inline"
-                              link
-                              type="primary"
+                              class="code-btn pwd-forgot-inline"
                               title="找回密码"
                               @click="$router.push('/forgot-password')"
                             >
@@ -224,7 +217,7 @@
                   </el-icon>
                   立即创建账号
                 </el-button>
-                <el-button type="primary" plain class="browse-btn browse-btn--pair" @click="$router.push('/')">
+                <el-button class="reg-btn browse-btn browse-btn--pair" @click="$router.push('/')">
                   <el-icon class="btn-icon">
                     <UserFilled />
                   </el-icon>
@@ -264,9 +257,11 @@ import { ref } from 'vue'
 import { useSignIn } from '@scripts/views/SignIn'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
 import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
-import { SITE_NAME, SITE_TAGLINE } from '@/constants/site'
+import { SITE_NAME } from '@/constants/site'
+import { LOGIN_WEBP_URL } from '@/utils/clientOss'
 
 const captchaDialogRef = ref()
+const loginBg = LOGIN_WEBP_URL
 
 const {
   AnnouncementBoard,

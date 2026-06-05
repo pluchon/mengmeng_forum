@@ -16,7 +16,9 @@ dashscope:
   model_vision: "qwen3-vl-flash"
   model_vision_fallback: "qwen3-vl-plus"
   model_rerank: "qwen3-vl-rerank"
-  model_embedding_rag: "tongyi-embedding-vision-flash"
+  model_embedding_rag: "qwen3-vl-embedding"
+  model_embedding_text_fallback: "text-embedding-v3"
+  # 勿将 embedding 配置为 qwen3-vl-rerank；对话走 compatible-mode，向量走 MultiModal/TextEmbedding
   model_image_normal: "z-image-turbo"
   model_image_premium: "wanx2.1-t2i-plus"
 
@@ -52,8 +54,23 @@ audit:
   task_state_key_prefix: "ai_audit:task_state:"
   task_state_ttl: 3600
   image_audit_timeout: 30
-  text_audit_timeout: 30
+  text_audit_timeout: 180
+  text_audit_max_chars: 12000
+  video_audit_timeout: 300
+  video_max_bytes_for_url: 104857600
+  video_frame_extract_timeout: 600
   summary_min_len: 50
+
+oss:
+  endpoint: https://oss-cn-shenzhen.aliyuncs.com
+  access_key_id: ""
+  access_key_secret: ""
+  bucket_name: ""
+  url_prefix: ""
+  root_prefix: ""
+
+ffmpeg:
+  base_url: http://ffmpeg:8099
 
 cache:
   exact_prefix: "ai_audit:cache:exact:"
@@ -64,6 +81,11 @@ cache:
   semantic_threshold: 0.7
 
 rag:
+  redis_article_ids_key: "forum_rag:article:ids"
+  redis_article_doc_prefix: "forum_rag:article:"
+  redis_user_ids_key: "forum_rag:user:ids"
+  redis_user_doc_prefix: "forum_rag:user:"
+  vector_scan_limit: 800
   max_candidates: 150
   doc_truncate: 1200
   relevance_threshold: 0.12
@@ -73,6 +95,10 @@ rag:
   embedding_weight: 0.10
   embedding_top_k: 80
   min_keyword_overlap: 0.08
+  vector_min_score: 0.12
+  vector_min_score_user: 0.22
+  vector_min_score_user_profile: 0.22
+  vector_min_score_user_semantic: 0.38
 
 image:
   max_bytes: 10485760
@@ -110,6 +136,15 @@ mcp:
   enabled: true
   tools:
     - tavily_search
+    - get_current_datetime
+    - map_geocode
+    - map_search_places
+    - map_directions
+    - map_weather
+
+baidu_map:
+  enabled: true
+  api_key: ""
 
 ai_hub:
   internal_key: ""

@@ -24,4 +24,7 @@ public class PublishArticleRequest {
     // 内容类型: 0富文本 1Markdown，默认0
     private Byte contentType = 0;
 
+    /** 帖子标签 ID，最多 5 个 */
+    private java.util.List<Long> tagIds;
+
 }

@@ -1,53 +1,25 @@
-# 本地开发：仅启动中间件 + Nginx（MySQL / Redis / PostgreSQL / RabbitMQ / Nginx）
-# 后端 Java、AI Python、前端 Vite 在宿主机自行启动。
+# 本地开发：仅 Docker 中间件（MySQL / Redis / RabbitMQ / PostgreSQL / FFmpeg）
+#
+# 以下在宿主机自行启动，本文件不包含：
+#   - Java 后端（forum-demo）          http://localhost:10086
+#   - AI 服务（ai-server）             http://localhost:5000
+#   - 用户端 / 管理端 Vite             各自 dev 端口（如 5173）
 #
 # 用法（在 nginx 目录下）：
-#   copy .env.dev.example .env
 #   docker compose -f docker-compose.dev.yaml up -d
+#   docker compose -f docker-compose.dev.yaml up -d --build   # 首次构建 FFmpeg 镜像
 #
-# 宿主机服务默认端口（与 application.yml、ai-server/config.yaml 一致）：
-#   Java 后端     http://localhost:10086
-#   AI 服务       http://localhost:5000
-#   用户端 Vite   http://localhost:5173  （可选，不用 Nginx 静态时）
-#   Nginx 入口    http://localhost        （需先 npm run build 生成 dist/）
-#   管理端        http://admin.localhost  （hosts 加 127.0.0.1 admin.localhost）
+# 或从仓库根目录：
+#   docker compose --project-directory . -f nginx/docker-compose.dev.yaml up -d --build
 #
-# 中间件映射端口（宿主机连接）：
-#   MySQL 33061  Redis 63790  RabbitMQ 56720/25672  Postgres 54320
+# 宿主机连接（与 forum-demo/application.yml、ai-server/config.yaml 默认一致）：
+#   MySQL       127.0.0.1:33061
+#   Redis       localhost:63790
+#   RabbitMQ    AMQP 56690（56720 在 Windows Hyper-V 保留段内），管理台 http://localhost:25672
+#   PostgreSQL  54320
+#   FFmpeg      http://localhost:8099  （Java 大文件压缩：FORUM_FFMPEG_URL=http://localhost:8099）
 
 services:
-
-  nginx:
-    image: nginx:1.30.1
-    container_name: forum-nginx-dev
-    restart: unless-stopped
-    ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-    volumes:
-      # 勿整目录挂载 conf.d.local，否则无法再挂 snippets 子目录
-      - ./conf.d.local/00-core.conf:/etc/nginx/conf.d/00-core.conf:ro
-      - ./conf.d.local/10-local-http.conf:/etc/nginx/conf.d/10-local-http.conf:ro
-      - ./conf.d/snippets:/etc/nginx/conf.d/snippets:ro
-      - ./dist/user:/usr/share/nginx/user:ro
-      - ./dist/admin:/usr/share/nginx/admin:ro
-      - ./logs:/var/log/nginx
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /var/run/nginx.pid && kill -0 $(cat /var/run/nginx.pid)"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - forum-dev-net
 
   mysql:
     image: mysql:9.7.0
@@ -93,8 +65,8 @@ services:
     container_name: forum-rabbitmq-dev
     restart: unless-stopped
     ports:
-      - "${RABBITMQ_AMQP_PORT:-56720}:5672"
-      - "${RABBITMQ_MGMT_PORT:-25672}:15672"
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56690}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-25672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-123456}
@@ -127,6 +99,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - forum-dev-net
+
+  ffmpeg:
+    build:
+      context: ./ffmpeg
+      dockerfile: Dockerfile
+    image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
+    container_name: forum-ffmpeg-dev
+    restart: unless-stopped
+    ports:
+      - "${FFMPEG_HOST_PORT:-8099}:8099"
     networks:
       - forum-dev-net
 

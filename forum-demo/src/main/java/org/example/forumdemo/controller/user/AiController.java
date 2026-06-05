@@ -14,8 +14,8 @@ import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
 import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
-import org.example.forumdemo.service.AiPointsBillingService;
-import org.example.forumdemo.service.CompanionMemoryService;
+import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
+import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
 import org.example.forumdemo.service.interfaces.file.FileService;
@@ -105,32 +105,40 @@ public class AiController {
         if (modelCode == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        aiPointsBillingService.ensureBalance(user,
-                aiPointsBillingService.estimatePoints(modelCode,
-                        Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                        Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(user,
+                    aiPointsBillingService.estimatePoints(modelCode,
+                            Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                            Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+        }
 
         boolean reservedDeepseekFree = false;
         boolean reservedAdvanced = false;
         try {
-            if (K_DEEPSEEK_FLASH.equals(kind) || K_DEEPSEEK_PRO.equals(kind)) {
-                if (!aiQuotaService.hasUnlimitedDeepseek(user)) {
-                    aiQuotaService.consumeDeepseekWrite(user);
-                    reservedDeepseekFree = true;
+            if (!usePoints) {
+                if (K_DEEPSEEK_FLASH.equals(kind) || K_DEEPSEEK_PRO.equals(kind)) {
+                    if (!aiQuotaService.hasUnlimitedDeepseek(user)) {
+                        aiQuotaService.consumeDeepseekWrite(user);
+                        reservedDeepseekFree = true;
+                    }
+                } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)
+                        || K_GEMINI_PRO.equals(kind)
+                        || K_CLAUDE_HAIKU.equals(kind) || K_CLAUDE_SONNET.equals(kind)) {
+                    aiQuotaService.consumeAdvancedLlm(user);
+                    reservedAdvanced = true;
+                } else {
+                    throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
                 }
-            } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)
-                    || K_GEMINI_PRO.equals(kind)
-                    || K_CLAUDE_HAIKU.equals(kind) || K_CLAUDE_SONNET.equals(kind)) {
-                aiQuotaService.consumeAdvancedLlm(user);
-                reservedAdvanced = true;
-            } else {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
             }
             Map<String, Object> data = aiHubService.write(user.getId(), req);
             AiModelUsageDTO usage = parseUsageFromData(data, modelCode);
-            int balance = aiPointsBillingService.charge(user, "ai_write", usage, null, Constant.POINTS_SOURCE_AI_COMPANION);
-            data.put("pointsCost", aiPointsBillingService.calcPoints(usage));
-            data.put("balanceAfter", balance);
+            Map<String, Object> billing = aiPointsBillingService.bill(
+                    user, "ai_write", usage, null, Constant.POINTS_SOURCE_AI_COMPANION, usePoints);
+            data.put("pointsCost", billing.get("pointsCost"));
+            data.put("balanceAfter", billing.get("balanceAfter"));
+            data.put("billingMode", billing.get("billingMode"));
+            data.put("usageStats", billing.get("usageStats"));
             return Result.success(data);
         } catch (ApplicationException ex) {
             releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
@@ -189,25 +197,38 @@ public class AiController {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         String modelCode = "premium".equals(q) ? Constant.AI_MODEL_IMAGE_PREMIUM : Constant.AI_MODEL_IMAGE_NORMAL;
-        aiPointsBillingService.ensureBalance(user, aiPointsBillingService.estimatePoints(modelCode, 0, 0, 1));
+        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(user, aiPointsBillingService.estimatePoints(modelCode, 0, 0, 1));
+        }
 
         boolean reservedNormal = false;
         boolean reservedPremium = false;
         try {
-            if ("normal".equals(q)) {
-                aiQuotaService.consumeImageNormal(user);
-                reservedNormal = true;
-            } else {
-                aiQuotaService.consumeImagePremium(user);
-                reservedPremium = true;
+            if (!usePoints) {
+                if ("normal".equals(q)) {
+                    aiQuotaService.consumeImageNormal(user);
+                    reservedNormal = true;
+                } else {
+                    aiQuotaService.consumeImagePremium(user);
+                    reservedPremium = true;
+                }
             }
-            Long dbSessionId = companionMemoryService.ensureSession(user.getId(), "drawing", req.getSessionId());
+            boolean ephemeral = Boolean.TRUE.equals(req.getEphemeral());
+            Long dbSessionId = null;
+            if (!ephemeral) {
+                dbSessionId = companionMemoryService.ensureSession(user.getId(), "drawing", req.getSessionId());
+            }
             Map<String, Object> data = aiHubService.image(user.getId(), req);
             AiModelUsageDTO usage = parseUsageFromData(data, modelCode);
             if (usage.getImageCount() == null || usage.getImageCount() < 1) {
                 usage = aiPointsBillingService.usageForImage(modelCode, 1);
             }
-            int balance = aiPointsBillingService.charge(user, "companion_image", usage, String.valueOf(dbSessionId), Constant.POINTS_SOURCE_AI_IMAGE);
+            String chargeRef = ephemeral
+                    ? (req.getSessionId() != null ? req.getSessionId() : "ephemeral-image")
+                    : String.valueOf(dbSessionId);
+            Map<String, Object> billing = aiPointsBillingService.bill(
+                    user, "companion_image", usage, chargeRef, Constant.POINTS_SOURCE_AI_IMAGE, usePoints);
             String url = data.get("url") != null ? String.valueOf(data.get("url")) : null;
             if (url == null && data.get("payload") instanceof Map<?, ?> pm) {
                 Object u = pm.get("url");
@@ -215,18 +236,36 @@ public class AiController {
                     url = String.valueOf(u);
                 }
             }
-            companionMemoryService.appendTextMessage(dbSessionId, "user", req.getPrompt().trim());
+            if (!ephemeral && dbSessionId != null) {
+                companionMemoryService.appendTextMessage(dbSessionId, "user", req.getPrompt().trim());
+            }
             if (url == null || url.isBlank()) {
                 log.warn("AI 生图返回空 URL userId={} quality={} dataKeys={}", user.getId(), q, data.keySet());
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE,
                         "AI 未返回图片地址，请检查进阶生图密钥(HUANAPI_IMAGE_KEY)或改用普通档"));
             }
-            String storedUrl = fileService.uploadCompanionAiImageFromRemote(user.getId(), url);
+            String storedUrl;
+            long ts = System.currentTimeMillis();
+            if (req.getArticleId() != null && req.getArticleId() > 0) {
+                String base = user.getId() + "_" + req.getArticleId() + "_" + ts;
+                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
+                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_ARTICLE, base);
+            } else {
+                String sid = (req.getSessionId() != null && !req.getSessionId().isBlank())
+                        ? req.getSessionId().trim() : "session";
+                String base = user.getId() + "_" + sid + "_" + ts;
+                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
+                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base);
+            }
             data.put("url", storedUrl);
-            companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
-            data.put("sessionId", String.valueOf(dbSessionId));
-            data.put("pointsCost", aiPointsBillingService.calcPoints(usage));
-            data.put("balanceAfter", balance);
+            if (!ephemeral && dbSessionId != null) {
+                companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
+            }
+            data.put("sessionId", chargeRef);
+            data.put("pointsCost", billing.get("pointsCost"));
+            data.put("balanceAfter", billing.get("balanceAfter"));
+            data.put("billingMode", billing.get("billingMode"));
+            data.put("usageStats", billing.get("usageStats"));
             data.put("modelCode", modelCode);
             return Result.success(data);
         } catch (ApplicationException ex) {
@@ -274,6 +313,7 @@ public class AiController {
             }
             Object est = um.get("estimated");
             dto.setEstimated(est instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(est)));
+            aiPointsBillingService.applyLatencyFromMap(dto, um);
         }
         return aiPointsBillingService.normalizeUsage(dto, fallbackModel);
     }

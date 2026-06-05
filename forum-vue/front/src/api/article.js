@@ -1,4 +1,5 @@
 import request from './request'
+import { useUserStore } from '@/stores/user'
 
 // 按版块获取帖子列表（分页）
 export function getArticleList(data) {
@@ -60,6 +61,60 @@ export function getAiSummary(articleId) {
   return request({ url: '/article/getSummary', method: 'get', params: { articleId } })
 }
 
+/** 流式生成 AI 智能导读（SSE） */
+export function streamArticleGuide(articleId, { onChunk, onDone, onError } = {}) {
+  const userStore = useUserStore()
+  const ctrl = new AbortController()
+  const url = `/article/streamGuide?articleId=${encodeURIComponent(articleId)}`
+  fetch(url, {
+    headers: userStore.token ? { Authorization: userStore.token } : {},
+    signal: ctrl.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        onError?.(`请求失败 (${res.status})`)
+        onDone?.()
+        return
+      }
+      const reader = res.body?.getReader()
+      if (!reader) {
+        onError?.('浏览器不支持流式响应')
+        onDone?.()
+        return
+      }
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n')
+        buf = parts.pop() || ''
+        for (const line of parts) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const payload = trimmed.slice(5).trim()
+          if (payload === '[DONE]') {
+            onDone?.()
+            return
+          }
+          try {
+            const o = JSON.parse(payload)
+            if (o.text) onChunk?.(o.text)
+          } catch {
+            /* ignore partial json */
+          }
+        }
+      }
+      onDone?.()
+    })
+    .catch((err) => {
+      if (err?.name !== 'AbortError') onError?.(err?.message || '网络异常')
+      onDone?.()
+    })
+  return () => ctrl.abort()
+}
+
 // 按用户获取帖子列表 (包含用户信息)
 export function getArticleListWithUser(params) {
   return request({ url: '/article/getArticleListByUserIdWithPageAndUserInfo', method: 'get', params })
@@ -97,6 +152,29 @@ export function uploadArticleImage(file, { onUploadProgress } = {}) {
     data: formData,
     onUploadProgress,
   })
+}
+
+// 上传帖子视频（单个）
+export function uploadArticleVideo(file, { onUploadProgress } = {}) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/file/uploadArticleVideo',
+    method: 'post',
+    data: formData,
+    timeout: 600000,
+    onUploadProgress,
+  })
+}
+
+// 绑定帖子视频 URL（切换为视频帖）
+export function setArticleVideo(articleId, videoUrl) {
+  return request({ url: '/article/setArticleVideo', method: 'post', params: { articleId, videoUrl } })
+}
+
+// 清空帖子视频（切回图片帖）
+export function clearArticleVideo(articleId) {
+  return request({ url: '/article/clearArticleVideo', method: 'post', params: { articleId } })
 }
 
 // 获取最新点赞用户

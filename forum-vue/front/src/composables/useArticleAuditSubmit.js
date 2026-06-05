@@ -2,6 +2,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { submitForAudit } from '@/api/article'
 import { useUserStore } from '@/stores/user'
 
+/** 提交审核确认框：灰色扁平主按钮 */
+export const auditSubmitMessageBoxOptions = {
+  customClass: 'audit-submit-msgbox',
+  confirmButtonClass: 'audit-submit-msgbox__confirm',
+  cancelButtonClass: 'audit-submit-msgbox__cancel',
+}
+
 /**
  * 提交异步审核：已绑定邮箱时可选择邮件通知，否则仅站内信确认。
  * @returns {{ ok: boolean, taskId?: string, message?: string }}
@@ -21,6 +28,7 @@ export async function submitArticleForAuditWithPrompt(articleId) {
           cancelButtonText: '否，仅站内信',
           type: 'info',
           distinguishCancelAndClose: true,
+          ...auditSubmitMessageBoxOptions,
         },
       )
       notifyEmail = true
@@ -33,6 +41,7 @@ export async function submitArticleForAuditWithPrompt(articleId) {
           cancelButtonText: '取消',
           type: 'info',
           distinguishCancelAndClose: true,
+          ...auditSubmitMessageBoxOptions,
         },
       )
     }
@@ -46,5 +55,6 @@ export async function submitArticleForAuditWithPrompt(articleId) {
     ElMessage.error(res.message || '提交审核失败')
     return { ok: false, message: res.message }
   }
+  ElMessage.success('已提交审核，结果将通过站内信或邮件通知您')
   return { ok: true, taskId: res.data }
 }

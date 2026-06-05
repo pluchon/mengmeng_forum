@@ -65,6 +65,27 @@
               <span class="editor-req">*</span> 内容
             </div>
             <div class="editor-content-head-tools">
+            <div class="editor-media-toggle">
+              <button
+                type="button"
+                class="editor-media-toggle__item"
+                :class="{ 'is-active': mediaMode === 'gallery' }"
+                @click="setMediaMode('gallery')"
+              >
+                <el-icon><Picture /></el-icon>
+                笔记相册
+              </button>
+              <button
+                type="button"
+                class="editor-media-toggle__item"
+                :class="{ 'is-active': mediaMode === 'video' }"
+                @click="setMediaMode('video')"
+              >
+                <el-icon><VideoCamera /></el-icon>
+                笔记视频
+              </button>
+              <span class="editor-media-toggle__thumb" :class="{ 'is-right': mediaMode === 'video' }" />
+            </div>
             <ArticleAiWriteAssist
               :editor-mode="editorMode"
               :title="form.title"
@@ -91,31 +112,20 @@
               >
                 Markdown
               </button>
+              <span class="editor-mode-seg__thumb" :class="{ 'is-right': editorMode === 'markdown' }" />
             </div>
             </div>
           </div>
 
-          <div v-if="editorMode === 'rich'" class="editor-workspace">
-            <div class="editor-main-pane">
-              <div class="editor-container rich-container">
-                <WangEditor
-                  v-model="form.content"
-                  min-height="300px"
-                  toolbar-suppress-image
-                  toolbar-slim
-                />
-              </div>
-            </div>
-            <aside class="editor-gallery-pane" aria-label="笔记相册">
-              <ArticleCreateGallerySection
-                variant="grid"
-                :urls="galleryUrls"
-                :max-count="galleryMaxCount"
-                :can-add="canAddGallery"
-                @open="openGalleryPicker"
-                @remove="removeGalleryAt"
+          <div v-if="editorMode === 'rich'" class="editor-workspace editor-workspace--single">
+            <div class="editor-container rich-container">
+              <WangEditor
+                v-model="form.content"
+                min-height="300px"
+                toolbar-suppress-image
+                toolbar-slim
               />
-            </aside>
+            </div>
           </div>
 
           <div v-else class="editor-md-workspace">
@@ -140,6 +150,7 @@
                   :rows="16"
                   placeholder="分享你的故事吧…"
                   class="md-input"
+                  @keydown="onMdKeydown"
                 />
                 <div class="md-preview prose" v-html="renderedPreview" />
               </div>
@@ -147,8 +158,19 @@
           </div>
         </div>
 
-        <div v-if="editorMode === 'markdown'" class="editor-field-card editor-gallery-card--below">
+        <div class="editor-field-card editor-tag-card">
+          <ArticleTagEditor
+            v-model="tagIds"
+            :board-id="form.boardId"
+            :title="form.title"
+            :content="form.content"
+            :label="mediaMode === 'video' ? '视频标签' : '帖子标签'"
+          />
+        </div>
+
+        <div class="editor-field-card editor-gallery-card--below">
           <ArticleCreateGallerySection
+            v-if="mediaMode === 'gallery'"
             variant="strip"
             :urls="galleryUrls"
             :max-count="galleryMaxCount"
@@ -160,6 +182,16 @@
             @scroll="updateGalleryStripState"
             @bind-ref="bindGalleryItemsRef"
           />
+          <ArticleCreateVideoSection
+            v-else
+            variant="strip"
+            :url="videoUrl"
+            :uploading="videoUploading"
+            :progress="videoUploadProgress"
+            :upload-error="videoUploadError"
+            @open="openVideoPicker"
+            @remove="removeVideo"
+          />
         </div>
       </el-form>
 
@@ -170,6 +202,13 @@
         multiple
         class="gallery-file-input"
         @change="onGalleryFilesSelected"
+      >
+      <input
+        ref="videoInputRef"
+        type="file"
+        accept="video/*"
+        class="gallery-file-input"
+        @change="onVideoFileSelected"
       >
     </div>
 
@@ -185,9 +224,11 @@
 </template>
 
 <script setup>
-import { InfoFilled, Picture } from '@element-plus/icons-vue'
+import { InfoFilled, Picture, VideoCamera } from '@element-plus/icons-vue'
 import ArticleCreateGallerySection from '@/components/article/ArticleCreateGallerySection.vue'
+import ArticleCreateVideoSection from '@/components/article/ArticleCreateVideoSection.vue'
 import ArticleAiWriteAssist from '@/components/article/ArticleAiWriteAssist.vue'
+import ArticleTagEditor from '@/components/article/ArticleTagEditor.vue'
 import { useArticleCreate } from '@scripts/views/ArticleCreate'
 
 const {
@@ -203,6 +244,13 @@ const {
   galleryStripFadeLeft,
   galleryStripOverflow,
   galleryUrls,
+  mediaMode,
+  videoUrl,
+  videoUploading,
+  videoUploadProgress,
+  videoUploadError,
+  galleryUploading,
+  videoInputRef,
   handleBoardChange,
   handleCancel,
   handleMdFileSelected,
@@ -215,13 +263,113 @@ const {
   mdWrap,
   onGalleryFilesSelected,
   openGalleryPicker,
+  openVideoPicker,
+  removeVideo,
+  onVideoFileSelected,
   removeGalleryAt,
   renderedPreview,
   selectedBoard,
   setEditorMode,
+  setMediaMode,
+  onMdKeydown,
   submitting,
+  tagIds,
   updateGalleryStripState,
 } = useArticleCreate()
 </script>
 
 <style scoped src="@/assets/styles/editor.css"></style>
+<style scoped>
+.editor-media-toggle {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(29, 33, 41, 0.06);
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  overflow: hidden;
+}
+.editor-media-toggle__item {
+  position: relative;
+  z-index: 2;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: #4a4a4a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.editor-media-toggle__item.is-active {
+  color: #1d2129;
+}
+.editor-media-toggle__thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 20px rgba(29, 33, 41, 0.12);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.editor-media-toggle__thumb.is-right {
+  transform: translateX(100%);
+}
+
+.editor-mode-seg {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border-tertiary, #e5e6eb);
+  background: rgba(29, 33, 41, 0.04);
+}
+
+.editor-mode-seg-btn {
+  position: relative;
+  z-index: 2;
+  border-radius: 18px !important;
+  background: transparent !important;
+  color: var(--color-text-secondary, #86909c) !important;
+}
+
+.editor-mode-seg-btn.is-active {
+  color: #1d2129 !important;
+  background: transparent !important;
+}
+
+.editor-mode-seg__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  border-radius: 18px;
+  background: #d4537e;
+  box-shadow: 0 6px 16px rgba(212, 83, 126, 0.28);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+  pointer-events: none;
+}
+
+.editor-mode-seg__thumb.is-right {
+  transform: translateX(100%);
+}
+
+.editor-mode-seg-btn.is-active {
+  color: #fff !important;
+}
+</style>

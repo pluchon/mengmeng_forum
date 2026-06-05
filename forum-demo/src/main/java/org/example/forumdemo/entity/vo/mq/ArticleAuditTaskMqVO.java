@@ -30,6 +30,8 @@ public class ArticleAuditTaskMqVO {
     private String coverUrl;
     /** 相册图 URL 数组; 与封面合并送 vl 模型审核 */
     private List<String> imageUrls;
+    /** 视频 URL; media_type=1 时由 qwen3-vl-plus 审核 */
+    private String videoUrl;
     /** 提交时间戳(ms); 用于 Python 侧观测 + 兜底超时丢弃 */
     private Long submittedAt;
 }

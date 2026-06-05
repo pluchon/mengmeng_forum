@@ -1,12 +1,6 @@
-***
+## 萌部落社区 v1.2
 
-[toc]
-
-***
-
-## 说明
-
-> 本项目只是纯粹出于个人兴趣爱好做的，实际生产环境这项目就是垃圾桶里的
+> 本项目出于个人兴趣爱好搭建；线上地址仅供学习交流。
 
 ## 部分界面演示
 
@@ -22,67 +16,80 @@
 
 ![image-20260528204818241](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528204818579.png)
 
+![image-20260531175200788](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260531180048907.png)
+
+![image-20260531175245223](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260531180048945.png)
+
 ***
 
-线上真实地址：
+线上地址：
+
 - 用户端：`https://www.nuonuoya.cn`
 - 管理端：`https://admin.nuonuoya.cn`
 
-> 这是一个前后端分离技术社区项目：发帖、评论、私信、抽奖、搜索都具备；帖子和图片在发布前会经过 AI 审核；多实例部署时私信支持跨实例实时推送。
+> 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具。
 
 ---
 
 ## 目录
 
-- 项目概览
-- 整体架构
-- 功能一览
-- 核心流程（重点讲得清）
-- 本地开发（可选）
-- 生产部署（Docker Compose）
-- 配置说明（环境变量）
-- 常见问题
-- 仓库结构
+- [v1.2 更新摘要](#v12-更新摘要)
+- [项目概览](#项目概览)
+- [整体架构](#整体架构)
+- [功能一览](#功能一览)
+- [核心流程](#核心流程)
+- [本地开发](#本地开发)
+- [生产部署](#生产部署)
+- [配置说明](#配置说明)
+- [常见问题](#常见问题)
+- [仓库结构](#仓库结构)
+
+---
+
+## v1.2 更新摘要
+
+- **视频帖**：发帖支持视频模式；大文件（>200MB）走 FFmpeg 服务压缩/重封装后上传 OSS
+- **帖子标签**：按版块绑定标签，搜索与详情展示标签
+- **审核增强**：文本 → 图片 → **视频** 三阶段；私有 OSS 视频自动签名 URL；超大视频抽帧兜底审核
+- **看板娘**：登录用户会话落库；RAG 推荐站内帖子；Tavily 搜索 + 百度地图 MCP
+- **部署脚本**：`package/up.sh` 日常更新（权限修复、`docker load`、强制重建）；`start.sh` 首次部署 / 初始化库
 
 ---
 
 ## 项目概览
 
-这个仓库包含 4 个主要部分：
-
-- **`forum-demo`**：Java 后端（Spring Boot），提供业务 API、鉴权、消息消费、WebSocket、审核状态流转等
-- **`ai-server`**：Python 服务，负责 AI 审核 / AI 写作 / 看板娘聊天 / 智能搜索（语义排序、RAG 相关能力）
-- **`forum-vue`**：用户端前端（Vue 3）
-- **`forum-vue-admin`**：管理端前端（Vue 3 + Arco）
-- **`nginx`**：打包与部署（Nginx 配置、compose、脚本）
+| 目录 | 说明 |
+|------|------|
+| `forum-demo` | Java 后端（Spring Boot）：业务 API、鉴权、MQ、WebSocket、审核状态 |
+| `ai-server` | Python：AI 审核 / 写作 / 看板娘 / 语义搜索 / RAG |
+| `forum-vue` | 用户端（Vue 3 + Vite 6） |
+| `forum-vue-admin` | 管理端（Vue 3 + Arco） |
+| `nginx` | Nginx 配置、Docker Compose、打包脚本、`ffmpeg` 视频服务 |
 
 ---
 
 ## 整体架构
-
-系统的主链路大致是这样：
-
-- 用户端 / 管理端 → **Nginx**（静态资源 + 反向代理）
-- Nginx → **Java 后端**（业务 API、WebSocket）
-- Java 后端 → **MySQL**（主业务数据）
-- Java 后端 → **Redis**（缓存、排行榜、发布订阅）
-- Java 后端 → **RabbitMQ**（发帖审核、异步任务解耦）
-- Java 后端 → **Python AI 服务**（审核、写作、搜索、聊天）
-- Python AI 服务 → **PostgreSQL**（LangGraph 会话/状态持久化）
 
 ```mermaid
 flowchart TB
   U[用户端 Web] --> N[Nginx]
   A[管理端 Web] --> N
   N --> J[Java 后端 forum-demo]
+  N --> F[FFmpeg 视频服务]
 
   J --> M[(MySQL)]
   J --> R[(Redis)]
   J --> Q[(RabbitMQ)]
+  J --> F
 
-  J --> P[Python AI 服务 ai-server]
+  J --> P[Python AI ai-server]
   P --> PG[(PostgreSQL)]
+  P --> OSS[(阿里云 OSS)]
 ```
+
+- 用户端 / 管理端 → **Nginx**（静态 `dist/` + 反代 API）
+- Java → MySQL / Redis / RabbitMQ / FFmpeg / ai-server
+- ai-server → PostgreSQL（LangGraph checkpoint）、DashScope、OSS 签名读私有媒体
 
 ---
 
@@ -90,386 +97,244 @@ flowchart TB
 
 ### 用户端
 
-- **发帖 / 评论 / 楼中楼**：支持富文本 / Markdown（按项目实现）
-- **发帖审核**：提交后先进入“审核中”，通过才发布，失败会给出原因
-- **图片上传**：服务端压缩 + AI 图片审核，通过后才上传 OSS
-- **私信聊天**：WebSocket 实时消息，支持跨实例推送
-- **积分体系**：签到、商城、抽奖等带来积分增减（以你的业务为准）
-- **抽奖活动**：扣积分、扣库存、防超卖，支持软/硬保底
-- **热帖榜**：实时加分的排行榜
-- **智能搜索**：先走数据库快搜，必要时再走 AI 语义增强
+- 发帖 / 评论 / 楼中楼（富文本 / Markdown）
+- **图文帖 / 视频帖**、封面、相册（最多 15 张）
+- **帖子标签**（版块内申请 / 绑定）
+- 发帖 **AI 异步审核**（通过才发布）
+- 图片压缩 + AI 审核 + OSS；视频 FFmpeg 处理后上传 OSS
+- 私信 WebSocket、积分 / 签到 / 商城 / 抽奖、热帖榜
+- 智能搜索（DB 快搜 + AI 语义增强）
+- 看板娘：多模型、会话历史、站内帖子 RAG、联网与地图工具
 
 ### 管理端
 
-- **内容管理**：帖子、评论、公告、抽奖活动/奖品等（以你的页面为准）
-- **系统管理**：字典、菜单、部门、角色（RBAC 表结构已预置）
+- 帖子 / 评论 / 公告 / 抽奖等内容管理
+- 系统字典、菜单、部门、角色（RBAC 预置表）
 
 ---
 
 ## 核心流程
 
-### 1) 行为验证码 + 一次性票据（防刷）
+### 1) 发帖审核（异步 + 幂等）
 
-目的很简单：短信/邮件是要花钱的，注册/找回密码也不能让脚本随便刷。
+1. 用户提交 → Java 状态改为「审核中」，生成 `taskId`，投递 `q-audit-article`
+2. Python worker 消费：`validate_text` → `validate_images` → **`validate_video`**（有视频时）→ `summarize`
+3. 结果回 MQ → Java 条件更新状态并通知用户
 
-做法分两层：
+**视频审核要点（v1.2）**
 
-- **先过行为验证码**：通过后签发一张“一次性票据”
-- **再做频率限制**：按手机号/邮箱做冷却与窗口限额
-
-一次性票据的核心是两点：
-
-- 票据写入 Redis，**短过期**
-- 使用时校验通过后立刻删除，**同一张票用一次就失效**
+- DashScope 需能访问视频 URL；**私有 OSS** 由 ai-server 用 `ALIYUN_*` / `OSS_*` 生成**签名 URL**
+- 视频 >100MB 或 DashScope 拉取失败时：FFmpeg **抽帧** → 走图片审核兜底
+- ai-server 容器须配置与 Java 相同的 OSS 环境变量（见 `docker-compose.yaml`）
 
 ```mermaid
 sequenceDiagram
   participant FE as 前端
-  participant BE as Java后端
-  participant Redis as Redis
-
-  FE->>BE: 1) 提交滑块验证结果
-  BE->>Redis: 写入 ticket(UUID, TTL=2min, purpose)
-  BE-->>FE: 返回 ticket
-
-  FE->>BE: 2) 携带 ticket 调注册/发码
-  BE->>Redis: 校验 ticket + 删除(用一次就失效)
-  alt 票据有效
-    BE-->>FE: 继续业务(发码/注册)
-  else 票据无效/已用
-    BE-->>FE: 拒绝
-  end
-```
-
----
-
-### 2) 积分抽奖防超卖（扣积分 + 扣库存都要稳）
-
-抽奖里最怕两件事：
-
-- **积分扣成负数**
-- **限量奖品发超了**
-
-这里的处理思路是：关键扣减都交给数据库做“带条件的更新”，让它天然原子。
-
-- 扣积分：`points >= cost` 才能扣，影响行数为 0 就直接失败
-- 扣库存：`stock > 0` 才能扣，失败就换个奖品重新抽（有限次数）
-- 同一用户并发抽奖：在事务内锁定用户行，避免同时扣两次
-
-硬保底 / 软保底：
-
-- **硬保底**：连续 N 次没中头奖，下一次直接走保底池（保证命中）
-- **软保底**：十连在最后一抽做兜底（保证至少出一个稀有）
-
-```mermaid
-flowchart TD
-  S[开始抽奖] --> L[事务内锁用户行: SELECT FOR UPDATE]
-  L --> P[扣积分: UPDATE where points>=cost]
-  P -->|影响行数=0| F1[余额不足 结束]
-  P -->|扣成功| D{单抽/十连}
-  D --> C[按权重抽奖品]
-  C --> K[扣库存: UPDATE where stock>0]
-  K -->|失败| R1[换奖品重试]
-  K -->|成功| W[写中奖记录/发放积分或VIP]
-  W --> E[提交事务 结束]
-```
-
----
-
-### 3) 发帖审核工作流（异步 + 幂等）
-
-AI 审核慢，不能让用户提交发帖接口卡住。
-
-所以发帖审核采用“异步工作流”：
-
-1. 用户提交后，Java 先把帖子状态改为“审核中”，生成任务 ID
-2. Java 把任务投递到 MQ，接口立刻返回（用户体验不卡）
-3. Python worker 消费消息，跑审核流程（文字→图片→摘要）
-4. 审核结果再回到 MQ，Java 消费后更新帖子状态、通知用户
-
-关键点：
-
-- **不怕重复回调**：用“状态 + 任务 ID”做条件更新，结果只会成功一次
-- **不怕短暂失败**：消费者手动 ACK、失败重试；超时可以做补偿扫描
-
-```mermaid
-sequenceDiagram
-  participant FE as 前端
-  participant J as Java后端
+  participant J as Java
   participant MQ as RabbitMQ
-  participant P as Python审核(ai-server)
+  participant P as ai-server
+  participant DS as DashScope
 
-  FE->>J: 提交帖子
-  J->>J: 状态=审核中 + 生成taskId
-  J->>MQ: 投递审核任务(taskId,内容)
-  J-->>FE: 立刻返回(不等待AI)
-
-  MQ->>P: worker消费任务
-  P->>P: 审核文字/图片/生成摘要
-  P->>MQ: 回传审核结果(taskId,结论)
-
-  MQ->>J: Java消费结果
-  J->>J: 条件更新(状态=审核中 && taskId匹配)
-  J-->>FE: 通知/刷新后看到发布或驳回
+  FE->>J: 提交审核
+  J->>MQ: 审核任务(含 videoUrl)
+  MQ->>P: worker 消费
+  P->>P: 文本/图片审核
+  P->>P: OSS 签名 videoUrl
+  P->>DS: 视频审核(或抽帧兜底)
+  P->>MQ: 审核结果
+  MQ->>J: 更新帖子状态
 ```
+
+### 2) 视频上传
+
+- ≤200MB：直传 OSS
+- \>200MB：Java → FFmpeg（优先 remux，否则 ultrafast 重编码）→ OSS
+- Nginx `/file/` 代理超时 3600s
+
+### 3) 行为验证码 + 一次性票据
+
+滑块通过后签发 Redis 短 TTL 票据；注册 / 发码须带票据且**用一次即删**。
+
+### 4) 积分抽奖防超卖
+
+事务内 `SELECT FOR UPDATE`；扣积分 `points >= cost`、扣库存 `stock > 0` 条件更新；硬 / 软保底。
+
+### 5) 私信跨实例推送
+
+写库后 Redis PubSub 广播；持有目标 WebSocket 的实例负责推送。
+
+### 6) 热帖榜
+
+Redis ZSet；行为 `ZINCRBY`；删帖 / 驳回 `ZREM`。
+
+### 7) 智能搜索
+
+先 DB `LIKE`，不足时 ai-server 语义排序 / RAG。
 
 ---
 
-### 4) 私信跨实例推送（Redis 广播）
+## 本地开发
 
-单机推送很简单：用户 A 发给 B，服务端拿到 B 的 WebSocket 连接就推。
-
-但多实例部署时，B 的连接在哪台机器上是不确定的。解决办法是：
-
-- 写库后发布一条“推送事件”到 Redis（广播）
-- 所有实例都能收到
-- **真正持有 B 连接的那台**负责推送，其它实例忽略
-
-这样做的好处是：无论用户连到哪台机器，都能实时收到消息。
-
-```mermaid
-flowchart LR
-  A[用户A] --> J1[Java实例1]
-  B[用户B] --> J2[Java实例2: 持有B的WS连接]
-
-  J1 --> DB[(MySQL 写消息)]
-  J1 --> Pub[Redis 广播: PubSub]
-  Pub --> J1
-  Pub --> J2
-
-  J2 --> WS[WebSocket 推送给B]
-```
-
----
-
-### 5) 热帖榜（ZSet）
-
-热帖榜用 Redis 的 ZSet 存：
-
-- member：帖子 ID
-- score：热度分
-
-点赞/浏览/回复/收藏等行为发生时，直接 `ZINCRBY` 加分。
-
-删帖/驳回/下线时从榜单移除（并且可以定时全量重算做兜底）。
-
-```mermaid
-flowchart TD
-  E[用户行为: 浏览 点赞 回复 收藏] --> Z[Redis ZSet: hot_rank]
-  Z --> I[ZINCRBY 加分]
-  D[删帖/驳回] --> R[ZREM 移除]
-  T[定时任务兜底] --> Recalc[从DB重算并写回ZSet]
-```
-
----
-
-### 6) 智能搜索（先快搜，后增强）
-
-搜索不是上来就 AI：
-
-1. **先走数据库**：标题模糊匹配，快、稳定、成本低
-2. **必要时走 AI**：当结果太少/不准确，才用语义增强做排序或召回
-
-一句话解释：**普通搜索用“快的”，找不到再用“聪明的”。**
-
-```mermaid
-flowchart TD
-  Q[输入关键词] --> DB[数据库 LIKE 快搜]
-  DB -->|结果够用| R1[直接返回]
-  DB -->|结果太少或无| C[取候选: 标题 摘要]
-  C --> AI[调用 ai-server: 语义排序]
-  AI --> R2[返回更相关的结果]
-```
-
----
-
-### 7) 图片压缩 + AI 审核 + OSS 上传（同一条流水线）
-
-图片上传做三件事：
-
-- **压缩**：体积太大就逐级压缩，压到合适为止（不写临时文件）
-- **AI 审核**：违规图不允许进入 OSS
-- **上传 OSS**：统一目录、统一命名策略
-
-这套流水线的目标就是：图片更省、更快、更安全。
-
-```mermaid
-flowchart TD
-  U[用户上传图片] --> V[校验格式和大小]
-  V -->|不通过| X[拒绝]
-  V --> C[阶梯压缩]
-  C --> A[AI 图片审核]
-  A -->|违规| X2[拒绝]
-  A -->|通过| O[上传 OSS]
-  O --> OK[返回 URL]
-```
-
----
-
-## 本地开发（可选）
+### 中间件（Docker）
 
 ```powershell
-# 仅中间件 + Nginx（Java / AI / 前端在宿主机）
 cd nginx
-copy .env.dev.example .env
-docker compose -f docker-compose.dev.yaml up -d
+docker compose -f docker-compose.dev.yaml up -d --build
 ```
 
-用户端：`forum-vue/front` → `npm install` → `npm run dev`（默认 `http://localhost:5173`）。  
-管理端：`forum-vue-admin/admin` → 同样方式。  
-后端：`forum-demo` 默认 `http://localhost:10086`。  
-AI：`ai-server` 见该目录 `config.yaml` / `config.docker.yaml`。
+| 服务 | 宿主机端口 |
+|------|------------|
+| MySQL | 33061 |
+| Redis | 63790 |
+| RabbitMQ AMQP | **56690**（Windows Hyper-V 保留 56720，勿改回） |
+| RabbitMQ 管理台 | 25672 |
+| PostgreSQL | 54320 |
+| FFmpeg | 8099 |
 
-`nginx/conf.d.local/` 将 API 反代到 `host.docker.internal:10086`；生产用 `conf.d/`。
+### 应用（宿主机）
+
+| 模块 | 目录 | 默认地址 |
+|------|------|----------|
+| 用户端 | `forum-vue/front` | `npm run dev` → 5173 |
+| 管理端 | `forum-vue-admin/admin` | 各自 dev 端口 |
+| 后端 | `forum-demo` | `http://localhost:10086` |
+| AI | `ai-server` | `http://localhost:5000` |
+
+**IDEA 打开后端**：File → Open → 选 **`forum-demo`** 文件夹（或 `pom.xml`），Maven Reload，开启 Lombok Annotation Processors。
+
+**本地密钥（勿提交仓库）**
+
+```powershell
+copy scripts\dev-secrets.ps1.example scripts\dev-secrets.ps1
+# 编辑 dev-secrets.ps1 填入 Key
+. .\scripts\load-dev-env.ps1
+```
+
+**数据库**：结构变更后整库重跑 `forum-demo/src/main/resources/sql/create.sql`（会清空数据）。PostgreSQL 会话表：`postgres_ai_session.sql`；开发清空 checkpoint：`postgres_reset_dev.sql`。
+
+**RAG 向量**：`model_embedding_rag` 默认 `qwen3-vl-embedding`；`qwen3-vl-rerank` 仅用于重排，不能当 embedding。
 
 ---
 
-## 生产部署（Docker Compose）
+## 生产部署
 
-栈：**Vite 构建前端 → Docker 打镜像 → Compose 编排 → Nginx 反代 + 挂载 `dist/`**。服务器**只上传** `nginx/package/` 整目录，不要上传整个 `nginx/` 或仓库根目录。
+栈：**本机 `make-package.ps1` → 上传 `nginx/package/` → 服务器 `up.sh` / `start.sh`**。  
+**勿**只上传部分 `assets/*.js`；**勿**单独 `docker compose up --build`（不会 `docker load` 离线镜像，易 403 白屏）。
 
 ### 本机打包
 
 ```powershell
 cd nginx
+# 确认 nginx\.env 为生产配置（会复制进 package\.env，该文件已 gitignore）
 .\scripts\make-package.ps1
 ```
 
-产物：`nginx\package\`（含 `dist/`、`images/*.tar`、`conf.d/`、`ssl/` 模板、`.env.example`、`start.sh`）。  
-自检：`package\dist\user\index.html` 存在；`package\images\` 下三个 tar 都在；用户端前端使用 **Vite 6**（勿用 Vite 8，否则可能出现 `Ye is not a function`）。
+产物：`nginx\package\`（`dist/`、`images/*.tar`、`conf.d/`、`ssl/` 模板、`.env.example`、`start.sh`、`up.sh`、`collect-logs.sh`）。
 
-仅更新前端（本机已有镜像时）：
+仅更新前端（已有镜像）：
 
 ```powershell
 .\scripts\build-all.ps1 -SkipDocker -SkipBackend
 .\scripts\export-images.ps1
 ```
 
-### 上传到服务器
+### 上传
 
-整目录传到 `~/package/`。**不要**只覆盖几个 `assets/*.js`（会与 `index.html` 混版本导致白屏）。
+整目录传到服务器 `~/package/`。替换前可备份 `.env` 与 `ssl/`。
 
-若服务器上已有旧包，建议先备份 `.env` 和 `ssl/`，再整包替换；或至少：
-
-```bash
-rm -rf ~/package/dist/user/assets ~/package/dist/admin/assets
-# 再上传本次 package 里的完整 dist/
-```
-
-### 服务器首次 / 重装 package 目录
+### 服务器启动
 
 ```bash
 cd ~/package
-cp .env.example .env && nano .env   # JWT、MySQL、OSS、各 AI Key 等
-# HTTPS：将证书放入 ssl/（勿提交仓库）
-#   www.nuonuoya.cn.pem / .key
-#   admin.nuonuoya.cn.pem / .key
+sed -i 's/\r$//' .env start.sh up.sh verify-frontend-dist.sh reset-db.sh collect-logs.sh
+chmod +x start.sh up.sh verify-frontend-dist.sh reset-db.sh collect-logs.sh
 
-chmod +x start.sh verify-frontend-dist.sh
-./verify-frontend-dist.sh .
-./start.sh
+# 日常更新（推荐）
+bash up.sh
+
+# 首次部署 / 需要初始化库
+cp .env.example .env && nano .env
+# HTTPS：证书放入 ssl/（*.pem *.key 已 gitignore）
+bash start.sh
 ```
 
-`./start.sh` 会 `docker load` 三个 tar 并 `docker compose up -d --force-recreate`（**不带 `-v`**，不删数据卷）。首次启动约 2～5 分钟，后端未就绪时可能短暂 502，刷新即可。
+`up.sh`：`chmod dist` → 校验前端 → `docker load` 三个 tar → `compose up --force-recreate`。  
+`start.sh`：含首次 `create.sql` 初始化（可用 `SKIP_DB_INIT=1` 跳过）。
 
-**`start.sh` 若卡在 `chmod: logs/... Operation not permitted`**：旧日志属 root，脚本会因此中断。先执行：
-
-```bash
-cd ~/package
-sudo rm -rf logs && mkdir -p logs/backend
-./start.sh
-```
-
-或手动：`chmod -R a+rX dist conf.d ssl` 后执行 `docker load` 与 `docker compose ... up -d`。
-
-Nginx 挂载：
-
-- `./dist/user` → `/usr/share/nginx/user`
-- `./dist/admin` → `/usr/share/nginx/admin`
+**排错**：`bash collect-logs.sh` 生成 `logs-collect-*.txt`。
 
 ### 数据与 Navicat
 
-| 操作 | 数据 |
-|------|------|
-| `./start.sh` / `up --force-recreate` | **保留**（Docker 卷在） |
-| `docker compose down`（无 `-v`） | **保留** |
-| `docker compose down -v` | **删除** MySQL/Redis 等卷 |
+| 操作 | 数据卷 |
+|------|--------|
+| `up.sh` / `up --force-recreate` | 保留 |
+| `docker compose down` | 保留 |
+| `docker compose down -v` | **删除** |
 
-生产中间件端口只绑 **127.0.0.1**，需 **SSH 隧道** 后用 Navicat：
+SSH 隧道后连接（须加载 `docker-compose.yaml` + `docker-compose.prod.yml`）：
 
-| 服务 | 端口 |
-|------|------|
+| 服务 | 127.0.0.1 端口 |
+|------|----------------|
 | MySQL | 33061 |
 | Redis | 63790 |
 | PostgreSQL | 54320 |
 | RabbitMQ 管理台 | 15672 |
 
-须同时加载：`docker-compose.yaml` + `docker-compose.prod.yml`。
-
-空库初始化可执行 `package/sql/create.sql`；增量见 `forum-demo/src/main/resources/sql/migrate-*.sql`。
-
-### 部署验证
+### 验证
 
 ```bash
 docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
 curl -s http://127.0.0.1/healthz
-curl -I https://www.nuonuoya.cn
+./verify-frontend-dist.sh .
 ```
-
-容器内 `dist` 为空（Snap Docker 读不到 `~/home`）时：
-
-```bash
-sudo snap connect docker:home
-sudo snap restart docker
-cd ~/package
-docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d --force-recreate nginx
-```
-
-或把部署目录迁到 `/opt/forum/package`。
 
 ---
 
-## 配置说明（环境变量）
+## 配置说明
 
-下面这些通常是上线时最需要改的（以 `nginx/.env` 为准）：
+以 `nginx/.env`（及服务器 `package/.env`）为准，**切勿提交真实 `.env`**。
 
-- **安全相关**
-  - `JWT_SECRET`
-  - `PII_CRYPTO_SECRET`
-  - `FORUM_MASCOT_INTERNAL_KEY` / `FORUM_AI_INTERNAL_KEY`
-- **数据库 / 缓存 / MQ**
-  - `MYSQL_*`、`REDIS_PASSWORD`
-  - `RABBITMQ_*`
-  - `POSTGRES_*`
-- **AI 能力**
-  - `DASHSCOPE_API_KEY`（通义）
-  - `DEEPSEEK_API_KEY`
-  - `HUANAPI_*`（Gemini / Image / Claude 等）
-  - `TAVILY_API_KEY`
-- **对象存储 / 短信 / 邮件**
-  - `ALIYUN_ACCESS_KEY_ID` / `ALIYUN_ACCESS_KEY_SECRET`
-  - `OSS_*`
-  - `MAIL_USERNAME` / `MAIL_PASSWORD`
+| 类别 | 变量 |
+|------|------|
+| 安全 | `JWT_SECRET`、`PII_CRYPTO_SECRET`、`FORUM_MASCOT_INTERNAL_KEY`、`FORUM_AI_INTERNAL_KEY` |
+| 数据 | `MYSQL_*`、`REDIS_PASSWORD`、`RABBITMQ_*`、`POSTGRES_*` |
+| AI | `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`（须来自 [platform.deepseek.com](https://platform.deepseek.com)，**勿与 DashScope 混用**）、`HUANAPI_*`、`TAVILY_API_KEY`、`BAIDU_MAP_API_KEY` |
+| OSS | `ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`、`OSS_BUCKET_NAME`、`OSS_URL_PREFIX`、`OSS_ROOT_PREFIX` |
+| OSS → ai-server | 同上 OSS 变量须注入 **forum-ai-server**（视频审核签名读私有桶） |
+| 邮件 | `MAIL_USERNAME`、`MAIL_PASSWORD` |
+
+看板娘 MCP（ai-server 内置）：`tavily_search`、`get_current_datetime`、`map_*`（需对应 API Key）。
 
 ---
 
 ## 常见问题
 
-### 1) 刚启动访问 502 / WebSocket 失败
+### 1) 502 / WebSocket 失败
 
-后端 Spring Boot 启动需要 20~30 秒，Nginx 可能先起来，刷新即可。新包会在后端 **healthy** 后再起 Nginx，可减轻首次 502。
+后端启动约 20～90s，刷新即可；compose 已配置 backend healthy 后再起 Nginx。
 
-### 2) 白屏 / `xxx is not a function` / `Ye is not a function`
+### 2) 前端 403 / 白屏
 
-`index.html` 与 `assets/*.js` 不是同一次构建；或曾用 Vite 8 打包。处理：本机 `make-package.ps1` 后**整包**上传 `dist/`，服务器 `./verify-frontend-dist.sh .` 通过后再 `./start.sh`。浏览器强刷；`chat-integration.*.js` 为浏览器插件可忽略。
+- 未执行 `bash up.sh`：缺 `chmod dist` 或 `docker load`
+- `index.html` 与 `assets/*.js` 版本不一致：整包重传 `dist/`，跑 `./verify-frontend-dist.sh .`
 
-### 3) Navicat 连不上 MySQL
+### 3) 审核一直「审核异常」
 
-生产端口只绑 `127.0.0.1`，需 SSH 隧道；须带 `docker-compose.prod.yml` 启动。
+- 文本超时：已加长 `text_audit_timeout`；长文会截断
+- **视频帖**：日志若 `Failed to download multimodal content` → OSS 私有桶；确认 ai-server 有 OSS 环境变量并重新部署
+- 队列 `NOT_FOUND q-audit-article`：启动竞态，Java 起来后自动恢复
 
-### 4) 管理端登录提示“需要管理员权限”
+### 4) 视频帖保存报「不支持相册图」
 
-管理端要求 `user.is_admin = 1`，需在库中提升并绑定 `role_admin`。
+v1.2 已修复：视频模式只调 `setArticleVideo`，勿对视频帖调 `replaceArticleImages`。需部署最新前后端。
+
+### 5) Navicat 连不上
+
+生产端口绑 `127.0.0.1`，须 SSH 隧道 + `docker-compose.prod.yml`。
+
+### 6) 管理端「需要管理员权限」
+
+库中 `user.is_admin = 1` 并绑定 `role_admin`。
 
 ---
 
@@ -477,9 +342,22 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d --force-r
 
 ```text
 luntan/
-  forum-demo/            # Java 后端（Spring Boot）
-  ai-server/             # Python AI 服务（审核/写作/搜索/聊天）
-  forum-vue/             # 用户端前端（Vue）
-  forum-vue-admin/       # 管理端前端（Vue + Arco）
-  nginx/                 # 打包与部署（compose、Nginx 配置、脚本）
+  forum-demo/              # Java 后端
+  ai-server/               # Python AI（审核 / 看板娘 / RAG）
+  forum-vue/               # 用户端前端
+  forum-vue-admin/         # 管理端前端
+  nginx/                   # Compose、Nginx、FFmpeg、打包脚本
+    scripts/
+      make-package.ps1     # 一键打包
+      build-all.ps1        # 构建前后端与镜像
+      export-images.ps1    # 组装 package/
+      verify-package.ps1   # 打包自检
+      server-up.sh         # → package/up.sh
+    ffmpeg/                # 视频压缩 / 审核抽帧
+  scripts/
+    dev-secrets.ps1.example
+    load-dev-env.ps1       # 本地加载密钥到当前 PowerShell 会话
+  luntan.code-workspace    # 多根工作区（可选）
 ```
+
+**Git 忽略要点**：`.env`、`nginx/package/`、`nginx/dist/`、`target/`、`node_modules/`、`ssl/*.pem`、`scripts/dev-secrets.ps1`、本地 `ai-server/config.local.yaml` 等，见根目录 `.gitignore`。

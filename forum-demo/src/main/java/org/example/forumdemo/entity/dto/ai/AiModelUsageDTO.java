@@ -2,9 +2,7 @@ package org.example.forumdemo.entity.dto.ai;
 
 import lombok.Data;
 
-/**
- * Python ai-server 返回的用量（token / 张数）。
- */
+/** Token/image usage returned from ai-server. */
 @Data
 public class AiModelUsageDTO {
 
@@ -12,6 +10,8 @@ public class AiModelUsageDTO {
     private Integer inputTokens;
     private Integer outputTokens;
     private Integer imageCount;
-    /** 无真实 token 时由上游标记 */
+    /** true when upstream had no real token counts */
     private Boolean estimated;
+    /** measured latency in ms */
+    private Integer latencyMs;
 }

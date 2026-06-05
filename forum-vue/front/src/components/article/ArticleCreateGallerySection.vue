@@ -1,10 +1,8 @@
 <template>
   <div class="gallery-section" :class="`gallery-section--${variant}`">
     <div class="editor-gallery-pane-head">
-      <span class="editor-gallery-pane-title">笔记相册</span>
       <span class="editor-gallery-pane-count">{{ urls.length }}/{{ maxCount }}</span>
     </div>
-    <p class="editor-gallery-pane-hint">展示在正文下方，有图时正文不少于 10 字</p>
 
     <template v-if="urls.length">
       <!-- Markdown：单行横向滚动 -->

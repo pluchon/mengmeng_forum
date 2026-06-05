@@ -8,6 +8,7 @@
     append-to-body
     :show-close="false"
     destroy-on-close
+    @opened="onDialogOpened"
     @closed="handleClose"
   >
     <button type="button" class="mc-dialog-close" aria-label="关闭" @click="handleClose">
@@ -109,9 +110,9 @@
             :vip-expire-at="userStore.vipExpireAt"
           />
           <span class="mc-left-uname">{{ userStore.nickname || '用户' }}</span>
-          <div class="mc-online mc-online--trailing">
+          <div class="mc-online mc-online--trailing" :class="{ 'is-offline': !selfOnline }">
             <span class="mc-online-dot" />
-            <span>在线</span>
+            <span>{{ selfOnline ? '在线' : '离线' }}</span>
           </div>
         </div>
       </aside>
@@ -128,9 +129,9 @@
               />
               <span class="mc-rname">{{ currentSession.user?.nickname }}</span>
             </div>
-            <div class="mc-online mc-online--trailing">
+            <div class="mc-online mc-online--trailing" :class="{ 'is-offline': !peerOnline }">
               <span class="mc-online-dot" />
-              <span>在线</span>
+              <span>{{ peerOnline ? '在线' : '离线' }}</span>
             </div>
           </header>
 
@@ -403,13 +404,16 @@ const {
   onConvBlur,
   onConvFocus,
   onDialogBlurRoot,
+  onDialogOpened,
   onEmojiPopoverShow,
   onEmojiTabChange,
   onEmojiStickerFileChange,
   openArticleFromSystem,
   parseSystemMessageContent,
+  peerOnline,
   scrollToBottom,
   searchQuery,
+  selfOnline,
   selectListItem,
   sendContent,
   sendMessageFromEmoji,

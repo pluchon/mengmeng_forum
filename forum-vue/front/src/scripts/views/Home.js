@@ -83,11 +83,9 @@ export function useHome() {
 
   const isHotFeed = computed(() => menuActiveKey.value === 'hot')
 
-  const searchInputPlaceholder = computed(() => {
-    if (aiSearchMode.value) return 'AI 语义搜索：输入关键词…'
-    if (searchTargetMode.value === 'user') return '搜索用户'
-    return '搜索帖子'
-  })
+  const searchInputPlaceholder = computed(() =>
+    aiSearchMode.value ? 'AI 语义综合搜索…' : '综合搜索帖子与用户…',
+  )
 
   /** 推荐 / 热帖榜不展示板块选择行 */
   const showBoardPillsRow = computed(
@@ -216,8 +214,7 @@ export function useHome() {
     try {
       const [msgRes, sysRes] = await Promise.all([getUnReadCount(), getSystemMessageUnreadCount()])
       const api = msgRes?.code === 0 ? Number(msgRes.data) || 0 : 0
-      const prev = Number(messageStore.unreadCount) || 0
-      messageStore.setUnreadCount(Math.max(api, prev), { keepTip: messageStore.showTip })
+      messageStore.setUnreadCount(api, { keepTip: messageStore.showTip })
       if (sysRes?.code === 0) {
         messageStore.setSystemUnreadCount(Number(sysRes.data) || 0)
       }
@@ -254,11 +251,7 @@ export function useHome() {
       if (!messageStore.incomingSignal?.seq) return
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
-        const prev = Number(messageStore.unreadCount) || 0
         await fetchUnread()
-        if ((Number(messageStore.unreadCount) || 0) < prev) {
-          messageStore.unreadCount = prev
-        }
         messageStore.showTip = true
       }, 500)
     },
@@ -393,10 +386,6 @@ export function useHome() {
     if (!kw) return
     const query = { keyword: kw }
     if (aiSearchMode.value) query.ai = '1'
-    if (searchTargetMode.value === 'user') {
-      router.push({ path: '/search/user', query })
-      return
-    }
     router.push({ path: '/search', query })
   }
 

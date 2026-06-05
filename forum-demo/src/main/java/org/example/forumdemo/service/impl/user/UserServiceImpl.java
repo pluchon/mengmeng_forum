@@ -19,6 +19,7 @@ import org.example.forumdemo.entity.dto.user.UserLoginRequest;
 import org.example.forumdemo.entity.dto.user.UserResigterRequest;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.user.UserService;
@@ -59,6 +60,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     @Lazy
     private PointsService pointsService;
+
+    @Autowired
+    private AiHubService aiHubService;
 
     // ============================================================
     // 注册，使用事务保证原子性
@@ -117,6 +121,7 @@ public class UserServiceImpl implements UserService {
         } catch (Exception e) {
             log.warn("用户 {} 默认收藏夹创建失败, 留待懒加载补齐: {}", register.getId(), e.getMessage());
         }
+        indexUserRagProfile(register);
     }
 
     // ============================================================
@@ -300,8 +305,21 @@ public class UserServiceImpl implements UserService {
         }
         // 详细信息缓存失效，下一次查询会从 DB 重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
-        // 再把现在的最新的用户详细信息放入缓存
-        return queryUserByUserId(userId);
+        User latest = queryUserByUserId(userId);
+        indexUserRagProfile(latest);
+        return latest;
+    }
+
+    private void indexUserRagProfile(User user) {
+        if (user == null || user.getId() == null) {
+            return;
+        }
+        Map<String, Object> payload = new HashMap<>(4);
+        payload.put("userId", user.getId());
+        payload.put("nickname", user.getNickname());
+        payload.put("username", user.getUsername());
+        payload.put("remark", user.getRemark());
+        aiHubService.indexUserRag(payload);
     }
 
     @Override

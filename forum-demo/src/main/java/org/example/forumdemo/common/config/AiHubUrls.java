@@ -48,6 +48,10 @@ public class AiHubUrls {
         return path("/api/v1/summarize");
     }
 
+    public static String summarizeStreamUrl() {
+        return path("/api/v1/summarize/stream");
+    }
+
     public static String articleRagSearchUrl() {
         return path("/api/v1/article-rag-search");
     }

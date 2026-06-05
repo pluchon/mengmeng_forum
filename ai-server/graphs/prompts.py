@@ -41,6 +41,12 @@ TEXT_AUDIT_TEMPLATE = ChatPromptTemplate.from_messages([
 ])
 
 
+VIDEO_AUDIT_PROMPT = (
+    "你是论坛视频内容审核员。请判断该视频是否适合在公开论坛发布。\n"
+    "若合规，只输出「是」；若违规（色情、暴力、违法、严重谩骂等），只输出「否」。"
+)
+
+
 SUMMARY_TEMPLATE = ChatPromptTemplate.from_messages([
     ("system",
      "你是一个专业的论坛编辑. 请为用户提供的帖子内容生成一段精炼的摘要(不超过100字).\n"

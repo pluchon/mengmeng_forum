@@ -406,6 +406,14 @@
   background: #1d9e75;
 }
 
+.mc-online.is-offline {
+  color: #86909c;
+}
+
+.mc-online.is-offline .mc-online-dot {
+  background: #c9cdd4;
+}
+
 .mc-settings-btn {
   display: inline-flex;
   align-items: center;

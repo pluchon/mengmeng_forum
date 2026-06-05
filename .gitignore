@@ -1,5 +1,23 @@
-# IDE / OS
-.idea/
+# =============================================================================
+# 萌萌论坛 — Git 忽略规则（优先防止密钥、.env、本地配置入库）
+# 模板文件请用 *.example；真实值放环境变量或已忽略的 local 文件
+# =============================================================================
+
+# --- IDE / OS ---
+.idea/*
+!.idea/misc.xml
+!.idea/modules.xml
+!.idea/compiler.xml
+!.idea/encodings.xml
+!.idea/jarRepositories.xml
+!.idea/vcs.xml
+# 下列常含数据库密码、HTTP 历史、本机路径，切勿提交
+.idea/workspace.xml
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/httpRequests/
+.idea/shelf/
+.idea/usage.statistics.xml
 .vscode/
 .cursor/
 *.swp
@@ -18,24 +36,40 @@
 Thumbs.db
 desktop.ini
 
-# Java / Maven (forum-demo)
+# --- Java / Maven (forum-demo) ---
 target/
 .mvn/
 mvnw
 mvnw.cmd
-application-local.yml
-application-local.properties
+**/application-local.yml
+**/application-local.properties
+**/application-local.yaml
+**/application-secret.yml
+**/application-secret.properties
+**/application-*.local.yml
+**/application-*.local.properties
 forum-demo/log.txt
 forum-demo/details.txt
 forum-demo/cp.txt
 forum-demo/editor.ps1
 forum-demo/pushout.txt
+*.hprof
 
-# Node / Vue (forum-vue, forum-vue-admin)
+# --- Node / Vue (forum-vue, forum-vue-admin) ---
 node_modules/
 dist/
 dist-ssr/
 coverage/
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env*.example
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
+.env.test.local
 *.local
 .vite/
 .parcel-cache/
@@ -47,47 +81,121 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.npmrc
+.yarnrc
+.yarnrc.yml
+# 若需提交团队共享的非敏感 npm 配置，可对单文件使用 git add -f
 
-# Python (ai-server)
+# --- Python (ai-server) ---
 __pycache__/
 *.py[cod]
 *.pyc
 .Python
 .venv/
 venv/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-
-# Logs
-logs/
-**/logs/
-*.log
-
-# Secrets / env
 .env
 .env.*
 !.env.example
 !**/.env.example
-scripts/dev-secrets.ps1
+!**/.env*.example
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pypirc
+.python-version
+
+# ai-server 本地密钥覆盖（勿把填好 Key 的 config.yaml 提交；用此文件或环境变量）
 ai-server/config.local.yaml
+ai-server/config.local.yml
+ai-server/config.override.yaml
+ai-server/config.private.yaml
+ai-server/config.secrets.yaml
+ai-server/*.local.yaml
+ai-server/.env
+ai-server/.env.*
+# 勿提交带真实 api_key 的 config（模板 config.yaml / config.docker.yaml 中 api_key 须为空）
+
+# --- 日志 ---
+logs/
+**/logs/
+*.log
+
+# --- 密钥 / 凭据 / 环境（全仓库）---
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env*.example
+.envrc
+.direnv/
+nginx/.env
+nginx/.env.*
+!nginx/.env.example
+scripts/dev-secrets.ps1
+scripts/*-secrets.ps1
+!scripts/*-secrets.ps1.example
+!scripts/dev-secrets.ps1.example
 **/passwords.txt
 **/secrets.txt
+**/secrets/
 **/*credentials*
+**/*credential*.json
+**/service-account*.json
+**/google-services.json
+**/firebase-adminsdk*.json
+.aws/
+.azure/
+.gcloud/
+*.token
+*.tokens
+*.secret
+*.secrets
+*_secret.txt
+*_secrets.txt
 
-# TLS (keep directory, ignore key material)
+# --- TLS / SSH（证书与私钥勿入库；nginx/ssl 目录可保留 .gitkeep）---
 nginx/ssl/*.pem
 nginx/ssl/*.key
+nginx/ssl/*.crt
+nginx/ssl/*.p12
+nginx/ssl/*.pfx
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_dsa
+*.ppk
+known_hosts
 
-# Deploy artifacts (generated locally)
+# --- 数据库导出（可能含用户真实数据）---
+**/dump.sql
+**/*-dump.sql
+**/*_dump.sql
+*.sql.gz
+*.sql.bz2
+*.sql.zip
+*.dump
+
+# --- 部署产物（本地生成）---
 nginx/package/
 nginx/dist/
+nginx/logs/
 *.tar
 *.tar.gz
+logs-collect-*.txt
 
-# Misc
+# --- 杂项 ---
 *.bak
 *.tmp
 *~
+docker-compose.override.yml
+docker-compose.override.yaml
+forum-vue/front/.env.production
+forum-vue-admin/admin/.env.production

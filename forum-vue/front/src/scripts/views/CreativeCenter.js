@@ -279,13 +279,13 @@ export function useCreativeCenter() {
   function editTargetPath(row) {
     const id = row.article?.id
     const s = Number(row.article?.status)
-    if (s === ARTICLE_STATUS.PENDING_AUDIT) return `/article/${id}/audit`
+    if (s === ARTICLE_STATUS.PENDING_AUDIT) return `/creative`
     return `/article/edit/${id}`
   }
 
   function editTip(row) {
     const s = Number(row.article?.status)
-    if (s === ARTICLE_STATUS.PENDING_AUDIT) return '查看审核进度'
+    if (s === ARTICLE_STATUS.PENDING_AUDIT) return '审核中，请留意站内信'
     return '编辑'
   }
 

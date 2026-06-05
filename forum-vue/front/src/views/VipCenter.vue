@@ -177,8 +177,10 @@
 
 <script setup>
 import { Check, Close, Cpu, Refresh } from '@element-plus/icons-vue'
-import bgUrl from '@/assets/images/vip.jpg'
+import { clientOssUrl } from '@/utils/clientOss'
 import { useVipCenter } from '@scripts/views/VipCenter'
+
+const bgUrl = clientOssUrl('vip.webp')
 
 function formatDate(v) {
   if (!v) return '—'
