@@ -1,0 +1,7 @@
+.like-count-icon {
+  display: block;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  color: #86909c;
+}

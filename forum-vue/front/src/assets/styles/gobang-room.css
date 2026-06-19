@@ -1,0 +1,823 @@
+.gobang-room-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 70% 18%, rgba(88, 84, 214, 0.18), transparent 26%),
+    linear-gradient(135deg, #0b1720 0%, #12252f 54%, #0a141c 100%);
+  color: #edf5f3;
+}
+
+.gobang-room-inner {
+  width: min(1260px, 94vw);
+  margin: 0 auto;
+  padding: 18px 0 42px;
+}
+
+.gobang-room-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.gobang-room-head h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.game-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #edf5f3;
+  cursor: pointer;
+}
+
+.game-icon-btn--dark:hover {
+  border-color: rgba(139, 184, 255, 0.48);
+  background: rgba(139, 184, 255, 0.12);
+}
+
+.gobang-room-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d7e3e2;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.gobang-room-conn span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a8b7bd;
+}
+
+.gobang-room-conn.is-online span {
+  background: #4fd08d;
+}
+
+.gobang-room-grid {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.gobang-player-panel,
+.gobang-chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gobang-player-card,
+.gobang-spectator-card,
+.gobang-opponent-card,
+.gobang-observer-card,
+.gobang-room-side-card,
+.gobang-chat-box {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.gobang-player-card {
+  position: relative;
+  min-height: 116px;
+  padding: 16px 58px 16px 16px;
+  overflow: hidden;
+}
+
+.gobang-player-card.is-mine {
+  border-color: rgba(92, 202, 154, 0.42);
+  background: linear-gradient(135deg, rgba(35, 105, 92, 0.36), rgba(255, 255, 255, 0.06));
+}
+
+.gobang-player-card.is-rival {
+  border-color: rgba(115, 156, 255, 0.38);
+  background: linear-gradient(135deg, rgba(39, 67, 114, 0.36), rgba(255, 255, 255, 0.06));
+}
+
+.gobang-player-card.is-turn {
+  box-shadow: 0 0 0 1px rgba(109, 248, 189, 0.42), 0 0 24px rgba(80, 220, 190, 0.16);
+}
+
+.gobang-player-label,
+.gobang-room-side-card span,
+.gobang-opponent-card em {
+  display: block;
+  margin-bottom: 8px;
+  color: #a8b7bd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gobang-player-card strong,
+.gobang-room-side-card strong,
+.gobang-opponent-card strong {
+  display: block;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.gobang-player-card em {
+  display: block;
+  margin-top: 10px;
+  color: #ffd277;
+  font-size: 24px;
+  font-style: normal;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.gobang-side-piece,
+.gobang-turn-piece {
+  display: inline-block;
+  border-radius: 50%;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.36);
+}
+
+.gobang-side-piece {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 34px;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+}
+
+.gobang-side-piece.is-black,
+.gobang-turn-piece.is-black,
+.gobang-piece.is-black {
+  background: radial-gradient(circle at 32% 28%, #69737c, #12171e 62%, #050607);
+}
+
+.gobang-side-piece.is-white,
+.gobang-turn-piece.is-white,
+.gobang-piece.is-white {
+  background: radial-gradient(circle at 32% 28%, #fff, #eef0e8 58%, #c8cec4);
+}
+
+.gobang-spectator-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #dfe8ea;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gobang-spectator-card {
+  min-height: 118px;
+  padding: 12px;
+}
+
+.gobang-observer-card {
+  min-height: 86px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(74, 85, 108, 0.26), rgba(255, 255, 255, 0.06));
+}
+
+.gobang-observer-card strong {
+  display: block;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.gobang-observer-card span {
+  display: block;
+  margin-top: 8px;
+  color: #a8b7bd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gobang-spectator-list {
+  display: grid;
+  gap: 10px;
+}
+
+.gobang-mini-user,
+.gobang-dialog-user,
+.gobang-opponent-card {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.gobang-mini-user {
+  gap: 8px;
+}
+
+.gobang-mini-user em {
+  min-width: 0;
+  overflow: hidden;
+  color: #dce8e7;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gobang-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.gobang-avatar.is-large {
+  width: 44px;
+  height: 44px;
+}
+
+.gobang-avatar.is-vip {
+  padding: 2px;
+  background: conic-gradient(#ffda6a, #ff5f7e, #8b5cf6, #36d399, #ffda6a);
+}
+
+.gobang-avatar.is-ai {
+  background: linear-gradient(135deg, #6d5dfc, #29d3c2);
+}
+
+.gobang-ai-svg {
+  width: 70%;
+  height: 70%;
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.gobang-avatar img,
+.gobang-avatar b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.gobang-avatar img {
+  object-fit: cover;
+}
+
+.gobang-avatar b {
+  background: #263b48;
+}
+
+.gobang-more-users {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cfe0e3;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gobang-side-empty {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  color: #8da3ab;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gobang-opponent-card {
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.gobang-opponent-card div {
+  min-width: 0;
+}
+
+.gobang-opponent-card strong {
+  display: -webkit-box;
+  max-height: 40px;
+  overflow: hidden;
+  font-size: 18px;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.gobang-opponent-card em {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gobang-player-panel :deep(.el-button) {
+  min-height: 40px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.gobang-board-shell {
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(151, 184, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(26, 43, 54, 0.92);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.34);
+}
+
+.gobang-board-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #d9e6e4;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gobang-board-status.is-my-turn {
+  background: rgba(92, 202, 154, 0.16);
+  color: #e8fff3;
+}
+
+.gobang-board-status.is-finished {
+  background: rgba(115, 156, 255, 0.14);
+  color: #e8efff;
+}
+
+.gobang-board-status em {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffd277;
+  font-style: normal;
+}
+
+.gobang-board {
+  --board-pad: 22px;
+  position: relative;
+  width: min(72vh, 100%);
+  max-width: 720px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border: 1px solid #82673f;
+  border-radius: 8px;
+  background:
+    linear-gradient(#b98549 1px, transparent 1px),
+    linear-gradient(90deg, #b98549 1px, transparent 1px),
+    #ddb46d;
+  background-size:
+    calc((100% - var(--board-pad) * 2) / 14)
+    calc((100% - var(--board-pad) * 2) / 14);
+  background-position: var(--board-pad) var(--board-pad);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+  overflow: hidden;
+}
+
+.gobang-cell {
+  --step: calc((100% - var(--board-pad) * 2) / 14);
+  position: absolute;
+  left: calc(var(--board-pad) + var(--col) * var(--step));
+  top: calc(var(--board-pad) + var(--row) * var(--step));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--step);
+  height: var(--step);
+  padding: 0;
+  border: none;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: default;
+}
+
+.gobang-cell.can-play {
+  cursor: pointer;
+}
+
+.gobang-cell.can-play:hover::after {
+  content: "";
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(31, 41, 51, 0.28);
+}
+
+.gobang-piece {
+  width: 74%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+}
+
+.gobang-cell.is-winning .gobang-piece {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.62),
+    0 0 0 7px rgba(86, 156, 255, 0.44),
+    0 0 24px rgba(96, 165, 250, 0.86);
+  animation: gobangWinPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes gobangWinPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.gobang-board-result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  background: rgba(9, 17, 24, 0.5);
+  text-align: center;
+}
+
+.gobang-board-result strong {
+  color: #fff;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.gobang-board-result span {
+  color: #d9e7ea;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.gobang-board-result em {
+  color: #9fc4ff;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.gobang-peer-tip {
+  margin: 12px 0 0;
+  color: #a8d7cf;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gobang-room-side-card {
+  position: relative;
+  min-height: 112px;
+  padding: 16px 58px 16px 16px;
+  border-color: rgba(139, 184, 255, 0.42);
+  background:
+    linear-gradient(#21313d, #21313d) padding-box,
+    conic-gradient(from 120deg, rgba(88, 84, 214, 0.18), #6f7dff, #1ee6d1, rgba(88, 84, 214, 0.18)) border-box;
+  box-shadow: 0 0 26px rgba(98, 113, 255, 0.18);
+}
+
+.gobang-room-side-card span {
+  margin-bottom: 12px;
+  color: #cfe0ff;
+  font-size: 16px;
+}
+
+.gobang-room-side-card strong {
+  font-size: 24px;
+}
+
+.gobang-turn-piece {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 34px;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+}
+
+.gobang-chat-panel {
+  min-height: 100%;
+}
+
+.gobang-chat-box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gobang-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+}
+
+.gobang-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+}
+
+.gobang-chat-msg {
+  max-width: 88%;
+  align-self: flex-start;
+}
+
+.gobang-chat-msg.is-me {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.gobang-chat-msg span {
+  display: block;
+  margin-bottom: 4px;
+  color: #a8b7bd;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.gobang-chat-msg p {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #edf5f3;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.gobang-chat-msg.is-me p {
+  background: rgba(81, 118, 255, 0.86);
+  color: #fff;
+}
+
+.gobang-chat-msg img {
+  max-width: 82px;
+  max-height: 82px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gobang-chat-empty {
+  margin: auto;
+  color: #a8b7bd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gobang-emoji-strip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.gobang-emoji-pack,
+.gobang-emoji-more,
+.gobang-emoji-dialog-item {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf5f3;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.gobang-emoji-pack img,
+.gobang-emoji-dialog-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gobang-chat-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gobang-chat-input :deep(.el-button) {
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.gobang-chat-input :deep(.el-button--primary) {
+  --el-button-bg-color: #6f7dff;
+  --el-button-border-color: #6f7dff;
+  --el-button-hover-bg-color: #5865e8;
+  --el-button-hover-border-color: #5865e8;
+}
+
+.gobang-result-dialog-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 18px;
+  text-align: center;
+}
+
+.gobang-result-dialog-body strong {
+  color: #111827;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.gobang-result-dialog-body span {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.gobang-spectator-dialog-list {
+  display: grid;
+  gap: 10px;
+}
+
+.gobang-dialog-user {
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f5f7fa;
+}
+
+.gobang-dialog-user strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gobang-dialog-pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.gobang-opponent-stats-dialog {
+  display: grid;
+  gap: 12px;
+}
+
+.gobang-opponent-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f5f7fa;
+}
+
+.gobang-opponent-stat-row span {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.gobang-opponent-stat-row strong {
+  color: #111827;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.gobang-emoji-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 12px;
+}
+
+.gobang-emoji-dialog-item {
+  width: 52px;
+  height: 52px;
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
+@media (max-width: 1120px) {
+  .gobang-room-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gobang-player-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gobang-spectator-count,
+  .gobang-spectator-card,
+  .gobang-opponent-card,
+  .gobang-player-panel :deep(.el-button) {
+    grid-column: 1 / -1;
+  }
+
+  .gobang-chat-box {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 620px) {
+  .gobang-room-inner {
+    width: 94vw;
+    padding-top: 12px;
+  }
+
+  .gobang-room-head {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .gobang-room-conn {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .gobang-player-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .gobang-board-shell {
+    padding: 10px;
+  }
+
+  .gobang-board-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gobang-board {
+    width: 100%;
+    --board-pad: 14px;
+  }
+
+  .gobang-chat-input {
+    grid-template-columns: 1fr;
+  }
+}
