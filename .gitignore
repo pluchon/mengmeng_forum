@@ -20,6 +20,7 @@
 .idea/usage.statistics.xml
 .vscode/
 .cursor/
+.codex/
 *.swp
 *.swo
 *.iml
