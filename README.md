@@ -1,4 +1,4 @@
-## 萌部落社区 v1.2
+## 萌部落社区 v1.3
 
 > 本项目出于个人兴趣爱好搭建；线上地址仅供学习交流。
 
@@ -11,6 +11,12 @@
 ![image-20260605175708728](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175708955.png)
 
 ![image-20260605175802603](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175803233.png)
+
+![game-center-polish](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175627149.png)
+
+![gobang-game-polish](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175642759.png)
+
+![gobang-winning-line-b](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175729265.png)
 
 ![image-20260605175822507](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175822653.png)
 
@@ -26,32 +32,18 @@
 
 - 用户端：`https://www.nuonuoya.cn`
 
-> 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具。
+> 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋对战。
 
 ---
 
-## 目录
+## v1.3 更新摘要
 
-- [v1.2 更新摘要](#v12-更新摘要)
-- [项目概览](#项目概览)
-- [整体架构](#整体架构)
-- [功能一览](#功能一览)
-- [核心流程](#核心流程)
-- [本地开发](#本地开发)
-- [生产部署](#生产部署)
-- [配置说明](#配置说明)
-- [常见问题](#常见问题)
-- [仓库结构](#仓库结构)
-
----
-
-## v1.2 更新摘要
-
-- **视频帖**：发帖支持视频模式；大文件（>200MB）走 FFmpeg 服务压缩/重封装后上传 OSS
-- **帖子标签**：按版块绑定标签，搜索与详情展示标签
-- **审核增强**：文本 → 图片 → **视频** 三阶段；私有 OSS 视频自动签名 URL；超大视频抽帧兜底审核
-- **看板娘**：登录用户会话落库；RAG 推荐站内帖子；Tavily 搜索 + 百度地图 MCP
-- **部署脚本**：`package/up.sh` 日常更新（权限修复、`docker load`、强制重建）；`start.sh` 首次部署 / 初始化库
+- **游戏中心 / 五子棋**：新增独立游戏大厅、五子棋匹配页和蓝黑主题对局页，支持真人匹配、观战、房间聊天 / 表情、棋谱回放、天梯榜和战绩统计。
+- **三层 WebSocket**：大厅在线、游戏在线、房间对局拆成独立连接，服务端主动推送在线状态、匹配结果、落子、终局胜线和观战席变化。
+- **论坛积分联动**：五子棋胜负直接进入论坛积分流水，玩家段位、胜率、总局数和排行榜复用论坛账号体系。
+- **局时 / 步时**：支持 10 分钟局时、60 秒步时，超时、认输、五连均走统一结算链路。
+- **AI 对手**：长时间无人匹配时自动进入 AI 房间；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`，DeepSeek 不可用时展示本地策略兜底。
+- **多实例准备**：在线状态、匹配队列、房间快照、房间事件广播和对局结束事件已按 Redis / RabbitMQ 拆出扩展点。
 
 ---
 
@@ -59,7 +51,7 @@
 
 | 目录 | 说明 |
 |------|------|
-| `forum-demo` | Java 后端（Spring Boot）：业务 API、鉴权、MQ、WebSocket、审核状态 |
+| `backend` | Java 后端（Spring Boot）：业务 API、鉴权、MQ、WebSocket、审核状态、五子棋对战 |
 | `ai-server` | Python：AI 审核 / 写作 / 看板娘 / 语义搜索 / RAG |
 | `forum-vue` | 用户端（Vue 3 + Vite 6） |
 | `forum-vue-admin` | 管理端（Vue 3 + Arco） |
@@ -73,7 +65,7 @@
 flowchart TB
   U[用户端 Web] --> N[Nginx]
   A[管理端 Web] --> N
-  N --> J[Java 后端 forum-demo]
+  N --> J[Java 后端 backend]
   N --> F[FFmpeg 视频服务]
 
   J --> M[(MySQL)]
@@ -82,12 +74,14 @@ flowchart TB
   J --> F
 
   J --> P[Python AI ai-server]
+  J --> G[Game WebSocket: 大厅 / 游戏 / 房间]
   P --> PG[(PostgreSQL)]
   P --> OSS[(阿里云 OSS)]
 ```
 
 - 用户端 / 管理端 → **Nginx**（静态 `dist/` + 反代 API）
 - Java → MySQL / Redis / RabbitMQ / FFmpeg / ai-server
+- 五子棋实时链路 → Java WebSocket（大厅在线、游戏在线、房间对局三类连接）
 - ai-server → PostgreSQL（LangGraph checkpoint）、DashScope、OSS 签名读私有媒体
 
 ---
@@ -104,6 +98,7 @@ flowchart TB
 - 私信 WebSocket、积分 / 签到 / 商城 / 抽奖、热帖榜
 - 智能搜索（DB 快搜 + AI 语义增强）
 - 看板娘：多模型、会话历史、站内帖子 RAG、联网与地图工具
+- 游戏中心：五子棋实时匹配、观战、房间聊天 / 表情、棋谱回放、战绩统计、天梯榜、AI 对手
 
 ### 管理端
 
@@ -114,13 +109,58 @@ flowchart TB
 
 ## 核心流程
 
-### 1) 发帖审核（异步 + 幂等）
+### 1) 游戏中心 / 五子棋（WebSocket 实时对战）
+
+游戏中心目前先接入 **五子棋**，实时链路分成三层 WebSocket：大厅连接用于展示大厅在线与玩家状态；游戏连接用于匹配页在线人数、房间总数和最近对局；房间连接用于落子、计时、观战、聊天和终局同步。HTTP 只负责历史记录、统计、天梯榜、回放等非实时数据查询。
+
+**五子棋能力**
+
+- 快速匹配：真人优先，长时间无人时自动创建 AI 房间
+- AI 对手：Java 调 Python AI Hub；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`；DeepSeek 不可用或返回非法坐标时才走本地规则兜底
+- 实时对局：服务端维护权威棋盘，校验回合、坐标、棋色和观战身份；落子结果通过房间 WebSocket 主动推送
+- 计时规则：支持 10 分钟局时、60 秒步时，任一玩家超时直接结算
+- 观战与聊天：观众只读棋局，不能落子 / 认输；房间内支持文本和已购表情包，终局后禁止继续发送消息或表情
+- 棋谱与回放：每手落子写入 MySQL，前端支持历史对局回放和自动播放
+- 积分结算：胜负同步论坛积分流水，战绩统计、胜率、天梯榜与论坛用户体系共享
+- 多实例准备：在线状态、匹配队列、房间快照与房间事件可走 Redis；对局结束事件可投递 RabbitMQ 做补偿与异步处理
+
+```mermaid
+sequenceDiagram
+  participant FE as 前端
+  participant Lobby as 大厅 WS
+  participant Game as 游戏 WS
+  participant Room as 房间 WS
+  participant J as Java 后端
+  participant P as Python AI
+  participant DB as MySQL
+  participant R as Redis
+  participant MQ as RabbitMQ
+
+  FE->>Lobby: 进入游戏中心
+  Lobby->>J: 建立大厅在线连接
+  J->>R: 更新大厅在线、段位、胜率快照
+  FE->>Game: 进入五子棋匹配页
+  Game->>J: 开始匹配
+  alt 匹配真人
+    J->>Room: 创建真人房间
+  else 长时间无人
+    J->>Room: 创建 AI 房间
+    J->>P: 请求 DeepSeek 落子
+  end
+  Room->>J: 玩家落子 / 认输 / 聊天
+  J->>J: 校验回合、坐标、计时、观战权限
+  J->>DB: 写落子、战绩、积分流水
+  J->>MQ: 投递对局结束事件
+  J-->>Room: 推送棋盘、胜线、结果与倒计时
+```
+
+### 2) 发帖审核（异步 + 幂等）
 
 1. 用户提交 → Java 状态改为「审核中」，生成 `taskId`，投递 `q-audit-article`
 2. Python worker 消费：`validate_text` → `validate_images` → **`validate_video`**（有视频时）→ `summarize`
 3. 结果回 MQ → Java 条件更新状态并通知用户
 
-**视频审核要点（v1.2）**
+**视频审核要点**
 
 - DashScope 需能访问视频 URL；**私有 OSS** 由 ai-server 用 `ALIYUN_*` / `OSS_*` 生成**签名 URL**
 - 视频 >100MB 或 DashScope 拉取失败时：FFmpeg **抽帧** → 走图片审核兜底
@@ -144,7 +184,7 @@ sequenceDiagram
   MQ->>J: 更新帖子状态
 ```
 
-### 2) 视频上传
+### 3) 视频上传
 
 用户选择视频后，前端可**后台上传**并展示进度；后端按体积分流，大文件经 FFmpeg 再写入 OSS。Nginx `/file/` 代理超时 **3600s**，避免长视频压缩卡住。
 
@@ -170,7 +210,7 @@ flowchart TD
   URL --> BIND[setArticleVideo 绑定帖子]
 ```
 
-### 3) 行为验证码 + 一次性票据
+### 4) 行为验证码 + 一次性票据
 
 短信 / 邮件有成本，注册与找回密码不能裸奔。滑块验证通过后签发 **Redis 短 TTL 票据**；后续发码 / 注册须携带票据，校验成功即 **删除**（一次性）。
 
@@ -193,7 +233,7 @@ sequenceDiagram
   end
 ```
 
-### 4) 积分抽奖防超卖
+### 5) 积分抽奖防超卖
 
 抽奖最怕 **积分扣成负数** 和 **限量奖品发超**。关键扣减在事务内用 **带条件的 UPDATE** 保证原子性；并发抽奖对用户行 `SELECT FOR UPDATE` 串行化。
 
@@ -221,7 +261,7 @@ flowchart TD
   SB --> E
 ```
 
-### 5) 私信跨实例推送
+### 6) 私信跨实例推送
 
 多实例时，接收方的 WebSocket 连接落在哪台机器不确定。写库后向 Redis **PubSub 广播**推送事件；**只有持有目标连接的那台实例**真正下发，其余实例忽略。
 
@@ -238,7 +278,7 @@ flowchart LR
   J1 -->|无 B 连接| Skip[忽略]
 ```
 
-### 6) 热帖榜（Redis ZSet）
+### 7) 热帖榜（Redis ZSet）
 
 热帖榜用 Redis **ZSet**：member 为帖子 ID，score 为热度。点赞 / 浏览 / 回复 / 收藏等行为触发 `ZINCRBY`；删帖、驳回、下线时 `ZREM`。定时任务可从 DB 全量重算做兜底。
 
@@ -252,7 +292,7 @@ flowchart TD
   Z --> API[首页 / 热榜接口 ZREVRANGE]
 ```
 
-### 7) 智能搜索（快搜 + 语义增强）
+### 8) 智能搜索（快搜 + 语义增强）
 
 搜索分层：**先数据库** `LIKE` 快搜（低成本、稳定）；结果过少或相关性不足时，再调 **ai-server** 做语义排序 / RAG 召回，把更相关的帖子排到前面。
 
@@ -270,124 +310,128 @@ flowchart TD
 
 ## 本地开发
 
-### 中间件（Docker）
+### 启动顺序
 
 ```powershell
+# 1. 中间件
 cd nginx
 docker compose -f docker-compose.dev.yaml up -d --build
+
+# 2. 用户端
+cd ..\forum-vue\front
+npm install
+npm run dev
+
+# 3. 后端
+cd ..\..\backend
+mvn spring-boot:run
+
+# 4. Python AI
+cd ..\ai-server
+python main.py
 ```
 
-| 服务 | 宿主机端口 |
-|------|------------|
-| MySQL | 33061 |
-| Redis | 63790 |
-| RabbitMQ AMQP | **56690**（Windows Hyper-V 保留 56720，勿改回） |
-| RabbitMQ 管理台 | 25672 |
-| PostgreSQL | 54320 |
-| FFmpeg | 8099 |
+| 模块 | 默认地址 / 端口 |
+|------|----------------|
+| 用户端 | `http://localhost:5173` |
+| 后端 | `http://localhost:10086` |
+| AI 服务 | `http://localhost:5000` |
+| MySQL | `localhost:33061` |
+| Redis | `localhost:63790` |
+| RabbitMQ AMQP | `localhost:56690` |
+| RabbitMQ 管理台 | `localhost:25672` |
+| PostgreSQL | `localhost:54320` |
+| FFmpeg | `localhost:8099` |
 
-### 应用（宿主机）
+```mermaid
+flowchart LR
+  Dev[开发者] --> FE[forum-vue/front:5173]
+  FE --> BE[backend:10086]
+  BE --> M[(MySQL:33061)]
+  BE --> R[(Redis:63790)]
+  BE --> Q[(RabbitMQ:56690)]
+  BE --> AI[ai-server:5000]
+  BE --> FF[FFmpeg:8099]
+  AI --> PG[(PostgreSQL:54320)]
+```
 
-| 模块 | 目录 | 默认地址 |
-|------|------|----------|
-| 用户端 | `forum-vue/front` | `npm run dev` → 5173 |
-| 管理端 | `forum-vue-admin/admin` | 各自 dev 端口 |
-| 后端 | `forum-demo` | `http://localhost:10086` |
-| AI | `ai-server` | `http://localhost:5000` |
+**IDEA 打开后端**：File → Open → 选 `backend` 文件夹或 `pom.xml`，Maven Reload，开启 Lombok Annotation Processors。
 
-**IDEA 打开后端**：File → Open → 选 **`forum-demo`** 文件夹（或 `pom.xml`），Maven Reload，开启 Lombok Annotation Processors。
+**五子棋本地调试**
 
-**本地密钥（勿提交仓库）**
+- 游戏入口：用户端登录后访问 `/games`，再进入 `/games/gobang`
+- WebSocket 入口：`/ws/games/lobby`、`/ws/games/gobang`、`/ws/games/gobang/rooms/{roomId}`
+- 对局结果依赖 MySQL；在线、匹配与多实例房间事件依赖 Redis；异步结算事件依赖 RabbitMQ
+- AI 对手依赖 `ai-server` 与 `DEEPSEEK_API_KEY`；Python 服务不可用时 Java 会使用本地规则兜底，但界面会展示兜底标识
+
+### 本地密钥
 
 ```powershell
 copy scripts\dev-secrets.ps1.example scripts\dev-secrets.ps1
-# 编辑 dev-secrets.ps1 填入 Key
 . .\scripts\load-dev-env.ps1
 ```
 
-**数据库**：结构变更后整库重跑 `forum-demo/src/main/resources/sql/create.sql`（会清空数据）。PostgreSQL 会话表：`postgres_ai_session.sql`；开发清空 checkpoint：`postgres_reset_dev.sql`。
+真实 `.env`、`scripts/dev-secrets.ps1`、`ai-server/config.local.yaml` 不提交。数据库全量结构在 `backend/src/main/resources/sql/create.sql`，增量 SQL 放在 `backend/src/main/resources/sql/`。
 
-**RAG 向量**：`model_embedding_rag` 默认 `qwen3-vl-embedding`；`qwen3-vl-rerank` 仅用于重排，不能当 embedding。
+### 快速验收
+
+```powershell
+cd backend
+mvn clean test
+
+cd ..\forum-vue\front
+npm run build
+```
 
 ---
 
 ## 生产部署
 
-栈：**本机 `make-package.ps1` → 上传 `nginx/package/` → 服务器 `up.sh` / `start.sh`**。  
-**勿**只上传部分 `assets/*.js`；**勿**单独 `docker compose up --build`（不会 `docker load` 离线镜像，易 403 白屏）。
+生产部署遵循“本机构建完整包，服务器只加载完整包”的原则，避免前端 `index.html` 与 `assets` 版本不一致。
 
-### 本机打包
+```mermaid
+flowchart LR
+  Local[本地 make-package.ps1] --> Pack[nginx/package]
+  Pack --> Upload[上传整包到服务器]
+  Upload --> Env[确认 package/.env 与 ssl]
+  Env --> Up[bash up.sh]
+  Up --> Load[docker load 镜像]
+  Load --> Recreate[compose up --force-recreate]
+  Recreate --> Check[healthz / 前端资源校验]
+```
+
+### 日常更新
 
 ```powershell
 cd nginx
-# 确认 nginx\.env 为生产配置（会复制进 package\.env，该文件已 gitignore）
 .\scripts\make-package.ps1
 ```
 
-产物：`nginx\package\`（`dist/`、`images/*.tar`、`conf.d/`、`ssl/` 模板、`.env.example`、`start.sh`、`up.sh`、`collect-logs.sh`）。
-
-仅更新前端（已有镜像）：
-
-```powershell
-.\scripts\build-all.ps1 -SkipDocker -SkipBackend
-.\scripts\export-images.ps1
-```
-
-### 上传
-
-整目录传到服务器 `~/package/`。替换前可备份 `.env` 与 `ssl/`。
-
-### 服务器启动
+服务器：
 
 ```bash
 cd ~/package
-sed -i 's/\r$//' .env start.sh up.sh verify-frontend-dist.sh reset-db.sh collect-logs.sh
-chmod +x start.sh up.sh verify-frontend-dist.sh reset-db.sh collect-logs.sh
-
-# 日常更新（推荐）
 bash up.sh
-
-# 首次部署 / 需要初始化库
-cp .env.example .env && nano .env
-# HTTPS：证书放入 ssl/（*.pem *.key 已 gitignore）
-bash start.sh
-```
-
-`up.sh`：`chmod dist` → 校验前端 → `docker load` 三个 tar → `compose up --force-recreate`。  
-`start.sh`：含首次 `create.sql` 初始化（可用 `SKIP_DB_INIT=1` 跳过）。
-
-**排错**：`bash collect-logs.sh` 生成 `logs-collect-*.txt`。
-
-### 数据与 Navicat
-
-| 操作 | 数据卷 |
-|------|--------|
-| `up.sh` / `up --force-recreate` | 保留 |
-| `docker compose down` | 保留 |
-| `docker compose down -v` | **删除** |
-
-SSH 隧道后连接（须加载 `docker-compose.yaml` + `docker-compose.prod.yml`）：
-
-| 服务 | 127.0.0.1 端口 |
-|------|----------------|
-| MySQL | 33061 |
-| Redis | 63790 |
-| PostgreSQL | 54320 |
-| RabbitMQ 管理台 | 15672 |
-
-### 验证
-
-```bash
-docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
 curl -s http://127.0.0.1/healthz
 ./verify-frontend-dist.sh .
 ```
+
+### 首次部署
+
+```bash
+cd ~/package
+cp .env.example .env
+nano .env
+bash start.sh
+```
+
+`up.sh` 保留数据卷；`docker compose down -v` 会删除数据库数据，线上慎用。需要排查时优先执行 `bash collect-logs.sh` 收集日志包。
 
 ---
 
 ## 配置说明
 
-以 `nginx/.env`（及服务器 `package/.env`）为准，**切勿提交真实 `.env`**。
+以 `nginx/.env` 和服务器 `package/.env` 为准，真实值只来自环境变量或本地忽略文件。
 
 | 类别 | 变量 |
 |------|------|
@@ -398,38 +442,49 @@ curl -s http://127.0.0.1/healthz
 | OSS → ai-server | 同上 OSS 变量须注入 **forum-ai-server**（视频审核签名读私有桶） |
 | 邮件 | `MAIL_USERNAME`、`MAIL_PASSWORD` |
 
-看板娘 MCP（ai-server 内置）：`tavily_search`、`get_current_datetime`、`map_*`（需对应 API Key）。
+五子棋 AI 使用 DeepSeek：低水平对手走 `deepseek-v4-flash`，高水平对手走 `deepseek-v4-pro`；模型名称配置在 `ai-server/config.yaml` / `config.docker.yaml` 的 `deepseek.model_flash`、`deepseek.model_pro`。看板娘 MCP 内置 `tavily_search`、`get_current_datetime`、`map_*`，需要对应 API Key。
 
 ---
 
 ## 常见问题
 
-### 1) 502 / WebSocket 失败
+### 1) 五子棋对局结束后还能发消息导致异常
 
-后端启动约 20～90s，刷新即可；compose 已配置 backend healthy 后再起 Nginx。
+结束后房间会清理内存状态，但前端还会停留 60 秒展示胜负和胜线。后端必须把这段窗口里的聊天、表情、落子、认输都拦截成友好提示：`当前对战已经结束，不能发送消息或表情包`。如果又出现堆栈，优先看 `GobangRoomServiceImpl.chat()` 的结束态判断。
 
-### 2) 前端 403 / 白屏
+### 2) 五子棋 WebSocket 已连接但棋盘不刷新
 
-- 未执行 `bash up.sh`：缺 `chmod dist` 或 `docker load`
-- `index.html` 与 `assets/*.js` 版本不一致：整包重传 `dist/`，跑 `./verify-frontend-dist.sh .`
+检查三层连接是否连对：大厅 `/ws/games/lobby`，游戏 `/ws/games/gobang`，房间 `/ws/games/gobang/rooms/{roomId}`。落子后不应该依赖 HTTP 刷新，前端应直接应用 `move_accepted` / `game_finished` 的 payload。
 
-### 3) 审核一直「审核异常」
+```mermaid
+flowchart TD
+  A[棋盘没刷新] --> B{房间 WS 有消息?}
+  B -->|没有| C[检查 token、roomId、Nginx WS 代理]
+  B -->|有| D{消息类型正确?}
+  D -->|move_accepted| E[检查前端 applyMove]
+  D -->|game_finished| F[检查胜线和结束态渲染]
+  D -->|room_error| G[按后端提示修权限 / 状态]
+```
 
-- 文本超时：已加长 `text_audit_timeout`；长文会截断
-- **视频帖**：日志若 `Failed to download multimodal content` → OSS 私有桶；确认 ai-server 有 OSS 环境变量并重新部署
-- 队列 `NOT_FOUND q-audit-article`：启动竞态，Java 起来后自动恢复
+### 3) AI 对手一直显示本地策略兜底
 
-### 4) 视频帖保存报「不支持相册图」
+说明 Java 没拿到 Python / DeepSeek 的合法坐标。依次检查：`ai-server` 是否在 `5000` 端口；`FORUM_AI_INTERNAL_KEY` 是否一致；`DEEPSEEK_API_KEY` 是否有效；Python 返回坐标是否为空位。兜底不是错误，但如果 Python 已启动仍长期兜底，优先查 Python 日志里的 DeepSeek 调用失败原因。
 
-v1.2 已修复：视频模式只调 `setArticleVideo`，勿对视频帖调 `replaceArticleImages`。需部署最新前后端。
+### 4) 前端 403 / 白屏
 
-### 5) Navicat 连不上
+通常是生产包没整体更新，导致 `index.html` 指向的 `assets` 不存在。不要只传单个 JS 文件；重新上传完整 `nginx/package`，服务器执行 `bash up.sh`，再跑 `./verify-frontend-dist.sh .`。
 
-生产端口绑 `127.0.0.1`，须 SSH 隧道 + `docker-compose.prod.yml`。
+### 5) 审核一直显示异常
 
-### 6) 管理端「需要管理员权限」
+视频审核最常见是私有 OSS 导致 DashScope 无法拉取媒体，确认 ai-server 注入 OSS 变量并生成签名 URL。RabbitMQ 队列短暂 `NOT_FOUND` 多数是启动竞态，Java / Python 都起来后会恢复；持续存在时检查交换机和队列声明。
 
-库中 `user.is_admin = 1` 并绑定 `role_admin`。
+### 6) Redis / RabbitMQ 在游戏里分别负责什么
+
+Redis 更适合短生命周期实时状态：大厅在线、游戏在线、匹配队列、房间快照、跨实例房间事件广播。RabbitMQ 更适合“必须最终处理”的事件：对局结束后异步结算、补偿任务、统计刷新和通知扩展。不要把实时棋盘权威状态只放进 MQ，棋盘最终裁决仍由 Java 房间服务完成。
+
+### 7) 本地 RabbitMQ 端口对不上
+
+开发 Compose 默认把 RabbitMQ AMQP 映射到 `56690`，而后端配置如果没有加载本地环境变量，可能仍按 `56720` 连接。启动后端前确认 `SPRING_RABBITMQ_PORT=56690`，或在本机显式启动与 `application.yml` 一致的 RabbitMQ 端口。
 
 ---
 
@@ -437,7 +492,7 @@ v1.2 已修复：视频模式只调 `setArticleVideo`，勿对视频帖调 `repl
 
 ```text
 luntan/
-  forum-demo/              # Java 后端
+  backend/                 # Java 后端：API、WebSocket、积分、五子棋、MQ
   ai-server/               # Python AI（审核 / 看板娘 / RAG）
   forum-vue/               # 用户端前端
   forum-vue-admin/         # 管理端前端
@@ -455,4 +510,4 @@ luntan/
   luntan.code-workspace    # 多根工作区（可选）
 ```
 
-**Git 忽略要点**：`.env`、`nginx/package/`、`nginx/dist/`、`target/`、`node_modules/`、`ssl/*.pem`、`scripts/dev-secrets.ps1`、本地 `ai-server/config.local.yaml` 等，见根目录 `.gitignore`。
+**Git 忽略要点**：`.env`、`.codex/`、`nginx/package/`、`nginx/dist/`、`target/`、`node_modules/`、`ssl/*.pem`、`scripts/dev-secrets.ps1`、本地 `ai-server/config.local.yaml` 等，见根目录 `.gitignore`。
