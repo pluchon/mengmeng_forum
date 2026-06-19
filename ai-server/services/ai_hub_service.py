@@ -49,12 +49,16 @@ def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:
     return deepseek_chat_completion(base, key, model, messages)
 
 
-def generate_gobang_move(board: list[list[int]], ai_chess: int = 2) -> dict[str, Any]:
-    """调用 DeepSeek 生成五子棋 AI 落子，返回 {row, col, model, usage}."""
+def generate_gobang_move(
+    board: list[list[int]],
+    ai_chess: int = 2,
+    model_code: str | None = None,
+) -> dict[str, Any]:
+    """调用 DeepSeek 生成五子棋 AI 落子，返回坐标、模型和策略信息。"""
     safe_board = _normalize_gobang_board(board)
     ds = settings.deepseek
     base = ds.get("base_url") or "https://api.deepseek.com/v1"
-    model = ds.get("model_flash") or "deepseek-v4-flash"
+    model = _resolve_gobang_model(ds, model_code)
     key = ds.get("api_key") or ""
     player_chess = 1 if ai_chess == 2 else 2
     system = (
@@ -70,19 +74,52 @@ def generate_gobang_move(board: list[list[int]], ai_chess: int = 2) -> dict[str,
         "board": safe_board,
         "legend": {"0": "empty", "1": "black", "2": "white"},
     }
-    content, usage = deepseek_chat_completion(
-        base,
-        key,
-        model,
-        [
-            {"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-        ],
-    )
-    row, col = _parse_gobang_point(content)
-    if not _is_gobang_empty(safe_board, row, col):
-        raise ValueError("DeepSeek 返回了非法五子棋坐标")
-    return {"row": row, "col": col, "model": model, "usage": usage}
+    usage: dict[str, Any] = {"model_code": model, "estimated": True}
+    try:
+        content, usage = deepseek_chat_completion(
+            base,
+            key,
+            model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+            ],
+        )
+        row, col = _parse_gobang_point(content)
+        if not _is_gobang_empty(safe_board, row, col):
+            raise ValueError("DeepSeek 返回了非法五子棋坐标")
+        return {
+            "row": row,
+            "col": col,
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "llm_with_rule_guard",
+            "fallback": False,
+            "usage": usage,
+        }
+    except Exception as exc:
+        logger.warning("DeepSeek 五子棋不可用，使用 Python 本地策略兜底: %s", exc)
+        row, col = _choose_local_gobang_move(safe_board, ai_chess, player_chess)
+        return {
+            "row": row,
+            "col": col,
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "rule_based_fallback",
+            "fallback": True,
+            "usage": {**usage, "fallback_reason": str(exc)[:160]},
+        }
+
+
+def _resolve_gobang_model(ds: dict[str, Any], model_code: str | None) -> str:
+    requested = (model_code or "").strip()
+    flash = str(ds.get("model_flash") or "deepseek-v4-flash").strip()
+    pro = str(ds.get("model_pro") or "deepseek-v4-pro").strip()
+    if requested == pro:
+        return pro
+    return flash
 
 
 def _normalize_gobang_board(board: list[list[int]]) -> list[list[int]]:
@@ -116,6 +153,123 @@ def _parse_gobang_point(content: str) -> tuple[int, int]:
 
 def _is_gobang_empty(board: list[list[int]], row: int, col: int) -> bool:
     return 0 <= row < 15 and 0 <= col < 15 and board[row][col] == 0
+
+
+def _find_tactical_gobang_move(
+    board: list[list[int]],
+    ai_chess: int,
+    player_chess: int,
+) -> tuple[int, int] | None:
+    """优先处理一步取胜和一步必防，减少模型慢调用并提升棋力稳定性。"""
+    win = _find_five_move(board, ai_chess)
+    if win is not None:
+        return win
+    return _find_five_move(board, player_chess)
+
+
+def _find_five_move(board: list[list[int]], chess: int) -> tuple[int, int] | None:
+    for row in range(15):
+        for col in range(15):
+            if board[row][col] != 0:
+                continue
+            board[row][col] = chess
+            five = _has_five(board, chess, row, col)
+            board[row][col] = 0
+            if five:
+                return row, col
+    return None
+
+
+def _choose_local_gobang_move(
+    board: list[list[int]],
+    ai_chess: int,
+    player_chess: int,
+) -> tuple[int, int]:
+    tactical = _find_tactical_gobang_move(board, ai_chess, player_chess)
+    if tactical is not None:
+        return tactical
+    center = 7
+    if board[center][center] == 0:
+        return center, center
+    best_score = -1
+    best = None
+    for row in range(15):
+        for col in range(15):
+            if board[row][col] != 0 or not _has_neighbor(board, row, col):
+                continue
+            score = _score_point(board, row, col, ai_chess) * 2
+            score += _score_point(board, row, col, player_chess)
+            score += 20 - abs(row - center) - abs(col - center)
+            if score > best_score:
+                best_score = score
+                best = (row, col)
+    if best is not None:
+        return best
+    for row in range(15):
+        for col in range(15):
+            if board[row][col] == 0:
+                return row, col
+    raise ValueError("五子棋棋盘已满，无法生成落子")
+
+
+def _has_five(board: list[list[int]], chess: int, row: int, col: int) -> bool:
+    directions = ((1, 0), (0, 1), (1, 1), (1, -1))
+    return any(
+        _count_direction(board, chess, row, col, dr, dc)
+        + _count_direction(board, chess, row, col, -dr, -dc)
+        + 1
+        >= 5
+        for dr, dc in directions
+    )
+
+
+def _count_direction(
+    board: list[list[int]],
+    chess: int,
+    row: int,
+    col: int,
+    row_step: int,
+    col_step: int,
+) -> int:
+    count = 0
+    next_row = row + row_step
+    next_col = col + col_step
+    while 0 <= next_row < 15 and 0 <= next_col < 15 and board[next_row][next_col] == chess:
+        count += 1
+        next_row += row_step
+        next_col += col_step
+    return count
+
+
+def _has_neighbor(board: list[list[int]], row: int, col: int) -> bool:
+    for row_step in range(-2, 3):
+        for col_step in range(-2, 3):
+            if row_step == 0 and col_step == 0:
+                continue
+            next_row = row + row_step
+            next_col = col + col_step
+            if 0 <= next_row < 15 and 0 <= next_col < 15 and board[next_row][next_col] != 0:
+                return True
+    return False
+
+
+def _score_point(board: list[list[int]], row: int, col: int, chess: int) -> int:
+    score = 0
+    for row_step, col_step in ((1, 0), (0, 1), (1, 1), (1, -1)):
+        forward = _count_direction(board, chess, row, col, row_step, col_step)
+        backward = _count_direction(board, chess, row, col, -row_step, -col_step)
+        length = forward + backward + 1
+        if length >= 5:
+            score += 100000
+        elif length == 4:
+            score += 6000
+        elif length == 3:
+            score += 900
+        elif length == 2:
+            score += 120
+        else:
+            score += 8
+    return score
 
 
 def generate_image(prompt: str, quality: str) -> tuple[str, dict[str, Any], bool]:

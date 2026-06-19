@@ -9,6 +9,8 @@ import org.example.forumdemo.common.websocket.game.GameWsResponse;
 import org.example.forumdemo.entity.dto.game.GobangChatRequest;
 import org.example.forumdemo.entity.dto.game.GobangMoveRequest;
 import org.example.forumdemo.entity.vo.game.GobangRoomStateVO;
+import org.example.forumdemo.service.impl.game.GameConstants;
+import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -29,6 +31,9 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
     private GobangRoomService gobangRoomService;
 
     @Autowired
+    private GameOnlineStateService gameOnlineStateService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -40,6 +45,7 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         try {
+            gameOnlineStateService.enterGame(GameConstants.GOBANG, userId);
             GobangRoomStateVO state = gobangRoomService.joinRoom(roomId, userId, session);
             gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
                     "room_ready",
@@ -67,12 +73,14 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
         }
         if ("ping".equalsIgnoreCase(message.getPayload())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchGame(GameConstants.GOBANG, userId);
             gameConnectionRegistry.send(session, "pong");
             return;
         }
         GameWsMessage wsMessage = objectMapper.readValue(message.getPayload(), GameWsMessage.class);
         if ("ping".equals(wsMessage.getType())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchGame(GameConstants.GOBANG, userId);
             gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
                     "pong",
                     wsMessage.getRequestId(),
@@ -134,6 +142,7 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
             gobangRoomService.handleDisconnect(roomId, userId, session);
+            gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
         }
     }
 
@@ -143,6 +152,7 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
             gobangRoomService.handleDisconnect(roomId, userId, session);
+            gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
         }
         log.debug("五子棋房间 WS 异常 sessionId={}, error={}", session.getId(), exception.getMessage());
     }

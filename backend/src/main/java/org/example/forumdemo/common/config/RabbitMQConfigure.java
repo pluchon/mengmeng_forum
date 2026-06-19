@@ -66,6 +66,16 @@ public class RabbitMQConfigure {
                 .build();
     }
 
+    // 仲裁队列 5：游戏对局结束事件，供通知、统计、榜单等异步链路消费
+    @Bean("q-game-finished")
+    public Queue gameFinishedQueue() {
+        return QueueBuilder.durable(Constant.QUORUM_QUEUE_GAME_FINISHED)
+                .maxLength(500).quorum()
+                .deadLetterExchange(Constant.DEATH_EXCHANGE_1)
+                .deadLetterRoutingKey(Constant.ROUTING_KEY_DEAD)
+                .build();
+    }
+
     // 死信队列：统一存储流出的死信消息，普通持久化队列即可，通过routing key 进行区分
     @Bean("d-queue")
     public Queue deathQueue() {
@@ -100,6 +110,12 @@ public class RabbitMQConfigure {
     @Bean("binding-audit-result")
     public Binding bindingAuditResultQueue() {
         return BindingBuilder.bind(auditResultQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_AUDIT_RESULT);
+    }
+
+    // 游戏对局结束事件: 仲裁队列5 <- 主题交换机, RoutingKey = forum.game.finished
+    @Bean("binding-game-finished")
+    public Binding bindingGameFinishedQueue() {
+        return BindingBuilder.bind(gameFinishedQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_GAME_FINISHED);
     }
 
     // 死信队列 -> 死信交换机，RoutingKey = forum.dead.#

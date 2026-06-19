@@ -7,6 +7,7 @@ import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsMessage;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
 import org.example.forumdemo.service.impl.game.GameConstants;
+import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GobangMatchService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ public class GobangGameWebSocketHandler extends TextWebSocketHandler {
     private GameUserProfileService gameUserProfileService;
 
     @Autowired
+    private GameOnlineStateService gameOnlineStateService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -41,6 +45,7 @@ public class GobangGameWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         gameConnectionRegistry.enterGame(GameConstants.GOBANG, userId, session);
+        gameOnlineStateService.enterGame(GameConstants.GOBANG, userId);
         gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
                 "game_ready",
                 null,
@@ -56,12 +61,14 @@ public class GobangGameWebSocketHandler extends TextWebSocketHandler {
         }
         if ("ping".equalsIgnoreCase(message.getPayload())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchGame(GameConstants.GOBANG, userId);
             gameConnectionRegistry.send(session, "pong");
             return;
         }
         GameWsMessage wsMessage = objectMapper.readValue(message.getPayload(), GameWsMessage.class);
         if ("ping".equals(wsMessage.getType())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchGame(GameConstants.GOBANG, userId);
             gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
                     "pong",
                     wsMessage.getRequestId(),
@@ -89,6 +96,7 @@ public class GobangGameWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitGame(GameConstants.GOBANG, userId, session);
+            gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
             boolean removed = gobangMatchService.removeFromQueue(userId);
             if (removed) {
                 gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
@@ -101,6 +109,7 @@ public class GobangGameWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitGame(GameConstants.GOBANG, userId, session);
+            gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
             boolean removed = gobangMatchService.removeFromQueue(userId);
             if (removed) {
                 gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);

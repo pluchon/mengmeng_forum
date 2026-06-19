@@ -285,6 +285,13 @@
   stroke-width: 3;
 }
 
+.gobang-ai-icon {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  border-radius: 0;
+}
+
 .gobang-avatar img,
 .gobang-avatar b {
   display: inline-flex;
@@ -297,6 +304,13 @@
 
 .gobang-avatar img {
   object-fit: cover;
+}
+
+.gobang-avatar .gobang-ai-icon {
+  width: 72%;
+  height: 72%;
+  border-radius: 0;
+  object-fit: contain;
 }
 
 .gobang-avatar b {

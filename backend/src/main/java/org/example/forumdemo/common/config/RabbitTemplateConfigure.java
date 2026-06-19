@@ -92,4 +92,25 @@ public class RabbitTemplateConfigure {
                 new String(returned.getMessage().getBody())));
         return template;
     }
+
+    // 游戏事件专用：只承接结算后的异步副作用，不参与落子实时链路
+    @Bean("gameRabbitTemplate")
+    public RabbitTemplate gameRabbitTemplate(ConnectionFactory connectionFactory,
+            Jackson2JsonMessageConverter converter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(converter);
+        template.setConfirmCallback((correlationData, ack, cause) -> {
+            String messageId = correlationData != null ? correlationData.getId() : "unknown";
+            if (ack) {
+                log.debug("[游戏事件MQ] 投递成功 | messageId={}", messageId);
+            } else {
+                log.error("[游戏事件MQ] 投递失败 | messageId={} | cause={}", messageId, cause);
+            }
+        });
+        template.setReturnsCallback(returned -> log.error(
+                "[游戏事件MQ] 消息被退回 | routingKey={} | replyText={} | body={}",
+                returned.getRoutingKey(), returned.getReplyText(),
+                new String(returned.getMessage().getBody())));
+        return template;
+    }
 }

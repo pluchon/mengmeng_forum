@@ -226,7 +226,7 @@ ACCEPTANCE_SUMMARY {"total":33,"passed":32,"failed":1,"failedIds":["WATCH-003"]}
 | 游戏中心统计抽屉 | 通过，卡片为 `胜 / 负`、`总局数`、`胜率`，无积分余额，三行展示 |
 | 游戏中心/匹配页按钮 | 通过，按钮背景包含星空点状 `radial-gradient` 与深色 `linear-gradient` |
 | 五子棋匹配页文案 | 通过，“进入快速匹配”和说明文案在同一行 |
-| AI 对手展示 | 通过，对手卡展示 AI SVG 和 `DeepSeek V4 Flash · 本地策略兜底`；点击可打开统计弹窗 |
+| AI 对手展示 | 通过，对手卡展示 AI SVG 和 `deepseek-v4-flash · 本地策略兜底`；点击可打开统计弹窗 |
 | 玩家终局高亮 | 通过，胜方和负方棋盘均有 5 个 `.gobang-cell.is-winning` |
 | 观众终局高亮 | 通过，观众棋盘有 5 个 `.gobang-cell.is-winning`，展示“黑方获胜 五子连珠 60 秒后返回五子棋” |
 
@@ -276,6 +276,132 @@ output/playwright/gobang-winning-line-a.png
 output/playwright/gobang-winning-line-b.png
 output/playwright/gobang-winning-line-spectator.png
 ```
+
+### 5.6 2026-06-19 Plus 变更后验收重跑状态
+
+**结论**
+
+本次没有完成整份验收文档的完整重跑。已完成不依赖登录态的构建、编译和未登录访问检查；双账号匹配、房间对局、观战、聊天、AI、回放等浏览器端到端验收被本地 Redis/MySQL/RabbitMQ 环境阻塞。
+
+**当前环境检查**
+
+| 项目 | 结果 |
+|---|---|
+| 后端端口 | `localhost:10086` 已监听，进程来自当前项目 Spring Boot |
+| 前端端口 | `localhost:5173` 已监听，进程来自当前项目 Vite |
+| Redis | 配置端口 `63790` 未监听，`/captcha/generate` 返回 `Redis command timed out` |
+| MySQL | 配置端口 `33061` 未监听 |
+| RabbitMQ | 配置端口 `56720` 未监听 |
+
+**已执行项**
+
+| 验收项 | 命令/方式 | 结果 |
+|---|---|---|
+| 后端编译 | `mvn -DskipTests compile` | 通过 |
+| 前端构建 | `npm run build` | 通过，仅保留 Vite chunk 体积/动态导入警告 |
+| Python 语法检查 | `python -m py_compile ai-server/api/ai_hub.py ai-server/services/ai_hub_service.py` | 通过 |
+| 未登录访问 `/games` | Playwright CLI 打开 `http://localhost:5173/games` | 通过，出现“需要登录”提示 |
+| 未登录访问游戏概览接口 | `GET http://localhost:10086/game/center/overview` | 通过，返回 401 未授权 |
+| 验证码生成 | `POST http://localhost:10086/captcha/generate` | 阻塞，返回 `Redis command timed out` |
+
+**阻塞影响**
+
+验证码生成依赖 Redis。由于 Redis 端口不可用，无法签发 `X-Captcha-Ticket`，因此无法通过正常页面流程登录 `pluchon` / `charon`，后续双账号匹配、房间 WebSocket、落子、胜负结算、观战和聊天验收均无法继续。
+
+**恢复后需继续执行**
+
+1. 启动配置所需 Redis：`localhost:63790`。
+2. 启动配置所需 MySQL：`localhost:33061`。
+3. 启动配置所需 RabbitMQ：`localhost:56720`，virtual-host 为 `forum-demo`。
+4. 重新执行双账号浏览器验收：`pluchon` / `charon`。
+5. 补跑 P0：匹配、落子、非法落子、五连胜负、认输、计时、结算幂等、观战中立。
+6. 补跑 P1：聊天、表情、回放、AI 兜底匹配。
+
+### 5.7 2026-06-19 依赖恢复后的完整验收补跑
+
+**结论**
+
+本轮在 Redis、MySQL、RabbitMQ、前后端均启动后，补跑了登录、页面、WebSocket、匹配、对局、观战、聊天、回放、AI 兜底和构建检查。核心 P0 链路通过；AI 对手可进入房间并自动落子，但本轮实际返回模型名为 `deepseek-v4-flash · 本地策略兜底`，说明 Python/DeepSeek 完整模型调用未命中或返回不可用坐标，Java 端按设计使用了本地兜底策略。
+
+**环境检查**
+
+| 项目 | 结果 |
+|---|---|
+| 后端 | `localhost:10086` 正常 |
+| 前端 | `localhost:5173` 正常 |
+| Redis | Docker 容器 `forum-redis-dev` 正常 |
+| MySQL | Docker 容器 `forum-mysql-dev` 正常 |
+| RabbitMQ | Docker 容器 `forum-rabbitmq-dev` 正常 |
+| Python AI | `localhost:5000` 有响应 |
+| 数据库增量 | 已在本地 `forum_db` 执行 `incremental_game_center_gobang_plus.sql`，创建 `game_settlement_event` |
+
+**页面与看板娘排除**
+
+| 页面 | 结果 |
+|---|---|
+| `/games` 游戏中心 | 登录态正常；强刷新后 `.mascot-root`、`#oml2d-stage`、`#oml2d-canvas` 均不存在 |
+| `/games/gobang` 五子棋页面 | 登录态正常；看板娘 DOM 不存在 |
+| `/games/gobang/rooms/{roomId}` 对局页面 | 双账号进入房间后看板娘 DOM 不存在 |
+
+**协议与业务验收**
+
+| 类别 | 结果 | 证据 |
+|---|---|---|
+| 双账号登录 | 通过 | `pluchon`、`charon` 通过真实 `/user/login` 获取 JWT |
+| 双账号匹配 | 通过 | 双方进入同一房间 `52c8105c-eb94-407b-a7e9-64355c473d34` |
+| 步时超时 | 通过 | 手工浏览器对局等待超过步时后，双方分别展示“你赢了/你输了 · 超时”和 60 秒返回倒计时 |
+| 正常五连 | 通过 | 协议脚本房间 `af058f3a-acd7-4fed-b03b-a204df5392d9`，黑方 9 手横向五连 |
+| 胜线高亮数据 | 通过 | `winningLineCount=5` |
+| 双端实时同步 | 通过 | 双方均收到 9 条 `move_accepted` |
+| 观战中立身份 | 通过 | 房间 `41afb165-faa1-45d5-8344-c21b7c672ec5`，`zhangsan` 为 `spectator=true`，既非黑方也非白方 |
+| 观众禁止落子 | 通过 | 观众发送 `move` 后收到 `room_error`，`ok=false` |
+| 聊天文本 | 通过 | 房间 `fe3d48fa-80db-47a4-8fb8-9a475444a09b`，对端收到 `验收聊天 hello` |
+| 表情消息 | 通过 | 对端收到 `EMOJI` 消息与测试 URL |
+| 对局记录 | 通过 | 最近记录出现 `FIVE`、`TIMEOUT`、`SURRENDER` |
+| 棋谱回放 | 通过 | 记录 `id=34` 回放返回 9 手，坐标为 `(7,7)` 到 `(7,11)` 横向五连 |
+| AI 兜底匹配 | 通过 | 房间 `3a9cc734-2a59-4e8b-97fc-476c6c255677`，`aiRoom=true`，AI 自动落子 `(6,7)` |
+| AI 模型名 | 部分通过 | 当前展示 `deepseek-v4-flash · 本地策略兜底`；未证明 DeepSeek 远程调用成功 |
+
+**构建与语法检查**
+
+| 项目 | 结果 |
+|---|---|
+| 后端编译 | `mvn -DskipTests clean compile` 通过 |
+| 后端测试 | `mvn test` 通过，6 个测试通过；初次发现 `game_settlement_event` 缺表，执行增量 SQL 后重跑无该错误 |
+| 前端构建 | `npm run build` 通过，仅保留既有 Vite chunk / dynamic import 警告 |
+| Python 语法 | `python -m py_compile ai-server/api/ai_hub.py ai-server/services/ai_hub_service.py` 通过 |
+
+**本轮修复**
+
+1. 全局 App 挂载看板娘时排除 `/games` 与 `/games/**`，保证游戏中心、五子棋页面、对局页面不出现看板娘模型。
+2. AI 兜底展示名统一为 `deepseek-v4-flash · 本地策略兜底`，避免继续出现不精确模型名。
+3. 本地开发库执行 Plus 增量 SQL，补齐 `game_settlement_event` 表，消除结算事件补偿任务缺表错误。
+
+### 5.8 2026-06-19 AI 模型分层与图标专项修复
+
+**修复范围**
+
+| 模块 | 内容 |
+|---|---|
+| DeepSeek 模型名 | 按 DeepSeek 官方文档校正为 `deepseek-v4-flash` / `deepseek-v4-pro`，不再沿用旧 `chat` 口径 |
+| AI 分层 | 低水平五子棋玩家使用 `deepseek-v4-flash`；五子棋积分达到 1600 及以上时使用 `deepseek-v4-pro` |
+| Java 到 Python | Java 创建 AI 房间时写入 `aiModelCode`，调用 Python AI Hub 时通过 `model_code` 传递目标模型 |
+| Python AI Hub | `/api/v1/ai/gobang-move` 接收 `model_code`，优先调用对应 DeepSeek 模型；只有 DeepSeek 不可用、返回非法坐标或解析失败时才进入本地规则兜底 |
+| 前端图标 | AI 对手头像改用 `forum-vue/front/src/assets/svg/deepseek-color.svg`，通过 `modelIcon()` 统一解析，不再使用页面内手写 SVG |
+
+**验收结果**
+
+| 项目 | 结果 |
+|---|---|
+| 后端编译 | `mvn -DskipTests clean compile` 通过 |
+| 后端测试 | `mvn test` 通过，6 个测试通过 |
+| 前端构建 | `npm run build` 通过，仅保留既有 Vite chunk / dynamic import 警告 |
+| Python 语法 | `python -m py_compile ai-server/api/ai_hub.py ai-server/services/ai_hub_service.py` 通过 |
+| Python 单函数导入 | 当前命令行 Python 环境缺少 `requests`，未做真实单函数调用；以运行中的 Python 服务环境为准 |
+
+**说明**
+
+如果 Python 服务已经启动但界面仍显示“本地策略兜底”，现在只代表 DeepSeek 调用失败、超时、未配置有效 API Key、网络不可达、返回坐标非法或解析失败；旧版“先本地判断再跳过模型调用”的路径已移除。修改 Java/Python 源码后，正在运行的后端和 Python AI 服务都需要重启，才能加载本次 `model_code` 传递与分层逻辑。
 
 ## 6. 重点端到端链路
 
@@ -395,4 +521,4 @@ output/playwright/gobang-winning-line-spectator.png
 
 ### 9.4 说明
 
-AI 目前没有伪装为外部大模型调用，前端展示模型名为 `Gobang-Heuristic v1`。该策略用于快速本地响应：先寻找 AI 直接五连，再阻挡玩家五连，最后基于开放端、连子长度和中心偏好评分选点。后续如要接入真实大模型，可在该策略之前增加超时受控的模型候选点生成，并保留当前启发式作为兜底。
+AI 优先调用 Python AI Hub，再由 Python 按 `model_code` 调用 DeepSeek。低水平玩家默认 `deepseek-v4-flash`，五子棋积分达到 1600 及以上时默认 `deepseek-v4-pro`。当 DeepSeek 没有返回可用坐标时，前端展示对应模型名加 `· 本地策略兜底`，本地策略只作为兜底保底能力。

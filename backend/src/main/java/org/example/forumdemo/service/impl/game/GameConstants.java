@@ -19,6 +19,18 @@ public class GameConstants {
     public static final String END_TIMEOUT = "TIMEOUT";
     public static final String END_ABNORMAL = "ABNORMAL";
 
+    public static final String SETTLEMENT_EVENT_GAME_FINISHED = "GAME_FINISHED";
+    public static final String SETTLEMENT_EVENT_CREATED = "CREATED";
+    public static final String SETTLEMENT_EVENT_MQ_SENT = "MQ_SENT";
+    public static final String SETTLEMENT_EVENT_MQ_PENDING = "MQ_PENDING";
+    public static final String SETTLEMENT_EVENT_CONSUMED = "CONSUMED";
+    public static final String SETTLEMENT_EVENT_DEAD = "DEAD";
+
+    public static final String MATCH_BUCKET_BRONZE = "bronze";
+    public static final String MATCH_BUCKET_SILVER = "silver";
+    public static final String MATCH_BUCKET_GOLD = "gold";
+    public static final String MATCH_BUCKET_MASTER = "master";
+
     public static final int INITIAL_SCORE = 1000;
     public static final int SCORE_DELTA = 10;
     public static final int BOARD_SIZE = 15;

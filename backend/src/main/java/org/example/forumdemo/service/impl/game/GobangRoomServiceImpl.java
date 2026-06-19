@@ -1,18 +1,21 @@
 package org.example.forumdemo.service.impl.game;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.config.AiHubUrls;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
+import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
 import org.example.forumdemo.entity.db.GameMatchRecord;
 import org.example.forumdemo.entity.db.GameRoomMove;
 import org.example.forumdemo.entity.db.GameRoomPlayer;
+import org.example.forumdemo.entity.db.GameSettlementEvent;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.game.GobangChatRequest;
@@ -21,12 +24,17 @@ import org.example.forumdemo.entity.vo.game.GobangChatVO;
 import org.example.forumdemo.entity.vo.game.GobangMoveVO;
 import org.example.forumdemo.entity.vo.game.GobangRoomParticipantVO;
 import org.example.forumdemo.entity.vo.game.GobangRoomStateVO;
+import org.example.forumdemo.entity.vo.game.GameRoomSnapshotVO;
+import org.example.forumdemo.entity.vo.mq.GameFinishedMqVO;
 import org.example.forumdemo.mapper.GameMatchRecordMapper;
 import org.example.forumdemo.mapper.GameRoomMoveMapper;
 import org.example.forumdemo.mapper.GameRoomPlayerMapper;
+import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
+import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +57,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -59,7 +68,13 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private static final long RECONNECT_WINDOW_MS = 60_000;
 
-    private static final String DEFAULT_AI_MODEL_NAME = "DeepSeek V4 Flash · 本地策略兜底";
+    private static final int AI_PRO_SCORE_THRESHOLD = 1600;
+
+    private static final String AI_MODEL_FLASH = "deepseek-v4-flash";
+
+    private static final String AI_MODEL_PRO = "deepseek-v4-pro";
+
+    private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH + " · 本地策略兜底";
 
     // roomId -> 房间状态
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
@@ -74,6 +89,12 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GameUserProfileService gameUserProfileService;
 
     @Autowired
+    private GameRoomSnapshotService gameRoomSnapshotService;
+
+    @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
     private GameUserProfileMapper gameUserProfileMapper;
 
     @Autowired
@@ -84,6 +105,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private GameRoomMoveMapper gameRoomMoveMapper;
+
+    @Autowired
+    private GameSettlementEventMapper gameSettlementEventMapper;
 
     @Autowired
     private PointsService pointsService;
@@ -99,6 +123,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private ForumProducer forumProducer;
 
     @Value("${forum.ai.internal-key:}")
     private String aiInternalKey;
@@ -117,6 +144,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         gameUserProfileService.updateStatus(userIdB, GameConstants.GOBANG, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
+        saveRoomSnapshot(room);
         return room.getRoomId();
     }
 
@@ -127,12 +155,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
         GobangRoom room = new GobangRoom(userId, GameConstants.AI_USER_ID);
         room.setAiRoom(true);
+        String modelCode = chooseAiModelCode(userId);
+        room.setAiModelCode(modelCode);
+        room.setAiModelName(modelCode);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
         userRoomIds.put(userId, room.getRoomId());
         gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userId, "BLACK");
         saveRoomPlayer(room.getRoomId(), GameConstants.AI_USER_ID, "AI");
+        saveRoomSnapshot(room);
         return room.getRoomId();
     }
 
@@ -147,6 +179,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         } else {
             room.getSpectatorJoinedAt().putIfAbsent(userId, System.currentTimeMillis());
             saveRoomPlayer(roomId, userId, "SPECTATOR");
+            saveRoomSnapshot(room);
             sendStateToRoom(room, "room_state_updated");
         }
         return getRoomState(roomId, userId);
@@ -160,10 +193,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void handleMove(String roomId, Long userId, Integer row, Integer col, String requestId) {
-        GobangRoom room = requireRoom(roomId, userId);
+        GobangRoom room = findRoomForPlayerAction(
+                roomId,
+                userId,
+                requestId,
+                "当前对战已经结束，不能继续落子",
+                "观战玩家不能落子"
+        );
+        if (room == null) {
+            return;
+        }
         synchronized (room) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                sendRoomError(roomId, userId, requestId, "房间已结束");
+                sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能继续落子");
                 return;
             }
             if (!userId.equals(room.getCurrentTurnUserId())) {
@@ -192,6 +234,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             }
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
+            saveRoomSnapshot(room);
             GobangMoveVO moveVO = new GobangMoveVO(
                     userId,
                     row,
@@ -213,10 +256,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void surrender(String roomId, Long userId, String requestId) {
-        GobangRoom room = requireRoom(roomId, userId);
+        GobangRoom room = findRoomForPlayerAction(
+                roomId,
+                userId,
+                requestId,
+                "当前对战已经结束，不能认输",
+                "观战玩家不能认输"
+        );
+        if (room == null) {
+            return;
+        }
         synchronized (room) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                sendRoomError(roomId, userId, requestId, "房间已结束");
+                sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能认输");
                 return;
             }
             finishRoom(room, room.opponentOf(userId), GameConstants.END_SURRENDER);
@@ -225,8 +277,15 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void chat(String roomId, Long userId, GobangChatRequest request, String requestId) {
-        GobangRoom room = requireExistingRoom(roomId);
-        if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus()) && !GameConstants.ROOM_FINISHED.equals(room.getRoomStatus())) {
+        GobangRoom room = findRoomForChat(roomId, userId, requestId);
+        if (room == null) {
+            return;
+        }
+        if (GameConstants.ROOM_FINISHED.equals(room.getRoomStatus())) {
+            sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能发送消息或表情包");
+            return;
+        }
+        if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
             sendRoomError(roomId, userId, requestId, "房间不可聊天");
             return;
         }
@@ -249,6 +308,40 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 System.currentTimeMillis()
         );
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
+    }
+
+    private GobangRoom findRoomForPlayerAction(
+            String roomId,
+            Long userId,
+            String requestId,
+            String endedMessage,
+            String forbiddenMessage
+    ) {
+        if (roomId == null || roomId.isBlank() || userId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        GobangRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendRoomError(roomId, userId, requestId, endedMessage);
+            return null;
+        }
+        if (!room.contains(userId)) {
+            sendRoomError(roomId, userId, requestId, forbiddenMessage);
+            return null;
+        }
+        return room;
+    }
+
+    private GobangRoom findRoomForChat(String roomId, Long userId, String requestId) {
+        if (roomId == null || roomId.isBlank() || userId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        GobangRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能发送消息或表情包");
+            return null;
+        }
+        return room;
     }
 
     @Override
@@ -337,7 +430,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         room.setWinnerUserId(winnerId);
         room.setEndReason(endReason);
         Long loserId = winnerId == null ? null : room.opponentOf(winnerId);
-        transactionTemplate.executeWithoutResult(status -> {
+        GameFinishedMqVO finishedEvent = transactionTemplate.execute(status -> {
             GameMatchRecord record = new GameMatchRecord();
             record.setGameCode(GameConstants.GOBANG);
             record.setRoomId(room.getRoomId());
@@ -371,9 +464,114 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
                 gameUserProfileMapper.updatePlayStatus(room.getWhiteUserId(), GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
             }
+            return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
+        saveRoomSnapshot(room);
+        publishGameFinishedEvent(finishedEvent);
         sendFinalStateToRoom(room);
         cleanupRoom(room);
+    }
+
+    private void saveRoomSnapshot(GobangRoom room) {
+        if (room == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        GameRoomSnapshotVO snapshot = new GameRoomSnapshotVO(
+                GameConstants.GOBANG,
+                room.getRoomId(),
+                room.getRoomStatus(),
+                room.getBlackUserId(),
+                room.getWhiteUserId(),
+                room.getCurrentTurnUserId(),
+                room.copyBoard(),
+                countMoves(room),
+                room.getWinnerUserId(),
+                room.getEndReason(),
+                room.getWinningLine(),
+                room.remainingGameMs(room.getBlackUserId(), now),
+                room.remainingGameMs(room.getWhiteUserId(), now),
+                room.currentTurnRemainingMs(now),
+                now
+        );
+        gameRoomSnapshotService.saveSnapshot(snapshot);
+    }
+
+    private GameFinishedMqVO createGameFinishedEvent(
+            GobangRoom room,
+            GameMatchRecord record,
+            Long winnerId,
+            Long loserId,
+            String endReason
+    ) {
+        String eventId = UUID.randomUUID().toString();
+        GameSettlementEvent event = new GameSettlementEvent();
+        event.setEventId(eventId);
+        event.setGameCode(GameConstants.GOBANG);
+        event.setRoomId(room.getRoomId());
+        event.setEventType(GameConstants.SETTLEMENT_EVENT_GAME_FINISHED);
+        event.setRecordId(record.getId());
+        event.setStatus(GameConstants.SETTLEMENT_EVENT_CREATED);
+        event.setRetryCount(0);
+        event.setDeleteState((byte) 0);
+        gameSettlementEventMapper.insert(event);
+        return new GameFinishedMqVO(
+                eventId,
+                GameConstants.GOBANG,
+                room.getRoomId(),
+                record.getId(),
+                winnerId,
+                loserId,
+                endReason,
+                room.getWinningLine(),
+                System.currentTimeMillis()
+        );
+    }
+
+    private void publishGameFinishedEvent(GameFinishedMqVO event) {
+        if (event == null) {
+            return;
+        }
+        try {
+            forumProducer.sendGameFinished(event);
+            updateSettlementEventStatusFromCreated(
+                    event.getEventId(),
+                    GameConstants.SETTLEMENT_EVENT_MQ_SENT,
+                    null
+            );
+        } catch (Exception e) {
+            log.error("投递游戏结束 MQ 失败 roomId={}, eventId={}, error={}",
+                    event.getRoomId(),
+                    event.getEventId(),
+                    e.getMessage());
+            updateSettlementEventStatusFromCreated(
+                    event.getEventId(),
+                    GameConstants.SETTLEMENT_EVENT_MQ_PENDING,
+                    truncateError(e.getMessage())
+            );
+        }
+    }
+
+    private String chooseAiModelCode(Long userId) {
+        GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
+        int score = profile == null || profile.getScore() == null ? 0 : profile.getScore();
+        return score < AI_PRO_SCORE_THRESHOLD ? AI_MODEL_FLASH : AI_MODEL_PRO;
+    }
+
+    private void updateSettlementEventStatusFromCreated(String eventId, String status, String lastError) {
+        LambdaUpdateWrapper<GameSettlementEvent> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(GameSettlementEvent::getEventId, eventId)
+                .eq(GameSettlementEvent::getStatus, GameConstants.SETTLEMENT_EVENT_CREATED)
+                .set(GameSettlementEvent::getStatus, status)
+                .set(GameSettlementEvent::getLastError, lastError);
+        gameSettlementEventMapper.update(null, wrapper);
+    }
+
+    private String truncateError(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() <= 512 ? message : message.substring(0, 512);
     }
 
     private void cleanupRoom(GobangRoom room) {
@@ -646,7 +844,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (remoteMove != null) {
             return remoteMove;
         }
-        room.setAiModelName(DEFAULT_AI_MODEL_NAME);
+        room.setAiModelName(formatAiModelName(room.getAiModelCode(), true));
         return chooseLocalAiMove(room.getBoard());
     }
 
@@ -665,6 +863,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             body.put("ai_chess", 2);
             body.put("player_chess", 1);
             body.put("room_id", room.getRoomId());
+            body.put("model_code", room.getAiModelCode());
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     AiHubUrls.gobangMoveUrl(),
                     new HttpEntity<>(body, headers),
@@ -682,13 +881,35 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             if (!inBoard(row, col) || room.getBoard()[row][col] != 0) {
                 return null;
             }
-            String modelName = data.get("model") == null ? "" : String.valueOf(data.get("model")).trim();
-            room.setAiModelName(modelName.isBlank() ? "DeepSeek V4 Flash · Python" : modelName);
+            String modelCode = parseModelCode(data, room.getAiModelCode());
+            boolean fallback = Boolean.TRUE.equals(data.get("fallback"));
+            room.setAiModelCode(modelCode);
+            room.setAiModelName(formatAiModelName(modelCode, fallback));
             return new int[] { row, col };
         } catch (Exception e) {
             log.debug("五子棋 Python AI 不可用，使用本地兜底策略 roomId={}, error={}", room.getRoomId(), e.getMessage());
             return null;
         }
+    }
+
+    private String parseModelCode(Map data, String defaultModelCode) {
+        Object raw = data.get("modelCode");
+        if (raw == null) {
+            raw = data.get("model");
+        }
+        String modelCode = raw == null ? "" : String.valueOf(raw).trim();
+        if (AI_MODEL_PRO.equals(modelCode)) {
+            return AI_MODEL_PRO;
+        }
+        if (AI_MODEL_FLASH.equals(modelCode)) {
+            return AI_MODEL_FLASH;
+        }
+        return AI_MODEL_PRO.equals(defaultModelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
+    }
+
+    private String formatAiModelName(String modelCode, boolean fallback) {
+        String safeModelCode = AI_MODEL_PRO.equals(modelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
+        return fallback ? safeModelCode + " · 本地策略兜底" : safeModelCode;
     }
 
     private SimpleClientHttpRequestFactory aiRequestFactory() {
@@ -879,11 +1100,27 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                         e.getMessage());
             }
         });
+        publishGenericRoomState(room, type);
+    }
+
+    private void publishGenericRoomState(GobangRoom room, String type) {
+        try {
+            String payload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                    type,
+                    null,
+                    toStateVO(room, null)
+            ));
+            gameRoomEventBusService.publishRoomEvent(room.getRoomId(), payload);
+        } catch (Exception e) {
+            log.debug("发布五子棋房间状态事件失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
+        }
     }
 
     private void broadcast(String roomId, GameWsResponse<?> response) {
         try {
-            gameConnectionRegistry.broadcastRoom(roomId, objectMapper.writeValueAsString(response));
+            String payload = objectMapper.writeValueAsString(response);
+            gameConnectionRegistry.broadcastRoom(roomId, payload);
+            gameRoomEventBusService.publishRoomEvent(roomId, payload);
         } catch (Exception e) {
             log.debug("广播五子棋房间消息失败 roomId={}, error={}", roomId, e.getMessage());
         }

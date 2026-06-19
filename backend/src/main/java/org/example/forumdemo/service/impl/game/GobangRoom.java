@@ -68,7 +68,11 @@ public class GobangRoom {
 
     // AI 展示名：Python 模型成功返回时更新，否则显示本地兜底策略
     @Setter
-    private String aiModelName = "DeepSeek V4 Flash · 本地策略兜底";
+    private String aiModelName = "deepseek-v4-flash · 本地策略兜底";
+
+    // AI 模型编码：低水平玩家默认 deepseek-v4-flash，高水平玩家默认 deepseek-v4-pro
+    @Setter
+    private String aiModelCode = "deepseek-v4-flash";
 
     // 房间内聊天消息
     private final List<String> chatMessages = new ArrayList<>();

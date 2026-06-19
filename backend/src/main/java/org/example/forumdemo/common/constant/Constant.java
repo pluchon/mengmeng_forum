@@ -37,6 +37,8 @@ public class Constant {
     public static final String QUORUM_QUEUE_AUDIT_TASK   = "q-audit-article";
     // 业务仲裁队列 4：Python -> Java 帖子审核结果回执队列
     public static final String QUORUM_QUEUE_AUDIT_RESULT = "q-audit-result";
+    // 游戏对局结束事件队列：承接结算后的通知、统计和榜单刷新入口
+    public static final String QUORUM_QUEUE_GAME_FINISHED = "q-game-finished";
     // 死信队列：接收过期或超出积压限制的消息（绑定到死信交换机）
     public static final String D_QUORUM_QUEUE_1 = "d-queue_1";
 
@@ -49,6 +51,8 @@ public class Constant {
     public static final String ROUTING_KEY_AUDIT_TASK   = "forum.audit.article";
     // 主题交换机 -> 审核结果队列 (Python 回执, Java 消费)
     public static final String ROUTING_KEY_AUDIT_RESULT = "forum.audit.result";
+    // 主题交换机 -> 游戏结束事件队列
+    public static final String ROUTING_KEY_GAME_FINISHED = "forum.game.finished";
     // 死信消息的路由键：消息过期后由死信交换机使用此 Key 路由到死信队列
     public static final String ROUTING_KEY_DEAD = "forum.dead.#";
 
@@ -56,6 +60,8 @@ public class Constant {
     // 用户详情 Hash 缓存前缀，格式：user_info:{userId}
     //WebSocket 跨实例推送 Redis Pub/Sub 频道
     public static final String WS_PUSH_CHANNEL = "forum:ws:push";
+    // 游戏房间跨实例事件广播频道
+    public static final String GAME_ROOM_EVENT_CHANNEL = "forum:game:room:event";
 
     public static final String REDIS_KEY_USER_INFO = "user_info:";
     // 用户名 -> userId String 映射前缀，格式：user_name:{username}

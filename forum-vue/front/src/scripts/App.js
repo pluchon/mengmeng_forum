@@ -24,9 +24,11 @@ export function useApp() {
   const showGlobalHeader = computed(
     () => !isAuthPage.value && !route.matched.some(r => r.meta?.shell),
   )
+  /** 游戏页面是独立沉浸式界面，不展示看板娘模型 */
+  const isGamePage = computed(() => route.path === '/games' || route.path.startsWith('/games/'))
   /** 登录/注册等认证页不展示看板娘 */
   const showMascot = computed(
-    () => import.meta.env.VITE_ENABLE_MASCOT === 'true' && !isAuthPage.value,
+    () => import.meta.env.VITE_ENABLE_MASCOT === 'true' && !isAuthPage.value && !isGamePage.value,
   )
 
   return {
