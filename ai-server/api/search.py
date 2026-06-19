@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from flask import jsonify, request
 
@@ -16,15 +17,22 @@ logger = logging.getLogger(__name__)
 _RAG = settings.rag
 
 
-def _parse_candidates(data: dict, *, id_field: str) -> tuple[str, list[str], list]:
-    query = (data.get("query") or "").strip()
+def _json_payload() -> dict[str, Any]:
+    data = request.get_json(silent=True) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_candidates(data: dict[str, Any], *, id_field: str) -> tuple[str, list[str], list[Any]]:
+    query_max_len = int(_RAG.get("query_max_len", 500))
+    query = str(data.get("query") or "").strip()[:query_max_len]
     candidates = data.get("candidates") or []
+    candidates = candidates if isinstance(candidates, list) else []
     max_candidates = int(_RAG.get("max_candidates", 150))
     doc_trunc = int(_RAG.get("doc_truncate", 1200))
 
-    seen_ids: set = set()
+    seen_ids: set[Any] = set()
     docs: list[str] = []
-    meta: list = []
+    meta: list[Any] = []
     for c in candidates[:max_candidates]:
         if not isinstance(c, dict):
             continue
@@ -43,7 +51,7 @@ def _parse_candidates(data: dict, *, id_field: str) -> tuple[str, list[str], lis
 
 @api.route("/article-rag-search", methods=["POST"])
 def article_rag_search():
-    data = request.get_json(silent=True) or {}
+    data = _json_payload()
     query, docs, meta = _parse_candidates(data, id_field="articleId")
 
     if not query:
@@ -57,7 +65,7 @@ def article_rag_search():
 
 @api.route("/user-rag-search", methods=["POST"])
 def user_rag_search():
-    data = request.get_json(silent=True) or {}
+    data = _json_payload()
     query, docs, meta = _parse_candidates(data, id_field="userId")
 
     if not query:

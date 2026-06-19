@@ -1,4 +1,6 @@
 """Flask 蓝图集合"""
+from __future__ import annotations
+
 from flask import Blueprint
 
 api = Blueprint("api", __name__, url_prefix="/api/v1")

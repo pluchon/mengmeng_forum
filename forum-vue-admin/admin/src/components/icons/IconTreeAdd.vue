@@ -15,7 +15,3 @@
     <path d="M16 24L32 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
 </template>
-
-<script lang="ts" setup></script>
-
-<style lang="scss" scoped></style>

@@ -29,5 +29,3 @@ interface Props {
   data?: string[]
 }
 </script>
-
-<style lang="scss" scoped></style>

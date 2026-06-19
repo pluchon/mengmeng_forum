@@ -16,5 +16,3 @@ const props = withDefaults(defineProps<Props>(), {
   icon: ''
 })
 </script>
-
-<style lang="scss" scoped></style>

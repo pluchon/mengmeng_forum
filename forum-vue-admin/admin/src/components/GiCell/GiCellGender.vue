@@ -24,5 +24,3 @@ interface Props {
   gender?: Gender
 }
 </script>
-
-<style lang="scss" scoped></style>

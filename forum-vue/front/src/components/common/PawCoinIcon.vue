@@ -14,10 +14,4 @@
   </svg>
 </template>
 
-<style scoped>
-.paw-coin-icon {
-  display: block;
-  width: 1.15em;
-  height: 1.15em;
-}
-</style>
+<style scoped src="./PawCoinIcon.css"></style>

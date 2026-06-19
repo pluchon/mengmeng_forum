@@ -187,6 +187,7 @@ known_hosts
 nginx/package/
 nginx/dist/
 nginx/logs/
+output/
 *.tar
 *.tar.gz
 logs-collect-*.txt

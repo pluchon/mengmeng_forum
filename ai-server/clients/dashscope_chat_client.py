@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 import json
 import logging
-from typing import Any, Iterator, Optional
+from typing import Any
 
 import requests
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -156,8 +157,8 @@ class DashscopeChatModel(BaseChatModel):
     def _generate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         from config import settings

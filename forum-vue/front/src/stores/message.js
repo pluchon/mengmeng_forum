@@ -24,6 +24,14 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
+  function showIncomingTip() {
+    showTip.value = true
+  }
+
+  function hideTip() {
+    showTip.value = false
+  }
+
   function decrementUnread(count = 1) {
     unreadCount.value = Math.max(0, unreadCount.value - count)
     if (unreadCount.value === 0) {
@@ -102,6 +110,8 @@ export const useMessageStore = defineStore('message', () => {
     showTip,
     tipText,
     setUnreadCount,
+    showIncomingTip,
+    hideTip,
     onNewMessage,
     decrementUnread,
     notifyPeerRead,

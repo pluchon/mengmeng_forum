@@ -222,7 +222,7 @@ export function useProfile() {
         if (userInfo.value) {
           userInfo.value = { ...userInfo.value, backgroundUrl: url }
         }
-        userStore.backgroundUrl = url
+        userStore.patchUserProfile({ backgroundUrl: url })
         ElMessage.success('背景图已更新')
       } else {
         ElMessage.error(res.message || '上传失败')

@@ -4,28 +4,27 @@
 
 ## 部分界面演示
 
-![image-20260528203429613](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528203429912.png)
+![image-20260618112324233](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260618112324431.png)
 
-![image-20260528203511617](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528203511743.png)
+![image-20260618112231878](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260618112232112.png)
 
-![image-20260528203608982](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528203609400.png)
+![image-20260605175708728](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175708955.png)
 
-![image-20260528203732068](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528203732161.png)
+![image-20260605175802603](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175803233.png)
 
-![image-20260528204713731](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528204713886.png)
+![image-20260605175822507](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175822653.png)
 
-![image-20260528204818241](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260528204818579.png)
+> 管理界面还没完全做好，目前比较糙
 
-![image-20260531175200788](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260531180048907.png)
+![image-20260605175951669](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175951857.png)
 
-![image-20260531175245223](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260531180048945.png)
+![image-20260605180011517](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605180011700.png)
 
 ***
 
 线上地址：
 
 - 用户端：`https://www.nuonuoya.cn`
-- 管理端：`https://admin.nuonuoya.cn`
 
 > 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具。
 
@@ -147,29 +146,125 @@ sequenceDiagram
 
 ### 2) 视频上传
 
-- ≤200MB：直传 OSS
-- \>200MB：Java → FFmpeg（优先 remux，否则 ultrafast 重编码）→ OSS
-- Nginx `/file/` 代理超时 3600s
+用户选择视频后，前端可**后台上传**并展示进度；后端按体积分流，大文件经 FFmpeg 再写入 OSS。Nginx `/file/` 代理超时 **3600s**，避免长视频压缩卡住。
+
+- **≤200MB**：Java 直传 OSS
+- **>200MB**：Java → FFmpeg（H.264+AAC 则 **remux** 不重编码，否则 **ultrafast** 重编码）→ 回传字节流 → OSS
+- 绑定帖子：保存草稿 / 提交时调用 `setArticleVideo`（视频帖不调相册接口）
+
+```mermaid
+flowchart TD
+  U[用户选择视频] --> FE[前端后台上传 + 进度条]
+  FE --> NG[Nginx /file/ 反代]
+  NG --> J[Java FileService]
+  J --> S{体积 ≤ 200MB?}
+  S -->|是| OSS1[直传 OSS]
+  S -->|否| FF[FFmpeg 服务]
+  FF --> M{H.264 + AAC?}
+  M -->|是| R[remux -c copy]
+  M -->|否| E[ultrafast 重编码]
+  R --> OSS2[上传 OSS]
+  E --> OSS2
+  OSS1 --> URL[返回 videoUrl]
+  OSS2 --> URL
+  URL --> BIND[setArticleVideo 绑定帖子]
+```
 
 ### 3) 行为验证码 + 一次性票据
 
-滑块通过后签发 Redis 短 TTL 票据；注册 / 发码须带票据且**用一次即删**。
+短信 / 邮件有成本，注册与找回密码不能裸奔。滑块验证通过后签发 **Redis 短 TTL 票据**；后续发码 / 注册须携带票据，校验成功即 **删除**（一次性）。
+
+```mermaid
+sequenceDiagram
+  participant FE as 前端
+  participant BE as Java 后端
+  participant Redis as Redis
+
+  FE->>BE: 1) 提交滑块验证结果
+  BE->>Redis: SET ticket(UUID, purpose, TTL≈2min)
+  BE-->>FE: 返回 ticket
+
+  FE->>BE: 2) 注册 / 发码（带 ticket）
+  BE->>Redis: GET + DEL ticket（用一次即失效）
+  alt 票据有效且未用过
+    BE-->>FE: 继续业务（发码 / 注册）
+  else 无效 / 已用 / 过期
+    BE-->>FE: 拒绝
+  end
+```
 
 ### 4) 积分抽奖防超卖
 
-事务内 `SELECT FOR UPDATE`；扣积分 `points >= cost`、扣库存 `stock > 0` 条件更新；硬 / 软保底。
+抽奖最怕 **积分扣成负数** 和 **限量奖品发超**。关键扣减在事务内用 **带条件的 UPDATE** 保证原子性；并发抽奖对用户行 `SELECT FOR UPDATE` 串行化。
+
+- 扣积分：`WHERE points >= cost`，影响行数为 0 则失败
+- 扣库存：`WHERE stock > 0`，失败则换奖品重抽（有上限）
+- **硬保底**：连续 N 次未中头奖 → 下次走保底池
+- **软保底**：十连最后一抽兜底，保证至少一个稀有
+
+```mermaid
+flowchart TD
+  S[开始抽奖] --> L[事务: SELECT user FOR UPDATE]
+  L --> P[扣积分 UPDATE points>=cost]
+  P -->|0 行| F1[余额不足]
+  P -->|成功| D{单抽 / 十连}
+  D --> G{触发硬保底?}
+  G -->|是| POOL[保底奖池]
+  G -->|否| W[按权重抽奖品]
+  POOL --> K
+  W --> K[扣库存 UPDATE stock>0]
+  K -->|失败| R[换奖品重试]
+  K -->|成功| REC[写中奖记录 / 发奖]
+  R --> W
+  REC --> E[提交事务]
+  D --> SB[十连: 末抽软保底检查]
+  SB --> E
+```
 
 ### 5) 私信跨实例推送
 
-写库后 Redis PubSub 广播；持有目标 WebSocket 的实例负责推送。
+多实例时，接收方的 WebSocket 连接落在哪台机器不确定。写库后向 Redis **PubSub 广播**推送事件；**只有持有目标连接的那台实例**真正下发，其余实例忽略。
 
-### 6) 热帖榜
+```mermaid
+flowchart LR
+  A[用户 A 发私信] --> J1[Java 实例 1]
+  B[用户 B 的 WS] --> J2[Java 实例 2]
 
-Redis ZSet；行为 `ZINCRBY`；删帖 / 驳回 `ZREM`。
+  J1 --> DB[(MySQL 持久化消息)]
+  J1 --> Pub[Redis PubSub 广播]
+  Pub --> J1
+  Pub --> J2
+  J2 -->|本机有 B 的连接| WS[WebSocket 推送给 B]
+  J1 -->|无 B 连接| Skip[忽略]
+```
 
-### 7) 智能搜索
+### 6) 热帖榜（Redis ZSet）
 
-先 DB `LIKE`，不足时 ai-server 语义排序 / RAG。
+热帖榜用 Redis **ZSet**：member 为帖子 ID，score 为热度。点赞 / 浏览 / 回复 / 收藏等行为触发 `ZINCRBY`；删帖、驳回、下线时 `ZREM`。定时任务可从 DB 全量重算做兜底。
+
+```mermaid
+flowchart TD
+  E[用户行为: 浏览 / 点赞 / 回复 / 收藏] --> Z[Redis ZSet hot_rank]
+  Z --> I[ZINCRBY 加分]
+  D[删帖 / 审核驳回 / 下线] --> R[ZREM 移除]
+  T[定时兜底任务] --> Recalc[从 MySQL 重算热度]
+  Recalc --> Z
+  Z --> API[首页 / 热榜接口 ZREVRANGE]
+```
+
+### 7) 智能搜索（快搜 + 语义增强）
+
+搜索分层：**先数据库** `LIKE` 快搜（低成本、稳定）；结果过少或相关性不足时，再调 **ai-server** 做语义排序 / RAG 召回，把更相关的帖子排到前面。
+
+```mermaid
+flowchart TD
+  Q[用户输入关键词] --> DB[MySQL 标题 LIKE 快搜]
+  DB --> C{结果数量 / 质量够用?}
+  C -->|是| R1[直接返回列表]
+  C -->|否| Cand[拉取候选: 标题 + 摘要 + 标签]
+  Cand --> AI[ai-server 语义排序 / RAG]
+  AI --> R2[返回重排后的结果]
+```
 
 ---
 

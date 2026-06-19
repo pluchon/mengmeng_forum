@@ -5,10 +5,10 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
-
-import json
+from typing import Any
 
 from flask import Response, jsonify, request, stream_with_context
 
@@ -18,8 +18,11 @@ from graphs.mascot_graph import run_mascot_chat, stream_mascot_chat
 
 logger = logging.getLogger(__name__)
 
+_ALLOWED_SKILLS = {"writing", "help", "chat"}
+_ALLOWED_TIERS = {"basic", "vip"}
 
-def _client_datetime_from_body(data: dict) -> str:
+
+def _client_datetime_from_body(data: dict[str, Any]) -> str:
     raw = data.get("client_datetime") or data.get("clientDatetime") or ""
     return str(raw).strip()[:64]
 
@@ -32,46 +35,26 @@ def _internal_auth_ok() -> bool:
     return got == expected
 
 
-@api.route("/mascot/chat", methods=["POST"])
-def mascot_chat():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()
-    if not message:
-        return jsonify({"code": 400, "msg": "message required"}), 400
-
-    max_len = int(settings.mascot.get("max_user_message_len", 2000))
-    if len(message) > max_len:
-        return jsonify({"code": 400, "msg": f"message too long (max {max_len})"}), 400
-
-    session_id = str(data.get("session_id") or data.get("sessionId") or "")
-    # Java BFF 将 forum_mascot_model.code 放在 appearance；勿再强行收敛为 standard/keyboard/gamepad
-    appearance = str(data.get("appearance") or "").strip().lower()
+def _sanitize_appearance(raw: Any) -> str:
+    # Java BFF 将 forum_mascot_model.code 放在 appearance；勿再强行收敛为固定枚举
+    appearance = str(raw or "").strip().lower()
     appearance = re.sub(r"[^a-z0-9_-]", "", appearance)
-    if not appearance:
-        appearance = "snow_miku"
-    appearance = appearance[:64]
+    return (appearance or "snow_miku")[:64]
 
-    llm_provider = str(data.get("llm_provider") or data.get("llmProvider") or "").strip()
-    skill = str(data.get("skill") or "chat").strip().lower()
-    if skill not in ("writing", "help", "chat"):
-        skill = "chat"
-    tier = str(data.get("tier") or "basic").lower()
-    if tier not in ("basic", "vip"):
-        tier = "basic"
-    vip_tier_raw = data.get("vip_tier", data.get("vipTier", 0))
+
+def _parse_vip_tier(raw: Any) -> int:
     try:
-        vip_tier = max(0, min(2, int(vip_tier_raw)))
+        return max(0, min(2, int(raw)))
     except (TypeError, ValueError):
-        vip_tier = 0
+        return 0
 
-    history = data.get("history")
-    if not isinstance(history, list):
-        history = []
+
+def _clean_history(raw: Any, max_len: int) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+
     clean_history: list[dict[str, str]] = []
-    for item in history:
+    for item in raw:
         if not isinstance(item, dict):
             continue
         role = str(item.get("role", "")).lower()
@@ -79,19 +62,59 @@ def mascot_chat():
         if role not in ("user", "assistant") or not content:
             continue
         clean_history.append({"role": role, "content": content[:max_len]})
+    return clean_history
+
+
+def _json_payload() -> dict[str, Any]:
+    data = request.get_json(silent=True) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_mascot_payload(
+    data: dict[str, Any],
+) -> tuple[dict[str, Any] | None, tuple[Response, int] | None]:
+    message = str(data.get("message") or "").strip()
+    if not message:
+        return None, (jsonify({"code": 400, "msg": "message required"}), 400)
+
+    max_len = int(settings.mascot.get("max_user_message_len", 2000))
+    if len(message) > max_len:
+        return None, (jsonify({"code": 400, "msg": f"message too long (max {max_len})"}), 400)
+
+    skill = str(data.get("skill") or "chat").strip().lower()
+    if skill not in _ALLOWED_SKILLS:
+        skill = "chat"
+
+    tier = str(data.get("tier") or "basic").lower()
+    if tier not in _ALLOWED_TIERS:
+        tier = "basic"
+
+    return {
+        "message": message,
+        "session_id": str(data.get("session_id") or data.get("sessionId") or ""),
+        "appearance": _sanitize_appearance(data.get("appearance")),
+        "tier": tier,
+        "history": _clean_history(data.get("history"), max_len),
+        "llm_provider": str(data.get("llm_provider") or data.get("llmProvider") or "").strip(),
+        "skill": skill,
+        "vip_tier": _parse_vip_tier(data.get("vip_tier", data.get("vipTier", 0))),
+        "client_datetime": _client_datetime_from_body(data),
+    }, None
+
+
+@api.route("/mascot/chat", methods=["POST"])
+def mascot_chat():
+    if not _internal_auth_ok():
+        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
+
+    data = _json_payload()
+    payload, error = _parse_mascot_payload(data)
+    if error:
+        return error
+    assert payload is not None
 
     try:
-        result = run_mascot_chat(
-            message=message,
-            session_id=session_id,
-            appearance=appearance,
-            tier=tier,
-            history=clean_history,
-            llm_provider=llm_provider,
-            skill=skill,
-            vip_tier=vip_tier,
-            client_datetime=_client_datetime_from_body(data),
-        )
+        result = run_mascot_chat(**payload)
     except Exception:
         logger.exception("mascot chat 异常")
         return jsonify({"code": 500, "msg": "mascot agent error"}), 500
@@ -117,70 +140,23 @@ def mascot_chat_stream():
     if not _internal_auth_ok():
         return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
 
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()
-    if not message:
-        return jsonify({"code": 400, "msg": "message required"}), 400
-
-    max_len = int(settings.mascot.get("max_user_message_len", 2000))
-    if len(message) > max_len:
-        return jsonify({"code": 400, "msg": f"message too long (max {max_len})"}), 400
-
-    session_id = str(data.get("session_id") or data.get("sessionId") or "")
-    appearance = str(data.get("appearance") or "").strip().lower()
-    appearance = re.sub(r"[^a-z0-9_-]", "", appearance)
-    if not appearance:
-        appearance = "snow_miku"
-    appearance = appearance[:64]
-
-    llm_provider = str(data.get("llm_provider") or data.get("llmProvider") or "").strip()
-    skill = str(data.get("skill") or "chat").strip().lower()
-    if skill not in ("writing", "help", "chat"):
-        skill = "chat"
-    tier = str(data.get("tier") or "basic").lower()
-    if tier not in ("basic", "vip"):
-        tier = "basic"
-    vip_tier_raw = data.get("vip_tier", data.get("vipTier", 0))
-    try:
-        vip_tier = max(0, min(2, int(vip_tier_raw)))
-    except (TypeError, ValueError):
-        vip_tier = 0
-
-    history = data.get("history")
-    if not isinstance(history, list):
-        history = []
-    clean_history: list[dict[str, str]] = []
-    for item in history:
-        if not isinstance(item, dict):
-            continue
-        role = str(item.get("role", "")).lower()
-        content = str(item.get("content", "")).strip()
-        if role not in ("user", "assistant") or not content:
-            continue
-        clean_history.append({"role": role, "content": content[:max_len]})
+    data = _json_payload()
+    payload, error = _parse_mascot_payload(data)
+    if error:
+        return error
+    assert payload is not None
 
     def generate():
         try:
-            for kind, payload in stream_mascot_chat(
-                message=message,
-                session_id=session_id,
-                appearance=appearance,
-                tier=tier,
-                history=clean_history,
-                llm_provider=llm_provider,
-                skill=skill,
-                vip_tier=vip_tier,
-                client_datetime=_client_datetime_from_body(data),
-            ):
-                if kind == "text" and payload:
-                    yield f"data: {json.dumps({'text': payload}, ensure_ascii=False)}\n\n"
+            for kind, event_payload in stream_mascot_chat(**payload):
+                if kind == "text" and event_payload:
+                    yield f"data: {json.dumps({'text': event_payload}, ensure_ascii=False)}\n\n"
                 elif kind == "usage":
-                    yield f"data: {json.dumps({'usage': payload}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'usage': event_payload}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
-        except Exception as ex:
+        except Exception:
             logger.exception("mascot chat stream 异常")
-            msg = str(ex).strip()[:400] or "mascot stream error"
-            err = json.dumps({"error": msg}, ensure_ascii=False)
+            err = json.dumps({"error": "mascot stream error"}, ensure_ascii=False)
             yield f"data: {err}\n\n"
             yield "data: [DONE]\n\n"
 

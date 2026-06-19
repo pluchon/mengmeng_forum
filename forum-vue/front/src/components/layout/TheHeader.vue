@@ -24,6 +24,9 @@
           <el-tooltip content="站点公告" placement="bottom">
             <el-icon class="icon-btn notice-icon" @click="showAnnouncement"><Notification /></el-icon>
           </el-tooltip>
+          <el-tooltip content="游戏中心" placement="bottom">
+            <el-icon class="icon-btn game-center-header-icon" @click="$router.push('/games')"><Trophy /></el-icon>
+          </el-tooltip>
           <router-link
             v-if="checkinLoaded"
             to="/checkin"

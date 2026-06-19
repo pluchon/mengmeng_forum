@@ -252,7 +252,7 @@ export function useHome() {
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
         await fetchUnread()
-        messageStore.showTip = true
+        messageStore.showIncomingTip()
       }, 500)
     },
   )

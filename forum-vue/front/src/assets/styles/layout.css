@@ -137,6 +137,10 @@
   margin-right: -10px;
 }
 
+.game-center-header-icon {
+  margin-right: -10px;
+}
+
 .user-trigger {
   position: relative;
   cursor: pointer;

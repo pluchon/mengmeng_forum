@@ -64,11 +64,10 @@
 <script setup lang="ts">
 import type { RequestOption, UploadRequest } from '@arco-design/web-vue'
 import { Message } from '@arco-design/web-vue'
-import axios from 'axios'
+import { uploadLotteryPrizePicture } from '@/apis/file'
 import type { LotteryPrizeOption } from '@/apis/content/lotteryPrize'
 import { getLotteryPrizeDetail } from '@/apis/content/lotteryPrize'
 import type { ActivityPrizeLineForm } from './lotteryActivityShared'
-import { getToken } from '@/utils/auth'
 
 const props = defineProps<{
   editIndex: number | null
@@ -154,23 +153,10 @@ function onImageUpload(option: RequestOption): UploadRequest {
     return {}
   }
   imageUploading.value = true
-  const fd = new FormData()
-  fd.append('file', file)
-  const base = import.meta.env.VITE_API_PREFIX || ''
   const aid = props.activityId ? Number(props.activityId) : 0
   const pid = form.prizeId ? Number(form.prizeId) : 0
-  axios
-    .post(`${base}/file/uploadLotteryPrizePicture?activityId=${aid}&prizeId=${pid}`, fd, {
-      headers: { Authorization: getToken() || '' },
-    })
-    .then((res) => {
-      const body = res.data as { code?: number, message?: string, data?: string }
-      if (body?.code !== undefined && body.code !== 0) {
-        Message.error(body.message || '上传失败')
-        option.onError(new Error(body.message))
-        return
-      }
-      const url = typeof body?.data === 'string' ? body.data : ''
+  uploadLotteryPrizePicture(file, aid, pid)
+    .then((url) => {
       if (!url) {
         Message.error('上传返回无 URL')
         option.onError(new Error('no url'))
@@ -178,7 +164,7 @@ function onImageUpload(option: RequestOption): UploadRequest {
       }
       form.imagePath = url
       Message.success('图片已上传')
-      option.onSuccess(res.data)
+      option.onSuccess({ data: url })
     })
     .catch(() => {
       Message.error('上传失败')

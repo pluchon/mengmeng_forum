@@ -9,7 +9,6 @@ from __future__ import annotations
 import base64
 import io
 import logging
-from typing import Optional
 
 import requests
 from PIL import Image, UnidentifiedImageError
@@ -23,7 +22,7 @@ _ALLOWED = set(_IMG.get("allowed_formats", ["jpeg", "jpg", "png", "gif", "webp",
 _MAX_BYTES = int(_IMG.get("max_bytes", 10 * 1024 * 1024))
 
 
-def validate_image_bytes(image_data: bytes) -> Optional[str]:
+def validate_image_bytes(image_data: bytes) -> str | None:
     """返回小写格式名(jpeg/png/...); 不合法返回 None"""
     if not image_data:
         return None

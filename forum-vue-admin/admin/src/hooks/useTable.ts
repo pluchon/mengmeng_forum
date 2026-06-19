@@ -171,9 +171,8 @@ export function useTable<T extends U, U = T>(options: Options<T, U>) {
           getTableData()
         }
         return res.success
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.log('删除失败', error)
+      } catch {
+        Message.error('删除失败')
         return false
       }
     }

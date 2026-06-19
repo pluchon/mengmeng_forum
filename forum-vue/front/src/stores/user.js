@@ -51,9 +51,24 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  function setToken(newToken) {
+    token.value = newToken || ''
+  }
+
   function login(newToken) {
-    token.value = newToken
+    setToken(newToken)
     fetchUserInfo()
+  }
+
+  function patchUserProfile(fields = {}) {
+    const has = (key) => Object.prototype.hasOwnProperty.call(fields, key)
+    if (has('nickname')) nickname.value = fields.nickname || ''
+    if (has('remark')) remark.value = fields.remark || ''
+    if (has('phoneNum')) phoneNum.value = fields.phoneNum || ''
+    if (has('email')) email.value = fields.email || ''
+    if (has('backgroundUrl')) backgroundUrl.value = fields.backgroundUrl || ''
+    if (has('avatarUrl')) avatarUrl.value = fields.avatarUrl || ''
+    if (has('gender')) gender.value = fields.gender != null ? Number(fields.gender) : 2
   }
 
   function logout() {
@@ -78,7 +93,7 @@ export const useUserStore = defineStore('user', () => {
     token, id, nickname, avatarUrl, isAdmin,
     remark, phoneNum, email, backgroundUrl,
     vipTier, vipExpireAt, mascotModelId, gender, state,
-    isLoggedIn, fetchUserInfo, login, logout
+    isLoggedIn, fetchUserInfo, setToken, login, logout, patchUserProfile
   }
 }, {
   persist: true

@@ -123,9 +123,8 @@
 <script setup lang="ts">
 import { Message } from '@arco-design/web-vue'
 import type { RequestOption, UploadRequest } from '@arco-design/web-vue/es/upload/interfaces'
-import axios from 'axios'
+import { uploadLotteryPrizePicture } from '@/apis/file'
 import { getLotteryPrizeDetail, saveLotteryPrize } from '@/apis/content/lotteryPrize'
-import { getToken } from '@/utils/auth'
 import LotteryMysteryItemDialog, { type MysteryItemForm } from './LotteryMysteryItemDialog.vue'
 
 /** 表单类型：101 = 神秘大奖（存库为 prizeType=1 + isMysteryBundle=1） */
@@ -286,22 +285,9 @@ function onPrizeImageCustomRequest(option: RequestOption): UploadRequest {
     return {}
   }
   prizeImageUploading.value = true
-  const fd = new FormData()
-  fd.append('file', file)
-  const base = import.meta.env.VITE_API_PREFIX || ''
   const pid = form.id ? Number(form.id) : 0
-  axios
-    .post(`${base}/file/uploadLotteryPrizePicture?activityId=0&prizeId=${pid}`, fd, {
-      headers: { Authorization: getToken() || '' },
-    })
-    .then((res) => {
-      const body = res.data as { code?: number, message?: string, data?: string }
-      if (body?.code !== undefined && body.code !== 0) {
-        Message.error(body.message || '上传失败')
-        option.onError(new Error(body.message))
-        return
-      }
-      const url = typeof body?.data === 'string' ? body.data : ''
+  uploadLotteryPrizePicture(file, 0, pid)
+    .then((url) => {
       if (!url) {
         Message.error('上传返回无 URL')
         option.onError(new Error('no url'))
@@ -309,7 +295,7 @@ function onPrizeImageCustomRequest(option: RequestOption): UploadRequest {
       }
       form.imagePath = url
       Message.success('图片已上传')
-      option.onSuccess(res.data)
+      option.onSuccess({ data: url })
     })
     .catch(() => {
       Message.error('上传失败')

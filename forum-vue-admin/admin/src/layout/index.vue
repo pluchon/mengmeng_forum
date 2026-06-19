@@ -41,5 +41,3 @@ const LayoutTop = defineAsyncComponent({
 
 const appStore = useAppStore()
 </script>
-
-<style lang="scss" scoped></style>

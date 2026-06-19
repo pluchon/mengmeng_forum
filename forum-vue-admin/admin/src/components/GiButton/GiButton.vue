@@ -82,5 +82,3 @@ const buttonProps = computed(() => {
   }
 })
 </script>
-
-<style lang='scss' scoped></style>

@@ -35,9 +35,7 @@ request.interceptors.response.use(
     const newToken = response.headers['authorization'] || response.headers['Authorization']
     if (newToken) {
       const userStore = useUserStore()
-      userStore.token = newToken
-      // 登录成功后拉取用户信息
-      userStore.fetchUserInfo()
+      userStore.login(newToken)
     }
     if (response.config?.url?.includes('/captcha/generate')) {
       return res

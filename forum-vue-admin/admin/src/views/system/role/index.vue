@@ -115,5 +115,3 @@ const tableColumns: TableColumnData[] = [
   }
 ]
 </script>
-
-<style lang="scss" scoped></style>

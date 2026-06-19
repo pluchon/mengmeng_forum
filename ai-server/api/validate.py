@@ -12,8 +12,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from flask import jsonify, request
+from flask import Response, jsonify, request
 from langchain_core.messages import HumanMessage
 
 from api import api
@@ -29,12 +30,17 @@ logger = logging.getLogger(__name__)
 _IMG_MAX = int(settings.image.get("max_bytes", 10 * 1024 * 1024))
 
 
-def _ok(**fields):
+def _json_payload() -> dict[str, Any]:
+    data = request.get_json(silent=True) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _ok(**fields: Any) -> tuple[Response, int]:
     fields.setdefault("code", 200)
     return jsonify(fields), 200
 
 
-def _extract_text(resp) -> str:
+def _extract_text(resp: object) -> str:
     content = getattr(resp, "content", resp)
     if isinstance(content, list) and content:
         first = content[0]
@@ -48,7 +54,7 @@ def _extract_text(resp) -> str:
 
 @api.route("/validate-text", methods=["POST"])
 def validate_text():
-    data = request.get_json(silent=True) or {}
+    data = _json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "allow": False, "msg": "Missing content field"}), 400
 

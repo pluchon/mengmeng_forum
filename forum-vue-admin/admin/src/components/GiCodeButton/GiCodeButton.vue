@@ -23,5 +23,3 @@ const onViewCode = () => {
   })
 }
 </script>
-
-<style lang='scss' scoped></style>
