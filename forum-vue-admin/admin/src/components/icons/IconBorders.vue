@@ -9,7 +9,3 @@
     <path d="M6 24H42" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
   </svg>
 </template>
-
-<script lang="ts" setup></script>
-
-<style lang="scss" scoped></style>

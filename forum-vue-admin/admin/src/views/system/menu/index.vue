@@ -144,5 +144,3 @@ const onEdit = (item: T.ListItem) => {
   MenuFormModalRef.value?.edit(item.id)
 }
 </script>
-
-<style lang="scss" scoped></style>

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from flask import Response, jsonify, request, stream_with_context
 
@@ -22,7 +23,12 @@ logger = logging.getLogger(__name__)
 _MIN_LEN = int(settings.audit.get("summary_min_len", 50))
 
 
-def _extract_text(resp) -> str:
+def _json_payload() -> dict[str, Any]:
+    data = request.get_json(silent=True) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _extract_text(resp: object) -> str:
     content = getattr(resp, "content", resp)
     if isinstance(content, list) and content:
         first = content[0]
@@ -32,7 +38,7 @@ def _extract_text(resp) -> str:
 
 @api.route("/summarize", methods=["POST"])
 def summarize_text():
-    data = request.get_json(silent=True) or {}
+    data = _json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "summary": "", "msg": "Missing content"}), 400
 
@@ -59,7 +65,7 @@ def summarize_text():
 
 @api.route("/summarize/stream", methods=["POST"])
 def summarize_stream():
-    data = request.get_json(silent=True) or {}
+    data = _json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "msg": "Missing content"}), 400
 

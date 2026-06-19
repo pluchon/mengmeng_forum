@@ -105,5 +105,3 @@ const tableColumns: TableColumnData[] = [
 
 defineExpose({ open })
 </script>
-
-<style lang="scss" scoped></style>

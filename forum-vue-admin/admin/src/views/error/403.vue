@@ -7,5 +7,3 @@ import ErrorPage from './components/ErrorPage.vue'
 
 defineOptions({ name: 'Error403' })
 </script>
-
-<style lang="scss" scoped></style>

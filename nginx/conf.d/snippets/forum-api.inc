@@ -32,7 +32,7 @@ location ~ ^/file/ {
     client_max_body_size 350m;
 }
 
-location ~ ^/(user|board|article|message|mail|sms|category|like|file|articleReply|articleSubReply|checkin|shop|points|favorite|search|system-message|mascot|lottery|vip|ai|notice|captcha|admin)(/|$) {
+location ~ ^/(user|board|article|message|mail|sms|category|like|file|articleReply|articleSubReply|checkin|shop|points|favorite|search|system-message|mascot|lottery|vip|game|ai|notice|captcha|admin)(/|$) {
     error_page 418 = @forum_spa_fallback;
     if ($proxy_forum_api = 0) {
         return 418;

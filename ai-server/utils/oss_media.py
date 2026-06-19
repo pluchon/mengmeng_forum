@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -24,12 +23,12 @@ def is_oss_configured() -> bool:
     return bool(bucket and ak and sk and bucket.lower() != "your-oss-bucket")
 
 
-def object_key_from_public_url(url: str) -> Optional[str]:
+def object_key_from_public_url(url: str) -> str | None:
     """从 OSS 外链解析 object key；非本站 OSS 链接返回 None."""
     raw = (url or "").strip()
     if not raw:
         return None
-    prefix = ( _oss_cfg().get("url_prefix") or "").strip()
+    prefix = (_oss_cfg().get("url_prefix") or "").strip()
     if prefix and not prefix.endswith("/"):
         prefix += "/"
     if prefix and raw.startswith(prefix):
@@ -66,7 +65,7 @@ def presign_get_url(url: str, *, expires: int = 3600) -> str:
         return url
 
 
-def head_object_size(url: str, *, timeout: int = 15) -> Optional[int]:
+def head_object_size(url: str, *, timeout: int = 15) -> int | None:
     """HEAD 对象大小（字节）；失败返回 None."""
     if not is_oss_configured():
         return None

@@ -15,12 +15,4 @@
   </svg>
 </template>
 
-<style scoped>
-.like-count-icon {
-  display: block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  color: #86909c;
-}
-</style>
+<style scoped src="./LikeCountIcon.css"></style>

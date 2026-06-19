@@ -127,6 +127,24 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'games',
+          name: 'gameCenter',
+          component: () => import('../views/GameCenter.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
+          path: 'games/gobang',
+          name: 'gobangGame',
+          component: () => import('../views/GobangGame.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
+          path: 'games/gobang/rooms/:roomId',
+          name: 'gobangRoom',
+          component: () => import('../views/GobangRoom.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
           path: 'vip',
           name: 'vipCenter',
           component: () => import('../views/VipCenter.vue'),

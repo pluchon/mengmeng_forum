@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import type { RequestOption, UploadRequest } from '@arco-design/web-vue'
 import { Message } from '@arco-design/web-vue'
-import axios from 'axios'
+import { uploadLotteryActivityPicture } from '@/apis/file'
 import type { LotteryActivityDetail } from '@/apis/content/lotteryActivity'
 import {
   getLotteryActivityDetail,
@@ -122,7 +122,6 @@ import {
   updateLotteryActivityMeta,
 } from '@/apis/content/lotteryActivity'
 import { PHASE_OPTIONS, STATUS_OPTIONS } from './lotteryActivityShared'
-import { getToken } from '@/utils/auth'
 
 const props = defineProps<{
   activityId: string | null
@@ -194,22 +193,9 @@ function onCoverUpload(option: RequestOption): UploadRequest {
     return {}
   }
   coverUploading.value = true
-  const fd = new FormData()
-  fd.append('file', file)
-  const base = import.meta.env.VITE_API_PREFIX || ''
   const aid = props.activityId ? Number(props.activityId) : 0
-  axios
-    .post(`${base}/file/uploadLotteryActivityPicture?activityId=${aid}`, fd, {
-      headers: { Authorization: getToken() || '' },
-    })
-    .then((res) => {
-      const body = res.data as { code?: number, message?: string, data?: string }
-      if (body?.code !== undefined && body.code !== 0) {
-        Message.error(body.message || '上传失败')
-        option.onError(new Error(body.message))
-        return
-      }
-      const url = typeof body?.data === 'string' ? body.data : ''
+  uploadLotteryActivityPicture(file, aid)
+    .then((url) => {
       if (!url) {
         Message.error('上传返回无 URL')
         option.onError(new Error('no url'))
@@ -217,7 +203,7 @@ function onCoverUpload(option: RequestOption): UploadRequest {
       }
       form.coverImageUrl = url
       Message.success('封面已上传')
-      option.onSuccess(res.data)
+      option.onSuccess({ data: url })
     })
     .catch(() => {
       Message.error('上传失败')

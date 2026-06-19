@@ -101,5 +101,3 @@ const option = computed<EChartsOption>(() => {
 
 const theme = computed(() => (isDark.value ? 'dark' : undefined))
 </script>
-
-<style lang="scss" scoped></style>

@@ -32,6 +32,8 @@ const SOURCE_OPTIONS = [
   { value: 6, label: '注册赠送' },
   { value: 7, label: 'VIP订阅' },
   { value: 8, label: '抽奖页彩蛋' },
+  { value: 11, label: '游戏胜利' },
+  { value: 12, label: '游戏失败' },
   { value: 99, label: '管理员调整' },
 ]
 

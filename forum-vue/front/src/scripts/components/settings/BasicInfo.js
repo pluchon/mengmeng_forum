@@ -65,7 +65,7 @@ export function useBasicInfo() {
         ElMessage.success('性别已更新')
         originalValues.gender = g
         profileForm.gender = g
-        userStore.gender = g
+        userStore.patchUserProfile({ gender: g })
       }
     } finally {
       saving.value = false
@@ -112,9 +112,9 @@ export function useBasicInfo() {
         ElMessage.success('更新成功')
         originalValues[field] = profileForm[field]
         editing[field] = false
-        if (field === 'nickname') userStore.nickname = profileForm.nickname
-        if (field === 'remark') userStore.remark = profileForm.remark
-        if (field === 'gender') userStore.gender = profileForm.gender
+        if (field === 'nickname') userStore.patchUserProfile({ nickname: profileForm.nickname })
+        if (field === 'remark') userStore.patchUserProfile({ remark: profileForm.remark })
+        if (field === 'gender') userStore.patchUserProfile({ gender: profileForm.gender })
       }
     } finally {
       saving.value = false
@@ -142,7 +142,7 @@ export function useBasicInfo() {
       if (res.code === 0) {
         const url = res.data
         await updateAvatarUrl(url)
-        userStore.avatarUrl = url + '?t=' + Date.now()
+        userStore.patchUserProfile({ avatarUrl: url + '?t=' + Date.now() })
         ElMessage.success('头像已更新')
       }
     } catch (err) {

@@ -1,6 +1,6 @@
 import { ref, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search, Message, Notification } from '@element-plus/icons-vue'
+import { Search, Message, Notification, Trophy } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
@@ -82,7 +82,7 @@ export function useTheHeader() {
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
         await fetchUnread()
-        messageStore.showTip = true
+        messageStore.showIncomingTip()
       }, 500)
     },
   )
@@ -133,6 +133,7 @@ export function useTheHeader() {
     Message,
     Notification,
     Search,
+    Trophy,
     announcementRef,
     defaultAvatar,
     goToCreative,

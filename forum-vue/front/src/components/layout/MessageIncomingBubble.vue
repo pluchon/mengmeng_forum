@@ -45,7 +45,7 @@ function onOpen() {
 }
 
 function onClose() {
-  messageStore.showTip = false
+  messageStore.hideTip()
 }
 
 let hideTimer = null
@@ -55,7 +55,7 @@ watch(
     if (!seq) return
     if (hideTimer) clearTimeout(hideTimer)
     hideTimer = setTimeout(() => {
-      messageStore.showTip = false
+      messageStore.hideTip()
     }, AUTO_HIDE_MS)
   },
 )

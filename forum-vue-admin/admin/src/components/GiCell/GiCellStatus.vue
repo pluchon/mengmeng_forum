@@ -20,5 +20,3 @@ interface Props {
   status?: Status
 }
 </script>
-
-<style lang="scss" scoped></style>

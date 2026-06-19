@@ -191,11 +191,10 @@
 import type { FormInstance } from '@arco-design/web-vue'
 import { Message } from '@arco-design/web-vue'
 import type { RequestOption, UploadRequest } from '@arco-design/web-vue/es/upload/interfaces'
-import axios from 'axios'
 import { marked } from 'marked'
+import { uploadNoticePicture } from '@/apis/file'
 import type { NoticeCategoryOption } from '@/apis/content/notice'
 import { getNoticeCategories, getNoticeDetail, saveNotice, updateNotice } from '@/apis/content/notice'
-import { getToken } from '@/utils/auth'
 import { useDict } from '@/hooks'
 import NoticeFormLivePreviewDialog from './NoticeFormLivePreviewDialog.vue'
 
@@ -274,22 +273,9 @@ function onCoverCustomRequest(option: RequestOption): UploadRequest {
     return {}
   }
   coverUploading.value = true
-  const fd = new FormData()
-  fd.append('file', file)
-  const base = import.meta.env.VITE_API_PREFIX || ''
   const noticeId = props.editId ? Number(props.editId) : 0
-  axios
-    .post(`${base}/file/uploadNoticePicture?noticeId=${noticeId}`, fd, {
-      headers: { Authorization: getToken() || '' },
-    })
-    .then((res) => {
-      const body = res.data as { code?: number, message?: string, data?: string }
-      if (body?.code !== undefined && body.code !== 0) {
-        Message.error(body.message || MSG.uploadFail)
-        option.onError(new Error(body.message))
-        return
-      }
-      const url = typeof body?.data === 'string' ? body.data : ''
+  uploadNoticePicture(file, noticeId)
+    .then((url) => {
       if (!url) {
         Message.error(MSG.noUrl)
         option.onError(new Error('no url'))
@@ -297,7 +283,7 @@ function onCoverCustomRequest(option: RequestOption): UploadRequest {
       }
       form.coverImageUrl = url
       Message.success(MSG.uploadOk)
-      option.onSuccess(res.data)
+      option.onSuccess({ data: url })
     })
     .catch(() => {
       Message.error(MSG.uploadFail)

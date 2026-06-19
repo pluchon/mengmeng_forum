@@ -157,7 +157,7 @@ export function useSettings(captchaDialogRef) {
     const res = await verifyAndBindEmail(emailForm.email, emailForm.code)
     if (res.code === 0) {
       ElMessage.success('邮箱绑定成功')
-      userStore.email = emailForm.email
+      userStore.patchUserProfile({ email: emailForm.email })
       emailDialogVisible.value = false
     }
   }
@@ -166,7 +166,7 @@ export function useSettings(captchaDialogRef) {
     const res = await verifyAndBindPhone(phoneForm.phoneNumber, phoneForm.code)
     if (res.code === 0) {
       ElMessage.success('手机号绑定成功')
-      userStore.phoneNum = phoneForm.phoneNumber
+      userStore.patchUserProfile({ phoneNum: phoneForm.phoneNumber })
       phoneDialogVisible.value = false
     }
   }

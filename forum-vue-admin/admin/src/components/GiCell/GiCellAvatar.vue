@@ -27,5 +27,3 @@ interface Props {
   isLink?: boolean
 }
 </script>
-
-<style lang="scss" scoped></style>

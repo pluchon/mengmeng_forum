@@ -19,5 +19,3 @@ import AccountRightContent from './AccountRightContent.vue'
 
 defineOptions({ name: 'SystemAccount' })
 </script>
-
-<style lang="scss" scoped></style>

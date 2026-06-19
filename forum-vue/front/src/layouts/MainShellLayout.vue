@@ -125,6 +125,10 @@
               </el-button>
             </el-tooltip>
             <template v-if="userStore.isLoggedIn">
+              <el-button text class="home-tool-btn home-game-center-btn" @click="$router.push('/games')">
+                <el-icon><Trophy /></el-icon>
+                <span class="home-tool-btn__text">游戏中心</span>
+              </el-button>
               <el-button text class="home-tool-btn" @click="$router.push('/checkin')">
                 <el-icon><Calendar /></el-icon>
                 <span class="home-tool-btn__text">每日签到</span>
@@ -172,6 +176,10 @@
               </el-tooltip>
             </template>
             <template v-else>
+              <el-button text class="home-tool-btn home-game-center-btn" @click="$router.push('/games')">
+                <el-icon><Trophy /></el-icon>
+                <span class="home-tool-btn__text">游戏中心</span>
+              </el-button>
               <el-button text class="home-tool-btn" @click="$router.push('/emoji-shop')">
                 <el-icon><Goods /></el-icon>
                 <span class="home-tool-btn__text">表情商城</span>
@@ -204,7 +212,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Calendar, Coin, EditPen, Goods, Medal, Message, Notification, Pointer, Present, Search } from '@element-plus/icons-vue'
+import { Calendar, Coin, EditPen, Goods, Medal, Message, Notification, Pointer, Present, Search, Trophy } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
@@ -259,5 +267,9 @@ const {
 .home-mascot-pass-btn.is-active {
   color: #7c3aed;
   background: rgba(124, 58, 237, 0.1);
+}
+
+.home-game-center-btn {
+  color: #ff2442;
 }
 </style>
