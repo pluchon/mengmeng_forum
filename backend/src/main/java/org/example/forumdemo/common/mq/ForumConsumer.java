@@ -6,9 +6,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.entity.vo.mq.ArticleAuditResultMqVO;
+import org.example.forumdemo.entity.vo.mq.GameFinishedMqVO;
 import org.example.forumdemo.entity.vo.mq.MessageNotifyMqVO;
 import org.example.forumdemo.entity.vo.mq.ReplyNotifyMqVO;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
+import org.example.forumdemo.service.interfaces.game.GameMqEventService;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,9 @@ public class ForumConsumer {
     @Autowired
     @Lazy
     private ArticleService articleService;
+
+    @Autowired
+    private GameMqEventService gameMqEventService;
 
     // 我们的ackMode是手动进行确认的模式，不是自动确认
 
@@ -98,6 +103,22 @@ public class ForumConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
             log.error("[MQ 消费者] 审核结果处理失败 | deliveryTag={} | error={}", deliveryTag, e.getMessage(), e);
+            channel.basicNack(deliveryTag, false, false);
+        }
+    }
+
+    // 监听游戏对局结束事件，当前先完成消费幂等骨架，后续接入通知、统计和榜单刷新
+    @RabbitListener(queues = Constant.QUORUM_QUEUE_GAME_FINISHED, ackMode = "MANUAL")
+    public void handleGameFinished(Message message, Channel channel) throws IOException {
+        long deliveryTag = message.getMessageProperties().getDeliveryTag();
+        try {
+            GameFinishedMqVO vo = objectMapper.readValue(message.getBody(), GameFinishedMqVO.class);
+            log.debug("[MQ 消费者] 收到游戏结束事件 | gameCode={} | roomId={} | eventId={}",
+                    vo.getGameCode(), vo.getRoomId(), vo.getEventId());
+            gameMqEventService.handleGameFinished(vo);
+            channel.basicAck(deliveryTag, false);
+        } catch (Exception e) {
+            log.error("[MQ 消费者] 游戏结束事件处理失败 | deliveryTag={} | error={}", deliveryTag, e.getMessage(), e);
             channel.basicNack(deliveryTag, false, false);
         }
     }

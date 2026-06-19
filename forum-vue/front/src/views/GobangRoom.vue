@@ -64,10 +64,7 @@
           <section v-else class="gobang-opponent-card" role="button" tabindex="0" @click="openOpponentStats" @keyup.enter="openOpponentStats">
             <span class="gobang-avatar is-large" :class="{ 'is-vip': opponentProfile?.vip, 'is-ai': opponentProfile?.ai }">
               <img v-if="opponentProfile?.avatarUrl" :src="opponentProfile.avatarUrl" alt="" />
-              <svg v-else-if="opponentProfile?.ai" viewBox="0 0 48 48" aria-hidden="true" class="gobang-ai-svg">
-                <rect x="10" y="12" width="28" height="24" rx="8" />
-                <path d="M18 24h12M24 18v12M16 36l-4 5M32 36l4 5M17 8l-3-5M31 8l3-5" />
-              </svg>
+              <img v-else-if="opponentProfile?.ai" :src="aiModelIcon(opponentProfile)" alt="" class="gobang-ai-icon" />
               <b v-else>{{ avatarText(opponentProfile) }}</b>
             </span>
             <div>
@@ -188,10 +185,7 @@
         <div class="gobang-dialog-user">
           <span class="gobang-avatar" :class="{ 'is-vip': opponentProfile?.vip, 'is-ai': opponentProfile?.ai }">
             <img v-if="opponentProfile?.avatarUrl" :src="opponentProfile.avatarUrl" alt="" />
-            <svg v-else-if="opponentProfile?.ai" viewBox="0 0 48 48" aria-hidden="true" class="gobang-ai-svg">
-              <rect x="10" y="12" width="28" height="24" rx="8" />
-              <path d="M18 24h12M24 18v12M16 36l-4 5M32 36l4 5M17 8l-3-5M31 8l3-5" />
-            </svg>
+            <img v-else-if="opponentProfile?.ai" :src="aiModelIcon(opponentProfile)" alt="" class="gobang-ai-icon" />
             <b v-else>{{ avatarText(opponentProfile) }}</b>
           </span>
           <strong>{{ opponentProfile?.nickname || opponentProfile?.username || '对手' }}</strong>

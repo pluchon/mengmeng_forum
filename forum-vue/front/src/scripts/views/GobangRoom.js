@@ -5,6 +5,7 @@ import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer, UserFilled } from '@
 import { getGobangRoom, surrenderGobangRoom } from '@/api/game'
 import { getShopMyPacks } from '@/api/shop'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import { modelIcon } from '@/constants/aiModels'
 
 let timer = null
 let finishRedirectTimer = null
@@ -238,7 +239,7 @@ function fallbackParticipant(userId, label) {
     vip: false,
     vipTier: 0,
     ai: userId === -1,
-    aiModelName: userId === -1 ? 'DeepSeek V4 Flash · 本地策略兜底' : '',
+    aiModelName: userId === -1 ? 'deepseek-v4-flash · 本地策略兜底' : '',
   }
 }
 
@@ -387,6 +388,15 @@ function participantDisplayName(player) {
 function avatarText(player) {
   const name = player?.nickname || player?.username || '棋'
   return name.slice(0, 1).toUpperCase()
+}
+
+function aiModelCode(player) {
+  const text = String(player?.aiModelName || '')
+  return text.includes('deepseek-v4-pro') ? 'deepseek-v4-pro' : 'deepseek-v4-flash'
+}
+
+function aiModelIcon(player) {
+  return modelIcon(aiModelCode(player))
 }
 
 function openOpponentStats() {

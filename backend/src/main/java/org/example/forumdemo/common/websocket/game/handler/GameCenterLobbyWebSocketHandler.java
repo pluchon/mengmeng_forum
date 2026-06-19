@@ -7,6 +7,7 @@ import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsMessage;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
 import org.example.forumdemo.service.interfaces.game.GameCenterService;
+import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -26,6 +27,9 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
     private GameCenterService gameCenterService;
 
     @Autowired
+    private GameOnlineStateService gameOnlineStateService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -36,6 +40,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         gameConnectionRegistry.enterLobby(userId, session);
+        gameOnlineStateService.enterLobby(userId);
         gameConnectionRegistry.send(
                 session,
                 objectMapper.writeValueAsString(GameWsResponse.ok(
@@ -54,12 +59,14 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
         }
         if ("ping".equalsIgnoreCase(message.getPayload())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchLobby(userId);
             gameConnectionRegistry.send(session, "pong");
             return;
         }
         GameWsMessage wsMessage = objectMapper.readValue(message.getPayload(), GameWsMessage.class);
         if ("ping".equals(wsMessage.getType())) {
             gameConnectionRegistry.touch(session);
+            gameOnlineStateService.touchLobby(userId);
             gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
                     "pong",
                     wsMessage.getRequestId(),
@@ -73,6 +80,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitLobby(userId, session);
+            gameOnlineStateService.leaveLobby(userId);
         }
     }
 
@@ -81,6 +89,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitLobby(userId, session);
+            gameOnlineStateService.leaveLobby(userId);
         }
         log.debug("游戏大厅 WS 异常 sessionId={}, error={}", session.getId(), exception.getMessage());
     }

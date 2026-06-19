@@ -1099,7 +1099,30 @@ CREATE TABLE `game_match_record` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏对局记录表';
 
 -- ----------------------------
--- 23.5 游戏房间玩家映射表 (game_room_player)
+-- 23.5 游戏结算事件表 (game_settlement_event)
+-- ----------------------------
+DROP TABLE IF EXISTS `game_settlement_event`;
+CREATE TABLE `game_settlement_event` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '事件ID',
+    `event_id` varchar(64) NOT NULL COMMENT '事件唯一ID',
+    `game_code` varchar(64) NOT NULL COMMENT '游戏编码',
+    `room_id` varchar(64) NOT NULL COMMENT '房间ID',
+    `event_type` varchar(64) NOT NULL COMMENT '事件类型，如 GAME_FINISHED',
+    `record_id` bigint DEFAULT NULL COMMENT '关联对局记录ID',
+    `status` varchar(32) NOT NULL DEFAULT 'CREATED' COMMENT '事件状态 CREATED/MQ_SENT/MQ_PENDING/CONSUMED/DEAD',
+    `retry_count` int NOT NULL DEFAULT 0 COMMENT '重试次数',
+    `last_error` varchar(512) DEFAULT NULL COMMENT '最近一次错误摘要',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_game_event_id` (`event_id`),
+    UNIQUE KEY `uk_game_room_event` (`game_code`, `room_id`, `event_type`),
+    KEY `idx_game_event_status` (`game_code`, `status`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏结算事件表';
+
+-- ----------------------------
+-- 23.6 游戏房间玩家映射表 (game_room_player)
 -- ----------------------------
 DROP TABLE IF EXISTS `game_room_player`;
 CREATE TABLE `game_room_player` (
@@ -1117,7 +1140,7 @@ CREATE TABLE `game_room_player` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏房间玩家映射表';
 
 -- ----------------------------
--- 23.6 游戏房间落子记录表 (game_room_move)
+-- 23.7 游戏房间落子记录表 (game_room_move)
 -- ----------------------------
 DROP TABLE IF EXISTS `game_room_move`;
 CREATE TABLE `game_room_move` (

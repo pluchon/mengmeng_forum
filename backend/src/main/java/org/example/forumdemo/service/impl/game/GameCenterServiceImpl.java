@@ -9,6 +9,7 @@ import org.example.forumdemo.entity.vo.game.GameDefinitionVO;
 import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
 import org.example.forumdemo.mapper.GameDefinitionMapper;
 import org.example.forumdemo.service.interfaces.game.GameCenterService;
+import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,9 @@ public class GameCenterServiceImpl implements GameCenterService {
     @Autowired
     private GameConnectionRegistry gameConnectionRegistry;
 
+    @Autowired
+    private GameOnlineStateService gameOnlineStateService;
+
     @Override
     public GameCenterOverviewVO getOverview(Long userId) {
         List<GameDefinition> definitions = gameDefinitionMapper.selectList(new LambdaQueryWrapper<GameDefinition>()
@@ -37,12 +41,19 @@ public class GameCenterServiceImpl implements GameCenterService {
                 .orderByAsc(GameDefinition::getId));
         List<GameDefinitionVO> games = new ArrayList<>(definitions.size());
         for (GameDefinition row : definitions) {
-            int onlineCount = GameConstants.GOBANG.equals(row.getGameCode())
-                    ? gameConnectionRegistry.countGameOnline(GameConstants.GOBANG)
-                    : 0;
+            int onlineCount = gameOnlineStateService.countGameOnline(row.getGameCode());
+            if (onlineCount < 0) {
+                onlineCount = GameConstants.GOBANG.equals(row.getGameCode())
+                        ? gameConnectionRegistry.countGameOnline(GameConstants.GOBANG)
+                        : 0;
+            }
             games.add(GameConverter.toDefinitionVO(row, onlineCount));
         }
         GameUserProfileVO gobangProfile = gameUserProfileService.getProfileVO(userId, GameConstants.GOBANG);
-        return new GameCenterOverviewVO(games, gobangProfile, gameConnectionRegistry.countLobbyOnline());
+        int lobbyOnline = gameOnlineStateService.countLobbyOnline();
+        if (lobbyOnline < 0) {
+            lobbyOnline = gameConnectionRegistry.countLobbyOnline();
+        }
+        return new GameCenterOverviewVO(games, gobangProfile, lobbyOnline);
     }
 }

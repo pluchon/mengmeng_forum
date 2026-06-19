@@ -99,10 +99,11 @@ def ai_gobang_move():
         ai_chess = 2
     if ai_chess not in (1, 2):
         ai_chess = 2
+    model_code = str(data.get("model_code") or "").strip()
 
     t0 = time.perf_counter()
     try:
-        move = generate_gobang_move(board, ai_chess)
+        move = generate_gobang_move(board, ai_chess, model_code)
     except ValueError as exc:
         return jsonify({"code": 400, "msg": str(exc)}), 400
     except Exception:
@@ -116,6 +117,11 @@ def ai_gobang_move():
             "row": move["row"],
             "col": move["col"],
             "model": move["model"],
+            "modelCode": move.get("model") or move.get("model_name"),
+            "modelName": move.get("model_name") or move["model"],
+            "modelVersion": move.get("model_version") or move["model"],
+            "strategyName": move.get("strategy_name") or "llm_with_rule_guard",
+            "fallback": bool(move.get("fallback")),
             "usage": usage,
         },
     })
