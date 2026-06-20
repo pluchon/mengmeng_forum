@@ -26,6 +26,40 @@ def _exact_key(text: str) -> str:
     return f"{_C.get('exact_prefix', 'ai_audit:cache:exact:')}{hashlib.md5(text.encode('utf-8')).hexdigest()}"
 
 
+def _loads_json(raw: object) -> dict | None:
+    """解析 Redis 缓存 JSON；兼容历史脏数据，失败时返回 None 而非抛错。"""
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    if not isinstance(raw, str):
+        raw = str(raw)
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("跳过无效缓存 JSON: %s", text[:120])
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _parse_candidates(raw_items: list) -> list[dict]:
+    rows: list[dict] = []
+    for raw in raw_items:
+        entry = _loads_json(raw)
+        if not entry:
+            continue
+        text = entry.get("text")
+        result = entry.get("result")
+        if not isinstance(text, str) or not isinstance(result, dict):
+            logger.warning("跳过结构异常的缓存条目")
+            continue
+        rows.append(entry)
+    return rows
+
+
 def find_match(text: str) -> dict | None:
     """命中返回缓存的 result dict {allow, msg}; 未命中返回 None"""
     try:
@@ -34,8 +68,11 @@ def find_match(text: str) -> dict | None:
         logger.exception("Redis 精确缓存读取失败")
         return None
     if hit:
-        logger.info("精确缓存命中")
-        return json.loads(hit)
+        cached = _loads_json(hit)
+        if cached:
+            logger.info("精确缓存命中")
+            return cached
+        logger.warning("精确缓存损坏，忽略后走审核")
 
     try:
         candidates_json = redis_client.lrange(_C.get("list_key", "ai_audit:text_list"),
@@ -46,7 +83,10 @@ def find_match(text: str) -> dict | None:
     if not candidates_json:
         return None
 
-    candidates = [json.loads(c) for c in candidates_json]
+    candidates = _parse_candidates(candidates_json)
+    if not candidates:
+        return None
+
     docs = [c["text"] for c in candidates]
 
     try:

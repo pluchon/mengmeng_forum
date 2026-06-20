@@ -170,12 +170,17 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "status 仅允许 1 / 2"));
         }
         User operator = userService.queryUserByUserId(operatorUserId);
-        if (operator == null || operator.getIsAdmin() == null || operator.getIsAdmin() != 1) {
+        if (operator == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NO_PERMISSION));
         }
         EmojiShop shop = emojiShopMapper.selectById(shopId);
         if (shop == null || (shop.getDeleteState() != null && shop.getDeleteState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NOT_EXISTS));
+        }
+        boolean isAdmin = operator.getIsAdmin() != null && operator.getIsAdmin() == 1;
+        boolean isAuthor = shop.getUploadUserId() != null && shop.getUploadUserId().equals(operatorUserId);
+        if (!isAdmin && !isAuthor) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NO_PERMISSION));
         }
         emojiShopMapper.update(null, new LambdaUpdateWrapper<EmojiShop>()
                 .eq(EmojiShop::getId, shopId).set(EmojiShop::getStatus, status));

@@ -94,16 +94,16 @@ if (-not $SkipAdmin) {
 if (-not $SkipBackend) {
     if (-not $SkipDocker) {
         Step "Docker build forum-backend:latest"
-        docker build -t forum-backend:latest (Join-Path $repoRoot "forum-demo")
+        docker build -t forum-backend:latest (Join-Path $repoRoot "backend")
         if ($LASTEXITCODE -ne 0) { throw "forum-backend image build failed" }
         Write-Host "Image forum-backend:latest ready" -ForegroundColor Green
     } else {
-        Step "Maven package forum-demo"
-        Push-Location (Join-Path $repoRoot "forum-demo")
+        Step "Maven package backend"
+        Push-Location (Join-Path $repoRoot "backend")
         mvn -q -B package -DskipTests
         if ($LASTEXITCODE -ne 0) { Pop-Location; throw "mvn package failed" }
         Pop-Location
-        Write-Host "JAR in forum-demo/target/" -ForegroundColor Green
+        Write-Host "JAR in backend/target/" -ForegroundColor Green
     }
 }
 

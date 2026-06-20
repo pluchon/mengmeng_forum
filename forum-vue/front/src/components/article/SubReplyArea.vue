@@ -41,6 +41,7 @@
               </div>
               <div class="sub-item-meta">
                 <el-text type="info" size="small">{{ sub.subReply.createTime }}</el-text>
+                <IpRegionLabel :region="sub.subReply?.ipRegion" />
               </div>
             </el-col>
           </el-row>
@@ -96,6 +97,7 @@
 
 <script setup>
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
 import { useSubReplyArea } from '@scripts/components/article/SubReplyArea'
 
@@ -157,6 +159,13 @@ defineExpose({ openReplyTo })
   opacity: 0.28;
   cursor: default;
   pointer-events: none;
+}
+
+.sub-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .sub-user-link {

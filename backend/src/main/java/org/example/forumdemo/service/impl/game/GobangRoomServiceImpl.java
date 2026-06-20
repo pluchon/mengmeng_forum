@@ -37,6 +37,9 @@ import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
+import org.example.forumdemo.service.impl.game.guard.GobangActionContext;
+import org.example.forumdemo.service.impl.game.guard.GobangGuardChain;
+import org.example.forumdemo.service.impl.game.guard.GobangGuardResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -127,8 +130,17 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     @Autowired
     private ForumProducer forumProducer;
 
+    private GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
+
     @Value("${forum.ai.internal-key:}")
     private String aiInternalKey;
+
+    @Autowired(required = false)
+    public void setGobangGuardChain(GobangGuardChain gobangGuardChain) {
+        if (gobangGuardChain != null) {
+            this.gobangGuardChain = gobangGuardChain;
+        }
+    }
 
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
@@ -193,31 +205,14 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void handleMove(String roomId, Long userId, Integer row, Integer col, String requestId) {
-        GobangRoom room = findRoomForPlayerAction(
-                roomId,
-                userId,
-                requestId,
-                "当前对战已经结束，不能继续落子",
-                "观战玩家不能落子"
-        );
+        requireRoomActionParams(roomId, userId);
+        GobangRoom room = rooms.get(roomId);
         if (room == null) {
+            rejectIfGuardFailed(GobangActionContext.move(roomId, userId, requestId, null, row, col));
             return;
         }
         synchronized (room) {
-            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能继续落子");
-                return;
-            }
-            if (!userId.equals(room.getCurrentTurnUserId())) {
-                sendRoomError(roomId, userId, requestId, "还没轮到你落子");
-                return;
-            }
-            if (!gobangRuleEngine.inBoard(row, col)) {
-                sendRoomError(roomId, userId, requestId, "落子坐标不合法");
-                return;
-            }
-            if (room.getBoard()[row][col] != 0) {
-                sendRoomError(roomId, userId, requestId, "该位置已经有棋子");
+            if (rejectIfGuardFailed(GobangActionContext.move(roomId, userId, requestId, room, row, col))) {
                 return;
             }
             int chess = room.chessOf(userId);
@@ -256,19 +251,14 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void surrender(String roomId, Long userId, String requestId) {
-        GobangRoom room = findRoomForPlayerAction(
-                roomId,
-                userId,
-                requestId,
-                "当前对战已经结束，不能认输",
-                "观战玩家不能认输"
-        );
+        requireRoomActionParams(roomId, userId);
+        GobangRoom room = rooms.get(roomId);
         if (room == null) {
+            rejectIfGuardFailed(GobangActionContext.surrender(roomId, userId, requestId, null));
             return;
         }
         synchronized (room) {
-            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能认输");
+            if (rejectIfGuardFailed(GobangActionContext.surrender(roomId, userId, requestId, room))) {
                 return;
             }
             finishRoom(room, room.opponentOf(userId), GameConstants.END_SURRENDER);
@@ -277,28 +267,14 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public void chat(String roomId, Long userId, GobangChatRequest request, String requestId) {
-        GobangRoom room = findRoomForChat(roomId, userId, requestId);
-        if (room == null) {
+        requireRoomActionParams(roomId, userId);
+        GobangRoom room = rooms.get(roomId);
+        GobangActionContext context = GobangActionContext.chat(roomId, userId, requestId, room, request);
+        if (rejectIfGuardFailed(context)) {
             return;
         }
-        if (GameConstants.ROOM_FINISHED.equals(room.getRoomStatus())) {
-            sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能发送消息或表情包");
-            return;
-        }
-        if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-            sendRoomError(roomId, userId, requestId, "房间不可聊天");
-            return;
-        }
-        String type = request == null || request.getMessageType() == null ? "TEXT" : request.getMessageType().trim().toUpperCase();
-        String content = request == null || request.getContent() == null ? "" : request.getContent().trim();
-        if ("TEXT".equals(type) && (content.isBlank() || content.length() > 200)) {
-            sendRoomError(roomId, userId, requestId, "聊天内容不能为空且不能超过 200 字");
-            return;
-        }
-        if (!"TEXT".equals(type) && !"EMOJI".equals(type)) {
-            sendRoomError(roomId, userId, requestId, "不支持的聊天类型");
-            return;
-        }
+        String type = context.chatMessageType();
+        String content = context.chatContent();
         GobangChatVO vo = new GobangChatVO(
                 userId,
                 type,
@@ -310,38 +286,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
     }
 
-    private GobangRoom findRoomForPlayerAction(
-            String roomId,
-            Long userId,
-            String requestId,
-            String endedMessage,
-            String forbiddenMessage
-    ) {
+    private void requireRoomActionParams(String roomId, Long userId) {
         if (roomId == null || roomId.isBlank() || userId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        GobangRoom room = rooms.get(roomId);
-        if (room == null) {
-            sendRoomError(roomId, userId, requestId, endedMessage);
-            return null;
-        }
-        if (!room.contains(userId)) {
-            sendRoomError(roomId, userId, requestId, forbiddenMessage);
-            return null;
-        }
-        return room;
     }
 
-    private GobangRoom findRoomForChat(String roomId, Long userId, String requestId) {
-        if (roomId == null || roomId.isBlank() || userId == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+    private boolean rejectIfGuardFailed(GobangActionContext context) {
+        GobangGuardResult result = gobangGuardChain.check(context);
+        if (result.isPassed()) {
+            return false;
         }
-        GobangRoom room = rooms.get(roomId);
-        if (room == null) {
-            sendRoomError(roomId, userId, requestId, "当前对战已经结束，不能发送消息或表情包");
-            return null;
-        }
-        return room;
+        sendRoomError(context.getRoomId(), context.getUserId(), context.getRequestId(), result.getMessage());
+        return true;
     }
 
     @Override

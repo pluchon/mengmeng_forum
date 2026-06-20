@@ -52,21 +52,33 @@
       </div>
 
       <div class="setting-item">
-        <div class="setting-label setting-label--text" title="性别">
+        <div class="setting-label" title="性别">
           <img :src="genderIconUrl" alt="" class="setting-label-icon" />
-          <span>性别</span>
         </div>
-        <div class="setting-content setting-content--gender">
-          <el-radio-group
-            v-model="profileForm.gender"
-            class="setting-gender-group"
-            :disabled="saving"
-            @change="saveGender"
-          >
-            <el-radio :value="0" border>女</el-radio>
-            <el-radio :value="1" border>男</el-radio>
-            <el-radio :value="2" border>保密</el-radio>
-          </el-radio-group>
+        <div class="setting-content">
+          <template v-if="!editing.gender">
+            <span class="value-text">性别：{{ genderLabel(profileForm.gender) }}</span>
+            <el-button class="edit-btn" @click="startEdit('gender')">修改</el-button>
+          </template>
+          <template v-else>
+            <div class="edit-box edit-box--gender">
+              <el-radio-group
+                v-model="profileForm.gender"
+                class="setting-gender-group"
+                :disabled="saving"
+              >
+                <el-radio :value="0" border>女</el-radio>
+                <el-radio :value="1" border>男</el-radio>
+                <el-radio :value="2" border>保密</el-radio>
+              </el-radio-group>
+              <div class="edit-actions">
+                <el-button type="primary" size="small" :loading="saving" @click="saveGender">
+                  保存
+                </el-button>
+                <el-button size="small" @click="cancelEdit('gender')">取消</el-button>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -136,6 +148,7 @@ const {
   DEFAULT_AVATAR,
   cancelEdit,
   editing,
+  genderLabel,
   handleAvatarUpload,
   profileForm,
   saveSingleField,

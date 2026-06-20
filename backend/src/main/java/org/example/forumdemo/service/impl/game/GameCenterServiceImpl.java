@@ -43,17 +43,16 @@ public class GameCenterServiceImpl implements GameCenterService {
         for (GameDefinition row : definitions) {
             int onlineCount = gameOnlineStateService.countGameOnline(row.getGameCode());
             if (onlineCount < 0) {
-                onlineCount = GameConstants.GOBANG.equals(row.getGameCode())
-                        ? gameConnectionRegistry.countGameOnline(GameConstants.GOBANG)
-                        : 0;
+                onlineCount = gameConnectionRegistry.countGameOnline(row.getGameCode());
             }
             games.add(GameConverter.toDefinitionVO(row, onlineCount));
         }
         GameUserProfileVO gobangProfile = gameUserProfileService.getProfileVO(userId, GameConstants.GOBANG);
+        GameUserProfileVO jinziProfile = gameUserProfileService.getProfileVO(userId, GameConstants.JINZI);
         int lobbyOnline = gameOnlineStateService.countLobbyOnline();
         if (lobbyOnline < 0) {
             lobbyOnline = gameConnectionRegistry.countLobbyOnline();
         }
-        return new GameCenterOverviewVO(games, gobangProfile, lobbyOnline);
+        return new GameCenterOverviewVO(games, gobangProfile, jinziProfile, lobbyOnline);
     }
 }

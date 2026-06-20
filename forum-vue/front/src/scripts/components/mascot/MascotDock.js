@@ -1122,6 +1122,9 @@ export function useMascotDock() {
     if (!stageHost.value) return
     try {
       stageHost.value.innerHTML = ''
+      document
+        .querySelectorAll('#oml2d-stage, #oml2d-canvas, #oml2d-tips, #oml2d-statusBar')
+        .forEach((node) => node.remove())
     }
     catch {
       /* ignore */

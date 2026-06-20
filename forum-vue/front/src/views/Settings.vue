@@ -14,10 +14,6 @@
               <el-icon><Lock /></el-icon>
               <span>账号与安全</span>
             </el-menu-item>
-            <el-menu-item index="privacy">
-              <el-icon><Setting /></el-icon>
-              <span>隐私设置</span>
-            </el-menu-item>
           </el-menu>
         </aside>
 
@@ -29,21 +25,6 @@
           />
 
           <AccountSecurity v-if="activeMenu === 'account'" @open-password="pwdDialogVisible = true" />
-
-          <div v-if="activeMenu === 'privacy'" class="settings-section animate-fade-in">
-            <div class="settings-list">
-              <div v-for="i in 4" :key="i" class="setting-item disabled">
-                <div class="setting-label setting-label--text">
-                  隐私选项 {{ i }}
-                  <el-tag size="small" type="info" class="ml-8">开发中</el-tag>
-                </div>
-                <div class="setting-content">
-                  <span class="desc-text">此项功能正在紧急开发中，敬请期待</span>
-                  <el-switch :model-value="false" disabled />
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -224,7 +205,6 @@ const {
   Lock,
   Message,
   Phone,
-  Setting,
   User,
   activeMenu,
   emailCodeBtnDisabled,

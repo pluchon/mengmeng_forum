@@ -103,51 +103,62 @@
                 </div>
               </div>
 
-              <el-button
-                v-if="detail.owned"
-                type="success"
-                class="emoji-shop-detail-dialog__buy-btn"
-                disabled
-                round
-              >
-                已拥有
-              </el-button>
-              <el-button
-                v-else-if="isAuthor"
-                type="info"
-                class="emoji-shop-detail-dialog__buy-btn"
-                disabled
-                round
-              >
-                您是作者，无需购买~
-              </el-button>
-              <el-button
-                v-else-if="canPurchase"
-                type="primary"
-                class="emoji-shop-detail-dialog__buy-btn"
-                round
-                :disabled="purchaseDisabled"
-                :loading="purchasing"
-                @click="onPurchase"
-              >
-                {{ purchaseLabel }}
-              </el-button>
-              <el-button
-                v-else-if="!userStore.isLoggedIn"
-                type="primary"
-                class="emoji-shop-detail-dialog__buy-btn"
-                round
-                @click="router.push('/sign-in')"
-              >
-                登录后购买
-              </el-button>
+              <div class="emoji-shop-detail-dialog__action-row">
+                <el-button
+                  v-if="isAuthor && detail.status === 1"
+                  class="emoji-shop-detail-dialog__shelf-btn"
+                  round
+                  @click="setShelf(2)"
+                >
+                  下架
+                </el-button>
+                <el-button
+                  v-else-if="isAuthor && detail.status !== 1"
+                  class="emoji-shop-detail-dialog__shelf-btn"
+                  round
+                  @click="setShelf(1)"
+                >
+                  上架
+                </el-button>
 
-              <div
-                v-if="Number(userStore.isAdmin) === 1 && detail.status"
-                class="emoji-shop-detail-dialog__admin"
-              >
-                <el-button v-if="detail.status === 1" size="small" round @click="setShelf(2)">下架</el-button>
-                <el-button v-else size="small" round @click="setShelf(1)">上架</el-button>
+                <el-button
+                  v-if="detail.owned"
+                  type="success"
+                  class="emoji-shop-detail-dialog__buy-btn"
+                  disabled
+                  round
+                >
+                  已拥有
+                </el-button>
+                <el-button
+                  v-else-if="isAuthor"
+                  type="info"
+                  class="emoji-shop-detail-dialog__buy-btn"
+                  disabled
+                  round
+                >
+                  您是作者，无需购买~
+                </el-button>
+                <el-button
+                  v-else-if="canPurchase"
+                  type="primary"
+                  class="emoji-shop-detail-dialog__buy-btn"
+                  round
+                  :disabled="purchaseDisabled"
+                  :loading="purchasing"
+                  @click="onPurchase"
+                >
+                  {{ purchaseLabel }}
+                </el-button>
+                <el-button
+                  v-else-if="!userStore.isLoggedIn"
+                  type="primary"
+                  class="emoji-shop-detail-dialog__buy-btn"
+                  round
+                  @click="router.push('/sign-in')"
+                >
+                  登录后购买
+                </el-button>
               </div>
             </div>
           </section>

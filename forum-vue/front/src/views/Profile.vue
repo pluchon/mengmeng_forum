@@ -25,8 +25,9 @@
           </div>
           <div class="info-content">
             <div class="name-row">
-              <div class="nickname-with-badge">
+              <div class="name-meta-row">
                 <h1 class="nickname">{{ userInfo?.nickname || '匿名用户' }}</h1>
+                <span class="id-inline">ID: {{ userInfo?.id || '---' }}</span>
                 <img
                   v-if="showVipBadge"
                   :src="vipCrownSrc"
@@ -36,116 +37,140 @@
                   alt="VIP"
                 />
               </div>
-              <div v-if="isMe" class="action-btns">
-                <el-button round class="profile-edit-btn" @click="$router.push('/settings')">编辑资料</el-button>
-              </div>
-              <div v-else class="action-btns">
-                <el-button round @click="handleChat">私信</el-button>
+              <div class="name-row-right">
+                <IpRegionLabel :region="userInfo?.ipRegion" />
+                <div v-if="!isMe" class="action-btns">
+                  <el-button round @click="handleChat">私信</el-button>
+                </div>
               </div>
             </div>
 
-            <div class="id-row">ID: {{ userInfo?.id || '---' }}</div>
-
-            <p class="bio">{{ userInfo?.remark || '还没有填写个人简介哦' }}</p>
-
-            <div class="stat-item">
-              <span class="val">{{ total }}</span>
-              <span class="lab">发帖数</span>
-            </div>
+            <p class="bio">个人简介：{{ userInfo?.remark || '还没有填写个人简介哦' }}</p>
           </div>
         </section>
 
         <div class="profile-tabs-wrap">
-          <el-tabs v-model="activeTab" class="red-profile-tabs">
-            <el-tab-pane label="笔记" name="notes">
-              <div class="profile-content">
-                <el-row :gutter="20">
-                  <el-col v-for="item in articles" :key="item.id" :xs="12" :sm="8" :md="6">
-                    <el-card
-                      class="note-card animate-fade-up"
-                      :body-style="{ padding: '0px' }"
-                      shadow="hover"
-                      @click="$router.push(`/article/${item.id}`)"
-                    >
-                      <div class="note-cover" :style="coverStyle(item)">
-                        <span v-if="!item.coverImg" class="cover-text">{{ item.title?.substring(0, 1) }}</span>
-                        <div v-if="Number(item.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
-                      </div>
-                      <div class="note-info">
-                        <h3 class="note-title">{{ item.title }}</h3>
-                        <div class="note-meta">
-                          <el-icon><Star /></el-icon>
-                          <span>{{ item.likeCount || 0 }}</span>
-                        </div>
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-                <el-empty v-if="articles.length === 0" description="还没有发布过笔记哦" />
-              </div>
-            </el-tab-pane>
+          <div class="profile-tabs-bar">
+            <nav class="profile-tabs-nav" aria-label="个人主页内容分类">
+              <button
+                type="button"
+                class="profile-tab-btn"
+                :class="{ 'is-active': activeTab === 'notes' }"
+                @click="activeTab = 'notes'"
+              >
+                笔记
+              </button>
+              <button
+                type="button"
+                class="profile-tab-btn"
+                :class="{ 'is-active': activeTab === 'collect' }"
+                @click="activeTab = 'collect'"
+              >
+                收藏
+              </button>
+              <button
+                type="button"
+                class="profile-tab-btn"
+                :class="{ 'is-active': activeTab === 'liked' }"
+                @click="activeTab = 'liked'"
+              >
+                点赞
+              </button>
+            </nav>
+            <div v-if="activeTab === 'notes'" class="profile-tab-post-count">
+              <span class="profile-tab-post-count-val">{{ total }}</span>
+              <span class="profile-tab-post-count-lab">发帖数</span>
+            </div>
+          </div>
 
-            <el-tab-pane label="收藏" name="collect">
-              <div class="profile-content profile-fav-list" v-loading="loadingFavorites">
+          <div v-show="activeTab === 'notes'" class="profile-content">
+            <el-row :gutter="20">
+              <el-col v-for="item in articles" :key="item.id" :xs="12" :sm="8" :md="6">
                 <el-card
-                  v-for="f in favoriteFolders"
-                  :key="f.id"
-                  class="profile-fav-folder-card animate-fade-up"
-                  shadow="never"
-                  :body-style="{ padding: '14px 16px' }"
+                  class="note-card animate-fade-up"
+                  :body-style="{ padding: '0px' }"
+                  shadow="hover"
+                  @click="$router.push(`/article/${item.id}`)"
                 >
-                  <div class="profile-fav-folder-row">
-                    <div>
-                      <div class="profile-fav-folder-name">{{ f.name }}</div>
-                      <div class="profile-fav-folder-meta">
-                        {{ Number(f.isPublic) === 1 ? '公开' : '私密' }} · {{ f.itemCount ?? 0 }} 条
-                      </div>
+                  <div class="note-cover" :style="coverStyle(item)">
+                    <span v-if="!item.coverImg" class="cover-text">{{ item.title?.substring(0, 1) }}</span>
+                    <div v-if="Number(item.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
+                  </div>
+                  <div class="note-info">
+                    <h3 class="note-title">{{ item.title }}</h3>
+                    <div class="note-meta">
+                      <el-icon><Star /></el-icon>
+                      <span>{{ item.likeCount || 0 }}</span>
                     </div>
-                    <button type="button" class="profile-fav-view-btn" @click="openFavoriteDialog(f)">查看</button>
                   </div>
                 </el-card>
+              </el-col>
+            </el-row>
+            <el-empty v-if="articles.length === 0" description="还没有发布过笔记哦" />
+          </div>
 
-                <el-empty v-if="!loadingFavorites && favoriteFolders.length === 0" description="暂无收藏" />
+          <div v-show="activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
+            <div v-if="isMe" class="profile-fav-head">
+              <span>我的收藏夹</span>
+              <el-button type="primary" size="small" round :icon="Plus" @click="openCreateFavoriteFolder">
+                新建
+              </el-button>
+            </div>
+            <el-card
+              v-for="f in favoriteFolders"
+              :key="f.id"
+              class="profile-fav-folder-card animate-fade-up"
+              shadow="never"
+              :body-style="{ padding: '14px 16px' }"
+            >
+              <div class="profile-fav-folder-row">
+                <div>
+                  <div class="profile-fav-folder-name">{{ f.name }}</div>
+                  <div class="profile-fav-folder-meta">
+                    {{ Number(f.isPublic) === 1 ? '公开' : '私密' }} · {{ f.itemCount ?? 0 }} 条
+                  </div>
+                </div>
+                <button type="button" class="profile-fav-view-btn" @click="openFavoriteDialog(f)">查看</button>
               </div>
-            </el-tab-pane>
+            </el-card>
 
-            <el-tab-pane label="点赞" name="liked">
-              <div class="profile-content">
-                <el-row :gutter="20">
-                  <el-col
-                    v-for="item in likedArticles"
-                    :key="item.article?.id || item.id"
-                    :xs="12"
-                    :sm="8"
-                    :md="6"
-                  >
-                    <el-card
-                      class="note-card note-card--outlined animate-fade-up"
-                      :body-style="{ padding: '0px' }"
-                      shadow="never"
-                      @click="$router.push(`/article/${item.article?.id || item.id}`)"
-                    >
-                      <div class="note-cover" :style="coverStyle(item.article || item)">
-                        <span
-                          v-if="!(item.article || item).coverImg"
-                          class="cover-text"
-                        >{{ (item.article?.title || item.title)?.substring(0, 1) }}</span>
-                        <div v-if="Number((item.article || item).mediaType) === 1" class="note-cover-play" aria-hidden="true" />
-                      </div>
-                      <div class="note-info">
-                        <h3 class="note-title">{{ item.article?.title || item.title }}</h3>
-                        <div class="note-meta">
-                          <el-icon><Star /></el-icon>
-                          <span>{{ item.article?.likeCount || item.likeCount || 0 }}</span>
-                        </div>
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-                <el-empty v-if="likedArticles.length === 0" description="还没有点赞过帖子哦" />
-              </div>
-            </el-tab-pane>
-          </el-tabs>
+            <el-empty v-if="!loadingFavorites && favoriteFolders.length === 0" description="暂无收藏" />
+          </div>
+
+          <div v-show="activeTab === 'liked'" class="profile-content">
+            <el-row :gutter="20">
+              <el-col
+                v-for="item in likedArticles"
+                :key="item.article?.id || item.id"
+                :xs="12"
+                :sm="8"
+                :md="6"
+              >
+                <el-card
+                  class="note-card note-card--outlined animate-fade-up"
+                  :body-style="{ padding: '0px' }"
+                  shadow="never"
+                  @click="$router.push(`/article/${item.article?.id || item.id}`)"
+                >
+                  <div class="note-cover" :style="coverStyle(item.article || item)">
+                    <span
+                      v-if="!(item.article || item).coverImg"
+                      class="cover-text"
+                    >{{ (item.article?.title || item.title)?.substring(0, 1) }}</span>
+                    <div v-if="Number((item.article || item).mediaType) === 1" class="note-cover-play" aria-hidden="true" />
+                  </div>
+                  <div class="note-info">
+                    <h3 class="note-title">{{ item.article?.title || item.title }}</h3>
+                    <div class="note-meta">
+                      <el-icon><Star /></el-icon>
+                      <span>{{ item.article?.likeCount || item.likeCount || 0 }}</span>
+                    </div>
+                  </div>
+                </el-card>
+              </el-col>
+            </el-row>
+            <el-empty v-if="likedArticles.length === 0" description="还没有点赞过帖子哦" />
+          </div>
         </div>
       </template>
     </div>
@@ -192,11 +217,41 @@
         <el-empty v-if="!favoriteDialogLoading && !favoriteDialogItems.length" description="暂无收藏帖子" />
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="favoriteCreateVisible"
+      title="新建收藏夹"
+      width="420px"
+      class="profile-fav-create-dialog"
+      destroy-on-close
+    >
+      <el-form label-width="84px">
+        <el-form-item label="名称">
+          <el-input
+            v-model="favoriteCreateForm.name"
+            maxlength="50"
+            show-word-limit
+            placeholder="输入收藏夹名称"
+          />
+        </el-form-item>
+        <el-form-item label="可见性">
+          <el-radio-group v-model="favoriteCreateForm.isPublic">
+            <el-radio :value="1">公开</el-radio>
+            <el-radio :value="0">私密</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="favoriteCreateVisible = false">取消</el-button>
+        <el-button type="primary" :loading="favoriteCreateSaving" @click="saveFavoriteFolder">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import { useProfile } from '@scripts/views/Profile'
 import vipCrownUrl from '@/assets/svg/VIP.svg?url'
 
@@ -204,6 +259,7 @@ const vipCrownSrc = vipCrownUrl
 
 const {
   Camera,
+  Plus,
   Star,
   activeTab,
   articles,
@@ -215,6 +271,9 @@ const {
   handleChat,
   isMe,
   likedArticles,
+  favoriteCreateForm,
+  favoriteCreateSaving,
+  favoriteCreateVisible,
   favoriteCoverStyle,
   favoriteDialogItems,
   favoriteDialogLoading,
@@ -225,7 +284,9 @@ const {
   loadingFavorites,
   loading,
   openArticleFromFavorite,
+  openCreateFavoriteFolder,
   openFavoriteDialog,
+  saveFavoriteFolder,
   total,
   triggerBgUpload,
   userInfo,

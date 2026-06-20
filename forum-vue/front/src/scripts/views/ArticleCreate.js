@@ -348,6 +348,7 @@ export function useArticleCreate() {
   }
 
   function openGalleryPicker() {
+    if (galleryUploading.value) return
     galleryInputRef.value?.click()
   }
 
@@ -360,6 +361,7 @@ export function useArticleCreate() {
   async function onGalleryFilesSelected(e) {
     const raw = e.target?.files
     if (!raw?.length) return
+    if (galleryUploading.value) return
     const files = Array.from(raw)
     e.target.value = ''
     if (mediaMode.value === 'video') {
@@ -383,7 +385,6 @@ export function useArticleCreate() {
       }
     }
     galleryUploading.value = true
-    ElMessage.info(`相册 ${take.length} 张图在后台上传，可先继续编辑正文`)
     try {
       for (const file of take) {
         const res = await uploadArticleImage(file)

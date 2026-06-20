@@ -14,6 +14,9 @@ import org.example.forumdemo.service.interfaces.game.GameMatchQueueService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GobangMatchService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
+import org.example.forumdemo.service.impl.game.matchguard.GobangMatchContext;
+import org.example.forumdemo.service.impl.game.matchguard.GobangMatchGuardChain;
+import org.example.forumdemo.service.impl.game.matchguard.GobangMatchGuardResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -51,21 +54,29 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     @Autowired
     private UserMapper userMapper;
 
+    private GobangMatchGuardChain gobangMatchGuardChain = GobangMatchGuardChain.defaultChain();
+
+    @Autowired(required = false)
+    public void setGobangMatchGuardChain(GobangMatchGuardChain gobangMatchGuardChain) {
+        if (gobangMatchGuardChain != null) {
+            this.gobangMatchGuardChain = gobangMatchGuardChain;
+        }
+    }
+
     @Override
     public void startMatch(Long userId, String requestId, WebSocketSession session) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
         User user = userMapper.selectById(userId);
         int points = user == null || user.getPoints() == null ? 0 : user.getPoints();
-        if (points < GameConstants.SCORE_DELTA) {
-            sendToSession(session, GameWsResponse.fail("match_failed", requestId,
-                    "论坛积分不足，至少需要 " + GameConstants.SCORE_DELTA + " 积分才能开始匹配"));
+        boolean alreadyQueued = gameMatchQueueService.contains(GameConstants.GOBANG, userId);
+        GobangMatchGuardResult guardResult = gobangMatchGuardChain.check(
+                new GobangMatchContext(userId, user, profile, points, alreadyQueued)
+        );
+        if (guardResult.isFail()) {
+            sendToSession(session, GameWsResponse.fail("match_failed", requestId, guardResult.getMessage()));
             return;
         }
-        if (GameConstants.PROFILE_PLAYING.equals(profile.getCurrentStatus())) {
-            sendToSession(session, GameWsResponse.fail("match_failed", requestId, "你已经在对局中"));
-            return;
-        }
-        if (gameMatchQueueService.contains(GameConstants.GOBANG, userId)) {
+        if (guardResult.isOk()) {
             sendToSession(session, GameWsResponse.ok("match_started", requestId, null));
             return;
         }

@@ -1,18 +1,23 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
-import { getShopList } from '@/api/shop'
+import { getShopList, getShopMyPacks } from '@/api/shop'
 import { useUserStore } from '@/stores/user'
 import { unwrapPageRecords } from '@/utils/apiData'
-import emojiShopIconUrl from '@/assets/svg/表情包.svg?url'
 import uploadIconUrl from '@/assets/svg/上传.svg?url'
 
-export const SORT_OPTIONS = [
+export const MAIN_TABS = [
   { label: '最新上架', value: 'new' },
-  { label: '热销', value: 'hot' },
-  { label: '积分从低到高', value: 'price_asc' },
-  { label: '积分从高到低', value: 'price_desc' },
+  { label: '热门排行', value: 'hot' },
 ]
+
+export const PRICE_SORTS = [
+  { label: '积分从低到高', value: 'price_asc', arrow: '↑' },
+  { label: '积分从高到低', value: 'price_desc', arrow: '↓' },
+]
+
+/** @deprecated 保留兼容；列表页改用 MAIN_TABS + PRICE_SORTS */
+export const SORT_OPTIONS = [...MAIN_TABS, ...PRICE_SORTS]
 
 export function useEmojiShop(detailDialogRef, uploadDialogRef) {
   const route = useRoute()
@@ -26,8 +31,11 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
   const pageSize = ref(20)
   const sort = ref('new')
   const keyword = ref('')
+  const viewMode = ref('all')
 
   let searchTimer = null
+
+  const isOwnedView = computed(() => viewMode.value === 'owned')
 
   const isVipMember = computed(() => {
     const t = Number(userStore.vipTier) || 0
@@ -45,15 +53,40 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
     return `${n} 积分`
   }
 
+  function mapMyPackToListItem(pack) {
+    return {
+      id: pack.shopId,
+      name: pack.name,
+      coverUrl: pack.coverUrl,
+      price: pack.pricePaid,
+      owned: true,
+      salesCount: 0,
+    }
+  }
+
   function setSort(value) {
-    if (sort.value === value) return
+    if (sort.value === value && viewMode.value === 'all') return
+    viewMode.value = 'all'
     sort.value = value
     loadList(1)
   }
 
+  async function showMyOwned() {
+    if (!userStore.isLoggedIn) {
+      const { ensureLoggedIn } = await import('@/utils/loginPrompt')
+      if (!(await ensureLoggedIn('查看已购表情包需要登录'))) return
+    }
+    if (viewMode.value === 'owned') return
+    viewMode.value = 'owned'
+    await loadMyPacks()
+  }
+
   function onSearchInput() {
     clearTimeout(searchTimer)
-    searchTimer = setTimeout(() => loadList(1), 320)
+    searchTimer = setTimeout(() => {
+      if (viewMode.value === 'owned') loadMyPacks()
+      else loadList(1)
+    }, 320)
   }
 
   function goDetail(id) {
@@ -70,6 +103,7 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
   function onDetailPurchased(shopId) {
     const row = records.value.find((r) => r.id === shopId)
     if (row) row.owned = true
+    if (viewMode.value === 'owned') loadMyPacks()
   }
 
   async function goUpload() {
@@ -100,7 +134,33 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
     }
   }
 
+  async function loadMyPacks() {
+    if (!userStore.isLoggedIn) {
+      records.value = []
+      total.value = 0
+      return
+    }
+    pageNum.value = 1
+    loading.value = true
+    try {
+      const res = await getShopMyPacks()
+      if (res.code === 0 && Array.isArray(res.data)) {
+        let items = res.data.map(mapMyPackToListItem)
+        const q = keyword.value.trim()
+        if (q) items = items.filter((item) => (item.name || '').includes(q))
+        records.value = items
+        total.value = items.length
+      } else {
+        records.value = []
+        total.value = 0
+      }
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function loadList(p = pageNum.value) {
+    viewMode.value = 'all'
     pageNum.value = p
     loading.value = true
     try {
@@ -152,7 +212,6 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
 
   return {
     Search,
-    emojiShopIconUrl,
     uploadIconUrl,
     userStore,
     loading,
@@ -162,10 +221,15 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
     pageSize,
     sort,
     keyword,
+    viewMode,
+    isOwnedView,
     isVipMember,
     SORT_OPTIONS,
+    MAIN_TABS,
+    PRICE_SORTS,
     formatPrice,
     setSort,
+    showMyOwned,
     onSearchInput,
     goDetail,
     goUpload,
@@ -174,5 +238,6 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
     onDetailClosed,
     onDetailPurchased,
     loadList,
+    loadMyPacks,
   }
 }

@@ -98,6 +98,9 @@ public class User {
     @Schema(description = "备注/自我介绍", example = "这个人很懒，什么都没留下")
     private String remark;
 
+    @Schema(description = "最近登录IP属地(省份/国家)")
+    private String ipRegion;
+
     @Schema(description = "管理员标签（仅管理端维护，与用户端简介 remark 分离）")
     private String adminTag;
 

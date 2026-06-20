@@ -6,19 +6,21 @@
 
 ![image-20260618112324233](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260618112324431.png)
 
-![image-20260618112231878](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260618112232112.png)
+![image-20260620132214399](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132214769.png)
 
-![image-20260605175708728](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175708955.png)
+![image-20260620132229021](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132229262.png)
 
-![image-20260605175802603](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175803233.png)
+![image-20260620132244567](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132244754.png)
 
-![game-center-polish](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175627149.png)
+![image-20260620132313826](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132314012.png)
 
-![gobang-game-polish](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175642759.png)
+![image-20260620132340560](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132340782.png)
 
-![gobang-winning-line-b](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260619175729265.png)
+![image-20260620132355767](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132355938.png)
 
-![image-20260605175822507](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175822653.png)
+![image-20260620132418922](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132419135.png)
+
+![image-20260620132431965](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132432116.png)
 
 > 管理界面还没完全做好，目前比较糙
 
@@ -32,17 +34,19 @@
 
 - 用户端：`https://www.nuonuoya.cn`
 
-> 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋对战。
+> 前后端分离技术社区：发帖（图文 / 视频）、评论、私信、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋与井字棋对战。
 
 ---
 
 ## v1.3 更新摘要
 
 - **游戏中心 / 五子棋**：新增独立游戏大厅、五子棋匹配页和蓝黑主题对局页，支持真人匹配、观战、房间聊天 / 表情、棋谱回放、天梯榜和战绩统计。
+- **游戏中心 / 井字棋**：复用游戏中心通用表与结算链路，新增 3×3 井字棋匹配页与对局页；支持快速匹配、AI 对手、房间聊天 / 表情、棋谱回放、天梯榜和战绩统计（不开放观战）。
 - **三层 WebSocket**：大厅在线、游戏在线、房间对局拆成独立连接，服务端主动推送在线状态、匹配结果、落子、终局胜线和观战席变化。
-- **论坛积分联动**：五子棋胜负直接进入论坛积分流水，玩家段位、胜率、总局数和排行榜复用论坛账号体系。
-- **局时 / 步时**：支持 10 分钟局时、60 秒步时，超时、认输、五连均走统一结算链路。
-- **AI 对手**：长时间无人匹配时自动进入 AI 房间；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`，DeepSeek 不可用时展示本地策略兜底。
+- **论坛积分联动**：五子棋 / 井字棋胜负直接进入论坛积分流水，玩家段位、胜率、总局数和排行榜复用论坛账号体系。
+- **局时 / 步时**：五子棋支持 10 分钟局时、60 秒步时；井字棋支持 2 分钟局时、20 秒步时；超时、认输、成线 / 五连均走统一结算链路。
+- **AI 对手**：长时间无人匹配时自动进入 AI 房间；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`，DeepSeek 不可用时展示本地策略兜底（井字棋 AI 局积分变化更小）。
+- **局部责任链**：五子棋动作 / 匹配、私信发送、发帖提交审核、抽奖准入已抽成 Guard Chain；结算、扣分、库存、MQ、WebSocket 广播仍保留在 Service 主流程。
 - **多实例准备**：在线状态、匹配队列、房间快照、房间事件广播和对局结束事件已按 Redis / RabbitMQ 拆出扩展点。
 
 ---
@@ -51,7 +55,7 @@
 
 | 目录 | 说明 |
 |------|------|
-| `backend` | Java 后端（Spring Boot）：业务 API、鉴权、MQ、WebSocket、审核状态、五子棋对战 |
+| `backend` | Java 后端（Spring Boot）：业务 API、鉴权、MQ、WebSocket、审核状态、五子棋 / 井字棋对战 |
 | `ai-server` | Python：AI 审核 / 写作 / 看板娘 / 语义搜索 / RAG |
 | `forum-vue` | 用户端（Vue 3 + Vite 6） |
 | `forum-vue-admin` | 管理端（Vue 3 + Arco） |
@@ -81,7 +85,8 @@ flowchart TB
 
 - 用户端 / 管理端 → **Nginx**（静态 `dist/` + 反代 API）
 - Java → MySQL / Redis / RabbitMQ / FFmpeg / ai-server
-- 五子棋实时链路 → Java WebSocket（大厅在线、游戏在线、房间对局三类连接）
+- 五子棋 / 井字棋实时链路 → Java WebSocket（大厅在线、游戏在线、房间对局三类连接）
+- 局部责任链 → Java 后端 Guard Chain，只拦截前置准入规则，不接管事务核心流程
 - ai-server → PostgreSQL（LangGraph checkpoint）、DashScope、OSS 签名读私有媒体
 
 ---
@@ -99,6 +104,7 @@ flowchart TB
 - 智能搜索（DB 快搜 + AI 语义增强）
 - 看板娘：多模型、会话历史、站内帖子 RAG、联网与地图工具
 - 游戏中心：五子棋实时匹配、观战、房间聊天 / 表情、棋谱回放、战绩统计、天梯榜、AI 对手
+- 游戏中心：井字棋快速匹配、房间聊天 / 表情、棋谱回放、战绩统计、天梯榜、AI 对手（平局不扣积分）
 
 ### 管理端
 
@@ -152,6 +158,52 @@ sequenceDiagram
   J->>DB: 写落子、战绩、积分流水
   J->>MQ: 投递对局结束事件
   J-->>Room: 推送棋盘、胜线、结果与倒计时
+```
+
+### 1b) 游戏中心 / 井字棋（WebSocket 轻量对战）
+
+井字棋作为游戏中心第二款对战游戏，**复用** `game_definition` / `game_user_profile` / `game_match_record` / `game_room_move` 等通用表，以 `game_code = jinzi` 区分数据。实时链路同样拆成三层 WebSocket：大厅连接展示游戏中心在线；游戏连接负责井字棋匹配页在线人数与匹配队列；房间连接负责 3×3 落子、计时、聊天和终局同步。HTTP 负责个人资料、历史战绩、天梯榜与棋谱回放查询。
+
+**井字棋能力**
+
+- 快速匹配：按论坛积分分桶（青铜 / 白银 / 黄金 / 大师），同桶内真人优先配对
+- 入场门槛：开始匹配前须至少有 **3** 论坛积分；真人胜局 ±3 分，AI 胜局 ±1 分，**平局不结算积分**
+- AI 对手：队列等待约 **15 秒**无人匹配时自动创建 AI 房间；积分低于 1600 走 `deepseek-v4-flash`，达到 1600 及以上走 `deepseek-v4-pro`；DeepSeek 不可用或返回非法坐标时走本地 Minimax 兜底
+- 实时对局：服务端维护权威 3×3 棋盘，校验回合、坐标、棋色；三连成线推送 `winningLine`，平局走 `END_DRAW`
+- 计时规则：支持 **2 分钟**局时、**20 秒**步时；断线保留 **30 秒**重连窗口，超时判负
+- 房间聊天：对局双方支持文本和已购表情包；**不开放观战席**，终局后禁止继续落子 / 认输 / 聊天
+- 棋谱与回放：每手落子写入 `game_room_move`，匹配页支持历史对局回放
+- 积分结算：胜负同步论坛积分流水；战绩、胜率、天梯榜与论坛用户体系共享
+- 多实例准备：在线状态、匹配队列、房间快照与结算事件复用 Redis / RabbitMQ 扩展点
+
+```mermaid
+sequenceDiagram
+  participant FE as 前端
+  participant Lobby as 大厅 WS
+  participant Game as 游戏 WS
+  participant Room as 房间 WS
+  participant J as Java 后端
+  participant P as Python AI
+  participant DB as MySQL
+  participant R as Redis
+  participant MQ as RabbitMQ
+
+  FE->>Lobby: 进入游戏中心
+  Lobby->>J: 建立大厅在线连接
+  J->>R: 更新大厅在线、战绩快照
+  FE->>Game: 进入井字棋匹配页
+  Game->>J: 开始匹配
+  alt 匹配真人
+    J->>Room: 创建真人房间
+  else 约 15 秒无人
+    J->>Room: 创建 AI 房间
+    J->>P: 请求 DeepSeek 落子
+  end
+  Room->>J: 玩家落子 / 认输 / 聊天
+  J->>J: 校验回合、坐标、计时
+  J->>DB: 写落子、战绩、积分流水
+  J->>MQ: 投递对局结束事件
+  J-->>Room: 推送棋盘、胜线、平局或终局结果
 ```
 
 ### 2) 发帖审核（异步 + 幂等）
@@ -306,6 +358,39 @@ flowchart TD
   AI --> R2[返回重排后的结果]
 ```
 
+### 9) 局部责任链（Guard Chain）
+
+后端只在**前置准入校验**上使用局部责任链，避免业务入口继续堆叠大量重复 `if`。责任链只回答“能不能继续”，失败时返回统一错误；真正的落库、扣积分、库存扣减、MQ 投递、WebSocket 广播和状态流转仍由原 Service 主流程负责。
+
+已接入的 Guard Chain：
+
+- 五子棋房间动作：`MOVE / CHAT / SURRENDER`，校验房间存在、进行中、玩家身份、回合、坐标、空位和聊天内容
+- 五子棋匹配入口：校验用户存在、积分足够、未在对局中、未重复入队
+- 井字棋房间动作：在 `JinziRoomService` 内校验房间存在、进行中、玩家身份、回合、坐标、空位和聊天内容（不开放观战）
+- 井字棋匹配入口：校验用户存在、积分 ≥ 3、未在对局中、未重复入队
+- 私信发送：校验文本 / 图片 / GIF / 回复消息的内容、发送者状态、接收者、不能给自己发、媒体 URL 来源
+- 发帖提交审核：校验作者、禁言、帖子可见、状态允许、审核重试次数
+- 抽奖准入：校验用户 ID、抽数、活动可用、用户可用
+
+明确不放进责任链的核心流程：
+
+- 五子棋终局结算：对局记录、胜负统计、积分流水、玩家状态、结算事件和广播
+- 井字棋终局结算：对局记录、胜负统计、积分流水（平局 scoreDelta=0）、玩家状态、结算事件和广播
+- 发帖审核结果应用：`PENDING_AUDIT + taskId` 的 DB CAS、Redis dedup、通过 / 拒绝 / 异常状态落库
+- 抽奖执行：积分扣减、库存扣减、中奖记录、软保底 / 硬保底计数
+- 文件上传：当前私有方法校验已足够集中，拆链收益不明显
+
+```mermaid
+flowchart TD
+  A[业务请求] --> C[构造 Context]
+  C --> G[Guard Chain 前置校验]
+  G -->|失败| F[返回业务错误 / WebSocket 友好提示]
+  G -->|通过| S[Service 主流程]
+  S --> DB[(MySQL / Redis)]
+  S --> MQ[RabbitMQ 事件]
+  S --> WS[WebSocket 推送]
+```
+
 ---
 
 ## 本地开发
@@ -360,9 +445,17 @@ flowchart LR
 **五子棋本地调试**
 
 - 游戏入口：用户端登录后访问 `/games`，再进入 `/games/gobang`
-- WebSocket 入口：`/ws/games/lobby`、`/ws/games/gobang`、`/ws/games/gobang/rooms/{roomId}`
+- WebSocket 入口：`/ws/game-center/lobby`、`/ws/games/gobang`、`/ws/games/gobang/rooms/{roomId}`
 - 对局结果依赖 MySQL；在线、匹配与多实例房间事件依赖 Redis；异步结算事件依赖 RabbitMQ
 - AI 对手依赖 `ai-server` 与 `DEEPSEEK_API_KEY`；Python 服务不可用时 Java 会使用本地规则兜底，但界面会展示兜底标识
+
+**井字棋本地调试**
+
+- 游戏入口：用户端登录后访问 `/games`，再进入 `/games/jinzi`
+- WebSocket 入口：`/ws/game-center/lobby`、`/ws/games/jinzi`、`/ws/games/jinzi/rooms/{roomId}`
+- 匹配门槛：论坛积分至少 3 分；真人胜局 ±3 分，AI 胜局 ±1 分，平局不结算
+- 计时：2 分钟局时、20 秒步时；断线 30 秒内可重连，否则判负
+- AI 对手约 15 秒无人匹配后触发；同样依赖 `ai-server` 与 `DEEPSEEK_API_KEY`，不可用时走本地 Minimax 兜底
 
 ### 本地密钥
 
@@ -442,7 +535,7 @@ bash start.sh
 | OSS → ai-server | 同上 OSS 变量须注入 **forum-ai-server**（视频审核签名读私有桶） |
 | 邮件 | `MAIL_USERNAME`、`MAIL_PASSWORD` |
 
-五子棋 AI 使用 DeepSeek：低水平对手走 `deepseek-v4-flash`，高水平对手走 `deepseek-v4-pro`；模型名称配置在 `ai-server/config.yaml` / `config.docker.yaml` 的 `deepseek.model_flash`、`deepseek.model_pro`。看板娘 MCP 内置 `tavily_search`、`get_current_datetime`、`map_*`，需要对应 API Key。
+五子棋 / 井字棋 AI 使用 DeepSeek：低水平对手走 `deepseek-v4-flash`，高水平对手走 `deepseek-v4-pro`；模型名称配置在 `ai-server/config.yaml` / `config.docker.yaml` 的 `deepseek.model_flash`、`deepseek.model_pro`。看板娘 MCP 内置 `tavily_search`、`get_current_datetime`、`map_*`，需要对应 API Key。
 
 ---
 
@@ -450,7 +543,7 @@ bash start.sh
 
 ### 1) 五子棋对局结束后还能发消息导致异常
 
-结束后房间会清理内存状态，但前端还会停留 60 秒展示胜负和胜线。后端必须把这段窗口里的聊天、表情、落子、认输都拦截成友好提示：`当前对战已经结束，不能发送消息或表情包`。如果又出现堆栈，优先看 `GobangRoomServiceImpl.chat()` 的结束态判断。
+结束后房间会清理内存状态，但前端还会停留 60 秒展示胜负和胜线。后端必须把这段窗口里的聊天、表情、落子、认输都拦截成友好提示：`当前对战已经结束，不能发送消息或表情包`。如果又出现堆栈，优先看 `GobangGuardChain` 中的房间存在、进行中和玩家动作准入校验。
 
 ### 2) 五子棋 WebSocket 已连接但棋盘不刷新
 
@@ -466,23 +559,27 @@ flowchart TD
   D -->|room_error| G[按后端提示修权限 / 状态]
 ```
 
-### 3) AI 对手一直显示本地策略兜底
+### 3) 井字棋 WebSocket 已连接但棋盘不刷新
+
+检查游戏连接与房间连接是否连对：大厅 `/ws/game-center/lobby`，游戏 `/ws/games/jinzi`，房间 `/ws/games/jinzi/rooms/{roomId}`。落子后应直接应用 `move_accepted` / `game_finished` 的 payload，不要依赖 HTTP 轮询刷新。
+
+### 4) AI 对手一直显示本地策略兜底
 
 说明 Java 没拿到 Python / DeepSeek 的合法坐标。依次检查：`ai-server` 是否在 `5000` 端口；`FORUM_AI_INTERNAL_KEY` 是否一致；`DEEPSEEK_API_KEY` 是否有效；Python 返回坐标是否为空位。兜底不是错误，但如果 Python 已启动仍长期兜底，优先查 Python 日志里的 DeepSeek 调用失败原因。
 
-### 4) 前端 403 / 白屏
+### 5) 前端 403 / 白屏
 
 通常是生产包没整体更新，导致 `index.html` 指向的 `assets` 不存在。不要只传单个 JS 文件；重新上传完整 `nginx/package`，服务器执行 `bash up.sh`，再跑 `./verify-frontend-dist.sh .`。
 
-### 5) 审核一直显示异常
+### 6) 审核一直显示异常
 
 视频审核最常见是私有 OSS 导致 DashScope 无法拉取媒体，确认 ai-server 注入 OSS 变量并生成签名 URL。RabbitMQ 队列短暂 `NOT_FOUND` 多数是启动竞态，Java / Python 都起来后会恢复；持续存在时检查交换机和队列声明。
 
-### 6) Redis / RabbitMQ 在游戏里分别负责什么
+### 7) Redis / RabbitMQ 在游戏里分别负责什么
 
 Redis 更适合短生命周期实时状态：大厅在线、游戏在线、匹配队列、房间快照、跨实例房间事件广播。RabbitMQ 更适合“必须最终处理”的事件：对局结束后异步结算、补偿任务、统计刷新和通知扩展。不要把实时棋盘权威状态只放进 MQ，棋盘最终裁决仍由 Java 房间服务完成。
 
-### 7) 本地 RabbitMQ 端口对不上
+### 8) 本地 RabbitMQ 端口对不上
 
 开发 Compose 默认把 RabbitMQ AMQP 映射到 `56690`，而后端配置如果没有加载本地环境变量，可能仍按 `56720` 连接。启动后端前确认 `SPRING_RABBITMQ_PORT=56690`，或在本机显式启动与 `application.yml` 一致的 RabbitMQ 端口。
 
@@ -492,7 +589,7 @@ Redis 更适合短生命周期实时状态：大厅在线、游戏在线、匹�
 
 ```text
 luntan/
-  backend/                 # Java 后端：API、WebSocket、积分、五子棋、MQ
+  backend/                 # Java 后端：API、WebSocket、积分、五子棋 / 井字棋、MQ
   ai-server/               # Python AI（审核 / 看板娘 / RAG）
   forum-vue/               # 用户端前端
   forum-vue-admin/         # 管理端前端

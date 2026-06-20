@@ -168,6 +168,12 @@
             <artifactId>tianai-captcha-springboot-starter</artifactId>
             <version>1.5.5</version>
         </dependency>
+        <!-- ip2region，国内数据更准 -->
+        <dependency>
+            <groupId>org.lionsoul</groupId>
+            <artifactId>ip2region</artifactId>
+            <version>2.7.0</version>
+        </dependency>
 
     </dependencies>
 

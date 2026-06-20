@@ -137,18 +137,21 @@
 
           <el-scrollbar ref="msgScrollbar" class="mc-rbody-scroll">
             <div ref="msgContainer" class="mc-rbody mc-rbody--chat">
+              <template v-for="row in messageTimeline" :key="row.key">
+              <div v-if="row.type === 'date'" class="mc-date-divider">
+                <span>{{ row.label }}</span>
+              </div>
               <div
-                v-for="msg in messages"
-                :key="msg.message?.id"
+                v-else
                 class="mc-mrow"
-                :class="msg.isOwner ? 'is-me' : 'is-other'"
+                :class="row.msg.isOwner ? 'is-me' : 'is-other'"
               >
                 <div class="mc-mrow-ava">
                   <UserAvatarVip
                     :size="28"
-                    :src="msg.isOwner ? (userStore.avatarUrl || defaultAvatar) : (currentSession.user?.avatarUrl || defaultAvatar)"
-                    :vip-tier="msg.isOwner ? Number(userStore.vipTier) || 0 : Number(currentSession.user?.vipTier) || 0"
-                    :vip-expire-at="msg.isOwner ? userStore.vipExpireAt : currentSession.user?.vipExpireAt"
+                    :src="row.msg.isOwner ? (userStore.avatarUrl || defaultAvatar) : (currentSession.user?.avatarUrl || defaultAvatar)"
+                    :vip-tier="row.msg.isOwner ? Number(userStore.vipTier) || 0 : Number(currentSession.user?.vipTier) || 0"
+                    :vip-expire-at="row.msg.isOwner ? userStore.vipExpireAt : currentSession.user?.vipExpireAt"
                   />
                 </div>
                 <div class="mc-bwrap">
@@ -156,53 +159,54 @@
                     <div
                       class="mc-bbl"
                       :class="{
-                        'is-me': msg.isOwner && !isMediaMessage(msg) && Number(msg.message?.state) !== 2,
-                        'is-recalled': Number(msg.message?.state) === 2,
-                        'is-media': isMediaMessage(msg) && Number(msg.message?.state) !== 2,
+                        'is-me': row.msg.isOwner && !isMediaMessage(row.msg) && Number(row.msg.message?.state) !== 2,
+                        'is-recalled': Number(row.msg.message?.state) === 2,
+                        'is-media': isMediaMessage(row.msg) && Number(row.msg.message?.state) !== 2,
                       }"
                     >
-                      <span v-if="Number(msg.message?.state) === 2" class="mc-recalled">
-                        {{ msg.isOwner ? '你撤回了一条消息' : '对方撤回了一条消息' }}
+                      <span v-if="Number(row.msg.message?.state) === 2" class="mc-recalled">
+                        {{ row.msg.isOwner ? '你撤回了一条消息' : '对方撤回了一条消息' }}
                       </span>
-                      <template v-else-if="isMediaMessage(msg)">
+                      <template v-else-if="isMediaMessage(row.msg)">
                         <img
-                          :src="msg.message.mediaUrl"
+                          :src="row.msg.message.mediaUrl"
                           alt=""
                           class="mc-chat-img"
-                          :class="{ 'is-gif': Number(msg.message?.messageType) === 2 }"
-                          :style="bubbleImageStyle(msg.message)"
+                          :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
+                          :style="bubbleImageStyle(row.msg.message)"
                         >
                         <button
-                          v-if="!msg.isOwner && canFavoriteChatImage(msg)"
+                          v-if="!row.msg.isOwner && canFavoriteChatImage(row.msg)"
                           type="button"
                           class="mc-fav-img-btn"
-                          @click="favoriteChatImage(msg)"
+                          @click="favoriteChatImage(row.msg)"
                         >
                           添加到表情
                         </button>
                       </template>
-                      <span v-else>{{ msg.message?.content }}</span>
+                      <span v-else>{{ row.msg.message?.content }}</span>
                     </div>
                     <button
-                      v-if="msg.isOwner && Number(msg.message?.state) !== 2"
+                      v-if="row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       type="button"
                       class="mc-recall-btn"
-                      @click="handleRecall(msg)"
+                      @click="handleRecall(row.msg)"
                     >
                       撤回
                     </button>
                   </div>
-                  <div class="mc-meta-row" :class="{ 'is-me': msg.isOwner }">
-                    <span class="mc-btime">{{ formatTime(msg.message?.createTime) }}</span>
+                  <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
+                    <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
                     <span
-                      v-if="msg.isOwner && Number(msg.message?.state) !== 2"
+                      v-if="row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       class="mc-read"
                     >
-                      {{ Number(msg.message?.state) === 1 ? '已读' : '未读' }}
+                      {{ Number(row.msg.message?.state) === 1 ? '已读' : '未读' }}
                     </span>
                   </div>
                 </div>
               </div>
+              </template>
             </div>
           </el-scrollbar>
 
@@ -397,6 +401,7 @@ const {
   isActiveItem,
   isMediaMessage,
   listItems,
+  messageTimeline,
   messages,
   msgContainer,
   msgScrollbar,

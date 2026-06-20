@@ -25,8 +25,11 @@ public class GameUserProfileVO {
     // 游戏编码
     private String gameCode;
 
-    // 论坛积分余额
+    // 天梯分
     private Integer score;
+
+    // 论坛积分余额
+    private Integer forumPoints;
 
     // 总局数
     private Integer totalCount;

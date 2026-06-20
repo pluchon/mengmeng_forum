@@ -4,7 +4,8 @@
       <span class="editor-gallery-pane-count">{{ url ? '1/1' : '0/1' }}</span>
     </div>
 
-    <div v-if="uploading" class="video-uploading">
+    <div v-if="uploading" class="video-uploading" aria-live="polite">
+      <el-icon class="media-upload-spinner" :size="36"><Loading /></el-icon>
       <p class="video-uploading__text">
         {{
           progress >= 100
@@ -45,7 +46,7 @@
 </template>
 
 <script setup>
-import { VideoCamera } from '@element-plus/icons-vue'
+import { Loading, VideoCamera } from '@element-plus/icons-vue'
 
 defineProps({
   variant: { type: String, default: 'grid' },
@@ -91,10 +92,16 @@ const emit = defineEmits(['open', 'remove'])
   transform: translateY(-1px);
 }
 .video-uploading {
-  padding: 20px 16px;
+  padding: 28px 16px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.04);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 120px;
+  justify-content: center;
 }
 .video-uploading--error {
   background: rgba(245, 108, 108, 0.08);

@@ -1,6 +1,6 @@
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Setting, Message, Phone, ArrowLeft } from '@element-plus/icons-vue'
+import { User, Lock, Message, Phone, ArrowLeft } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { sendUpdatePwdCode, sendMailCode, sendSmsCode, updatePasswordByMail, updatePasswordBySms, verifyAndBindEmail, verifyAndBindPhone } from '@/api/settings'
 import BasicInfo from '@/components/settings/BasicInfo.vue'
@@ -177,10 +177,9 @@ export function useSettings(captchaDialogRef) {
     BasicInfo,
     ElMessage,
     Lock,
-    Message,
-    Phone,
-    Setting,
-    User,
+  Message,
+  Phone,
+  User,
     activeMenu,
     emailCodeBtnDisabled,
     emailCodeBtnDisabledPwd,

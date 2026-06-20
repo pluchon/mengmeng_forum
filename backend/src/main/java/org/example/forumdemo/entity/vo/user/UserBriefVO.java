@@ -20,6 +20,7 @@ public class UserBriefVO {
     private String backgroundUrl;
     private Byte vipTier;
     private Date vipExpireAt;
+    private String ipRegion;
 
     public UserBriefVO(User user) {
         this.id = user.getId();
@@ -30,5 +31,6 @@ public class UserBriefVO {
         this.backgroundUrl = user.getBackgroundUrl();
         this.vipTier = user.getVipTier();
         this.vipExpireAt = user.getVipExpireAt();
+        this.ipRegion = user.getIpRegion();
     }
 }

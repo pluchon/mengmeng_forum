@@ -1,4 +1,4 @@
-import { computed, watch } from 'vue'
+import { computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -10,6 +10,13 @@ export function useApp() {
   const route = useRoute()
   const userStore = useUserStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
+
+  function cleanupMascotDom() {
+    if (typeof document === 'undefined') return
+    document
+      .querySelectorAll('#oml2d-stage, #oml2d-canvas, #oml2d-tips, #oml2d-statusBar')
+      .forEach((node) => node.remove())
+  }
 
   watch(
     () => userStore.isLoggedIn,
@@ -29,6 +36,16 @@ export function useApp() {
   /** 登录/注册等认证页不展示看板娘 */
   const showMascot = computed(
     () => import.meta.env.VITE_ENABLE_MASCOT === 'true' && !isAuthPage.value && !isGamePage.value,
+  )
+
+  watch(
+    isGamePage,
+    async (gamePage) => {
+      if (!gamePage) return
+      await nextTick()
+      cleanupMascotDom()
+    },
+    { immediate: true },
   )
 
   return {

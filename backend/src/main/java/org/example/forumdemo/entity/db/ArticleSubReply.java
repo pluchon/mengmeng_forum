@@ -37,6 +37,9 @@ public class ArticleSubReply {
     @Schema(description = "回复内容（纯文本）")
     private String content;
 
+    @Schema(description = "楼中楼回复时IP属地快照")
+    private String ipRegion;
+
     @JsonIgnore
     @Schema(description = "状态: 0-正常, 1-禁用")
     private Byte state;

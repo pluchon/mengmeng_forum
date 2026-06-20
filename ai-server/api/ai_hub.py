@@ -18,6 +18,7 @@ from services.ai_hub_service import (
     generate_cover_hints,
     generate_gobang_move,
     generate_image,
+    generate_jinzi_move,
     generate_write_content,
 )
 
@@ -109,6 +110,46 @@ def ai_gobang_move():
     except Exception:
         logger.exception("gobang-move 失败")
         return jsonify({"code": 503, "msg": "gobang ai unavailable"}), 503
+    usage = attach_latency(move.get("usage") or {}, t0)
+    return jsonify({
+        "code": 200,
+        "msg": "ok",
+        "data": {
+            "row": move["row"],
+            "col": move["col"],
+            "model": move["model"],
+            "modelCode": move.get("model") or move.get("model_name"),
+            "modelName": move.get("model_name") or move["model"],
+            "modelVersion": move.get("model_version") or move["model"],
+            "strategyName": move.get("strategy_name") or "llm_with_rule_guard",
+            "fallback": bool(move.get("fallback")),
+            "usage": usage,
+        },
+    })
+
+
+@api.route("/ai/jinzi-move", methods=["POST"])
+def ai_jinzi_move():
+    if not _internal_auth_ok():
+        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
+    data = _json_payload()
+    board = data.get("board")
+    try:
+        ai_chess = int(data.get("ai_chess") or 2)
+    except (TypeError, ValueError):
+        ai_chess = 2
+    if ai_chess not in (1, 2):
+        ai_chess = 2
+    model_code = str(data.get("model_code") or "").strip()
+
+    t0 = time.perf_counter()
+    try:
+        move = generate_jinzi_move(board, ai_chess, model_code)
+    except ValueError as exc:
+        return jsonify({"code": 400, "msg": str(exc)}), 400
+    except Exception:
+        logger.exception("jinzi-move 失败")
+        return jsonify({"code": 503, "msg": "jinzi ai unavailable"}), 503
     usage = attach_latency(move.get("usage") or {}, t0)
     return jsonify({
         "code": 200,

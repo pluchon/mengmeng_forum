@@ -69,6 +69,14 @@
                 >
                   立即签到
                 </el-button>
+                <el-button
+                  v-else-if="status?.todaySigned"
+                  round
+                  class="checkin-toolbar-checkin-btn checkin-toolbar-checkin-btn--done"
+                  disabled
+                >
+                  今日已签
+                </el-button>
               </div>
             </div>
 
@@ -111,38 +119,42 @@
           <div class="checkin-stat-mini">
             <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
             <div class="checkin-stat-mini-mask" />
-            <div class="checkin-stat-mini-content checkin-stat-mini-content--points">
-              <div class="checkin-stat-mini-body">
-                <div class="checkin-stat-mini-label">萌币（累计）</div>
-                <div class="checkin-stat-mini-value">
-                  <PawCoinIcon class="checkin-stat-mini-paw" />
-                  {{ status.totalPoints ?? 0 }}
-                </div>
-              </div>
+            <div class="checkin-stat-mini-content">
               <button
                 type="button"
-                class="checkin-stat-mini-trend-btn"
+                class="checkin-stat-corner-btn"
                 aria-label="查看签到趋势"
                 @click="openTrendOverlay"
               >
-                <img :src="iconTrendUrl" alt="" class="checkin-stat-mini-trend-icon" />
+                <img :src="iconTrendUrl" alt="" class="checkin-stat-corner-icon" />
               </button>
+              <div class="checkin-stat-mini-row">
+                <span class="checkin-stat-mini-label">萌币（累计）</span>
+                <span class="checkin-stat-mini-value">
+                  <PawCoinIcon class="checkin-stat-mini-paw" />
+                  {{ status.totalPoints ?? 0 }}
+                </span>
+              </div>
             </div>
           </div>
           <div class="checkin-stat-mini">
             <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
             <div class="checkin-stat-mini-mask" />
             <div class="checkin-stat-mini-content">
-              <div class="checkin-stat-mini-label">连续签到</div>
-              <div class="checkin-stat-mini-value">{{ status.streakDays ?? 0 }} 天</div>
+              <div class="checkin-stat-mini-row">
+                <span class="checkin-stat-mini-label">连续签到</span>
+                <span class="checkin-stat-mini-value">{{ status.streakDays ?? 0 }} 天</span>
+              </div>
             </div>
           </div>
           <div class="checkin-stat-mini">
             <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
             <div class="checkin-stat-mini-mask" />
             <div class="checkin-stat-mini-content">
-              <div class="checkin-stat-mini-label">累计签到</div>
-              <div class="checkin-stat-mini-value">{{ status.totalDays ?? 0 }} 天</div>
+              <div class="checkin-stat-mini-row">
+                <span class="checkin-stat-mini-label">累计签到</span>
+                <span class="checkin-stat-mini-value">{{ status.totalDays ?? 0 }} 天</span>
+              </div>
             </div>
           </div>
         </div>

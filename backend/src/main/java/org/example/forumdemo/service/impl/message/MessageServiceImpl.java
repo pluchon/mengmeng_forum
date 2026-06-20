@@ -8,13 +8,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.config.OssConfig;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.utils.ForumDateTimes;
 import org.example.forumdemo.common.enums.MessageStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.utils.AiAuditUtils;
-import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Message;
@@ -33,6 +32,9 @@ import org.example.forumdemo.entity.vo.mq.MessageNotifyMqVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.MessageMapper;
 import org.example.forumdemo.mapper.UserChatEmojiMapper;
+import org.example.forumdemo.service.impl.message.guard.MessageSendContext;
+import org.example.forumdemo.service.impl.message.guard.MessageSendGuardChain;
+import org.example.forumdemo.service.impl.message.guard.MessageSendGuardResult;
 import org.example.forumdemo.service.interfaces.message.MessageService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.jspecify.annotations.NonNull;
@@ -44,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +82,15 @@ public class MessageServiceImpl implements MessageService {
     @Autowired
     private WebSocketPushService webSocketPushService;
 
+    private MessageSendGuardChain messageSendGuardChain;
+
+    @Autowired(required = false)
+    public void setMessageSendGuardChain(MessageSendGuardChain messageSendGuardChain) {
+        if (messageSendGuardChain != null) {
+            this.messageSendGuardChain = messageSendGuardChain;
+        }
+    }
+
     // ============================================================
     // 发送 / 撤回 / 回复
     // ============================================================
@@ -96,6 +108,12 @@ public class MessageServiceImpl implements MessageService {
         }
     }
 
+    private void stampMessageTimes(Message message) {
+        Date now = ForumDateTimes.now();
+        message.setCreateTime(now);
+        message.setUpdateTime(now);
+    }
+
     private void pushPeerReadOne(Long messageAuthorId, Long readerUserId, Long dbMessageId) {
         try {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -111,20 +129,15 @@ public class MessageServiceImpl implements MessageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Message send(SendMessageRequest req, Long sendUserId) {
-        validateContent(req.getContent());
-        User sender = userService.queryUserByUserId(sendUserId);
-        UserMuteGuard.assertCanPost(sender);
+        checkMessageSendGuard(MessageSendContext.text(req, sendUserId));
         Long receiveUserId = req.getReceiveUserId();
-        userService.queryUserByUserId(receiveUserId);
-        if (sendUserId.equals(receiveUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_SEND_MESSAGE_BY_MYSELF));
-        }
         Message newMessage = new Message();
         newMessage.setPostUserId(sendUserId);
         newMessage.setReceiveUserId(receiveUserId);
         newMessage.setMessageType(Constant.MESSAGE_TYPE_TEXT);
         newMessage.setContent(req.getContent());
         newMessage.setState(Constant.MESSAGE_STATE_UNREAD);
+        stampMessageTimes(newMessage);
         if (messageMapper.insert(newMessage) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
@@ -143,23 +156,8 @@ public class MessageServiceImpl implements MessageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Message sendImage(SendImageMessageRequest req, Long sendUserId) {
-        if (req == null || req.getReceiveUserId() == null
-                || !StringUtils.hasLength(req.getMediaUrl())
-                || req.getMessageType() == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_MESSAGE_IMAGE_INVALID));
-        }
-        if (!Constant.MESSAGE_TYPE_IMAGE.equals(req.getMessageType())
-                && !Constant.MESSAGE_TYPE_GIF.equals(req.getMessageType())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_MESSAGE_IMAGE_INVALID));
-        }
+        checkMessageSendGuard(MessageSendContext.image(req, sendUserId));
         Long receiveUserId = req.getReceiveUserId();
-        if (sendUserId.equals(receiveUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_SEND_MESSAGE_BY_MYSELF));
-        }
-        User sender = userService.queryUserByUserId(sendUserId);
-        UserMuteGuard.assertCanPost(sender);
-        userService.queryUserByUserId(receiveUserId);
-        validateSendImageMediaUrl(req.getMediaUrl());
 
         Message newMessage = new Message();
         newMessage.setPostUserId(sendUserId);
@@ -172,6 +170,7 @@ public class MessageServiceImpl implements MessageService {
         newMessage.setMediaWidth(req.getMediaWidth());
         newMessage.setMediaHeight(req.getMediaHeight());
         newMessage.setState(Constant.MESSAGE_STATE_UNREAD);
+        stampMessageTimes(newMessage);
         if (messageMapper.insert(newMessage) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
@@ -184,21 +183,15 @@ public class MessageServiceImpl implements MessageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void replyMessage(MessageReplyRequest req, Long sendUserId) {
-        validateContent(req.getContent());
-        User sender = userService.queryUserByUserId(sendUserId);
-        UserMuteGuard.assertCanPost(sender);
+        checkMessageSendGuard(MessageSendContext.reply(req, sendUserId));
         Long receiveId = req.getReceiveId();
-        // 校验接收者存在
-        userService.queryUserByUserId(receiveId);
-        if (!StringUtils.hasLength(req.getContent())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
         Message reply = new Message();
         reply.setPostUserId(sendUserId);
         reply.setReceiveUserId(receiveId);
         reply.setMessageType(Constant.MESSAGE_TYPE_TEXT);
         reply.setContent(req.getContent());
         reply.setState(Constant.MESSAGE_STATE_UNREAD);
+        stampMessageTimes(reply);
         if (messageMapper.insert(reply) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
@@ -531,11 +524,13 @@ public class MessageServiceImpl implements MessageService {
     // 内部共用
     // ============================================================
 
-    /** AI 文本审核，违规直接抛业务异常 */
-    private void validateContent(String content) {
-        String violation = AiAuditUtils.isTextAllowed(content);
-        if (violation != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
+    private void checkMessageSendGuard(MessageSendContext context) {
+        MessageSendGuardChain chain = messageSendGuardChain != null
+                ? messageSendGuardChain
+                : MessageSendGuardChain.defaultChain(userService, ossConfig);
+        MessageSendGuardResult result = chain.check(context);
+        if (!result.isPassed()) {
+            throw new ApplicationException(result.getErrorResult());
         }
     }
 
@@ -569,22 +564,6 @@ public class MessageServiceImpl implements MessageService {
             return "[GIF]";
         }
         return msg.getContent() == null ? "" : msg.getContent();
-    }
-
-    /**
-     * 会话气泡中的图片/GIF URL：允许聊天临时目录、聊天表情库目录或表情商城目录（均经本站上传审核）.
-     */
-    private void validateChatBubbleMediaUrl(String mediaUrl) {
-        boolean okMsg = isChatMediaUnderPrefix(mediaUrl, Constant.OSS_PATH_CHAT_MESSAGE);
-        boolean okEmoji = isChatMediaUnderPrefix(mediaUrl, Constant.OSS_PATH_CHAT_EMOJI);
-        boolean okShop = isChatMediaUnderPrefix(mediaUrl, Constant.OSS_PATH_EMOJI_SHOP);
-        if (!okMsg && !okEmoji && !okShop) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
-        }
-    }
-
-    private void validateSendImageMediaUrl(String mediaUrl) {
-        validateChatBubbleMediaUrl(mediaUrl);
     }
 
     private boolean isChatMediaUnderPrefix(String mediaUrl, String allowedPathPrefix) {

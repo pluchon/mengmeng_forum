@@ -47,11 +47,11 @@ sync_dist dist "$NGINX_ROOT/dist/admin"
 
 if [[ "$SKIP_DOCKER" == true ]]; then
   step "Maven 打包后端"
-  cd "$REPO_ROOT/forum-demo"
+  cd "$REPO_ROOT/backend"
   mvn -q -B package -DskipTests
 else
   step "Docker 构建 forum-backend"
-  docker build -t forum-backend:latest "$REPO_ROOT/forum-demo"
+  docker build -t forum-backend:latest "$REPO_ROOT/backend"
   step "Docker 构建 ai-server"
   cd "$NGINX_ROOT"
   docker compose build ai-server
