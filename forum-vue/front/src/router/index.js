@@ -145,6 +145,18 @@ const router = createRouter({
           meta: { requiresAuth: true, shellBare: true },
         },
         {
+          path: 'games/jinzi',
+          name: 'jinziGame',
+          component: () => import('../views/JinziGame.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
+          path: 'games/jinzi/rooms/:roomId',
+          name: 'jinziRoom',
+          component: () => import('../views/JinziRoom.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
           path: 'vip',
           name: 'vipCenter',
           component: () => import('../views/VipCenter.vue'),

@@ -30,9 +30,13 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleImageMapper;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
+import org.example.forumdemo.service.impl.article.auditguard.ArticleAuditSubmitContext;
+import org.example.forumdemo.service.impl.article.auditguard.ArticleAuditSubmitGuardChain;
+import org.example.forumdemo.service.impl.article.auditguard.ArticleAuditSubmitGuardResult;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.board.BoardService;
+import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
 import org.example.forumdemo.service.interfaces.message.SystemMessageService;
 import org.example.forumdemo.service.interfaces.user.UserService;
@@ -117,6 +121,18 @@ public class ArticleServiceImpl implements ArticleService {
     @Autowired
     private org.example.forumdemo.service.interfaces.article.ArticleTagService articleTagService;
 
+    @Autowired
+    private IpRegionService ipRegionService;
+
+    private ArticleAuditSubmitGuardChain articleAuditSubmitGuardChain = ArticleAuditSubmitGuardChain.defaultChain();
+
+    @Autowired(required = false)
+    public void setArticleAuditSubmitGuardChain(ArticleAuditSubmitGuardChain articleAuditSubmitGuardChain) {
+        if (articleAuditSubmitGuardChain != null) {
+            this.articleAuditSubmitGuardChain = articleAuditSubmitGuardChain;
+        }
+    }
+
     /** 状态 / 删除标记：1 表示禁用 / 已删除 */
     private static final byte STATE_FORBIDDEN = 1;
     private static final byte DELETE_TRUE = 1;
@@ -176,14 +192,18 @@ public class ArticleServiceImpl implements ArticleService {
         if (article.getStatus() == null || article.getStatus() != ArticleStatus.APPROVED.getCode()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PUBLISH_NEED_APPROVED));
         }
-        int result = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+        String ipRegion = ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp());
+        LambdaUpdateWrapper<Article> publishUpdate = new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .eq(Article::getStatus, ArticleStatus.APPROVED.getCode())
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .ne(Article::getState, STATE_FORBIDDEN)
-                // 设置发布状态
                 .set(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .set(Article::getAuditFinishedAt, new Date()));
+                .set(Article::getAuditFinishedAt, new Date());
+        if (StringUtils.hasText(ipRegion)) {
+            publishUpdate.set(Article::getIpRegion, ipRegion);
+        }
+        int result = articleMapper.update(null, publishUpdate);
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UPDATE_ARTICLE));
         }
@@ -906,25 +926,14 @@ public class ArticleServiceImpl implements ArticleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         User author = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(author);
         Article article = articleMapper.selectByIdForUpdate(articleId);
-        if (article == null || (article.getState() != null && article.getState() == STATE_FORBIDDEN)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-        if (!Objects.equals(article.getUserId(), loginUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_NOT_AUTHOR));
-        }
-        if (!ArticleStatus.canSubmitForAudit(article.getStatus())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_STATUS_INVALID));
-        }
+        checkArticleAuditSubmitGuard(new ArticleAuditSubmitContext(articleId, loginUserId, author, article));
         int curRetry = article.getAuditRetryCount() == null ? 0 : article.getAuditRetryCount();
-        if (curRetry >= Constant.ARTICLE_AUDIT_MAX_RETRY) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_RETRY_LIMIT));
-        }
         String taskId = UUID.randomUUID().toString();
         Byte oldStatus = article.getStatus();
         boolean wasPublished = ArticleStatus.isPublished(oldStatus);
-        int updated = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+        String ipRegion = ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp());
+        LambdaUpdateWrapper<Article> auditUpdate = new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .eq(Article::getStatus, oldStatus)
                 .ne(Article::getDeleteState, DELETE_TRUE)
@@ -934,7 +943,11 @@ public class ArticleServiceImpl implements ArticleService {
                 .set(Article::getAuditRetryCount, curRetry + 1)
                 .set(Article::getAuditSubmittedAt, new Date())
                 .set(Article::getAuditFinishedAt, null)
-                .set(Article::getAuditResultMessage, null));
+                .set(Article::getAuditResultMessage, null);
+        if (StringUtils.hasText(ipRegion)) {
+            auditUpdate.set(Article::getIpRegion, ipRegion);
+        }
+        int updated = articleMapper.update(null, auditUpdate);
         if (updated <= 0) {
             // 并发下另一个请求已经把状态改了, 拒绝本次
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_STATUS_INVALID));
@@ -970,6 +983,13 @@ public class ArticleServiceImpl implements ArticleService {
         log.info("提交审核成功: articleId={}, userId={}, taskId={}, retry={}/{}",
                 articleId, loginUserId, taskId, curRetry + 1, Constant.ARTICLE_AUDIT_MAX_RETRY);
         return taskId;
+    }
+
+    private void checkArticleAuditSubmitGuard(ArticleAuditSubmitContext context) {
+        ArticleAuditSubmitGuardResult result = articleAuditSubmitGuardChain.check(context);
+        if (!result.isPassed()) {
+            throw new ApplicationException(result.getErrorResult());
+        }
     }
 
     /**
@@ -1049,14 +1069,25 @@ public class ArticleServiceImpl implements ArticleService {
     private boolean applyAuditApproved(Article article, ArticleAuditResultMqVO result, Date now) {
         Long articleId = article.getId();
         Long userId = article.getUserId();
-        int updated = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+        String fallbackRegion = article.getIpRegion();
+        if (!StringUtils.hasText(fallbackRegion)) {
+            User author = userService.getUserInfoById(userId);
+            if (author != null) {
+                fallbackRegion = author.getIpRegion();
+            }
+        }
+        LambdaUpdateWrapper<Article> approvedUpdate = new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .eq(Article::getStatus, ArticleStatus.PENDING_AUDIT.getCode())
                 .eq(Article::getAuditTaskId, result.getTaskId())
                 .set(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .set(Article::getAuditFinishedAt, now)
                 .set(Article::getAuditResultMessage,
-                        StringUtils.hasText(result.getFinalReason()) ? result.getFinalReason() : "审核通过"));
+                        StringUtils.hasText(result.getFinalReason()) ? result.getFinalReason() : "审核通过");
+        if (StringUtils.hasText(fallbackRegion)) {
+            approvedUpdate.set(Article::getIpRegion, fallbackRegion);
+        }
+        int updated = articleMapper.update(null, approvedUpdate);
         if (updated <= 0) {
             log.warn("APPROVED 扭转失败 (并发): articleId={}, taskId={}", articleId, result.getTaskId());
             return false;

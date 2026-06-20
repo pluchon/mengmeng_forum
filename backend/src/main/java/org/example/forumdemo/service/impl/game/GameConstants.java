@@ -4,6 +4,7 @@ package org.example.forumdemo.service.impl.game;
 public class GameConstants {
 
     public static final String GOBANG = "gobang";
+    public static final String JINZI = "jinzi";
 
     public static final String PROFILE_IDLE = "IDLE";
     public static final String PROFILE_MATCHING = "MATCHING";
@@ -14,6 +15,8 @@ public class GameConstants {
     public static final String ROOM_FINISHED = "FINISHED";
 
     public static final String END_FIVE = "FIVE";
+    public static final String END_LINE = "LINE";
+    public static final String END_DRAW = "DRAW";
     public static final String END_SURRENDER = "SURRENDER";
     public static final String END_DISCONNECT = "DISCONNECT";
     public static final String END_TIMEOUT = "TIMEOUT";
@@ -38,6 +41,13 @@ public class GameConstants {
     public static final long MOVE_TIME_MS = 60 * 1000L;
     public static final long AI_MATCH_TIMEOUT_MS = 15 * 1000L;
     public static final Long AI_USER_ID = -1L;
+
+    public static final int JINZI_BOARD_SIZE = 3;
+    public static final int JINZI_SCORE_DELTA = 3;
+    public static final int JINZI_AI_SCORE_DELTA = 1;
+    public static final long JINZI_GAME_TIME_MS = 2 * 60 * 1000L;
+    public static final long JINZI_MOVE_TIME_MS = 20 * 1000L;
+    public static final long JINZI_RECONNECT_WINDOW_MS = 30 * 1000L;
 
     private GameConstants() {
     }

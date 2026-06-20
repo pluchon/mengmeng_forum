@@ -16,36 +16,35 @@
 }
 
 .lottery-dialog.el-dialog {
-  background: linear-gradient(160deg, rgba(26, 26, 46, 0.97), rgba(22, 33, 62, 0.95));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
 }
 
 .lottery-dialog .el-dialog__header {
   padding-bottom: 8px;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   margin-right: 0;
 }
 
 .lottery-dialog .el-dialog__title {
-  color: #fff;
+  color: #1a1c1c;
   font-weight: 700;
   font-size: 16px;
 }
 
 .lottery-dialog .el-dialog__headerbtn .el-dialog__close {
-  color: rgba(255, 255, 255, 0.75);
+  color: #86909c;
 }
 
 .lottery-dialog .el-dialog__body {
-  color: rgba(255, 255, 255, 0.85);
+  color: #4e5969;
   padding-top: 14px;
 }
 
 .lottery-dialog .el-dialog__footer {
-  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 12px;
 }
 
@@ -53,7 +52,7 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.88);
+  color: #4e5969;
 }
 
 .lottery-dialog-footer {
@@ -72,7 +71,7 @@
   margin: 10px 0 0;
   font-size: 11px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.45);
+  color: #86909c;
 }
 
 .lottery-history-empty {
@@ -83,39 +82,25 @@
 .lottery-history-empty-icon {
   width: 48px;
   height: 48px;
-  filter: brightness(0) invert(1);
-  opacity: 0.35;
+  opacity: 0.45;
   margin-bottom: 10px;
 }
 
 .lottery-history-empty p {
   margin: 0;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.82);
+  color: #4e5969;
 }
 
 .lottery-history-empty-sub {
   margin: 8px 0 0 !important;
   font-size: 12px !important;
-  color: rgba(255, 255, 255, 0.48) !important;
+  color: #86909c !important;
 }
 
 .lottery-history-table.el-table {
-  --el-table-bg-color: rgba(255, 255, 255, 0.04);
-  --el-table-tr-bg-color: rgba(255, 255, 255, 0.04);
-  --el-table-header-bg-color: rgba(255, 255, 255, 0.08);
-  --el-table-row-hover-bg-color: rgba(245, 185, 66, 0.12);
-  --el-table-border-color: rgba(255, 255, 255, 0.12);
-  --el-table-text-color: rgba(255, 255, 255, 0.88);
-  --el-table-header-text-color: rgba(255, 255, 255, 0.75);
-  /* 斑马纹行默认浅色背景在深色弹窗上会呈现「发白」，与文案对比异常 */
-  --el-fill-color-lighter: rgba(255, 255, 255, 0.065);
   border-radius: 10px;
   overflow: hidden;
-}
-
-.lottery-dialog--history .lottery-history-table.el-table--striped .el-table__body tr.el-table__row--striped > td.el-table__cell {
-  background-color: rgba(255, 255, 255, 0.065);
 }
 
 .lottery-surprise-reward-wrap {
@@ -126,7 +111,7 @@
   position: relative;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .lottery-surprise-reward-photo img {
@@ -152,6 +137,76 @@
 .lottery-surprise-reward-note {
   margin: 10px 0 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.42);
+  color: #86909c;
   text-align: center;
+}
+
+.lottery-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.lottery-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f7f8fa;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.lottery-activity-item:hover {
+  border-color: rgba(212, 83, 126, 0.35);
+  background: #fff;
+}
+
+.lottery-activity-item--active {
+  border-color: rgba(212, 83, 126, 0.5);
+  background: #fde8ef;
+}
+
+.lottery-activity-item__cover {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eef0f3;
+}
+
+.lottery-activity-item__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lottery-activity-item__meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lottery-activity-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1c1c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lottery-activity-item__cost {
+  font-size: 11px;
+  color: #d4537e;
 }

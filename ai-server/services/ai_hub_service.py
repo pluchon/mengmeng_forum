@@ -113,6 +113,70 @@ def generate_gobang_move(
         }
 
 
+def generate_jinzi_move(
+    board: list[list[int]],
+    ai_chess: int = 2,
+    model_code: str | None = None,
+) -> dict[str, Any]:
+    """调用 DeepSeek 生成井字棋 AI 落子，失败时回退到本地战术策略。"""
+    safe_board = _normalize_jinzi_board(board)
+    ds = settings.deepseek
+    base = ds.get("base_url") or "https://api.deepseek.com/v1"
+    model = _resolve_gobang_model(ds, model_code)
+    key = ds.get("api_key") or ""
+    player_chess = 1 if ai_chess == 2 else 2
+    system = (
+        "你是井字棋 AI。棋盘是 3x3，row/col 都从 0 开始。"
+        "1 表示黑棋，2 表示白棋，0 表示空位。"
+        "你必须为 AI 选择一个当前为空的合法落点。"
+        "优先级：自己能三连则立即取胜；其次阻挡对手三连；再选择中心、角、边。"
+        "只输出 JSON 对象，不要 markdown，不要解释，格式为 {\"row\":1,\"col\":1}。"
+    )
+    user = {
+        "ai_chess": ai_chess,
+        "player_chess": player_chess,
+        "board": safe_board,
+        "legend": {"0": "empty", "1": "black", "2": "white"},
+    }
+    usage: dict[str, Any] = {"model_code": model, "estimated": True}
+    try:
+        content, usage = deepseek_chat_completion(
+            base,
+            key,
+            model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+            ],
+        )
+        row, col = _parse_jinzi_point(content)
+        if not _is_jinzi_empty(safe_board, row, col):
+            raise ValueError("DeepSeek 返回了非法井字棋坐标")
+        return {
+            "row": row,
+            "col": col,
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "llm_with_rule_guard",
+            "fallback": False,
+            "usage": usage,
+        }
+    except Exception as exc:
+        logger.warning("DeepSeek 井字棋不可用，使用 Python 本地策略兜底: %s", exc)
+        row, col = _choose_local_jinzi_move(safe_board, ai_chess, player_chess)
+        return {
+            "row": row,
+            "col": col,
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "rule_based_fallback",
+            "fallback": True,
+            "usage": {**usage, "fallback_reason": str(exc)[:160]},
+        }
+
+
 def _resolve_gobang_model(ds: dict[str, Any], model_code: str | None) -> str:
     requested = (model_code or "").strip()
     flash = str(ds.get("model_flash") or "deepseek-v4-flash").strip()
@@ -153,6 +217,85 @@ def _parse_gobang_point(content: str) -> tuple[int, int]:
 
 def _is_gobang_empty(board: list[list[int]], row: int, col: int) -> bool:
     return 0 <= row < 15 and 0 <= col < 15 and board[row][col] == 0
+
+
+def _normalize_jinzi_board(board: list[list[int]]) -> list[list[int]]:
+    if not isinstance(board, list) or len(board) != 3:
+        raise ValueError("board must be 3x3")
+    safe: list[list[int]] = []
+    for row in board:
+        if not isinstance(row, list) or len(row) != 3:
+            raise ValueError("board must be 3x3")
+        safe_row: list[int] = []
+        for cell in row:
+            try:
+                value = int(cell)
+            except (TypeError, ValueError):
+                value = 0
+            safe_row.append(value if value in (0, 1, 2) else 0)
+        safe.append(safe_row)
+    return safe
+
+
+def _parse_jinzi_point(content: str) -> tuple[int, int]:
+    text = (content or "").strip()
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        raise ValueError("DeepSeek 未返回 JSON 坐标")
+    data = json.loads(match.group(0))
+    row = int(data.get("row"))
+    col = int(data.get("col"))
+    return row, col
+
+
+def _is_jinzi_empty(board: list[list[int]], row: int, col: int) -> bool:
+    return 0 <= row < 3 and 0 <= col < 3 and board[row][col] == 0
+
+
+def _choose_local_jinzi_move(
+    board: list[list[int]],
+    ai_chess: int,
+    player_chess: int,
+) -> tuple[int, int]:
+    win = _find_jinzi_line_move(board, ai_chess)
+    if win is not None:
+        return win
+    block = _find_jinzi_line_move(board, player_chess)
+    if block is not None:
+        return block
+    if board[1][1] == 0:
+        return 1, 1
+    for row, col in ((0, 0), (0, 2), (2, 0), (2, 2), (0, 1), (1, 0), (1, 2), (2, 1)):
+        if board[row][col] == 0:
+            return row, col
+    raise ValueError("井字棋棋盘已满，无法生成落子")
+
+
+def _find_jinzi_line_move(board: list[list[int]], chess: int) -> tuple[int, int] | None:
+    for row in range(3):
+        for col in range(3):
+            if board[row][col] != 0:
+                continue
+            board[row][col] = chess
+            line = _has_jinzi_line(board, chess)
+            board[row][col] = 0
+            if line:
+                return row, col
+    return None
+
+
+def _has_jinzi_line(board: list[list[int]], chess: int) -> bool:
+    lines = (
+        ((0, 0), (0, 1), (0, 2)),
+        ((1, 0), (1, 1), (1, 2)),
+        ((2, 0), (2, 1), (2, 2)),
+        ((0, 0), (1, 0), (2, 0)),
+        ((0, 1), (1, 1), (2, 1)),
+        ((0, 2), (1, 2), (2, 2)),
+        ((0, 0), (1, 1), (2, 2)),
+        ((0, 2), (1, 1), (2, 0)),
+    )
+    return any(all(board[row][col] == chess for row, col in line) for line in lines)
 
 
 def _find_tactical_gobang_move(

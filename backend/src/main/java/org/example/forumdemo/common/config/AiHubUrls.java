@@ -63,4 +63,8 @@ public class AiHubUrls {
     public static String gobangMoveUrl() {
         return path("/api/v1/ai/gobang-move");
     }
+
+    public static String jinziMoveUrl() {
+        return path("/api/v1/ai/jinzi-move");
+    }
 }

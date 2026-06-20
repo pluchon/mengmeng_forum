@@ -41,8 +41,8 @@
           </div>
           <div class="game-card-content">
             <div class="game-card-tools">
-              <el-button size="small" :icon="DataLine" @click="openStats">对局统计</el-button>
-              <el-button size="small" :icon="Trophy" @click="openLeaderboard">天梯榜</el-button>
+              <el-button size="small" :icon="DataLine" @click="openStats('gobang')">对局统计</el-button>
+              <el-button size="small" :icon="Trophy" @click="openLeaderboard('gobang')">天梯榜</el-button>
             </div>
             <div class="game-card-title-row">
               <h2>{{ gobangGame.gameName || '五子棋' }}</h2>
@@ -86,10 +86,38 @@
             <span>等待第一盘棋开局</span>
           </div>
         </section>
+
+        <article class="game-card game-card--jinzi">
+          <div class="game-card-board jinzi-cover-board" aria-hidden="true">
+            <span class="jinzi-cover-mark is-x jinzi-piece-a">×</span>
+            <span class="jinzi-cover-mark is-o jinzi-piece-b">○</span>
+            <span class="jinzi-cover-mark is-x jinzi-piece-c">×</span>
+          </div>
+          <div class="game-card-content">
+            <div class="game-card-tools">
+              <el-button size="small" :icon="DataLine" @click="openStats('jinzi')">对局统计</el-button>
+              <el-button size="small" :icon="Trophy" @click="openLeaderboard('jinzi')">天梯榜</el-button>
+            </div>
+            <div class="game-card-title-row">
+              <h2>{{ jinziGame.gameName || '井字' }}</h2>
+              <span>{{ jinziOnlineText }}</span>
+            </div>
+            <div class="game-card-rules">
+              <span>20秒/步时</span>
+              <span>2分钟/局时</span>
+              <span>短局快速匹配</span>
+            </div>
+            <div class="game-card-actions">
+              <el-button type="primary" size="large" :icon="Promotion" @click="enterJinzi">
+                进入匹配
+              </el-button>
+            </div>
+          </div>
+        </article>
       </main>
     </div>
 
-    <el-drawer v-model="leaderboardVisible" title="五子棋天梯榜" size="420px" destroy-on-close>
+    <el-drawer v-model="leaderboardVisible" :title="`${activeGameName}天梯榜`" size="420px" destroy-on-close>
       <ol v-if="leaderboard.length" class="game-rank-list">
         <li v-for="(row, index) in leaderboard" :key="row.userId">
           <span>{{ index + 1 }}</span>
@@ -103,7 +131,7 @@
       <p v-else class="game-stats-empty">还没有玩家上榜。</p>
     </el-drawer>
 
-    <el-drawer v-model="statsVisible" title="五子棋统计" size="420px" destroy-on-close>
+    <el-drawer v-model="statsVisible" :title="`${activeGameName}统计`" size="420px" destroy-on-close>
       <div class="game-stats-summary">
         <div>
           <span>胜 / 负</span>

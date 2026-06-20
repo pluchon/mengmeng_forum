@@ -30,8 +30,12 @@
               ×
             </button>
           </div>
+          <div v-if="uploading" class="editor-gallery-slot editor-gallery-slot--loading" aria-live="polite">
+            <el-icon class="media-upload-spinner" :size="26"><Loading /></el-icon>
+            <span class="media-upload-label">{{ uploadLabel }}</span>
+          </div>
           <button
-            v-if="canAdd"
+            v-else-if="canAdd"
             type="button"
             class="editor-gallery-slot editor-gallery-slot--add"
             aria-label="添加图片"
@@ -59,8 +63,12 @@
             ×
           </button>
         </div>
+        <div v-if="uploading" class="editor-gallery-slot editor-gallery-slot--loading" aria-live="polite">
+          <el-icon class="media-upload-spinner" :size="26"><Loading /></el-icon>
+          <span class="media-upload-label">{{ uploadLabel }}</span>
+        </div>
         <button
-          v-if="canAdd"
+          v-else-if="canAdd"
           type="button"
           class="editor-gallery-slot editor-gallery-slot--add"
           aria-label="添加图片"
@@ -71,6 +79,11 @@
       </div>
     </template>
 
+    <div v-else-if="uploading" class="editor-gallery-empty-cta editor-gallery-empty-cta--loading" aria-live="polite">
+      <el-icon class="media-upload-spinner" :size="32"><Loading /></el-icon>
+      <span>{{ uploadLabel }}</span>
+    </div>
+
     <button v-else type="button" class="editor-gallery-empty-cta" @click="emit('open')">
       <el-icon :size="28"><Picture /></el-icon>
       <span>点击添加图片</span>
@@ -79,7 +92,7 @@
 </template>
 
 <script setup>
-import { Picture, Plus } from '@element-plus/icons-vue'
+import { Loading, Picture, Plus } from '@element-plus/icons-vue'
 import { onBeforeUnmount } from 'vue'
 
 const props = defineProps({
@@ -89,6 +102,8 @@ const props = defineProps({
   stripOverflow: { type: Boolean, default: false },
   stripFadeLeft: { type: Boolean, default: false },
   canAdd: { type: Boolean, default: true },
+  uploading: { type: Boolean, default: false },
+  uploadLabel: { type: String, default: '图片上传中…' },
 })
 
 const emit = defineEmits(['open', 'remove', 'scroll', 'bind-ref'])

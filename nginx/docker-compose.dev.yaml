@@ -1,7 +1,7 @@
 # 本地开发：仅 Docker 中间件（MySQL / Redis / RabbitMQ / PostgreSQL / FFmpeg）
 #
 # 以下在宿主机自行启动，本文件不包含：
-#   - Java 后端（forum-demo）          http://localhost:10086
+#   - Java 后端（backend）          http://localhost:10086
 #   - AI 服务（ai-server）             http://localhost:5000
 #   - 用户端 / 管理端 Vite             各自 dev 端口（如 5173）
 #
@@ -12,7 +12,7 @@
 # 或从仓库根目录：
 #   docker compose --project-directory . -f nginx/docker-compose.dev.yaml up -d --build
 #
-# 宿主机连接（与 forum-demo/application.yml、ai-server/config.yaml 默认一致）：
+# 宿主机连接（与 backend/application.yml、ai-server/config.yaml 默认一致）：
 #   MySQL       127.0.0.1:33061
 #   Redis       localhost:63790
 #   RabbitMQ    AMQP 56690（56720 在 Windows Hyper-V 保留段内），管理台 http://localhost:25672
@@ -32,6 +32,8 @@ services:
       MYSQL_DATABASE: forum_db
       MYSQL_USER: ${MYSQL_USER:-forum_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
+      TZ: Asia/Shanghai
+    command: ["--default-time-zone=+08:00"]
     volumes:
       - forum_dev_mysql_data:/var/lib/mysql
     healthcheck:

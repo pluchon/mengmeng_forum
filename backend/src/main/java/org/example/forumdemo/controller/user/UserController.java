@@ -18,10 +18,14 @@ import org.example.forumdemo.service.interfaces.user.MailCodeService;
 import org.example.forumdemo.service.interfaces.user.PasswordResetService;
 import org.example.forumdemo.service.interfaces.user.SMSCodeService;
 import org.example.forumdemo.common.utils.OnlineUserManageUtil;
+import org.example.forumdemo.service.interfaces.user.UserLoginLogService;
 import org.example.forumdemo.service.interfaces.user.UserService;
+import org.example.forumdemo.entity.vo.user.UserLoginLogVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "用户模块", description = "用户的增删改查接口")
 @RestController
@@ -48,6 +52,9 @@ public class UserController {
     @Autowired
     private OnlineUserManageUtil onlineUserManageUtil;
 
+    @Autowired
+    private UserLoginLogService userLoginLogService;
+
     @Operation(summary = "用户注册", description = "传入用户名、密码、昵称完成注册")
     @PostMapping("/register")
     public Result<String> register(@Valid @RequestBody UserResigterRequest userResigterRequest) {
@@ -61,7 +68,9 @@ public class UserController {
     @Operation(summary = "用户登录", description = "传入用户名/邮箱、密码完成登录，登录成功后 JWT 通过 Header 返回")
     @PostMapping("/login")
     public Result<User> login(@Valid @RequestBody UserLoginRequest userLoginRequest,
-                              @RequestHeader(value = "X-Captcha-Ticket", required = false) String captchaTicket, HttpServletResponse response) {
+                              @RequestHeader(value = "X-Captcha-Ticket", required = false) String captchaTicket,
+                              HttpServletRequest request,
+                              HttpServletResponse response) {
         if (!StringUtils.hasText(captchaTicket)) {
             return Result.fail(ResultCode.FAILED_CAPTCHA_REQUIRED);
         }
@@ -69,6 +78,7 @@ public class UserController {
             return Result.fail(ResultCode.FAILED_CAPTCHA_CHECK);
         }
         User user = userService.login(userLoginRequest);
+        userLoginLogService.recordSuccess(user.getId(), "password", request);
         response.setHeader(Constant.JWT_NAME, user.getToken());
         response.setHeader(Constant.ACCESS_CONTROL_EXPOSE_HEADERS, Constant.JWT_NAME);
         return Result.success(user);
@@ -195,5 +205,14 @@ public class UserController {
             return Result.successData(false);
         }
         return Result.successData(onlineUserManageUtil.isOnline(userId));
+    }
+
+    @Operation(summary = "登录日志", description = "查询当前用户最近登录记录")
+    @GetMapping("/loginLogs")
+    public Result<List<UserLoginLogVO>> loginLogs(
+            @RequestParam(defaultValue = "20") Integer limit,
+            HttpServletRequest httpServletRequest) {
+        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(userLoginLogService.listRecent(sessionUser.getId(), limit == null ? 20 : limit));
     }
 }

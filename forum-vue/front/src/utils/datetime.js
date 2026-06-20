@@ -106,3 +106,112 @@ export function formatForumDateTimeShanghai(input) {
 export function formatForumDateOnlyShanghai(input) {
   return formatCheckinLogDateOnly(input)
 }
+
+/** 东八区日历日键 yyyy-MM-dd，用于聊天日期分组 */
+export function shanghaiDayKey(input) {
+  const d = input instanceof Date ? input : parseForumDateTime(input)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function shanghaiYmdParts(input) {
+  const d = input instanceof Date ? input : parseForumDateTime(input)
+  if (!d || Number.isNaN(d.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  return {
+    y: Number(parts.find((p) => p.type === 'year')?.value),
+    m: Number(parts.find((p) => p.type === 'month')?.value),
+    d: Number(parts.find((p) => p.type === 'day')?.value),
+  }
+}
+
+/** 私信气泡时间：当天仅 HH:mm，其余日期同样只显示时刻（日期由分隔条承担） */
+export function formatChatBubbleTimeShanghai(input, now = new Date()) {
+  const d = parseForumDateTime(input)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d)
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00'
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  return `${hour}:${minute}`
+}
+
+/** 会话列表时间：当天 HH:mm，昨天/日期分级展示 */
+export function formatChatSessionTimeShanghai(input, now = new Date()) {
+  const d = parseForumDateTime(input)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  const dayKey = shanghaiDayKey(d)
+  const todayKey = shanghaiDayKey(now)
+  if (dayKey === todayKey) return formatChatBubbleTimeShanghai(d, now)
+
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  if (dayKey === shanghaiDayKey(yesterday)) return '昨天'
+
+  const target = shanghaiYmdParts(d)
+  const current = shanghaiYmdParts(now)
+  if (!target || !current) return ''
+  if (target.y === current.y) return `${target.m}月${target.d}日`
+  return `${target.y}年${target.m}月${target.d}日`
+}
+
+/** 聊天日期分隔条文案（微信风格） */
+export function formatChatDateDividerShanghai(input, now = new Date()) {
+  const d = parseForumDateTime(input)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  const dayKey = shanghaiDayKey(d)
+  const todayKey = shanghaiDayKey(now)
+  if (dayKey === todayKey) return '今天'
+
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  if (dayKey === shanghaiDayKey(yesterday)) return '昨天'
+
+  const target = shanghaiYmdParts(d)
+  const current = shanghaiYmdParts(now)
+  if (!target || !current) return ''
+  if (target.y === current.y) return `${target.m}月${target.d}日`
+  return `${target.y}年${target.m}月${target.d}日`
+}
+
+/**
+ * 将私信消息列表展开为「日期分隔 + 消息」时间线。
+ * 首条若是当天消息则不插「今天」分隔条；跨日时插入对应日期文案。
+ */
+export function buildChatMessageTimeline(messages, getCreateTime = (row) => row?.message?.createTime) {
+  const rows = []
+  let lastDayKey = ''
+  const list = Array.isArray(messages) ? messages : []
+
+  list.forEach((msg, index) => {
+    const time = getCreateTime(msg)
+    const dayKey = shanghaiDayKey(time)
+    if (!dayKey || dayKey === lastDayKey) {
+      rows.push({ type: 'message', key: `msg-${msg?.message?.id ?? index}`, msg })
+      return
+    }
+
+    const label = formatChatDateDividerShanghai(time)
+    const isFirst = lastDayKey === ''
+    const showDivider = !(isFirst && label === '今天')
+    if (showDivider) {
+      rows.push({ type: 'date', key: `date-${dayKey}-${index}`, label, dayKey })
+    }
+    lastDayKey = dayKey
+    rows.push({ type: 'message', key: `msg-${msg?.message?.id ?? index}`, msg })
+  })
+
+  return rows
+}

@@ -1,11 +1,11 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Star, Camera } from '@element-plus/icons-vue'
+import { Star, Camera, Plus } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { getArticleListWithUser } from '@/api/article'
 import { getMyLikeList } from '@/api/like'
-import { getFavoriteFolderArticles, getMyFavoriteFolders, getUserFavoriteFolders } from '@/api/favorite'
+import { getFavoriteFolderArticles, getMyFavoriteFolders, getUserFavoriteFolders, createFavoriteFolder } from '@/api/favorite'
 import { uploadProfileBackground, updateBackgroundUrl } from '@/api/settings'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
@@ -34,6 +34,9 @@ export function useProfile() {
   const favoriteDialogTitle = ref('收藏')
   const favoriteDialogItems = ref([])
   const activeFavoriteFolderId = ref(null)
+  const favoriteCreateVisible = ref(false)
+  const favoriteCreateSaving = ref(false)
+  const favoriteCreateForm = ref({ name: '', isPublic: 1 })
 
   watch(activeTab, (tab) => {
     if (tab === 'liked' && likedArticles.value.length === 0) {
@@ -67,6 +70,35 @@ export function useProfile() {
       }
     } finally {
       loadingFavorites.value = false
+    }
+  }
+
+  function openCreateFavoriteFolder() {
+    favoriteCreateForm.value = { name: '', isPublic: 1 }
+    favoriteCreateVisible.value = true
+  }
+
+  async function saveFavoriteFolder() {
+    const name = favoriteCreateForm.value.name?.trim()
+    if (!name) {
+      ElMessage.warning('请输入收藏夹名称')
+      return
+    }
+    favoriteCreateSaving.value = true
+    try {
+      const res = await createFavoriteFolder({
+        name,
+        isPublic: favoriteCreateForm.value.isPublic,
+      })
+      if (res.code === 0) {
+        ElMessage.success('已创建')
+        favoriteCreateVisible.value = false
+        await loadFavoriteFolders()
+      } else {
+        ElMessage.error(res.message || '创建失败')
+      }
+    } finally {
+      favoriteCreateSaving.value = false
     }
   }
 
@@ -237,6 +269,7 @@ export function useProfile() {
 
   return {
     Camera,
+    Plus,
     Star,
     activeTab,
     articles,
@@ -248,6 +281,9 @@ export function useProfile() {
     handleChat,
     isMe,
     likedArticles,
+    favoriteCreateForm,
+    favoriteCreateSaving,
+    favoriteCreateVisible,
     favoriteCoverStyle,
     favoriteDialogItems,
     favoriteDialogLoading,
@@ -258,7 +294,9 @@ export function useProfile() {
     loadFavoriteFolders,
     loadingFavorites,
     openArticleFromFavorite,
+    openCreateFavoriteFolder,
     openFavoriteDialog,
+    saveFavoriteFolder,
     loading,
     total,
     triggerBgUpload,

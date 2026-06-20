@@ -86,3 +86,7 @@ export function verifyAndBindEmail(email, code) {
 export function verifyAndBindPhone(phoneNumber, code) {
   return request({ url: '/sms/verifyAndBind', method: 'post', params: { phoneNumber, code } })
 }
+
+export function getLoginLogs(limit = 20) {
+  return request({ url: '/user/loginLogs', method: 'get', params: { limit } })
+}

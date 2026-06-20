@@ -6,6 +6,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.example.forumdemo.common.utils.ForumDateTimes;
 import org.springframework.core.env.Environment;
 
 @Slf4j
@@ -14,6 +15,7 @@ import org.springframework.core.env.Environment;
 public class ForumDemoApplication {
 
     public static void main(String[] args) {
+        ForumDateTimes.useShanghaiAsDefault();
         SpringApplication.run(ForumDemoApplication.class, args);
     }
 

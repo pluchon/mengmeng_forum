@@ -215,12 +215,18 @@
 }
 
 .emoji-shop-detail-dialog__buy-btn {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  margin: 0 !important;
 }
 
-.emoji-shop-detail-dialog__admin {
-  margin-top: 10px;
+.emoji-shop-detail-dialog__action-row {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.emoji-shop-detail-dialog__shelf-btn {
+  flex-shrink: 0;
+  margin: 0 !important;
 }

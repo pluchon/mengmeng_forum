@@ -36,6 +36,9 @@ public class ArticleReply {
     @Schema(description = "回帖内容", example = "写得很好，学到了！")
     private String content;
 
+    @Schema(description = "评论时IP属地快照")
+    private String ipRegion;
+
     @Schema(description = "点赞数", example = "6")
     private Integer likeCount;
 

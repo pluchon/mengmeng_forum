@@ -11,6 +11,7 @@ import org.example.forumdemo.common.captcha.CaptchaTicketPurpose;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.service.interfaces.captcha.CaptchaTicketService;
 import org.example.forumdemo.service.interfaces.user.SMSCodeService;
+import org.example.forumdemo.service.interfaces.user.UserLoginLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -32,11 +33,15 @@ public class SMSController {
     @Autowired
     private CaptchaTicketService captchaTicketService;
 
+    @Autowired
+    private UserLoginLogService userLoginLogService;
+
     @Operation(summary = "短信验证码登录", description = "code 为空时发送验证码；code 非空时校验并登录")
     @PostMapping("/login")
     public Result<User> loginBySms(@RequestParam String phoneNumber,
                                    @RequestParam(required = false) String code,
                                    @RequestParam(required = false) String captchaTicket,
+                                   HttpServletRequest request,
                                    HttpServletResponse response) {
         if (!StringUtils.hasText(code)) {
             if (!StringUtils.hasText(captchaTicket)) {
@@ -55,6 +60,7 @@ public class SMSController {
             return Result.fail(ResultCode.FAILED_CAPTCHA_CHECK);
         }
         User user = smsCodeService.loginBySms(phoneNumber, code);
+        userLoginLogService.recordSuccess(user.getId(), "sms", request);
         response.setHeader(Constant.JWT_NAME, user.getToken());
         response.setHeader(Constant.ACCESS_CONTROL_EXPOSE_HEADERS, Constant.JWT_NAME);
         return Result.success(user);

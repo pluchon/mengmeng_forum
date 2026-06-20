@@ -16,8 +16,11 @@ import org.example.forumdemo.entity.vo.article.ArticleSubReplyListResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleSubReplyMapper;
+import org.example.forumdemo.common.utils.RequestIpUtils;
+import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.article.ArticleSubReplyService;
+import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,9 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private IpRegionService ipRegionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -66,6 +72,7 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         subReply.setPostUserId(loginUserId);
         subReply.setReplyUserId(req.getReplyUserId());
         subReply.setContent(req.getContent());
+        subReply.setIpRegion(ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp()));
         if (articleSubReplyMapper.insert(subReply) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }

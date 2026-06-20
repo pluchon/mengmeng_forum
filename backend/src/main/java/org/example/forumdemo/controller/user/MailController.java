@@ -11,6 +11,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.service.interfaces.captcha.CaptchaTicketService;
 import org.example.forumdemo.service.interfaces.user.MailCodeService;
+import org.example.forumdemo.service.interfaces.user.UserLoginLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -33,11 +34,15 @@ public class MailController {
     @Autowired
     private CaptchaTicketService captchaTicketService;
 
+    @Autowired
+    private UserLoginLogService userLoginLogService;
+
     @Operation(summary = "邮箱验证码登录", description = "code 为空时发送验证码；code 非空时校验并登录")
     @PostMapping("/login")
     public Result<User> loginByMail(@RequestParam String email,
                                     @RequestParam(required = false) String code,
                                     @RequestParam(required = false) String captchaTicket,
+                                    HttpServletRequest request,
                                     HttpServletResponse response) {
         if (!StringUtils.hasText(code)) {
             if (!StringUtils.hasText(captchaTicket)) {
@@ -56,6 +61,7 @@ public class MailController {
             return Result.fail(ResultCode.FAILED_CAPTCHA_CHECK);
         }
         User user = mailCodeService.loginByMail(email, code);
+        userLoginLogService.recordSuccess(user.getId(), "mail", request);
         response.setHeader(Constant.JWT_NAME, user.getToken());
         response.setHeader(Constant.ACCESS_CONTROL_EXPOSE_HEADERS, Constant.JWT_NAME);
         return Result.success(user);

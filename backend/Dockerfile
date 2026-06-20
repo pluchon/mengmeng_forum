@@ -10,7 +10,7 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 RUN apk add --no-cache wget \
     && adduser -D -u 1000 appuser
-COPY --from=builder /build/target/forum-back-*.jar app.jar
+COPY --from=builder /build/target/backend-*.jar app.jar
 USER appuser
 EXPOSE 8080
 ENV SPRING_PROFILES_ACTIVE=prod

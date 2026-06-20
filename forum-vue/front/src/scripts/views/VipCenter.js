@@ -22,14 +22,6 @@ export function useVipCenter() {
   const quotaGroups = computed(() => quotaPanel.value?.groups || [])
   const showQuota = computed(() => vipActive.value && (vipTier.value === 1 || vipTier.value === 2))
 
-  const periodResetLabel = computed(() => {
-    const end = quotaPanel.value?.periodEnd
-    if (!end) return ''
-    const d = new Date(end)
-    if (Number.isNaN(d.getTime())) return ''
-    return `周期重置于 ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  })
-
   function providerIcon(provider, modelCode) {
     return resolveAiIcon(provider, modelCode)
   }
@@ -74,11 +66,16 @@ export function useVipCenter() {
   }
 
   function planCardClass(plan) {
-    const base = 'vip-plan-card'
-    if (plan.code === 'pro' && plan.featured && !vipActive.value) {
-      return `${base} vip-plan-card--featured`
+    const classes = ['vip-plan-card']
+    if (plan.code === 'pro') classes.push('vip-plan-card--pro')
+    else if (plan.code === 'max') classes.push('vip-plan-card--max')
+    else classes.push('vip-plan-card--free')
+    if (plan.buttonState === 'owned') {
+      classes.push('vip-plan-card--owned')
+    } else if (plan.code === 'pro' && plan.featured) {
+      classes.push('vip-plan-card--featured')
     }
-    return base
+    return classes.join(' ')
   }
 
   function planNameClass(plan) {
@@ -129,7 +126,8 @@ export function useVipCenter() {
   }
 
   function displaySub(item) {
-    return item.resetHint || ''
+    const hint = item.resetHint || ''
+    return hint.replace(/（订阅周期）/g, '').replace(/（自然日）/g, '').trim()
   }
 
   async function loadCenter() {
@@ -204,7 +202,6 @@ export function useVipCenter() {
     quotaPanel,
     quotaGroups,
     showQuota,
-    periodResetLabel,
     providerIcon,
     barClass,
     usedClass,

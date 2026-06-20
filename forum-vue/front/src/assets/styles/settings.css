@@ -166,7 +166,8 @@
   border-bottom: 1px solid #f8f8f8;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
   transition: all 0.2s;
 }
 
@@ -182,10 +183,10 @@
   width: 44px;
   flex-shrink: 0;
   font-size: 0;
-  padding-top: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
 }
 
 .setting-label-icon {
@@ -194,17 +195,16 @@
   display: block;
   object-fit: contain;
   opacity: 0.78;
+  flex-shrink: 0;
 }
 
 .setting-label--text {
   width: auto;
-  min-width: 120px;
+  min-width: 88px;
   font-size: 15px;
   font-weight: 700;
   color: #333;
   justify-content: flex-start;
-  gap: 8px;
-  padding-top: 4px;
 }
 
 .setting-content {
@@ -212,7 +212,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 32px;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.edit-box--gender {
+  max-width: 100%;
+}
+
+.edit-box--gender .setting-gender-group {
+  margin-bottom: 4px;
 }
 
 .value-text {
@@ -346,6 +355,35 @@
   height: 18px;
   display: block;
   object-fit: contain;
+}
+
+.security-pwd-btn {
+  background: #f8f8f8 !important;
+  border: 1px solid #eee !important;
+  color: #666 !important;
+  border-radius: 999px !important;
+  padding: 10px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.security-pwd-btn:hover {
+  background: #f0f0f0 !important;
+  border-color: #e0e0e0 !important;
+  color: #555 !important;
+}
+
+.login-log-loading,
+.login-log-empty {
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 14px;
+  color: #86909c;
+}
+
+.login-log-table {
+  width: 100%;
 }
 
 .code-input-group {
@@ -528,12 +566,6 @@
   margin-right: 0;
   padding-right: 16px;
   text-align: center;
-}
-
-.setting-content--gender {
-  flex: 1;
-  justify-content: flex-end;
-  padding-top: 2px;
 }
 
 .setting-gender-group {

@@ -1,19 +1,21 @@
 <template>
   <div class="shell-main-stack shell-page-scroll">
-    <div v-if="showBoardPillsRow" class="home-xhs-board-row">
-      <template v-if="boardsInCategory.length">
-        <button
-          v-for="b in boardsInCategory"
-          :key="b.id"
-          type="button"
-          class="home-board-pill"
-          :class="{ 'is-active': currentBoardId === b.id }"
-          @click="selectBoardPill(b.id)"
-        >
-          {{ b.name }}
-        </button>
-      </template>
-      <span v-else class="home-board-empty">该分类下暂无板块</span>
+    <div v-if="showBoardPillsRow" class="home-board-section">
+      <div class="home-xhs-board-row home-xhs-board-row--card">
+        <template v-if="boardsInCategory.length">
+          <button
+            v-for="b in boardsInCategory"
+            :key="b.id"
+            type="button"
+            class="home-board-pill"
+            :class="{ 'is-active': currentBoardId === b.id }"
+            @click="selectBoardPill(b.id)"
+          >
+            {{ b.name }}
+          </button>
+        </template>
+        <span v-else class="home-board-empty">该分类下暂无板块</span>
+      </div>
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed">
@@ -137,6 +139,11 @@
         </div>
       </div>
 
+      <div v-if="loading && feedList.length" class="home-feed-loading-more" aria-live="polite">
+        <el-icon class="home-feed-loading-spin" :size="20"><Loading /></el-icon>
+        <span>正在加载更多…</span>
+      </div>
+
       <div v-if="!isHotFeed && total > pageSize" class="pagination-wrap">
         <el-pagination
           v-model:current-page="pageNum"
@@ -160,6 +167,7 @@
 defineOptions({ name: 'HomeFeed' })
 
 import { computed } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'

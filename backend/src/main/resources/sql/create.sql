@@ -34,6 +34,7 @@ CREATE TABLE `user` (
                         `vip_expire_at` datetime DEFAULT NULL COMMENT 'VIP到期时间; NULL且vip_tier>0可视为运营期内不限期占位',
                         `mascot_model_id` bigint DEFAULT NULL COMMENT '用户选择的看板娘模型 forum_mascot_model.id',
                         `remark` varchar(1000) DEFAULT NULL COMMENT '备注, 自我介绍',
+                        `ip_region` varchar(32) DEFAULT NULL COMMENT '最近登录IP属地(省份/国家)',
                         `admin_tag` varchar(500) DEFAULT NULL COMMENT '管理员标签，仅管理端维护',
                         `dept_id` bigint DEFAULT NULL COMMENT '后台部门ID，对应 sys_dept.id',
                         `state` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常, 1禁言',
@@ -47,6 +48,24 @@ CREATE TABLE `user` (
                         UNIQUE INDEX `user_phone_hash_uindex` (`phone_hash`),
                         UNIQUE INDEX `user_email_hash_uindex` (`email_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
+
+-- ----------------------------
+-- 1c. 用户登录日志表 (user_login_log)
+-- ----------------------------
+DROP TABLE IF EXISTS `user_login_log`;
+CREATE TABLE `user_login_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `login_type` varchar(16) NOT NULL COMMENT 'password/mail/sms',
+    `ip_address` varchar(64) DEFAULT NULL COMMENT '登录IP',
+    `user_agent` varchar(512) DEFAULT NULL COMMENT 'UA摘要',
+    `login_status` tinyint NOT NULL DEFAULT 1 COMMENT '1成功 0失败',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
+    `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '登录时间',
+    `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_login_log_user_time` (`user_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户登录日志';
 
 -- ----------------------------
 -- 1b. 看板娘 Live2D 模型库（用户端仅展示上架；资源由 Vite /live2d-assets 映射至 live2d-master）
@@ -121,6 +140,7 @@ CREATE TABLE `article` (
                            `audit_result_message` varchar(500) DEFAULT NULL COMMENT '最近一次审核结论文本(通过原因/拒绝理由)',
                            `audit_submitted_at` datetime DEFAULT NULL COMMENT '最近一次审核提交时间',
                            `audit_finished_at` datetime DEFAULT NULL COMMENT '最近一次审核结束时间',
+                           `ip_region` varchar(32) DEFAULT NULL COMMENT '发帖时IP属地快照',
                            `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
                            `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                            `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -216,6 +236,7 @@ CREATE TABLE `article_reply` (
                                  `reply_id` bigint DEFAULT NULL COMMENT '关联回复编号, 支持楼中楼',
                                  `reply_user_id` bigint DEFAULT NULL COMMENT '被回复用户编号',
                                  `content` varchar(500) NOT NULL COMMENT '回帖内容',
+                                 `ip_region` varchar(32) DEFAULT NULL COMMENT '评论时IP属地快照',
                                  `like_count` int NOT NULL DEFAULT 0 COMMENT '点赞数',
                                  `state` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常, 1禁用',
                                  `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
@@ -274,6 +295,7 @@ CREATE TABLE `article_sub_reply` (
                                      `post_user_id` BIGINT NOT NULL COMMENT '当前发帖的用户ID',
                                      `reply_user_id` BIGINT NOT NULL COMMENT '被回复的目标用户ID (用于显示 @昵称)',
                                      `content` TEXT NOT NULL COMMENT '回复内容',
+                                     `ip_region` varchar(32) DEFAULT NULL COMMENT '楼中楼回复时IP属地快照',
                                      `state` TINYINT DEFAULT 0 COMMENT '状态: 0-正常, 1-禁用',
                                      `delete_state` TINYINT DEFAULT 0 COMMENT '是否删除: 0-否, 1-是',
                                      `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -1046,7 +1068,9 @@ CREATE TABLE `game_definition` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏定义表';
 
 INSERT INTO `game_definition` (`game_code`, `game_name`, `cover_url`, `status`, `sort`, `delete_state`)
-VALUES ('gobang', '五子棋', NULL, 1, 10, 0);
+VALUES
+    ('gobang', '五子棋', NULL, 1, 10, 0),
+    ('jinzi', '井字棋', NULL, 1, 20, 0);
 
 -- ----------------------------
 -- 23.3 游戏用户资料表 (game_user_profile)

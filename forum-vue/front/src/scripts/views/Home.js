@@ -84,7 +84,7 @@ export function useHome() {
   const isHotFeed = computed(() => menuActiveKey.value === 'hot')
 
   const searchInputPlaceholder = computed(() =>
-    aiSearchMode.value ? 'AI 语义综合搜索…' : '综合搜索帖子与用户…',
+    aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
   )
 
   /** 推荐 / 热帖榜不展示板块选择行 */

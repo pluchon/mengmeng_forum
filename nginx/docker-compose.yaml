@@ -158,6 +158,8 @@ services:
       MYSQL_DATABASE: forum_db
       MYSQL_USER: ${MYSQL_USER:-forum_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
+      TZ: Asia/Shanghai
+    command: ["--default-time-zone=+08:00"]
     volumes:
       - forum_mysql_data:/var/lib/mysql
     healthcheck:

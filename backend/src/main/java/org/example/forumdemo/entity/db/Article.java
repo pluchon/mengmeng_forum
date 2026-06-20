@@ -84,6 +84,9 @@ public class Article {
     @Schema(description = "最近一次审核结束时间")
     private Date auditFinishedAt;
 
+    @Schema(description = "发帖时IP属地快照")
+    private String ipRegion;
+
     @Schema(description = "是否删除: 0否 1是", example = "0")
     @JsonIgnore
     private Byte deleteState;

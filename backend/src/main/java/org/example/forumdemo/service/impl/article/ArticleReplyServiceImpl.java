@@ -19,8 +19,10 @@ import org.example.forumdemo.entity.vo.mq.ReplyNotifyMqVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleReplyMapper;
 import org.example.forumdemo.common.utils.UserMuteGuard;
+import org.example.forumdemo.common.utils.RequestIpUtils;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
+import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     @Autowired
     private ForumProducer forumProducer;
+
+    @Autowired
+    private IpRegionService ipRegionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -73,6 +78,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         newReply.setArticleId(articleId);
         newReply.setPostUserId(loginUserId);
         newReply.setContent(content);
+        newReply.setIpRegion(ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp()));
         if (articleReplyMapper.insert(newReply) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }

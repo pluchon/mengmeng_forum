@@ -27,6 +27,9 @@ import org.example.forumdemo.mapper.LotteryDrawHourlyStatMapper;
 import org.example.forumdemo.mapper.LotteryDrawRecordMapper;
 import org.example.forumdemo.mapper.LotteryPrizeMysteryItemMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.lottery.guard.LotteryDrawContext;
+import org.example.forumdemo.service.impl.lottery.guard.LotteryDrawGuardChain;
+import org.example.forumdemo.service.impl.lottery.guard.LotteryDrawGuardResult;
 import org.example.forumdemo.service.interfaces.lottery.LotteryService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.vip.VipSubscribeService;
@@ -76,6 +79,15 @@ public class LotteryServiceImpl implements LotteryService {
 
     @Autowired
     private VipSubscribeService vipSubscribeService;
+
+    private LotteryDrawGuardChain lotteryDrawGuardChain = LotteryDrawGuardChain.defaultChain();
+
+    @Autowired(required = false)
+    public void setLotteryDrawGuardChain(LotteryDrawGuardChain lotteryDrawGuardChain) {
+        if (lotteryDrawGuardChain != null) {
+            this.lotteryDrawGuardChain = lotteryDrawGuardChain;
+        }
+    }
 
     @Override
     public List<LotteryActivityListItemVO> listSelectableActivities() {
@@ -181,18 +193,11 @@ public class LotteryServiceImpl implements LotteryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int times = dto.getTimes() == null ? 0 : dto.getTimes();
-        if (times != 1 && times != 10) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_LOTTERY_TIMES_INVALID));
-        }
+        checkLotteryDrawGuard(LotteryDrawContext.requestOnly(userId, dto));
         LotteryActivity activity = resolveActivity(dto.getActivityId());
         User lockedUser = userMapper.selectByIdForUpdate(userId);
-        if (lockedUser == null || (lockedUser.getDeleteState() != null && lockedUser.getDeleteState() != 0)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
+        checkLotteryDrawGuard(LotteryDrawContext.resolved(userId, dto, activity, lockedUser));
+        int times = dto.getTimes() == null ? 0 : dto.getTimes();
         int pity = lockedUser.getLotteryPityDraws() == null ? 0 : lockedUser.getLotteryPityDraws();
         int totalCost = activity.getCostPointsPerDraw() * times;
         String costRemark = times == 1 ? "积分抽奖·单抽" : "积分抽奖·十连";
@@ -220,6 +225,13 @@ public class LotteryServiceImpl implements LotteryService {
         }
         int balanceAfter = pointsService.getWallet(userId).getBalance();
         return new LotteryDrawResultVO(balanceAfter, batchKey, results, pity);
+    }
+
+    private void checkLotteryDrawGuard(LotteryDrawContext context) {
+        LotteryDrawGuardResult result = lotteryDrawGuardChain.check(context);
+        if (!result.isPassed()) {
+            throw new ApplicationException(result.getErrorResult());
+        }
     }
 
     private LotteryDrawItemVO executeOneDraw(Long userId, Long activityId, String batchKey,

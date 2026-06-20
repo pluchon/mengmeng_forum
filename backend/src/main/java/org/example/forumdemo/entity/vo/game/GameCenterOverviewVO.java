@@ -18,6 +18,9 @@ public class GameCenterOverviewVO {
     // 当前用户五子棋资料
     private GameUserProfileVO gobangProfile;
 
+    // 当前用户井字棋资料
+    private GameUserProfileVO jinziProfile;
+
     // 游戏中心在线人数
     private Integer lobbyOnlineCount;
 }

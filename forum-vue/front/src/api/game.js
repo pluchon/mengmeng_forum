@@ -31,3 +31,27 @@ export function getGobangRoom(roomId) {
 export function surrenderGobangRoom(roomId) {
   return request({ url: `/game/gobang/rooms/${encodeURIComponent(roomId)}/surrender`, method: 'post' })
 }
+
+export function getJinziProfile() {
+  return request({ url: '/game/jinzi/profile', method: 'get' })
+}
+
+export function getJinziRecords(params) {
+  return request({ url: '/game/jinzi/records', method: 'get', params })
+}
+
+export function getJinziLeaderboard(params) {
+  return request({ url: '/game/jinzi/leaderboard', method: 'get', params })
+}
+
+export function getJinziReplay(recordId) {
+  return request({ url: `/game/jinzi/records/${encodeURIComponent(recordId)}/replay`, method: 'get' })
+}
+
+export function getJinziRoom(roomId) {
+  return request({ url: `/game/jinzi/rooms/${encodeURIComponent(roomId)}`, method: 'get' })
+}
+
+export function surrenderJinziRoom(roomId) {
+  return request({ url: `/game/jinzi/rooms/${encodeURIComponent(roomId)}/surrender`, method: 'post' })
+}

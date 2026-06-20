@@ -41,7 +41,12 @@ import { useChatEmojiStore } from '@/stores/chatEmoji'
 import { useEmojiShopStore } from '@/stores/emojiShop'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { unwrapPageRecords } from '@/utils/apiData'
-import { parseForumDateTime } from '@/utils/datetime'
+import {
+  buildChatMessageTimeline,
+  formatChatBubbleTimeShanghai,
+  formatChatSessionTimeShanghai,
+  parseForumDateTime,
+} from '@/utils/datetime'
 import { validateLocalImageFile, openImageUploadLoading } from '@/utils/imageUploadFeedback'
 import {
   canFavoriteChatMediaMessage,
@@ -211,6 +216,8 @@ export function useMessageView() {
     const list = currentSystemGroup.value?.messages
     return Array.isArray(list) ? list : []
   })
+
+  const messageTimeline = computed(() => buildChatMessageTimeline(messages.value))
 
   function previewForSysMessage(m) {
     if (!m) return ''
@@ -829,32 +836,11 @@ export function useMessageView() {
   }
 
   function formatTime(time) {
-    const d = parseForumDateTime(time)
-    if (!d) return ''
-    return d.toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Shanghai',
-    })
+    return formatChatBubbleTimeShanghai(time)
   }
 
   function formatSessionTime(time) {
-    const d = parseForumDateTime(time)
-    if (!d) return ''
-    const now = new Date()
-    const opts = { timeZone: 'Asia/Shanghai' }
-    const sameDay =
-      d.toLocaleDateString('zh-CN', opts) === now.toLocaleDateString('zh-CN', opts)
-    if (sameDay) {
-      return d.toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: 'Asia/Shanghai',
-      })
-    }
-    return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Shanghai' })
+    return formatChatSessionTimeShanghai(time)
   }
 
   function openArticleFromSystem(msg) {
@@ -897,6 +883,7 @@ export function useMessageView() {
     isActiveItem,
     isMediaMessage,
     listItems,
+    messageTimeline,
     messages,
     msgContainer,
     msgScrollbar,

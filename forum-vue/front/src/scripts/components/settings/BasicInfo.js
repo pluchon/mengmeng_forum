@@ -13,6 +13,7 @@ export function useBasicInfo() {
   const editing = reactive({
     nickname: false,
     remark: false,
+    gender: false,
   })
 
   const originalValues = reactive({
@@ -54,10 +55,13 @@ export function useBasicInfo() {
     originalValues.gender = profileForm.gender
   }
 
-  async function saveGender(val) {
-    const g = Number(val)
+  async function saveGender() {
+    const g = Number(profileForm.gender)
     if (![0, 1, 2].includes(g)) return
-    if (g === originalValues.gender) return
+    if (g === originalValues.gender) {
+      editing.gender = false
+      return
+    }
     saving.value = true
     try {
       const res = await updateUserInfo({ gender: g })
@@ -65,11 +69,19 @@ export function useBasicInfo() {
         ElMessage.success('性别已更新')
         originalValues.gender = g
         profileForm.gender = g
+        editing.gender = false
         userStore.patchUserProfile({ gender: g })
       }
     } finally {
       saving.value = false
     }
+  }
+
+  function genderLabel(g) {
+    const val = Number(g)
+    if (val === 0) return '女'
+    if (val === 1) return '男'
+    return '保密'
   }
 
   function startEdit(field) {
@@ -158,6 +170,7 @@ export function useBasicInfo() {
     DEFAULT_AVATAR,
     cancelEdit,
     editing,
+    genderLabel,
     handleAvatarUpload,
     profileForm,
     saveSingleField,

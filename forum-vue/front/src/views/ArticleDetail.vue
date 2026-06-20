@@ -92,6 +92,7 @@
                     :vip-expire-at="author?.vipExpireAt"
                   />
                   <span class="nickname">{{ author?.nickname }}</span>
+                  <IpRegionLabel :region="article?.ipRegion" />
                 </div>
                 <div v-else class="author-info author-info--static">
                   <UserAvatarVip
@@ -101,6 +102,7 @@
                     :vip-expire-at="author?.vipExpireAt"
                   />
                   <span class="nickname">{{ author?.nickname }}</span>
+                  <IpRegionLabel :region="article?.ipRegion" />
                 </div>
                 <button
                   v-if="isOwner"
@@ -236,11 +238,11 @@
                     <div class="comment-text" v-html="item.articleReply.content"></div>
                     <div class="comment-footer">
                       <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
+                      <IpRegionLabel :region="item.articleReply?.ipRegion" />
                     </div>
                     <SubReplyArea
                       :reply-id="item.articleReply.id"
                       :article-id="article.id"
-                      :read-only="true"
                     />
                   </div>
                 </div>
@@ -378,6 +380,7 @@
 
 <script setup>
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import { useArticleDetail } from '@scripts/views/ArticleDetail'
 
 const {

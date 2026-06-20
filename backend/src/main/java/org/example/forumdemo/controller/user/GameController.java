@@ -13,10 +13,12 @@ import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
 import org.example.forumdemo.entity.vo.game.GobangActiveRoomVO;
 import org.example.forumdemo.entity.vo.game.GobangReplayVO;
 import org.example.forumdemo.entity.vo.game.GobangRoomStateVO;
+import org.example.forumdemo.entity.vo.game.JinziRoomStateVO;
 import org.example.forumdemo.service.impl.game.GameConstants;
 import org.example.forumdemo.service.interfaces.game.GameCenterService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
+import org.example.forumdemo.service.interfaces.game.JinziRoomService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +43,9 @@ public class GameController {
     @Autowired
     private GobangRoomService gobangRoomService;
 
+    @Autowired
+    private JinziRoomService jinziRoomService;
+
     @Operation(summary = "游戏中心概览", description = "返回游戏卡片与当前用户五子棋资料")
     @GetMapping("/center/overview")
     public Result<GameCenterOverviewVO> overview(HttpServletRequest request) {
@@ -53,6 +58,13 @@ public class GameController {
     public Result<GameUserProfileVO> gobangProfile(HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.getProfileVO(loginUser.getId(), GameConstants.GOBANG));
+    }
+
+    @Operation(summary = "井字棋资料", description = "返回当前用户井字棋积分、胜率和状态")
+    @GetMapping("/jinzi/profile")
+    public Result<GameUserProfileVO> jinziProfile(HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(gameUserProfileService.getProfileVO(loginUser.getId(), GameConstants.JINZI));
     }
 
     @Operation(summary = "五子棋对局记录", description = "分页返回当前用户五子棋历史对局")
@@ -70,11 +82,33 @@ public class GameController {
         ));
     }
 
+    @Operation(summary = "井字棋对局记录", description = "分页返回当前用户井字棋历史对局")
+    @GetMapping("/jinzi/records")
+    public Result<PageResult<GameMatchRecordVO>> jinziRecords(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(gameUserProfileService.listRecords(
+                loginUser.getId(),
+                GameConstants.JINZI,
+                pageNum,
+                pageSize
+        ));
+    }
+
     @Operation(summary = "五子棋天梯榜", description = "返回五子棋玩家排行榜")
     @GetMapping("/gobang/leaderboard")
     public Result<List<GameUserProfileVO>> gobangLeaderboard(
             @RequestParam(defaultValue = "20") Integer pageSize) {
         return Result.success(gameUserProfileService.listLeaderboard(GameConstants.GOBANG, pageSize));
+    }
+
+    @Operation(summary = "井字棋天梯榜", description = "返回井字棋玩家排行榜")
+    @GetMapping("/jinzi/leaderboard")
+    public Result<List<GameUserProfileVO>> jinziLeaderboard(
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return Result.success(gameUserProfileService.listLeaderboard(GameConstants.JINZI, pageSize));
     }
 
     @Operation(summary = "五子棋活跃房间", description = "返回当前可观战的五子棋房间")
@@ -92,6 +126,15 @@ public class GameController {
         return Result.success(gameUserProfileService.getReplay(loginUser.getId(), recordId));
     }
 
+    @Operation(summary = "井字棋录像回放", description = "返回某一局井字棋对局的落子列表")
+    @GetMapping("/jinzi/records/{recordId}/replay")
+    public Result<GobangReplayVO> jinziReplay(
+            @PathVariable Long recordId,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(gameUserProfileService.getReplay(loginUser.getId(), recordId));
+    }
+
     @Operation(summary = "五子棋房间状态", description = "断线重连或刷新时兜底拉取房间状态")
     @GetMapping("/gobang/rooms/{roomId}")
     public Result<GobangRoomStateVO> gobangRoom(
@@ -101,6 +144,15 @@ public class GameController {
         return Result.success(gobangRoomService.getRoomState(roomId, loginUser.getId()));
     }
 
+    @Operation(summary = "井字棋房间状态", description = "断线重连或刷新时兜底拉取井字棋房间状态")
+    @GetMapping("/jinzi/rooms/{roomId}")
+    public Result<JinziRoomStateVO> jinziRoom(
+            @PathVariable String roomId,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(jinziRoomService.getRoomState(roomId, loginUser.getId()));
+    }
+
     @Operation(summary = "五子棋认输", description = "HTTP 兜底认输接口，正常房间内优先使用 WebSocket")
     @PostMapping("/gobang/rooms/{roomId}/surrender")
     public Result<Void> surrender(
@@ -108,6 +160,16 @@ public class GameController {
             HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         gobangRoomService.surrender(roomId, loginUser.getId(), null);
+        return Result.success();
+    }
+
+    @Operation(summary = "井字棋认输", description = "HTTP 兜底认输接口，正常房间内优先使用 WebSocket")
+    @PostMapping("/jinzi/rooms/{roomId}/surrender")
+    public Result<Void> jinziSurrender(
+            @PathVariable String roomId,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        jinziRoomService.surrender(roomId, loginUser.getId(), null);
         return Result.success();
     }
 }

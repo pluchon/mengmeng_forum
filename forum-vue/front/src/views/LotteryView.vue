@@ -1,7 +1,5 @@
 <template>
-  <div v-loading="loading" class="lottery-page animate-fade-in">
-    <div class="lottery-bg" :style="{ backgroundImage: `url(${bgUrl})` }" />
-
+  <div v-loading="loading" class="lottery-page shell-page-scroll animate-fade-in">
     <div class="lottery-inner">
       <div class="lottery-demo-banner" role="alert">
         <el-icon class="lottery-demo-banner__icon" :size="20"><WarningFilled /></el-icon>
@@ -13,8 +11,8 @@
 
       <header class="lottery-topbar">
         <div class="lottery-title-block">
-          <el-icon :size="26" color="#f5b942"><Trophy /></el-icon>
-          <h1 class="lottery-title">积分幸运抽</h1>
+          <el-icon :size="26"><Trophy /></el-icon>
+          <h1 class="lottery-title">积分幸运抽奖</h1>
         </div>
       </header>
 
@@ -22,6 +20,16 @@
       <div class="lottery-main-grid">
         <!-- 左：积分与保底 -->
         <aside class="lottery-glass lottery-info-col">
+          <button
+            type="button"
+            class="lottery-record-icon-btn"
+            aria-label="我的抽奖记录"
+            title="我的抽奖记录"
+            @click="historyDialogVisible = true"
+          >
+            <img :src="recordIconUrl" alt="" />
+          </button>
+
           <div class="lottery-info-main">
             <div class="lottery-info-label">当前积分余额</div>
             <div class="lottery-info-value">{{ info.balance ?? '—' }}</div>
@@ -52,117 +60,114 @@
               </el-tooltip>
             </div>
 
-            <div v-if="currentActivityTitle" class="lottery-activity-current">
-              <span class="lottery-activity-current__text">
-                当前活动是<strong>{{ currentActivityTitle }}</strong>
-              </span>
+            <div v-if="activityList.length" class="lottery-activity-picker">
               <button
-                v-if="activityList.length > 1"
+                v-for="act in sidebarActivities"
+                :key="act.id"
                 type="button"
-                class="lottery-activity-switch-btn"
-                :class="{ 'lottery-activity-switch-btn--disabled': !canSwitchActivity }"
+                class="lottery-activity-pick-card"
+                :class="{ 'is-active': selectedActivityId === act.id }"
                 :disabled="!canSwitchActivity"
-                aria-label="切换活动"
-                title="切换活动"
+                @click="onSelectActivity(act.id)"
+              >
+                <span class="lottery-activity-pick-card__title">{{ act.title }}</span>
+              </button>
+              <button
+                v-if="hasMoreActivities"
+                type="button"
+                class="lottery-activity-more-btn"
+                :disabled="!canSwitchActivity"
+                aria-label="查看更多活动"
+                title="查看更多活动"
                 @click="openActivitySwitch"
               >
-                <img :src="switchActivityIconUrl" alt="" />
+                <el-icon><ArrowDown /></el-icon>
               </button>
             </div>
           </div>
-
-          <button
-            type="button"
-            class="lottery-record-icon-btn"
-            aria-label="我的抽奖记录"
-            title="我的抽奖记录"
-            @click="historyDialogVisible = true"
-          >
-            <img :src="recordIconUrl" alt="" />
-          </button>
         </aside>
 
         <!-- 中：抽奖操作 / 洗牌 + 说明（与左右列同高） -->
         <section class="lottery-glass lottery-draw-stack lottery-draw-col">
-          <transition name="fade">
+          <div class="lottery-draw-body" :class="{ 'is-busy': phase !== 'idle' }">
             <div
-              v-if="showMiddleLotteryDrawingOverlay"
-              class="lottery-draw-full-overlay"
+              v-if="phase === 'single_shuffle' || phase === 'ten_shuffle'"
+              class="lottery-draw-spin-panel"
               aria-live="polite"
             >
-              <span class="lottery-draw-full-overlay__text">抽奖中……</span>
+              <div class="lottery-gacha-spin" :class="{ 'lottery-gacha-spin--ten': phase === 'ten_shuffle' }">
+                <div class="lottery-gacha-orbit" />
+                <div class="lottery-gacha-orbit lottery-gacha-orbit--reverse" />
+                <div class="lottery-gacha-core">
+                  <el-icon :size="28"><Trophy /></el-icon>
+                </div>
+                <span
+                  v-for="n in 6"
+                  :key="n"
+                  class="lottery-gacha-spark"
+                  :style="{ '--spark-i': n }"
+                />
+              </div>
+              <p class="lottery-gacha-label">{{ phase === 'ten_shuffle' ? '十连抽取中…' : '单抽进行中…' }}</p>
             </div>
-          </transition>
-          <div class="lottery-draw-top-block">
-            <div v-if="phase === 'idle'" class="lottery-compact-actions">
-              <button
-                type="button"
-                class="lottery-play-card lottery-play-card--single"
-                :disabled="busy"
-                @click="onSingle"
+
+            <div v-else-if="phase === 'single_result'" class="lottery-draw-result">
+              <p class="lottery-draw-result-heading">恭喜获得</p>
+              <div
+                class="lottery-draw-result-prize"
+                :class="{ 'is-jackpot': singleOutcome?.jackpot }"
               >
-                <span class="play-icon" aria-hidden="true">
-                  <el-icon><Coin /></el-icon>
+                <span class="lottery-draw-result-name">{{ formatOutcome(singleOutcome) }}</span>
+                <span v-if="singleOutcome?.grantPoints > 0" class="lottery-draw-result-points">
+                  +{{ singleOutcome.grantPoints }} 积分
                 </span>
-                <span class="play-main">
+              </div>
+              <button type="button" class="lottery-draw-confirm-btn" @click="resetRound">确定</button>
+            </div>
+
+            <div v-else-if="phase === 'ten_result'" class="lottery-draw-result lottery-draw-result--ten">
+              <p class="lottery-draw-result-heading">十连结果</p>
+              <div class="lottery-ten-result-grid">
+                <div
+                  v-for="(item, i) in tenResults"
+                  :key="i"
+                  class="lottery-ten-result-chip"
+                  :class="{ 'is-jackpot': item.jackpot }"
+                >
+                  <span class="lottery-ten-result-chip__name">{{ formatOutcome(item) }}</span>
+                  <span v-if="item.grantPoints > 0" class="lottery-ten-result-chip__pts">+{{ item.grantPoints }}</span>
+                </div>
+              </div>
+              <button type="button" class="lottery-draw-confirm-btn" @click="resetRound">确定</button>
+            </div>
+
+            <div v-if="phase === 'idle'" class="lottery-draw-idle-wrap">
+              <h3 class="lottery-draw-strategy-title">请选择你的策略</h3>
+              <div class="lottery-compact-actions">
+                <button
+                  type="button"
+                  class="lottery-play-card lottery-play-card--single"
+                  :disabled="busy"
+                  @click="onSingle"
+                >
+                  <span class="play-icon" aria-hidden="true">
+                    <el-icon><Coin /></el-icon>
+                  </span>
                   <span class="play-label">单抽</span>
-                  <span class="play-meta">{{ costPer }} 积分 · 翻一张揭晓</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                class="lottery-play-card lottery-play-card--ten"
-                :disabled="busy"
-                @click="onTen"
-              >
-                <span class="play-icon" aria-hidden="true">
-                  <el-icon><Grid /></el-icon>
-                </span>
-                <span class="play-main">
+                </button>
+                <button
+                  type="button"
+                  class="lottery-play-card lottery-play-card--ten"
+                  :disabled="busy"
+                  @click="onTen"
+                >
+                  <span class="play-icon" aria-hidden="true">
+                    <el-icon><Grid /></el-icon>
+                  </span>
                   <span class="play-label">十连</span>
-                  <span class="play-meta">{{ tenCost }} 积分 · 十张依次翻开</span>
-                </span>
-              </button>
-            </div>
-
-            <div
-              v-else-if="phase === 'single_shuffle' || phase === 'ten_shuffle'"
-              class="lottery-draw-shuffle-panel"
-            >
-              <div v-if="phase === 'single_shuffle'" class="shuffle-stage" aria-live="polite">
-                <p class="shuffle-title">洗牌中</p>
-                <p class="shuffle-sub">好运正在重组…</p>
-                <div class="shuffle-deck shuffle-deck--five">
-                  <div
-                    v-for="n in 5"
-                    :key="n"
-                    class="shuffle-stack-card"
-                    :style="{ '--slot': n - 1 }"
-                  />
-                </div>
-              </div>
-
-              <div v-if="phase === 'ten_shuffle'" class="shuffle-stage shuffle-stage--ten" aria-live="polite">
-                <p class="shuffle-title">十连洗牌</p>
-                <p class="shuffle-sub">十张奖券叠在一起疯狂洗牌…</p>
-                <div class="shuffle-deck shuffle-deck--ten">
-                  <div
-                    v-for="n in 10"
-                    :key="n"
-                    class="shuffle-stack-card shuffle-stack-card--small"
-                    :style="{ '--slot': n - 1 }"
-                  />
-                </div>
+                </button>
               </div>
             </div>
-
-            <div v-else class="lottery-draw-phase-placeholder" />
-          </div>
-
-          <div class="lottery-draw-rules-block" aria-label="抽奖说明">
-            <ul class="lottery-inline-foot-list lottery-draw-middle-only">
-              <li v-for="(line, i) in drawMiddleHints" :key="i">{{ line }}</li>
-            </ul>
           </div>
         </section>
 
@@ -185,118 +190,35 @@
             <span class="lottery-cost-name">神秘大奖硬保底</span>
             <span class="lottery-cost-val lottery-cost-val--ok">{{ info.hardPityThreshold ?? 50 }} 抽未出必得</span>
           </div>
-          <p v-if="info.description" class="lottery-cost-desc lottery-cost-desc--push">{{ info.description }}</p>
+          <ul class="lottery-cost-rules">
+            <li v-for="(line, i) in costRuleHints" :key="i">{{ line }}</li>
+          </ul>
         </aside>
       </div>
 
-      <el-card v-if="phase === 'single_pick'" class="lottery-stage-card lottery-stage-card--enter" shadow="never">
-        <p class="lottery-stage-hint lottery-stage-hint--icon">
-          <el-icon class="lottery-stage-hint-icon" :size="18"><MagicStick /></el-icon>
-          <span>选一张卡牌翻开揭晓</span>
-        </p>
-        <div class="cards-row">
-          <button
-            v-for="idx in 5"
-            :key="idx"
-            type="button"
-            class="flip-scene"
-            :class="{
-              flipped: pickedIdx === idx - 1 && singleRevealed,
-              picked: pickedIdx === idx - 1,
-              dim: singleRevealed && pickedIdx !== idx - 1,
-            }"
-            :disabled="singleRevealed"
-            @click="revealSingle(idx - 1)"
-          >
-            <div class="flip-inner">
-              <div class="face back">
-                <span class="glyph">{{ idx }}</span>
-              </div>
-              <div class="face front">
-                <template v-if="pickedIdx === idx - 1 && singleOutcome">
-                  <span class="win-title">{{ formatOutcome(singleOutcome) }}</span>
-                  <span v-if="singleOutcome.grantPoints > 0" class="win-points"
-                    >+{{ singleOutcome.grantPoints }} 积分</span
-                  >
-                </template>
-              </div>
-            </div>
-          </button>
-        </div>
-        <div v-if="singleRevealed" class="stage-footer">
-          <el-button type="primary" link class="lottery-stage-flat-btn" @click="resetRound">再来一轮</el-button>
-        </div>
-      </el-card>
-
-      <el-card v-if="phase === 'ten_show'" class="lottery-stage-card lottery-stage-card--enter" shadow="never">
-        <p class="lottery-stage-hint lottery-stage-hint--icon">
-          <el-icon class="lottery-stage-hint-icon" :size="18"><Present /></el-icon>
-          <span>十连结果如下</span>
-        </p>
-        <div class="cards-grid ten">
-          <div
-            v-for="(item, i) in tenResults"
-            :key="i"
-            class="flip-scene small"
-            :class="{ flipped: tenFlipped[i], jackpot: item.jackpot }"
-          >
-            <div class="flip-inner">
-              <div class="face back"><span class="glyph">{{ i + 1 }}</span></div>
-              <div class="face front ten-front">
-                <span class="win-title small">{{ formatOutcome(item) }}</span>
-                <span v-if="item.grantPoints > 0" class="win-points small">+{{ item.grantPoints }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="stage-footer">
-          <el-button type="primary" link class="lottery-stage-flat-btn" @click="resetRound">收起</el-button>
-        </div>
-      </el-card>
-
       <div class="lottery-bottom-grid">
-        <div class="lottery-pool-column">
-          <div class="lottery-glass-dark lottery-pool-section">
-            <div class="lottery-section-title">
-              <el-icon :size="18"><Present /></el-icon>
-              奖池一览
-            </div>
-            <div class="lottery-pool-grid">
-              <div
-                v-for="(p, i) in info.prizes || []"
-                :key="i"
-                class="lottery-pool-chip"
-                :class="{ jackpot: p.jackpot }"
-              >
-                <span class="chip-name">{{ p.name }}</span>
-                <span class="chip-weight">{{ formatPrizePercent(p) }}</span>
-                <span class="chip-meta" :class="{ scarce: poolStockScarce(p.stockRemaining) }">{{
-                  poolStockHint(p.stockRemaining)
-                }}</span>
-              </div>
-            </div>
+        <div class="lottery-glass lottery-pool-section">
+          <div class="lottery-section-title">
+            <el-icon :size="18"><Present /></el-icon>
+            奖池一览
           </div>
-          <div class="lottery-glass-dark lottery-surprise-card">
-            <button type="button" class="lottery-surprise-cta" @click="focusSurprisePreview">
-              点我看看
-            </button>
+          <div class="lottery-pool-grid">
             <div
-              ref="surprisePreviewRef"
-              class="lottery-surprise-preview"
-              :class="{ 'lottery-surprise-preview--claimed': info.lotterySurpriseClaimed }"
-              role="button"
-              tabindex="0"
-              @click="openSurprisePhase1"
-              @keydown.enter.prevent="openSurprisePhase1"
+              v-for="(p, i) in info.prizes || []"
+              :key="i"
+              class="lottery-pool-chip"
+              :class="{ jackpot: p.jackpot }"
             >
-              <img :src="surpriseTeaserImg" alt="" @error="onSurpriseImgError" />
-              <div class="lottery-surprise-mask" />
-              <span class="lottery-surprise-hint">限领一次 · 点图领取积分</span>
+              <span class="chip-name">{{ p.name }}</span>
+              <span class="chip-weight">{{ formatPrizePercent(p) }}</span>
+              <span class="chip-meta" :class="{ scarce: poolStockScarce(p.stockRemaining) }">{{
+                poolStockHint(p.stockRemaining)
+              }}</span>
             </div>
           </div>
         </div>
 
-        <div class="lottery-glass-dark lottery-chart-section">
+        <div class="lottery-glass lottery-chart-section">
           <div class="lottery-chart-block">
             <div class="lottery-chart-head">
               <el-icon :size="17"><TrendCharts /></el-icon>
@@ -317,6 +239,27 @@
               <p class="lottery-chart-hint">统计全站玩家在当前活动下的中奖次数。</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="lottery-surprise-row lottery-glass">
+        <button type="button" class="lottery-surprise-cta" @click="focusSurprisePreview">
+          点我看看
+        </button>
+        <div
+          ref="surprisePreviewRef"
+          class="lottery-surprise-preview"
+          :class="{ 'lottery-surprise-preview--claimed': info.lotterySurpriseClaimed }"
+          role="button"
+          tabindex="0"
+          @click="openSurprisePhase1"
+          @keydown.enter.prevent="openSurprisePhase1"
+        >
+          <img :src="surpriseTeaserImg" alt="" @error="onSurpriseImgError" />
+          <div class="lottery-surprise-mask" />
+          <span class="lottery-surprise-hint">
+            {{ info.lotterySurpriseClaimed ? '已领取' : '限领一次 · 点图领取积分' }}
+          </span>
         </div>
       </div>
       </div>
@@ -343,7 +286,6 @@
           <el-table-column prop="kind" label="抽奖类型" width="88" />
           <el-table-column prop="prizeName" label="奖品" min-width="140" show-overflow-tooltip />
         </el-table>
-        <p class="lottery-history-footnote">以上为服务端返回的近期抽奖摘要（不含具体时间）；完整明细请以站内通知为准。</p>
       </div>
       <div v-else class="lottery-history-empty">
         <img class="lottery-history-empty-icon" :src="recordIconUrl" alt="" />
@@ -354,7 +296,7 @@
 
     <el-dialog
       v-model="activitySwitchVisible"
-      title="切换活动"
+      title="全部活动"
       width="min(400px, 92vw)"
       class="lottery-dialog lottery-dialog--activity"
       align-center
@@ -450,7 +392,7 @@ import {
   TrendCharts,
   InfoFilled,
   WarningFilled,
-  MagicStick,
+  ArrowDown,
   Coin,
   Grid,
 } from '@element-plus/icons-vue'
@@ -465,14 +407,14 @@ import {
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import EChart from '@/components/common/EChart.vue'
 import recordIconUrl from '@/assets/svg/抽奖记录.svg?url'
-import switchActivityIconUrl from '@/assets/svg/修改.svg?url'
 import { clientOssUrl } from '@/utils/clientOss'
 
-const bgUrl = clientOssUrl('goods.webp')
+const VISIBLE_ACTIVITY_LIMIT = 3
+
 const surpriseTeaserImg = clientOssUrl('抽奖惊喜.webp')
 const surpriseRewardImg = clientOssUrl('抽奖.webp')
 
-const CHART_PALETTE = ['#6b7280', '#34d399', '#a78bfa', '#f59e0b', '#f97316', '#ec4899', '#60a5fa', '#93c5fd']
+const CHART_PALETTE = ['#9ca3af', '#34d399', '#a78bfa', '#f59e0b', '#f97316', '#ec4899', '#60a5fa', '#d4537e']
 
 /** 与后端 Constant.POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT 一致（展示文案） */
 const PAGE_SURPRISE_POINTS = 200
@@ -481,16 +423,19 @@ const loading = ref(true)
 const busy = ref(false)
 const surpriseClaimBusy = ref(false)
 
-/** 中间卡片：仅保留与右侧「消耗说明」数字表不重复的文案 */
-const drawMiddleHints = [
-  '积分奖即时到账，其它奖品以站内通知为准。',
-  '命中概率随库存变化；售罄档位会自动剔除并重算。',
-]
+const activityCoverFallback = surpriseTeaserImg
+
+const costRuleHints = computed(() => [
+  '单次消耗积分参与抽奖',
+  '积分奖即时到账，其它奖品以站内通知为准',
+  '概率按活动权重动态计算（售罄档位自动剔除并重算）',
+  '十连 Soft：至少 1 件稀有档（大奖/周边/VIP）',
+  `累计 ${info.hardPityThreshold ?? 50} 抽未出神秘大奖则下一次必出神秘大奖档`,
+])
 
 const activityList = ref([])
 const selectedActivityId = ref(null)
 const activitySwitchVisible = ref(false)
-const activityCoverFallback = bgUrl
 
 const info = reactive({
   activityId: null,
@@ -571,12 +516,12 @@ function focusSurprisePreview() {
 
 function onSurpriseImgError(e) {
   const el = e?.target
-  if (el && el.src !== bgUrl) {
-    el.src = bgUrl
+  if (el && el.src !== surpriseTeaserImg) {
+    el.src = surpriseTeaserImg
   }
 }
 
-/** idle | single_shuffle | single_pick | ten_shuffle | ten_show */
+/** idle | single_shuffle | single_result | ten_shuffle | ten_result */
 const phase = ref('idle')
 
 const SHUFFLE_MIN_MS = 1000
@@ -604,17 +549,22 @@ const hardPityRemaining = computed(() => {
   return Math.max(0, th - cur)
 })
 
-const currentActivityTitle = computed(() => {
-  const t = info.title?.trim()
-  if (t) return t
-  const act = activityList.value.find((a) => a.id === selectedActivityId.value)
-  return act?.title?.trim() || ''
+const sidebarActivities = computed(() => {
+  const list = activityList.value
+  if (list.length <= VISIBLE_ACTIVITY_LIMIT) return list
+  const selId = selectedActivityId.value
+  const selected = list.find((a) => a.id === selId)
+  const rest = list.filter((a) => a.id !== selId)
+  const merged = selected ? [selected, ...rest] : list
+  return merged.slice(0, VISIBLE_ACTIVITY_LIMIT)
 })
+
+const hasMoreActivities = computed(() => activityList.value.length > VISIBLE_ACTIVITY_LIMIT)
 
 const canSwitchActivity = computed(() => phase.value === 'idle' && !busy.value)
 
 function openActivitySwitch() {
-  if (!canSwitchActivity.value || activityList.value.length <= 1) return
+  if (!canSwitchActivity.value || activityList.value.length <= VISIBLE_ACTIVITY_LIMIT) return
   activitySwitchVisible.value = true
 }
 
@@ -648,14 +598,6 @@ async function onSelectActivityFromDialog(id) {
   activitySwitchVisible.value = false
 }
 
-/** 中部大卡「抽奖中……」：单抽整段 + 十连洗牌与结果展示，直至再来一轮/收起 */
-const showMiddleLotteryDrawingOverlay = computed(
-  () =>
-    phase.value === 'single_pick' ||
-    phase.value === 'ten_shuffle' ||
-    phase.value === 'ten_show',
-)
-
 function formatPrizePercent(p) {
   const prizes = info.prizes || []
   const total = prizes.reduce((s, x) => s + (x.weight ?? 0), 0)
@@ -681,17 +623,17 @@ const pieOption = computed(() => {
           total > 0 ? ((((params.value ?? 0) / total) * 100).toFixed(2)) : '0.00'
         return `${params.name}<br/>概率: ${pct}%`
       },
-      backgroundColor: 'rgba(17,24,39,0.92)',
-      borderColor: 'rgba(255,255,255,0.12)',
-      textStyle: { color: '#e5e7eb', fontSize: 12 },
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: 'rgba(0,0,0,0.08)',
+      textStyle: { color: '#4e5969', fontSize: 12 },
     },
     series: [
       {
         type: 'pie',
         radius: ['34%', '62%'],
         avoidLabelOverlap: true,
-        label: { color: '#e5e7eb', fontSize: 11 },
-        labelLine: { lineStyle: { color: 'rgba(255,255,255,0.35)' } },
+        label: { color: '#4e5969', fontSize: 11 },
+        labelLine: { lineStyle: { color: 'rgba(0,0,0,0.15)' } },
         data,
       },
     ],
@@ -705,21 +647,21 @@ const barOption = computed(() => {
   return {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(17,24,39,0.92)',
-      borderColor: 'rgba(255,255,255,0.12)',
-      textStyle: { color: '#e5e7eb', fontSize: 12 },
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: 'rgba(0,0,0,0.08)',
+      textStyle: { color: '#4e5969', fontSize: 12 },
     },
     grid: { left: 10, right: 10, top: 22, bottom: names.some((n) => n.length > 5) ? 40 : 28 },
     xAxis: {
       type: 'category',
       data: names.length ? names : ['暂无数据'],
-      axisLabel: { color: '#9ca3af', fontSize: 10, rotate: names.length > 6 ? 28 : 0 },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.15)' } },
+      axisLabel: { color: '#86909c', fontSize: 10, rotate: names.length > 6 ? 28 : 0 },
+      axisLine: { lineStyle: { color: 'rgba(0,0,0,0.12)' } },
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#9ca3af', fontSize: 10 },
-      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+      axisLabel: { color: '#86909c', fontSize: 10 },
+      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.06)' } },
     },
     series: [
       {
@@ -727,7 +669,7 @@ const barOption = computed(() => {
         data: names.length ? vals : [0],
         barMaxWidth: 28,
         itemStyle: {
-          color: '#4a90d9',
+          color: '#d4537e',
           borderRadius: [4, 4, 0, 0],
         },
       },
@@ -736,10 +678,7 @@ const barOption = computed(() => {
 })
 
 const singleOutcome = ref(null)
-const pickedIdx = ref(null)
-const singleRevealed = ref(false)
 const tenResults = ref([])
-const tenFlipped = ref([])
 const jackpotOverlay = ref(false)
 const jackpotOverlayText = ref('')
 
@@ -787,10 +726,7 @@ async function loadInfo(opts = {}) {
 function resetRound() {
   phase.value = 'idle'
   singleOutcome.value = null
-  pickedIdx.value = null
-  singleRevealed.value = false
   tenResults.value = []
-  tenFlipped.value = []
   loadInfo({ silent: true })
 }
 
@@ -822,8 +758,6 @@ async function onSingle() {
   busy.value = true
   phase.value = 'single_shuffle'
   singleOutcome.value = null
-  pickedIdx.value = null
-  singleRevealed.value = false
   try {
     const [res] = await Promise.all([
       lotteryDraw(1, selectedActivityId.value),
@@ -835,23 +769,17 @@ async function onSingle() {
     }
     singleOutcome.value = res.data.results[0]
     await syncAfterDraw(res)
-    phase.value = 'single_pick'
+    phase.value = 'single_result'
+    const text = formatOutcome(singleOutcome.value)
+    if (singleOutcome.value?.rewardDetail || singleOutcome.value?.grantPoints > 0) {
+      ElMessage.success(`恭喜获得：${text}`)
+    }
+    if (singleOutcome.value?.jackpot) {
+      jackpotOverlayText.value = text
+      jackpotOverlay.value = true
+    }
   } finally {
     busy.value = false
-  }
-}
-
-function revealSingle(idx) {
-  if (singleRevealed.value) return
-  pickedIdx.value = idx
-  singleRevealed.value = true
-  const text = formatOutcome(singleOutcome.value)
-  if (singleOutcome.value?.rewardDetail || singleOutcome.value?.jackpot) {
-    ElMessage.success(`恭喜获得：${text}`)
-  }
-  if (singleOutcome.value?.jackpot) {
-    jackpotOverlayText.value = text
-    jackpotOverlay.value = true
   }
 }
 
@@ -864,11 +792,10 @@ async function onTen() {
   busy.value = true
   phase.value = 'ten_shuffle'
   tenResults.value = []
-  tenFlipped.value = []
   try {
     const [res] = await Promise.all([
       lotteryDraw(10, selectedActivityId.value),
-      delay(SHUFFLE_MIN_MS + 400),
+      delay(SHUFFLE_MIN_MS + 500),
     ])
     if (res.code !== 0 || !res.data?.results?.length) {
       phase.value = 'idle'
@@ -876,31 +803,11 @@ async function onTen() {
     }
     tenResults.value = res.data.results
     await syncAfterDraw(res)
-    phase.value = 'ten_show'
-    tenFlipped.value = tenResults.value.map(() => false)
-    await nextFlipTen()
-    setTimeout(() => maybeJackpot(res.data.results), 400)
+    phase.value = 'ten_result'
+    setTimeout(() => maybeJackpot(res.data.results), 300)
   } finally {
     busy.value = false
   }
-}
-
-function nextFlipTen() {
-  return new Promise((resolve) => {
-    let i = 0
-    const tick = () => {
-      if (i >= tenResults.value.length) {
-        resolve()
-        return
-      }
-      const next = [...tenFlipped.value]
-      next[i] = true
-      tenFlipped.value = next
-      i += 1
-      setTimeout(tick, 120)
-    }
-    tick()
-  })
 }
 
 onMounted(async () => {
