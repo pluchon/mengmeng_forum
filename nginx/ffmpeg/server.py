@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from functools import wraps
 
 from flask import Flask, Response, abort, jsonify, request
 
@@ -15,6 +16,69 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 _compress_lock = threading.Lock()
+
+INTERNAL_KEY = (os.environ.get("FFMPEG_INTERNAL_KEY") or os.environ.get("FORUM_FFMPEG_INTERNAL_KEY") or "").strip()
+REQUIRE_INTERNAL_KEY = os.environ.get("FFMPEG_REQUIRE_INTERNAL_KEY", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _require_internal_key() -> bool:
+    if REQUIRE_INTERNAL_KEY:
+        return True
+    return _env_truthy("FFMPEG_REQUIRE_INTERNAL_KEY") or _env_truthy("AI_REQUIRE_INTERNAL_KEY")
+
+
+def _check_internal_key() -> None:
+    if not _require_internal_key() and not INTERNAL_KEY:
+        return
+    if _require_internal_key() and not INTERNAL_KEY:
+        abort(503, "ffmpeg internal key not configured")
+    got = (request.headers.get("X-Internal-Key") or "").strip()
+    if got != INTERNAL_KEY:
+        abort(403, "invalid X-Internal-Key")
+
+
+def _internal_protected(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        _check_internal_key()
+        return view(*args, **kwargs)
+
+    return wrapper
+
+
+def _allowed_url_prefixes() -> list[str]:
+    prefixes: list[str] = []
+    oss_prefix = (os.environ.get("OSS_URL_PREFIX") or "").strip().rstrip("/")
+    if oss_prefix:
+        prefixes.append(oss_prefix.lower())
+    extra = (os.environ.get("FFMPEG_ALLOWED_URL_PREFIXES") or "").strip()
+    for item in extra.split(","):
+        p = item.strip().rstrip("/").lower()
+        if p:
+            prefixes.append(p)
+    return prefixes
+
+
+def _url_allowed(url: str) -> bool:
+    if _env_truthy("FFMPEG_ALLOW_ANY_URL"):
+        return True
+    raw = (url or "").strip()
+    if not raw.lower().startswith(("http://", "https://")):
+        return False
+    lowered = raw.lower()
+    prefixes = _allowed_url_prefixes()
+    if not prefixes:
+        return False
+    return any(lowered.startswith(p) for p in prefixes)
 
 
 def _run(cmd: list[str], *, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
@@ -123,6 +187,7 @@ def _transcode(in_path: str, out_path: str, *, mode: str, probe: dict) -> None:
 
 
 @app.post("/compress")
+@_internal_protected
 def compress():
     if not request.files or "file" not in request.files:
         abort(400, "missing file")
@@ -206,12 +271,15 @@ def _probe_url(url: str) -> dict:
 
 
 @app.post("/extract-audit-frames")
+@_internal_protected
 def extract_audit_frames():
     """从视频 URL 抽取若干 JPEG 帧，供 ai-server 视频审核兜底（OSS 私有桶需传签名 URL）。"""
     data = request.get_json(force=True, silent=True) or {}
     url = (data.get("url") or "").strip()
     if not url:
         abort(400, "missing url")
+    if not _url_allowed(url):
+        abort(403, "url not allowed")
     try:
         count = int(data.get("count") or 4)
     except (TypeError, ValueError):

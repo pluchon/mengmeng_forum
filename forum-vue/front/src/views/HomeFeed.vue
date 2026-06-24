@@ -75,7 +75,7 @@
       </div>
 
       <div
-        v-else-if="feedList.length"
+        v-show="!loading && feedList.length"
         ref="masonryRef"
         class="home-masonry"
       >
@@ -90,10 +90,10 @@
             class="home-masonry-item"
           >
             <el-card
-              class="note-card note-card--masonry animate-fade-up"
+              class="note-card note-card--masonry"
               :body-style="{ padding: '0px' }"
               shadow="hover"
-              @click="$router.push(`/article/${entry.article.id}`)"
+              @click="openArticle(entry, $event)"
             >
               <div class="note-cover note-cover--fluid">
                 <img
@@ -127,6 +127,7 @@
                       :vip-expire-at="entry.user?.vipExpireAt"
                     />
                     <span class="nickname">{{ entry.user?.nickname }}</span>
+                    <FollowingBadge :from-following="!!entry.fromFollowing" />
                   </div>
                   <div class="likes">
                     <LikeCountIcon />
@@ -161,18 +162,28 @@
       />
     </main>
   </div>
+  <router-view />
 </template>
 
 <script setup>
 defineOptions({ name: 'HomeFeed' })
 
-import { computed } from 'vue'
+import { computed, onActivated, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import FollowingBadge from '@/components/common/FollowingBadge.vue'
+import { useBoardStore } from '@/stores/board'
 import { useHomeShellContext } from '@/composables/useHomeShell'
 import { useHomeMasonry } from '@/composables/useHomeMasonry'
+import { restoreFeedScroll } from '@/utils/feedScrollRestore'
+import { captureFeedCardOrigin, captureFeedOpenFrom } from '@/utils/feedNavigation'
+
+const route = useRoute()
+const router = useRouter()
+const boardStore = useBoardStore()
 
 const {
   CircleCheck,
@@ -184,6 +195,7 @@ const {
   currentBoardId,
   defaultAvatar,
   dismissCheckinHomeStrip,
+  ensureHomeFeedLoaded,
   fetchArticles,
   getRandomPastel,
   hotFeedList,
@@ -203,6 +215,24 @@ const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleLi
 const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
   columnWidth: 220,
   gap: 16,
+})
+
+function openArticle(entry, event) {
+  const id = entry?.article?.id
+  if (!id) return
+  const card = event?.currentTarget?.closest?.('.home-masonry-item') || event?.currentTarget
+  if (card) captureFeedCardOrigin(id, card)
+  captureFeedOpenFrom(route.path)
+  router.push(`/article/${id}`)
+}
+
+onMounted(async () => {
+  if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
+  await ensureHomeFeedLoaded()
+})
+
+onActivated(() => {
+  restoreFeedScroll()
 })
 </script>
 

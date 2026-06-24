@@ -113,6 +113,8 @@ services:
     restart: unless-stopped
     ports:
       - "${FFMPEG_HOST_PORT:-8099}:8099"
+    environment:
+      FFMPEG_REQUIRE_INTERNAL_KEY: "0"
     networks:
       - forum-dev-net
 

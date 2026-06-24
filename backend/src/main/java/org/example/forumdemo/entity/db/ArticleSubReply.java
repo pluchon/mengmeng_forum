@@ -40,6 +40,9 @@ public class ArticleSubReply {
     @Schema(description = "楼中楼回复时IP属地快照")
     private String ipRegion;
 
+    @Schema(description = "点赞数", example = "0")
+    private Integer likeCount;
+
     @JsonIgnore
     @Schema(description = "状态: 0-正常, 1-禁用")
     private Byte state;

@@ -16,7 +16,10 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ArticleReplyListResponse {
-    //前端需要显示帖子回复信息以及贴子发布者的信息
     private ArticleReply articleReply;
     private UserBriefVO user;
+    // 楼中楼回复数
+    private Integer subReplyCount;
+    // 当前登录用户是否已点赞
+    private Boolean liked;
 }

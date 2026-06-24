@@ -30,6 +30,7 @@ class TavilySearchClient:
         max_results: int = 5,
         search_depth: str = "basic",
         include_answer: bool = True,
+        include_images: bool = False,
     ) -> dict[str, Any]:
         if not self.is_configured():
             raise ValueError("TAVILY_API_KEY 未配置")
@@ -38,6 +39,7 @@ class TavilySearchClient:
             "max_results": max(1, min(20, max_results)),
             "search_depth": search_depth or "basic",
             "include_answer": include_answer,
+            "include_images": include_images,
         }
         r = requests.post(
             _SEARCH_URL,
@@ -56,20 +58,39 @@ class TavilySearchClient:
             raise ValueError("Tavily 响应格式异常")
         return data
 
-    def search_for_context(
+    @staticmethod
+    def _normalize_image_url(raw: Any) -> str:
+        url = str(raw or "").strip()
+        if not url.startswith(("https://", "http://")):
+            return ""
+        if len(url) > 2048:
+            return ""
+        return url
+
+    def pick_illustration_image(self, data: dict[str, Any]) -> str:
+        """从 Tavily 响应中选取一张可用于说明的配图（仅一张）."""
+        images = data.get("images")
+        if isinstance(images, list):
+            for item in images:
+                url = self._normalize_image_url(item)
+                if url:
+                    return url
+        results = data.get("results") or []
+        if isinstance(results, list):
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                url = self._normalize_image_url(item.get("image"))
+                if url:
+                    return url
+        return ""
+
+    def format_search_data(
         self,
-        query: str,
+        data: dict[str, Any],
         *,
         max_results: int = 5,
-        search_depth: str = "basic",
     ) -> str:
-        """格式化为可注入 LLM / 生图 prompt 的文本."""
-        data = self.search(
-            query,
-            max_results=max_results,
-            search_depth=search_depth,
-            include_answer=True,
-        )
         lines: list[str] = []
         answer = data.get("answer")
         if isinstance(answer, str) and answer.strip():
@@ -93,3 +114,40 @@ class TavilySearchClient:
         if not lines:
             return "未找到相关网页结果。"
         return "\n".join(lines)
+
+    def search_for_context(
+        self,
+        query: str,
+        *,
+        max_results: int = 5,
+        search_depth: str = "basic",
+        include_images: bool = False,
+    ) -> str:
+        """格式化为可注入 LLM / 生图 prompt 的文本."""
+        data = self.search(
+            query,
+            max_results=max_results,
+            search_depth=search_depth,
+            include_answer=True,
+            include_images=include_images,
+        )
+        return self.format_search_data(data, max_results=max_results)
+
+    def search_for_chat(
+        self,
+        query: str,
+        *,
+        max_results: int = 5,
+        search_depth: str = "basic",
+    ) -> tuple[str, str]:
+        """看板娘联网：返回 (文本上下文, 配图 URL 或空)."""
+        data = self.search(
+            query,
+            max_results=max_results,
+            search_depth=search_depth,
+            include_answer=True,
+            include_images=True,
+        )
+        text = self.format_search_data(data, max_results=max_results)
+        image_url = self.pick_illustration_image(data)
+        return text, image_url

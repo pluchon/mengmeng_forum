@@ -7,8 +7,7 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.utils.JWTUtils;
-import org.example.forumdemo.common.utils.MD5Utils;
+import org.example.forumdemo.common.utils.PasswordUtils;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.UUIDUtils;
@@ -65,6 +64,12 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private AiHubService aiHubService;
 
+    @Autowired
+    private AuthTokenService authTokenService;
+
+    @Autowired
+    private JwtTokenVersionService jwtTokenVersionService;
+
     // ============================================================
     // 注册，使用事务保证原子性
     // ============================================================
@@ -96,7 +101,7 @@ public class UserServiceImpl implements UserService {
         register.setNickname(nickname);
         String salt = UUIDUtils.UUID32();
         register.setSalt(salt);
-        register.setPassword(MD5Utils.md5SaltHigh(password, salt));
+        register.setPassword(PasswordUtils.encode(password));
         // 我们敏感信息都有两个字段，一个是可逆的密文，一个是哈希。
         // 可逆的密文是为了还原数据的，但是每一次生成都不确定，无法建立索引
         // 不可逆的哈希密文每一次都是固定的，因此便于建立索引
@@ -198,13 +203,20 @@ public class UserServiceImpl implements UserService {
             user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                     .eq(User::getId, user.getId()).ne(User::getDeleteState, 1));
         }
-        if (!MD5Utils.md5SaltHigh(password, user.getSalt()).equals(user.getPassword())) {
+        if (!PasswordUtils.matches(password, user.getPassword(), user.getSalt())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_LOGIN));
         }
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(Constant.JWT_USER_ID, user.getId());
-        claims.put(Constant.JWT_USER_NAME, user.getUsername());
-        user.setToken(JWTUtils.genJwt(claims));
+        authTokenService.assertCanAuthenticate(user);
+        if (!PasswordUtils.isBcryptHash(user.getPassword())) {
+            String bcrypt = PasswordUtils.encode(password);
+            userMapper.update(null, new LambdaUpdateWrapper<User>()
+                    .eq(User::getId, user.getId())
+                    .set(User::getPassword, bcrypt)
+                    .set(User::getSalt, ""));
+            user.setPassword(bcrypt);
+            user.setSalt("");
+        }
+        user.setToken(authTokenService.issueToken(user));
         log.info("用户 {} 登录校验通过", user.getUsername());
         //用户完整信息存入缓存
         storeRedis(user);
@@ -364,16 +376,16 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        if (!MD5Utils.md5SaltHigh(oldPassword, user.getSalt()).equals(user.getPassword())) {
+        if (!PasswordUtils.matches(oldPassword, user.getPassword(), user.getSalt())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        String newSalt = UUIDUtils.UUID32();
-        String newSecret = MD5Utils.md5SaltHigh(newPassword, newSalt);
+        String newSecret = PasswordUtils.encode(newPassword);
         int updated = userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, userId).set(User::getSalt, newSalt).set(User::getPassword, newSecret));
+                .eq(User::getId, userId).set(User::getSalt, "").set(User::getPassword, newSecret));
         if (updated <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
+        jwtTokenVersionService.bump(userId);
         // 盐值变更必须清缓存，下次读取时重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
         log.info("用户 {} 修改密码成功，缓存已清除", userId);
@@ -417,6 +429,7 @@ public class UserServiceImpl implements UserService {
         map.put("points", user.getPoints() == null ? "0" : String.valueOf(user.getPoints()));
         map.put("mascotModelId", user.getMascotModelId() == null ? "" : String.valueOf(user.getMascotModelId()));
         map.put("state", user.getState() == null ? "0" : String.valueOf(user.getState().intValue()));
+        map.put("ipRegion", nullToEmpty(user.getIpRegion()));
         // 敏感信息（password / salt）不入缓存
         stringRedisTemplate.opsForHash().putAll(redisKey, map);
         // 设置过期时间，防止存在内存中过久，我们一般设置为5分钟
@@ -442,6 +455,11 @@ public class UserServiceImpl implements UserService {
             stringRedisTemplate.delete(redisKey);
             return null;
         }
+        // 旧版缓存结构不含 ipRegion：删除并回源 DB，保证 IP 属地能正常展示
+        if (!map.containsKey("ipRegion")) {
+            stringRedisTemplate.delete(redisKey);
+            return null;
+        }
         User user = new User();
         user.setId(Long.valueOf(map.get("id").toString()));
         user.setUsername(map.get("username").toString());
@@ -464,6 +482,7 @@ public class UserServiceImpl implements UserService {
             user.setMascotModelId(Long.valueOf(mid.trim()));
         }
         user.setState(Byte.valueOf(map.getOrDefault("state", "0").toString()));
+        user.setIpRegion(map.getOrDefault("ipRegion", "").toString());
         return user;
     }
 

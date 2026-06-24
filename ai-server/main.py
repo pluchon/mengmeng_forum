@@ -41,6 +41,10 @@ def main():
     _setup_logging()
     logger = logging.getLogger("main")
 
+    from security.internal_auth import assert_startup_internal_keys
+
+    assert_startup_internal_keys()
+
     # 启动后台审核 worker (daemon=True, 主线程退出时自动结束)
     try:
         audit_worker.start_in_background()

@@ -17,14 +17,14 @@ DROP TABLE IF EXISTS `user`;
 CREATE TABLE `user` (
                         `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户编号, 主键, 自增',
                         `username` varchar(20) NOT NULL COMMENT '用户名, 非空, 唯一',
-                        `password` varchar(32) NOT NULL COMMENT '加密后的密码',
+                        `password` varchar(255) NOT NULL COMMENT 'BCrypt 哈希（约60字符）',
                         `nickname` varchar(50) NOT NULL COMMENT '昵称, 非空',
                         `phone_num` varchar(255) DEFAULT NULL COMMENT '手机号密文',
                         `phone_hash` varchar(64) DEFAULT NULL COMMENT '手机号HMAC，用于等值查询',
                         `email` varchar(255) DEFAULT NULL COMMENT '邮箱密文',
                         `email_hash` varchar(64) DEFAULT NULL COMMENT '邮箱HMAC，用于等值查询',
                         `gender` tinyint NOT NULL DEFAULT 2 COMMENT '0女 1男 2保密, 非空, 默认2',
-                        `salt` varchar(32) NOT NULL COMMENT '为密码加盐, 非空',
+                        `salt` varchar(32) NOT NULL DEFAULT '' COMMENT '历史 MD5 盐；BCrypt 用户为空串',
                         `avatar_url` varchar(255) DEFAULT NULL COMMENT '用户头像URL',
                         `background_url` varchar(500) DEFAULT NULL COMMENT '用户主页背景图URL',
                         `article_count` int NOT NULL DEFAULT 0 COMMENT '发帖数量',
@@ -66,6 +66,20 @@ CREATE TABLE `user_login_log` (
     PRIMARY KEY (`id`),
     KEY `idx_user_login_log_user_time` (`user_id`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户登录日志';
+
+-- ----------------------------
+-- 1d. 用户关注关系表 (user_follow)
+-- ----------------------------
+DROP TABLE IF EXISTS `user_follow`;
+CREATE TABLE `user_follow` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `follower_id` bigint NOT NULL COMMENT '关注者用户ID',
+    `followee_id` bigint NOT NULL COMMENT '被关注者用户ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uix_follower_followee` (`follower_id`, `followee_id`),
+    KEY `idx_followee_id` (`followee_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注关系表';
 
 -- ----------------------------
 -- 1b. 看板娘 Live2D 模型库（用户端仅展示上架；资源由 Vite /live2d-assets 映射至 live2d-master）
@@ -296,6 +310,7 @@ CREATE TABLE `article_sub_reply` (
                                      `reply_user_id` BIGINT NOT NULL COMMENT '被回复的目标用户ID (用于显示 @昵称)',
                                      `content` TEXT NOT NULL COMMENT '回复内容',
                                      `ip_region` varchar(32) DEFAULT NULL COMMENT '楼中楼回复时IP属地快照',
+                                     `like_count` int NOT NULL DEFAULT 0 COMMENT '点赞数',
                                      `state` TINYINT DEFAULT 0 COMMENT '状态: 0-正常, 1-禁用',
                                      `delete_state` TINYINT DEFAULT 0 COMMENT '是否删除: 0-否, 1-是',
                                      `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -307,6 +322,32 @@ CREATE TABLE `article_sub_reply` (
 
 ALTER TABLE `article_sub_reply`
     MODIFY COLUMN `reply_user_id` BIGINT NULL COMMENT '被回复的目标用户ID (用于显示 @昵称)';
+
+-- ----------------------------
+-- 7b. 一级评论点赞记录 (article_reply_like)
+-- ----------------------------
+DROP TABLE IF EXISTS `article_reply_like`;
+CREATE TABLE `article_reply_like` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '点赞用户',
+    `reply_id` bigint NOT NULL COMMENT '一级评论ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '点赞时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uix_user_reply` (`user_id`, `reply_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='一级评论点赞记录';
+
+-- ----------------------------
+-- 7c. 楼中楼回复点赞记录 (article_sub_reply_like)
+-- ----------------------------
+DROP TABLE IF EXISTS `article_sub_reply_like`;
+CREATE TABLE `article_sub_reply_like` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '点赞用户',
+    `sub_reply_id` bigint NOT NULL COMMENT '楼中楼回复ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '点赞时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uix_user_sub_reply` (`user_id`, `sub_reply_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='楼中楼回复点赞记录';
 
 -- ----------------------------
 -- 8. 分类表 (category)
@@ -872,7 +913,7 @@ CREATE TABLE `forum_companion_message` (
     `role` varchar(16) NOT NULL COMMENT 'user|assistant',
     `content` text COMMENT '文本内容',
     `msg_type` varchar(16) NOT NULL DEFAULT 'text' COMMENT 'text|image',
-    `image_url` varchar(1024) DEFAULT NULL COMMENT '生图URL(OSS)',
+    `image_url` varchar(1024) DEFAULT NULL COMMENT '生图URL(OSS)；text消息时可存联网检索配图',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),

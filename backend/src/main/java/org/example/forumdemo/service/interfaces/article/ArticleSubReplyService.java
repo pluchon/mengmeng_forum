@@ -14,5 +14,6 @@ public interface ArticleSubReplyService {
     /**
      * 根据一级回复ID（楼层ID）分页查询楼中楼列表
      */
-    PageResult<ArticleSubReplyListResponse> querySubReplyByReplyId(Long replyId, Integer pageNum, Integer pageSize);
+    PageResult<ArticleSubReplyListResponse> querySubReplyByReplyId(
+            Long replyId, Integer pageNum, Integer pageSize, Long loginUserId);
 }

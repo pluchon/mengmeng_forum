@@ -1,10 +1,11 @@
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer, UserFilled } from '@element-plus/icons-vue'
 import { getGobangRoom, surrenderGobangRoom } from '@/api/game'
 import { getShopMyPacks } from '@/api/shop'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { modelIcon } from '@/constants/aiModels'
 
 let timer = null
@@ -34,12 +35,14 @@ function formatMs(value) {
 
 const route = useRoute()
 const router = useRouter()
+const pointsWalletStore = usePointsWalletStore()
 const roomId = computed(() => String(route.params.roomId || ''))
 const loading = ref(false)
 const surrendering = ref(false)
 const peerStateText = ref('')
 const chatText = ref('')
 const chatMessages = ref([])
+const chatListRef = ref(null)
 const emojiPacks = ref([])
 const clock = ref(Date.now())
 const syncedAt = ref(Date.now())
@@ -65,6 +68,7 @@ const room = reactive({
   moveRemainingMs: 60000,
   spectator: false,
   aiRoom: false,
+  aiThinking: false,
   winningLine: [],
   blackPlayer: null,
   whitePlayer: null,
@@ -88,6 +92,7 @@ const roomSocket = useGameWebSocket(`games/gobang/rooms/${roomId.value}`, {
     }
     if (message.type === 'room_chat' && message.data) {
       chatMessages.value.push(message.data)
+      scrollChatToBottom()
     }
     if (message.type === 'peer_disconnected') {
       peerStateText.value = '对手暂时离线，保留 60 秒重连窗口'
@@ -105,6 +110,11 @@ const boardRows = computed(() => room.board || emptyBoard())
 const isFinished = computed(() => room.roomStatus === 'FINISHED')
 const isSpectator = computed(() => Boolean(room.spectator))
 const isMyTurn = computed(() => !isFinished.value && !isSpectator.value && room.currentTurnUserId === room.thisUserId)
+const isAiThinking = computed(() => {
+  if (!room.aiRoom || isFinished.value || isSpectator.value) return false
+  if (room.aiThinking) return true
+  return !isMyTurn.value && room.roomStatus === 'PLAYING'
+})
 const currentTurnChess = computed(() => {
   if (room.currentTurnUserId === room.blackUserId) return 1
   if (room.currentTurnUserId === room.whiteUserId) return 2
@@ -186,6 +196,7 @@ const boardStatusText = computed(() => {
   if (isFinished.value) return `${winnerText.value} · ${endReasonText(room.endReason)}`
   if (isSpectator.value) return room.currentTurnUserId === room.blackUserId ? '黑方落子' : '白方落子'
   if (isMyTurn.value) return '轮到你落子'
+  if (isAiThinking.value) return 'AI 思考中…'
   return '等待对手落子'
 })
 const finishCountdownText = computed(() => `${finishCountdown.value} 秒后返回五子棋`)
@@ -230,6 +241,17 @@ const emojiImages = computed(() => {
 const visibleEmojiImages = computed(() => emojiImages.value.slice(0, 6))
 const hasMoreEmoji = computed(() => emojiImages.value.length > visibleEmojiImages.value.length)
 
+function scrollChatToBottom() {
+  nextTick(() => {
+    const el = chatListRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+watch(() => chatMessages.value.length, () => {
+  scrollChatToBottom()
+})
+
 function fallbackParticipant(userId, label) {
   return {
     userId,
@@ -239,7 +261,7 @@ function fallbackParticipant(userId, label) {
     vip: false,
     vipTier: 0,
     ai: userId === -1,
-    aiModelName: userId === -1 ? 'deepseek-v4-flash · 本地策略兜底' : '',
+    aiModelName: userId === -1 ? 'deepseek-v4-flash · DeepSeek' : '',
   }
 }
 
@@ -259,6 +281,7 @@ function applyRoomState(data) {
   room.moveRemainingMs = data.moveRemainingMs == null ? room.moveRemainingMs : Number(data.moveRemainingMs)
   room.spectator = Boolean(data.spectator)
   room.aiRoom = Boolean(data.aiRoom)
+  room.aiThinking = Boolean(data.aiThinking)
   room.winningLine = Array.isArray(data.winningLine) ? data.winningLine : []
   room.blackPlayer = data.blackPlayer || null
   room.whitePlayer = data.whitePlayer || null
@@ -268,6 +291,7 @@ function applyRoomState(data) {
   room.roomOnlineCount = Number(data.roomOnlineCount) || 0
   syncedAt.value = Date.now()
   if (room.roomStatus === 'FINISHED') {
+    void pointsWalletStore.refresh()
     startFinishRedirect()
   }
 }
@@ -289,6 +313,7 @@ function applyMove(move) {
     room.winnerUserId = move.winnerUserId
     room.endReason = move.endReason || 'FIVE'
     room.winningLine = Array.isArray(move.winningLine) ? move.winningLine : []
+    void pointsWalletStore.refresh()
     startFinishRedirect()
   }
 }

@@ -33,6 +33,7 @@ import { pickThinkingPhrase, startThinkingRotation } from '@/utils/mascotThinkin
 import { pickMascotIdlePhrase } from '@/utils/mascotIdleTips'
 import { formatAiUsageLine, usageStatsFromApi } from '@/utils/aiUsageDisplay'
 import { marked } from 'marked'
+import { sanitizeHtml } from '@/utils/security'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -45,14 +46,77 @@ function escapeHtml(s) {
 }
 
 /** 看板娘 AI 回复：Markdown → HTML（表格、列表、加粗等） */
-function renderMascotMarkdown(content) {
-  const raw = (content || '').trim()
+function renderMascotMarkdown(content, stripInlineImages = false) {
+  let raw = (content || '').trim()
   if (!raw) return ''
+  if (stripInlineImages) {
+    raw = raw.replace(/!\[[^\]]*]\([^)]+\)/g, '').trim()
+  }
   try {
-    return marked.parse(raw, { async: false })
+    return sanitizeHtml(marked.parse(raw, { async: false }))
   } catch {
     return `<p>${escapeHtml(raw)}</p>`
   }
+}
+
+const MASCOT_RELATED_MIN_SCORE = 0.42
+const MASCOT_RELATED_TOP_MIN = 0.46
+const MASCOT_RELATED_RELATIVE_TO_TOP = 0.93
+const MASCOT_RELATED_SCORE_GAP = 0.055
+const MASCOT_RELATED_HIGH_BYPASS = 0.52
+const MASCOT_RELATED_MAX = 5
+
+function tokenizeMascotQuery(query) {
+  const parts = String(query || '').trim().split(/[\s,，、；;|/\\]+/)
+  const out = []
+  for (const p of parts) {
+    const t = p.trim()
+    if (t.length < 2 || out.includes(t)) continue
+    out.push(t)
+    if (out.length >= 8) break
+  }
+  return out
+}
+
+function passesMascotTitleGate(query, title, score) {
+  if (score >= MASCOT_RELATED_HIGH_BYPASS) return true
+  const t = String(title || '').trim()
+  if (!t) return false
+  const tokens = tokenizeMascotQuery(query)
+  if (!tokens.length) return score >= MASCOT_RELATED_TOP_MIN
+  const lower = t.toLowerCase()
+  return tokens.some((tok) => lower.includes(tok.toLowerCase()))
+}
+
+function filterRelatedArticles(list, query = '') {
+  if (!Array.isArray(list) || !list.length) return []
+  const eligible = list
+    .map((a) => ({
+      ...a,
+      score: Number(a.score) || 0,
+    }))
+    .filter((a) => a.score >= MASCOT_RELATED_MIN_SCORE)
+    .sort((a, b) => b.score - a.score)
+  if (!eligible.length) return []
+  const top = eligible[0].score
+  if (top < MASCOT_RELATED_TOP_MIN) return []
+  const relativeFloor = Math.max(MASCOT_RELATED_MIN_SCORE, top * MASCOT_RELATED_RELATIVE_TO_TOP)
+  const out = []
+  let prevScore = -1
+  for (const row of eligible) {
+    if (out.length >= MASCOT_RELATED_MAX) break
+    if (row.score < relativeFloor) break
+    if (!passesMascotTitleGate(query, row.title, row.score)) continue
+    if (prevScore >= 0 && prevScore - row.score > MASCOT_RELATED_SCORE_GAP) break
+    prevScore = row.score
+    out.push(row)
+  }
+  return out
+}
+
+function isSafeMascotImageUrl(url) {
+  const s = String(url || '').trim()
+  return s.startsWith('https://') && s.length <= 2048
 }
 
 const companionXiaomai = clientOssUrl('xiaomai.webp')
@@ -166,6 +230,38 @@ export function useMascotDock() {
   let chatStreamAbort = null
   let stopThinkingRotation = null
   let idleTipsTimer = null
+  let stageTipTimer = null
+  const stageTipText = ref('')
+
+  function clearStageCloudTip() {
+    if (stageTipTimer) {
+      clearTimeout(stageTipTimer)
+      stageTipTimer = null
+    }
+    stageTipText.value = ''
+    try {
+      oml2d.value?.tipsMessage?.('', 0, 0)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function showStageCloudTip(text, durationMs = 3000) {
+    const msg = String(text || '').trim()
+    if (!msg) {
+      clearStageCloudTip()
+      return
+    }
+    if (assistantOpen.value || stageUseFallback.value) return
+    clearStageCloudTip()
+    stageTipText.value = msg
+    if (durationMs > 0) {
+      stageTipTimer = setTimeout(() => {
+        stageTipText.value = ''
+        stageTipTimer = null
+      }, durationMs)
+    }
+  }
 
   function stopMascotIdleTips() {
     if (idleTipsTimer) {
@@ -178,13 +274,7 @@ export function useMascotDock() {
     stopMascotIdleTips()
     const show = () => {
       if (assistantOpen.value || stageUseFallback.value) return
-      const inst = oml2d.value
-      if (!inst?.tipsMessage) return
-      try {
-        inst.tipsMessage(pickMascotIdlePhrase(), 4200, 0)
-      } catch {
-        /* ignore */
-      }
+      showStageCloudTip(pickMascotIdlePhrase(), 4200)
     }
     setTimeout(show, 4000)
     idleTipsTimer = setInterval(show, 26000 + Math.floor(Math.random() * 14000))
@@ -451,13 +541,26 @@ export function useMascotDock() {
   }
   
   function mapVoToMessages(rows) {
-    return (rows || []).map((m) => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content || '',
-      type: m.type === 'image' ? 'image' : 'text',
-      url: m.url || '',
-      at: m.at ? new Date(m.at).getTime() : Date.now(),
-    }))
+    return (rows || []).map((m) => {
+      const searchImageUrl = m.searchImageUrl || ''
+      return {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content || '',
+        type: m.type === 'image' ? 'image' : 'text',
+        url: m.url || '',
+        searchImageUrl: isSafeMascotImageUrl(searchImageUrl) ? searchImageUrl : '',
+        stripInlineImages: isSafeMascotImageUrl(searchImageUrl),
+        at: m.at ? new Date(m.at).getTime() : Date.now(),
+      }
+    })
+  }
+
+  function isLatestRegeneratableAssistant(index) {
+    if (loading.value) return false
+    const lastIdx = messages.value.length - 1
+    if (index !== lastIdx) return false
+    const m = messages.value[index]
+    return m?.role === 'assistant' && m?.type !== 'image' && !m?.streaming
   }
   
   async function syncServerSessions(nav) {
@@ -807,6 +910,15 @@ export function useMascotDock() {
   const rootStyle = computed(() => ({
     transform: `translate(${dragOffset.value.x}px, ${dragOffset.value.y}px)`,
   }))
+
+  watch(assistantOpen, (open) => {
+    if (open) {
+      stopMascotIdleTips()
+      clearStageCloudTip()
+    } else if (!stageUseFallback.value) {
+      startMascotIdleTips()
+    }
+  })
   
   function applyStageScaleToLib() {
     const { w, h } = stageSize.value
@@ -1211,6 +1323,8 @@ export function useMascotDock() {
   watch(messages, () => scrollFsToBottom(), { deep: true })
   
   async function onAssistantOpened() {
+    stopMascotIdleTips()
+    clearStageCloudTip()
     if (userStore.isLoggedIn) {
       pointsWallet.refresh()
     }
@@ -1266,11 +1380,14 @@ export function useMascotDock() {
     const now = Date.now()
     if (!skipPushUser) {
       messages.value.push({ role: 'user', content: text, type: 'text', at: now })
+      persistCurrentMessages()
     }
 
     const history = buildChatHistory()
 
     const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
+    let streamHadError = false
+    let assistantIdx = -1
 
     try {
       if (activeNav.value === 'drawing') {
@@ -1299,8 +1416,7 @@ export function useMascotDock() {
           usageStats: imgStats,
         })
         notifyAiBilling(data)
-        const inst = oml2d.value
-        if (inst?.tipsMessage) inst.tipsMessage('生成完成', 3000, 1)
+        showStageCloudTip('生成完成', 3000)
         refreshEstimate()
         persistCurrentMessages()
         return
@@ -1311,7 +1427,7 @@ export function useMascotDock() {
         chatStreamAbort = null
       }
       clearThinkingRotation()
-      const assistantIdx = messages.value.length
+      assistantIdx = messages.value.length
       const llmForThinking = selectedLlm.value
       messages.value.push({
         role: 'assistant',
@@ -1321,6 +1437,7 @@ export function useMascotDock() {
         streaming: true,
         thinkingText: pickThinkingPhrase(llmForThinking),
         relatedArticles: [],
+        searchImageUrl: '',
       })
       stopThinkingRotation = startThinkingRotation(llmForThinking, (text) => {
         const row = messages.value[assistantIdx]
@@ -1354,11 +1471,15 @@ export function useMascotDock() {
             onMeta(meta) {
               applyServerSessionId(meta)
               const row = messages.value[assistantIdx]
+              if (meta?.status === 'preparing' && row?.streaming && !(row.content || '').length) {
+                row.thinkingText = '正在整理资料…'
+              }
               if (meta?.relatedArticles?.length && row) {
-                const sorted = [...meta.relatedArticles]
-                  .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
-                  .slice(0, 5)
-                row.relatedArticles = sorted
+                row.relatedArticles = filterRelatedArticles(meta.relatedArticles, text)
+              }
+              if (meta?.searchImageUrl && row && isSafeMascotImageUrl(meta.searchImageUrl)) {
+                row.searchImageUrl = meta.searchImageUrl
+                row.stripInlineImages = true
               }
               const stats = usageStatsFromApi(meta)
               if (stats && row) row.usageStats = stats
@@ -1370,19 +1491,18 @@ export function useMascotDock() {
               if (row) {
                 row.streaming = false
                 row.thinkingText = ''
-                if (!row.content?.trim()) row.content = '…'
+                if (!streamHadError && !row.content?.trim()) row.content = '…'
               }
               chatStreamAbort = null
               refreshEstimate()
               persistCurrentMessages()
-              const inst = oml2d.value
-              const reply = row?.content || ''
-              if (inst?.tipsMessage && reply) {
-                inst.tipsMessage(reply.length > 100 ? `${reply.slice(0, 100)}…` : reply, 4500, 1)
+              if (!streamHadError) {
+                showStageCloudTip('回复好了，点我查看～', 2800)
+                resolve()
               }
-              resolve()
             },
             onError(msg) {
+              streamHadError = true
               clearThinkingRotation()
               chatStreamAbort = null
               const row = messages.value[assistantIdx]
@@ -1391,6 +1511,9 @@ export function useMascotDock() {
                 row.thinkingText = ''
                 if (!row.content?.trim()) {
                   messages.value.splice(assistantIdx, 1)
+                } else {
+                  row.streamInterrupted = true
+                  persistCurrentMessages()
                 }
               }
               if (msg) ElMessage.error(String(msg))
@@ -1400,13 +1523,25 @@ export function useMascotDock() {
         )
       })
     } catch (e) {
-      if (!skipPushUser) messages.value.pop()
-      else if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'assistant') {
-        messages.value.pop()
+      if (!streamHadError) {
+        if (!skipPushUser) messages.value.pop()
+        else if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'assistant') {
+          messages.value.pop()
+        }
+      } else {
+        persistCurrentMessages()
       }
       throw e
     } finally {
       loading.value = false
+      if (assistantIdx >= 0) {
+        const row = messages.value[assistantIdx]
+        if (row?.streaming) {
+          row.streaming = false
+          row.thinkingText = ''
+          clearThinkingRotation()
+        }
+      }
     }
   }
 
@@ -1477,6 +1612,7 @@ export function useMascotDock() {
   
   onBeforeUnmount(() => {
     stopMascotIdleTips()
+    clearStageCloudTip()
     clearThinkingRotation()
     if (chatStreamAbort) {
       chatStreamAbort()
@@ -1485,6 +1621,10 @@ export function useMascotDock() {
     onStagePointerUp()
     clearOml2dStageHost()
   })
+
+  function hideMascotSearchImage(msg) {
+    if (msg) msg.searchImageUrl = ''
+  }
 
   return {
     DEFAULT_AVATAR,
@@ -1526,8 +1666,8 @@ export function useMascotDock() {
     formatAiUsageLine,
     formatMsgTime,
     formatSessionTime,
-    sessionListForNav,
-    selectLocalSession,
+    hideMascotSearchImage,
+    isLatestRegeneratableAssistant,
     imageQuality,
     initOml2dStage,
     inputPlaceholder,
@@ -1566,15 +1706,18 @@ export function useMascotDock() {
     scalePopoverOpen,
     scrollFsToBottom,
     scrollbarFs,
+    selectLocalSession,
     selectNav,
     selectedLlm,
     selectedLlmChat,
     send,
     sessionId,
+    sessionListForNav,
     stageHost,
     stageHovered,
     stageHostStyle,
     stageScale,
+    stageTipText,
     stageUseFallback,
     stageWrapStyle,
     uiLabels,

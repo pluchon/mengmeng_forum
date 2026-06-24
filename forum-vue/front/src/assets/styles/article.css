@@ -40,6 +40,14 @@
 }
 
 /* Article Detail Styles */
+.article-detail-route-root {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  pointer-events: none;
+  background: transparent;
+}
+
 .red-detail-page {
   height: calc(100vh - 70px);
   background: #fff;
@@ -284,6 +292,52 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.author-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.article-detail-follow-btn {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.article-detail-follow-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.article-detail-follow-btn--follow {
+  color: #fff;
+  background: #ff2442;
+}
+
+.article-detail-follow-btn--follow:hover:not(:disabled) {
+  background: #e61e3a;
+}
+
+.article-detail-follow-btn--followed {
+  color: #86909c;
+  background: #f2f3f5;
+}
+
+.article-detail-follow-btn--followed:hover:not(:disabled) {
+  background: #e5e6eb;
 }
 
 .nickname {
@@ -300,6 +354,45 @@
   flex: 1;
   overflow-y: auto;
   padding: 20px 16px;
+}
+
+.article-content-scroll--hidden-bar :deep(.el-scrollbar__bar) {
+  display: none !important;
+}
+
+.article-content-scroll--hidden-bar :deep(.el-scrollbar__wrap) {
+  scrollbar-width: none;
+}
+
+.article-content-scroll--hidden-bar :deep(.el-scrollbar__wrap::-webkit-scrollbar) {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.content-text-wrap.is-collapsed {
+  max-height: 220px;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+}
+
+.content-expand-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 18px;
+  margin-bottom: 20px;
+}
+
+.content-expand-btn {
+  border: none;
+  background: transparent;
+  color: #ff2442;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
 }
 
 .content-title {
@@ -545,8 +638,85 @@
 .comment-user { font-size: 13px; font-weight: 700; color: #666; margin-bottom: 4px; }
 .comment-text { font-size: 14px; color: #333; line-height: 1.5; }
 .comment-footer {
-  margin-top: 8px; font-size: 12px; color: #999;
-  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comment-footer-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-footer-actions,
+.sub-item-meta-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comment-action-btn {
+  border: none;
+  background: transparent;
+  color: #86909c;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.comment-action-btn .is-liked {
+  color: #ff2442;
+}
+
+.reply-target-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: #f7f8fa;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.reply-target-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reply-target-label {
+  color: #1d2129;
+  font-weight: 600;
+}
+
+.reply-target-preview {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-target-clear {
+  border: none;
+  background: transparent;
+  color: #ff2442;
+  cursor: pointer;
+  font-size: 13px;
 }
 
 .interaction-footer {
@@ -622,6 +792,17 @@
 }
 .action-item span { font-size: 14px; font-weight: 700; }
 .action-item:hover, .action-item.active { color: var(--primary-red) !important; background: transparent !important; }
+
+.share-action-btn--copied,
+.share-action-btn--copied:hover {
+  color: var(--primary-red) !important;
+}
+
+.share-copied-text {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 @media (max-width: 900px) {
   .red-detail-container { flex-direction: column; overflow-y: auto; }

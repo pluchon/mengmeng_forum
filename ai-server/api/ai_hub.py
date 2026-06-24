@@ -26,11 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 def _internal_auth_ok() -> bool:
-    expected = (settings.ai_hub.get("internal_key") or "").strip()
-    if not expected:
-        return True
-    got = (request.headers.get("X-Internal-Key") or "").strip()
-    return got == expected
+    from security.internal_auth import internal_auth_ok
+
+    return internal_auth_ok((settings.ai_hub.get("internal_key") or "").strip())
 
 
 def _clean_messages(raw: Any, max_turns: int = 24) -> list[dict[str, str]]:
@@ -101,10 +99,11 @@ def ai_gobang_move():
     if ai_chess not in (1, 2):
         ai_chess = 2
     model_code = str(data.get("model_code") or "").strip()
+    use_llm = bool(data.get("use_llm", True))
 
     t0 = time.perf_counter()
     try:
-        move = generate_gobang_move(board, ai_chess, model_code)
+        move = generate_gobang_move(board, ai_chess, model_code, use_llm=use_llm)
     except ValueError as exc:
         return jsonify({"code": 400, "msg": str(exc)}), 400
     except Exception:
@@ -141,10 +140,11 @@ def ai_jinzi_move():
     if ai_chess not in (1, 2):
         ai_chess = 2
     model_code = str(data.get("model_code") or "").strip()
+    use_llm = bool(data.get("use_llm", False))
 
     t0 = time.perf_counter()
     try:
-        move = generate_jinzi_move(board, ai_chess, model_code)
+        move = generate_jinzi_move(board, ai_chess, model_code, use_llm=use_llm)
     except ValueError as exc:
         return jsonify({"code": 400, "msg": str(exc)}), 400
     except Exception:

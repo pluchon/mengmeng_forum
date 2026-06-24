@@ -44,6 +44,32 @@ public class JWTUtils {
                 .compact();//用于获取令牌
     }
 
+    public static String genJwtForUser(Long userId, String username, long tokenVersion) {
+        Map<String, Object> claims = new java.util.HashMap<>();
+        claims.put(org.example.forumdemo.common.constant.Constant.JWT_USER_ID, userId);
+        claims.put(org.example.forumdemo.common.constant.Constant.JWT_USER_NAME, username);
+        claims.put(org.example.forumdemo.common.constant.Constant.JWT_TOKEN_VERSION, tokenVersion);
+        return genJwt(claims);
+    }
+
+    public static long readTokenVersion(Claims claims) {
+        if (claims == null) {
+            return 0L;
+        }
+        Object raw = claims.get(org.example.forumdemo.common.constant.Constant.JWT_TOKEN_VERSION);
+        if (raw == null) {
+            return 0L;
+        }
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(raw.toString().trim());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
     //验证我们的JWT密钥
     public static Claims parseJWT(String jwt){
         //如果我们的密钥是空的，直接返回

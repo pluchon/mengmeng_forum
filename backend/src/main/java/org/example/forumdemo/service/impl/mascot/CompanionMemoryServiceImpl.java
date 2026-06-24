@@ -96,6 +96,11 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Override
     public void appendTextMessage(Long sessionId, String role, String content) {
+        appendTextMessage(sessionId, role, content, null);
+    }
+
+    @Override
+    public void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
         if (sessionId == null || content == null || content.isBlank()) {
             return;
         }
@@ -104,6 +109,10 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         m.setRole(role);
         m.setContent(content.trim());
         m.setMsgType("text");
+        String img = searchImageUrl != null ? searchImageUrl.trim() : "";
+        if (!img.isBlank() && img.length() <= 1024 && img.startsWith("http")) {
+            m.setImageUrl(img);
+        }
         m.setDeleteState((byte) 0);
         m.setCreateTime(new Date());
         companionMessageMapper.insert(m);
@@ -189,6 +198,9 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
             } else {
                 v.setType("text");
                 v.setContent(m.getContent());
+                if (m.getImageUrl() != null && !m.getImageUrl().isBlank()) {
+                    v.setSearchImageUrl(m.getImageUrl().trim());
+                }
             }
             out.add(v);
         }

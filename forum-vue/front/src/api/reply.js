@@ -19,3 +19,19 @@ export function getSubReplyList(params) {
 export function submitSubReply(data) {
   return request({ url: '/articleSubReply/subReply', method: 'put', data })
 }
+
+export function likeReply(replyId) {
+  return request({ url: '/replyLike/likeReply', method: 'put', params: { replyId } })
+}
+
+export function unlikeReply(replyId) {
+  return request({ url: '/replyLike/unlikeReply', method: 'put', params: { replyId } })
+}
+
+export function likeSubReply(subReplyId) {
+  return request({ url: '/replyLike/likeSubReply', method: 'put', params: { subReplyId } })
+}
+
+export function unlikeSubReply(subReplyId) {
+  return request({ url: '/replyLike/unlikeSubReply', method: 'put', params: { subReplyId } })
+}

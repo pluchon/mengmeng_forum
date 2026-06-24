@@ -6,7 +6,6 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CaptchaUtils;
-import org.example.forumdemo.common.utils.JWTUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.MailUtil;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -14,12 +13,11 @@ import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.user.MailCodeService;
+import org.example.forumdemo.service.impl.user.AuthTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +36,9 @@ public class MailCodeServiceImpl implements MailCodeService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private AuthTokenService authTokenService;
 
     @Override
     public void send(String email) {
@@ -106,10 +107,7 @@ public class MailCodeServiceImpl implements MailCodeService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
         stringRedisTemplate.delete(Constant.REDIS_KEY_MAIL_VERIFY + email);
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(Constant.JWT_USER_ID, user.getId());
-        claims.put(Constant.JWT_USER_NAME, user.getUsername());
-        user.setToken(JWTUtils.genJwt(claims));
+        user.setToken(authTokenService.issueToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
         return user;

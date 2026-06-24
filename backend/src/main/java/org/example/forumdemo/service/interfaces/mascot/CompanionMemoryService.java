@@ -17,6 +17,9 @@ public interface CompanionMemoryService {
 
     void appendTextMessage(Long sessionId, String role, String content);
 
+    /** 助手文本消息；searchImageUrl 为联网检索配图（存 image_url，msg_type 仍为 text） */
+    void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl);
+
     void appendImageMessage(Long sessionId, String role, String imageUrl, String promptText);
 
     List<CompanionSessionVO> listSessions(Long userId, String skill, int limit);

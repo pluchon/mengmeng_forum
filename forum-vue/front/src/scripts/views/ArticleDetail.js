@@ -6,17 +6,25 @@ import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
 import { getArticleDetail, streamArticleGuide, getAuditStatus, getLatestLikers } from '@/api/article'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
-import { getReplyList, submitReply as apiSubmitReply } from '@/api/reply'
+import {
+  animateDetailDialogToCard,
+  clearFeedNavigationState,
+  getFeedCardOrigin,
+  shouldReturnBackToFeed,
+} from '@/utils/feedNavigation'
+import { getReplyList, submitReply as apiSubmitReply, submitSubReply, likeReply, unlikeReply } from '@/api/reply'
 import { likeArticle, unlikeArticle } from '@/api/like'
 import { cancelArticleFavorite, getMyFavoriteFolders, saveArticleFavorite } from '@/api/favorite'
 import SubReplyArea from '@/components/article/SubReplyArea.vue'
+import ArticleDetailVideo from '@/components/article/ArticleDetailVideo.vue'
 import { marked } from 'marked'
 import { DEFAULT_AVATAR } from '@/utils/constants'
-import { sanitizeHtml } from '@/utils/security'
+import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
+import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
 import likersMenuListIconUrl from '@/assets/svg/列表.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
@@ -68,7 +76,15 @@ export function useArticleDetail() {
   }
   const replies = ref([])
   const replyContent = ref('')
-  const detailCoverBg = ref('#ffffff')
+  const replyTarget = ref(null)
+  const contentExpanded = ref(false)
+  const isFollowingAuthor = ref(false)
+  const followSaving = ref(false)
+
+  const DETAIL_TOAST_Z_INDEX = 6000
+
+  const shareCopied = ref(false)
+  let shareCopiedTimer = null
 
   const showLikersDialog = ref(false)
   const loadingLikers = ref(false)
@@ -81,6 +97,8 @@ export function useArticleDetail() {
   const favoriteSaving = ref(false)
 
   const dialogOpen = ref(true)
+  let detailClosing = false
+  let skipDialogClosedNav = false
 
   /** 笔记相册 URL（与 article 正文独立） */
   const articleTags = ref([])
@@ -98,6 +116,19 @@ export function useArticleDetail() {
     if (!urls.length) return ''
     const i = Math.min(Math.max(0, activeGalleryIndex.value), urls.length - 1)
     return urls[i] || ''
+  })
+
+  /** 主图：相册优先，否则用封面（与首页瀑布流卡片一致） */
+  const mainDisplayImageUrl = computed(() => {
+    const gallery = activeGalleryUrl.value
+    if (gallery) return gallery
+    return String(article.value?.coverImg || '').trim()
+  })
+
+  const imagePreviewList = computed(() => {
+    if (articleGalleryUrls.value.length) return articleGalleryUrls.value
+    const cover = String(article.value?.coverImg || '').trim()
+    return cover ? [cover] : []
   })
 
   const articleVideoUrl = computed(() => String(article.value?.videoUrl || '').trim())
@@ -168,6 +199,10 @@ export function useArticleDetail() {
   onUnmounted(() => {
     galleryResizeObserver?.disconnect()
     galleryResizeObserver = null
+    if (shareCopiedTimer) {
+      clearTimeout(shareCopiedTimer)
+      shareCopiedTimer = null
+    }
   })
 
   const renderedContent = computed(() => {
@@ -187,6 +222,30 @@ export function useArticleDetail() {
     }
     return sanitizeHtml(html)
   })
+
+  function renderCommentHtml(content) {
+    return sanitizePlainTextAsHtml(content || '')
+  }
+
+  const plainContentLength = computed(() => {
+    const raw = article.value?.content || ''
+    return String(raw).replace(/<[^>]+>/g, '').replace(/\s+/g, '').length
+  })
+
+  const shouldCollapseContent = computed(() => plainContentLength.value > 280)
+
+  const replyPlaceholder = computed(() => (replyTarget.value ? '' : '说点什么…'))
+
+  function stripReplyPlainText(html) {
+    return String(html || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+  }
+
+  function buildReplyContentPreview(html) {
+    const plain = stripReplyPlainText(html)
+    if (!plain) return ''
+    if (plain.length <= 20) return plain
+    return `${plain.slice(0, 20)}...`
+  }
 
   const replyCountDisplay = computed(() => {
     if (!article.value) return 0
@@ -250,6 +309,8 @@ export function useArticleDetail() {
     loading.value = true
     article.value = null
     replies.value = []
+    replyTarget.value = null
+    contentExpanded.value = false
     aiSummary.value = ''
     aiSummaryIsHint.value = false
     articleGalleryUrls.value = []
@@ -265,8 +326,8 @@ export function useArticleDetail() {
         isLiked.value = res.data.isLiked || false
         isOwner.value = res.data.isOwner || false
         isFavorited.value = res.data.isFavorited || false
-        detailCoverBg.value = '#ffffff'
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
+        await loadAuthorFollowState()
         await syncOwnerArticleStatus(articleId)
         await nextTick()
         updateGalleryStripState()
@@ -312,19 +373,58 @@ export function useArticleDetail() {
     }
   }
 
+  async function handleBeforeClose(done) {
+    if (detailClosing) {
+      done()
+      return
+    }
+    detailClosing = true
+
+    const articleId = route.params.id
+    const fromHome = shouldReturnBackToFeed()
+    const origin = fromHome ? getFeedCardOrigin(articleId) : null
+
+    try {
+      if (origin) {
+        await animateDetailDialogToCard(origin)
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      done()
+      detailClosing = false
+      if (fromHome && window.history.length > 1) {
+        skipDialogClosedNav = true
+        clearFeedNavigationState()
+        router.back().then(() => {
+          nextTick(() => restoreFeedScroll())
+        })
+      }
+    }
+  }
+
   function handleDialogClosed() {
-    router.replace('/').then(() => {
-      restoreFeedScroll()
-    })
+    if (skipDialogClosedNav) {
+      skipDialogClosedNav = false
+      return
+    }
+    if (/^\/article\//.test(route.path)) {
+      clearFeedNavigationState()
+      router.replace('/').then(() => restoreFeedScroll())
+    }
   }
 
   function closeDetailDialog() {
-    dialogOpen.value = false
+    handleBeforeClose(() => {
+      dialogOpen.value = false
+    })
   }
 
   function goAuthorProfile() {
     const uid = author.value?.id
     if (!uid) return
+    skipDialogClosedNav = true
+    clearFeedNavigationState()
     closeDetailDialog()
     router.push(`/profile/${uid}`)
   }
@@ -332,6 +432,8 @@ export function useArticleDetail() {
   function goUserProfile(userId) {
     const uid = Number(userId)
     if (!Number.isFinite(uid) || uid <= 0) return
+    skipDialogClosedNav = true
+    clearFeedNavigationState()
     closeDetailDialog()
     router.push(`/profile/${uid}`)
   }
@@ -339,11 +441,146 @@ export function useArticleDetail() {
   async function loadReplies() {
     const res = await getReplyList({ articleId: route.params.id, pageNum: 1, pageSize: 50 })
     if (res.code === 0) {
-      replies.value = unwrapPageRecords(res.data)
+      replies.value = unwrapPageRecords(res.data).map((row) => ({
+        ...row,
+        liked: !!row.liked,
+        subReplyCount: row.subReplyCount ?? 0,
+      }))
       if (article.value) {
         article.value.replyCount = Math.max(Number(article.value.replyCount) || 0, replies.value.length)
       }
     }
+  }
+
+  function clearReplyTarget() {
+    replyTarget.value = null
+  }
+
+  function startReplyToFloor(item) {
+    if (!item?.articleReply?.id) return
+    replyTarget.value = {
+      mode: 'sub',
+      replyId: item.articleReply.id,
+      replyUserId: item.user?.id || null,
+      nickname: item.user?.nickname || '用户',
+      contentPreview: buildReplyContentPreview(item.articleReply.content),
+    }
+  }
+
+  function startReplyToSub(payload) {
+    if (!payload?.replyId) return
+    replyTarget.value = {
+      mode: 'sub',
+      replyId: payload.replyId,
+      replyUserId: payload.replyUserId || null,
+      nickname: payload.nickname || '用户',
+      contentPreview: buildReplyContentPreview(payload.content),
+    }
+  }
+
+  async function toggleReplyLike(item) {
+    if (!(await ensureLoggedIn('点赞需要登录'))) return
+    const replyId = item?.articleReply?.id
+    if (!replyId) return
+    try {
+      const res = item.liked ? await unlikeReply(replyId) : await likeReply(replyId)
+      if (res.code === 0) {
+        item.liked = !item.liked
+        const base = Number(item.articleReply.likeCount) || 0
+        item.articleReply.likeCount = Math.max(0, base + (item.liked ? 1 : -1))
+      } else {
+        ElMessage.error(res.message || '操作失败')
+      }
+    } catch {
+      ElMessage.error('点赞请求异常')
+    }
+  }
+
+  async function loadAuthorFollowState() {
+    isFollowingAuthor.value = false
+    if (!author.value?.id || isOwner.value || !userStore.isLoggedIn) return
+    try {
+      const res = await getFollowStats(author.value.id)
+      if (res.code === 0) {
+        isFollowingAuthor.value = !!res.data?.isFollowing
+      }
+    } catch {
+      isFollowingAuthor.value = false
+    }
+  }
+
+  async function toggleFollowAuthor() {
+    if (!(await ensureLoggedIn('关注需要登录'))) return
+    const uid = author.value?.id
+    if (!uid || isOwner.value) return
+    followSaving.value = true
+    try {
+      const res = isFollowingAuthor.value
+        ? await unfollowUser(uid)
+        : await followUser(uid)
+      if (res.code === 0) {
+        isFollowingAuthor.value = !isFollowingAuthor.value
+        ElMessage.success({
+          message: isFollowingAuthor.value ? '关注成功' : '已取消关注',
+          zIndex: DETAIL_TOAST_Z_INDEX,
+        })
+      } else {
+        ElMessage.error({ message: res.message || '操作失败', zIndex: DETAIL_TOAST_Z_INDEX })
+      }
+    } catch {
+      ElMessage.error({ message: '操作异常', zIndex: DETAIL_TOAST_Z_INDEX })
+    } finally {
+      followSaving.value = false
+    }
+  }
+
+  function copyToClipboardSync(text) {
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      textarea.setSelectionRange(0, text.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      if (ok) return true
+    } catch {
+      // fall through
+    }
+    return false
+  }
+
+  function showShareCopiedFeedback() {
+    shareCopied.value = true
+    if (shareCopiedTimer) clearTimeout(shareCopiedTimer)
+    shareCopiedTimer = setTimeout(() => {
+      shareCopied.value = false
+      shareCopiedTimer = null
+    }, 2000)
+  }
+
+  function handleShare() {
+    if (!article.value?.id) return
+    const url = `${window.location.origin}/article/${article.value.id}`
+    const copied = copyToClipboardSync(url)
+    if (copied) {
+      showShareCopiedFeedback()
+      ElMessage.success({ message: '已复制链接', zIndex: DETAIL_TOAST_Z_INDEX, offset: 72 })
+      return
+    }
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(url).then(() => {
+        showShareCopiedFeedback()
+        ElMessage.success({ message: '已复制链接', zIndex: DETAIL_TOAST_Z_INDEX, offset: 72 })
+      }).catch(() => {
+        ElMessage.error({ message: '复制失败，请手动复制地址栏链接', zIndex: DETAIL_TOAST_Z_INDEX, offset: 72 })
+      })
+      return
+    }
+    ElMessage.error({ message: '复制失败，请手动复制地址栏链接', zIndex: DETAIL_TOAST_Z_INDEX, offset: 72 })
   }
 
   async function handleLike() {
@@ -438,14 +675,26 @@ export function useArticleDetail() {
   }
 
   async function submitReply() {
-    if (!(await ensureLoggedIn('点赞需要登录'))) return
+    if (!(await ensureLoggedIn('评论需要登录'))) return
     if (blockIfMuted(userStore)) return
-    if (!replyContent.value.trim()) return
+    const text = replyContent.value.trim()
+    if (!text) return
     try {
-      const res = await apiSubmitReply({ articleId: article.value.id, content: replyContent.value })
+      let res
+      if (replyTarget.value?.mode === 'sub' && replyTarget.value.replyId) {
+        res = await submitSubReply({
+          articleId: article.value.id,
+          replyId: replyTarget.value.replyId,
+          replyUserId: replyTarget.value.replyUserId,
+          content: text,
+        })
+      } else {
+        res = await apiSubmitReply({ articleId: article.value.id, content: text })
+      }
       if (res.code === 0) {
         ElMessage.success('发送成功')
         replyContent.value = ''
+        replyTarget.value = null
         loadReplies()
       } else {
         ElMessage.error(res.message || '评论发送失败')
@@ -523,6 +772,7 @@ export function useArticleDetail() {
     MagicStick,
     PictureFilled,
     Share,
+    ArticleDetailVideo,
     SubReplyArea,
     aiLoading,
     aiSummary,
@@ -530,6 +780,8 @@ export function useArticleDetail() {
     aiSummaryIsHint,
     activeGalleryIndex,
     activeGalleryUrl,
+    mainDisplayImageUrl,
+    imagePreviewList,
     article,
     articleTags,
     articleGalleryUrls,
@@ -538,11 +790,16 @@ export function useArticleDetail() {
     isVideoArticle,
     replayDetailVideo,
     author,
+    clearReplyTarget,
     confirmFavorite,
+    contentExpanded,
+    shouldCollapseContent,
     closeDetailDialog,
     defaultAvatar,
-    detailCoverBg,
     dialogOpen,
+    followSaving,
+    isFollowingAuthor,
+    toggleFollowAuthor,
     fetchLikers,
     galleryStripFadeLeft,
     galleryStripFadeRight,
@@ -550,12 +807,15 @@ export function useArticleDetail() {
     galleryStripRef,
     goAuthorProfile,
     goUserProfile,
+    handleBeforeClose,
     handleDialogClosed,
     favoriteDialogVisible,
     favoriteFolders,
     favoriteFoldersLoading,
     favoriteSaving,
     handleLike,
+    handleShare,
+    shareCopied,
     isLiked,
     isOwner,
     isFavorited,
@@ -570,14 +830,20 @@ export function useArticleDetail() {
     onGalleryStripScroll,
     ownerAuditNotice,
     renderedContent,
+    renderCommentHtml,
     replies,
     sendIconUrl,
     replyContent,
     replyCountDisplay,
+    replyPlaceholder,
+    replyTarget,
     selectedFolderId,
     setActiveGalleryIndex,
     showLikersDialog,
+    startReplyToFloor,
+    startReplyToSub,
     submitReply,
+    toggleReplyLike,
     toggleFavorite,
     formatForumDateTimeShanghai,
   }

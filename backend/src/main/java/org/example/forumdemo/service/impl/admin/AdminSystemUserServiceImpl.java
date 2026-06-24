@@ -22,6 +22,7 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.service.interfaces.admin.AdminSystemUserService;
+import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -51,6 +52,9 @@ public class AdminSystemUserServiceImpl implements AdminSystemUserService {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private JwtTokenVersionService jwtTokenVersionService;
 
     @Override
     public PageResult<AdminSysUserRowVO> pageUsers(Integer page, Integer size, Integer pageNum, Integer pageSize,
@@ -115,6 +119,9 @@ public class AdminSystemUserServiceImpl implements AdminSystemUserService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .set(User::getState, muted ? (byte) 1 : (byte) 0)
                 .eq(User::getId, targetUserId));
+        if (muted) {
+            jwtTokenVersionService.bump(targetUserId);
+        }
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + targetUserId);
     }
 

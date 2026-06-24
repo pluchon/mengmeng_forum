@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -402,6 +403,10 @@ public class MascotServiceImpl implements MascotService {
         }
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(pyBody, headers);
 
+        if (!ephemeral && dbSessionId != null) {
+            companionMemoryService.appendTextMessage(dbSessionId, "user", request.getMessage().trim());
+        }
+
         Map body;
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(mascotAiUrl, entity, Map.class);
@@ -449,7 +454,6 @@ public class MascotServiceImpl implements MascotService {
 
         String reply = body.get("reply") != null ? String.valueOf(body.get("reply")) : "";
         if (!ephemeral && dbSessionId != null) {
-            companionMemoryService.appendTextMessage(dbSessionId, "user", request.getMessage().trim());
             companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
         }
 
@@ -563,6 +567,16 @@ public class MascotServiceImpl implements MascotService {
         final Long persistSessionId = dbSessionId;
         final String userMessage = request.getMessage().trim();
         final StringBuilder replyBuffer = new StringBuilder();
+        final AtomicReference<String> streamSearchImageUrl = new AtomicReference<>();
+
+        if (!ephemeral && persistSessionId != null) {
+            companionMemoryService.appendTextMessage(persistSessionId, "user", userMessage);
+            try {
+                sendMascotSse(emitter, Map.of("meta", Map.of("sessionId", String.valueOf(persistSessionId))));
+            } catch (Exception ex) {
+                log.warn("推送会话 id 失败: {}", ex.getMessage());
+            }
+        }
 
         Map<String, Object> pyBody = new HashMap<>();
         pyBody.put("message", userMessage);
@@ -627,6 +641,7 @@ public class MascotServiceImpl implements MascotService {
                     releaseBasicSlot(user.getId());
                 }
                 releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用"));
                 emitter.complete();
                 return;
@@ -658,6 +673,19 @@ public class MascotServiceImpl implements MascotService {
                             sendMascotSse(emitter, Map.of("text", piece));
                         }
                     }
+                    Object metaObj = chunk.get("meta");
+                    if (metaObj instanceof Map<?, ?> mm) {
+                        Map<String, Object> metaMap = new HashMap<>();
+                        mm.forEach((k, v) -> metaMap.put(String.valueOf(k), v));
+                        Object searchImg = metaMap.get("searchImageUrl");
+                        if (searchImg != null) {
+                            String u = String.valueOf(searchImg).trim();
+                            if (u.startsWith("http") && u.length() <= 1024) {
+                                streamSearchImageUrl.set(u);
+                            }
+                        }
+                        sendMascotSse(emitter, Map.of("meta", metaMap));
+                    }
                     Object usageObj = chunk.get("usage");
                     if (usageObj instanceof Map<?, ?> um) {
                         Map<String, Object> usageMap = new HashMap<>();
@@ -679,6 +707,7 @@ public class MascotServiceImpl implements MascotService {
                     releaseBasicSlot(user.getId());
                 }
                 releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
                 emitter.complete();
                 return;
@@ -703,10 +732,7 @@ public class MascotServiceImpl implements MascotService {
                     log.warn("看板娘帖子推荐超时或失败: {}", ex.getMessage());
                 }
             }
-            if (!ephemeral && persistSessionId != null) {
-                companionMemoryService.appendTextMessage(persistSessionId, "user", userMessage);
-                companionMemoryService.appendTextMessage(persistSessionId, "assistant", replyBuffer.toString());
-            }
+            persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
             sendMascotSse(emitter, Map.of("meta", meta));
             emitter.complete();
         } catch (Exception e) {
@@ -715,6 +741,7 @@ public class MascotServiceImpl implements MascotService {
                 releaseBasicSlot(user.getId());
             }
             releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
             try {
                 sendMascotSse(emitter, Map.of("error", "对话失败，请稍后重试"));
                 emitter.complete();
@@ -726,5 +753,13 @@ public class MascotServiceImpl implements MascotService {
                 conn.disconnect();
             }
         }
+    }
+
+    private void persistCompanionAssistantReply(
+            boolean ephemeral, Long sessionId, CharSequence reply, String searchImageUrl) {
+        if (ephemeral || sessionId == null || reply == null || reply.length() == 0) {
+            return;
+        }
+        companionMemoryService.appendTextMessage(sessionId, "assistant", reply.toString(), searchImageUrl);
     }
 }

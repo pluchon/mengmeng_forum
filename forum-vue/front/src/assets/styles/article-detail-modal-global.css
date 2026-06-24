@@ -1,11 +1,16 @@
 /* append-to-body 弹窗不受 SFC scoped 约束 */
 .article-detail-modal.el-dialog {
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   max-height: 92vh;
   margin-top: 2vh !important;
   border-radius: 16px;
   overflow: hidden;
+}
+
+.article-detail-modal.el-dialog.article-detail-modal--shrinking {
+  will-change: transform, opacity;
 }
 
 .article-detail-modal--no-top-title .el-dialog__header {
@@ -82,14 +87,11 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background: #ffffff;
 }
 
 .article-detail-modal .media-stage {
   min-height: 0;
-}
-
-.article-detail-modal .media-placeholder {
-  background: #fff !important;
 }
 
 .article-detail-modal .media-gallery-panel {
@@ -99,6 +101,11 @@
 /* 预览层需高于详情弹窗 (3100) */
 .el-image-viewer__wrapper {
   z-index: 5200 !important;
+}
+
+/* 详情弹窗内操作反馈需高于弹窗与萌宠浮层 */
+.el-message {
+  z-index: 6000 !important;
 }
 
 .article-detail-modal .info-section {

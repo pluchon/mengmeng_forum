@@ -11,13 +11,17 @@ import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleReply;
+import org.example.forumdemo.entity.db.ArticleReplyLike;
+import org.example.forumdemo.entity.db.ArticleSubReply;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.article.ReplyArticleRequest;
 import org.example.forumdemo.entity.vo.article.ArticleReplyListResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.mq.ReplyNotifyMqVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
+import org.example.forumdemo.mapper.ArticleReplyLikeMapper;
 import org.example.forumdemo.mapper.ArticleReplyMapper;
+import org.example.forumdemo.mapper.ArticleSubReplyMapper;
 import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.common.utils.RequestIpUtils;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyService;
@@ -28,7 +32,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +45,12 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     @Autowired
     private ArticleReplyMapper articleReplyMapper;
+
+    @Autowired
+    private ArticleSubReplyMapper articleSubReplyMapper;
+
+    @Autowired
+    private ArticleReplyLikeMapper articleReplyLikeMapper;
 
     @Autowired
     private ArticleService articleService;
@@ -95,7 +109,8 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     }
 
     @Override
-    public PageResult<ArticleReplyListResponse> queryReplyByArticleIdWithPage(Long articleId, Integer pageNum, Integer pageSize) {
+    public PageResult<ArticleReplyListResponse> queryReplyByArticleIdWithPage(
+            Long articleId, Integer pageNum, Integer pageSize, Long loginUserId) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<ArticleReply> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -103,13 +118,47 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
                 .eq(ArticleReply::getArticleId, articleId)
                 .ne(ArticleReply::getDeleteState, 1).ne(ArticleReply::getState, 1)
                 .orderByAsc(ArticleReply::getCreateTime));
-        List<ArticleReplyListResponse> records = result.getRecords().stream()
-                .map(this::buildReplyResponse).collect(Collectors.toList());
+        List<ArticleReply> rows = result.getRecords();
+        Map<Long, Integer> subCountMap = loadSubReplyCountMap(rows);
+        Set<Long> likedReplyIds = loadLikedReplyIds(loginUserId, rows);
+        List<ArticleReplyListResponse> records = rows.stream()
+                .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds))
+                .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
 
+    private Map<Long, Integer> loadSubReplyCountMap(List<ArticleReply> rows) {
+        Map<Long, Integer> map = new HashMap<>();
+        if (rows == null || rows.isEmpty()) {
+            return map;
+        }
+        List<Long> replyIds = rows.stream().map(ArticleReply::getId).collect(Collectors.toList());
+        List<ArticleSubReply> subs = articleSubReplyMapper.selectList(new LambdaQueryWrapper<ArticleSubReply>()
+                .in(ArticleSubReply::getReplyId, replyIds)
+                .ne(ArticleSubReply::getDeleteState, 1)
+                .ne(ArticleSubReply::getState, 1)
+                .select(ArticleSubReply::getReplyId));
+        for (ArticleSubReply sub : subs) {
+            Long rid = sub.getReplyId();
+            map.put(rid, map.getOrDefault(rid, 0) + 1);
+        }
+        return map;
+    }
+
+    private Set<Long> loadLikedReplyIds(Long loginUserId, List<ArticleReply> rows) {
+        if (loginUserId == null || loginUserId <= 0 || rows == null || rows.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> replyIds = rows.stream().map(ArticleReply::getId).collect(Collectors.toList());
+        List<ArticleReplyLike> likes = articleReplyLikeMapper.selectList(new LambdaQueryWrapper<ArticleReplyLike>()
+                .eq(ArticleReplyLike::getUserId, loginUserId)
+                .in(ArticleReplyLike::getReplyId, replyIds));
+        return likes.stream().map(ArticleReplyLike::getReplyId).collect(Collectors.toCollection(HashSet::new));
+    }
+
     /** 单条回复 -> 列表项装配；用户已注销时回退为占位昵称 */
-    private ArticleReplyListResponse buildReplyResponse(ArticleReply reply) {
+    private ArticleReplyListResponse buildReplyResponse(
+            ArticleReply reply, Map<Long, Integer> subCountMap, Set<Long> likedReplyIds) {
         UserBriefVO userBriefVO;
         try {
             User user = userService.queryUserByUserId(reply.getPostUserId());
@@ -118,7 +167,12 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             log.warn("回复 {} 的发表者 {} 已不存在", reply.getId(), reply.getPostUserId());
             userBriefVO = new UserBriefVO();
         }
-        return new ArticleReplyListResponse(reply, userBriefVO);
+        ArticleReplyListResponse vo = new ArticleReplyListResponse();
+        vo.setArticleReply(reply);
+        vo.setUser(userBriefVO);
+        vo.setSubReplyCount(subCountMap.getOrDefault(reply.getId(), 0));
+        vo.setLiked(likedReplyIds.contains(reply.getId()));
+        return vo;
     }
 
     @Override

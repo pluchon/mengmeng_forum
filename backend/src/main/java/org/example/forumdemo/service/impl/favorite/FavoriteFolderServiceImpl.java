@@ -27,6 +27,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +39,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     private static final byte DEFAULT_YES = 1;
     private static final byte DEFAULT_NO  = 0;
     private static final byte DELETE_YES = 1;
+    private static final int FOLDER_VISIBILITY_CHANGE_LIMIT = 8;
+    private static final long FOLDER_VISIBILITY_WINDOW_MS = 10 * 60 * 1000L;
+    private static final String REDIS_FOLDER_VISIBILITY_CHANGES = "forum:folder:visibility:changes:";
 
     @Autowired
     private UserFavoriteFolderMapper folderMapper;
@@ -100,7 +104,8 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             }
             folder.setName(newName);
         }
-        if (req.getIsPublic() != null) {
+        if (req.getIsPublic() != null && !Objects.equals(req.getIsPublic(), folder.getIsPublic())) {
+            assertFolderVisibilityChangeAllowed(loginUserId);
             folder.setIsPublic(req.getIsPublic());
         }
         if (req.getSortOrder() != null) {
@@ -245,5 +250,20 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_NOT_EXISTS));
         }
         return folder;
+    }
+
+    // 公开/私密切换限流，防止恶意刷接口
+    private void assertFolderVisibilityChangeAllowed(Long userId) {
+        if (userId == null || userId <= 0) {
+            return;
+        }
+        String key = REDIS_FOLDER_VISIBILITY_CHANGES + userId;
+        Long count = stringRedisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1L) {
+            stringRedisTemplate.expire(key, FOLDER_VISIBILITY_WINDOW_MS, TimeUnit.MILLISECONDS);
+        }
+        if (count != null && count > FOLDER_VISIBILITY_CHANGE_LIMIT) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_VISIBILITY_RATE_LIMIT));
+        }
     }
 }

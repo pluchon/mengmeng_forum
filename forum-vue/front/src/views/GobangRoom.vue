@@ -61,7 +61,7 @@
             <span>不参与落子</span>
           </section>
 
-          <section v-else class="gobang-opponent-card" role="button" tabindex="0" @click="openOpponentStats" @keyup.enter="openOpponentStats">
+          <section v-else class="gobang-opponent-card" :class="{ 'is-ai-thinking': isAiThinking }" role="button" tabindex="0" @click="openOpponentStats" @keyup.enter="openOpponentStats">
             <span class="gobang-avatar is-large" :class="{ 'is-vip': opponentProfile?.vip, 'is-ai': opponentProfile?.ai }">
               <img v-if="opponentProfile?.avatarUrl" :src="opponentProfile.avatarUrl" alt="" />
               <img v-else-if="opponentProfile?.ai" :src="aiModelIcon(opponentProfile)" alt="" class="gobang-ai-icon" />
@@ -86,7 +86,7 @@
         </aside>
 
         <section class="gobang-board-shell">
-          <div class="gobang-board-status" :class="{ 'is-my-turn': isMyTurn, 'is-finished': isFinished }">
+          <div class="gobang-board-status" :class="{ 'is-my-turn': isMyTurn, 'is-finished': isFinished, 'is-ai-thinking': isAiThinking }">
             <span>{{ boardStatusText }}</span>
             <em>
               <el-icon><Timer /></el-icon>
@@ -135,7 +135,7 @@
               <el-icon><ChatDotRound /></el-icon>
               <strong>房间聊天</strong>
             </div>
-            <div class="gobang-chat-list">
+            <div ref="chatListRef" class="gobang-chat-list">
               <div
                 v-for="(msg, index) in chatMessages"
                 :key="index"

@@ -7,15 +7,15 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.utils.MD5Utils;
+import org.example.forumdemo.common.utils.PasswordUtils;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
-import org.example.forumdemo.common.utils.UUIDUtils;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.user.MailCodeService;
 import org.example.forumdemo.service.interfaces.user.PasswordResetService;
 import org.example.forumdemo.service.interfaces.user.SMSCodeService;
+import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -36,6 +36,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private JwtTokenVersionService jwtTokenVersionService;
 
     @Override
     public void resetByMail(String email, String code, String newPassword) {
@@ -89,13 +92,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     /** 共用：生成新盐 + 新密码哈希落库，并清理用户缓存 */
     private void updatePassword(Long userId, String newPassword) {
-        String newSalt = UUIDUtils.UUID32();
-        String newSecret = MD5Utils.md5SaltHigh(newPassword, newSalt);
+        String newSecret = PasswordUtils.encode(newPassword);
         int updated = userMapper.update(null, new LambdaUpdateWrapper<User>().eq(User::getId, userId)
-                .set(User::getSalt, newSalt).set(User::getPassword, newSecret));
+                .set(User::getSalt, "").set(User::getPassword, newSecret));
         if (updated <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MOFIDY_PASSWORD_ERROR));
         }
+        jwtTokenVersionService.bump(userId);
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
     }
 

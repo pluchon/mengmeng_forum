@@ -57,9 +57,91 @@
 }
 
 .mascot-stage-wrap :deep(#oml2d-tips) {
-  z-index: 2 !important;
-  max-width: 95%;
+  display: none !important;
+}
+
+/* 看板娘头顶云朵提示（替代库自带蓝框气泡） */
+.mascot-cloud-tip {
+  position: absolute;
+  top: 4%;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: min(148px, 82%);
+  padding: 6px 12px 8px;
   pointer-events: none;
+  animation: mascot-cloud-in 0.22s ease-out;
+}
+
+.mascot-cloud-tip__text {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-size: 11px;
+  line-height: 1.38;
+  font-weight: 500;
+  color: #5a5f6e;
+  text-align: center;
+  word-break: break-word;
+}
+
+.mascot-cloud-tip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 4px 14px rgba(30, 41, 59, 0.1);
+}
+
+.mascot-cloud-tip::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  bottom: -7px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 3px 8px rgba(30, 41, 59, 0.08);
+}
+
+.mascot-cloud-tip__text::before,
+.mascot-cloud-tip__text::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.mascot-cloud-tip__text::before {
+  width: 22px;
+  height: 18px;
+  top: -7px;
+  left: 8px;
+}
+
+.mascot-cloud-tip__text::after {
+  width: 16px;
+  height: 14px;
+  top: -5px;
+  right: 6px;
+}
+
+@keyframes mascot-cloud-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 .mascot-stage-wrap :deep(#oml2d-statusBar) {
@@ -232,11 +314,11 @@
 }
 
 .mascot-msg-col {
-  max-width: 72%;
+  max-width: 68%;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 
 .mascot-msg-row.user .mascot-bubble-time {
@@ -389,8 +471,7 @@
 
 .mascot-bubble--ai {
   position: relative;
-  padding-right: 34px;
-  padding-bottom: 30px;
+  padding: 10px 14px;
   min-width: 72px;
   background: var(--el-fill-color, rgba(255, 255, 255, 0.08));
   border: 0.5px solid var(--el-border-color-lighter, rgba(255, 255, 255, 0.12));
@@ -502,9 +583,18 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px 10px;
   margin-top: 4px;
+  min-height: 24px;
+}
+
+.mascot-msg-row.user .mascot-bubble-meta {
+  justify-content: flex-end;
+}
+
+.mascot-bubble-meta--assistant .mascot-msg-regen {
+  margin-left: auto;
 }
 
 .mascot-bubble-stats {
@@ -724,9 +814,7 @@
 }
 
 .mascot-msg-regen {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
+  flex-shrink: 0;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -736,10 +824,37 @@
   border: 1px solid var(--el-border-color-lighter, #ebeef5);
   color: var(--el-text-color-secondary);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+}
+
+.mascot-search-image-card {
+  margin-top: 6px;
+  max-width: 100%;
+}
+
+.mascot-search-image-wrap {
+  margin-top: 8px;
+}
+
+.mascot-search-image {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  max-height: 150px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--el-fill-color-darker, rgba(0, 0, 0, 0.06));
+}
+
+.mascot-bubble--ai .mascot-md img {
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  margin-top: 6px;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .mascot-thinking-text {

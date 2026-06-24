@@ -1,5 +1,9 @@
 .gobang-room-page {
+  height: 100vh;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background:
     radial-gradient(circle at 70% 18%, rgba(88, 84, 214, 0.18), transparent 26%),
     linear-gradient(135deg, #0b1720 0%, #12252f 54%, #0a141c 100%);
@@ -7,12 +11,17 @@
 }
 
 .gobang-room-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   width: min(1260px, 94vw);
   margin: 0 auto;
   padding: 18px 0 42px;
 }
 
 .gobang-room-head {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
@@ -72,6 +81,8 @@
 }
 
 .gobang-room-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr) 280px;
   gap: 16px;
@@ -83,6 +94,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .gobang-player-card,
@@ -407,6 +421,21 @@
   color: #e8fff3;
 }
 
+.gobang-board-status.is-ai-thinking {
+  background: rgba(255, 210, 119, 0.14);
+  color: #fff3d6;
+  animation: gobang-ai-think-pulse 1.4s ease-in-out infinite;
+}
+
+.gobang-opponent-card.is-ai-thinking {
+  box-shadow: 0 0 0 2px rgba(255, 210, 119, 0.35);
+}
+
+@keyframes gobang-ai-think-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
 .gobang-board-status.is-finished {
   background: rgba(115, 156, 255, 0.14);
   color: #e8efff;
@@ -561,7 +590,7 @@
 }
 
 .gobang-chat-panel {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .gobang-chat-box {
@@ -587,8 +616,11 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  max-height: 100%;
   padding: 12px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .gobang-chat-msg {
@@ -794,7 +826,8 @@
   }
 
   .gobang-chat-box {
-    min-height: 420px;
+    min-height: 320px;
+    max-height: min(52vh, 520px);
   }
 }
 

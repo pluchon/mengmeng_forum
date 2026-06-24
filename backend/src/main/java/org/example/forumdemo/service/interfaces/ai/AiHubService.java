@@ -32,4 +32,7 @@ public interface AiHubService {
 
     /** 用户 AI 语义搜索：Redis 向量召回；失败返回空列表 */
     List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates);
+
+    /** 用户向量召回，返回 [{userId, score}, ...] 按 score 降序 */
+    List<Map<String, Object>> ragUserVectorRanked(String query);
 }

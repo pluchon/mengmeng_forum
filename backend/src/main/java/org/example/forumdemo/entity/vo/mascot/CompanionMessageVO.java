@@ -13,5 +13,7 @@ public class CompanionMessageVO {
     private String content;
     private String type;
     private String url;
+    /** 联网检索配图（text 消息时由 image_url 列承载） */
+    private String searchImageUrl;
     private Date at;
 }

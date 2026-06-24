@@ -18,4 +18,6 @@ public class ArticleListResponse {
     //我们在各个类中已经抹去了敏感信息，放心组装返回
     private UserBriefVO user;
     private Article article;
+    /** 当前登录用户是否关注了该帖作者；未登录时为 false */
+    private Boolean fromFollowing;
 }

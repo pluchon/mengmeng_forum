@@ -22,6 +22,7 @@ export const useUserStore = defineStore('user', () => {
   const gender = ref(2)
   /** 0 正常 1 禁言 */
   const state = ref(0)
+  const ipRegion = ref('')
 
   const isLoggedIn = computed(() => !!token.value && typeof token.value === 'string')
 
@@ -43,6 +44,7 @@ export const useUserStore = defineStore('user', () => {
         mascotModelId.value = res.data.mascotModelId ?? null
         gender.value = res.data.gender != null ? Number(res.data.gender) : 2
         state.value = res.data.state != null ? Number(res.data.state) : 0
+        ipRegion.value = res.data.ipRegion || ''
       } else {
         logout()
       }
@@ -86,13 +88,14 @@ export const useUserStore = defineStore('user', () => {
     mascotModelId.value = null
     gender.value = 2
     state.value = 0
+    ipRegion.value = ''
     router.push('/sign-in')
   }
 
   return {
     token, id, nickname, avatarUrl, isAdmin,
     remark, phoneNum, email, backgroundUrl,
-    vipTier, vipExpireAt, mascotModelId, gender, state,
+    vipTier, vipExpireAt, mascotModelId, gender, state, ipRegion,
     isLoggedIn, fetchUserInfo, setToken, login, logout, patchUserProfile
   }
 }, {
