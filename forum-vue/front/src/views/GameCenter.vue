@@ -10,7 +10,7 @@
         </div>
         <div class="game-points-balance">
           <span>积分余额</span>
-          <strong>{{ pointsBalanceText }}</strong>
+          <strong>{{ pointsBalance }}</strong>
         </div>
       </header>
 

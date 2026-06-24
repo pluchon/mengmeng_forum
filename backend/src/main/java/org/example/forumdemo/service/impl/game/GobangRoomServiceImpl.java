@@ -37,6 +37,8 @@ import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
+import org.example.forumdemo.service.impl.game.ai.GameAiPlanner;
+import org.example.forumdemo.service.impl.game.ai.GobangAiEngine;
 import org.example.forumdemo.service.impl.game.guard.GobangActionContext;
 import org.example.forumdemo.service.impl.game.guard.GobangGuardChain;
 import org.example.forumdemo.service.impl.game.guard.GobangGuardResult;
@@ -77,7 +79,11 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private static final String AI_MODEL_PRO = "deepseek-v4-pro";
 
-    private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH + " · 本地策略兜底";
+    private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH;
+
+    private static final int AI_CONNECT_TIMEOUT_MS = 3_000;
+
+    private static final int AI_READ_TIMEOUT_MS = 8_000;
 
     // roomId -> 房间状态
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
@@ -120,6 +126,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private GobangRuleEngine gobangRuleEngine;
+
+    @Autowired
+    private GobangAiEngine gobangAiEngine;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -169,7 +178,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         room.setAiRoom(true);
         String modelCode = chooseAiModelCode(userId);
         room.setAiModelCode(modelCode);
-        room.setAiModelName(modelCode);
+        room.setAiModelName(GameAiPlanner.formatModelLabel(modelCode, false, false));
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
         userRoomIds.put(userId, room.getRoomId());
@@ -605,6 +614,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 now,
                 spectator,
                 room.isAiRoom(),
+                room.isAiThinking(),
                 room.getWinningLine(),
                 blackPlayer,
                 whitePlayer,
@@ -768,41 +778,76 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private void scheduleAiMove(GobangRoom room) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                Thread.sleep(700);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            playAiMove(room.getRoomId());
-        });
+        boolean consultLlm = GameAiPlanner.shouldConsultLlm(room)
+                && !gobangAiEngine.hasTacticalMove(room.getBoard());
+        long minThinkMs = GameAiPlanner.minThinkMs(consultLlm);
+        room.setAiThinking(true);
+        sendStateToRoom(room, "room_state_updated");
+        final boolean llm = consultLlm;
+        CompletableFuture.runAsync(() -> executeAiTurn(room.getRoomId(), llm, minThinkMs));
     }
 
-    private void playAiMove(String roomId) {
-        GobangRoom room = rooms.get(roomId);
-        if (room == null) {
-            return;
-        }
-        synchronized (room) {
-            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
-                    || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
+    private void executeAiTurn(String roomId, boolean consultLlm, long minThinkMs) {
+        long started = System.currentTimeMillis();
+        try {
+            GobangRoom room = rooms.get(roomId);
+            if (room == null) {
                 return;
             }
-            int[] move = chooseAiMove(room);
-            if (move != null) {
+            int[] move;
+            synchronized (room) {
+                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
+                        || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
+                    return;
+                }
+                move = chooseAiMove(room, consultLlm);
+            }
+            if (move == null) {
+                return;
+            }
+            long elapsed = System.currentTimeMillis() - started;
+            long wait = minThinkMs - elapsed;
+            if (wait > 0) {
+                Thread.sleep(wait);
+            }
+            synchronized (room) {
+                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
+                        || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
+                    return;
+                }
+                if (!inBoard(move[0], move[1]) || room.getBoard()[move[0]][move[1]] != 0) {
+                    return;
+                }
+                room.setAiMoveCount(room.getAiMoveCount() + 1);
                 handleMove(roomId, GameConstants.AI_USER_ID, move[0], move[1], null);
+                if (room.isAiRoom()) {
+                    sendStateToRoom(room, "room_state_updated");
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            GobangRoom room = rooms.get(roomId);
+            if (room != null) {
+                room.setAiThinking(false);
+                sendStateToRoom(room, "room_state_updated");
             }
         }
     }
 
-    private int[] chooseAiMove(GobangRoom room) {
-        int[] remoteMove = chooseRemoteAiMove(room);
-        if (remoteMove != null) {
-            return remoteMove;
+    private int[] chooseAiMove(GobangRoom room, boolean consultLlm) {
+        if (gobangAiEngine.hasTacticalMove(room.getBoard())) {
+            room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
+            return gobangAiEngine.chooseMove(room.getBoard());
         }
-        room.setAiModelName(formatAiModelName(room.getAiModelCode(), true));
-        return chooseLocalAiMove(room.getBoard());
+        if (consultLlm) {
+            int[] remoteMove = chooseRemoteAiMove(room);
+            if (remoteMove != null) {
+                return remoteMove;
+            }
+        }
+        room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
+        return gobangAiEngine.chooseMove(room.getBoard());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -821,6 +866,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             body.put("player_chess", 1);
             body.put("room_id", room.getRoomId());
             body.put("model_code", room.getAiModelCode());
+            body.put("use_llm", true);
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     AiHubUrls.gobangMoveUrl(),
                     new HttpEntity<>(body, headers),
@@ -841,10 +887,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             String modelCode = parseModelCode(data, room.getAiModelCode());
             boolean fallback = Boolean.TRUE.equals(data.get("fallback"));
             room.setAiModelCode(modelCode);
-            room.setAiModelName(formatAiModelName(modelCode, fallback));
+            room.setAiModelName(GameAiPlanner.formatModelLabel(modelCode, !fallback, fallback));
             return new int[] { row, col };
         } catch (Exception e) {
-            log.debug("五子棋 Python AI 不可用，使用本地兜底策略 roomId={}, error={}", room.getRoomId(), e.getMessage());
+            log.warn("五子棋 Python AI 不可用，使用本地智能引擎 roomId={}, error={}", room.getRoomId(), e.getMessage());
             return null;
         }
     }
@@ -864,15 +910,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         return AI_MODEL_PRO.equals(defaultModelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
     }
 
-    private String formatAiModelName(String modelCode, boolean fallback) {
-        String safeModelCode = AI_MODEL_PRO.equals(modelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
-        return fallback ? safeModelCode + " · 本地策略兜底" : safeModelCode;
-    }
-
     private SimpleClientHttpRequestFactory aiRequestFactory() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(800);
-        factory.setReadTimeout(1800);
+        factory.setConnectTimeout(AI_CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(AI_READ_TIMEOUT_MS);
         return factory;
     }
 
@@ -888,135 +929,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             }
         }
         return defaultValue;
-    }
-
-    private int[] chooseLocalAiMove(int[][] board) {
-        int center = GameConstants.BOARD_SIZE / 2;
-        if (board[center][center] == 0) {
-            return new int[] { center, center };
-        }
-        int[] win = findTacticalMove(board, 2);
-        if (win != null) {
-            return win;
-        }
-        int[] block = findTacticalMove(board, 1);
-        if (block != null) {
-            return block;
-        }
-        int bestScore = Integer.MIN_VALUE;
-        int[] bestMove = null;
-        for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
-            for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
-                if (board[row][col] != 0 || !hasNeighbor(board, row, col)) {
-                    continue;
-                }
-                int score = scorePoint(board, row, col, 2) * 2 + scorePoint(board, row, col, 1);
-                int centerBias = 20 - Math.abs(row - center) - Math.abs(col - center);
-                score += centerBias;
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = new int[] { row, col };
-                }
-            }
-        }
-        return bestMove == null ? firstEmpty(board) : bestMove;
-    }
-
-    private int[] findTacticalMove(int[][] board, int chess) {
-        for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
-            for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
-                if (board[row][col] != 0) {
-                    continue;
-                }
-                board[row][col] = chess;
-                boolean five = gobangRuleEngine.hasFive(board, chess, row, col);
-                board[row][col] = 0;
-                if (five) {
-                    return new int[] { row, col };
-                }
-            }
-        }
-        return null;
-    }
-
-    private int scorePoint(int[][] board, int row, int col, int chess) {
-        int score = 0;
-        int[][] directions = new int[][] {
-                { 1, 0 },
-                { 0, 1 },
-                { 1, 1 },
-                { 1, -1 }
-        };
-        for (int[] direction : directions) {
-            int forward = countDirection(board, row, col, chess, direction[0], direction[1]);
-            int backward = countDirection(board, row, col, chess, -direction[0], -direction[1]);
-            int length = forward + backward + 1;
-            int openEnds = openEnd(board, row, col, chess, direction[0], direction[1], forward)
-                    + openEnd(board, row, col, chess, -direction[0], -direction[1], backward);
-            if (length >= 5) {
-                score += 100_000;
-            } else if (length == 4 && openEnds == 2) {
-                score += 12_000;
-            } else if (length == 4) {
-                score += 5_000;
-            } else if (length == 3 && openEnds == 2) {
-                score += 1_200;
-            } else if (length == 3) {
-                score += 360;
-            } else if (length == 2 && openEnds == 2) {
-                score += 120;
-            } else if (length == 2) {
-                score += 40;
-            } else if (openEnds > 0) {
-                score += 8;
-            }
-        }
-        return score;
-    }
-
-    private int countDirection(int[][] board, int row, int col, int chess, int rowStep, int colStep) {
-        int count = 0;
-        int nextRow = row + rowStep;
-        int nextCol = col + colStep;
-        while (inBoard(nextRow, nextCol) && board[nextRow][nextCol] == chess) {
-            count++;
-            nextRow += rowStep;
-            nextCol += colStep;
-        }
-        return count;
-    }
-
-    private int openEnd(int[][] board, int row, int col, int chess, int rowStep, int colStep, int count) {
-        int nextRow = row + rowStep * (count + 1);
-        int nextCol = col + colStep * (count + 1);
-        return inBoard(nextRow, nextCol) && board[nextRow][nextCol] == 0 ? 1 : 0;
-    }
-
-    private boolean hasNeighbor(int[][] board, int row, int col) {
-        for (int rowStep = -2; rowStep <= 2; rowStep++) {
-            for (int colStep = -2; colStep <= 2; colStep++) {
-                if (rowStep == 0 && colStep == 0) {
-                    continue;
-                }
-                int nextRow = row + rowStep;
-                int nextCol = col + colStep;
-                if (inBoard(nextRow, nextCol) && board[nextRow][nextCol] != 0) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private int[] firstEmpty(int[][] board) {
-        for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
-            for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
-                if (board[row][col] == 0) {
-                    return new int[] { row, col };
-                }
-            }
-        }
-        return null;
     }
 
     private boolean inBoard(int row, int col) {

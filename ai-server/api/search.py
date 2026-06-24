@@ -59,7 +59,7 @@ def article_rag_search():
     if not docs:
         return jsonify({"code": 200, "results": [], "msg": "No candidates"}), 200
 
-    results = hybrid_rank(query, docs, meta, id_key="articleId")
+    results = hybrid_rank(query, docs, meta, id_key="articleId", light=True)
     return jsonify({"code": 200, "results": results, "msg": "success"}), 200
 
 
@@ -73,5 +73,5 @@ def user_rag_search():
     if not docs:
         return jsonify({"code": 200, "results": [], "msg": "No candidates"}), 200
 
-    results = hybrid_rank(query, docs, meta, id_key="userId")
+    results = hybrid_rank(query, docs, meta, id_key="userId", light=True)
     return jsonify({"code": 200, "results": results, "msg": "success"}), 200

@@ -10,23 +10,26 @@ import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.entity.db.ArticleSubReply;
+import org.example.forumdemo.entity.db.ArticleSubReplyLike;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.article.SubReplyRequest;
 import org.example.forumdemo.entity.vo.article.ArticleSubReplyListResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
+import org.example.forumdemo.mapper.ArticleSubReplyLikeMapper;
 import org.example.forumdemo.mapper.ArticleSubReplyMapper;
 import org.example.forumdemo.common.utils.RequestIpUtils;
 import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.article.ArticleSubReplyService;
-import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +38,9 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
 
     @Autowired
     private ArticleSubReplyMapper articleSubReplyMapper;
+
+    @Autowired
+    private ArticleSubReplyLikeMapper articleSubReplyLikeMapper;
 
     @Autowired
     private ArticleService articleService;
@@ -81,21 +87,36 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     }
 
     @Override
-    public PageResult<ArticleSubReplyListResponse> querySubReplyByReplyId(Long replyId, Integer pageNum, Integer pageSize) {
+    public PageResult<ArticleSubReplyListResponse> querySubReplyByReplyId(
+            Long replyId, Integer pageNum, Integer pageSize, Long loginUserId) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<ArticleSubReply> page = PageUtils.getPage(validPageNum, validPageSize);
         Page<ArticleSubReply> result = articleSubReplyMapper.selectPage(page, new LambdaQueryWrapper<ArticleSubReply>()
                 .eq(ArticleSubReply::getReplyId, replyId).ne(ArticleSubReply::getState, 1)
                 .ne(ArticleSubReply::getDeleteState, 1).orderByAsc(ArticleSubReply::getCreateTime));
-        List<ArticleSubReplyListResponse> records = result.getRecords().stream()
-                .map(this::buildSubReplyResponse).collect(Collectors.toList());
+        List<ArticleSubReply> rows = result.getRecords();
+        Set<Long> likedSubIds = loadLikedSubReplyIds(loginUserId, rows);
+        List<ArticleSubReplyListResponse> records = rows.stream()
+                .map(sub -> buildSubReplyResponse(sub, likedSubIds))
+                .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
     }
 
+    private Set<Long> loadLikedSubReplyIds(Long loginUserId, List<ArticleSubReply> rows) {
+        if (loginUserId == null || loginUserId <= 0 || rows == null || rows.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> subIds = rows.stream().map(ArticleSubReply::getId).collect(Collectors.toList());
+        List<ArticleSubReplyLike> likes = articleSubReplyLikeMapper.selectList(new LambdaQueryWrapper<ArticleSubReplyLike>()
+                .eq(ArticleSubReplyLike::getUserId, loginUserId)
+                .in(ArticleSubReplyLike::getSubReplyId, subIds));
+        return likes.stream().map(ArticleSubReplyLike::getSubReplyId).collect(Collectors.toCollection(HashSet::new));
+    }
+
     /** 单条楼中楼 -> 列表项装配，被回复用户已注销时昵称留空 */
-    private ArticleSubReplyListResponse buildSubReplyResponse(ArticleSubReply sub) {
+    private ArticleSubReplyListResponse buildSubReplyResponse(ArticleSubReply sub, Set<Long> likedSubIds) {
         User postUser = userService.queryUserByUserId(sub.getPostUserId());
         String replyUserNickname = "";
         if (sub.getReplyUserId() != null) {
@@ -108,6 +129,11 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
                 log.warn("被回复用户 {} 不存在或已被删除", sub.getReplyUserId());
             }
         }
-        return new ArticleSubReplyListResponse(sub, new UserBriefVO(postUser), replyUserNickname);
+        ArticleSubReplyListResponse vo = new ArticleSubReplyListResponse();
+        vo.setSubReply(sub);
+        vo.setPostUser(new UserBriefVO(postUser));
+        vo.setReplyUserNickname(replyUserNickname);
+        vo.setLiked(likedSubIds.contains(sub.getId()));
+        return vo;
     }
 }

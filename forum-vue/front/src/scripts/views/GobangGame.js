@@ -10,6 +10,7 @@ import {
   getGobangReplay,
 } from '@/api/game'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import { useForumPointsBalance } from '@/composables/useForumPointsBalance'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
 
@@ -34,6 +35,7 @@ function endReasonText(reason) {
 }
 
 const router = useRouter()
+const { pointsBalance, refreshForumPointsBalance } = useForumPointsBalance()
 const loading = ref(false)
 const matching = ref(false)
 let refreshTimer = null
@@ -97,7 +99,6 @@ const gameSocket = useGameWebSocket('games/gobang', {
 const winRateText = computed(() => `${Number(profile.winRate) || 0}%`)
 const statusLabel = computed(() => statusText(profile.currentStatus))
 const canResumeRoom = computed(() => profile.currentStatus === 'PLAYING' && profile.currentRoomId)
-const pointsBalanceText = computed(() => `${Number(profile.score) || 0} 积分`)
 const gobangGame = computed(() =>
   overview.games.find((item) => item?.gameCode === 'gobang') || {
     gameCode: 'gobang',
@@ -150,14 +151,14 @@ async function loadRecords() {
 async function refreshAll() {
   loading.value = true
   try {
-    await Promise.all([loadProfile(), loadRecords(), loadOverview(), loadActiveRooms()])
+    await Promise.all([loadProfile(), loadRecords(), loadOverview(), loadActiveRooms(), refreshForumPointsBalance()])
   } finally {
     loading.value = false
   }
 }
 
 async function refreshSilent() {
-  await Promise.all([loadProfile(), loadOverview(), loadActiveRooms()])
+  await Promise.all([loadProfile(), loadOverview(), loadActiveRooms(), refreshForumPointsBalance()])
 }
 
 function startMatch() {

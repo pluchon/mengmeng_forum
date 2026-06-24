@@ -18,6 +18,10 @@ _AI_SERVER_ROOT = Path(__file__).resolve().parent
 _CONFIG_PATH = Path(os.environ.get("AI_SERVER_CONFIG", str(_AI_SERVER_ROOT / "config.yaml"))).resolve()
 
 
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _load() -> dict[str, Any]:
     if not _CONFIG_PATH.exists():
         raise FileNotFoundError(
@@ -84,7 +88,16 @@ class Settings:
 
         ff = raw.get("ffmpeg", {}) or {}
         ff["base_url"] = os.environ.get("FORUM_FFMPEG_URL", ff.get("base_url", "http://ffmpeg:8099"))
+        ff["internal_key"] = os.environ.get(
+            "FFMPEG_INTERNAL_KEY",
+            os.environ.get("FORUM_FFMPEG_INTERNAL_KEY", ff.get("internal_key", "")),
+        )
         raw["ffmpeg"] = ff
+
+        sec = raw.get("security", {}) or {}
+        if _env_truthy("AI_REQUIRE_INTERNAL_KEY"):
+            sec["require_internal_key"] = True
+        raw["security"] = sec
 
     @property
     def server(self) -> dict[str, Any]: return self.raw.get("server", {})
@@ -142,6 +155,10 @@ class Settings:
     @property
     def ffmpeg(self) -> dict[str, Any]:
         return self.raw.get("ffmpeg", {})
+
+    @property
+    def security(self) -> dict[str, Any]:
+        return self.raw.get("security", {})
 
     def pg_url(self) -> str:
         """LangGraph PostgresSaver 用的 conn string"""

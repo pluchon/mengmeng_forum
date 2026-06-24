@@ -21,6 +21,7 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.BoardMapper;
 import org.example.forumdemo.service.interfaces.board.BoardService;
+import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -30,6 +31,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -45,6 +47,9 @@ public class BoardServiceImpl implements BoardService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserFollowService userFollowService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -120,7 +125,7 @@ public class BoardServiceImpl implements BoardService {
     // 板块帖子列表（分页）；boardId=0 表示首页全量
     // ============================================================
     @Override
-    public PageResult<ArticleListResponse> selectBoardListWithPage(Long boardId, Integer pageNum, Integer pageSize) {
+    public PageResult<ArticleListResponse> selectBoardListWithPage(Long boardId, Integer pageNum, Integer pageSize, Long loginUserId) {
         if (boardId == null || boardId < 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -136,11 +141,15 @@ public class BoardServiceImpl implements BoardService {
             wrapper.eq(Article::getBoardId, boardId);
         }
         Page<Article> result = articleMapper.selectPage(page, wrapper);
+        Set<Long> followingIds = (loginUserId != null && loginUserId > 0)
+                ? userFollowService.listFollowingIds(loginUserId)
+                : Set.of();
         List<ArticleListResponse> records = result.getRecords().stream().map(article -> {
             User user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
             response.setUser(new UserBriefVO(user));
+            response.setFromFollowing(followingIds.contains(article.getUserId()));
             return response;
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,

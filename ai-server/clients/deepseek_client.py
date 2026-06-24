@@ -18,12 +18,18 @@ def deepseek_chat_completion(
     messages: list[dict[str, Any]],
     *,
     timeout: int = 120,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> tuple[str, dict[str, Any]]:
     if not api_key:
         raise ValueError("deepseek api_key 未配置，请设置 DEEPSEEK_API_KEY 或 config.yaml deepseek.api_key")
     url = base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"model": model, "messages": messages}
+    payload: dict[str, Any] = {"model": model, "messages": messages}
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+    if temperature is not None:
+        payload["temperature"] = temperature
     r = requests.post(url, headers=headers, json=payload, timeout=timeout)
     if not r.ok:
         body = (r.text or "")[:500]

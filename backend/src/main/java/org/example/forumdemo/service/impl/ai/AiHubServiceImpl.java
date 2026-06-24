@@ -27,6 +27,11 @@ import java.util.Map;
 @Service
 public class AiHubServiceImpl implements AiHubService {
 
+    /** 站点搜索：帖子向量最低相关度（与 ai-server rag.vector_min_score 对齐） */
+    private static final double ARTICLE_SEARCH_MIN_SCORE = 0.20;
+    /** 站点搜索：用户向量最低相关度 */
+    private static final double USER_SEARCH_MIN_SCORE = 0.28;
+
     @Value("${forum.ai.hub-base-url:http://localhost:5000}")
     private String hubBaseUrl;
 
@@ -168,6 +173,13 @@ public class AiHubServiceImpl implements AiHubService {
             }
             List<Long> sorted = new ArrayList<>();
             for (Object item : list) {
+                if (item instanceof Map<?, ?> m) {
+                    Object scoreObj = m.get("score");
+                    double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
+                    if (score < ARTICLE_SEARCH_MIN_SCORE) {
+                        continue;
+                    }
+                }
                 Long id = parseVectorHitId(item, "articleId", "article_id");
                 if (id != null) {
                     sorted.add(id);
@@ -253,6 +265,56 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
+    public List<Map<String, Object>> ragUserVectorRanked(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("query", query.trim());
+            body.put("candidates", Collections.emptyList());
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
+            ResponseEntity<Map> resp = restTemplate.postForEntity(
+                    joinUrl("/api/v1/rag/user-vector-search"), req, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                return Collections.emptyList();
+            }
+            Object results = resp.getBody().get("results");
+            if (!(results instanceof List<?> list)) {
+                return Collections.emptyList();
+            }
+            List<Map<String, Object>> ranked = new ArrayList<>();
+            for (Object item : list) {
+                if (!(item instanceof Map<?, ?> m)) {
+                    continue;
+                }
+                Object idObj = m.get("userId");
+                if (idObj == null) {
+                    idObj = m.get("user_id");
+                }
+                if (idObj == null) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("userId", idObj);
+                Object scoreObj = m.get("score");
+                double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
+                row.put("score", score);
+                ranked.add(row);
+            }
+            ranked.sort((a, b) -> Double.compare(
+                    ((Number) b.getOrDefault("score", 0)).doubleValue(),
+                    ((Number) a.getOrDefault("score", 0)).doubleValue()));
+            return ranked;
+        } catch (Exception e) {
+            log.warn("RAG 用户向量检索(含分数)失败 keyword={}: {}", query.trim(), e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates) {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
@@ -274,6 +336,13 @@ public class AiHubServiceImpl implements AiHubService {
             }
             List<Long> sorted = new ArrayList<>();
             for (Object item : list) {
+                if (item instanceof Map<?, ?> m) {
+                    Object scoreObj = m.get("score");
+                    double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
+                    if (score < USER_SEARCH_MIN_SCORE) {
+                        continue;
+                    }
+                }
                 Long id = parseVectorHitId(item, "userId", "user_id");
                 if (id != null) {
                     sorted.add(id);

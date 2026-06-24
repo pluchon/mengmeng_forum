@@ -14,10 +14,9 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ArticleSubReplyListResponse {
-    //楼中楼回复记录
     private ArticleSubReply subReply;
-    //发言用户信息
     private UserBriefVO postUser;
-    //被回复的目标用户昵称
     private String replyUserNickname;
+    // 当前登录用户是否已点赞
+    private Boolean liked;
 }

@@ -8,10 +8,14 @@ import org.example.forumdemo.common.websocket.game.handler.JinziGameWebSocketHan
 import org.example.forumdemo.common.websocket.game.handler.JinziRoomWebSocketHandler;
 import org.example.forumdemo.common.interceptor.TokenHandshakeInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+
+import java.util.Arrays;
 
 //配置握手前的JWT鉴权
 @Configuration
@@ -39,31 +43,36 @@ public class WebSocketConfigure implements WebSocketConfigurer {
     @Autowired
     private JinziRoomWebSocketHandler jinziRoomWebSocketHandler;
 
+    @Value("${forum.websocket.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+    private String allowedOriginsCsv;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        String[] origins = Arrays.stream(allowedOriginsCsv.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toArray(String[]::new);
+        if (origins.length == 0) {
+            origins = new String[] {"http://localhost:5173"};
+        }
+
         registry.addHandler(webSocket, "/ws/notify")
-                // 握手前执行 JWT 鉴权
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
         registry.addHandler(gameCenterLobbyWebSocketHandler, "/ws/game-center/lobby")
-                // 游戏中心大厅连接，独立于通知连接
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
         registry.addHandler(gobangGameWebSocketHandler, "/ws/games/gobang")
-                // 五子棋游戏级连接，负责匹配
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
         registry.addHandler(gobangRoomWebSocketHandler, "/ws/games/gobang/rooms/*")
-                // 五子棋房间连接，负责落子和房间状态
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
         registry.addHandler(jinziGameWebSocketHandler, "/ws/games/jinzi")
-                // 井字棋游戏级连接，负责匹配
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
         registry.addHandler(jinziRoomWebSocketHandler, "/ws/games/jinzi/rooms/*")
-                // 井字棋房间连接，负责落子和房间状态
                 .addInterceptors(tokenHandshakeInterceptor)
-                .setAllowedOrigins("*");
+                .setAllowedOrigins(origins);
     }
 }

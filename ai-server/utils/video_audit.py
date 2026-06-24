@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from collections.abc import Callable
 
 import requests
@@ -56,10 +57,18 @@ def _dashscope_video_audit(resolved_url: str) -> tuple[bool, str]:
 
 def _extract_frames_via_ffmpeg(resolved_url: str) -> list[bytes]:
     endpoint = f"{_ffmpeg_base()}/extract-audit-frames"
+    headers: dict[str, str] = {}
+    internal_key = (
+        (settings.ffmpeg.get("internal_key") or "").strip()
+        or (os.environ.get("FFMPEG_INTERNAL_KEY") or os.environ.get("FORUM_FFMPEG_INTERNAL_KEY") or "").strip()
+    )
+    if internal_key:
+        headers["X-Internal-Key"] = internal_key
     try:
         r = requests.post(
             endpoint,
             json={"url": resolved_url, "count": 4},
+            headers=headers,
             timeout=int(settings.audit.get("video_frame_extract_timeout", 600)),
         )
         r.raise_for_status()

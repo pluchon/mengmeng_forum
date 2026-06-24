@@ -30,6 +30,8 @@ import {
 import '@/assets/styles/editor.css'
 
 const MAX_ARTICLE_GALLERY = 15
+// 与后端 Constant.ARTICLE_GALLERY_MIN_CONTENT_LEN 保持一致：有相册图时正文纯文本至少 10 字
+const GALLERY_MIN_CONTENT_LEN = 10
 
 export function useArticleCreate() {
   const route = useRoute()
@@ -567,10 +569,22 @@ export function useArticleCreate() {
     }
   }
 
+  // 与后端一致：去掉 HTML 标签后计算正文纯文本长度
+  function plainContentLength() {
+    const raw = form.content || ''
+    return raw.replace(/<[^>]+>/g, '').trim().length
+  }
+
   // 核心提交逻辑
   async function validateAndPrepare() {
     if (!form.boardId || !form.title || !form.content.trim()) {
       ElMessage.warning('标题、内容和版块缺一不可哦')
+      return false
+    }
+    // 有相册图的帖子，正文纯文本必须 ≥ 10 字，否则后端相册同步会被拒(1146)
+    if (mediaMode.value === 'gallery' && galleryUrls.value.length > 0
+        && plainContentLength() < GALLERY_MIN_CONTENT_LEN) {
+      ElMessage.warning(`上传了图片的帖子，正文至少需要 ${GALLERY_MIN_CONTENT_LEN} 个字`)
       return false
     }
     if (galleryUploading.value) {
@@ -606,8 +620,11 @@ export function useArticleCreate() {
         const articleId = isEdit.value ? route.params.id : res.data
         const gal = await syncGalleryToServer(articleId)
         if (!gal.ok) {
+          // 相册/视频未同步成功（如正文不足 10 字）时，具体原因已由 syncGalleryToServer 提示；
+          // 此处中止跳转，避免用户误以为图片已保存
           const mediaHint = mediaMode.value === 'video' ? '视频' : '笔记相册'
-          ElMessage.warning(`正文已保存，但${mediaHint}未同步成功，可重新保存一次`)
+          ElMessage.warning(`正文已保存，但${mediaHint}未同步，请按提示修正后重新保存`)
+          return
         }
         // edit 模式下用户若用了内嵌封面 uploader, 先把封面同步上去再跳转, 让 cover 页能展示最新预览
         const cov = await runCoverUploadToArticle(articleId)

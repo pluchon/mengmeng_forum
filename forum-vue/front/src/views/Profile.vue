@@ -38,11 +38,29 @@
                 />
               </div>
               <div class="name-row-right">
-                <IpRegionLabel :region="userInfo?.ipRegion" />
+                <IpRegionLabel :region="profileIpRegion" />
                 <div v-if="!isMe" class="action-btns">
+                  <el-button
+                    round
+                    :type="isFollowing ? 'default' : 'primary'"
+                    :loading="followSaving"
+                    @click="toggleFollow"
+                  >
+                    {{ isFollowing ? '已关注' : '关注' }}
+                  </el-button>
                   <el-button round @click="handleChat">私信</el-button>
                 </div>
               </div>
+            </div>
+
+            <div class="follow-stats-row">
+              <button type="button" class="follow-stat follow-stat-btn" @click="openFollowingList">
+                <strong>{{ followingCount }}</strong> 关注
+              </button>
+              <span class="follow-stat-divider" aria-hidden="true">·</span>
+              <button type="button" class="follow-stat follow-stat-btn" @click="openFollowersList">
+                <strong>{{ followerCount }}</strong> 粉丝
+              </button>
             </div>
 
             <p class="bio">个人简介：{{ userInfo?.remark || '还没有填写个人简介哦' }}</p>
@@ -81,6 +99,15 @@
               <span class="profile-tab-post-count-val">{{ total }}</span>
               <span class="profile-tab-post-count-lab">发帖数</span>
             </div>
+            <button
+              v-if="activeTab === 'collect' && isMe"
+              type="button"
+              class="profile-fav-create-btn"
+              @click="openCreateFavoriteFolder"
+            >
+              <el-icon><Plus /></el-icon>
+              新建
+            </button>
           </div>
 
           <div v-show="activeTab === 'notes'" class="profile-content">
@@ -107,25 +134,35 @@
               </el-col>
             </el-row>
             <el-empty v-if="articles.length === 0" description="还没有发布过笔记哦" />
+            <div v-if="notesHasMore" class="profile-load-more-wrap">
+              <el-button
+                class="profile-load-more-btn"
+                :loading="notesLoadingMore"
+                @click="loadMoreNotes"
+              >
+                查看更多
+              </el-button>
+            </div>
           </div>
 
           <div v-show="activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
-            <div v-if="isMe" class="profile-fav-head">
-              <span>我的收藏夹</span>
-              <el-button type="primary" size="small" round :icon="Plus" @click="openCreateFavoriteFolder">
-                新建
-              </el-button>
-            </div>
             <el-card
               v-for="f in favoriteFolders"
               :key="f.id"
               class="profile-fav-folder-card animate-fade-up"
+              :class="{ 'profile-fav-folder-card--private': Number(f.isPublic) !== 1 }"
               shadow="never"
               :body-style="{ padding: '14px 16px' }"
             >
               <div class="profile-fav-folder-row">
                 <div>
-                  <div class="profile-fav-folder-name">{{ f.name }}</div>
+                  <div class="profile-fav-folder-name">
+                    <el-icon class="profile-fav-folder-icon">
+                      <Unlock v-if="Number(f.isPublic) === 1" />
+                      <Lock v-else />
+                    </el-icon>
+                    {{ f.name }}
+                  </div>
                   <div class="profile-fav-folder-meta">
                     {{ Number(f.isPublic) === 1 ? '公开' : '私密' }} · {{ f.itemCount ?? 0 }} 条
                   </div>
@@ -170,6 +207,15 @@
               </el-col>
             </el-row>
             <el-empty v-if="likedArticles.length === 0" description="还没有点赞过帖子哦" />
+            <div v-if="isMe && likedHasMore" class="profile-load-more-wrap">
+              <el-button
+                class="profile-load-more-btn"
+                :loading="likedLoadingMore"
+                @click="loadMoreLiked"
+              >
+                查看更多
+              </el-button>
+            </div>
           </div>
         </div>
       </template>
@@ -189,8 +235,31 @@
       width="min(920px, 94vw)"
       align-center
       destroy-on-close
-      :title="favoriteDialogTitle"
+      :show-close="false"
     >
+      <template #header>
+        <div class="profile-fav-dialog-head">
+          <div class="profile-fav-dialog-title">{{ favoriteDialogTitle }}</div>
+          <div class="profile-fav-dialog-head-actions">
+            <div v-if="isMe && favoriteDialogVisible" class="profile-fav-visibility">
+              <span class="profile-fav-visibility-label">公开</span>
+              <el-switch
+                :model-value="favoriteFolderPublic === 1"
+                :loading="favoriteVisibilitySaving"
+                @change="toggleFavoriteFolderPublic"
+              />
+            </div>
+            <button
+              type="button"
+              class="profile-fav-dialog-close"
+              aria-label="关闭"
+              @click="favoriteDialogVisible = false"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      </template>
       <div v-loading="favoriteDialogLoading" class="profile-fav-dialog-body">
         <div
           v-for="row in favoriteDialogItems"
@@ -246,21 +315,28 @@
         <el-button type="primary" :loading="favoriteCreateSaving" @click="saveFavoriteFolder">保存</el-button>
       </template>
     </el-dialog>
+
+    <UserFollowListDialog ref="followListDialogRef" />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
+import UserFollowListDialog from '@/components/user/UserFollowListDialog.vue'
 import { useProfile } from '@scripts/views/Profile'
 import vipCrownUrl from '@/assets/svg/VIP.svg?url'
 
 const vipCrownSrc = vipCrownUrl
+const followListDialogRef = ref(null)
 
 const {
   Camera,
+  Lock,
   Plus,
   Star,
+  Unlock,
   activeTab,
   articles,
   avatarSrc,
@@ -269,8 +345,16 @@ const {
   coverStyle,
   handleBgUpload,
   handleChat,
+  toggleFollow,
+  isFollowing,
+  followSaving,
+  followingCount,
+  followerCount,
   isMe,
   likedArticles,
+  likedHasMore,
+  likedLoadingMore,
+  loadMoreLiked,
   favoriteCreateForm,
   favoriteCreateSaving,
   favoriteCreateVisible,
@@ -279,14 +363,21 @@ const {
   favoriteDialogLoading,
   favoriteDialogTitle,
   favoriteDialogVisible,
+  favoriteFolderPublic,
   favoriteFolders,
   favoriteSnippet,
+  favoriteVisibilitySaving,
   loadingFavorites,
+  loadMoreNotes,
+  notesHasMore,
+  notesLoadingMore,
   loading,
   openArticleFromFavorite,
   openCreateFavoriteFolder,
   openFavoriteDialog,
+  profileIpRegion,
   saveFavoriteFolder,
+  toggleFavoriteFolderPublic,
   total,
   triggerBgUpload,
   userInfo,
@@ -294,6 +385,18 @@ const {
   displayVipExpireAt,
   showVipBadge,
 } = useProfile()
+
+function openFollowingList() {
+  const uid = userInfo.value?.id
+  if (!uid) return
+  followListDialogRef.value?.openList('following', uid)
+}
+
+function openFollowersList() {
+  const uid = userInfo.value?.id
+  if (!uid) return
+  followListDialogRef.value?.openList('followers', uid)
+}
 </script>
 
 <style scoped src="@/assets/styles/user.css"></style>

@@ -82,6 +82,8 @@ public class MascotController {
             HttpServletRequest httpServletRequest) {
         User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         SseEmitter emitter = new SseEmitter(180_000L);
+        emitter.onTimeout(emitter::complete);
+        emitter.onError((e) -> emitter.complete());
         if (user == null) {
             try {
                 emitter.send(SseEmitter.event().data("{\"error\":\"未登录\"}"));

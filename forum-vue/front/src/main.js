@@ -15,6 +15,8 @@ import './assets/styles/global.css'
 import './assets/styles/banner.css'
 
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+import { useUserStore } from './stores/user'
+import { usePointsWalletStore } from './stores/pointsWallet'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -31,6 +33,13 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus, {
   locale: zhCn,
+})
+
+router.isReady().then(() => {
+  const userStore = useUserStore()
+  if (userStore.isLoggedIn) {
+    void usePointsWalletStore().refresh()
+  }
 })
 
 app.mount('#app')

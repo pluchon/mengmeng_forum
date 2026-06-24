@@ -1204,12 +1204,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .author .nickname {
   font-size: 12px;
   color: #666;
-  max-width: 70px;
+  max-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

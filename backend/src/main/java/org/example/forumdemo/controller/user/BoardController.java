@@ -3,8 +3,11 @@ package org.example.forumdemo.controller.user;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import jakarta.servlet.http.HttpServletRequest;
+import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.Board;
+import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.article.ArticleListResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.service.interfaces.board.BoardService;
@@ -55,7 +58,10 @@ public class BoardController {
     @Operation(summary = "根据板块Id展示对应模块的帖子内容(分页)", description = "传入对应的板块ID查询，支持分页")
     @GetMapping("/selectBoardListByBoardIdWithPage")
     public Result<PageResult<ArticleListResponse>> selectBoardListByBoardIdWithPage(Long boardId,
-            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(boardService.selectBoardListWithPage(boardId, pageNum, pageSize));
+            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long loginUserId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(boardService.selectBoardListWithPage(boardId, pageNum, pageSize, loginUserId));
     }
 }

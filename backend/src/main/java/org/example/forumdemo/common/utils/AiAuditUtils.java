@@ -253,6 +253,63 @@ public class AiAuditUtils {
     }
 
     /**
+     * RAG 用户语义重排，保留 userId 与 score（供 AI 用户搜索过滤低相关结果）.
+     */
+    @SuppressWarnings("rawtypes")
+    public static List<Map<String, Object>> ragSearchUsersRanked(
+            String query, List<Map<String, Object>> candidates) {
+        if (query == null || query.trim().isEmpty() || candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            Map<String, Object> body = new HashMap<>();
+            body.put("query", query);
+            body.put("candidates", candidates);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> resp = restTemplate.postForEntity(AiHubUrls.userRagSearchUrl(), req, Map.class);
+            if (resp.getStatusCode() != HttpStatus.OK || resp.getBody() == null) {
+                return Collections.emptyList();
+            }
+            Object results = resp.getBody().get("results");
+            if (!(results instanceof List<?>)) {
+                return Collections.emptyList();
+            }
+            List<Map<String, Object>> ranked = new ArrayList<>();
+            for (Object item : (List<?>) results) {
+                if (!(item instanceof Map<?, ?> m)) {
+                    continue;
+                }
+                Object idObj = m.get("userId");
+                if (idObj == null) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("userId", idObj);
+                Object scoreObj = m.get("score");
+                if (scoreObj instanceof Number n) {
+                    row.put("score", n.doubleValue());
+                } else if (scoreObj != null) {
+                    try {
+                        row.put("score", Double.parseDouble(String.valueOf(scoreObj)));
+                    } catch (NumberFormatException ignore) {
+                        row.put("score", 0.0);
+                    }
+                } else {
+                    row.put("score", 0.0);
+                }
+                ranked.add(row);
+            }
+            return ranked;
+        } catch (Exception e) {
+            log.warn("用户 RAG 重排(含分数)调用失败: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
      * RAG 用户语义匹配检索（同步 HTTP 联调）
      * 作用：支持根据用户的简介、标签进行智能语义检索，寻找兴趣相投的用户
      *

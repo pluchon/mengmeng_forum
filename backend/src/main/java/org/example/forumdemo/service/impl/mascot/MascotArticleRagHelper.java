@@ -37,7 +37,15 @@ public class MascotArticleRagHelper {
     private static final int RAG_EXCERPT_TAIL = 400;
     private static final int MAX_RELATED = 5;
     /** 向量相关度阈值（与 ai-server rag.mascot_min_score 对齐） */
-    private static final double MIN_SCORE = 0.10;
+    private static final double MIN_SCORE = 0.42;
+    /** 最高分不足则整批不展示（避免泛语义误召回） */
+    private static final double TOP_MIN_TO_SHOW = 0.46;
+    /** 相对 top 分比例，低于此视为弱相关不展示 */
+    private static final double RELATIVE_TO_TOP = 0.93;
+    /** 相邻结果分差超过此值则截断（只保留第一梯队） */
+    private static final double SCORE_GAP_MAX = 0.055;
+    /** 高于此分可免标题关键词校验 */
+    private static final double HIGH_SCORE_BYPASS = 0.52;
 
     @Resource
     private ArticleMapper articleMapper;
@@ -59,7 +67,7 @@ public class MascotArticleRagHelper {
             // 1) 优先全库向量召回（Redis + qwen3-vl-embedding）
             List<Map<String, Object>> vectorRanked = aiHubService.ragArticleVectorRanked(query, List.of());
             if (!vectorRanked.isEmpty()) {
-                List<Map<String, Object>> fromVector = enrichTitles(vectorRanked, exclude);
+                List<Map<String, Object>> fromVector = enrichTitles(query, vectorRanked, exclude);
                 if (!fromVector.isEmpty()) {
                     return fromVector;
                 }
@@ -85,7 +93,7 @@ public class MascotArticleRagHelper {
             if (ranked.isEmpty()) {
                 ranked = fallbackVectorRank(query, payload, exclude);
             }
-            return enrichFromRanked(ranked, byId, exclude);
+            return enrichFromRanked(query, ranked, byId, exclude);
         } catch (Exception e) {
             log.warn("看板娘帖子 RAG 推荐失败: {}", e.getMessage());
             return Collections.emptyList();
@@ -105,12 +113,10 @@ public class MascotArticleRagHelper {
         return out;
     }
 
-    private List<Map<String, Object>> enrichTitles(List<Map<String, Object>> ranked, Set<Long> exclude) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private List<Map<String, Object>> enrichTitles(
+            String query, List<Map<String, Object>> ranked, Set<Long> exclude) {
+        List<Map<String, Object>> candidates = new ArrayList<>();
         for (Map<String, Object> row : ranked) {
-            if (out.size() >= MAX_RELATED) {
-                break;
-            }
             double score = row.get("score") instanceof Number n ? n.doubleValue() : 0.0;
             if (score < MIN_SCORE) {
                 continue;
@@ -132,20 +138,15 @@ public class MascotArticleRagHelper {
             item.put("articleId", id);
             item.put("title", a.getTitle().trim());
             item.put("score", score);
-            out.add(item);
+            candidates.add(item);
         }
-        out.sort(Comparator.comparingDouble(
-                (Map<String, Object> m) -> ((Number) m.getOrDefault("score", 0)).doubleValue()).reversed());
-        return out;
+        return applyRelevanceCutoff(query, candidates);
     }
 
     private List<Map<String, Object>> enrichFromRanked(
-            List<Map<String, Object>> ranked, Map<Long, Article> byId, Set<Long> exclude) {
-        List<Map<String, Object>> out = new ArrayList<>();
+            String query, List<Map<String, Object>> ranked, Map<Long, Article> byId, Set<Long> exclude) {
+        List<Map<String, Object>> candidates = new ArrayList<>();
         for (Map<String, Object> row : ranked) {
-            if (out.size() >= MAX_RELATED) {
-                break;
-            }
             Object idObj = row.get("articleId");
             if (idObj == null) {
                 continue;
@@ -171,11 +172,65 @@ public class MascotArticleRagHelper {
             item.put("articleId", id);
             item.put("title", a.getTitle().trim());
             item.put("score", score);
-            out.add(item);
+            candidates.add(item);
         }
-        out.sort(Comparator.comparingDouble(
+        return applyRelevanceCutoff(query, candidates);
+    }
+
+    /** 绝对阈值 + 相对 top + 分差截断 + 标题词命中，返回 0~5 条 */
+    private List<Map<String, Object>> applyRelevanceCutoff(String query, List<Map<String, Object>> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        candidates.sort(Comparator.comparingDouble(
                 (Map<String, Object> m) -> ((Number) m.getOrDefault("score", 0)).doubleValue()).reversed());
+        double top = ((Number) candidates.get(0).getOrDefault("score", 0)).doubleValue();
+        if (top < TOP_MIN_TO_SHOW) {
+            return Collections.emptyList();
+        }
+        double relativeFloor = Math.max(MIN_SCORE, top * RELATIVE_TO_TOP);
+        List<Map<String, Object>> out = new ArrayList<>();
+        double prevScore = -1;
+        for (Map<String, Object> row : candidates) {
+            if (out.size() >= MAX_RELATED) {
+                break;
+            }
+            double score = ((Number) row.getOrDefault("score", 0)).doubleValue();
+            if (score < relativeFloor) {
+                break;
+            }
+            String title = String.valueOf(row.getOrDefault("title", ""));
+            if (!passesSemanticGate(query, title, score)) {
+                continue;
+            }
+            if (prevScore >= 0 && prevScore - score > SCORE_GAP_MAX) {
+                break;
+            }
+            prevScore = score;
+            out.add(row);
+        }
         return out;
+    }
+
+    /** 低分时要求查询词与标题有字面重叠，过滤泛向量误匹配 */
+    private boolean passesSemanticGate(String query, String title, double score) {
+        if (score >= HIGH_SCORE_BYPASS) {
+            return true;
+        }
+        if (!StringUtils.hasText(title)) {
+            return false;
+        }
+        List<String> tokens = tokenizeKeyword(query);
+        if (tokens.isEmpty()) {
+            return score >= TOP_MIN_TO_SHOW;
+        }
+        String titleLower = title.toLowerCase();
+        for (String token : tokens) {
+            if (titleLower.contains(token.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isPublishedVisible(Article a) {
@@ -188,23 +243,28 @@ public class MascotArticleRagHelper {
 
     private List<Map<String, Object>> fallbackVectorRank(
             String query, List<Map<String, Object>> payload, Set<Long> exclude) {
-        List<Long> ids = aiHubService.ragVectorSearchArticles(query, payload);
-        List<Map<String, Object>> out = new ArrayList<>();
-        int rank = ids.size();
-        for (Long id : ids) {
-            if (out.size() >= MAX_RELATED) {
-                break;
+        List<Map<String, Object>> ranked = aiHubService.ragArticleVectorRanked(query, payload);
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        for (Map<String, Object> row : ranked) {
+            double score = row.get("score") instanceof Number n ? n.doubleValue() : 0.0;
+            if (score < MIN_SCORE) {
+                continue;
             }
-            if (id == null || exclude.contains(id)) {
-                rank--;
+            long id;
+            try {
+                id = Long.parseLong(String.valueOf(row.get("articleId")));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (exclude.contains(id)) {
                 continue;
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("articleId", id);
-            m.put("score", Math.max(MIN_SCORE, 0.5 + (rank-- * 0.02)));
-            out.add(m);
+            m.put("score", score);
+            candidates.add(m);
         }
-        return out;
+        return candidates;
     }
 
     private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Article> buildCandidateQuery(String kw) {

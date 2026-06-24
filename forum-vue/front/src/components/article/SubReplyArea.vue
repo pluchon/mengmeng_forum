@@ -40,8 +40,19 @@
                 </el-space>
               </div>
               <div class="sub-item-meta">
-                <el-text type="info" size="small">{{ sub.subReply.createTime }}</el-text>
-                <IpRegionLabel :region="sub.subReply?.ipRegion" />
+                <div class="sub-item-meta-left">
+                  <el-text type="info" size="small">{{ sub.subReply.createTime }}</el-text>
+                  <IpRegionLabel :region="sub.subReply?.ipRegion" />
+                </div>
+                <div class="sub-item-meta-actions">
+                  <button type="button" class="comment-action-btn" @click="toggleSubLike(sub)">
+                    <span :class="{ 'is-liked': sub.liked }">赞 {{ sub.subReply.likeCount || 0 }}</span>
+                  </button>
+                  <button type="button" class="comment-action-btn" @click="emitReply(sub)">
+                    <el-icon><ChatDotRound /></el-icon>
+                    <span>回复</span>
+                  </button>
+                </div>
               </div>
             </el-col>
           </el-row>
@@ -62,110 +73,61 @@
         />
       </div>
     </el-collapse-transition>
-
-    <div v-if="!readOnly" class="sub-input-box" :class="{ 'vip-sub-input-gold': vipGoldFocus }">
-      <el-input
-        ref="subInputRef"
-        v-model="inputContent"
-        :placeholder="replyTarget ? '回复 @' + replyTarget.postUser?.nickname : '写下你的回复...'"
-        size="small"
-        class="sub-input"
-        @keyup.enter="submitSub"
-      >
-        <template v-if="replyTarget" #prefix>
-          <el-tag size="small" closable type="info" @close="replyTarget = null">
-            @{{ replyTarget.postUser?.nickname }}
-          </el-tag>
-        </template>
-        <template #suffix>
-          <img
-            :src="sendIconUrl"
-            alt=""
-            class="sub-plain-svg sub-plain-svg--send"
-            :class="{ 'is-disabled': !inputContent.trim() || submitting }"
-            role="button"
-            tabindex="0"
-            aria-label="发送"
-            @click="submitSub"
-            @keydown.enter.prevent="submitSub"
-          />
-        </template>
-      </el-input>
-    </div>
   </div>
 </template>
 
 <script setup>
+import { ChatDotRound } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
-import sendIconUrl from '@/assets/svg/发送.svg?url'
 import { useSubReplyArea } from '@scripts/components/article/SubReplyArea'
 
 const props = defineProps({
   replyId: { type: [Number, String], required: true },
   articleId: { type: [Number, String], required: true },
-  /** 会员：楼中楼输入框在获得焦点时显示金色描边 */
-  vipGoldFocus: { type: Boolean, default: false },
-  /** 只读展示历史楼中楼，不显示回复输入框 */
-  readOnly: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: true },
 })
+
+const emit = defineEmits(['reply'])
 
 const {
   CaretBottom,
   CaretTop,
   defaultAvatar,
+  emitReply,
   expanded,
-  inputContent,
+  goProfile,
   loadSubs,
-  openReplyTo,
   page,
   pageSize,
-  replyTarget,
-  setReplyTarget,
-  subInputRef,
   subList,
-  submitSub,
-  submitting,
   toggle,
+  toggleSubLike,
   total,
-  goProfile,
-} = useSubReplyArea(props)
-
-defineExpose({ openReplyTo })
+} = useSubReplyArea(props, emit)
 </script>
 
 <style scoped src="@/assets/styles/article.css"></style>
 
 <style scoped>
-.sub-plain-svg {
-  display: inline-block;
-  vertical-align: middle;
-  cursor: pointer;
-  user-select: none;
-}
-
-.sub-plain-svg--send {
-  width: 16px;
-  height: 16px;
-  margin-right: 2px;
-  opacity: 0.85;
-}
-
-.sub-plain-svg--send:hover:not(.is-disabled) {
-  opacity: 1;
-}
-
-.sub-plain-svg--send.is-disabled {
-  opacity: 0.28;
-  cursor: default;
-  pointer-events: none;
-}
-
 .sub-item-meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-top: 4px;
+}
+
+.sub-item-meta-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-item-meta-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .sub-user-link {

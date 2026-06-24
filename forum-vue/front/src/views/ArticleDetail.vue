@@ -10,34 +10,27 @@
       :close-on-click-modal="true"
       :show-close="false"
       :destroy-on-close="false"
+      :before-close="handleBeforeClose"
+      transition=""
       @closed="handleDialogClosed"
     >
       <div class="red-detail-page red-detail-page--modal">
         <div v-if="article" class="red-detail-container">
           <div class="media-section">
             <div class="media-stage">
-              <div class="media-placeholder" :style="{ background: detailCoverBg }">
-                <video
+              <div class="media-placeholder">
+                <ArticleDetailVideo
                   v-if="isVideoArticle && articleVideoUrl"
-                  ref="detailVideoRef"
                   :key="articleVideoUrl"
-                  class="media-video-main"
                   :src="articleVideoUrl"
-                  autoplay
-                  controls
-                  controlslist="nodownload noplaybackrate noremoteplayback"
-                  disablepictureinpicture
-                  playsinline
-                  preload="auto"
-                  @contextmenu.prevent
                   @ended="replayDetailVideo"
                 />
                 <el-image
-                  v-else-if="activeGalleryUrl"
-                  :src="activeGalleryUrl"
+                  v-else-if="mainDisplayImageUrl"
+                  :src="mainDisplayImageUrl"
                   fit="contain"
                   class="media-gallery-main"
-                  :preview-src-list="articleGalleryUrls"
+                  :preview-src-list="imagePreviewList"
                   :initial-index="activeGalleryIndex"
                   preview-teleported
                   :z-index="5200"
@@ -92,7 +85,6 @@
                     :vip-expire-at="author?.vipExpireAt"
                   />
                   <span class="nickname">{{ author?.nickname }}</span>
-                  <IpRegionLabel :region="article?.ipRegion" />
                 </div>
                 <div v-else class="author-info author-info--static">
                   <UserAvatarVip
@@ -102,8 +94,19 @@
                     :vip-expire-at="author?.vipExpireAt"
                   />
                   <span class="nickname">{{ author?.nickname }}</span>
-                  <IpRegionLabel :region="article?.ipRegion" />
                 </div>
+                <button
+                  v-if="!isOwner && author?.id"
+                  type="button"
+                  class="article-detail-follow-btn"
+                  :class="isFollowingAuthor ? 'article-detail-follow-btn--followed' : 'article-detail-follow-btn--follow'"
+                  :disabled="followSaving"
+                  @click.stop="toggleFollowAuthor"
+                >
+                  {{ isFollowingAuthor ? '已关注' : '关注' }}
+                </button>
+              </div>
+              <div class="author-header-right">
                 <button
                   v-if="isOwner"
                   type="button"
@@ -113,19 +116,19 @@
                 >
                   <img :src="likersMenuListIconUrl" alt="" class="likers-list-icon-img" />
                 </button>
-                <el-tag v-if="isOwner" size="small" type="danger" effect="dark" style="margin-left: 4px">
+                <el-tag v-if="isOwner" size="small" type="danger" effect="dark">
                   你自己
                 </el-tag>
+                <el-button
+                  circle
+                  text
+                  class="author-header-close"
+                  aria-label="关闭"
+                  @click="closeDetailDialog"
+                >
+                  <el-icon :size="20"><Close /></el-icon>
+                </el-button>
               </div>
-              <el-button
-                circle
-                text
-                class="author-header-close"
-                aria-label="关闭"
-                @click="closeDetailDialog"
-              >
-                <el-icon :size="20"><Close /></el-icon>
-              </el-button>
             </div>
 
             <el-alert
@@ -144,10 +147,24 @@
               </template>
             </el-alert>
 
-            <el-scrollbar class="article-content-scroll">
+            <el-scrollbar class="article-content-scroll article-content-scroll--hidden-bar">
               <div class="article-body">
                 <h1 class="content-title">{{ article.title }}</h1>
-                <div class="content-text" v-html="renderedContent"></div>
+                <div
+                  class="content-text-wrap"
+                  :class="{ 'is-collapsed': shouldCollapseContent && !contentExpanded }"
+                >
+                  <div class="content-text" v-html="renderedContent"></div>
+                </div>
+                <div v-if="shouldCollapseContent" class="content-expand-wrap">
+                  <button
+                    type="button"
+                    class="content-expand-btn"
+                    @click="contentExpanded = !contentExpanded"
+                  >
+                    {{ contentExpanded ? '收起' : '点击展示全文' }}
+                  </button>
+                </div>
 
                 <div class="ai-summary-box animate-fade-up">
                   <div class="ai-guide-header">
@@ -235,14 +252,27 @@
                         UP
                       </el-tag>
                     </div>
-                    <div class="comment-text" v-html="item.articleReply.content"></div>
+                    <div class="comment-text" v-html="renderCommentHtml(item.articleReply.content)"></div>
                     <div class="comment-footer">
-                      <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
-                      <IpRegionLabel :region="item.articleReply?.ipRegion" />
+                      <div class="comment-footer-left">
+                        <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
+                        <IpRegionLabel :region="item.articleReply?.ipRegion" />
+                      </div>
+                      <div class="comment-footer-actions">
+                        <button type="button" class="comment-action-btn" @click="toggleReplyLike(item)">
+                          <span :class="{ 'is-liked': item.liked }">赞 {{ item.articleReply.likeCount || 0 }}</span>
+                        </button>
+                        <button type="button" class="comment-action-btn" @click="startReplyToFloor(item)">
+                          <el-icon><ChatDotRound /></el-icon>
+                          <span>回复 {{ item.subReplyCount || 0 }}</span>
+                        </button>
+                      </div>
                     </div>
                     <SubReplyArea
                       :reply-id="item.articleReply.id"
                       :article-id="article.id"
+                      read-only
+                      @reply="startReplyToSub"
                     />
                   </div>
                 </div>
@@ -256,13 +286,22 @@
             </el-scrollbar>
 
             <div class="interaction-footer interaction-footer-stacked">
+              <div v-if="replyTarget" class="reply-target-bar">
+                <div class="reply-target-text">
+                  <span class="reply-target-label">回复给 @{{ replyTarget.nickname }}</span>
+                  <span v-if="replyTarget.contentPreview" class="reply-target-preview">
+                    {{ replyTarget.contentPreview }}
+                  </span>
+                </div>
+                <button type="button" class="reply-target-clear" @click="clearReplyTarget">取消</button>
+              </div>
               <div
                 class="comment-input-wrap comment-input-full"
                 :class="{ 'vip-comment-gold': isVipGold }"
               >
                 <el-input
                   v-model="replyContent"
-                  placeholder="说点什么…"
+                  :placeholder="replyPlaceholder"
                   class="red-input red-input-tall"
                   @keyup.enter="submitReply"
                 >
@@ -297,8 +336,13 @@
                   <el-icon :size="24"><ChatDotRound /></el-icon>
                   <span class="count">{{ replyCountDisplay }}</span>
                 </el-button>
-                <el-button class="action-item">
-                  <el-icon :size="24"><Share /></el-icon>
+                <el-button
+                  class="action-item share-action-btn"
+                  :class="{ 'share-action-btn--copied': shareCopied }"
+                  @click="handleShare"
+                >
+                  <span v-if="shareCopied" class="share-copied-text">已复制</span>
+                  <el-icon v-else :size="24"><Share /></el-icon>
                 </el-button>
               </div>
             </div>
@@ -379,6 +423,8 @@
 </template>
 
 <script setup>
+defineOptions({ name: 'ArticleDetail' })
+
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import { useArticleDetail } from '@scripts/views/ArticleDetail'
@@ -389,6 +435,7 @@ const {
   CollectionTag,
   PictureFilled,
   Share,
+  ArticleDetailVideo,
   SubReplyArea,
   MagicStick,
   aiLoading,
@@ -398,18 +445,24 @@ const {
   article,
   articleTags,
   activeGalleryIndex,
-  activeGalleryUrl,
+  mainDisplayImageUrl,
+  imagePreviewList,
   articleGalleryUrls,
   articleVideoUrl,
   detailVideoRef,
   isVideoArticle,
   replayDetailVideo,
   author,
+  clearReplyTarget,
   closeDetailDialog,
   confirmFavorite,
+  contentExpanded,
+  shouldCollapseContent,
   defaultAvatar,
-  detailCoverBg,
   dialogOpen,
+  followSaving,
+  isFollowingAuthor,
+  toggleFollowAuthor,
   emptyCommentIconUrl,
   fetchLikers,
   galleryStripFadeLeft,
@@ -418,12 +471,15 @@ const {
   galleryStripRef,
   goAuthorProfile,
   goUserProfile,
+  handleBeforeClose,
   handleDialogClosed,
   favoriteDialogVisible,
   favoriteFolders,
   favoriteFoldersLoading,
   favoriteSaving,
   handleLike,
+  handleShare,
+  shareCopied,
   isLiked,
   isOwner,
   isFavorited,
@@ -437,14 +493,20 @@ const {
   onGalleryStripScroll,
   ownerAuditNotice,
   renderedContent,
+  renderCommentHtml,
   replies,
   sendIconUrl,
   replyContent,
   replyCountDisplay,
+  replyPlaceholder,
+  replyTarget,
   selectedFolderId,
   setActiveGalleryIndex,
   showLikersDialog,
+  startReplyToFloor,
+  startReplyToSub,
   submitReply,
+  toggleReplyLike,
   toggleFavorite,
   formatForumDateTimeShanghai,
 } = useArticleDetail()

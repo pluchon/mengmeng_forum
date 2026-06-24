@@ -358,6 +358,7 @@ def stream_mascot_chat(
     client_datetime: str = "",
 ):
     """yield ('text', str) 或 ('usage', dict)。"""
+    yield ("status", "preparing")
     ctx = _prepare_mascot_context(
         message=message,
         appearance=appearance,
@@ -368,6 +369,9 @@ def stream_mascot_chat(
         vip_tier=vip_tier,
         client_datetime=client_datetime,
     )
+    search_image = str(ctx.get("search_image_url") or "").strip()
+    if search_image:
+        yield ("meta", {"searchImageUrl": search_image})
     from clients.usage_util import attach_latency
 
     route, msgs = _build_agent_messages(ctx, stream=True)
@@ -422,7 +426,9 @@ def _skill_system_stream(
         if mcp_context:
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
-你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。"""
+你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。
+若系统已展示联网配图，正文无需再插入多张图片。
+站内相关帖子由系统在消息下方按相关度展示（0~5 条），弱相关时不要强行提及。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
             tail += " 出行规划请用 Markdown 表格输出阶段路线，并单独写目的地天气。"
         else:
@@ -521,11 +527,27 @@ def _route_after_assess(state: MascotState) -> Literal["tavily_search", "agent"]
 def node_tavily_search(state: MascotState) -> MascotState:
     query = (state.get("mcp_query") or state.get("message") or "").strip()
     ctx = ""
+    search_image_url = ""
     try:
-        ctx = invoke_tool("tavily_search", {"query": query})
+        from clients.tavily_client import TavilySearchClient
+        from config import settings as _settings
+
+        cfg = _settings.tavily
+        client = TavilySearchClient()
+        if client.is_configured():
+            ctx, search_image_url = client.search_for_chat(
+                query,
+                max_results=int(cfg.get("max_results", 5)),
+                search_depth=str(cfg.get("search_depth", "basic")),
+            )
+        else:
+            ctx = invoke_tool("tavily_search", {"query": query})
     except Exception:
         logger.exception("MCP tavily_search 失败")
-        ctx = ""
+        try:
+            ctx = invoke_tool("tavily_search", {"query": query})
+        except Exception:
+            ctx = ""
     prev = (state.get("mcp_context") or "").strip()
     if ctx and prev:
         merged = f"{prev}\n\n【联网检索参考】\n{ctx}"
@@ -533,7 +555,7 @@ def node_tavily_search(state: MascotState) -> MascotState:
         merged = f"【联网检索参考】\n{ctx}"
     else:
         merged = prev
-    return {"mcp_context": merged}
+    return {"mcp_context": merged, "search_image_url": search_image_url}
 
 
 def node_agent(state: MascotState) -> MascotState:

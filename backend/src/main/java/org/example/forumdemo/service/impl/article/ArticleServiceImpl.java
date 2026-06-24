@@ -39,6 +39,8 @@ import org.example.forumdemo.service.interfaces.board.BoardService;
 import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
 import org.example.forumdemo.service.interfaces.message.SystemMessageService;
+import org.example.forumdemo.service.interfaces.article.ArticleTagService;
+import org.example.forumdemo.service.interfaces.search.ArticleSearchIndexService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -119,7 +121,10 @@ public class ArticleServiceImpl implements ArticleService {
     private org.example.forumdemo.service.interfaces.ai.AiHubService aiHubService;
 
     @Autowired
-    private org.example.forumdemo.service.interfaces.article.ArticleTagService articleTagService;
+    private ArticleTagService articleTagService;
+
+    @Autowired
+    private ArticleSearchIndexService articleSearchIndexService;
 
     @Autowired
     private IpRegionService ipRegionService;
@@ -212,6 +217,7 @@ public class ArticleServiceImpl implements ArticleService {
         // 新文章按当前各字段加权入榜
         stringRedisTemplate.opsForZSet().add(Constant.REDIS_KEY_HOT_ARTICLES,
                 String.valueOf(articleId), computeHotScore(article));
+        articleSearchIndexService.syncPublishedArticle(articleId);
     }
 
     // ============================================================
@@ -334,6 +340,7 @@ public class ArticleServiceImpl implements ArticleService {
             stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
+            articleSearchIndexService.removeArticle(articleId);
         }
         if (req.getTagIds() != null) {
             articleTagService.bindArticleTags(articleId, article.getBoardId(), req.getTagIds());
@@ -364,6 +371,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
         // 同步从热帖 ZSet 中移除，防止已删除帖子继续出现在榜单
         stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
+        articleSearchIndexService.removeArticle(articleId);
         log.info("帖子 {} 已逻辑删除并从热帖榜单移除", articleId);
     }
 
@@ -699,6 +707,7 @@ public class ArticleServiceImpl implements ArticleService {
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
             stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+            articleSearchIndexService.removeArticle(articleId);
         }
     }
 
@@ -778,6 +787,7 @@ public class ArticleServiceImpl implements ArticleService {
                 boardService.deleteOneById(article.getBoardId());
                 userService.deleteOneById(loginUserId);
                 stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+                articleSearchIndexService.removeArticle(articleId);
             }
         }
         log.info("帖子相册替换完成: articleId={}, count={}, userId={}", articleId, urls.size(), loginUserId);
@@ -825,6 +835,7 @@ public class ArticleServiceImpl implements ArticleService {
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
             stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+            articleSearchIndexService.removeArticle(articleId);
         }
         log.info("帖子视频已绑定: articleId={}, userId={}", articleId, loginUserId);
     }
@@ -862,6 +873,7 @@ public class ArticleServiceImpl implements ArticleService {
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
             stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
+            articleSearchIndexService.removeArticle(articleId);
         }
     }
 
@@ -979,6 +991,7 @@ public class ArticleServiceImpl implements ArticleService {
             stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
             boardService.deleteOneById(article.getBoardId());
             userService.deleteOneById(loginUserId);
+            articleSearchIndexService.removeArticle(articleId);
         }
         log.info("提交审核成功: articleId={}, userId={}, taskId={}, retry={}/{}",
                 articleId, loginUserId, taskId, curRetry + 1, Constant.ARTICLE_AUDIT_MAX_RETRY);
@@ -1122,6 +1135,7 @@ public class ArticleServiceImpl implements ArticleService {
             ragPayload.put("authorNickname", author != null ? author.getNickname() : "");
             ragPayload.put("tagNames", articleTagService.tagNamesByArticleId(articleId));
             aiHubService.indexArticleRag(ragPayload);
+            articleSearchIndexService.syncPublishedArticle(articleId);
         }
         notifyAuditResult(article, result,
                 Constant.SYSTEM_MSG_TYPE_AUDIT_PASS,

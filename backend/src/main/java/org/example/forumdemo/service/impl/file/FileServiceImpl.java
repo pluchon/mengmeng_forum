@@ -16,6 +16,7 @@ import org.example.forumdemo.common.utils.ImageCompressor;
 import org.example.forumdemo.common.utils.InMemoryMultipartFile;
 import org.example.forumdemo.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -51,6 +52,9 @@ public class FileServiceImpl implements FileService {
 
     @Autowired
     private OssConfig ossConfig;
+
+    @Value("${forum.ffmpeg.internal-key:}")
+    private String ffmpegInternalKey;
 
     @Override
     public String uploadAvatar(MultipartFile file, Long userId) {
@@ -509,6 +513,9 @@ public class FileServiceImpl implements FileService {
             });
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+            if (ffmpegInternalKey != null && !ffmpegInternalKey.isBlank()) {
+                headers.set("X-Internal-Key", ffmpegInternalKey);
+            }
             org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> req =
                     new org.springframework.http.HttpEntity<>(body, headers);
             ResponseEntity<byte[]> resp = rt.postForEntity(url, req, byte[].class);

@@ -57,6 +57,14 @@ springdoc:
   swagger-ui:
     # 生产环境建议关闭 swagger，防止接口信息泄露
     enabled: false
+  api-docs:
+    enabled: false
+
+forum:
+  websocket:
+    allowed-origins: https://www.nuonuoya.cn,https://admin.nuonuoya.cn
+  ffmpeg:
+    internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
 
 pii:
   secret: ${PII_CRYPTO_SECRET}

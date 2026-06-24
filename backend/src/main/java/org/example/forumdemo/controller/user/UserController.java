@@ -21,11 +21,16 @@ import org.example.forumdemo.common.utils.OnlineUserManageUtil;
 import org.example.forumdemo.service.interfaces.user.UserLoginLogService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.example.forumdemo.entity.vo.user.UserLoginLogVO;
+import org.example.forumdemo.entity.vo.user.UserFollowListItemVO;
+import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
+import org.example.forumdemo.entity.vo.common.PageResult;
+import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @Tag(name = "用户模块", description = "用户的增删改查接口")
 @RestController
@@ -54,6 +59,9 @@ public class UserController {
 
     @Autowired
     private UserLoginLogService userLoginLogService;
+
+    @Autowired
+    private UserFollowService userFollowService;
 
     @Operation(summary = "用户注册", description = "传入用户名、密码、昵称完成注册")
     @PostMapping("/register")
@@ -214,5 +222,72 @@ public class UserController {
             HttpServletRequest httpServletRequest) {
         User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(userLoginLogService.listRecent(sessionUser.getId(), limit == null ? 20 : limit));
+    }
+
+    @Operation(summary = "关注用户")
+    @PutMapping("/followUser")
+    public Result<String> followUser(@RequestParam Long followeeId, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        userFollowService.follow(loginUser.getId(), followeeId);
+        return Result.success("关注成功");
+    }
+
+    @Operation(summary = "取消关注")
+    @PutMapping("/unfollowUser")
+    public Result<String> unfollowUser(@RequestParam Long followeeId, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        userFollowService.unfollow(loginUser.getId(), followeeId);
+        return Result.success("已取消关注");
+    }
+
+    @Operation(summary = "关注统计", description = "返回关注数、粉丝数；登录且查看他人主页时附带 isFollowing")
+    @GetMapping("/followStats")
+    public Result<UserFollowStatsVO> followStats(@RequestParam Long userId, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long viewerId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(userFollowService.getStats(userId, viewerId));
+    }
+
+    @Operation(summary = "我关注的用户ID列表", description = "用于首页热帖等场景标注「你的关注」")
+    @GetMapping("/followingIds")
+    public Result<List<Long>> followingIds(HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        Set<Long> ids = userFollowService.listFollowingIds(loginUser.getId());
+        return Result.success(ids.stream().sorted().toList());
+    }
+
+    @Operation(summary = "关注列表", description = "某用户关注的人；按关注时间降序；keyword 仅在关注范围内按用户名模糊搜")
+    @GetMapping("/followingList")
+    public Result<PageResult<UserFollowListItemVO>> followingList(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long viewerId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(userFollowService.listFollowingPage(userId, viewerId, keyword, pageNum, pageSize));
+    }
+
+    @Operation(summary = "粉丝列表", description = "关注某用户的人；按关注时间降序；keyword 仅在粉丝范围内按用户名模糊搜")
+    @GetMapping("/followerList")
+    public Result<PageResult<UserFollowListItemVO>> followerList(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long viewerId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(userFollowService.listFollowersPage(userId, viewerId, keyword, pageNum, pageSize));
     }
 }

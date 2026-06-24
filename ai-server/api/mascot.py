@@ -28,11 +28,9 @@ def _client_datetime_from_body(data: dict[str, Any]) -> str:
 
 
 def _internal_auth_ok() -> bool:
-    expected = (settings.mascot.get("internal_key") or "").strip()
-    if not expected:
-        return True
-    got = (request.headers.get("X-Internal-Key") or "").strip()
-    return got == expected
+    from security.internal_auth import internal_auth_ok
+
+    return internal_auth_ok((settings.mascot.get("internal_key") or "").strip())
 
 
 def _sanitize_appearance(raw: Any) -> str:
@@ -151,6 +149,10 @@ def mascot_chat_stream():
             for kind, event_payload in stream_mascot_chat(**payload):
                 if kind == "text" and event_payload:
                     yield f"data: {json.dumps({'text': event_payload}, ensure_ascii=False)}\n\n"
+                elif kind == "status" and event_payload:
+                    yield f"data: {json.dumps({'meta': {'status': event_payload}}, ensure_ascii=False)}\n\n"
+                elif kind == "meta" and event_payload:
+                    yield f"data: {json.dumps({'meta': event_payload}, ensure_ascii=False)}\n\n"
                 elif kind == "usage":
                     yield f"data: {json.dumps({'usage': event_payload}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"

@@ -35,10 +35,13 @@ export function useUnifiedSearchFeed() {
     const mode = preferAiRag.value ? 'AI 语义' : '普通'
     if (searchTab.value === 'user') {
       if (source.value === 'empty') return `「${keyword.value}」· 未检索到对应的用户`
+      if (source.value === 'rag') return `「${keyword.value}」· ${mode} · 用户`
+      if (source.value === 'db') return `「${keyword.value}」· 昵称/用户名匹配`
       return `「${keyword.value}」· ${mode} · 用户`
     }
     if (source.value === 'rag') return `「${keyword.value}」· ${mode} · 帖子`
     if (source.value === 'db') return `「${keyword.value}」· 标题/正文匹配`
+      if (source.value === 'inv') return `「${keyword.value}」· 倒排召回`
     if (source.value === 'empty') return `「${keyword.value}」· 未检索到对应的帖子`
     return ''
   })

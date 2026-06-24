@@ -18,6 +18,14 @@
           :style="stageHostStyle"
           @pointerdown="onStagePointerDown"
         />
+        <div
+          v-if="stageTipText"
+          class="mascot-cloud-tip"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="mascot-cloud-tip__text">{{ stageTipText }}</span>
+        </div>
         <img
           v-if="stageUseFallback"
           :src="companionAvatarSrc"
@@ -231,27 +239,46 @@
                               <template v-else-if="m.role === 'assistant'">
                                 <div
                                   class="mascot-md"
-                                  v-html="renderMascotMarkdown(m.content)"
+                                  v-html="renderMascotMarkdown(m.content, !!(m.searchImageUrl || m.stripInlineImages))"
                                 />
                                 <span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
                               </template>
                               <template v-else>
                                 {{ m.content }}<span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
                               </template>
-                              <button
-                                v-if="m.role === 'assistant' && m.type !== 'image' && !m.streaming"
-                                type="button"
-                                class="mascot-msg-regen"
-                                :disabled="loading"
-                                :title="uiLabels.regenerate"
-                                :aria-label="uiLabels.regenerate"
-                                @click="regenerateAssistant(i)"
-                              >
-                                <el-icon><Refresh /></el-icon>
-                              </button>
                             </div>
                           </div>
-                          <div v-if="m.at && !m.streaming" class="mascot-bubble-meta">
+                          <div
+                            v-if="m.searchImageUrl && !m.streaming"
+                            class="mascot-search-image-card"
+                          >
+                            <img
+                              :src="m.searchImageUrl"
+                              alt="搜索配图"
+                              class="mascot-search-image"
+                              loading="lazy"
+                              @error="hideMascotSearchImage(m)"
+                            >
+                          </div>
+                          <div
+                            v-if="m.role === 'assistant' && m.type !== 'image' && !m.streaming"
+                            class="mascot-bubble-meta mascot-bubble-meta--assistant"
+                          >
+                            <span v-if="m.usageStats" class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
+                            <span v-if="m.at" class="mascot-bubble-time">{{ formatMsgTime(m.at) }}</span>
+                            <button
+                              v-if="isLatestRegeneratableAssistant(i)"
+                              type="button"
+                              class="mascot-msg-regen"
+                              :disabled="loading"
+                              :title="uiLabels.regenerate"
+                              :aria-label="uiLabels.regenerate"
+                              @click="regenerateAssistant(i)"
+                            >
+                              <el-icon><Refresh /></el-icon>
+                            </button>
+                          </div>
+                          <div v-else-if="m.at && !m.streaming" class="mascot-bubble-meta">
                             <span v-if="m.usageStats" class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
                             <span class="mascot-bubble-time">{{ formatMsgTime(m.at) }}</span>
                           </div>
@@ -259,10 +286,10 @@
                             v-if="m.role === 'assistant' && m.relatedArticles?.length && !m.streaming"
                             class="mascot-related-block"
                           >
-                            <div class="mascot-related-label">相关帖子（按相关度排序，最多 5 条）</div>
+                            <div class="mascot-related-label">相关帖子</div>
                             <div class="mascot-related-links">
                               <router-link
-                                v-for="art in m.relatedArticles.slice(0, 5)"
+                                v-for="art in m.relatedArticles"
                                 :key="'rel-' + art.articleId"
                                 :to="{ name: 'articleDetail', params: { id: art.articleId } }"
                                 class="mascot-related-link"
@@ -335,6 +362,8 @@ const {
   formatAiUsageLine,
   formatMsgTime,
   formatSessionTime,
+  hideMascotSearchImage,
+  isLatestRegeneratableAssistant,
   imageModelOptions,
   imageQuality,
   inputPlaceholder,
@@ -366,6 +395,7 @@ const {
   stageHostStyle,
   stageHovered,
   stageScale,
+  stageTipText,
   stageUseFallback,
   stageWrapStyle,
   startNewSession,

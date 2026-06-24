@@ -89,6 +89,11 @@ oss:
 
 ffmpeg:
   base_url: http://127.0.0.1:8099
+  internal_key: ""
+
+# 本地开发：内网密钥可留空；生产 Docker 通过 AI_REQUIRE_INTERNAL_KEY=1 强制
+security:
+  require_internal_key: false
 
 cache:
   # 文本语义近似缓存: 精确缓存命中后跳过 LLM
@@ -104,22 +109,30 @@ rag:
   redis_article_doc_prefix: "forum_rag:article:"
   redis_user_ids_key: "forum_rag:user:ids"
   redis_user_doc_prefix: "forum_rag:user:"
-  vector_scan_limit: 800
-  max_candidates: 150
+  vector_scan_limit: 400
+  max_candidates: 80
   doc_truncate: 1200
-  relevance_threshold: 0.12
-  top_n: 50
+  relevance_threshold: 0.22
+  top_n: 40
   # 融合 rerank 与关键词/向量预筛（0~1 权重，越大越信 rerank）
   rerank_weight: 0.72
   keyword_weight: 0.18
   embedding_weight: 0.10
-  embedding_top_k: 80
+  embedding_top_k: 50
   min_keyword_overlap: 0.08
-  vector_min_score: 0.12
-  vector_min_score_user: 0.22
-  vector_min_score_user_profile: 0.22
-  vector_min_score_user_semantic: 0.38
-  mascot_min_score: 0.10
+  # 站内搜索 light 模式：省 embedding，候选少时仅关键词打分
+  skip_rerank_below: 5
+  light_rerank_weight: 0.55
+  light_keyword_weight: 0.45
+  light_rerank_top_n: 30
+  vector_min_score: 0.22
+  vector_min_score_user: 0.28
+  vector_min_score_user_profile: 0.28
+  vector_min_score_user_semantic: 0.40
+  mascot_min_score: 0.42
+  mascot_relative_to_top: 0.93
+  mascot_top_min_to_show: 0.46
+  mascot_score_gap: 0.055
 
 image:
   max_bytes: 10485760  # 10MB

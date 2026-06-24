@@ -25,7 +25,8 @@ public class SearchController {
     private SearchService searchService;
 
     @Operation(summary = "搜索帖子",
-            description = "普通模式: 标题/正文 LIKE(source=db)。ai=true: 仅 Redis RAG 向量库召回(source=rag)，不走 MySQL 模糊匹配。")
+            description = "普通模式: Redis 倒排优先(source=inv)，未命中回退 LIKE(source=db)。"
+                    + "ai=true: 倒排候选 + hybrid_rank；无候选时 LIKE/向量兜底(source=rag)。")
     @GetMapping("/article")
     public Result<SearchArticleResponse> searchArticle(@RequestParam String keyword,
                                                        @RequestParam(defaultValue = "1") Integer pageNum,
@@ -36,7 +37,7 @@ public class SearchController {
     }
 
     @Operation(summary = "搜索用户",
-            description = "普通模式: 用户名/昵称 LIKE(source=db)，无结果 source=empty。ai=true: RAG 语义匹配(source=rag)，无相关结果 source=empty。")
+            description = "普通模式: 用户名/昵称 LIKE(source=db)。ai=true: DB 候选 + hybrid_rank 打分过滤；无候选时向量兜底(source=rag)，无相关结果 source=empty。")
     @GetMapping("/user")
     public Result<SearchUserResponse> searchUser(@RequestParam String keyword,
                                                  @RequestParam(defaultValue = "1") Integer pageNum,

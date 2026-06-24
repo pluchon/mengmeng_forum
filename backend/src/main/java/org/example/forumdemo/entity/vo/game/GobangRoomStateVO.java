@@ -60,6 +60,9 @@ public class GobangRoomStateVO {
     // 是否 AI 对局
     private Boolean aiRoom;
 
+    // AI 是否正在思考
+    private Boolean aiThinking;
+
     // 胜利五连坐标，未结束为空
     private List<GobangBoardPointVO> winningLine;
 

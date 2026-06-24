@@ -124,7 +124,6 @@
           />
           <div class="unified-search-user-meta">
             <div class="unified-search-user-name">{{ u.nickname || u.username }}</div>
-            <div class="unified-search-user-sub">@{{ u.username }}</div>
           </div>
         </div>
         <el-empty v-if="!loading && keyword && hasSearched && !userRecords.length" description="未检索到对应的用户" />

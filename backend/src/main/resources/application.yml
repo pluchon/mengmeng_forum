@@ -98,6 +98,8 @@ captcha:
     keyPrefix: "captcha:secondary"
 
 forum:
+  websocket:
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
   mascot:
     ai-url: ${FORUM_MASCOT_AI_URL:http://localhost:5000/api/v1/mascot/chat}
     internal-key: ${FORUM_MASCOT_INTERNAL_KEY:}
@@ -106,3 +108,5 @@ forum:
   ai:
     hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://localhost:5000}
     internal-key: ${FORUM_AI_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
+  ffmpeg:
+    internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}

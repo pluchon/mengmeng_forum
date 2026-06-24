@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from clients.dashscope_embedding import embed_query
@@ -13,8 +14,84 @@ from utils.rag_enhance import hybrid_rank
 logger = logging.getLogger(__name__)
 
 MAX_RELATED = 5
+
+
 def _min_score() -> float:
-    return float(settings.rag.get("mascot_min_score", 0.10))
+    return float(settings.rag.get("mascot_min_score", 0.42))
+
+
+def _relative_to_top() -> float:
+    return float(settings.rag.get("mascot_relative_to_top", 0.93))
+
+
+def _top_min_to_show() -> float:
+    return float(settings.rag.get("mascot_top_min_to_show", 0.46))
+
+
+def _score_gap_max() -> float:
+    return float(settings.rag.get("mascot_score_gap", 0.055))
+
+
+def _high_score_bypass() -> float:
+    return float(settings.rag.get("mascot_high_score_bypass", 0.52))
+
+
+def _tokenize_query(query: str) -> list[str]:
+    parts = re.split(r"[\s,，、；;|/\\]+", (query or "").strip())
+    out: list[str] = []
+    for p in parts:
+        t = p.strip()
+        if len(t) < 2 or t in out:
+            continue
+        out.append(t)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _passes_semantic_gate(query: str, title: str, score: float) -> bool:
+    if score >= _high_score_bypass():
+        return True
+    title = (title or "").strip()
+    if not title:
+        return False
+    tokens = _tokenize_query(query)
+    if not tokens:
+        return score >= _top_min_to_show()
+    title_lower = title.lower()
+    return any(tok.lower() in title_lower for tok in tokens)
+
+
+def _apply_relevance_cutoff(query: str, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """按绝对阈值 + 相对 top + 分差截断，0~5 条均可."""
+    if not ranked:
+        return []
+    floor = _min_score()
+    sorted_rows = sorted(ranked, key=lambda x: float(x.get("score") or 0), reverse=True)
+    eligible = [r for r in sorted_rows if float(r.get("score") or 0) >= floor]
+    if not eligible:
+        return []
+    top = float(eligible[0].get("score") or 0)
+    if top < _top_min_to_show():
+        return []
+    relative_floor = max(floor, top * _relative_to_top())
+    out: list[dict[str, Any]] = []
+    prev_score = -1.0
+    gap = _score_gap_max()
+    for row in eligible:
+        if len(out) >= MAX_RELATED:
+            break
+        score = float(row.get("score") or 0)
+        if score < relative_floor:
+            break
+        title = str(row.get("title") or "")
+        if not _passes_semantic_gate(query, title, score):
+            continue
+        if prev_score >= 0 and prev_score - score > gap:
+            break
+        prev_score = score
+        out.append(row)
+    return out
 
 
 def fetch_related_articles(query: str, *, candidates: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -65,15 +142,11 @@ def fetch_related_articles(query: str, *, candidates: list[dict[str, Any]] | Non
         ]
 
     out: list[dict[str, Any]] = []
-    for row in sorted(ranked, key=lambda x: float(x.get("score") or 0), reverse=True):
-        if len(out) >= MAX_RELATED:
-            break
-        score = float(row.get("score") or 0)
-        if score < _min_score():
-            continue
+    for row in _apply_relevance_cutoff(q, ranked):
         aid = row.get("articleId")
         if aid is None:
             continue
+        score = float(row.get("score") or 0)
         out.append({"articleId": aid, "score": round(score, 4)})
     return out
 

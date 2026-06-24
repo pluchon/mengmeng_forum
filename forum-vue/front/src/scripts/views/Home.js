@@ -1,4 +1,4 @@
-import { ref, onMounted, onActivated, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
@@ -16,6 +16,7 @@ import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { useMessageStore } from '@/stores/message'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { getArticleList, getHotArticleList, getArticleDetail } from '@/api/article'
+import { getMyFollowingIds } from '@/api/userFollow'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -265,6 +266,17 @@ export function useHome() {
     loading.value = true
     hotFeedList.value = []
     try {
+      let followingSet = new Set()
+      if (userStore.isLoggedIn) {
+        try {
+          const fidRes = await getMyFollowingIds()
+          if (fidRes.code === 0 && Array.isArray(fidRes.data)) {
+            followingSet = new Set(fidRes.data.map((id) => Number(id)))
+          }
+        } catch {
+          followingSet = new Set()
+        }
+      }
       const idRes = await getHotArticleList(30)
       if (idRes.code !== 0 || !idRes.data?.length) return
       const ids = idRes.data
@@ -274,7 +286,12 @@ export function useHome() {
       for (const r of results) {
         if (r.status !== 'fulfilled' || r.value.code !== 0 || !r.value.data) continue
         const st = Number(r.value.data.article?.status)
-        if (st === ARTICLE_STATUS.PUBLISHED) items.push(r.value.data)
+        if (st === ARTICLE_STATUS.PUBLISHED) {
+          const row = r.value.data
+          const authorId = Number(row.user?.id ?? row.article?.userId)
+          row.fromFollowing = followingSet.has(authorId)
+          items.push(row)
+        }
       }
       hotFeedList.value = items
     } catch (e) {
@@ -285,11 +302,11 @@ export function useHome() {
     }
   }
 
-  const homeBootstrapped = ref(false)
+  const homeFeedInitialized = ref(false)
 
-  async function bootstrapHomeFeed() {
-    if (homeBootstrapped.value) return
-    homeBootstrapped.value = true
+  async function ensureHomeFeedLoaded() {
+    if (homeFeedInitialized.value) return
+    homeFeedInitialized.value = true
     await fetchArticles(1)
     await fetchCheckinSummary()
     if (userStore.isLoggedIn) {
@@ -297,17 +314,8 @@ export function useHome() {
     }
   }
 
-  onMounted(async () => {
-    if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
-    await bootstrapHomeFeed()
-  })
-
-  onActivated(async () => {
-    if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
-    await bootstrapHomeFeed()
-  })
-
-  async function fetchArticles(page = 1) {
+  async function fetchArticles(page = 1, opts = {}) {
+    const preserveScroll = opts?.preserveScroll === true
     pageNum.value = page
     loading.value = true
     try {
@@ -322,7 +330,9 @@ export function useHome() {
         total.value = res.data?.total || 0
       }
     } finally {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (!preserveScroll) {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
       loading.value = false
     }
   }
@@ -442,6 +452,7 @@ export function useHome() {
     defaultAvatar,
     dismissCheckinHomeStrip,
     effectiveVipTier,
+    ensureHomeFeedLoaded,
     fetchArticles,
     fetchCheckinSummary,
     fetchHotFeed,

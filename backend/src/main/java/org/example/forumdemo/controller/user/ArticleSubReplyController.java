@@ -32,7 +32,11 @@ public class ArticleSubReplyController {
     @Operation(summary = "分页查询楼中楼列表", description = "传入一级回复ID(replyId)，返回该楼层下的所有子回复->分页")
     @GetMapping("/getSubReplyByReplyId")
     public Result<PageResult<ArticleSubReplyListResponse>> getSubReplyByReplyId(Long replyId,
-        @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(articleSubReplyService.querySubReplyByReplyId(replyId, pageNum, pageSize));
+            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long loginUserId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(articleSubReplyService.querySubReplyByReplyId(
+                replyId, pageNum, pageSize, loginUserId));
     }
 }

@@ -9,6 +9,7 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.utils.JWTUtils;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -24,6 +25,9 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Resource
     private UserMapper userMapper;
+
+    @Resource
+    private JwtTokenVersionService jwtTokenVersionService;
 
     // 不需要强制登录也能解析 Token 的公开 API 路径（与 Configurer 中的部分排除逻辑对应）
     private static final List<String> OPTIONAL_PATHS = Arrays.asList(
@@ -42,6 +46,9 @@ public class LoginInterceptor implements HandlerInterceptor {
             "/shop/list",
             "/shop/detail",
             "/favorite/folder/userList",
+            "/user/followStats",
+            "/user/followingList",
+            "/user/followerList",
             "/search/article",
             "/search/user",
             // 公告中心：已发布公告列表（直查库，前端每次打开弹窗请求）
@@ -88,6 +95,16 @@ public class LoginInterceptor implements HandlerInterceptor {
                 }
             } catch (Exception e) {
                 log.warn("拦截器补全用户字段失败 userId={}, uri={}, err={}", userId, uri, e.getMessage());
+            }
+            if (user.getState() != null && user.getState().equals(Constant.STATE_BANNED)) {
+                response.setStatus(403);
+                return false;
+            }
+            long jwtTv = JWTUtils.readTokenVersion(jwtClaims);
+            if (!jwtTokenVersionService.isValid(userId, jwtTv)) {
+                log.warn("JWT 版本失效 userId={}, uri={}", userId, uri);
+                response.setStatus(401);
+                return false;
             }
             request.setAttribute(Constant.USER_SESSION, user);
             return true;

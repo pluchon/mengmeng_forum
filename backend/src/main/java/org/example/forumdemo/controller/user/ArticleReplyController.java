@@ -32,8 +32,12 @@ public class ArticleReplyController {
     @Operation(summary = "帖子回复列表(分页)", description = "传入帖子ID和分页参数")
     @GetMapping("/getArticleReplyByArticleIdWithPage")
     public Result<PageResult<ArticleReplyListResponse>> getArticleReplyByArticleIdWithPage(Long articleId,
-            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(articleReplyService.queryReplyByArticleIdWithPage(articleId, pageNum, pageSize));
+            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        Long loginUserId = loginUser != null ? loginUser.getId() : null;
+        return Result.success(articleReplyService.queryReplyByArticleIdWithPage(
+                articleId, pageNum, pageSize, loginUserId));
     }
 
     @Operation(summary = "删除帖子回复", description = "传入回复ID，只有回复作者或帖子楼主可以删除")

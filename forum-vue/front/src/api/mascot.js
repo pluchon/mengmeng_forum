@@ -1,6 +1,9 @@
 import request from './request'
 import { useUserStore } from '@/stores/user'
 
+/** 流式空闲超时：无新数据则中止（与后端 SseEmitter 180s 对齐） */
+const STREAM_IDLE_MS = 180_000
+
 /** 上架中的看板娘模型（无需登录） */
 export function getMascotPublicModels() {
   return request({
@@ -45,6 +48,31 @@ export function postMascotChat(data) {
 export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}) {
   const userStore = useUserStore()
   const ctrl = new AbortController()
+  let idleTimer = null
+  let timedOut = false
+  let settled = false
+
+  function settle(fn) {
+    if (settled) return
+    settled = true
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+    fn?.()
+  }
+
+  function touchIdle() {
+    if (settled) return
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      timedOut = true
+      ctrl.abort()
+    }, STREAM_IDLE_MS)
+  }
+
+  touchIdle()
+
   fetch('/mascot/chat/stream', {
     method: 'POST',
     headers: {
@@ -56,14 +84,18 @@ export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}
   })
     .then(async (res) => {
       if (!res.ok) {
-        onError?.(`请求失败 (${res.status})`)
-        onDone?.()
+        settle(() => {
+          onError?.(`请求失败 (${res.status})`)
+          onDone?.()
+        })
         return
       }
       const reader = res.body?.getReader()
       if (!reader) {
-        onError?.('浏览器不支持流式响应')
-        onDone?.()
+        settle(() => {
+          onError?.('浏览器不支持流式响应')
+          onDone?.()
+        })
         return
       }
       const dec = new TextDecoder()
@@ -71,6 +103,7 @@ export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
+        touchIdle()
         buf += dec.decode(value, { stream: true })
         const parts = buf.split('\n')
         buf = parts.pop() || ''
@@ -79,14 +112,17 @@ export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}
           if (!trimmed.startsWith('data:')) continue
           const payload = trimmed.slice(5).trim()
           if (payload === '[DONE]') {
-            onDone?.()
+            settle(() => onDone?.())
             return
           }
           try {
             const o = JSON.parse(payload)
+            touchIdle()
             if (o.error) {
-              onError?.(o.error)
-              onDone?.()
+              settle(() => {
+                onError?.(o.error)
+                onDone?.()
+              })
               return
             }
             if (o.text) onChunk?.(o.text)
@@ -96,13 +132,25 @@ export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}
           }
         }
       }
-      onDone?.()
+      settle(() => onDone?.())
     })
     .catch((err) => {
-      if (err?.name !== 'AbortError') onError?.(err?.message || '网络异常')
-      onDone?.()
+      settle(() => {
+        if (err?.name === 'AbortError') {
+          if (timedOut) onError?.('响应超时，请重试')
+        } else {
+          onError?.(err?.message || '网络异常')
+        }
+        onDone?.()
+      })
     })
-  return () => ctrl.abort()
+  return () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+    ctrl.abort()
+  }
 }
 
 /** 陪伴助手：按功能列出会话 */

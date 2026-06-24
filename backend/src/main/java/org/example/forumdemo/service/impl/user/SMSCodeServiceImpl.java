@@ -6,7 +6,6 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CaptchaUtils;
-import org.example.forumdemo.common.utils.JWTUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.SMSUtils;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -18,8 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +35,9 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private AuthTokenService authTokenService;
 
     @Override
     public void send(String phoneNumber) {
@@ -110,10 +110,7 @@ public class SMSCodeServiceImpl implements SMSCodeService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
         stringRedisTemplate.delete(Constant.REDIS_KEY_SMS_VERIFY + phoneNumber);
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(Constant.JWT_USER_ID, user.getId());
-        claims.put(Constant.JWT_USER_NAME, user.getUsername());
-        user.setToken(JWTUtils.genJwt(claims));
+        user.setToken(authTokenService.issueToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
         return user;

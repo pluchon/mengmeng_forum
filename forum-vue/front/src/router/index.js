@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { usePointsWalletStore } from '../stores/pointsWallet'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
 import { promptLogin } from '@/utils/loginPrompt'
 
@@ -41,6 +42,14 @@ const router = createRouter({
           name: 'home',
           component: () => import('../views/HomeFeed.vue'),
           meta: { public: true },
+          children: [
+            {
+              path: 'article/:id',
+              name: 'articleDetail',
+              component: () => import('../views/ArticleDetail.vue'),
+              meta: { public: true },
+            },
+          ],
         },
         {
           path: 'board/:id',
@@ -69,12 +78,6 @@ const router = createRouter({
         {
           path: 'article/:id/audit',
           redirect: '/',
-        },
-        {
-          path: 'article/:id',
-          name: 'articleDetail',
-          component: () => import('../views/ArticleDetail.vue'),
-          meta: { public: true },
         },
         {
           path: 'profile/:id?',
@@ -208,6 +211,14 @@ const router = createRouter({
   ],
 })
 
+function shouldRefreshForumPoints(path) {
+  return path === '/'
+    || path === '/points'
+    || path === '/lottery'
+    || path.startsWith('/games')
+    || path.startsWith('/emoji-shop')
+}
+
 router.beforeEach(async (to, from) => {
   const userStore = useUserStore()
   const isLoggedIn = userStore.isLoggedIn
@@ -225,6 +236,14 @@ router.beforeEach(async (to, from) => {
     return '/'
   }
   return true
+})
+
+router.afterEach((to) => {
+  const userStore = useUserStore()
+  if (!userStore.isLoggedIn) return
+  if (shouldRefreshForumPoints(to.path)) {
+    void usePointsWalletStore().refresh()
+  }
 })
 
 export default router

@@ -18,6 +18,8 @@ public class Constant {
     // JWT 载荷 Payload 中的 Key 字段
     public static final String JWT_USER_ID = "userId";
     public static final String JWT_USER_NAME = "username";
+    /** JWT 版本号，与 Redis forum:jwt:tv:{userId} 对齐；改密/禁言后递增 */
+    public static final String JWT_TOKEN_VERSION = "tv";
 
     // 跨域暴露请求头常量
     public static final String ACCESS_CONTROL_EXPOSE_HEADERS = "Access-Control-Expose-Headers";
@@ -63,6 +65,7 @@ public class Constant {
     // 游戏房间跨实例事件广播频道
     public static final String GAME_ROOM_EVENT_CHANNEL = "forum:game:room:event";
 
+    public static final String REDIS_KEY_JWT_TOKEN_VERSION = "forum:jwt:tv:";
     public static final String REDIS_KEY_USER_INFO = "user_info:";
     // 用户名 -> userId String 映射前缀，格式：user_name:{username}
     public static final String REDIS_KEY_USER_NAME = "user_name:";
@@ -170,11 +173,14 @@ public class Constant {
     public static final String REDIS_KEY_MASCOT_DAILY_CHAT = "mascot:daily:chat:";
 
     // RAG 检索召回侧粗筛: 取最近 N=100 篇已发布帖子做候选; 太大会让 rerank 调用超时
-    public static final int SEARCH_RAG_CANDIDATE_LIMIT = 150;
+    public static final int SEARCH_RAG_CANDIDATE_LIMIT = 80;
+    /** 倒排召回最大帖子数 */
+    public static final int SEARCH_INVERTED_MAX_RESULTS = 120;
     // 单次返回的最大 RAG 结果数 (上限保护, 防超大 pageSize 把 rerank 打满)
     public static final int SEARCH_RAG_MAX_RESULTS = 50;
     // 搜索响应的 source 标识
     public static final String SEARCH_SOURCE_DB    = "db";
+    public static final String SEARCH_SOURCE_INV   = "inv";
     public static final String SEARCH_SOURCE_RAG   = "rag";
     public static final String SEARCH_SOURCE_EMPTY = "empty";
 

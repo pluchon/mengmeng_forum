@@ -67,7 +67,7 @@ public class WebSocket extends TextWebSocketHandler {
 
     // 连接关闭：下线清理
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         cleanup(session);
         Long userId = resolveUserId(session);
         if (userId != null) {

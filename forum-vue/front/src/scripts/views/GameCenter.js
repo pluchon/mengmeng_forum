@@ -11,6 +11,7 @@ import {
   getJinziRecords,
 } from '@/api/game'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import { useForumPointsBalance } from '@/composables/useForumPointsBalance'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
 
@@ -43,6 +44,7 @@ function formatRecordTime(value) {
 }
 
 const router = useRouter()
+const { pointsBalance, refreshForumPointsBalance } = useForumPointsBalance()
 const loading = ref(false)
 const statsVisible = ref(false)
 const leaderboardVisible = ref(false)
@@ -94,7 +96,6 @@ const gobangProfile = computed(() => overview.gobangProfile || {})
 const totalCount = computed(() => Number(profile.value.totalCount) || 0)
 const winRateText = computed(() => `${Number(profile.value.winRate) || 0}%`)
 const statusLabel = computed(() => statusText(profile.value.currentStatus))
-const pointsBalanceText = computed(() => `${Number(gobangProfile.value.forumPoints ?? gobangProfile.value.points) || 0} 积分`)
 const lobbyOnlineText = computed(() => `${Number(overview.lobbyOnlineCount) || 0}人`)
 const gameOnlineCount = computed(() => Number(gobangGame.value.onlineCount) || 0)
 const gameOnlineText = computed(() => `${gameOnlineCount.value}人在线`)
@@ -141,7 +142,7 @@ async function loadLeaderboard(gameCode = activeGameCode.value) {
 }
 
 async function refreshLobby(silent = false) {
-  await Promise.all([loadOverview(silent), loadActiveRooms()])
+  await Promise.all([loadOverview(silent), loadActiveRooms(), refreshForumPointsBalance()])
 }
 
 async function loadStatRecords(gameCode = activeGameCode.value) {
@@ -227,7 +228,7 @@ defineExpose({
   openLeaderboard,
   openStats,
   overview,
-  pointsBalanceText,
+  pointsBalance,
   profile,
   rankText,
   recordResultText,

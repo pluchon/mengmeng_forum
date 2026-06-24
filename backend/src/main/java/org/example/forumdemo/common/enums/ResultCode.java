@@ -64,6 +64,7 @@ public enum ResultCode {
     FAILED_FAVORITE_ALREADY_EXISTS(1150, "你已经收藏过这篇帖子"),
     FAILED_FAVORITE_NOT_EXISTS(1151, "收藏记录不存在"),
     FAILED_DEFAULT_FOLDER_CANNOT_DELETE(1152, "默认收藏夹不能删除"),
+    FAILED_FOLDER_VISIBILITY_RATE_LIMIT(1156, "收藏夹公开状态修改过于频繁，请稍后再试"),
     FAILED_SEARCH_KEYWORD_EMPTY(1153, "请输入搜索关键词"),
     FAILED_AUDIT_STATUS_INVALID(1154, "当前帖子状态不允许提交审核"),
     FAILED_AUDIT_RETRY_LIMIT(1155, "审核次数已达上限, 请联系管理员处理"),
@@ -81,6 +82,9 @@ public enum ResultCode {
     FAILED_CAPTCHA_REQUIRED(1167, "请先完成人机验证"),
     FAILED_CAPTCHA_CHECK(1168, "人机验证失败或已过期，请重试"),
     FAILED_EMOJI_SHOP_NOT_FAVORITABLE(1169, "商城表情不支持添加到收藏"),
+    FAILED_ALREADY_FOLLOWING(1170, "你已经关注过该用户"),
+    FAILED_NOT_FOLLOWING(1171, "你尚未关注该用户"),
+    FAILED_CANNOT_FOLLOW_SELF(1172, "不能关注自己"),
     ERROR_SERVICES(2000, "服务器内部错误"),
     ERROR_IS_NULL(2001, "IS NULL."),// 特殊错误
     ;

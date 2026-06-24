@@ -69,9 +69,6 @@ oss:
   url_prefix: ""
   root_prefix: ""
 
-ffmpeg:
-  base_url: http://ffmpeg:8099
-
 cache:
   exact_prefix: "ai_audit:cache:exact:"
   list_key: "ai_audit:text_list"
@@ -85,20 +82,28 @@ rag:
   redis_article_doc_prefix: "forum_rag:article:"
   redis_user_ids_key: "forum_rag:user:ids"
   redis_user_doc_prefix: "forum_rag:user:"
-  vector_scan_limit: 800
-  max_candidates: 150
+  vector_scan_limit: 400
+  max_candidates: 80
   doc_truncate: 1200
-  relevance_threshold: 0.12
-  top_n: 50
+  relevance_threshold: 0.22
+  top_n: 40
   rerank_weight: 0.72
   keyword_weight: 0.18
   embedding_weight: 0.10
-  embedding_top_k: 80
+  embedding_top_k: 50
   min_keyword_overlap: 0.08
-  vector_min_score: 0.12
-  vector_min_score_user: 0.22
-  vector_min_score_user_profile: 0.22
-  vector_min_score_user_semantic: 0.38
+  skip_rerank_below: 5
+  light_rerank_weight: 0.55
+  light_keyword_weight: 0.45
+  light_rerank_top_n: 30
+  vector_min_score: 0.22
+  vector_min_score_user: 0.28
+  vector_min_score_user_profile: 0.28
+  vector_min_score_user_semantic: 0.40
+  mascot_min_score: 0.42
+  mascot_relative_to_top: 0.93
+  mascot_top_min_to_show: 0.46
+  mascot_score_gap: 0.055
 
 image:
   max_bytes: 10485760
@@ -147,4 +152,11 @@ baidu_map:
   api_key: ""
 
 ai_hub:
+  internal_key: ""
+
+security:
+  require_internal_key: true
+
+ffmpeg:
+  base_url: http://ffmpeg:8099
   internal_key: ""

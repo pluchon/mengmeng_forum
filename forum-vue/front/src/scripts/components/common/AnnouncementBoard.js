@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Bell, House, Document, ChatLineRound, Promotion, WarningFilled } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import { sanitizeHtml } from '@/utils/security'
 import { getNoticeCenterList } from '@/api/notice'
 import '@/assets/styles/home.css'
 
@@ -74,7 +75,7 @@ export function useAnnouncementBoard() {
     if (!raw)
       return '<p class="announcement-md-empty">暂无正文</p>'
     try {
-      return marked.parse(raw, { async: false })
+      return sanitizeHtml(marked.parse(raw, { async: false }))
     } catch {
       return '<p class="announcement-md-empty">正文解析失败</p>'
     }

@@ -65,9 +65,15 @@ def expand_title_keywords(title: str, extra: list[str] | None = None) -> list[st
 
 def expand_search_query(query: str) -> str:
     """搜索框查询扩展：与入库检索词同义联动（如 四川 ↔ 川西）."""
+    terms = expand_search_term_list(query)
+    return "\n".join(terms)[:512]
+
+
+def expand_search_term_list(query: str) -> list[str]:
+    """扁平同义/分词列表，供 Java 侧与 hybrid_rank 共用同一扩展逻辑."""
     q = (query or "").strip()
     if not q:
-        return ""
+        return []
     parts: list[str] = [q]
     lower = q.lower()
     for key, phrases in _TOPIC_EXPANSIONS.items():
@@ -77,7 +83,11 @@ def expand_search_query(query: str) -> str:
             if key not in parts:
                 parts.append(key)
             parts.extend(phrases)
-    return "\n".join(dict.fromkeys(x for x in parts if x))[:512]
+    for seg in re.split(r"[,，、\s|/]+", q):
+        s = seg.strip()
+        if 2 <= len(s) <= 24 and s not in parts:
+            parts.append(s)
+    return list(dict.fromkeys(x for x in parts if x))[:12]
 
 
 def build_rag_embed_text(title: str, *, user_tags: list[str] | None = None) -> tuple[str, list[str]]:

@@ -53,26 +53,50 @@ def generate_gobang_move(
     board: list[list[int]],
     ai_chess: int = 2,
     model_code: str | None = None,
+    *,
+    use_llm: bool = True,
 ) -> dict[str, Any]:
-    """调用 DeepSeek 生成五子棋 AI 落子，返回坐标、模型和策略信息。"""
+    """五子棋落子：战术手与本地搜索优先，仅在 use_llm 时调用 DeepSeek。"""
     safe_board = _normalize_gobang_board(board)
-    ds = settings.deepseek
-    base = ds.get("base_url") or "https://api.deepseek.com/v1"
-    model = _resolve_gobang_model(ds, model_code)
-    key = ds.get("api_key") or ""
     player_chess = 1 if ai_chess == 2 else 2
+    ds = settings.deepseek
+    model = _resolve_gobang_model(ds, model_code)
+    tactical = _find_tactical_gobang_move(safe_board, ai_chess, player_chess)
+    if tactical is not None:
+        return {
+            "row": tactical[0],
+            "col": tactical[1],
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "tactical_local",
+            "fallback": False,
+            "usage": {"model_code": model, "estimated": True, "local": True},
+        }
+    if not use_llm:
+        row, col = _choose_local_gobang_move(safe_board, ai_chess, player_chess)
+        return {
+            "row": row,
+            "col": col,
+            "model": model,
+            "model_name": model,
+            "model_version": model,
+            "strategy_name": "heuristic_local",
+            "fallback": False,
+            "usage": {"model_code": model, "estimated": True, "local": True},
+        }
+    base = ds.get("base_url") or "https://api.deepseek.com/v1"
+    key = ds.get("api_key") or ""
+    stones = _sparse_board_stones(safe_board)
     system = (
-        "你是五子棋 AI。棋盘是 15x15，row/col 都从 0 开始。"
-        "1 表示黑棋，2 表示白棋，0 表示空位。"
-        "你必须为 AI 选择一个当前为空的合法落点。"
-        "优先级：自己能五连则立即取胜；其次阻挡对手五连；再考虑活四、冲四、活三和中心势。"
-        "只输出 JSON 对象，不要 markdown，不要解释，格式为 {\"row\":7,\"col\":7}。"
+        "你是五子棋 AI。row/col 从 0 开始，1=黑 2=白。"
+        "选空位落子。优先：自己五连、挡对手五连、活四冲四。"
+        "只输出 JSON：{\"row\":7,\"col\":7}"
     )
     user = {
         "ai_chess": ai_chess,
-        "player_chess": player_chess,
-        "board": safe_board,
-        "legend": {"0": "empty", "1": "black", "2": "white"},
+        "stones": stones,
+        "board_size": 15,
     }
     usage: dict[str, Any] = {"model_code": model, "estimated": True}
     try:
@@ -84,6 +108,9 @@ def generate_gobang_move(
                 {"role": "system", "content": system},
                 {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
             ],
+            timeout=8,
+            max_tokens=24,
+            temperature=0,
         )
         row, col = _parse_gobang_point(content)
         if not _is_gobang_empty(safe_board, row, col):
@@ -107,7 +134,7 @@ def generate_gobang_move(
             "model": model,
             "model_name": model,
             "model_version": model,
-            "strategy_name": "rule_based_fallback",
+            "strategy_name": "heuristic_local",
             "fallback": True,
             "usage": {**usage, "fallback_reason": str(exc)[:160]},
         }
@@ -117,64 +144,35 @@ def generate_jinzi_move(
     board: list[list[int]],
     ai_chess: int = 2,
     model_code: str | None = None,
+    *,
+    use_llm: bool = False,
 ) -> dict[str, Any]:
-    """调用 DeepSeek 生成井字棋 AI 落子，失败时回退到本地战术策略。"""
+    """井字棋落子：始终本地 minimax 战术，不调用大模型。"""
     safe_board = _normalize_jinzi_board(board)
-    ds = settings.deepseek
-    base = ds.get("base_url") or "https://api.deepseek.com/v1"
-    model = _resolve_gobang_model(ds, model_code)
-    key = ds.get("api_key") or ""
     player_chess = 1 if ai_chess == 2 else 2
-    system = (
-        "你是井字棋 AI。棋盘是 3x3，row/col 都从 0 开始。"
-        "1 表示黑棋，2 表示白棋，0 表示空位。"
-        "你必须为 AI 选择一个当前为空的合法落点。"
-        "优先级：自己能三连则立即取胜；其次阻挡对手三连；再选择中心、角、边。"
-        "只输出 JSON 对象，不要 markdown，不要解释，格式为 {\"row\":1,\"col\":1}。"
-    )
-    user = {
-        "ai_chess": ai_chess,
-        "player_chess": player_chess,
-        "board": safe_board,
-        "legend": {"0": "empty", "1": "black", "2": "white"},
+    ds = settings.deepseek
+    model = _resolve_gobang_model(ds, model_code)
+    row, col = _choose_local_jinzi_move(safe_board, ai_chess, player_chess)
+    return {
+        "row": row,
+        "col": col,
+        "model": model,
+        "model_name": model,
+        "model_version": model,
+        "strategy_name": "minimax_local",
+        "fallback": False,
+        "usage": {"model_code": model, "estimated": True, "local": True},
     }
-    usage: dict[str, Any] = {"model_code": model, "estimated": True}
-    try:
-        content, usage = deepseek_chat_completion(
-            base,
-            key,
-            model,
-            [
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-            ],
-        )
-        row, col = _parse_jinzi_point(content)
-        if not _is_jinzi_empty(safe_board, row, col):
-            raise ValueError("DeepSeek 返回了非法井字棋坐标")
-        return {
-            "row": row,
-            "col": col,
-            "model": model,
-            "model_name": model,
-            "model_version": model,
-            "strategy_name": "llm_with_rule_guard",
-            "fallback": False,
-            "usage": usage,
-        }
-    except Exception as exc:
-        logger.warning("DeepSeek 井字棋不可用，使用 Python 本地策略兜底: %s", exc)
-        row, col = _choose_local_jinzi_move(safe_board, ai_chess, player_chess)
-        return {
-            "row": row,
-            "col": col,
-            "model": model,
-            "model_name": model,
-            "model_version": model,
-            "strategy_name": "rule_based_fallback",
-            "fallback": True,
-            "usage": {**usage, "fallback_reason": str(exc)[:160]},
-        }
+
+
+def _sparse_board_stones(board: list[list[int]]) -> list[dict[str, int]]:
+    stones: list[dict[str, int]] = []
+    for row in range(len(board)):
+        for col in range(len(board[row])):
+            cell = board[row][col]
+            if cell in (1, 2):
+                stones.append({"row": row, "col": col, "chess": int(cell)})
+    return stones
 
 
 def _resolve_gobang_model(ds: dict[str, Any], model_code: str | None) -> str:
