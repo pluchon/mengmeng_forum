@@ -59,6 +59,7 @@ export function openImageUploadLoading(file, normalMessage) {
     lock: true,
     text: getImageUploadLoadingText(file, normalMessage),
     background: 'rgba(255, 255, 255, 0.72)',
+    customClass: 'forum-image-upload-loading',
   })
 }
 

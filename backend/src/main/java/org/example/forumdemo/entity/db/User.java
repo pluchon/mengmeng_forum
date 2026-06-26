@@ -101,12 +101,6 @@ public class User {
     @Schema(description = "最近登录IP属地(省份/国家)")
     private String ipRegion;
 
-    @Schema(description = "管理员标签（仅管理端维护，与用户端简介 remark 分离）")
-    private String adminTag;
-
-    @Schema(description = "后台部门ID（sys_dept.id）")
-    private Long deptId;
-
     @Schema(description = "状态: 0正常 1禁言", example = "0")
     private Byte state;
 

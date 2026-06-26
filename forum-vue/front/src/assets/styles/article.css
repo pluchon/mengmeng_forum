@@ -1,3 +1,10 @@
+@import './purchased-emoji-popover.css';
+
+/* 评论/发帖上传遮罩需高于详情弹层 */
+.forum-image-upload-loading {
+  z-index: 12050 !important;
+}
+
 /* Article List Styles */
 .article-container {
   max-width: 1000px;
@@ -672,7 +679,18 @@
   padding: 0;
 }
 
+.comment-like-icon {
+  width: 14px;
+  height: 14px;
+  color: #86909c;
+  flex-shrink: 0;
+}
+
 .comment-action-btn .is-liked {
+  color: #ff2442;
+}
+
+.comment-action-btn .comment-like-icon.is-filled {
   color: #ff2442;
 }
 
@@ -736,6 +754,164 @@
 .comment-input-full {
   width: 100%;
   flex: none;
+}
+
+.reply-pending-media {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.reply-pending-media::-webkit-scrollbar {
+  display: none;
+}
+
+.reply-pending-card {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafafa;
+  border: 1px solid #eee;
+}
+
+.reply-pending-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.reply-pending-emoji-badge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  padding: 1px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.reply-pending-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.comment-suffix-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comment-tool-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #c9cdd4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.comment-tool-btn--muted {
+  color: #c0c4cc;
+}
+
+.comment-tool-btn--muted:hover {
+  color: #909399;
+  background: #f5f5f5;
+}
+
+.comment-emoji-pack-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  opacity: 0.72;
+}
+
+.comment-tool-btn--muted:hover .comment-emoji-pack-icon {
+  opacity: 1;
+}
+
+.comment-send-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-left: 2px;
+  border: none;
+  border-radius: 8px;
+  background: radial-gradient(circle at 24% 28%, rgba(122, 170, 255, 0.9) 0 1px, transparent 2px),
+    linear-gradient(135deg, #050a13, #10244a);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.comment-send-btn.is-disabled,
+.comment-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.comment-send-btn .detail-plain-svg--send {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) invert(1);
+}
+
+.comment-emoji-panel {
+  min-height: 120px;
+}
+
+.comment-emoji-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: #86909c;
+  font-size: 13px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .red-input-tall :deep(.el-input__wrapper) {

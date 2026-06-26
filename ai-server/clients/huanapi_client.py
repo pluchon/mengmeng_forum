@@ -158,6 +158,7 @@ def _huanapi_error_message(r: requests.Response) -> str:
         if isinstance(err, dict) and err.get("message"):
             return str(err["message"])
     except Exception:
+        logger.debug("HuanAPI 错误响应非 JSON，回退原始文本")
         pass
     return (r.text or "")[:400]
 

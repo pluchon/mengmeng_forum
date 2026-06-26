@@ -12,8 +12,8 @@ import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
-import org.example.forumdemo.entity.db.GameMatchRecord;
-import org.example.forumdemo.entity.db.GameRoomMove;
+import org.example.forumdemo.entity.db.GameGobangMatchRecord;
+import org.example.forumdemo.entity.db.GameGobangRoomMove;
 import org.example.forumdemo.entity.db.GameRoomPlayer;
 import org.example.forumdemo.entity.db.GameSettlementEvent;
 import org.example.forumdemo.entity.db.GameUserProfile;
@@ -26,8 +26,8 @@ import org.example.forumdemo.entity.vo.game.GobangRoomParticipantVO;
 import org.example.forumdemo.entity.vo.game.GobangRoomStateVO;
 import org.example.forumdemo.entity.vo.game.GameRoomSnapshotVO;
 import org.example.forumdemo.entity.vo.mq.GameFinishedMqVO;
-import org.example.forumdemo.mapper.GameMatchRecordMapper;
-import org.example.forumdemo.mapper.GameRoomMoveMapper;
+import org.example.forumdemo.mapper.GameGobangMatchRecordMapper;
+import org.example.forumdemo.mapper.GameGobangRoomMoveMapper;
 import org.example.forumdemo.mapper.GameRoomPlayerMapper;
 import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
@@ -43,12 +43,12 @@ import org.example.forumdemo.service.impl.game.guard.GobangActionContext;
 import org.example.forumdemo.service.impl.game.guard.GobangGuardChain;
 import org.example.forumdemo.service.impl.game.guard.GobangGuardResult;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -71,7 +71,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class GobangRoomServiceImpl implements GobangRoomService {
 
-    private static final long RECONNECT_WINDOW_MS = 60_000;
+    private static final long RECONNECT_WINDOW_MS = GameConstants.GOBANG_RECONNECT_WINDOW_MS;
 
     private static final int AI_PRO_SCORE_THRESHOLD = 1600;
 
@@ -80,10 +80,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private static final String AI_MODEL_PRO = "deepseek-v4-pro";
 
     private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH;
-
-    private static final int AI_CONNECT_TIMEOUT_MS = 3_000;
-
-    private static final int AI_READ_TIMEOUT_MS = 8_000;
 
     // roomId -> 房间状态
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
@@ -107,13 +103,13 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GameUserProfileMapper gameUserProfileMapper;
 
     @Autowired
-    private GameMatchRecordMapper gameMatchRecordMapper;
+    private GameGobangMatchRecordMapper gameGobangMatchRecordMapper;
 
     @Autowired
     private GameRoomPlayerMapper gameRoomPlayerMapper;
 
     @Autowired
-    private GameRoomMoveMapper gameRoomMoveMapper;
+    private GameGobangRoomMoveMapper gameGobangRoomMoveMapper;
 
     @Autowired
     private GameSettlementEventMapper gameSettlementEventMapper;
@@ -143,6 +139,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Value("${forum.ai.internal-key:}")
     private String aiInternalKey;
+
+    @Autowired
+    @Qualifier("gameAiRestTemplate")
+    private RestTemplate gameAiRestTemplate;
 
     @Autowired(required = false)
     public void setGobangGuardChain(GobangGuardChain gobangGuardChain) {
@@ -397,8 +397,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         room.setEndReason(endReason);
         Long loserId = winnerId == null ? null : room.opponentOf(winnerId);
         GameFinishedMqVO finishedEvent = transactionTemplate.execute(status -> {
-            GameMatchRecord record = new GameMatchRecord();
-            record.setGameCode(GameConstants.GOBANG);
+            GameGobangMatchRecord record = new GameGobangMatchRecord();
             record.setRoomId(room.getRoomId());
             record.setBlackUserId(room.getBlackUserId());
             record.setWhiteUserId(room.getWhiteUserId());
@@ -409,7 +408,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
             record.setDeleteState((byte) 0);
-            gameMatchRecordMapper.insert(record);
+            gameGobangMatchRecordMapper.insert(record);
             if (winnerId != null && loserId != null) {
                 gameUserProfileMapper.applyWin(winnerId, GameConstants.GOBANG, GameConstants.SCORE_DELTA);
                 gameUserProfileMapper.applyLose(loserId, GameConstants.GOBANG, GameConstants.SCORE_DELTA);
@@ -465,7 +464,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private GameFinishedMqVO createGameFinishedEvent(
             GobangRoom room,
-            GameMatchRecord record,
+            GameGobangMatchRecord record,
             Long winnerId,
             Long loserId,
             String endReason
@@ -651,7 +650,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return Map.of();
         }
         Map<Long, User> userMap = new HashMap<>();
-        userMapper.selectBatchIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -751,8 +750,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private void saveMove(GobangRoom room, Long userId, Integer row, Integer col, Integer chess, Long spentMs) {
-        GameRoomMove move = new GameRoomMove();
-        move.setGameCode(GameConstants.GOBANG);
+        GameGobangRoomMove move = new GameGobangRoomMove();
         move.setRoomId(room.getRoomId());
         move.setMoveNo(countMoves(room) + 1);
         move.setUserId(userId);
@@ -761,7 +759,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         move.setChess(chess);
         move.setSpentMs(spentMs);
         move.setDeleteState((byte) 0);
-        gameRoomMoveMapper.insert(move);
+        gameGobangRoomMoveMapper.insert(move);
     }
 
     private int countMoves(GobangRoom room) {
@@ -853,7 +851,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private int[] chooseRemoteAiMove(GobangRoom room) {
         try {
-            RestTemplate restTemplate = new RestTemplate(aiRequestFactory());
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             if (aiInternalKey != null && !aiInternalKey.isBlank()) {
@@ -867,7 +864,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             body.put("room_id", room.getRoomId());
             body.put("model_code", room.getAiModelCode());
             body.put("use_llm", true);
-            ResponseEntity<Map> response = restTemplate.postForEntity(
+            ResponseEntity<Map> response = gameAiRestTemplate.postForEntity(
                     AiHubUrls.gobangMoveUrl(),
                     new HttpEntity<>(body, headers),
                     Map.class
@@ -908,13 +905,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return AI_MODEL_FLASH;
         }
         return AI_MODEL_PRO.equals(defaultModelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
-    }
-
-    private SimpleClientHttpRequestFactory aiRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(AI_CONNECT_TIMEOUT_MS);
-        factory.setReadTimeout(AI_READ_TIMEOUT_MS);
-        return factory;
     }
 
     private int parseInt(Object value, int defaultValue) {

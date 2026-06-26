@@ -303,6 +303,15 @@ async function onPointerUp(e) {
   await submitSlider()
 }
 
+function failAndClose(message) {
+  if (message) ElMessage.error(message)
+  settled = true
+  visible.value = false
+  rejectPromise?.(new Error('failed'))
+  rejectPromise = null
+  resolvePromise = null
+}
+
 async function submitSlider() {
   if (!vo.value || submitting.value) return
   submitting.value = true
@@ -334,10 +343,15 @@ async function submitSlider() {
       trackList: scaledTrack,
       data: vo.value.data,
     }
-    const res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
+    let res
+    try {
+      res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
+    } catch {
+      failAndClose()
+      return
+    }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      ElMessage.error(res.message || '验证失败，请重试')
-      await loadVo()
+      failAndClose(res.message || '验证失败，请重试')
       return
     }
     resolveWithTicket(res.data.captchaTicket)
@@ -416,14 +430,11 @@ async function submitClickTrack() {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
     } catch {
       // axios 拦截器已对业务码弹窗；勿再向外抛，避免 Vue 点击处理器出现 Unhandled promise
-      resetClick()
-      await loadVo()
+      failAndClose()
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      ElMessage.error(res.message || '验证失败，请重试')
-      resetClick()
-      await loadVo()
+      failAndClose(res.message || '验证失败，请重试')
       return
     }
     resolveWithTicket(res.data.captchaTicket)

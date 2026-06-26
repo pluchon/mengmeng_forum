@@ -8,11 +8,11 @@ import logging
 import time
 from typing import Any
 
-from flask import jsonify, request
+from flask import jsonify
 
 from api import api
+from api.common import RouteResponse, ai_hub_auth_error, json_payload
 from clients.usage_util import attach_latency
-from config import settings
 from services.ai_hub_service import (
     AiHubConfigError,
     generate_cover_hints,
@@ -23,12 +23,6 @@ from services.ai_hub_service import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _internal_auth_ok() -> bool:
-    from security.internal_auth import internal_auth_ok
-
-    return internal_auth_ok((settings.ai_hub.get("internal_key") or "").strip())
 
 
 def _clean_messages(raw: Any, max_turns: int = 24) -> list[dict[str, str]]:
@@ -46,16 +40,12 @@ def _clean_messages(raw: Any, max_turns: int = 24) -> list[dict[str, str]]:
     return out
 
 
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
-
-
 @api.route("/ai/write", methods=["POST"])
-def ai_write():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-    data = _json_payload()
+def ai_write() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
     kind = str(data.get("kind") or "").strip().lower()
     messages = _clean_messages(data.get("messages"))
     if not kind or not messages:
@@ -71,10 +61,11 @@ def ai_write():
 
 
 @api.route("/ai/cover-hints", methods=["POST"])
-def ai_cover_hints():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-    data = _json_payload()
+def ai_cover_hints() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
     article = str(data.get("article_text") or "").strip()
     if not article:
         return jsonify({"code": 400, "msg": "article_text required"}), 400
@@ -87,10 +78,11 @@ def ai_cover_hints():
 
 
 @api.route("/ai/gobang-move", methods=["POST"])
-def ai_gobang_move():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-    data = _json_payload()
+def ai_gobang_move() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
     board = data.get("board")
     try:
         ai_chess = int(data.get("ai_chess") or 2)
@@ -128,10 +120,11 @@ def ai_gobang_move():
 
 
 @api.route("/ai/jinzi-move", methods=["POST"])
-def ai_jinzi_move():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-    data = _json_payload()
+def ai_jinzi_move() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
     board = data.get("board")
     try:
         ai_chess = int(data.get("ai_chess") or 2)
@@ -169,10 +162,11 @@ def ai_jinzi_move():
 
 
 @api.route("/ai/image", methods=["POST"])
-def ai_image():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-    data = _json_payload()
+def ai_image() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
     prompt = str(data.get("prompt") or "").strip()
     quality = str(data.get("quality") or "normal").strip().lower()
     if not prompt:

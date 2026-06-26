@@ -35,6 +35,8 @@ export function useSignIn(captchaDialogRef) {
     if (v === 'code') loginForm.value.emailPassword = ''
   })
   const loading = ref(false)
+  const sendingCode = ref(false)
+  const sendingMailCode = ref(false)
   const agreed = ref(false)
   const countdown = ref(0)
   const mailCountdown = ref(0)
@@ -129,10 +131,11 @@ export function useSignIn(captchaDialogRef) {
       return
     }
 
-    const ticket = await verifyCaptcha('SMS_SEND')
-    if (!ticket) return
-
+    sendingCode.value = true
     try {
+      const ticket = await verifyCaptcha('SMS_SEND')
+      if (!ticket) return
+
       const res = await smsLogin(loginForm.value.phoneNum, undefined, ticket)
       if (res.code === 0) {
         loginForm.value.code = ''
@@ -141,6 +144,8 @@ export function useSignIn(captchaDialogRef) {
       }
     } catch {
       /* 错误已由 axios 响应拦截器提示 */
+    } finally {
+      sendingCode.value = false
     }
   }
 
@@ -155,10 +160,11 @@ export function useSignIn(captchaDialogRef) {
       return
     }
 
-    const ticket = await verifyCaptcha('MAIL_SEND')
-    if (!ticket) return
-
+    sendingMailCode.value = true
     try {
+      const ticket = await verifyCaptcha('MAIL_SEND')
+      if (!ticket) return
+
       const res = await mailLogin(loginForm.value.email, undefined, ticket)
       if (res.code === 0) {
         loginForm.value.emailCode = ''
@@ -167,6 +173,8 @@ export function useSignIn(captchaDialogRef) {
       }
     } catch {
       /* 错误已由 axios 响应拦截器提示 */
+    } finally {
+      sendingMailCode.value = false
     }
   }
 
@@ -311,5 +319,7 @@ export function useSignIn(captchaDialogRef) {
     emailSubTab,
     phoneFormRef,
     rules,
+    sendingCode,
+    sendingMailCode,
   }
 }

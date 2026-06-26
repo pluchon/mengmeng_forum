@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
-from flask import Response, jsonify, request, stream_with_context
+from flask import Response, jsonify, stream_with_context
 
 from api import api
+from api.common import RouteResponse, json_payload
 from clients.dashscope_chat_client import dashscope_stream_text_legacy, lc_messages_to_openai
 from clients.llm import text_llm
 from config import settings
@@ -23,11 +23,6 @@ logger = logging.getLogger(__name__)
 _MIN_LEN = int(settings.audit.get("summary_min_len", 50))
 
 
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
-
-
 def _extract_text(resp: object) -> str:
     content = getattr(resp, "content", resp)
     if isinstance(content, list) and content:
@@ -37,8 +32,8 @@ def _extract_text(resp: object) -> str:
 
 
 @api.route("/summarize", methods=["POST"])
-def summarize_text():
-    data = _json_payload()
+def summarize_text() -> RouteResponse:
+    data = json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "summary": "", "msg": "Missing content"}), 400
 
@@ -64,8 +59,8 @@ def summarize_text():
 
 
 @api.route("/summarize/stream", methods=["POST"])
-def summarize_stream():
-    data = _json_payload()
+def summarize_stream() -> RouteResponse:
+    data = json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "msg": "Missing content"}), 400
 

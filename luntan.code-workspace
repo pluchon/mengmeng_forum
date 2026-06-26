@@ -1,6 +1,6 @@
 {
   "folders": [
-    { "path": "forum-demo", "name": "forum-demo (Java)" },
+    { "path": "backend", "name": "backend (Java)" },
     { "path": "forum-vue/front", "name": "forum-vue" },
     { "path": "ai-server", "name": "ai-server" }
   ],

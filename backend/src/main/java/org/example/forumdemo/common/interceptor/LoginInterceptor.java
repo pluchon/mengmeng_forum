@@ -1,60 +1,29 @@
 package org.example.forumdemo.common.interceptor;
 
 import io.jsonwebtoken.Claims;
-import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.example.forumdemo.common.constant.AuthApiPaths;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.utils.JWTUtils;
 import org.example.forumdemo.entity.db.User;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
+import org.example.forumdemo.service.interfaces.user.UserAuthSnapshotService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import java.util.Arrays;
-import java.util.List;
-
-/**
- * 登录拦截器：解析 Token 并支持公开路径访问
- */
+// 登录拦截器：解析 Token 并支持公开路径访问
 @Slf4j
 @Component
 public class LoginInterceptor implements HandlerInterceptor {
 
-    @Resource
-    private UserMapper userMapper;
+    @Autowired
+    private UserAuthSnapshotService userAuthSnapshotService;
 
-    @Resource
+    @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
-
-    // 不需要强制登录也能解析 Token 的公开 API 路径（与 Configurer 中的部分排除逻辑对应）
-    private static final List<String> OPTIONAL_PATHS = Arrays.asList(
-            "/article/selectArticleDetailByArticleId",
-            "/article/getHotArticleList",
-            "/user/findPasswordByMail",
-            "/user/findPasswordBySms",
-            "/reply/select",
-            "/category/getCategoryWithBoards",
-            "/category/articles",
-            "/article/tag/list",
-            "/article/tag/suggest",
-            "/board/topBoardList",
-            "/board/selectBoardBy",
-            "/board/selectBoardListByBoardIdWithPage",
-            "/shop/list",
-            "/shop/detail",
-            "/favorite/folder/userList",
-            "/user/followStats",
-            "/user/followingList",
-            "/user/followerList",
-            "/search/article",
-            "/search/user",
-            // 公告中心：已发布公告列表（直查库，前端每次打开弹窗请求）
-            "/notice/center/list",
-            "/mascot/public/"
-    );
 
     //登录前的校验
     @Override
@@ -84,18 +53,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             Long userId = Long.valueOf(jwtClaims.get(Constant.JWT_USER_ID).toString());
             user.setId(userId);
             user.setUsername(jwtClaims.get(Constant.JWT_USER_NAME, String.class));
-            // VIP / 管理员 的判断校验
-            try {
-                User dbUser = userMapper.selectById(userId);
-                if (dbUser != null) {
-                    user.setVipTier(dbUser.getVipTier());
-                    user.setVipExpireAt(dbUser.getVipExpireAt());
-                    user.setIsAdmin(dbUser.getIsAdmin());
-                    user.setState(dbUser.getState());
-                }
-            } catch (Exception e) {
-                log.warn("拦截器补全用户字段失败 userId={}, uri={}, err={}", userId, uri, e.getMessage());
-            }
+            userAuthSnapshotService.enrichAuthFields(user);
             if (user.getState() != null && user.getState().equals(Constant.STATE_BANNED)) {
                 response.setStatus(403);
                 return false;
@@ -121,6 +79,6 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     // 检测游客模式下是否是我们的定义好的公开路径，如果不是就进行拦截
     private boolean isOptionalPath(String uri) {
-        return OPTIONAL_PATHS.stream().anyMatch(uri::startsWith);
+        return AuthApiPaths.isOptionalAuth(uri);
     }
 }

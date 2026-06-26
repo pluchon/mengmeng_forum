@@ -1,15 +1,16 @@
 """视频帖审核：优先 DashScope 拉 URL；失败或超大文件则抽帧走图片审核."""
+
 from __future__ import annotations
 
-import base64
 import logging
-import os
 from collections.abc import Callable
+from typing import Any
 
 import requests
 from langchain_core.messages import HumanMessage
 
 from clients.dashscope_chat_client import dashscope_chat_completion, lc_messages_to_openai
+from clients.ffmpeg_client import extract_audit_frames
 from config import settings
 from graphs.prompts import VIDEO_AUDIT_PROMPT
 from utils.image import validate_image_bytes
@@ -24,10 +25,6 @@ def _video_max_bytes() -> int:
 
 def _video_timeout() -> int:
     return int(settings.audit.get("video_audit_timeout", 300))
-
-
-def _ffmpeg_base() -> str:
-    return (settings.ffmpeg.get("base_url") or "http://ffmpeg:8099").rstrip("/")
 
 
 def _resolve_video_url(url: str) -> str:
@@ -55,38 +52,6 @@ def _dashscope_video_audit(resolved_url: str) -> tuple[bool, str]:
     return allowed, text
 
 
-def _extract_frames_via_ffmpeg(resolved_url: str) -> list[bytes]:
-    endpoint = f"{_ffmpeg_base()}/extract-audit-frames"
-    headers: dict[str, str] = {}
-    internal_key = (
-        (settings.ffmpeg.get("internal_key") or "").strip()
-        or (os.environ.get("FFMPEG_INTERNAL_KEY") or os.environ.get("FORUM_FFMPEG_INTERNAL_KEY") or "").strip()
-    )
-    if internal_key:
-        headers["X-Internal-Key"] = internal_key
-    try:
-        r = requests.post(
-            endpoint,
-            json={"url": resolved_url, "count": 4},
-            headers=headers,
-            timeout=int(settings.audit.get("video_frame_extract_timeout", 600)),
-        )
-        r.raise_for_status()
-        data = r.json() or {}
-        out: list[bytes] = []
-        for item in data.get("frames") or []:
-            if not item:
-                continue
-            try:
-                out.append(base64.b64decode(item))
-            except Exception:
-                continue
-        return out
-    except Exception:
-        logger.exception("[video_audit] ffmpeg 抽帧失败 url=%s", resolved_url[:120])
-        return []
-
-
 def _is_dashscope_download_error(exc: requests.HTTPError) -> bool:
     body = ""
     if exc.response is not None:
@@ -94,8 +59,8 @@ def _is_dashscope_download_error(exc: requests.HTTPError) -> bool:
     return "download" in body or "multimodal content" in body
 
 
-def audit_video_url(url: str, *, image_audit_fn: Callable[[bytes], dict]) -> dict:
-    """返回 {"url", "allow", "reason", "error"?}"""
+def audit_video_url(url: str, *, image_audit_fn: Callable[[bytes], dict[str, Any]]) -> dict[str, Any]:
+    """返回 {"url", "allow", "reason", "error"?}."""
     raw = (url or "").strip()
     if not raw:
         return {"url": url, "allow": True, "reason": "skip empty"}
@@ -122,7 +87,7 @@ def audit_video_url(url: str, *, image_audit_fn: Callable[[bytes], dict]) -> dic
             logger.exception("[video_audit] DashScope 视频审核失败 url=%s", raw[:120])
             return {"url": raw, "allow": False, "reason": "视频审核服务异常", "error": True}
 
-    frames = _extract_frames_via_ffmpeg(resolved)
+    frames = extract_audit_frames(resolved)
     if not frames:
         return {
             "url": raw,
@@ -134,13 +99,18 @@ def audit_video_url(url: str, *, image_audit_fn: Callable[[bytes], dict]) -> dic
     for idx, frame_bytes in enumerate(frames):
         if not validate_image_bytes(frame_bytes):
             continue
-        r = image_audit_fn(frame_bytes)
-        if r.get("error"):
-            return {"url": raw, "allow": False, "reason": r.get("reason", "视频帧审核异常"), "error": True}
-        if not r.get("allow"):
+        result = image_audit_fn(frame_bytes)
+        if result.get("error"):
             return {
                 "url": raw,
                 "allow": False,
-                "reason": r.get("reason") or f"视频第{idx + 1}帧不合规",
+                "reason": result.get("reason", "视频帧审核异常"),
+                "error": True,
+            }
+        if not result.get("allow"):
+            return {
+                "url": raw,
+                "allow": False,
+                "reason": result.get("reason") or f"视频第{idx + 1}帧不合规",
             }
     return {"url": raw, "allow": True, "reason": ""}

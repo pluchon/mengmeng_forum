@@ -19,7 +19,7 @@ from config import settings
 from workers import audit_worker
 
 
-def _setup_logging():
+def _setup_logging() -> None:
     level_name = (settings.logging_cfg.get("level") or "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
     logging.basicConfig(
@@ -37,7 +37,7 @@ def create_app() -> Flask:
     return app
 
 
-def main():
+def main() -> None:
     _setup_logging()
     logger = logging.getLogger("main")
 
@@ -52,8 +52,8 @@ def main():
         logger.exception("启动 audit_worker 失败, 进程继续仅服务 REST API")
 
     try:
-        from utils.site_help import ensure_site_help_cached
-        ensure_site_help_cached()
+        from utils.site_help import refresh_site_help_cache
+        refresh_site_help_cache()
     except Exception:
         logger.exception("站点帮助缓存预热失败")
 

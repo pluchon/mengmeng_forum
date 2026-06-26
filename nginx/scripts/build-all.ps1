@@ -5,7 +5,6 @@
 param(
     [switch]$SkipDocker,
     [switch]$SkipFront,
-    [switch]$SkipAdmin,
     [switch]$SkipBackend
 )
 
@@ -79,18 +78,6 @@ if (-not $SkipFront) {
     Sync-Live2dAssets
 }
 
-if (-not $SkipAdmin) {
-    Step "Build admin (forum-vue-admin/admin)"
-    $admin = Join-Path $repoRoot "forum-vue-admin\admin"
-    Push-Location $admin
-    if (-not (Test-Path "node_modules")) { npm ci }
-    npm run build
-    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "admin build failed" }
-    Pop-Location
-    Sync-Dist (Join-Path $admin "dist") (Join-Path $nginxRoot "dist\admin")
-    Write-Host "Synced to nginx/dist/admin" -ForegroundColor Green
-}
-
 if (-not $SkipBackend) {
     if (-not $SkipDocker) {
         Step "Docker build forum-backend:latest"
@@ -129,7 +116,6 @@ if ($SkipFront) {
 
 Step "Done (local workspace)"
 Write-Host "  nginx/dist/user   - user SPA (local compose / export source)" -ForegroundColor Yellow
-Write-Host "  nginx/dist/admin  - admin SPA" -ForegroundColor Yellow
 Write-Host "  forum-backend:latest / forum-ai-server:latest / forum-ffmpeg:latest" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Local dev:  cd nginx; docker compose up -d" -ForegroundColor DarkGray

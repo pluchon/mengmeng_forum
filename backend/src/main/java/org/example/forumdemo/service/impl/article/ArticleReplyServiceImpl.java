@@ -24,6 +24,7 @@ import org.example.forumdemo.mapper.ArticleReplyMapper;
 import org.example.forumdemo.mapper.ArticleSubReplyMapper;
 import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.common.utils.RequestIpUtils;
+import org.example.forumdemo.service.interfaces.article.ArticleReplyMediaService;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.common.IpRegionService;
@@ -31,6 +32,7 @@ import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -64,6 +66,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Autowired
     private IpRegionService ipRegionService;
 
+    @Autowired
+    private ArticleReplyMediaService articleReplyMediaService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void replyArticle(ReplyArticleRequest req, Long loginUserId) {
@@ -71,9 +76,13 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         UserMuteGuard.assertCanPost(loginUser);
         Long articleId = req.getArticleId();
         String content = req.getContent();
-        // 一级评论：与楼中楼一致，极短内容不调远程审核；审核服务异常时降级放行
         String raw = content == null ? "" : content;
         String plain = raw.replaceAll("<[^>]+>", "").trim();
+        boolean hasMedia = req.getMediaList() != null && !req.getMediaList().isEmpty();
+        if (!StringUtils.hasText(plain) && !hasMedia) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_CONTENT_EMPTY));
+        }
+        // 一级评论：与楼中楼一致，极短内容不调远程审核；审核服务异常时降级放行
         String violation = null;
         if (plain.length() >= 25) {
             try {
@@ -91,11 +100,12 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         ArticleReply newReply = new ArticleReply();
         newReply.setArticleId(articleId);
         newReply.setPostUserId(loginUserId);
-        newReply.setContent(content);
+        newReply.setContent(raw);
         newReply.setIpRegion(ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp()));
         if (articleReplyMapper.insert(newReply) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
+        articleReplyMediaService.saveForReply(newReply.getId(), req.getMediaList(), loginUserId);
         // 通知楼主
         String summary = null;
         if (content != null) {
@@ -121,8 +131,10 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         List<ArticleReply> rows = result.getRecords();
         Map<Long, Integer> subCountMap = loadSubReplyCountMap(rows);
         Set<Long> likedReplyIds = loadLikedReplyIds(loginUserId, rows);
+        Map<Long, List<org.example.forumdemo.entity.vo.article.ArticleReplyMediaVO>> mediaMap =
+                articleReplyMediaService.mapByReplyIds(rows.stream().map(ArticleReply::getId).collect(Collectors.toList()));
         List<ArticleReplyListResponse> records = rows.stream()
-                .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds))
+                .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds, mediaMap))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
@@ -158,7 +170,8 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     /** 单条回复 -> 列表项装配；用户已注销时回退为占位昵称 */
     private ArticleReplyListResponse buildReplyResponse(
-            ArticleReply reply, Map<Long, Integer> subCountMap, Set<Long> likedReplyIds) {
+            ArticleReply reply, Map<Long, Integer> subCountMap, Set<Long> likedReplyIds,
+            Map<Long, List<org.example.forumdemo.entity.vo.article.ArticleReplyMediaVO>> mediaMap) {
         UserBriefVO userBriefVO;
         try {
             User user = userService.queryUserByUserId(reply.getPostUserId());
@@ -172,6 +185,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         vo.setUser(userBriefVO);
         vo.setSubReplyCount(subCountMap.getOrDefault(reply.getId(), 0));
         vo.setLiked(likedReplyIds.contains(reply.getId()));
+        vo.setMediaList(mediaMap.getOrDefault(reply.getId(), List.of()));
         return vo;
     }
 

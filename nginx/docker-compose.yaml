@@ -14,7 +14,6 @@ services:
       - ./conf.d:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro
       - ./dist/user:/usr/share/nginx/user:ro
-      - ./dist/admin:/usr/share/nginx/admin:ro
       - ./logs:/var/log/nginx
     depends_on:
       backend-1:
@@ -130,6 +129,7 @@ services:
       OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
       OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
       FORUM_FFMPEG_URL: http://ffmpeg:8099
+      FORUM_BACKEND_BASE_URL: http://backend-1:8080
     depends_on:
       postgres:
         condition: service_healthy

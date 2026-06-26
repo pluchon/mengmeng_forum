@@ -36,6 +36,24 @@ export function useSubReplyArea(props, emit) {
     { immediate: true },
   )
 
+  watch(
+    () => props.refreshToken,
+    async (token, prev) => {
+      if (!token || token === prev) return
+      expanded.value = true
+      await loadSubs(1)
+    },
+  )
+
+  watch(
+    () => props.subReplyCount,
+    async (count, prev) => {
+      if (count === prev || count <= 0) return
+      expanded.value = true
+      await loadSubs(1)
+    },
+  )
+
   function toggle() {
     expanded.value = !expanded.value
   }

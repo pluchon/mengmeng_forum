@@ -859,6 +859,56 @@
   border-radius: 999px;
 }
 
+.profile-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 8px;
+}
+
+.profile-pager--dialog {
+  margin-top: 16px;
+}
+
+.profile-pager-input {
+  width: 56px;
+}
+
+.profile-pager-input :deep(.el-input__inner) {
+  text-align: center;
+}
+
+.profile-pager-sep {
+  font-size: 13px;
+  color: #86909c;
+}
+
+.profile-fav-dialog-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-fav-edit-btn {
+  border: none;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
+}
+
+.profile-fav-edit-btn:hover {
+  color: #ff2442;
+}
+
+.profile-fav-rename-input {
+  width: min(280px, 52vw);
+}
+
 .profile-fav-dialog-head {
   display: flex;
   align-items: center;

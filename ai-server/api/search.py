@@ -6,20 +6,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from flask import jsonify, request
+from flask import jsonify
 
 from api import api
+from api.common import RouteResponse, json_payload
 from config import settings
 from utils.rag_enhance import hybrid_rank
 
 logger = logging.getLogger(__name__)
 
 _RAG = settings.rag
-
-
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
 
 
 def _parse_candidates(data: dict[str, Any], *, id_field: str) -> tuple[str, list[str], list[Any]]:
@@ -50,8 +46,8 @@ def _parse_candidates(data: dict[str, Any], *, id_field: str) -> tuple[str, list
 
 
 @api.route("/article-rag-search", methods=["POST"])
-def article_rag_search():
-    data = _json_payload()
+def article_rag_search() -> RouteResponse:
+    data = json_payload()
     query, docs, meta = _parse_candidates(data, id_field="articleId")
 
     if not query:
@@ -64,8 +60,8 @@ def article_rag_search():
 
 
 @api.route("/user-rag-search", methods=["POST"])
-def user_rag_search():
-    data = _json_payload()
+def user_rag_search() -> RouteResponse:
+    data = json_payload()
     query, docs, meta = _parse_candidates(data, id_field="userId")
 
     if not query:

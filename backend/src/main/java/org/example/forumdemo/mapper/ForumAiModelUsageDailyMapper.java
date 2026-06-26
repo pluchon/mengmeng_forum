@@ -11,14 +11,6 @@ import java.sql.Date;
 @Mapper
 public interface ForumAiModelUsageDailyMapper extends BaseMapper<ForumAiModelUsageDaily> {
 
-    /**
-     * 按东八区日历日累加调用次数（与 uk_ai_usage_day_model 一致）。
-     */
-    @Insert("INSERT INTO forum_ai_model_usage_daily (stat_date, model_code, call_count) "
-            + "VALUES (#{statDate}, #{modelCode}, 1) "
-            + "ON DUPLICATE KEY UPDATE call_count = call_count + 1")
-    int incrementCallCount(@Param("statDate") Date statDate, @Param("modelCode") String modelCode);
-
     @Insert("INSERT INTO forum_ai_model_usage_daily "
             + "(stat_date, model_code, call_count, points_spent, input_tokens, output_tokens, image_count) "
             + "VALUES (#{statDate}, #{modelCode}, 1, #{pointsSpent}, #{inputTokens}, #{outputTokens}, #{imageCount}) "

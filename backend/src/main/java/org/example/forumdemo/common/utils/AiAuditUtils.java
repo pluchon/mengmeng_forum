@@ -21,9 +21,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// AI 模块
+// AI 审核与 RAG 检索 HTTP 工具（RestTemplate 由 Spring 启动时注入）
 @Slf4j
 public class AiAuditUtils {
+
+    private static RestTemplate restTemplate = new RestTemplate();
+
+    private AiAuditUtils() {
+    }
+
+    public static void setRestTemplate(RestTemplate template) {
+        if (template != null) {
+            restTemplate = template;
+        }
+    }
 
     /**
      * 图片安全审核方法（同步 HTTP 请求）
@@ -34,9 +45,7 @@ public class AiAuditUtils {
      */
     public static boolean isImageAllowed(MultipartFile file) {
         try {
-            // 1. 创建 Spring 提供的用于发起同步 HTTP 请求的 RestTemplate 客户端实例
-            RestTemplate restTemplate = new RestTemplate();
-            // 2. 将 MultipartFile 图片直接转换为符合 HTTP 表单协议的内存数据流结构
+            // 1. 将 MultipartFile 图片直接转换为符合 HTTP 表单协议的内存数据流结构
             MultiValueMap<String, Object> body = getStringObjectMultiValueMap(file);
             // 3. 创建 HTTP 请求头对象
             HttpHeaders headers = new HttpHeaders();
@@ -102,7 +111,6 @@ public class AiAuditUtils {
         }
         try {
             // 2. 实例化 HTTP 请求模板客户端
-            RestTemplate restTemplate = new RestTemplate();
             // 3. 构造请求体 Map，将待检测文本放入 "content" 键中
             Map<String, String> requestBody = new HashMap<>();
             requestBody.put("content", content);
@@ -148,7 +156,6 @@ public class AiAuditUtils {
         }
         try {
             // 2. 创建 RestTemplate 客户端
-            RestTemplate restTemplate = new RestTemplate();
             // 3. 构建发送给 Python 的 JSON 载荷体，包含搜索 query 和候选集合
             Map<String, Object> body = new HashMap<>();
             body.put("query", query);
@@ -205,7 +212,6 @@ public class AiAuditUtils {
             return Collections.emptyList();
         }
         try {
-            RestTemplate restTemplate = new RestTemplate();
             Map<String, Object> body = new HashMap<>();
             body.put("query", query);
             body.put("candidates", candidates);
@@ -262,7 +268,6 @@ public class AiAuditUtils {
             return Collections.emptyList();
         }
         try {
-            RestTemplate restTemplate = new RestTemplate();
             Map<String, Object> body = new HashMap<>();
             body.put("query", query);
             body.put("candidates", candidates);
@@ -325,7 +330,6 @@ public class AiAuditUtils {
         }
         try {
             // 2. 实例化客户端并构建 JSON 载荷
-            RestTemplate restTemplate = new RestTemplate();
             Map<String, Object> body = new HashMap<>();
             body.put("query", query);
             body.put("candidates", candidates);
@@ -377,7 +381,6 @@ public class AiAuditUtils {
         }
         try {
             // 2. 实例化客户端并构建请求 JSON
-            RestTemplate restTemplate = new RestTemplate();
             Map<String, String> requestBody = new HashMap<>();
             requestBody.put("content", content);
             // 3. 构建 JSON 报文头并打包

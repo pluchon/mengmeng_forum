@@ -18,7 +18,8 @@ _AI_SERVER_ROOT = Path(__file__).resolve().parent
 _CONFIG_PATH = Path(os.environ.get("AI_SERVER_CONFIG", str(_AI_SERVER_ROOT / "config.yaml"))).resolve()
 
 
-def _env_truthy(name: str) -> bool:
+def env_truthy(name: str) -> bool:
+    """环境变量是否为真值（1 / true / yes / on，大小写不敏感）。"""
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
@@ -94,31 +95,54 @@ class Settings:
         )
         raw["ffmpeg"] = ff
 
+        fm = raw.get("forum", {}) or {}
+        fm["base_url"] = os.environ.get("FORUM_BACKEND_BASE_URL", fm.get("base_url", "http://localhost:10086"))
+        raw["forum"] = fm
+
         sec = raw.get("security", {}) or {}
-        if _env_truthy("AI_REQUIRE_INTERNAL_KEY"):
+        if env_truthy("AI_REQUIRE_INTERNAL_KEY"):
             sec["require_internal_key"] = True
         raw["security"] = sec
 
     @property
-    def server(self) -> dict[str, Any]: return self.raw.get("server", {})
+    def server(self) -> dict[str, Any]:
+        return self.raw.get("server", {})
+
     @property
-    def logging_cfg(self) -> dict[str, Any]: return self.raw.get("logging", {})
+    def logging_cfg(self) -> dict[str, Any]:
+        return self.raw.get("logging", {})
+
     @property
-    def dashscope(self) -> dict[str, Any]: return self.raw.get("dashscope", {})
+    def dashscope(self) -> dict[str, Any]:
+        return self.raw.get("dashscope", {})
+
     @property
-    def redis(self) -> dict[str, Any]: return self.raw.get("redis", {})
+    def redis(self) -> dict[str, Any]:
+        return self.raw.get("redis", {})
+
     @property
-    def rabbitmq(self) -> dict[str, Any]: return self.raw.get("rabbitmq", {})
+    def rabbitmq(self) -> dict[str, Any]:
+        return self.raw.get("rabbitmq", {})
+
     @property
-    def postgres(self) -> dict[str, Any]: return self.raw.get("postgres", {})
+    def postgres(self) -> dict[str, Any]:
+        return self.raw.get("postgres", {})
+
     @property
-    def audit(self) -> dict[str, Any]: return self.raw.get("audit", {})
+    def audit(self) -> dict[str, Any]:
+        return self.raw.get("audit", {})
+
     @property
-    def cache(self) -> dict[str, Any]: return self.raw.get("cache", {})
+    def cache(self) -> dict[str, Any]:
+        return self.raw.get("cache", {})
+
     @property
-    def rag(self) -> dict[str, Any]: return self.raw.get("rag", {})
+    def rag(self) -> dict[str, Any]:
+        return self.raw.get("rag", {})
+
     @property
-    def image(self) -> dict[str, Any]: return self.raw.get("image", {})
+    def image(self) -> dict[str, Any]:
+        return self.raw.get("image", {})
 
     @property
     def mascot(self) -> dict[str, Any]:
@@ -155,6 +179,10 @@ class Settings:
     @property
     def ffmpeg(self) -> dict[str, Any]:
         return self.raw.get("ffmpeg", {})
+
+    @property
+    def forum(self) -> dict[str, Any]:
+        return self.raw.get("forum", {})
 
     @property
     def security(self) -> dict[str, Any]:

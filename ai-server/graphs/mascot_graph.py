@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Iterator
 from typing import Any, Literal, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -248,7 +249,10 @@ def _yield_stream_events(events: Any, *, model_code: str) -> Any:
     yield "", attach_latency(usage, t0)
 
 
-def _invoke_mascot_llm_stream(route: str, msgs: list[Any]):
+def _invoke_mascot_llm_stream(
+    route: str,
+    msgs: list[Any],
+) -> Iterator[tuple[str, dict[str, Any] | None]]:
     """yield (text_chunk, usage_or_none)；usage 仅在最后一次非 None。"""
     ds = settings.dashscope
     dsk = settings.deepseek
@@ -627,7 +631,7 @@ def node_agent(state: MascotState) -> MascotState:
     }
 
 
-def build_mascot_graph():
+def build_mascot_graph() -> Any:
     g = StateGraph(MascotState)
     g.add_node("route_skill", node_route_skill)
     g.add_node("assess", node_assess)

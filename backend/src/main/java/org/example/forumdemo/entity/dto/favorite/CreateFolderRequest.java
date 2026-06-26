@@ -10,7 +10,7 @@ import lombok.Data;
 public class CreateFolderRequest {
 
     @NotBlank(message = "收藏夹名称不能为空")
-    @Size(max = 50, message = "收藏夹名称不能超过 50 字")
+    @Size(max = 25, message = "收藏夹名称不能超过 25 字")
     @Schema(description = "收藏夹名称", example = "我的精选")
     private String name;
 

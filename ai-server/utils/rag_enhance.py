@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _RAG = settings.rag
 
 
-def _field(obj, key: str, default=None):
+def _field(obj: Any, key: str, default: Any = None) -> Any:
     if obj is None:
         return default
     if isinstance(obj, dict):

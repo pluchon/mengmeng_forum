@@ -67,7 +67,12 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     public void startMatch(Long userId, String requestId, WebSocketSession session) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
         User user = userMapper.selectById(userId);
-        int points = user == null || user.getPoints() == null ? 0 : user.getPoints();
+        int points = profile.getScore() == null ? 0 : profile.getScore();
+        if (GameConstants.PROFILE_MATCHING.equals(profile.getCurrentStatus())
+                && !gameMatchQueueService.contains(GameConstants.GOBANG, userId)) {
+            gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
+            profile.setCurrentStatus(GameConstants.PROFILE_IDLE);
+        }
         boolean alreadyQueued = gameMatchQueueService.contains(GameConstants.GOBANG, userId);
         GobangMatchGuardResult guardResult = gobangMatchGuardChain.check(
                 new GobangMatchContext(userId, user, profile, points, alreadyQueued)

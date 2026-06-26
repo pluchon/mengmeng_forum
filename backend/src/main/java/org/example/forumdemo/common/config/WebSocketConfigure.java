@@ -1,11 +1,7 @@
 package org.example.forumdemo.common.config;
 
 import org.example.forumdemo.common.advice.WebSocket;
-import org.example.forumdemo.common.websocket.game.handler.GameCenterLobbyWebSocketHandler;
-import org.example.forumdemo.common.websocket.game.handler.GobangGameWebSocketHandler;
-import org.example.forumdemo.common.websocket.game.handler.GobangRoomWebSocketHandler;
-import org.example.forumdemo.common.websocket.game.handler.JinziGameWebSocketHandler;
-import org.example.forumdemo.common.websocket.game.handler.JinziRoomWebSocketHandler;
+import org.example.forumdemo.common.websocket.game.handler.*;
 import org.example.forumdemo.common.interceptor.TokenHandshakeInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +39,12 @@ public class WebSocketConfigure implements WebSocketConfigurer {
     @Autowired
     private JinziRoomWebSocketHandler jinziRoomWebSocketHandler;
 
+    @Autowired
+    private TetrisGameWebSocketHandler tetrisGameWebSocketHandler;
+
+    @Autowired
+    private TetrisRoomWebSocketHandler tetrisRoomWebSocketHandler;
+
     @Value("${forum.websocket.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
     private String allowedOriginsCsv;
 
@@ -72,6 +74,12 @@ public class WebSocketConfigure implements WebSocketConfigurer {
                 .addInterceptors(tokenHandshakeInterceptor)
                 .setAllowedOrigins(origins);
         registry.addHandler(jinziRoomWebSocketHandler, "/ws/games/jinzi/rooms/*")
+                .addInterceptors(tokenHandshakeInterceptor)
+                .setAllowedOrigins(origins);
+        registry.addHandler(tetrisGameWebSocketHandler, "/ws/games/tetris")
+                .addInterceptors(tokenHandshakeInterceptor)
+                .setAllowedOrigins(origins);
+        registry.addHandler(tetrisRoomWebSocketHandler, "/ws/games/tetris/rooms/*")
                 .addInterceptors(tokenHandshakeInterceptor)
                 .setAllowedOrigins(origins);
     }

@@ -160,10 +160,28 @@ const router = createRouter({
           meta: { requiresAuth: true, shellBare: true },
         },
         {
+          path: 'games/tetris',
+          name: 'tetrisGame',
+          component: () => import('../views/TetrisGame.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
+          path: 'games/tetris/pk',
+          name: 'tetrisPkGame',
+          component: () => import('../views/TetrisPkGame.vue'),
+          meta: { requiresAuth: true, shellBare: true },
+        },
+        {
+          path: 'games/tetris/pk/rooms/:roomId',
+          name: 'tetrisPkRoom',
+          component: () => import('../views/TetrisPkRoom.vue'),
+          meta: { requiresAuth: true, shellBare: true, tetrisMode: 'pk' },
+        },
+        {
           path: 'vip',
           name: 'vipCenter',
           component: () => import('../views/VipCenter.vue'),
-          meta: { public: true },
+          meta: { requiresAuth: true },
         },
         {
           path: 'checkin',

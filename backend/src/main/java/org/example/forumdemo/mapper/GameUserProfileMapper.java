@@ -37,4 +37,9 @@ public interface GameUserProfileMapper extends BaseMapper<GameUserProfile> {
             + "WHERE user_id = #{userId} AND game_code = #{gameCode} AND delete_state = 0")
     int applyDraw(@Param("userId") Long userId,
                   @Param("gameCode") String gameCode);
+
+    @Update("UPDATE game_user_profile SET score = GREATEST(score, #{runScore}), "
+            + "total_count = total_count + 1 "
+            + "WHERE user_id = #{userId} AND game_code = #{gameCode} AND delete_state = 0")
+    int applyTetrisFinish(@Param("userId") Long userId, @Param("gameCode") String gameCode, @Param("runScore") int runScore);
 }

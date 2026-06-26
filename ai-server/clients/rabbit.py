@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 
 import pika
 from pika.adapters.blocking_connection import BlockingConnection
@@ -37,7 +38,7 @@ def _params() -> pika.ConnectionParameters:
     )
 
 
-def open_consumer_channel():
+def open_consumer_channel() -> tuple[BlockingConnection, pika.channel.Channel]:
     """每个消费者线程独占一个 BlockingConnection + Channel"""
     conn = BlockingConnection(_params())
     ch = conn.channel()
@@ -45,7 +46,7 @@ def open_consumer_channel():
     return conn, ch
 
 
-def _ensure_publisher():
+def _ensure_publisher() -> pika.channel.Channel:
     global _publisher_connection, _publisher_channel
     if _publisher_connection is None or _publisher_connection.is_closed:
         _publisher_connection = BlockingConnection(_params())
@@ -94,7 +95,6 @@ def publish_json(routing_key: str, payload: dict, retries: int = 3) -> bool:
                     pass
                 _publisher_connection = None
         if attempt + 1 < retries:
-            import time
             time.sleep(0.35 * (attempt + 1))
     logger.exception("[Rabbit] 发布最终失败 routing_key=%s", routing_key, exc_info=last_err)
     return False

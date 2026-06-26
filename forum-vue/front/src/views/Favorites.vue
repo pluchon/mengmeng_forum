@@ -56,7 +56,7 @@
       <el-dialog v-model="createDialogVisible" :title="dialogTitle" width="420px" class="red-dialog">
         <el-form label-width="84px">
           <el-form-item label="名称">
-            <el-input v-model="folderForm.name" maxlength="50" show-word-limit placeholder="输入收藏夹名称" />
+            <el-input v-model="folderForm.name" maxlength="25" show-word-limit placeholder="输入收藏夹名称" />
           </el-form-item>
           <el-form-item label="可见性">
             <el-radio-group v-model="folderForm.isPublic">

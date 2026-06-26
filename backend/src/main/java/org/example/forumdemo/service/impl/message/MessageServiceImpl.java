@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.config.OssConfig;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.converter.MessageConverter;
 import org.example.forumdemo.common.utils.ForumDateTimes;
 import org.example.forumdemo.common.enums.MessageStatus;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -27,6 +28,7 @@ import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.message.MessageDetailResponse;
 import org.example.forumdemo.entity.vo.message.MessageListResponse;
 import org.example.forumdemo.entity.vo.message.MessageSessionResponse;
+import org.example.forumdemo.entity.vo.message.MessageVO;
 import org.example.forumdemo.entity.vo.message.UserChatEmojiResponse;
 import org.example.forumdemo.entity.vo.mq.MessageNotifyMqVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
@@ -128,7 +130,7 @@ public class MessageServiceImpl implements MessageService {
     }
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Message send(SendMessageRequest req, Long sendUserId) {
+    public MessageVO send(SendMessageRequest req, Long sendUserId) {
         checkMessageSendGuard(MessageSendContext.text(req, sendUserId));
         Long receiveUserId = req.getReceiveUserId();
         Message newMessage = new Message();
@@ -144,7 +146,7 @@ public class MessageServiceImpl implements MessageService {
         publishNotify(newMessage.getId(), sendUserId, receiveUserId, sessionSummary(newMessage));
         incrementUnreadCount(receiveUserId, 1L);
         invalidateSessionCache(sendUserId, receiveUserId);
-        return queryMessageByMessageId(newMessage.getId());
+        return MessageConverter.toMessageVO(queryMessageByMessageId(newMessage.getId()));
     }
 
     /**
@@ -155,7 +157,7 @@ public class MessageServiceImpl implements MessageService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Message sendImage(SendImageMessageRequest req, Long sendUserId) {
+    public MessageVO sendImage(SendImageMessageRequest req, Long sendUserId) {
         checkMessageSendGuard(MessageSendContext.image(req, sendUserId));
         Long receiveUserId = req.getReceiveUserId();
 
@@ -177,7 +179,7 @@ public class MessageServiceImpl implements MessageService {
         publishNotify(newMessage.getId(), sendUserId, receiveUserId, sessionSummary(newMessage));
         incrementUnreadCount(receiveUserId, 1L);
         invalidateSessionCache(sendUserId, receiveUserId);
-        return queryMessageByMessageId(newMessage.getId());
+        return MessageConverter.toMessageVO(queryMessageByMessageId(newMessage.getId()));
     }
 
     @Override
@@ -393,7 +395,7 @@ public class MessageServiceImpl implements MessageService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public UserChatEmoji favoriteEmoji(FavoriteEmojiRequest req, Long userId) {
+    public UserChatEmojiResponse favoriteEmoji(FavoriteEmojiRequest req, Long userId) {
         if (req == null || req.getMediaUrl() == null || !StringUtils.hasLength(req.getMediaUrl().trim())
                 || req.getMediaType() == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -455,7 +457,7 @@ public class MessageServiceImpl implements MessageService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_EMOJI_DUPLICATE));
         }
         invalidateEmojiCache(userId);
-        return emoji;
+        return MessageConverter.toEmojiResponse(emoji);
     }
 
     /** 取消收藏 (软删, 只能删自己的) */

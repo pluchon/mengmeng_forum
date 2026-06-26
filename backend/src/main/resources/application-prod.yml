@@ -62,7 +62,7 @@ springdoc:
 
 forum:
   websocket:
-    allowed-origins: https://www.nuonuoya.cn,https://admin.nuonuoya.cn
+    allowed-origins: https://www.nuonuoya.cn
   ffmpeg:
     internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
 

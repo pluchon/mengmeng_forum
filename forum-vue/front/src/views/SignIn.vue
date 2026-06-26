@@ -40,6 +40,7 @@
                       <el-button
                         class="code-btn"
                         :disabled="countdown > 0"
+                        :loading="sendingCode"
                         @click="handleSendCode"
                       >
                         {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
@@ -180,6 +181,7 @@
                             <el-button
                               class="code-btn"
                               :disabled="mailCountdown > 0"
+                              :loading="sendingMailCode"
                               @click="handleSendMailCode"
                             >
                               {{ mailCountdown > 0 ? `${mailCountdown}s` : '获取验证码' }}
@@ -285,6 +287,8 @@ const {
   mailCountdown,
   phoneFormRef,
   rules,
+  sendingCode,
+  sendingMailCode,
   userNameFormRef,
 } = useSignIn(captchaDialogRef)
 </script>

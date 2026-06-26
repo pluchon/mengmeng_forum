@@ -3,14 +3,16 @@ package org.example.forumdemo.service.interfaces.article;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.dto.article.PublishArticleRequest;
 import org.example.forumdemo.entity.dto.article.UpdateArticleRequest;
+import org.example.forumdemo.entity.dto.article.ValidateTextRequest;
+import org.example.forumdemo.entity.vo.article.ArticleBriefVO;
 import org.example.forumdemo.entity.vo.article.ArticleDetailResponse;
 import org.example.forumdemo.entity.vo.article.ArticleListByUserIdPageResponse;
+import org.example.forumdemo.entity.vo.article.ArticleValidateTextVO;
 import org.example.forumdemo.entity.vo.article.AuditStatusResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.mq.ArticleAuditResultMqVO;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 帖子核心业务
@@ -34,14 +36,14 @@ public interface ArticleService {
     void deleteArticle(Long articleId, Long loginUserId);
 
     // 用户主页帖子列表（分页）
-    PageResult<Article> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum, Integer pageSize);
+    PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum, Integer pageSize);
 
     // 用户主页帖子列表（分页，附带用户信息与 owner 标志）
     ArticleListByUserIdPageResponse queryArticleListByUserIdWithPageAndUserInfo(Long userId, Long loginUserId,
                                                                                Integer pageNum, Integer pageSize);
 
     // 回收站：根据 delete_state=1 查询当前登录用户已删除的帖子（分页，仅本人可看）
-    PageResult<Article> queryDeletedArticleListWithPage(Long loginUserId, Integer pageNum, Integer pageSize);
+    PageResult<ArticleBriefVO> queryDeletedArticleListWithPage(Long loginUserId, Integer pageNum, Integer pageSize);
 
     // 热帖榜单 TopN（Redis ZSet，冷启动时从 DB 回源）
     List<Long> getHotArticleList(Integer topN);
@@ -53,7 +55,9 @@ public interface ArticleService {
     String validateContent(String content);
 
     // 内容安全审核：返回 { isAllowed: true/false, reason: ... }
-    Map<String, Object> validateContentResult(String content);
+    ArticleValidateTextVO validateContentResult(String content);
+
+    ArticleValidateTextVO validateContentResult(ValidateTextRequest request);
 
     // FileController 上传完成后，由业务侧把 URL 落库为帖子封面
     void updateArticleCoverByUrl(Long articleId, String coverUrl, Long loginUserId);

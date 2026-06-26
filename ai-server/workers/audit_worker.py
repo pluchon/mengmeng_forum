@@ -121,7 +121,7 @@ def _handle_message(body: bytes) -> dict | None:
         }
 
 
-def _consume_loop():
+def _consume_loop() -> None:
     """blocking 消费循环; 出错就 sleep 5s 重连.
 
     publish 成功 -> 标记 done + ack

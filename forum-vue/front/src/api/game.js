@@ -55,3 +55,51 @@ export function getJinziRoom(roomId) {
 export function surrenderJinziRoom(roomId) {
   return request({ url: `/game/jinzi/rooms/${encodeURIComponent(roomId)}/surrender`, method: 'post' })
 }
+
+export function getTetrisProfile() {
+  return request({ url: '/game/tetris/profile', method: 'get' })
+}
+
+export function getTetrisRecords(params) {
+  return request({ url: '/game/tetris/records', method: 'get', params })
+}
+
+export function getTetrisLeaderboard(params) {
+  return request({ url: '/game/tetris/leaderboard', method: 'get', params })
+}
+
+export function settleTetris(body) {
+  return request({ url: '/game/tetris/settle', method: 'post', data: body })
+}
+
+export function getTetrisReplay(recordId) {
+  return request({ url: `/game/tetris/records/${encodeURIComponent(recordId)}/replay`, method: 'get' })
+}
+
+export function getTetrisPkProfile() {
+  return request({ url: '/game/tetris/pk/profile', method: 'get' })
+}
+
+export function getTetrisPkRecords(params) {
+  return request({ url: '/game/tetris/pk/records', method: 'get', params })
+}
+
+export function getTetrisPkLeaderboard(params) {
+  return request({ url: '/game/tetris/pk/leaderboard', method: 'get', params })
+}
+
+export function getTetrisPkActiveRooms() {
+  return request({ url: '/game/tetris/pk/rooms/active', method: 'get' })
+}
+
+export function getTetrisPkRoom(roomId) {
+  return request({ url: `/game/tetris/pk/rooms/${encodeURIComponent(roomId)}`, method: 'get' })
+}
+
+export function surrenderTetrisPkRoom(roomId) {
+  return request({ url: `/game/tetris/pk/rooms/${encodeURIComponent(roomId)}/surrender`, method: 'post' })
+}
+
+export function getTetrisPkReplay(recordId) {
+  return request({ url: `/game/tetris/pk/records/${encodeURIComponent(recordId)}/replay`, method: 'get' })
+}

@@ -37,8 +37,9 @@
 Thumbs.db
 desktop.ini
 
-# --- Java / Maven (forum-demo) ---
+# --- Java / Maven (backend) ---
 target/
+backend/cloud/
 .mvn/
 mvnw
 mvnw.cmd
@@ -49,14 +50,14 @@ mvnw.cmd
 **/application-secret.properties
 **/application-*.local.yml
 **/application-*.local.properties
-forum-demo/log.txt
-forum-demo/details.txt
-forum-demo/cp.txt
-forum-demo/editor.ps1
-forum-demo/pushout.txt
+backend/log.txt
+backend/details.txt
+backend/cp.txt
+backend/editor.ps1
+backend/pushout.txt
 *.hprof
 
-# --- Node / Vue (forum-vue, forum-vue-admin) ---
+# --- Node / Vue (forum-vue) ---
 node_modules/
 dist/
 dist-ssr/
@@ -189,6 +190,7 @@ nginx/package/
 nginx/dist/
 nginx/logs/
 output/
+.playwright-cli/
 *.tar
 *.tar.gz
 logs-collect-*.txt
@@ -200,4 +202,3 @@ logs-collect-*.txt
 docker-compose.override.yml
 docker-compose.override.yaml
 forum-vue/front/.env.production
-forum-vue-admin/admin/.env.production

@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer, UserFilled } from '@element-plus/icons-vue'
 import { getGobangRoom, surrenderGobangRoom } from '@/api/game'
-import { getShopMyPacks } from '@/api/shop'
+import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { modelIcon } from '@/constants/aiModels'
@@ -193,7 +193,7 @@ const winnerText = computed(() => {
   return room.winnerUserId === room.thisUserId ? '你赢了' : '你输了'
 })
 const boardStatusText = computed(() => {
-  if (isFinished.value) return `${winnerText.value} · ${endReasonText(room.endReason)}`
+  if (isFinished.value) return winnerText.value
   if (isSpectator.value) return room.currentTurnUserId === room.blackUserId ? '黑方落子' : '白方落子'
   if (isMyTurn.value) return '轮到你落子'
   if (isAiThinking.value) return 'AI 思考中…'
@@ -355,13 +355,6 @@ async function loadRoom() {
   }
 }
 
-async function loadEmojiPacks() {
-  const res = await getShopMyPacks()
-  if (res.code === 0) {
-    emojiPacks.value = Array.isArray(res.data) ? res.data : []
-  }
-}
-
 function play(row, col) {
   if (!isMyTurn.value || isFinished.value || isSpectator.value) return
   if (Number(room.board?.[row]?.[col]) !== 0) return
@@ -388,12 +381,11 @@ function sendChat() {
 
 function sendEmoji(url) {
   if (!url || !canChat.value) return
-  const sent = roomSocket.send('chat', {
+  roomSocket.send('chat', {
     messageType: 'EMOJI',
     content: url,
     emojiUrl: url,
   })
-  if (sent) emojiDialogVisible.value = false
 }
 
 function participantName(userId) {
@@ -467,7 +459,7 @@ async function backGame() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadRoom(), loadEmojiPacks()])
+  await loadRoom()
   roomSocket.connect()
   timer = window.setInterval(() => {
     clock.value = Date.now()

@@ -14,10 +14,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from flask import Response, jsonify, request
+from flask import jsonify, request
 from langchain_core.messages import HumanMessage
 
 from api import api
+from api.common import RouteResponse, json_payload
 from clients.llm import text_llm, vision_llm, vision_llm_fallback
 from config import settings
 from graphs.prompts import IMAGE_AUDIT_TEMPLATE, IMAGE_DESC_PROMPT, TEXT_AUDIT_TEMPLATE
@@ -30,12 +31,7 @@ logger = logging.getLogger(__name__)
 _IMG_MAX = int(settings.image.get("max_bytes", 10 * 1024 * 1024))
 
 
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
-
-
-def _ok(**fields: Any) -> tuple[Response, int]:
+def _ok(**fields: Any) -> RouteResponse:
     fields.setdefault("code", 200)
     return jsonify(fields), 200
 
@@ -53,8 +49,8 @@ def _extract_text(resp: object) -> str:
 
 
 @api.route("/validate-text", methods=["POST"])
-def validate_text():
-    data = _json_payload()
+def validate_text() -> RouteResponse:
+    data = json_payload()
     if "content" not in data:
         return jsonify({"code": 400, "allow": False, "msg": "Missing content field"}), 400
 
@@ -81,7 +77,7 @@ def validate_text():
 
 
 @api.route("/validate-image", methods=["POST"])
-def validate_image():
+def validate_image() -> RouteResponse:
     if "file" not in request.files:
         return jsonify({"code": 400, "allow": False, "msg": "Missing file field"}), 400
 

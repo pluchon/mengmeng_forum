@@ -1,55 +1,111 @@
-"""站点帮助 RAG 缓存：启动时加载 details/*.txt 到 Redis。"""
+"""站点帮助语料：从 Java 公告中心动态拉取并缓存到 Redis."""
+
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import Any
 
+from clients.forum_backend_client import list_published_notices
 from clients.redis_client import redis_client
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 _CACHE_KEY = "mascot:site_help:corpus"
-_DETAILS_DIR = Path(__file__).resolve().parent.parent / "details"
 
-_TOPIC_FILES = {
-    "如何发帖": "如何发帖.txt",
-    "积分规则": "积分规则.txt",
-    "VIP权益": "VIP权益.txt",
-    "版规摘要": "版规摘要.txt",
+_NOTICE_KIND_LABEL: dict[int, str] = {
+    0: "入站须知",
+    1: "活动公告",
+    2: "纪律公告",
+    3: "系统更新",
+    4: "版规公告",
 }
 
 
-def _load_corpus_from_disk() -> str:
-    parts: list[str] = []
-    for title, fname in _TOPIC_FILES.items():
-        path = _DETAILS_DIR / fname
-        if not path.is_file():
-            logger.warning("站点帮助文档缺失: %s", path)
-            continue
-        text = path.read_text(encoding="utf-8").strip()
-        if text:
-            parts.append(f"## {title}\n{text}")
-    return "\n\n".join(parts)
+def _cache_ttl() -> int:
+    forum_ttl = settings.forum.get("site_help_cache_ttl")
+    if forum_ttl is not None:
+        return int(forum_ttl)
+    return int(settings.cache.get("ttl", 86400))
 
 
-def ensure_site_help_cached() -> str:
-    """若 Redis 无缓存则从 details 目录加载。"""
+def _max_notice_chars() -> int:
+    return int(settings.forum.get("site_help_max_notice_chars", 4000))
+
+
+def _truncate(text: str, limit: int) -> str:
+    raw = (text or "").strip()
+    if len(raw) <= limit:
+        return raw
+    return raw[:limit].rstrip() + "…"
+
+
+def _notice_kind_label(raw: Any) -> str:
+    try:
+        kind = int(raw)
+    except (TypeError, ValueError):
+        return "公告"
+    return _NOTICE_KIND_LABEL.get(kind, "公告")
+
+
+def _format_notice(item: dict[str, Any]) -> str:
+    title = str(item.get("title") or "未命名公告").strip()
+    kind_label = _notice_kind_label(item.get("noticeKind"))
+    subtitle = _truncate(str(item.get("subtitle") or ""), 300)
+    body = _truncate(str(item.get("contentMarkdown") or ""), _max_notice_chars())
+    lines = [f"## [{kind_label}] {title}"]
+    if subtitle:
+        lines.append(subtitle)
+    if body:
+        lines.append(body)
+    return "\n".join(lines)
+
+
+def _build_corpus_from_notices(notices: list[dict[str, Any]]) -> str:
+    parts = [_format_notice(item) for item in notices if item]
+    return "\n\n".join(part for part in parts if part.strip())
+
+
+def _load_corpus_from_forum() -> str:
+    notices = list_published_notices()
+    corpus = _build_corpus_from_notices(notices)
+    if corpus:
+        return corpus
+    return "暂无已发布公告，站点帮助内容请以后台公告中心为准。"
+
+
+def _read_cached_corpus() -> str | None:
     try:
         cached = redis_client.get(_CACHE_KEY)
         if cached:
             return cached
     except Exception:
-        logger.debug("读取站点帮助缓存失败，改从磁盘加载")
+        logger.debug("读取站点帮助 Redis 缓存失败")
+    return None
 
-    corpus = _load_corpus_from_disk()
-    if not corpus:
-        corpus = "暂无站点帮助文档，请联系管理员配置 ai-server/details 下的说明文件。"
+
+def _write_cached_corpus(corpus: str) -> None:
     try:
-        ttl = int(settings.cache.get("ttl", 86400))
-        redis_client.setex(_CACHE_KEY, ttl, corpus)
+        redis_client.setex(_CACHE_KEY, _cache_ttl(), corpus)
     except Exception:
         logger.warning("站点帮助写入 Redis 失败，仅内存使用")
+
+
+def ensure_site_help_cached() -> str:
+    """优先读 Redis；过期或缺失时从 Java 公告中心刷新."""
+    cached = _read_cached_corpus()
+    if cached:
+        return cached
+
+    corpus = _load_corpus_from_forum()
+    _write_cached_corpus(corpus)
+    return corpus
+
+
+def refresh_site_help_cache() -> str:
+    """强制从 Java 拉取并覆盖缓存（启动预热或手动刷新）."""
+    corpus = _load_corpus_from_forum()
+    _write_cached_corpus(corpus)
     return corpus
 
 

@@ -19,4 +19,5 @@ public class SubReplyRequest {
     private Long postUserId;
     //回复内容
     private String content;
+    private java.util.List<ArticleReplyMediaItemDTO> mediaList;
 }

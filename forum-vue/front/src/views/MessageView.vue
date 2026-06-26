@@ -73,7 +73,7 @@
             @focus="onConvFocus(item)"
             @blur="onConvBlur(item)"
           >
-            <div class="mc-conv-ava">
+            <div class="mc-conv-ava" @click.stop="openPeerProfile(item)">
               <template v-if="item.kind === 'pm'">
                 <UserAvatarVip
                   :size="38"
@@ -89,7 +89,7 @@
             </div>
             <div class="mc-conv-body">
               <div class="mc-conv-row">
-                <span class="mc-conv-name">{{ item.name }}</span>
+                <span class="mc-conv-name mc-conv-name--link" @click.stop="openPeerProfile(item)">{{ item.name }}</span>
                 <span class="mc-conv-time">{{ formatSessionTime(item.time) }}</span>
               </div>
               <div class="mc-conv-prev" :class="{ 'is-unread': item.unread > 0 }">
@@ -168,21 +168,26 @@
                         {{ row.msg.isOwner ? '你撤回了一条消息' : '对方撤回了一条消息' }}
                       </span>
                       <template v-else-if="isMediaMessage(row.msg)">
-                        <img
-                          :src="row.msg.message.mediaUrl"
-                          alt=""
-                          class="mc-chat-img"
-                          :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
-                          :style="bubbleImageStyle(row.msg.message)"
-                        >
-                        <button
-                          v-if="!row.msg.isOwner && canFavoriteChatImage(row.msg)"
-                          type="button"
-                          class="mc-fav-img-btn"
-                          @click="favoriteChatImage(row.msg)"
-                        >
-                          添加到表情
-                        </button>
+                        <div class="mc-media-stack">
+                          <el-image
+                            :src="row.msg.message.mediaUrl"
+                            :preview-src-list="[row.msg.message.mediaUrl]"
+                            preview-teleported
+                            :z-index="10050"
+                            fit="contain"
+                            class="mc-chat-img"
+                            :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
+                            :style="bubbleImageStyle(row.msg.message)"
+                          />
+                          <button
+                            v-if="!row.msg.isOwner && canFavoriteChatImage(row.msg)"
+                            type="button"
+                            class="mc-fav-img-btn"
+                            @click="favoriteChatImage(row.msg)"
+                          >
+                            添加到表情
+                          </button>
+                        </div>
                       </template>
                       <span v-else>{{ row.msg.message?.content }}</span>
                     </div>
@@ -229,7 +234,14 @@
               <button type="button" class="mc-itbtn" title="发送图片" @click="triggerChatImagePick">
                 <el-icon><Picture /></el-icon>
               </button>
-              <el-popover placement="top-start" :width="340" trigger="click" @show="onEmojiPopoverShow">
+              <el-popover
+                v-model:visible="emojiPopoverVisible"
+                placement="top-start"
+                :width="340"
+                trigger="click"
+                :persistent="true"
+                @show="onEmojiPopoverShow"
+              >
                 <template #reference>
                   <button type="button" class="mc-itbtn" title="表情">
                     <img :src="emojiPackIconUrl" alt="" class="mc-emoji-pack-icon">
@@ -241,50 +253,106 @@
                 >
                   <el-tabs v-model="emojiPanelTab" class="mc-emoji-tabs" @tab-change="onEmojiTabChange">
                     <el-tab-pane label="收藏" name="favorites">
-                      <div v-if="!chatEmojiStore.list.length" class="mc-emoji-empty">
+                      <div v-if="!favoriteEmojis.length" class="mc-emoji-empty">
                         <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
                       </div>
-                      <div v-else class="mc-emoji-grid">
-                        <div
-                          v-for="em in chatEmojiStore.list"
-                          :key="em.id"
-                          class="mc-emoji-cell"
-                        >
-                          <img
-                            :src="em.mediaUrl"
-                            alt=""
-                            class="mc-emoji-thumb"
-                            @click="sendMessageFromEmoji(em)"
+                      <div v-else class="mc-emoji-favorites">
+                        <div class="mc-emoji-grid mc-emoji-grid--favorites">
+                          <div
+                            v-for="em in paginatedFavorites"
+                            :key="em.id"
+                            class="mc-emoji-cell"
                           >
+                            <img
+                              :src="em.mediaUrl"
+                              alt=""
+                              class="mc-emoji-thumb"
+                              @click="sendMessageFromEmoji(em)"
+                            >
+                            <button
+                              type="button"
+                              class="mc-emoji-del"
+                              aria-label="删除"
+                              @click.stop="removeEmojiKeepPopover(em.id)"
+                            >
+                              <el-icon><Close /></el-icon>
+                            </button>
+                          </div>
+                        </div>
+                        <div v-if="favoriteTotalPages > 1" class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
+                          <button type="button" class="mc-emoji-fav-pager-btn" @click="goFavoriteFirst">首页</button>
+                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="favoritePage <= 1" @click="goFavoritePrev">上页</button>
+                          <input
+                            v-model="favoritePageInput"
+                            type="number"
+                            min="1"
+                            :max="favoriteTotalPages"
+                            class="mc-emoji-fav-pager-input"
+                            @keyup.enter="jumpFavoritePage"
+                          >
+                          <span class="mc-emoji-fav-pager-sep">/ {{ favoriteTotalPages }}</span>
+                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="favoritePage >= favoriteTotalPages" @click="goFavoriteNext">下页</button>
+                        </div>
+                      </div>
+                    </el-tab-pane>
+                    <el-tab-pane label="我的上传" name="uploads">
+                      <div class="mc-emoji-favorites">
+                        <div class="mc-emoji-grid mc-emoji-grid--favorites">
+                          <div
+                            v-for="em in paginatedUploaded"
+                            :key="em.id"
+                            class="mc-emoji-cell"
+                          >
+                            <img
+                              :src="em.mediaUrl"
+                              alt=""
+                              class="mc-emoji-thumb"
+                              @click="sendMessageFromEmoji(em)"
+                            >
+                            <button
+                              type="button"
+                              class="mc-emoji-del"
+                              aria-label="删除"
+                              @click.stop="removeEmojiKeepPopover(em.id)"
+                            >
+                              <el-icon><Close /></el-icon>
+                            </button>
+                          </div>
                           <button
+                            v-if="showUploadOnCurrentPage"
                             type="button"
-                            class="mc-emoji-del"
-                            aria-label="删除"
-                            @click.stop="chatEmojiStore.remove(em.id)"
+                            class="mc-emoji-add mc-emoji-add--cell"
+                            title="上传表情"
+                            @click="triggerEmojiStickerPick"
                           >
-                            <el-icon><Close /></el-icon>
+                            <el-icon :size="20"><Plus /></el-icon>
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          class="mc-emoji-add"
-                          title="上传并添加到表情"
-                          @click="triggerEmojiStickerPick"
-                        >
-                          <el-icon :size="22"><Plus /></el-icon>
-                        </button>
+                        <div v-if="uploadedTotalPages > 1" class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
+                          <button type="button" class="mc-emoji-fav-pager-btn" @click="goUploadedFirst">首页</button>
+                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="uploadedPage <= 1" @click="goUploadedPrev">上页</button>
+                          <input
+                            v-model="uploadedPageInput"
+                            type="number"
+                            min="1"
+                            :max="uploadedTotalPages"
+                            class="mc-emoji-fav-pager-input"
+                            @keyup.enter="jumpUploadedPage"
+                          >
+                          <span class="mc-emoji-fav-pager-sep">/ {{ uploadedTotalPages }}</span>
+                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="uploadedPage >= uploadedTotalPages" @click="goUploadedNext">下页</button>
+                        </div>
                       </div>
                     </el-tab-pane>
                     <el-tab-pane label="已购" name="purchased">
                       <div v-if="!visiblePacks.length" class="mc-emoji-empty">
                         <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
                       </div>
-                      <div v-else class="mc-emoji-purchased">
-                        <div v-for="pack in visiblePacks" :key="pack.userEmojiId" class="mc-emoji-pack">
-                          <div class="mc-emoji-pack-title">{{ pack.name }}</div>
-                          <div class="mc-emoji-grid mc-emoji-grid--pack">
+                      <div v-else class="mc-emoji-purchased-layout">
+                        <div class="mc-emoji-pack-body">
+                          <div class="mc-emoji-grid mc-emoji-grid--pack mc-emoji-grid--scroll">
                             <img
-                              v-for="(url, uidx) in pack.imageUrls"
+                              v-for="(url, uidx) in (selectedPurchasedPack?.imageUrls || [])"
                               :key="uidx"
                               :src="url"
                               alt=""
@@ -292,6 +360,50 @@
                               @click="sendMessageFromShopUrl(url)"
                             >
                           </div>
+                        </div>
+                        <div class="mc-emoji-pack-bar">
+                          <button
+                            v-if="packBarCanScrollLeft"
+                            type="button"
+                            class="mc-emoji-pack-more"
+                            aria-label="向左滚动"
+                            @click="scrollPackBarLeft"
+                          >
+                            <el-icon><ArrowLeft /></el-icon>
+                          </button>
+                          <div ref="packBarRef" class="mc-emoji-pack-bar-scroll" @scroll="onPackBarScroll">
+                            <div
+                              v-for="pack in visiblePacks"
+                              :key="pack.userEmojiId"
+                              class="mc-emoji-pack-bar-item"
+                            >
+                              <button
+                                type="button"
+                                class="mc-emoji-pack-cover"
+                                :class="{ 'is-active': Number(selectedPurchasedPack?.userEmojiId) === Number(pack.userEmojiId) }"
+                                :title="pack.name"
+                                @click="selectPurchasedPack(pack)"
+                              >
+                                <img :src="pack.coverUrl || pack.imageUrls?.[0]" alt="">
+                              </button>
+                              <transition name="mc-pack-name">
+                                <span
+                                  v-if="Number(selectedPurchasedPack?.userEmojiId) === Number(pack.userEmojiId)"
+                                  :key="pack.userEmojiId"
+                                  class="mc-emoji-pack-name"
+                                >{{ pack.name }}</span>
+                              </transition>
+                            </div>
+                          </div>
+                          <button
+                            v-if="packBarCanScrollRight"
+                            type="button"
+                            class="mc-emoji-pack-more"
+                            aria-label="查看更多表情包"
+                            @click="scrollPackBarRight"
+                          >
+                            <el-icon><ArrowRight /></el-icon>
+                          </button>
                         </div>
                       </div>
                     </el-tab-pane>
@@ -369,6 +481,8 @@ import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { useMessageView } from '@scripts/views/MessageView'
 
 const {
+  ArrowLeft,
+  ArrowRight,
   ChatLineRound,
   ChatLineSquare,
   Close,
@@ -389,12 +503,20 @@ const {
   dialogVisible,
   emojiPackIconUrl,
   emojiPanelTab,
+  emojiPopoverVisible,
   emojiShopStore,
   emojiStickerInput,
   favoriteChatImage,
+  favoriteEmojis,
+  favoritePage,
+  favoritePageInput,
+  favoriteTotalPages,
   focusedConvKey,
   formatSessionTime,
   formatTime,
+  goFavoriteFirst,
+  goFavoriteNext,
+  goFavoritePrev,
   handleClose,
   handleRecall,
   inputBoxRef,
@@ -412,12 +534,27 @@ const {
   onDialogOpened,
   onEmojiPopoverShow,
   onEmojiTabChange,
+  jumpFavoritePage,
+  jumpUploadedPage,
+  onPackBarScroll,
   onEmojiStickerFileChange,
   openArticleFromSystem,
+  openPeerProfile,
+  packBarCanScrollLeft,
+  packBarCanScrollRight,
+  packBarRef,
+  paginatedFavorites,
+  paginatedUploaded,
+  removeEmojiKeepPopover,
+  showUploadOnCurrentPage,
   parseSystemMessageContent,
   peerOnline,
+  scrollPackBarLeft,
+  scrollPackBarRight,
   scrollToBottom,
   searchQuery,
+  selectPurchasedPack,
+  selectedPurchasedPack,
   selfOnline,
   selectListItem,
   sendContent,
@@ -430,6 +567,13 @@ const {
   tabBadges,
   triggerChatImagePick,
   triggerEmojiStickerPick,
+  uploadedEmojis,
+  uploadedPage,
+  uploadedPageInput,
+  uploadedTotalPages,
+  goUploadedFirst,
+  goUploadedNext,
+  goUploadedPrev,
   userStore,
   viewerIsVip,
   visiblePacks,

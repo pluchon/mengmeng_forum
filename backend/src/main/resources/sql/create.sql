@@ -1,6 +1,6 @@
 -- 全库初始化脚本（执行即删库重建 forum_db；勿与 PostgreSQL 的 postgres_ai_session.sql 混跑）
--- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、管理端 RBAC、抽奖演示）。
--- 不含用户/帖子等业务数据；生产数据请走注册与运营后台维护。
+-- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、抽奖演示）。
+-- 不含用户/帖子等业务数据；生产数据请走用户端注册与日常运营维护。
 -- 结构变更请整库重跑本脚本，勿做增量 patch。
 DROP DATABASE IF EXISTS `forum_db`;
 CREATE DATABASE `forum_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -35,8 +35,6 @@ CREATE TABLE `user` (
                         `mascot_model_id` bigint DEFAULT NULL COMMENT '用户选择的看板娘模型 forum_mascot_model.id',
                         `remark` varchar(1000) DEFAULT NULL COMMENT '备注, 自我介绍',
                         `ip_region` varchar(32) DEFAULT NULL COMMENT '最近登录IP属地(省份/国家)',
-                        `admin_tag` varchar(500) DEFAULT NULL COMMENT '管理员标签，仅管理端维护',
-                        `dept_id` bigint DEFAULT NULL COMMENT '后台部门ID，对应 sys_dept.id',
                         `state` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常, 1禁言',
                         `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
                         `lottery_pity_draws` int NOT NULL DEFAULT 0 COMMENT '抽奖硬保底计数：连续未中神秘大奖(is_jackpot)父档的次数，命中后归零',
@@ -348,6 +346,45 @@ CREATE TABLE `article_sub_reply_like` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uix_user_sub_reply` (`user_id`, `sub_reply_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='楼中楼回复点赞记录';
+
+-- ----------------------------
+-- 7d. 评论附件 (article_reply_media)
+-- ----------------------------
+DROP TABLE IF EXISTS `article_reply_media`;
+CREATE TABLE `article_reply_media` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `reply_id` bigint DEFAULT NULL COMMENT '一级评论ID',
+    `sub_reply_id` bigint DEFAULT NULL COMMENT '楼中楼评论ID',
+    `media_type` tinyint NOT NULL COMMENT '1用户图片 2商城表情',
+    `media_url` varchar(500) NOT NULL COMMENT '媒体URL',
+    `shop_id` bigint DEFAULT NULL COMMENT '商城表情包ID(仅 type=2)',
+    `sort_order` int NOT NULL DEFAULT 0 COMMENT '排序',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_reply_id` (`reply_id`),
+    KEY `idx_sub_reply_id` (`sub_reply_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论图片/表情附件';
+
+-- ----------------------------
+-- 7e. 视频帖弹幕 (article_video_danmaku)
+-- ----------------------------
+DROP TABLE IF EXISTS `article_video_danmaku`;
+CREATE TABLE `article_video_danmaku` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `article_id` bigint NOT NULL COMMENT '帖子ID，仅视频帖',
+    `user_id` bigint NOT NULL COMMENT '发送用户ID',
+    `video_time_ms` int NOT NULL COMMENT '弹幕对应视频时间点(毫秒)',
+    `content` varchar(100) NOT NULL COMMENT '弹幕文本',
+    `color_code` tinyint NOT NULL DEFAULT 0 COMMENT '预设颜色编码: 0白 1红 2黄 3绿 4蓝 5粉 6橙 7紫 8青',
+    `mode` tinyint NOT NULL DEFAULT 0 COMMENT '弹幕模式: 0滚动 1顶部 2底部',
+    `font_size` tinyint NOT NULL DEFAULT 1 COMMENT '字号: 0小 1标准',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0正常 1已删除',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_article_time` (`article_id`, `video_time_ms`, `id`),
+    KEY `idx_user_article_time` (`user_id`, `article_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='视频帖弹幕';
 
 -- ----------------------------
 -- 8. 分类表 (category)
@@ -1042,7 +1079,7 @@ CREATE TABLE `lottery_draw_record` (
 
 
 -- ----------------------------
--- 23.1 抽奖按小时汇总(管理端首页趋势; 每次抽奖写入 UPSERT)
+-- 23.1 抽奖按小时汇总(每次抽奖写入 UPSERT)
 -- ----------------------------
 CREATE TABLE `lottery_draw_hourly_stat` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -1111,7 +1148,9 @@ CREATE TABLE `game_definition` (
 INSERT INTO `game_definition` (`game_code`, `game_name`, `cover_url`, `status`, `sort`, `delete_state`)
 VALUES
     ('gobang', '五子棋', NULL, 1, 10, 0),
-    ('jinzi', '井字棋', NULL, 1, 20, 0);
+    ('jinzi', '井字棋', NULL, 1, 20, 0),
+    ('tetris', '俄罗斯方块', NULL, 1, 30, 0),
+    ('tetris_pk', '俄罗斯方块PK', NULL, 1, 31, 0);
 
 -- ----------------------------
 -- 23.3 游戏用户资料表 (game_user_profile)
@@ -1138,12 +1177,11 @@ CREATE TABLE `game_user_profile` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏用户资料表';
 
 -- ----------------------------
--- 23.4 游戏对局记录表 (game_match_record)
+-- 23.4 五子棋对局记录表 (game_gobang_match_record)
 -- ----------------------------
-DROP TABLE IF EXISTS `game_match_record`;
-CREATE TABLE `game_match_record` (
+DROP TABLE IF EXISTS `game_gobang_match_record`;
+CREATE TABLE `game_gobang_match_record` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
-    `game_code` varchar(64) NOT NULL COMMENT '游戏编码',
     `room_id` varchar(64) NOT NULL COMMENT '房间ID',
     `black_user_id` bigint NOT NULL COMMENT '黑方用户ID',
     `white_user_id` bigint NOT NULL COMMENT '白方用户ID',
@@ -1157,11 +1195,36 @@ CREATE TABLE `game_match_record` (
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_game_room_record` (`game_code`, `room_id`),
-    KEY `idx_black_time` (`black_user_id`, `ended_at`),
-    KEY `idx_white_time` (`white_user_id`, `ended_at`),
-    KEY `idx_winner_time` (`winner_user_id`, `ended_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏对局记录表';
+    UNIQUE KEY `uk_gobang_room_record` (`room_id`),
+    KEY `idx_gobang_black_time` (`black_user_id`, `ended_at`),
+    KEY `idx_gobang_white_time` (`white_user_id`, `ended_at`),
+    KEY `idx_gobang_winner_time` (`winner_user_id`, `ended_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='五子棋对局记录表';
+
+-- ----------------------------
+-- 23.4.1 井字棋对局记录表 (game_jinzi_match_record)
+-- ----------------------------
+DROP TABLE IF EXISTS `game_jinzi_match_record`;
+CREATE TABLE `game_jinzi_match_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+    `room_id` varchar(64) NOT NULL COMMENT '房间ID',
+    `black_user_id` bigint NOT NULL COMMENT '黑方用户ID',
+    `white_user_id` bigint NOT NULL COMMENT '白方用户ID',
+    `winner_user_id` bigint DEFAULT NULL COMMENT '胜方用户ID',
+    `loser_user_id` bigint DEFAULT NULL COMMENT '负方用户ID',
+    `end_reason` varchar(32) NOT NULL COMMENT '结束原因 THREE/SURRENDER/DISCONNECT/TIMEOUT/ABNORMAL/DRAW',
+    `score_delta` int NOT NULL DEFAULT 10 COMMENT '本局胜负积分变化绝对值',
+    `started_at` datetime NOT NULL COMMENT '对局开始时间',
+    `ended_at` datetime NOT NULL COMMENT '对局结束时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_jinzi_room_record` (`room_id`),
+    KEY `idx_jinzi_black_time` (`black_user_id`, `ended_at`),
+    KEY `idx_jinzi_white_time` (`white_user_id`, `ended_at`),
+    KEY `idx_jinzi_winner_time` (`winner_user_id`, `ended_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='井字棋对局记录表';
 
 -- ----------------------------
 -- 23.5 游戏结算事件表 (game_settlement_event)
@@ -1205,12 +1268,11 @@ CREATE TABLE `game_room_player` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏房间玩家映射表';
 
 -- ----------------------------
--- 23.7 游戏房间落子记录表 (game_room_move)
+-- 23.7 五子棋房间落子记录表 (game_gobang_room_move)
 -- ----------------------------
-DROP TABLE IF EXISTS `game_room_move`;
-CREATE TABLE `game_room_move` (
+DROP TABLE IF EXISTS `game_gobang_room_move`;
+CREATE TABLE `game_gobang_room_move` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
-    `game_code` varchar(64) NOT NULL COMMENT '游戏编码',
     `room_id` varchar(64) NOT NULL COMMENT '房间ID',
     `move_no` int NOT NULL COMMENT '步号，从1开始',
     `user_id` bigint NOT NULL COMMENT '落子用户ID',
@@ -1222,9 +1284,85 @@ CREATE TABLE `game_room_move` (
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_room_move_no` (`game_code`, `room_id`, `move_no`),
-    KEY `idx_room_moves` (`game_code`, `room_id`, `delete_state`, `move_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏房间落子记录表';
+    UNIQUE KEY `uk_gobang_room_move_no` (`room_id`, `move_no`),
+    KEY `idx_gobang_room_moves` (`room_id`, `delete_state`, `move_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='五子棋房间落子记录表';
+
+-- ----------------------------
+-- 23.7.1 井字棋房间落子记录表 (game_jinzi_room_move)
+-- ----------------------------
+DROP TABLE IF EXISTS `game_jinzi_room_move`;
+CREATE TABLE `game_jinzi_room_move` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+    `room_id` varchar(64) NOT NULL COMMENT '房间ID',
+    `move_no` int NOT NULL COMMENT '步号，从1开始',
+    `user_id` bigint NOT NULL COMMENT '落子用户ID',
+    `row_index` int NOT NULL COMMENT '行号',
+    `col_index` int NOT NULL COMMENT '列号',
+    `chess` int NOT NULL COMMENT '棋子颜色：1黑 2白',
+    `spent_ms` bigint NOT NULL DEFAULT 0 COMMENT '该步耗时毫秒',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_jinzi_room_move_no` (`room_id`, `move_no`),
+    KEY `idx_jinzi_room_moves` (`room_id`, `delete_state`, `move_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='井字棋房间落子记录表';
+
+-- ----------------------------
+-- 23.7.2 俄罗斯方块单人局记录表 (game_tetris_record)
+-- ----------------------------
+DROP TABLE IF EXISTS `game_tetris_record`;
+CREATE TABLE `game_tetris_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `game_code` varchar(64) NOT NULL DEFAULT 'tetris' COMMENT '游戏编码',
+    `score` int NOT NULL DEFAULT 0 COMMENT '本局分数',
+    `level` int NOT NULL DEFAULT 1 COMMENT '结束时等级',
+    `lines_cleared` int NOT NULL DEFAULT 0 COMMENT '总消行数',
+    `duration_ms` bigint NOT NULL DEFAULT 0 COMMENT '局时长毫秒',
+    `seed` bigint NOT NULL COMMENT '随机种子',
+    `replay_payload` mediumtext NOT NULL COMMENT '回放JSON',
+    `forum_points_awarded` int NOT NULL DEFAULT 0 COMMENT '本次论坛积分奖励',
+    `validation_status` varchar(16) NOT NULL DEFAULT 'VALID' COMMENT '校验状态 VALID/REJECTED',
+    `started_at` datetime NOT NULL COMMENT '开局时间',
+    `ended_at` datetime NOT NULL COMMENT '结束时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_tetris_user_time` (`user_id`, `delete_state`, `ended_at`),
+    KEY `idx_tetris_score` (`game_code`, `delete_state`, `score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='俄罗斯方块单人局记录';
+
+-- ----------------------------
+-- 23.7.3 俄罗斯方块 PK 对局记录表 (game_tetris_pk_match_record)
+-- ----------------------------
+DROP TABLE IF EXISTS `game_tetris_pk_match_record`;
+CREATE TABLE `game_tetris_pk_match_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+    `room_id` varchar(64) NOT NULL COMMENT '房间ID',
+    `player1_user_id` bigint NOT NULL COMMENT '玩家1用户ID',
+    `player2_user_id` bigint NOT NULL COMMENT '玩家2用户ID',
+    `red_user_id` bigint NOT NULL COMMENT '红方用户ID',
+    `blue_user_id` bigint NOT NULL COMMENT '蓝方用户ID',
+    `winner_user_id` bigint DEFAULT NULL COMMENT '胜方用户ID',
+    `loser_user_id` bigint DEFAULT NULL COMMENT '败方用户ID',
+    `player1_score` int NOT NULL DEFAULT 0 COMMENT '玩家1得分',
+    `player2_score` int NOT NULL DEFAULT 0 COMMENT '玩家2得分',
+    `end_reason` varchar(32) NOT NULL DEFAULT '' COMMENT '结束原因',
+    `score_delta` int NOT NULL DEFAULT 3 COMMENT '积分变动',
+    `replay_payload` mediumtext COMMENT '回放JSON',
+    `started_at` datetime NOT NULL COMMENT '开始时间',
+    `ended_at` datetime NOT NULL COMMENT '结束时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_tetris_pk_room` (`room_id`),
+    KEY `idx_tetris_pk_player1` (`player1_user_id`, `delete_state`, `ended_at`),
+    KEY `idx_tetris_pk_player2` (`player2_user_id`, `delete_state`, `ended_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='俄罗斯方块PK对局记录';
 
 
 -- ----------------------------
@@ -1294,167 +1432,5 @@ INSERT INTO `forum_vip_quota_config`
 (2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60),
 (2, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 800000, 'MAX', 70),
 (2, 'token_claude_sonnet', '本期 Token 配额 · 文本', 'Claude Sonnet', 'token_period', NULL, 'claude-sonnet-4-6', 'claude', NULL, 400000, 'MAX', 90);
-
--- ----------------------------
--- 25. 管理后台 RBAC（菜单 / 角色 / 部门 / 字典），供 forum-vue-admin 对接
--- 权限仍以 forum.user.is_admin=1 为硬门槛；以下为前台 Gi 动态路由与表单脚手架。
--- ----------------------------
-DROP TABLE IF EXISTS `sys_role_menu`;
-DROP TABLE IF EXISTS `sys_user_role`;
-DROP TABLE IF EXISTS `sys_menu`;
-DROP TABLE IF EXISTS `sys_dict_data`;
-DROP TABLE IF EXISTS `sys_dict_type`;
-DROP TABLE IF EXISTS `sys_role`;
-DROP TABLE IF EXISTS `sys_dept`;
-
-CREATE TABLE `sys_dept` (
-    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '部门ID',
-    `parent_id` bigint NOT NULL DEFAULT 0 COMMENT '父级ID，0为根',
-    `name` varchar(100) NOT NULL COMMENT '部门名称',
-    `sort` int NOT NULL DEFAULT 0 COMMENT '排序',
-    `status` char(1) NOT NULL DEFAULT '1' COMMENT '状态 1启用 0停用',
-    `description` varchar(500) DEFAULT NULL COMMENT '备注',
-    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='后台部门树';
-
-CREATE TABLE `sys_role` (
-    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '角色ID',
-    `role_code` varchar(64) NOT NULL COMMENT '角色编码，如 role_admin',
-    `role_name` varchar(100) NOT NULL COMMENT '角色名称',
-    `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_role_code` (`role_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='后台角色';
-
-CREATE TABLE `sys_menu` (
-    `id` varchar(32) NOT NULL COMMENT '菜单ID（与前端路由组件路径约定一致）',
-    `parent_id` varchar(32) NOT NULL DEFAULT '' COMMENT '父菜单ID',
-    `path` varchar(200) NOT NULL COMMENT '路由 path',
-    `component` varchar(200) DEFAULT NULL COMMENT '组件标识 Layout / system/user/index',
-    `redirect` varchar(200) DEFAULT NULL COMMENT '重定向',
-    `type` tinyint NOT NULL COMMENT '1目录 2菜单 3按钮',
-    `title` varchar(100) NOT NULL COMMENT '标题',
-    `icon` varchar(100) DEFAULT NULL COMMENT '图标',
-    `sort` int NOT NULL DEFAULT 0 COMMENT '排序',
-    `hidden` tinyint NOT NULL DEFAULT 0 COMMENT '是否隐藏',
-    `keep_alive` tinyint NOT NULL DEFAULT 0 COMMENT '是否缓存',
-    `breadcrumb` tinyint NOT NULL DEFAULT 1 COMMENT '面包屑',
-    `affix` tinyint NOT NULL DEFAULT 0 COMMENT '固定标签',
-    `show_in_tabs` tinyint NOT NULL DEFAULT 1 COMMENT '是否出现在标签栏',
-    `always_show` tinyint NOT NULL DEFAULT 0 COMMENT '是否总是显示父级',
-    `active_menu` varchar(200) DEFAULT NULL COMMENT '高亮菜单 path',
-    `permission` varchar(100) DEFAULT NULL COMMENT '权限标识',
-    `status` char(1) NOT NULL DEFAULT '1' COMMENT '状态',
-    PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='后台菜单';
-
-CREATE TABLE `sys_dict_type` (
-    `id` bigint NOT NULL AUTO_INCREMENT,
-    `dict_code` varchar(64) NOT NULL COMMENT '字典编码',
-    `dict_name` varchar(100) NOT NULL COMMENT '字典名称',
-    `remark` varchar(255) DEFAULT NULL,
-    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_dict_code` (`dict_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='字典类型';
-
-CREATE TABLE `sys_dict_data` (
-    `id` bigint NOT NULL AUTO_INCREMENT,
-    `dict_code` varchar(64) NOT NULL COMMENT '字典编码',
-    `label` varchar(100) NOT NULL COMMENT '显示文本',
-    `value` varchar(100) NOT NULL COMMENT '值',
-    `sort` int NOT NULL DEFAULT 0,
-    `status` char(1) NOT NULL DEFAULT '1' COMMENT '1启用 0停用',
-    PRIMARY KEY (`id`),
-    INDEX `idx_dict_code` (`dict_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='字典数据';
-
-CREATE TABLE `sys_user_role` (
-    `id` bigint NOT NULL AUTO_INCREMENT,
-    `user_id` bigint NOT NULL COMMENT 'forum.user.id',
-    `role_id` bigint NOT NULL COMMENT 'sys_role.id',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_role` (`user_id`, `role_id`),
-    INDEX `idx_role_id` (`role_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户-角色';
-
-CREATE TABLE `sys_role_menu` (
-    `id` bigint NOT NULL AUTO_INCREMENT,
-    `role_id` bigint NOT NULL,
-    `menu_id` varchar(32) NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_role_menu` (`role_id`, `menu_id`),
-    INDEX `idx_menu_id` (`menu_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色-菜单权限';
-
--- 初始角色（与前端 mock roles 一致）
-INSERT INTO `sys_role` (`id`, `role_code`, `role_name`, `remark`) VALUES
-    (1, 'role_admin', '超级管理员', '完全菜单'),
-    (2, 'role_user', '普通用户', '演示');
-
--- 部门根节点
-INSERT INTO `sys_dept` (`id`, `parent_id`, `name`, `sort`, `status`, `description`) VALUES
-    (1, 0, '萌萌论坛总部', 0, '1', '默认部门');
-
--- 字典：Gi 模板 STATUS / GENDER
-INSERT INTO `sys_dict_type` (`dict_code`, `dict_name`) VALUES
-    ('STATUS', '用户状态'),
-    ('GENDER', '性别');
-
-INSERT INTO `sys_dict_data` (`dict_code`, `label`, `value`, `sort`, `status`) VALUES
-    ('STATUS', '启用', '1', 1, '1'),
-    ('STATUS', '停用', '0', 2, '1'),
-    ('GENDER', '男', '1', 1, '1'),
-    ('GENDER', '女', '2', 2, '1'),
-    ('GENDER', '保密', '3', 3, '1');
-
--- 公告大类(用户端侧栏/管理端筛选用; value 与 forum_notice.notice_kind 一致)
-INSERT INTO `sys_dict_type` (`dict_code`, `dict_name`, `remark`) VALUES
-    ('FORUM_NOTICE_KIND', '论坛公告大类', '0入站 1活动 2纪律 3系统 4版规');
-
-INSERT INTO `sys_dict_data` (`dict_code`, `label`, `value`, `sort`, `status`) VALUES
-    ('FORUM_NOTICE_KIND', '新用户入站', '0', 1, '1'),
-    ('FORUM_NOTICE_KIND', '活动公告', '1', 2, '1'),
-    ('FORUM_NOTICE_KIND', '纪律公告', '2', 3, '1'),
-    ('FORUM_NOTICE_KIND', '系统更新', '3', 4, '1'),
-    ('FORUM_NOTICE_KIND', '版规公告', '4', 5, '1');
-
--- 注册成功后写入 system_message.type=4 时的默认标题与正文(业务可覆盖)
-INSERT INTO `sys_dict_type` (`dict_code`, `dict_name`, `remark`) VALUES
-    ('FORUM_REGISTER_SYSMSG', '注册入站系统消息', '配合 system_message.type=4 引导用户查看公告中心「入站必看」');
-
-INSERT INTO `sys_dict_data` (`dict_code`, `label`, `value`, `sort`, `status`) VALUES
-    ('FORUM_REGISTER_SYSMSG', 'TITLE', '入站必看', 1, '1'),
-    ('FORUM_REGISTER_SYSMSG', 'CONTENT', '欢迎加入萌萌论坛！请打开公告中心阅读「入站必看」，了解社区规则后再发帖互动。', 2, '1');
-
--- 菜单树（与 forum-vue-admin mock 裁剪版一致）
-INSERT INTO `sys_menu` (`id`,`parent_id`,`path`,`component`,`redirect`,`type`,`title`,`icon`,`sort`,`hidden`,`keep_alive`,`breadcrumb`,`affix`,`show_in_tabs`,`always_show`,`active_menu`,`permission`,`status`) VALUES
-    ('08','','/system','Layout','/system/user',1,'系统管理','icon-park-outline:setting-two',2,0,0,1,0,1,0,'','','1');
-INSERT INTO `sys_menu` (`id`,`parent_id`,`path`,`component`,`redirect`,`type`,`title`,`icon`,`sort`,`hidden`,`keep_alive`,`breadcrumb`,`affix`,`show_in_tabs`,`always_show`,`active_menu`,`permission`,`status`) VALUES
-    ('0801','08','/system/user','system/user/index','',2,'用户管理','icon-park-outline:setting-config',1,0,0,1,0,1,0,'','','1'),
-    ('0802','08','/system/role','system/role/index','',2,'角色管理','icon-park-outline:setting-config',2,1,0,1,0,1,0,'','','1'),
-    ('0803','08','/system/dept','system/dept/index','',2,'部门管理','icon-park-outline:setting-config',3,1,0,1,0,1,0,'','','1'),
-    ('0804','08','/system/menu','system/menu/index','',2,'菜单管理','icon-park-outline:setting-config',4,1,0,1,0,1,0,'','','1'),
-    ('0806','08','/system/account','system/account/index','',2,'账户管理','icon-park-outline:setting-config',5,1,0,1,0,1,0,'','','1');
-
-INSERT INTO `sys_menu` (`id`,`parent_id`,`path`,`component`,`redirect`,`type`,`title`,`icon`,`sort`,`hidden`,`keep_alive`,`breadcrumb`,`affix`,`show_in_tabs`,`always_show`,`active_menu`,`permission`,`status`) VALUES
-    ('09','','/content','Layout','/content/article',1,'内容管理','icon-park-outline:notebook-one',1,0,0,1,0,1,0,'','','1');
-INSERT INTO `sys_menu` (`id`,`parent_id`,`path`,`component`,`redirect`,`type`,`title`,`icon`,`sort`,`hidden`,`keep_alive`,`breadcrumb`,`affix`,`show_in_tabs`,`always_show`,`active_menu`,`permission`,`status`) VALUES
-    ('0901','09','/content/article','content/article/index','',2,'帖子管理','icon-park-outline:notes',1,0,0,1,0,1,0,'','','1'),
-    ('0902','09','/content/reply','content/reply/index','',2,'一级评论','icon-park-outline:message',2,1,0,1,0,1,0,'','','1'),
-    ('0903','09','/content/notice','content/notice/index','',2,'论坛公告','icon-park-outline:volume-notice',3,0,0,1,0,1,0,'','','1'),
-    ('0904','09','/content/lottery-activity','content/lottery-activity/index','',2,'活动管理','icon-park-outline:gift',4,0,0,1,0,1,0,'','','1'),
-    ('0905','09','/content/lottery-prize','content/lottery-prize/index','',2,'奖品管理','icon-park-outline:box',5,0,0,1,0,1,0,'','','1'),
-    ('0906','09','/content/mascot-model','content/mascot-model/index','',2,'看板娘模型','icon-park-outline:robot',6,0,0,1,0,1,0,'','','1');
-
--- 超级管理员可见全部菜单
-INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
-SELECT 1, `id` FROM `sys_menu`;
-
--- 绑定管理员账号：将首个 is_admin=1 的用户赋予 role_admin（若无则跳过）
-INSERT INTO `sys_user_role` (`user_id`, `role_id`)
-SELECT `id`, 1 FROM `user` WHERE `is_admin` = 1 AND `delete_state` = 0 LIMIT 1;
 
 SET FOREIGN_KEY_CHECKS = 1;

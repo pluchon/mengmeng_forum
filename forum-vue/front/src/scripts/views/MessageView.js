@@ -9,6 +9,8 @@ import {
   Search,
   Picture,
   Plus,
+  ArrowRight,
+  ArrowLeft,
   Bell,
   CircleCheck,
   Star,
@@ -52,6 +54,7 @@ import {
   canFavoriteChatMediaMessage,
   validateChatImageMime,
   readImageNaturalSize,
+  isUserUploadedChatEmoji,
 } from '@/utils/chatMedia'
 import { isVipActive } from '@/utils/vip'
 import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
@@ -93,6 +96,7 @@ export function useMessageView() {
   const defaultAvatar = DEFAULT_AVATAR
 
   const emojiPanelTab = ref('favorites')
+  const emojiPopoverVisible = ref(false)
   const activeTab = ref('all')
   const focusedConvKey = ref(null)
 
@@ -204,6 +208,193 @@ export function useMessageView() {
     }
     const set = new Set(hidden.map((x) => Number(x)).filter(Number.isFinite))
     return emojiShopStore.myPacks.filter((p) => !set.has(Number(p.userEmojiId)))
+  })
+
+  const FAVORITES_PAGE_SIZE = 8
+  const favoritePage = ref(1)
+  const favoritePageInput = ref('1')
+  const uploadedPage = ref(1)
+  const uploadedPageInput = ref('1')
+  const selectedPurchasedPackId = ref(null)
+  const packBarRef = ref(null)
+  const packBarCanScrollLeft = ref(false)
+  const packBarCanScrollRight = ref(false)
+
+  const favoriteEmojis = computed(() =>
+    chatEmojiStore.list.filter((e) => !isUserUploadedChatEmoji(e)),
+  )
+
+  const uploadedEmojis = computed(() =>
+    chatEmojiStore.list.filter((e) => isUserUploadedChatEmoji(e)),
+  )
+
+  const selectedPurchasedPack = computed(() => {
+    const packs = visiblePacks.value
+    if (!packs.length) return null
+    const id = selectedPurchasedPackId.value
+    if (id != null) {
+      const hit = packs.find((p) => Number(p.userEmojiId) === Number(id))
+      if (hit) return hit
+    }
+    return packs[0]
+  })
+
+  const favoriteTotalPages = computed(() => {
+    const total = favoriteEmojis.value.length
+    return Math.max(1, Math.ceil(total / FAVORITES_PAGE_SIZE))
+  })
+
+  const uploadedTotalPages = computed(() => {
+    const total = uploadedEmojis.value.length + 1
+    return Math.max(1, Math.ceil(total / FAVORITES_PAGE_SIZE))
+  })
+
+  const paginatedFavorites = computed(() => {
+    const start = (favoritePage.value - 1) * FAVORITES_PAGE_SIZE
+    return favoriteEmojis.value.slice(start, start + FAVORITES_PAGE_SIZE)
+  })
+
+  const paginatedUploaded = computed(() => {
+    const start = (uploadedPage.value - 1) * FAVORITES_PAGE_SIZE
+    return uploadedEmojis.value.slice(start, start + FAVORITES_PAGE_SIZE)
+  })
+
+  const showUploadOnCurrentPage = computed(() => {
+    const uploadIndex = uploadedEmojis.value.length
+    const pageStart = (uploadedPage.value - 1) * FAVORITES_PAGE_SIZE
+    const pageEnd = pageStart + FAVORITES_PAGE_SIZE
+    return uploadIndex >= pageStart && uploadIndex < pageEnd
+  })
+
+  async function removeEmojiKeepPopover(emojiId) {
+    await chatEmojiStore.remove(emojiId)
+    await nextTick()
+    emojiPopoverVisible.value = true
+  }
+
+  function openPeerProfile(item) {
+    if (item?.kind !== 'pm') return
+    const uid = item?.user?.id ?? item?.session?.user?.id
+    if (!uid) return
+    handleClose()
+    router.push(`/profile/${uid}`)
+  }
+
+  function syncFavoritePageInput() {
+    favoritePageInput.value = String(favoritePage.value)
+  }
+
+  function syncUploadedPageInput() {
+    uploadedPageInput.value = String(uploadedPage.value)
+  }
+
+  function goUploadedFirst() {
+    uploadedPage.value = 1
+    syncUploadedPageInput()
+  }
+
+  function goUploadedPrev() {
+    if (uploadedPage.value > 1) {
+      uploadedPage.value -= 1
+      syncUploadedPageInput()
+    }
+  }
+
+  function goUploadedNext() {
+    if (uploadedPage.value < uploadedTotalPages.value) {
+      uploadedPage.value += 1
+      syncUploadedPageInput()
+    }
+  }
+
+  function jumpUploadedPage() {
+    const n = Number(uploadedPageInput.value)
+    if (!Number.isFinite(n)) return
+    uploadedPage.value = Math.min(uploadedTotalPages.value, Math.max(1, Math.floor(n)))
+    syncUploadedPageInput()
+  }
+
+  function goFavoriteFirst() {
+    favoritePage.value = 1
+    syncFavoritePageInput()
+  }
+
+  function goFavoritePrev() {
+    if (favoritePage.value > 1) {
+      favoritePage.value -= 1
+      syncFavoritePageInput()
+    }
+  }
+
+  function goFavoriteNext() {
+    if (favoritePage.value < favoriteTotalPages.value) {
+      favoritePage.value += 1
+      syncFavoritePageInput()
+    }
+  }
+
+  function jumpFavoritePage() {
+    const n = Number(favoritePageInput.value)
+    if (!Number.isFinite(n)) return
+    favoritePage.value = Math.min(favoriteTotalPages.value, Math.max(1, Math.floor(n)))
+    syncFavoritePageInput()
+  }
+
+  function selectPurchasedPack(pack) {
+    selectedPurchasedPackId.value = pack?.userEmojiId ?? null
+    nextTick(updatePackBarScrollState)
+  }
+
+  function onPackBarScroll() {
+    updatePackBarScrollState()
+  }
+
+  function scrollPackBarLeft() {
+    packBarRef.value?.scrollBy({ left: -120, behavior: 'smooth' })
+  }
+
+  function scrollPackBarRight() {
+    packBarRef.value?.scrollBy({ left: 120, behavior: 'smooth' })
+  }
+
+  function updatePackBarScrollState() {
+    const el = packBarRef.value
+    if (!el) {
+      packBarCanScrollLeft.value = false
+      packBarCanScrollRight.value = false
+      return
+    }
+    const maxScroll = el.scrollWidth - el.clientWidth
+    packBarCanScrollLeft.value = el.scrollLeft > 4
+    packBarCanScrollRight.value = maxScroll > 4 && el.scrollLeft < maxScroll - 4
+  }
+
+  watch(visiblePacks, (packs) => {
+    if (!packs.length) {
+      selectedPurchasedPackId.value = null
+      packBarCanScrollLeft.value = false
+      packBarCanScrollRight.value = false
+      return
+    }
+    const cur = selectedPurchasedPackId.value
+    if (cur == null || !packs.some((p) => Number(p.userEmojiId) === Number(cur))) {
+      selectedPurchasedPackId.value = packs[0].userEmojiId
+    }
+    nextTick(updatePackBarScrollState)
+  }, { immediate: true })
+
+  watch(() => favoriteEmojis.value.length, () => {
+    if (favoritePage.value > favoriteTotalPages.value) {
+      favoritePage.value = favoriteTotalPages.value
+    }
+    syncFavoritePageInput()
+  })
+
+  watch(() => uploadedEmojis.value.length, () => {
+    if (uploadedPage.value > uploadedTotalPages.value) {
+      uploadedPage.value = uploadedTotalPages.value
+    }
+    syncUploadedPageInput()
   })
 
   function coerceMessageId(raw) {
@@ -709,7 +900,10 @@ export function useMessageView() {
     const loading = openImageUploadLoading(file, '正在上传表情…')
     try {
       await chatEmojiStore.uploadAndFavorite(file)
-      ElMessage.success('已添加到表情')
+      ElMessage.success('已添加到我的上传')
+      emojiPanelTab.value = 'uploads'
+      uploadedPage.value = 1
+      syncUploadedPageInput()
     } catch {
       /* 已提示 */
     } finally {
@@ -723,6 +917,9 @@ export function useMessageView() {
       if (userStore.isLoggedIn && emojiPanelTab.value === 'purchased') {
         await emojiShopStore.fetchMyPacks()
       }
+      syncFavoritePageInput()
+      syncUploadedPageInput()
+      nextTick(updatePackBarScrollState)
     } catch {
       /* store / 拦截器已提示 */
     }
@@ -735,6 +932,12 @@ export function useMessageView() {
       } catch {
         /* 已提示 */
       }
+    }
+    if (name === 'favorites') {
+      syncFavoritePageInput()
+    }
+    if (name === 'uploads') {
+      syncUploadedPageInput()
     }
   }
 
@@ -848,6 +1051,8 @@ export function useMessageView() {
   }
 
   return {
+    ArrowLeft,
+    ArrowRight,
     Bell,
     ChatLineRound,
     ChatLineSquare,
@@ -871,6 +1076,7 @@ export function useMessageView() {
     defaultAvatar,
     dialogVisible,
     emojiPanelTab,
+    emojiPopoverVisible,
     emojiShopStore,
     emojiStickerInput,
     favoriteChatImage,
@@ -896,6 +1102,7 @@ export function useMessageView() {
     onEmojiTabChange,
     onEmojiStickerFileChange,
     openArticleFromSystem,
+    openPeerProfile,
     parseSystemMessageContent,
     peerOnline,
     scrollToBottom,
@@ -915,6 +1122,34 @@ export function useMessageView() {
     triggerEmojiStickerPick,
     userStore,
     viewerIsVip,
+    favoriteEmojis,
+    favoritePage,
+    favoritePageInput,
+    favoriteTotalPages,
+    goFavoriteFirst,
+    goFavoriteNext,
+    goFavoritePrev,
+    jumpFavoritePage,
+    jumpUploadedPage,
+    onPackBarScroll,
+    paginatedFavorites,
+    paginatedUploaded,
+    removeEmojiKeepPopover,
+    showUploadOnCurrentPage,
+    packBarCanScrollLeft,
+    packBarCanScrollRight,
+    packBarRef,
+    scrollPackBarLeft,
+    scrollPackBarRight,
+    selectPurchasedPack,
+    selectedPurchasedPack,
+    uploadedEmojis,
+    uploadedPage,
+    uploadedPageInput,
+    uploadedTotalPages,
+    goUploadedFirst,
+    goUploadedNext,
+    goUploadedPrev,
     visiblePacks,
     router,
   }

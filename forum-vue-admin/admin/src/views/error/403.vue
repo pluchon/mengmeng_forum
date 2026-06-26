@@ -1,9 +1,0 @@
-<template>
-  <ErrorPage :code="403"></ErrorPage>
-</template>
-
-<script setup lang="ts">
-import ErrorPage from './components/ErrorPage.vue'
-
-defineOptions({ name: 'Error403' })
-</script>

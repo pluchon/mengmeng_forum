@@ -12,12 +12,15 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
+import org.example.forumdemo.converter.MascotConverter;
+import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -66,6 +69,9 @@ public class MascotServiceImpl implements MascotService {
 
     @Value("${forum.mascot.treat-admin-as-vip:true}")
     private boolean treatAdminAsVip;
+
+    @Autowired
+    private RestTemplate forumRestTemplate;
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -330,7 +336,7 @@ public class MascotServiceImpl implements MascotService {
 
     @Override
     @SuppressWarnings("rawtypes")
-    public Map<String, Object> chat(User user, MascotChatRequest request) {
+    public MascotChatResponseVO chat(User user, MascotChatRequest request) {
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
 
@@ -395,7 +401,7 @@ public class MascotServiceImpl implements MascotService {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
 
-        RestTemplate restTemplate = new RestTemplate();
+        RestTemplate restTemplate = forumRestTemplate;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (internalKey != null && !internalKey.isBlank()) {
@@ -469,7 +475,7 @@ public class MascotServiceImpl implements MascotService {
         data.put("usageStats", billing.get("usageStats"));
         data.put("modelCode", usage.getModelCode());
         data.put("estimated", usage.getEstimated());
-        return data;
+        return MascotConverter.toChatResponse(data);
     }
 
     private String mascotStreamAiUrl() {

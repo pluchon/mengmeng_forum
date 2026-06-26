@@ -252,7 +252,7 @@ def vector_search_users(
         if boost > 0:
             if sim >= float(_RAG.get("vector_min_score_user_profile", 0.22)):
                 scored.append((sim, uid))
-        elif cosine >= float(_RAG.get("vector_min_score_user_semantic", 0.38)):
+        elif cosine >= float(_RAG.get("vector_min_score_user_semantic", 0.44)):
             scored.append((sim, uid))
     scored.sort(key=lambda x: x[0], reverse=True)
     top_k = min(top_k, int(_RAG.get("embedding_top_k", 80)))

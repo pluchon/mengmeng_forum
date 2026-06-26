@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.converter.MascotConverter;
+import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -94,7 +96,7 @@ public class VipCenterServiceImpl implements VipCenterService {
     }
 
     @Override
-    public Map<String, Object> quotaHintForLlmRoute(Long userId, String llmRoute) {
+    public MascotQuotaHintVO quotaHintForLlmRoute(Long userId, String llmRoute) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("percent", 0);
         out.put("canUsePointsPay", false);
@@ -102,7 +104,7 @@ public class VipCenterServiceImpl implements VipCenterService {
         User user = requireUser(userId);
         if (!vipActive(user) || (!Constant.VIP_TIER_PRO.equals(user.getVipTier())
                 && !Constant.VIP_TIER_MAX.equals(user.getVipTier()))) {
-            return out;
+            return MascotConverter.toQuotaHintVO(out);
         }
         String route = llmRoute != null ? llmRoute.trim().toLowerCase(Locale.ROOT).replace('_', '-') : "";
         VipQuotaPanelVO panel = buildQuotaPanel(user);
@@ -120,7 +122,7 @@ public class VipCenterServiceImpl implements VipCenterService {
                         out.put("percent", 0);
                         out.put("canUsePointsPay", false);
                         out.put("quotaLabel", item.getDisplayName());
-                        return out;
+                        return MascotConverter.toQuotaHintVO(out);
                     }
                     continue;
                 }
@@ -157,7 +159,7 @@ public class VipCenterServiceImpl implements VipCenterService {
         out.put("percent", percent);
         out.put("quotaLabel", label);
         out.put("canUsePointsPay", percent >= 95);
-        return out;
+        return MascotConverter.toQuotaHintVO(out);
     }
 
     private static boolean routeNeedsAdvancedDaily(String route) {

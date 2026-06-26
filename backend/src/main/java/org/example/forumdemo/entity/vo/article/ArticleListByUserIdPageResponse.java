@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import org.example.forumdemo.entity.db.Article;
+import org.example.forumdemo.entity.vo.article.ArticleBriefVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 
@@ -18,12 +18,12 @@ import org.example.forumdemo.entity.vo.common.PageResult;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ArticleListByUserIdPageResponse extends PageResult<Article> {
+public class ArticleListByUserIdPageResponse extends PageResult<ArticleBriefVO> {
     private UserBriefVO user;
     private Boolean isOwner;
 
     // 便于构造：将PageResult转换为此类
-    public ArticleListByUserIdPageResponse(PageResult<Article> pageResult, UserBriefVO user, Boolean isOwner) {
+    public ArticleListByUserIdPageResponse(PageResult<ArticleBriefVO> pageResult, UserBriefVO user, Boolean isOwner) {
         super(pageResult.getRecords(), pageResult.getTotal(), pageResult.getPageNum(),
               pageResult.getPageSize(), pageResult.getPages(), pageResult.getHasNextPage());
         this.user = user;
