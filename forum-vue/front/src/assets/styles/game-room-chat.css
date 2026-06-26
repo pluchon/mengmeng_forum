@@ -1,0 +1,183 @@
+.game-room-chat-panel,
+.gobang-chat-box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.gobang-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+}
+
+.gobang-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  max-height: 100%;
+  padding: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gobang-chat-msg {
+  max-width: 88%;
+  align-self: flex-start;
+}
+
+.gobang-chat-msg.is-me {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.gobang-chat-msg span {
+  display: block;
+  margin-bottom: 4px;
+  color: #a8b7bd;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.gobang-chat-msg p {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #edf5f3;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.gobang-chat-msg.is-me p {
+  background: rgba(81, 118, 255, 0.86);
+  color: #fff;
+}
+
+.gobang-chat-msg img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.gobang-chat-empty {
+  color: #8da3ab;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.game-room-chat-input-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.game-room-chat-input-wrap :deep(.el-input__wrapper) {
+  padding-right: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+.game-room-chat-emoji-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.game-room-chat-emoji-btn--inline {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transform: translateY(-50%);
+}
+
+.game-room-chat-emoji-btn--inline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.game-room-chat-emoji-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.game-room-chat-emoji-btn .comment-emoji-pack-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.gobang-chat-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.game-room-chat-panel.is-readonly {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.gobang-chat-input :deep(.el-input__inner) {
+  color: #edf5f3;
+}
+
+.gobang-chat-input :deep(.el-input__inner::placeholder) {
+  color: #8da3ab;
+}
+
+.gobang-chat-input :deep(.el-button) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.game-room-chat-send,
+.game-room-chat-panel .gobang-chat-input :deep(.game-room-chat-send) {
+  --el-button-text-color: #e8f2ff;
+  --el-button-bg-color: #07111f;
+  --el-button-border-color: #1b5cff;
+  --el-button-hover-bg-color: #0a1d38;
+  --el-button-hover-border-color: #4d86ff;
+  --el-button-hover-text-color: #fff;
+  --el-button-active-bg-color: #050a13;
+  --el-button-active-border-color: #78a4ff;
+  --el-button-disabled-bg-color: rgba(7, 17, 31, 0.5);
+  --el-button-disabled-border-color: rgba(27, 92, 255, 0.35);
+  background:
+    radial-gradient(circle at 18% 34%, rgba(112, 164, 255, 0.95) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.74) 0 1px, transparent 2px),
+    radial-gradient(circle at 84% 72%, rgba(75, 139, 255, 0.76) 0 1px, transparent 2px),
+    linear-gradient(135deg, #030712 0%, #0a1830 46%, #07111f 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(95, 148, 255, 0.2);
+  border-radius: 8px;
+  font-weight: 900;
+}

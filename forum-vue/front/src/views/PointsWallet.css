@@ -1,0 +1,28 @@
+.points-filter-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.points-filter-option {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4e5969;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.points-filter-option:hover {
+  background: #f2f3f5;
+}
+
+.points-filter-option.is-active {
+  background: rgba(107, 76, 255, 0.1);
+  color: #6b4cff;
+}

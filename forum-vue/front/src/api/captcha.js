@@ -13,5 +13,10 @@ export function generateCaptcha(body = {}) {
  * @param {Record<string, unknown>} payload
  */
 export function checkCaptcha(payload) {
-  return request({ url: '/captcha/check', method: 'post', data: payload })
+  return request({
+    url: '/captcha/check',
+    method: 'post',
+    data: payload,
+    silentBizCodes: [1168],
+  })
 }

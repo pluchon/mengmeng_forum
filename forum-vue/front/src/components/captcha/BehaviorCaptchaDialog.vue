@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-dialog
     v-model="visible"
     title="安全验证"
@@ -306,6 +306,12 @@ async function onPointerUp(e) {
 function failAndClose(message) {
   if (message) ElMessage.error(message)
   settled = true
+  submitting.value = false
+  dragging.value = false
+  vo.value = null
+  errorMsg.value = ''
+  resetSlider()
+  resetClick()
   visible.value = false
   rejectPromise?.(new Error('failed'))
   rejectPromise = null
@@ -346,8 +352,8 @@ async function submitSlider() {
     let res
     try {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
-    } catch {
-      failAndClose()
+    } catch (err) {
+      failAndClose(err?.message || '验证失败，请重试')
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
@@ -428,9 +434,8 @@ async function submitClickTrack() {
     let res
     try {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
-    } catch {
-      // axios 拦截器已对业务码弹窗；勿再向外抛，避免 Vue 点击处理器出现 Unhandled promise
-      failAndClose()
+    } catch (err) {
+      failAndClose(err?.message || '验证失败，请重试')
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
@@ -495,6 +500,7 @@ function onDialogClosed() {
 }
 
 function closeReject() {
+  settled = true
   visible.value = false
 }
 

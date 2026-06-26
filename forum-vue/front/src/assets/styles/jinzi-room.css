@@ -1,0 +1,134 @@
+@import "./gobang-room.css";
+
+.jinzi-room-grid {
+  grid-template-columns: 230px minmax(420px, 1fr) 280px;
+}
+
+.jinzi-board {
+  width: min(64vh, 100%);
+  max-width: 600px;
+  --board-pad: 0px;
+  border-color: #3d5a80;
+  background:
+    linear-gradient(#40516a 1px, transparent 1px),
+    linear-gradient(90deg, #40516a 1px, transparent 1px),
+    linear-gradient(145deg, #0b1220, #172554 58%, #111827);
+  background-size: calc(100% / 3) calc(100% / 3);
+  background-position: 0 0;
+}
+
+.jinzi-board .gobang-cell {
+  --step: calc(100% / 3);
+  left: calc((var(--col) + 0.5) * var(--step));
+  top: calc((var(--row) + 0.5) * var(--step));
+  width: var(--step);
+  height: var(--step);
+}
+
+.jinzi-mark,
+.jinzi-side-mark,
+.jinzi-turn-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  line-height: 1;
+  user-select: none;
+}
+
+.jinzi-mark {
+  width: 72%;
+  height: 72%;
+  font-size: clamp(42px, 8vw, 72px);
+}
+
+.jinzi-mark.is-x {
+  color: #f8fafc;
+  text-shadow: 0 0 18px rgba(148, 163, 184, 0.35);
+}
+
+.jinzi-mark.is-o {
+  color: #7dd3fc;
+  font-size: clamp(44px, 8.2vw, 76px);
+  text-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+}
+
+.jinzi-board .gobang-cell.can-play:hover::after {
+  content: "×";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42%;
+  height: 42%;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(248, 250, 252, 0.28);
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.jinzi-board .gobang-cell.is-winning .jinzi-mark {
+  animation: jinziWinPulse 1.1s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(96, 165, 250, 0.85));
+}
+
+@keyframes jinziWinPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.jinzi-side-mark {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  font-size: 28px;
+}
+
+.jinzi-side-mark.is-x {
+  color: #f8fafc;
+}
+
+.jinzi-side-mark.is-o {
+  color: #7dd3fc;
+  font-size: 30px;
+}
+
+.jinzi-room-page .gobang-player-time {
+  display: block;
+  margin-top: 8px;
+  font-style: normal;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fbbf24;
+  letter-spacing: 0.02em;
+}
+
+.jinzi-turn-mark {
+  width: 34px;
+  height: 34px;
+  margin-top: 10px;
+  font-size: 28px;
+}
+
+.jinzi-turn-mark.is-x {
+  color: #f8fafc;
+}
+
+.jinzi-turn-mark.is-o {
+  color: #7dd3fc;
+  font-size: 30px;
+}
+
+@media (max-width: 1120px) {
+  .jinzi-room-grid {
+    grid-template-columns: 1fr;
+  }
+}

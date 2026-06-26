@@ -1,0 +1,15 @@
+.following-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: #ff2442;
+  background: rgba(255, 36, 66, 0.08);
+  border: 1px solid rgba(255, 36, 66, 0.22);
+  white-space: nowrap;
+}

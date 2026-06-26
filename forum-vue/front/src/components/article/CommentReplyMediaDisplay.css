@@ -1,0 +1,59 @@
+.comment-media-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.comment-media-row::-webkit-scrollbar {
+  display: none;
+}
+
+.comment-media-item {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.comment-media-item--image {
+  cursor: zoom-in;
+}
+
+.comment-media-item--image :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.comment-media-item--emoji {
+  cursor: pointer;
+}
+
+.comment-media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.comment-media-emoji-badge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  padding: 1px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  object-fit: contain;
+  pointer-events: none;
+}

@@ -1,0 +1,284 @@
+package org.example.forumdemo.service.impl.ai;
+
+import lombok.extern.slf4j.Slf4j;
+import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.enums.ResultCode;
+import org.example.forumdemo.common.exception.ApplicationException;
+import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.converter.AiHubConverter;
+import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
+import org.example.forumdemo.entity.dto.ai.AiImageRequest;
+import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
+import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
+import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
+import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
+import org.example.forumdemo.entity.vo.ai.AiWriteResponseVO;
+import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
+import org.example.forumdemo.service.interfaces.ai.AiHubService;
+import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
+import org.example.forumdemo.service.interfaces.file.FileService;
+import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.util.Locale;
+import java.util.Map;
+
+// AI 写作/生图用例：配额预占、Hub 调用、计费与 OSS 落库
+@Slf4j
+@Service
+public class AiCompanionApiServiceImpl implements AiCompanionApiService {
+
+    private static final String K_DEEPSEEK_FLASH = "deepseek_flash";
+    private static final String K_DEEPSEEK_PRO = "deepseek_pro";
+    private static final String K_QWEN_FLASH = "qwen_flash";
+    private static final String K_QWEN_PRO = "qwen_pro";
+    private static final String K_GEMINI_PRO = "gemini_pro";
+    private static final String K_CLAUDE_HAIKU = "claude_haiku";
+    private static final String K_CLAUDE_SONNET = "claude_sonnet";
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private AiQuotaService aiQuotaService;
+
+    @Autowired
+    private AiHubService aiHubService;
+
+    @Autowired
+    private AiPointsBillingService aiPointsBillingService;
+
+    @Autowired
+    private CompanionMemoryService companionMemoryService;
+
+    @Autowired
+    private FileService fileService;
+
+    @Override
+    public AiPriceEstimateVO priceEstimate(Long userId, String skill, String route, String quality) {
+        requireUser(userId);
+        String model;
+        int in = Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS;
+        int out = Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS;
+        int img = 0;
+        if ("drawing".equalsIgnoreCase(skill) || "image".equalsIgnoreCase(skill)) {
+            boolean premium = "premium".equalsIgnoreCase(quality);
+            model = premium ? Constant.AI_MODEL_IMAGE_PREMIUM : Constant.AI_MODEL_IMAGE_NORMAL;
+            in = 0;
+            out = 0;
+            img = 1;
+        } else {
+            model = aiPointsBillingService.resolveModelFromRoute(
+                    route != null && !route.isBlank() ? route : "qwen-flash");
+        }
+        AiPriceEstimateVO vo = new AiPriceEstimateVO();
+        vo.setModelCode(model);
+        vo.setEstimated(true);
+        vo.setPoints(aiPointsBillingService.estimatePoints(model, in, out, img));
+        return vo;
+    }
+
+    @Override
+    public AiWriteResponseVO write(Long userId, AiWriteRequest req) {
+        User user = requireUser(userId);
+        if (req == null || !StringUtils.hasText(req.getKind()) || req.getMessages() == null || req.getMessages().isEmpty()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        String kind = req.getKind().trim().toLowerCase(Locale.ROOT);
+        req.setKind(kind);
+        String modelCode = modelCodeForWriteKind(kind);
+        if (modelCode == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(user,
+                    aiPointsBillingService.estimatePoints(modelCode,
+                            Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                            Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+        }
+
+        boolean reservedDeepseekFree = false;
+        boolean reservedAdvanced = false;
+        try {
+            if (!usePoints) {
+                if (K_DEEPSEEK_FLASH.equals(kind) || K_DEEPSEEK_PRO.equals(kind)) {
+                    if (!aiQuotaService.hasUnlimitedDeepseek(user)) {
+                        aiQuotaService.consumeDeepseekWrite(user);
+                        reservedDeepseekFree = true;
+                    }
+                } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)
+                        || K_GEMINI_PRO.equals(kind)
+                        || K_CLAUDE_HAIKU.equals(kind) || K_CLAUDE_SONNET.equals(kind)) {
+                    aiQuotaService.consumeAdvancedLlm(user);
+                    reservedAdvanced = true;
+                } else {
+                    throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+                }
+            }
+            AiHubWriteResultVO hubResult = aiHubService.write(user.getId(), req);
+            AiModelUsageDTO usage = aiPointsBillingService.normalizeUsage(hubResult.getUsage(), modelCode);
+            Map<String, Object> billing = aiPointsBillingService.bill(
+                    user, "ai_write", usage, null, Constant.POINTS_SOURCE_AI_COMPANION, usePoints);
+            return AiHubConverter.toWriteResponse(hubResult, billing);
+        } catch (ApplicationException ex) {
+            releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
+            throw ex;
+        } catch (RuntimeException ex) {
+            releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
+            throw ex;
+        }
+    }
+
+    @Override
+    public AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest req) {
+        User user = requireUser(userId);
+        if (req == null || !StringUtils.hasText(req.getArticleText())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        req.setArticleText(req.getArticleText().trim());
+        try {
+            AiHubCoverHintsResultVO result = aiHubService.coverHints(user.getId(), req);
+            aiQuotaService.recordCoverHint(user);
+            return result;
+        } catch (ApplicationException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE));
+        }
+    }
+
+    @Override
+    public AiImageResponseVO image(Long userId, AiImageRequest req) {
+        User user = requireUser(userId);
+        if (req == null || !StringUtils.hasText(req.getPrompt()) || !StringUtils.hasText(req.getQuality())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        String q = req.getQuality().trim().toLowerCase(Locale.ROOT);
+        req.setQuality(q);
+        if (!"normal".equals(q) && !"premium".equals(q)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        String modelCode = "premium".equals(q) ? Constant.AI_MODEL_IMAGE_PREMIUM : Constant.AI_MODEL_IMAGE_NORMAL;
+        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(user, aiPointsBillingService.estimatePoints(modelCode, 0, 0, 1));
+        }
+
+        boolean reservedNormal = false;
+        boolean reservedPremium = false;
+        try {
+            if (!usePoints) {
+                if ("normal".equals(q)) {
+                    aiQuotaService.consumeImageNormal(user);
+                    reservedNormal = true;
+                } else {
+                    aiQuotaService.consumeImagePremium(user);
+                    reservedPremium = true;
+                }
+            }
+            boolean ephemeral = Boolean.TRUE.equals(req.getEphemeral());
+            Long dbSessionId = null;
+            if (!ephemeral) {
+                dbSessionId = companionMemoryService.ensureSession(user.getId(), "drawing", req.getSessionId());
+            }
+            AiHubImageResultVO hubResult = aiHubService.image(user.getId(), req);
+            AiModelUsageDTO usage = aiPointsBillingService.normalizeUsage(hubResult.getUsage(), modelCode);
+            if (usage.getImageCount() == null || usage.getImageCount() < 1) {
+                usage = aiPointsBillingService.usageForImage(modelCode, 1);
+            }
+            String chargeRef = ephemeral
+                    ? (req.getSessionId() != null ? req.getSessionId() : "ephemeral-image")
+                    : String.valueOf(dbSessionId);
+            Map<String, Object> billing = aiPointsBillingService.bill(
+                    user, "companion_image", usage, chargeRef, Constant.POINTS_SOURCE_AI_IMAGE, usePoints);
+            String url = hubResult.getUrl();
+            if (!ephemeral && dbSessionId != null) {
+                companionMemoryService.appendTextMessage(dbSessionId, "user", req.getPrompt().trim());
+            }
+            if (url == null || url.isBlank()) {
+                log.warn("AI 生图返回空 URL userId={} quality={}", user.getId(), q);
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE,
+                        "AI 未返回图片地址，请检查进阶生图密钥(HUANAPI_IMAGE_KEY)或改用普通档"));
+            }
+            String storedUrl;
+            long ts = System.currentTimeMillis();
+            if (req.getArticleId() != null && req.getArticleId() > 0) {
+                String base = user.getId() + "_" + req.getArticleId() + "_" + ts;
+                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
+                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_ARTICLE, base);
+            } else {
+                String sid = (req.getSessionId() != null && !req.getSessionId().isBlank())
+                        ? req.getSessionId().trim() : "session";
+                String base = user.getId() + "_" + sid + "_" + ts;
+                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
+                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base);
+            }
+            if (!ephemeral && dbSessionId != null) {
+                companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
+            }
+            return AiHubConverter.toImageResponse(hubResult, modelCode, chargeRef, storedUrl, billing);
+        } catch (ApplicationException ex) {
+            releaseImageReservation(user, reservedNormal, reservedPremium);
+            throw ex;
+        } catch (RuntimeException ex) {
+            releaseImageReservation(user, reservedNormal, reservedPremium);
+            log.error("AI 生图失败 userId={} quality={}: {}", user.getId(), q, ex.getMessage(), ex);
+            String detail = ex.getMessage() != null && !ex.getMessage().isBlank()
+                    ? ex.getMessage() : "请稍后重试";
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 生图失败: " + detail));
+        }
+    }
+
+    private User requireUser(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+        return user;
+    }
+
+    private void releaseWriteReservation(User user, boolean reservedDeepseekFree, boolean reservedAdvanced) {
+        if (reservedDeepseekFree) {
+            aiQuotaService.releaseDeepseekWrite(user);
+        }
+        if (reservedAdvanced) {
+            aiQuotaService.releaseAdvancedLlm(user);
+        }
+    }
+
+    private void releaseImageReservation(User user, boolean reservedNormal, boolean reservedPremium) {
+        if (reservedNormal) {
+            aiQuotaService.releaseImageNormal(user);
+        }
+        if (reservedPremium) {
+            aiQuotaService.releaseImagePremium(user);
+        }
+    }
+
+    private static String modelCodeForWriteKind(String kind) {
+        if (kind == null) {
+            return null;
+        }
+        return switch (kind) {
+            case K_DEEPSEEK_FLASH -> "deepseek-v4-flash";
+            case K_DEEPSEEK_PRO -> "deepseek-v4-pro";
+            case K_QWEN_FLASH -> "qwen3.6-flash";
+            case K_QWEN_PRO -> Constant.AI_MODEL_QWEN_DEEP;
+            case K_GEMINI_PRO -> Constant.AI_MODEL_GEMINI_DEEP;
+            case K_CLAUDE_HAIKU -> Constant.AI_MODEL_CLAUDE_HAIKU;
+            case K_CLAUDE_SONNET -> Constant.AI_MODEL_CLAUDE_SONNET;
+            default -> null;
+        };
+    }
+}

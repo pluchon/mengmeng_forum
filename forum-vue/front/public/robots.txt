@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# 仅索引用户端公开页面；管理后台使用独立域名且已禁止抓取
+Sitemap: https://www.nuonuoya.cn/sitemap.xml

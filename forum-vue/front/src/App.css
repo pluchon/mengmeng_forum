@@ -1,0 +1,9 @@
+.app-root {
+  position: relative;
+  min-height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
