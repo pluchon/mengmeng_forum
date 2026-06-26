@@ -1,0 +1,54 @@
+.search-hint-card {
+  margin-bottom: 0;
+}
+
+.search-banner {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #4e5969;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.search-banner.rag {
+  background: rgba(64, 158, 255, 0.1);
+  color: #1d5fbf;
+}
+
+.search-result-list {
+  margin-top: 12px;
+}
+
+.result-card {
+  margin-top: 10px;
+  border-radius: 14px;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.user-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #1d2129;
+  line-height: 1.3;
+}
+
+.user-remark {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #86909c;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

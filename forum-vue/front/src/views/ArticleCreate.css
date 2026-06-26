@@ -1,0 +1,92 @@
+.editor-media-toggle {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(29, 33, 41, 0.06);
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  overflow: hidden;
+}
+.editor-media-toggle__item {
+  position: relative;
+  z-index: 2;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: #4a4a4a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.editor-media-toggle__item.is-active {
+  color: #1d2129;
+}
+.editor-media-toggle__thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 20px rgba(29, 33, 41, 0.12);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.editor-media-toggle__thumb.is-right {
+  transform: translateX(100%);
+}
+
+.editor-mode-seg {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border-tertiary, #e5e6eb);
+  background: rgba(29, 33, 41, 0.04);
+}
+
+.editor-mode-seg-btn {
+  position: relative;
+  z-index: 2;
+  border-radius: 18px !important;
+  background: transparent !important;
+  color: var(--color-text-secondary, #86909c) !important;
+}
+
+.editor-mode-seg-btn.is-active {
+  color: #1d2129 !important;
+  background: transparent !important;
+}
+
+.editor-mode-seg__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  border-radius: 18px;
+  background: #d4537e;
+  box-shadow: 0 6px 16px rgba(212, 83, 126, 0.28);
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
+  pointer-events: none;
+}
+
+.editor-mode-seg__thumb.is-right {
+  transform: translateX(100%);
+}
+
+.editor-mode-seg-btn.is-active {
+  color: #fff !important;
+}

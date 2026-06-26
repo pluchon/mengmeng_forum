@@ -1,0 +1,42 @@
+.search-hint-card {
+  margin-bottom: 0;
+}
+
+.search-banner {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #4e5969;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.search-banner.rag {
+  background: rgba(255, 36, 66, 0.08);
+  color: #a61b29;
+}
+
+.search-result-list {
+  margin-top: 12px;
+}
+
+.result-card {
+  margin-top: 10px;
+  border-radius: 14px;
+}
+
+.result-title {
+  font-weight: 800;
+  font-size: 15px;
+  color: #1d2129;
+  line-height: 1.3;
+}
+
+.result-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #86909c;
+}
+
+.dot {
+  margin: 0 6px;
+}

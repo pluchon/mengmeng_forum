@@ -16,10 +16,6 @@
   </svg>
 </template>
 
-<script setup>
-defineProps({
-  filled: { type: Boolean, default: false },
-})
-</script>
+<script setup src="./LikeCountIcon.js"></script>
 
 <style scoped src="./LikeCountIcon.css"></style>

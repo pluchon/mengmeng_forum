@@ -1,0 +1,23 @@
+.sub-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sub-item-meta-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-item-meta-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sub-user-link {
+  cursor: pointer;
+}

@@ -1,0 +1,618 @@
+package org.example.forumdemo.service.impl.game;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.enums.ResultCode;
+import org.example.forumdemo.common.exception.ApplicationException;
+import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
+import org.example.forumdemo.common.websocket.game.GameWsResponse;
+import org.example.forumdemo.entity.db.GameTetrisPkMatchRecord;
+import org.example.forumdemo.entity.db.GameUserProfile;
+import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.dto.game.TetrisChatRequest;
+import org.example.forumdemo.entity.vo.game.GobangRoomParticipantVO;
+import org.example.forumdemo.entity.vo.game.TetrisActiveRoomVO;
+import org.example.forumdemo.entity.vo.game.TetrisBoardViewVO;
+import org.example.forumdemo.entity.vo.game.TetrisChatVO;
+import org.example.forumdemo.entity.vo.game.TetrisCurPieceVO;
+import org.example.forumdemo.entity.vo.game.TetrisRoomStateVO;
+import org.example.forumdemo.mapper.GameTetrisPkMatchRecordMapper;
+import org.example.forumdemo.mapper.GameUserProfileMapper;
+import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.game.tetris.TetrisBlock;
+import org.example.forumdemo.service.impl.game.tetris.TetrisEngineConstants;
+import org.example.forumdemo.service.impl.game.tetris.TetrisMatrixUtil;
+import org.example.forumdemo.service.impl.game.tetris.TetrisPlayerState;
+import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
+import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
+import org.example.forumdemo.service.interfaces.points.PointsService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.socket.WebSocketSession;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+// 俄罗斯方块 PK 房间服务，服务端权威推进双方棋盘
+@Slf4j
+@Service
+public class TetrisRoomServiceImpl implements TetrisRoomService {
+
+    private static final long RECONNECT_WINDOW_MS = GameConstants.TETRIS_RECONNECT_WINDOW_MS;
+
+    private static final int PK_SCORE_DELTA = 3;
+
+    private final ConcurrentHashMap<String, TetrisRoom> rooms = new ConcurrentHashMap<>();
+
+    private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
+
+    private final Random garbageRandom = new Random();
+
+    @Autowired
+    private GameConnectionRegistry gameConnectionRegistry;
+
+    @Autowired
+    private GameUserProfileService gameUserProfileService;
+
+    @Autowired
+    private GameUserProfileMapper gameUserProfileMapper;
+
+    @Autowired
+    private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private PointsService pointsService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Override
+    public String createMatchedRoom(Long userIdA, Long userIdB) {
+        if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        boolean swap = garbageRandom.nextBoolean();
+        Long redUserId = swap ? userIdB : userIdA;
+        Long blueUserId = swap ? userIdA : userIdB;
+        TetrisRoom room = new TetrisRoom(userIdA, userIdB, redUserId, blueUserId);
+        rooms.put(room.getRoomId(), room);
+        userRoomIds.put(userIdA, room.getRoomId());
+        userRoomIds.put(userIdB, room.getRoomId());
+        gameUserProfileService.updateStatus(userIdA, GameConstants.TETRIS_PK, GameConstants.PROFILE_PLAYING, room.getRoomId());
+        gameUserProfileService.updateStatus(userIdB, GameConstants.TETRIS_PK, GameConstants.PROFILE_PLAYING, room.getRoomId());
+        return room.getRoomId();
+    }
+
+    @Override
+    public TetrisRoomStateVO joinRoom(String roomId, Long userId, WebSocketSession session) {
+        TetrisRoom room = requireExistingRoom(roomId);
+        boolean spectator = !room.contains(userId);
+        gameConnectionRegistry.enterRoom(roomId, userId, session);
+        if (!spectator) {
+            room.getDisconnectDeadlines().remove(userId);
+            broadcast(roomId, GameWsResponse.ok("peer_reconnected", null, toStateVO(room, userId)));
+        } else {
+            room.getSpectatorJoinedAt().put(userId, System.currentTimeMillis());
+        }
+        return toStateVO(room, userId);
+    }
+
+    @Override
+    public TetrisRoomStateVO getRoomState(String roomId, Long userId) {
+        return toStateVO(requireExistingRoom(roomId), userId);
+    }
+
+    @Override
+    public void handleInput(String roomId, Long userId, String action, String requestId) {
+        requireRoomActionParams(roomId, userId, action);
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendRoomError(roomId, userId, requestId, "房间不存在或已结束");
+            return;
+        }
+        synchronized (room) {
+            if (!room.contains(userId)) {
+                sendRoomError(roomId, userId, requestId, "观众不能操作棋盘");
+                return;
+            }
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                sendRoomError(roomId, userId, requestId, "对局已结束");
+                return;
+            }
+            TetrisPlayerState state = room.stateOf(userId);
+            if (state == null || state.isGameOver()) {
+                sendRoomError(roomId, userId, requestId, "本局已结束");
+                return;
+            }
+            long now = System.currentTimeMillis();
+            int garbage = state.handleInput(action, now);
+            if (garbage > 0) {
+                Long opponentId = room.opponentOf(userId);
+                TetrisPlayerState opponentState = room.stateOf(opponentId);
+                if (opponentState != null) {
+                    opponentState.addGarbageLines(garbage, garbageRandom);
+                    broadcast(roomId, GameWsResponse.ok("garbage_received", requestId, Map.of(
+                            "targetUserId", opponentId,
+                            "lines", garbage
+                    )));
+                }
+            }
+            checkFinishAfterMove(room, userId);
+            if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                broadcastState(room, "room_state_updated", requestId);
+            }
+        }
+    }
+
+    @Override
+    public void chat(String roomId, Long userId, TetrisChatRequest request, String requestId) {
+        requireRoomActionParams(roomId, userId, "chat");
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendRoomError(roomId, userId, requestId, "房间不存在或已结束");
+            return;
+        }
+        if (!room.contains(userId)) {
+            sendRoomError(roomId, userId, requestId, "观众不能发言");
+            return;
+        }
+        String messageType = request == null || request.getMessageType() == null
+                ? "TEXT"
+                : request.getMessageType().trim().toUpperCase();
+        String content = request == null ? "" : String.valueOf(request.getContent() == null ? "" : request.getContent()).trim();
+        if ("TEXT".equals(messageType) && content.isEmpty()) {
+            sendRoomError(roomId, userId, requestId, "消息不能为空");
+            return;
+        }
+        TetrisChatVO vo = new TetrisChatVO(
+                userId,
+                messageType,
+                content,
+                request == null ? null : request.getEmojiId(),
+                request == null ? null : request.getEmojiUrl(),
+                System.currentTimeMillis()
+        );
+        synchronized (room) {
+            room.getChatHistory().add(vo);
+        }
+        broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
+    }
+
+    @Override
+    public void surrender(String roomId, Long userId, String requestId) {
+        requireRoomActionParams(roomId, userId, "surrender");
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendRoomError(roomId, userId, requestId, "房间不存在或已结束");
+            return;
+        }
+        synchronized (room) {
+            if (!room.contains(userId)) {
+                sendRoomError(roomId, userId, requestId, "观众不能认输");
+                return;
+            }
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                sendRoomError(roomId, userId, requestId, "对局已结束");
+                return;
+            }
+            finishRoom(room, room.opponentOf(userId), GameConstants.END_SURRENDER);
+        }
+    }
+
+    @Override
+    public void handleDisconnect(String roomId, Long userId, WebSocketSession session) {
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null || userId == null) {
+            gameConnectionRegistry.exitRoom(roomId, userId, session);
+            return;
+        }
+        if (!room.contains(userId)) {
+            gameConnectionRegistry.exitRoom(roomId, userId, session);
+            room.getSpectatorJoinedAt().remove(userId);
+            broadcastState(room, "room_state_updated", null);
+            return;
+        }
+        gameConnectionRegistry.exitRoom(roomId, userId, session);
+        synchronized (room) {
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                return;
+            }
+            room.getDisconnectDeadlines().put(userId, System.currentTimeMillis() + RECONNECT_WINDOW_MS);
+            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, toStateVO(room, room.opponentOf(userId))));
+        }
+    }
+
+    @Override
+    public List<TetrisActiveRoomVO> listActiveRooms() {
+        List<TetrisActiveRoomVO> rows = new ArrayList<>();
+        for (TetrisRoom room : rooms.values()) {
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                continue;
+            }
+            rows.add(new TetrisActiveRoomVO(
+                    room.getRoomId(),
+                    room.getPlayer1UserId(),
+                    room.getPlayer2UserId(),
+                    room.getRedUserId(),
+                    room.getBlueUserId(),
+                    room.scoreOf(room.getRedUserId()),
+                    room.scoreOf(room.getBlueUserId()),
+                    room.getStartedAt()
+            ));
+        }
+        rows.sort(Comparator.comparing(TetrisActiveRoomVO::getStartedAt).reversed());
+        return rows;
+    }
+
+    // 定时推进双方重力
+    @Scheduled(fixedDelay = 80)
+    public void tickRooms() {
+        long now = System.currentTimeMillis();
+        for (TetrisRoom room : rooms.values()) {
+            synchronized (room) {
+                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                    continue;
+                }
+                boolean changed = false;
+                if (!room.getPlayer1State().isGameOver()) {
+                    room.getPlayer1State().tickFall(now);
+                    changed = true;
+                }
+                if (!room.getPlayer2State().isGameOver()) {
+                    room.getPlayer2State().tickFall(now);
+                    changed = true;
+                }
+                if (!changed) {
+                    continue;
+                }
+                checkFinishAfterMove(room, room.getPlayer1UserId());
+                if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                    broadcastState(room, "room_state_updated", null);
+                }
+            }
+        }
+    }
+
+    @Scheduled(fixedDelay = 5_000)
+    public void settleExpiredDisconnects() {
+        long now = System.currentTimeMillis();
+        for (TetrisRoom room : rooms.values()) {
+            synchronized (room) {
+                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                    continue;
+                }
+                for (Map.Entry<Long, Long> entry : room.getDisconnectDeadlines().entrySet()) {
+                    if (entry.getValue() <= now) {
+                        finishRoom(room, room.opponentOf(entry.getKey()), GameConstants.END_DISCONNECT);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private void checkFinishAfterMove(TetrisRoom room, Long actorUserId) {
+        TetrisPlayerState actorState = room.stateOf(actorUserId);
+        if (actorState != null && actorState.isGameOver()) {
+            finishRoom(room, room.opponentOf(actorUserId), GameConstants.END_LINE);
+            return;
+        }
+        Long opponentId = room.opponentOf(actorUserId);
+        TetrisPlayerState opponentState = room.stateOf(opponentId);
+        if (opponentState != null && opponentState.isGameOver()) {
+            finishRoom(room, actorUserId, GameConstants.END_LINE);
+        }
+    }
+
+    private void finishRoom(TetrisRoom room, Long winnerId, String endReason) {
+        if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+            return;
+        }
+        room.setRoomStatus(GameConstants.ROOM_FINISHED);
+        room.setWinnerUserId(winnerId);
+        room.setEndReason(endReason);
+        Long loserId = winnerId == null ? null : room.opponentOf(winnerId);
+        transactionTemplate.execute(status -> {
+            GameTetrisPkMatchRecord record = new GameTetrisPkMatchRecord();
+            record.setRoomId(room.getRoomId());
+            record.setPlayer1UserId(room.getPlayer1UserId());
+            record.setPlayer2UserId(room.getPlayer2UserId());
+            record.setRedUserId(room.getRedUserId());
+            record.setBlueUserId(room.getBlueUserId());
+            record.setWinnerUserId(winnerId);
+            record.setLoserUserId(loserId);
+            record.setPlayer1Score(room.scoreOf(room.getPlayer1UserId()));
+            record.setPlayer2Score(room.scoreOf(room.getPlayer2UserId()));
+            record.setEndReason(endReason);
+            record.setScoreDelta(PK_SCORE_DELTA);
+            record.setReplayPayload(buildReplayPayload(room));
+            record.setStartedAt(room.getStartedAt());
+            record.setEndedAt(new Date());
+            record.setDeleteState((byte) 0);
+            gameTetrisPkMatchRecordMapper.insert(record);
+            if (winnerId != null && loserId != null) {
+                gameUserProfileMapper.applyWin(winnerId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
+                gameUserProfileMapper.applyLose(loserId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
+                pointsService.addPoints(winnerId, PK_SCORE_DELTA,
+                        Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励");
+                User loser = userMapper.selectByIdForUpdate(loserId);
+                int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
+                if (loserPoints >= PK_SCORE_DELTA) {
+                    pointsService.deductPoints(loserId, PK_SCORE_DELTA,
+                            Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除");
+                }
+            }
+            gameUserProfileMapper.updatePlayStatus(room.getPlayer1UserId(), GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
+            gameUserProfileMapper.updatePlayStatus(room.getPlayer2UserId(), GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
+            return null;
+        });
+        broadcastState(room, "game_finished", null);
+        cleanupRoom(room);
+    }
+
+    private String buildReplayPayload(TetrisRoom room) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("player1Seed", room.getPlayer1State().getSeed());
+            payload.put("player2Seed", room.getPlayer2State().getSeed());
+            payload.put("player1Score", room.scoreOf(room.getPlayer1UserId()));
+            payload.put("player2Score", room.scoreOf(room.getPlayer2UserId()));
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private void cleanupRoom(TetrisRoom room) {
+        userRoomIds.remove(room.getPlayer1UserId());
+        userRoomIds.remove(room.getPlayer2UserId());
+        rooms.remove(room.getRoomId());
+    }
+
+    private TetrisRoom requireExistingRoom(String roomId) {
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "房间不存在或已结束"));
+        }
+        return room;
+    }
+
+    private void requireRoomActionParams(String roomId, Long userId, String action) {
+        if (roomId == null || roomId.isBlank() || userId == null || action == null || action.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+    }
+
+    private TetrisRoomStateVO toStateVO(TetrisRoom room, Long userId) {
+        boolean spectator = userId == null || !room.contains(userId);
+        Map<Long, User> userMap = loadRoomUsers(room);
+        Map<Long, GameUserProfile> profileMap = loadRoomProfiles(room);
+        GobangRoomParticipantVO player1 = toParticipant(room.getPlayer1UserId(), "PLAYER1", room.getStartedAt().getTime(), userMap, profileMap);
+        GobangRoomParticipantVO player2 = toParticipant(room.getPlayer2UserId(), "PLAYER2", room.getStartedAt().getTime(), userMap, profileMap);
+        Long opponentId = spectator ? null : room.opponentOf(userId);
+        GobangRoomParticipantVO opponentPlayer = null;
+        if (opponentId != null) {
+            opponentPlayer = opponentId.equals(room.getPlayer1UserId()) ? player1 : player2;
+        }
+        int redScore = room.scoreOf(room.getRedUserId());
+        int blueScore = room.scoreOf(room.getBlueUserId());
+        int leftPercent = calcPkBarPercent(redScore, blueScore);
+        TetrisBoardViewVO myBoard = null;
+        TetrisBoardViewVO opponentBoard = null;
+        if (!spectator) {
+            myBoard = toBoardView(room.stateOf(userId), true);
+            opponentBoard = toBoardView(room.stateOf(opponentId), false);
+        } else {
+            myBoard = toBoardView(room.stateOf(room.getPlayer1UserId()), false);
+            opponentBoard = toBoardView(room.stateOf(room.getPlayer2UserId()), false);
+        }
+        List<GobangRoomParticipantVO> spectators = buildSpectators(room, userMap, profileMap);
+        return new TetrisRoomStateVO(
+                room.getRoomId(),
+                userId,
+                opponentId,
+                room.getPlayer1UserId(),
+                room.getPlayer2UserId(),
+                room.getRedUserId(),
+                room.getBlueUserId(),
+                room.getRoomStatus(),
+                room.getWinnerUserId(),
+                room.getEndReason(),
+                spectator,
+                myBoard,
+                opponentBoard,
+                redScore,
+                blueScore,
+                leftPercent,
+                opponentPlayer,
+                player1,
+                player2,
+                spectators,
+                spectators.size(),
+                gameConnectionRegistry.countRoomOnline(room.getRoomId()),
+                System.currentTimeMillis(),
+                new ArrayList<>(room.getChatHistory())
+        );
+    }
+
+    private int calcPkBarPercent(int redScore, int blueScore) {
+        int total = Math.max(1, redScore + blueScore);
+        int percent = (int) Math.round(redScore * 100.0 / total);
+        return Math.max(5, Math.min(95, percent));
+    }
+
+    private TetrisBoardViewVO toBoardView(TetrisPlayerState state, boolean revealHoldNext) {
+        if (state == null) {
+            return new TetrisBoardViewVO(
+                    TetrisEngineConstants.createBlankMatrix(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0,
+                    true,
+                    revealHoldNext
+            );
+        }
+        TetrisBlock cur = state.getCur();
+        TetrisCurPieceVO curVo = cur == null ? null : toPieceVO(cur);
+        TetrisCurPieceVO ghostVo = null;
+        if (cur != null) {
+            TetrisBlock ghost = TetrisMatrixUtil.ghostDrop(cur, state.getMatrix());
+            ghostVo = toPieceVO(ghost);
+        }
+        return new TetrisBoardViewVO(
+                state.getMatrix(),
+                curVo,
+                ghostVo,
+                revealHoldNext ? state.getNextType() : null,
+                revealHoldNext ? state.getHoldType() : null,
+                state.getPoints(),
+                state.getClearLines(),
+                state.isGameOver(),
+                revealHoldNext
+        );
+    }
+
+    private TetrisCurPieceVO toPieceVO(TetrisBlock block) {
+        return new TetrisCurPieceVO(block.getType(), block.getXy(), block.getShape());
+    }
+
+    private Map<Long, GameUserProfile> loadRoomProfiles(TetrisRoom room) {
+        List<Long> userIds = new ArrayList<>();
+        addRealUserId(userIds, room.getPlayer1UserId());
+        addRealUserId(userIds, room.getPlayer2UserId());
+        gameConnectionRegistry.roomUserIds(room.getRoomId()).forEach(id -> addRealUserId(userIds, id));
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, GameUserProfile> profileMap = new HashMap<>();
+        gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
+                .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
+                .eq(GameUserProfile::getDeleteState, (byte) 0)
+                .in(GameUserProfile::getUserId, userIds))
+                .forEach(profile -> profileMap.put(profile.getUserId(), profile));
+        return profileMap;
+    }
+
+    private Map<Long, User> loadRoomUsers(TetrisRoom room) {
+        List<Long> userIds = new ArrayList<>();
+        addRealUserId(userIds, room.getPlayer1UserId());
+        addRealUserId(userIds, room.getPlayer2UserId());
+        gameConnectionRegistry.roomUserIds(room.getRoomId()).forEach(id -> addRealUserId(userIds, id));
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, User> userMap = new HashMap<>();
+        userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        return userMap;
+    }
+
+    private void addRealUserId(List<Long> userIds, Long userId) {
+        if (userId != null && userId > 0 && !userIds.contains(userId)) {
+            userIds.add(userId);
+        }
+    }
+
+    private List<GobangRoomParticipantVO> buildSpectators(
+            TetrisRoom room,
+            Map<Long, User> userMap,
+            Map<Long, GameUserProfile> profileMap
+    ) {
+        Set<Long> onlineIds = gameConnectionRegistry.roomUserIds(room.getRoomId());
+        List<GobangRoomParticipantVO> spectators = new ArrayList<>();
+        onlineIds.forEach(id -> {
+            if (id != null && !room.contains(id)) {
+                spectators.add(toParticipant(
+                        id,
+                        "SPECTATOR",
+                        room.getSpectatorJoinedAt().getOrDefault(id, System.currentTimeMillis()),
+                        userMap,
+                        profileMap
+                ));
+            }
+        });
+        spectators.sort(Comparator.comparing(GobangRoomParticipantVO::getJoinedAtMs));
+        return spectators;
+    }
+
+    private GobangRoomParticipantVO toParticipant(
+            Long userId,
+            String role,
+            Long joinedAtMs,
+            Map<Long, User> userMap,
+            Map<Long, GameUserProfile> profileMap
+    ) {
+        User user = userMap.get(userId);
+        GameUserProfile profile = profileMap.get(userId);
+        int totalCount = profile == null || profile.getTotalCount() == null ? 0 : profile.getTotalCount();
+        int winCount = profile == null || profile.getWinCount() == null ? 0 : profile.getWinCount();
+        int winRate = totalCount <= 0 ? 0 : (int) Math.round(winCount * 100.0 / totalCount);
+        return new GobangRoomParticipantVO(
+                userId,
+                user == null ? null : user.getUsername(),
+                user == null ? null : user.getNickname(),
+                user == null ? null : user.getAvatarUrl(),
+                user == null ? null : user.getVipTier(),
+                user != null && user.getVipTier() != null && user.getVipTier() > 0,
+                role,
+                joinedAtMs,
+                false,
+                null,
+                totalCount,
+                winRate
+        );
+    }
+
+    private void broadcastState(TetrisRoom room, String type, String requestId) {
+        gameConnectionRegistry.forEachRoomSession(room.getRoomId(), (uid, session) -> {
+            try {
+                gameConnectionRegistry.send(
+                        session,
+                        objectMapper.writeValueAsString(GameWsResponse.ok(type, requestId, toStateVO(room, uid)))
+                );
+            } catch (Exception e) {
+                log.debug("广播俄罗斯方块房间状态失败 roomId={}, userId={}", room.getRoomId(), uid);
+            }
+        });
+    }
+
+    private void broadcast(String roomId, GameWsResponse<?> response) {
+        try {
+            gameConnectionRegistry.broadcastRoom(roomId, objectMapper.writeValueAsString(response));
+        } catch (Exception e) {
+            log.debug("广播俄罗斯方块房间消息失败 roomId={}", roomId);
+        }
+    }
+
+    private void sendRoomError(String roomId, Long userId, String requestId, String message) {
+        try {
+            gameConnectionRegistry.sendToRoom(
+                    roomId,
+                    userId,
+                    objectMapper.writeValueAsString(GameWsResponse.fail("room_error", requestId, message))
+            );
+        } catch (Exception e) {
+            log.debug("发送俄罗斯方块房间错误失败 roomId={}, userId={}", roomId, userId);
+        }
+    }
+}

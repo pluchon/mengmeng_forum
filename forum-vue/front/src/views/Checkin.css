@@ -1,0 +1,11 @@
+.text-muted {
+  color: #86909c;
+  font-size: 12px;
+}
+
+.checkin-log-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #86909c;
+  line-height: 1.3;
+}
