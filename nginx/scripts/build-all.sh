@@ -39,12 +39,6 @@ npm run build
 sync_dist dist "$NGINX_ROOT/dist/user"
 sync_live2d
 
-step "构建管理端"
-cd "$REPO_ROOT/forum-vue-admin/admin"
-[[ -d node_modules ]] || npm ci
-npm run build
-sync_dist dist "$NGINX_ROOT/dist/admin"
-
 if [[ "$SKIP_DOCKER" == true ]]; then
   step "Maven 打包后端"
   cd "$REPO_ROOT/backend"

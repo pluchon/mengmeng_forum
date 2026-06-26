@@ -16,10 +16,10 @@ import org.example.forumdemo.common.utils.ImageCompressor;
 import org.example.forumdemo.common.utils.InMemoryMultipartFile;
 import org.example.forumdemo.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,6 +55,14 @@ public class FileServiceImpl implements FileService {
 
     @Value("${forum.ffmpeg.internal-key:}")
     private String ffmpegInternalKey;
+
+    @Autowired
+    @Qualifier("aiRestTemplate")
+    private RestTemplate aiRestTemplate;
+
+    @Autowired
+    @Qualifier("ffmpegRestTemplate")
+    private RestTemplate ffmpegRestTemplate;
 
     @Override
     public String uploadAvatar(MultipartFile file, Long userId) {
@@ -180,11 +188,7 @@ public class FileServiceImpl implements FileService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅支持 http(s) 或 data 图片地址"));
         }
         try {
-            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(15_000);
-            factory.setReadTimeout(120_000);
-            RestTemplate rt = new RestTemplate(factory);
-            ResponseEntity<byte[]> resp = rt.exchange(URI.create(url), HttpMethod.GET, null, byte[].class);
+            ResponseEntity<byte[]> resp = aiRestTemplate.exchange(URI.create(url), HttpMethod.GET, null, byte[].class);
             byte[] bytes = resp.getBody();
             if (bytes == null || bytes.length == 0) {
                 throw new ApplicationException("下载 AI 图片失败: 响应为空");
@@ -496,10 +500,6 @@ public class FileServiceImpl implements FileService {
         String url = baseUrl.endsWith("/") ? baseUrl + "compress" : baseUrl + "/compress";
         log.info("视频开始压缩 name={} size={}MB ffmpeg={}", file.getOriginalFilename(), inMb, baseUrl);
         try {
-            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(30_000);
-            factory.setReadTimeout(1_800_000);
-            RestTemplate rt = new RestTemplate(factory);
             org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
             body.add("file", new org.springframework.core.io.InputStreamResource(file.getInputStream()) {
                 @Override
@@ -518,7 +518,7 @@ public class FileServiceImpl implements FileService {
             }
             org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> req =
                     new org.springframework.http.HttpEntity<>(body, headers);
-            ResponseEntity<byte[]> resp = rt.postForEntity(url, req, byte[].class);
+            ResponseEntity<byte[]> resp = ffmpegRestTemplate.postForEntity(url, req, byte[].class);
             byte[] bytes = resp.getBody();
             if (!resp.getStatusCode().is2xxSuccessful() || bytes == null || bytes.length == 0) {
                 throw new ApplicationException("视频压缩失败: 空响应");

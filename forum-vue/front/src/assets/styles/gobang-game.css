@@ -323,6 +323,32 @@
   font-weight: 900;
 }
 
+.tetris-pk-record-table :deep(.el-table__cell .cell) {
+  display: block;
+  align-items: initial;
+  justify-content: initial;
+  min-height: 32px;
+  line-height: 32px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tetris-pk-record-table :deep(.is-center .cell) {
+  text-align: center;
+}
+
+.tetris-pk-record-table :deep(.tetris-pk-result-col .cell) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.tetris-pk-record-table :deep(.tetris-pk-result-col .gobang-result-tag) {
+  display: inline-flex;
+  margin: 0 auto;
+}
+
 .gobang-record-pager {
   display: flex;
   justify-content: center;

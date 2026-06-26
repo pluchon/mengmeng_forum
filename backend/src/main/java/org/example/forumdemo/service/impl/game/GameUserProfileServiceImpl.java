@@ -7,8 +7,10 @@ import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.converter.GameConverter;
-import org.example.forumdemo.entity.db.GameMatchRecord;
-import org.example.forumdemo.entity.db.GameRoomMove;
+import org.example.forumdemo.entity.db.GameGobangMatchRecord;
+import org.example.forumdemo.entity.db.GameGobangRoomMove;
+import org.example.forumdemo.entity.db.GameJinziMatchRecord;
+import org.example.forumdemo.entity.db.GameJinziRoomMove;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -16,8 +18,10 @@ import org.example.forumdemo.entity.vo.game.GameMatchRecordVO;
 import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
 import org.example.forumdemo.entity.vo.game.GobangMoveVO;
 import org.example.forumdemo.entity.vo.game.GobangReplayVO;
-import org.example.forumdemo.mapper.GameMatchRecordMapper;
-import org.example.forumdemo.mapper.GameRoomMoveMapper;
+import org.example.forumdemo.mapper.GameGobangMatchRecordMapper;
+import org.example.forumdemo.mapper.GameGobangRoomMoveMapper;
+import org.example.forumdemo.mapper.GameJinziMatchRecordMapper;
+import org.example.forumdemo.mapper.GameJinziRoomMoveMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
@@ -36,10 +40,16 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     private GameUserProfileMapper gameUserProfileMapper;
 
     @Autowired
-    private GameMatchRecordMapper gameMatchRecordMapper;
+    private GameGobangMatchRecordMapper gameGobangMatchRecordMapper;
 
     @Autowired
-    private GameRoomMoveMapper gameRoomMoveMapper;
+    private GameJinziMatchRecordMapper gameJinziMatchRecordMapper;
+
+    @Autowired
+    private GameGobangRoomMoveMapper gameGobangRoomMoveMapper;
+
+    @Autowired
+    private GameJinziRoomMoveMapper gameJinziRoomMoveMapper;
 
     @Autowired
     private UserMapper userMapper;
@@ -85,34 +95,99 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     }
 
     @Override
-    public PageResult<GameMatchRecordVO> listRecords(Long userId, String gameCode, Integer pageNum, Integer pageSize) {
-        if (userId == null || gameCode == null || gameCode.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<GameMatchRecord> page = new Page<>(validPageNum, validPageSize);
-        LambdaQueryWrapper<GameMatchRecord> wrapper = new LambdaQueryWrapper<GameMatchRecord>()
-                .eq(GameMatchRecord::getGameCode, gameCode)
-                .eq(GameMatchRecord::getDeleteState, (byte) 0)
-                .and(q -> q.eq(GameMatchRecord::getBlackUserId, userId)
-                        .or()
-                        .eq(GameMatchRecord::getWhiteUserId, userId))
-                .orderByDesc(GameMatchRecord::getEndedAt)
-                .orderByDesc(GameMatchRecord::getId);
-        Page<GameMatchRecord> result = gameMatchRecordMapper.selectPage(page, wrapper);
+    public PageResult<GameMatchRecordVO> listGobangRecords(Long userId, Integer pageNum, Integer pageSize) {
+        return listMatchRecords(userId, pageNum, pageSize, gameGobangMatchRecordMapper);
+    }
+
+    @Override
+    public PageResult<GameMatchRecordVO> listJinziRecords(Long userId, Integer pageNum, Integer pageSize) {
+        return listMatchRecords(userId, pageNum, pageSize, gameJinziMatchRecordMapper);
+    }
+
+    private PageResult<GameMatchRecordVO> listGobangMatchRecords(
+            Long userId,
+            Integer pageNum,
+            Integer pageSize,
+            Page<GameGobangMatchRecord> result
+    ) {
         List<GameMatchRecordVO> rows = new ArrayList<>(result.getRecords().size());
-        for (GameMatchRecord record : result.getRecords()) {
-            rows.add(GameConverter.toRecordVO(record));
+        for (GameGobangMatchRecord record : result.getRecords()) {
+            rows.add(GameConverter.toGobangRecordVO(record));
         }
         return new PageResult<>(
                 rows,
                 result.getTotal(),
-                validPageNum,
-                validPageSize,
+                pageNum,
+                pageSize,
                 result.getPages(),
                 result.hasNext()
         );
+    }
+
+    private PageResult<GameMatchRecordVO> listJinziMatchRecords(
+            Long userId,
+            Integer pageNum,
+            Integer pageSize,
+            Page<GameJinziMatchRecord> result
+    ) {
+        List<GameMatchRecordVO> rows = new ArrayList<>(result.getRecords().size());
+        for (GameJinziMatchRecord record : result.getRecords()) {
+            rows.add(GameConverter.toJinziRecordVO(record));
+        }
+        return new PageResult<>(
+                rows,
+                result.getTotal(),
+                pageNum,
+                pageSize,
+                result.getPages(),
+                result.hasNext()
+        );
+    }
+
+    private PageResult<GameMatchRecordVO> listMatchRecords(
+            Long userId,
+            Integer pageNum,
+            Integer pageSize,
+            GameGobangMatchRecordMapper mapper
+    ) {
+        if (userId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<GameGobangMatchRecord> page = new Page<>(validPageNum, validPageSize);
+        LambdaQueryWrapper<GameGobangMatchRecord> wrapper = new LambdaQueryWrapper<GameGobangMatchRecord>()
+                .eq(GameGobangMatchRecord::getDeleteState, (byte) 0)
+                .and(q -> q.eq(GameGobangMatchRecord::getBlackUserId, userId)
+                        .or()
+                        .eq(GameGobangMatchRecord::getWhiteUserId, userId))
+                .orderByDesc(GameGobangMatchRecord::getEndedAt)
+                .orderByDesc(GameGobangMatchRecord::getId);
+        Page<GameGobangMatchRecord> result = mapper.selectPage(page, wrapper);
+        return listGobangMatchRecords(userId, validPageNum, validPageSize, result);
+    }
+
+    private PageResult<GameMatchRecordVO> listMatchRecords(
+            Long userId,
+            Integer pageNum,
+            Integer pageSize,
+            GameJinziMatchRecordMapper mapper
+    ) {
+        if (userId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<GameJinziMatchRecord> page = new Page<>(validPageNum, validPageSize);
+        LambdaQueryWrapper<GameJinziMatchRecord> wrapper = new LambdaQueryWrapper<GameJinziMatchRecord>()
+                .eq(GameJinziMatchRecord::getDeleteState, (byte) 0)
+                .and(q -> q.eq(GameJinziMatchRecord::getBlackUserId, userId)
+                        .or()
+                        .eq(GameJinziMatchRecord::getWhiteUserId, userId))
+                .orderByDesc(GameJinziMatchRecord::getEndedAt)
+                .orderByDesc(GameJinziMatchRecord::getId);
+        Page<GameJinziMatchRecord> result = mapper.selectPage(page, wrapper);
+        return listJinziMatchRecords(userId, validPageNum, validPageSize, result);
     }
 
     @Override
@@ -138,28 +213,51 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     }
 
     @Override
-    public GobangReplayVO getReplay(Long userId, Long recordId) {
+    public GobangReplayVO getGobangReplay(Long userId, Long recordId) {
         if (userId == null || recordId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        GameMatchRecord record = gameMatchRecordMapper.selectById(recordId);
+        GameGobangMatchRecord record = gameGobangMatchRecordMapper.selectById(recordId);
         if (record == null
                 || record.getDeleteState() == null
                 || record.getDeleteState() != 0
                 || (!userId.equals(record.getBlackUserId()) && !userId.equals(record.getWhiteUserId()))) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
         }
-        List<GameRoomMove> moves = gameRoomMoveMapper.selectList(new LambdaQueryWrapper<GameRoomMove>()
-                .eq(GameRoomMove::getGameCode, record.getGameCode())
-                .eq(GameRoomMove::getRoomId, record.getRoomId())
-                .eq(GameRoomMove::getDeleteState, (byte) 0)
-                .orderByAsc(GameRoomMove::getMoveNo)
-                .orderByAsc(GameRoomMove::getId));
+        List<GameGobangRoomMove> moves = gameGobangRoomMoveMapper.selectList(new LambdaQueryWrapper<GameGobangRoomMove>()
+                .eq(GameGobangRoomMove::getRoomId, record.getRoomId())
+                .eq(GameGobangRoomMove::getDeleteState, (byte) 0)
+                .orderByAsc(GameGobangRoomMove::getMoveNo)
+                .orderByAsc(GameGobangRoomMove::getId));
         List<GobangMoveVO> moveRows = new ArrayList<>(moves.size());
-        for (GameRoomMove move : moves) {
-            moveRows.add(GameConverter.toMoveVO(move));
+        for (GameGobangRoomMove move : moves) {
+            moveRows.add(GameConverter.toGobangMoveVO(move));
         }
-        return new GobangReplayVO(GameConverter.toRecordVO(record), moveRows);
+        return new GobangReplayVO(GameConverter.toGobangRecordVO(record), moveRows);
+    }
+
+    @Override
+    public GobangReplayVO getJinziReplay(Long userId, Long recordId) {
+        if (userId == null || recordId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        GameJinziMatchRecord record = gameJinziMatchRecordMapper.selectById(recordId);
+        if (record == null
+                || record.getDeleteState() == null
+                || record.getDeleteState() != 0
+                || (!userId.equals(record.getBlackUserId()) && !userId.equals(record.getWhiteUserId()))) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
+        }
+        List<GameJinziRoomMove> moves = gameJinziRoomMoveMapper.selectList(new LambdaQueryWrapper<GameJinziRoomMove>()
+                .eq(GameJinziRoomMove::getRoomId, record.getRoomId())
+                .eq(GameJinziRoomMove::getDeleteState, (byte) 0)
+                .orderByAsc(GameJinziRoomMove::getMoveNo)
+                .orderByAsc(GameJinziRoomMove::getId));
+        List<GobangMoveVO> moveRows = new ArrayList<>(moves.size());
+        for (GameJinziRoomMove move : moves) {
+            moveRows.add(GameConverter.toJinziMoveVO(move));
+        }
+        return new GobangReplayVO(GameConverter.toJinziRecordVO(record), moveRows);
     }
 
     @Override

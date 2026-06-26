@@ -13,6 +13,5 @@ public final class CaptchaTicketPurpose {
     public static final String RESET_SEND = "RESET_SEND";
     public static final String RESET_SUBMIT = "RESET_SUBMIT";
 
-    private CaptchaTicketPurpose() {
-    }
+    private CaptchaTicketPurpose() {}
 }

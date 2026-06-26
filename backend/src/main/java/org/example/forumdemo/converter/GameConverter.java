@@ -1,10 +1,13 @@
 package org.example.forumdemo.converter;
 
 import org.example.forumdemo.entity.db.GameDefinition;
-import org.example.forumdemo.entity.db.GameMatchRecord;
-import org.example.forumdemo.entity.db.GameRoomMove;
+import org.example.forumdemo.entity.db.GameGobangMatchRecord;
+import org.example.forumdemo.entity.db.GameGobangRoomMove;
+import org.example.forumdemo.entity.db.GameJinziMatchRecord;
+import org.example.forumdemo.entity.db.GameJinziRoomMove;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.service.impl.game.GameConstants;
 import org.example.forumdemo.entity.vo.game.GameDefinitionVO;
 import org.example.forumdemo.entity.vo.game.GameMatchRecordVO;
 import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
@@ -48,28 +51,60 @@ public class GameConverter {
         );
     }
 
-    public static GameMatchRecordVO toRecordVO(GameMatchRecord row) {
+    public static GameMatchRecordVO toGobangRecordVO(GameGobangMatchRecord row) {
+        return toRecordVO(GameConstants.GOBANG, row.getId(), row.getRoomId(), row.getBlackUserId(),
+                row.getWhiteUserId(), row.getWinnerUserId(), row.getLoserUserId(), row.getEndReason(),
+                row.getScoreDelta(), row.getStartedAt(), row.getEndedAt());
+    }
+
+    public static GameMatchRecordVO toJinziRecordVO(GameJinziMatchRecord row) {
+        return toRecordVO(GameConstants.JINZI, row.getId(), row.getRoomId(), row.getBlackUserId(),
+                row.getWhiteUserId(), row.getWinnerUserId(), row.getLoserUserId(), row.getEndReason(),
+                row.getScoreDelta(), row.getStartedAt(), row.getEndedAt());
+    }
+
+    public static GobangMoveVO toGobangMoveVO(GameGobangRoomMove row) {
+        return toMoveVO(row.getUserId(), row.getRowIndex(), row.getColIndex(), row.getChess());
+    }
+
+    public static GobangMoveVO toJinziMoveVO(GameJinziRoomMove row) {
+        return toMoveVO(row.getUserId(), row.getRowIndex(), row.getColIndex(), row.getChess());
+    }
+
+    private static GameMatchRecordVO toRecordVO(
+            String gameCode,
+            Long id,
+            String roomId,
+            Long blackUserId,
+            Long whiteUserId,
+            Long winnerUserId,
+            Long loserUserId,
+            String endReason,
+            Integer scoreDelta,
+            java.util.Date startedAt,
+            java.util.Date endedAt
+    ) {
         return new GameMatchRecordVO(
-                row.getId(),
-                row.getGameCode(),
-                row.getRoomId(),
-                row.getBlackUserId(),
-                row.getWhiteUserId(),
-                row.getWinnerUserId(),
-                row.getLoserUserId(),
-                row.getEndReason(),
-                row.getScoreDelta(),
-                row.getStartedAt(),
-                row.getEndedAt()
+                id,
+                gameCode,
+                roomId,
+                blackUserId,
+                whiteUserId,
+                winnerUserId,
+                loserUserId,
+                endReason,
+                scoreDelta,
+                startedAt,
+                endedAt
         );
     }
 
-    public static GobangMoveVO toMoveVO(GameRoomMove row) {
+    private static GobangMoveVO toMoveVO(Long userId, Integer rowIndex, Integer colIndex, Integer chess) {
         return new GobangMoveVO(
-                row.getUserId(),
-                row.getRowIndex(),
-                row.getColIndex(),
-                row.getChess(),
+                userId,
+                rowIndex,
+                colIndex,
+                chess,
                 null,
                 null,
                 null,

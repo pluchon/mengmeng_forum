@@ -126,7 +126,7 @@
 .game-center-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   gap: 16px;
   align-items: stretch;
 }
@@ -139,6 +139,36 @@
 .game-card--jinzi {
   grid-column: 1 / -1;
   grid-row: 2;
+}
+
+.game-card--tetris {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.game-live-panel {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 306px;
+  padding: 18px;
+  overflow: hidden;
+}
+
+.game-tetris-pk-panel {
+  grid-column: 2;
+  grid-row: 3;
+  min-height: 306px;
+}
+
+.game-card--tetris :deep(.tetris-cover-board) {
+  align-self: center;
+  width: min(230px, 100%);
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .game-card {
@@ -347,6 +377,11 @@
   margin-top: 26px;
 }
 
+.game-card-actions--dual {
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 .game-card-actions :deep(.el-button) {
   width: 100%;
   min-height: 48px;
@@ -369,15 +404,20 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(95, 148, 255, 0.2);
 }
 
-.game-live-panel {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  padding: 18px;
-  overflow: hidden;
+.game-card-actions :deep(.game-card-btn--pk) {
+  --el-button-text-color: #ffe8f7;
+  --el-button-bg-color: #1a0618;
+  --el-button-border-color: #ff4db8;
+  --el-button-hover-bg-color: #2a0a24;
+  --el-button-hover-border-color: #ff7ad0;
+  --el-button-active-bg-color: #12040f;
+  --el-button-active-border-color: #ffb3e6;
+  background:
+    radial-gradient(circle at 16% 30%, rgba(255, 126, 219, 0.95) 0 1px, transparent 2px),
+    radial-gradient(circle at 68% 24%, rgba(255, 255, 255, 0.72) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 70%, rgba(255, 77, 184, 0.78) 0 1px, transparent 2px),
+    linear-gradient(135deg, #12040f 0%, #2a0a24 46%, #1a0618 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 122, 208, 0.22);
 }
 
 .game-section-head {
@@ -560,7 +600,7 @@
   font-weight: 700;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 768px) {
   .game-center-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
@@ -568,7 +608,9 @@
 
   .game-card--gobang,
   .game-card--jinzi,
-  .game-live-panel {
+  .game-card--tetris,
+  .game-live-panel,
+  .game-tetris-pk-panel {
     grid-column: auto;
     grid-row: auto;
   }
@@ -608,7 +650,8 @@
   }
 
   .game-card,
-  .game-live-panel {
+  .game-live-panel,
+  .game-tetris-pk-panel {
     padding: 16px;
   }
 
@@ -630,4 +673,64 @@
     animation: none;
     opacity: 1;
   }
+}
+
+.tetris-record-table {
+  width: 100%;
+}
+
+.tetris-record-table :deep(.el-table__fixed-right .cell),
+.tetris-record-table :deep(.el-table__row td:last-child .cell) {
+  justify-content: center;
+}
+
+.tetris-replay-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.tetris-replay-meta strong {
+  font-size: 24px;
+  font-weight: 900;
+  color: #1b5cff;
+}
+
+.tetris-replay-meta span {
+  color: #7a8794;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tetris-replay-stage {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.tetris-replay-canvas {
+  border-radius: 10px;
+  background: #0f1720;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.tetris-record-table :deep(.el-button.is-link) {
+  min-width: 58px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 24% 28%, rgba(122, 170, 255, 0.9) 0 1px, transparent 2px),
+    linear-gradient(135deg, #050a13, #10244a);
+  color: #fff;
+  font-weight: 900;
+}
+
+.tetris-replay-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
 }

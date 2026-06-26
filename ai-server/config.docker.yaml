@@ -160,3 +160,10 @@ security:
 ffmpeg:
   base_url: http://ffmpeg:8099
   internal_key: ""
+
+forum:
+  base_url: "http://backend-1:8080"
+  notice_list_path: "/notice/center/list"
+  request_timeout: 15
+  site_help_cache_ttl: 600
+  site_help_max_notice_chars: 4000

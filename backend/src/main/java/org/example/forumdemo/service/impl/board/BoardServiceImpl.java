@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.converter.BoardConverter;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
@@ -16,6 +17,7 @@ import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.Board;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.article.ArticleListResponse;
+import org.example.forumdemo.entity.vo.board.BoardPublicVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleMapper;
@@ -62,7 +64,7 @@ public class BoardServiceImpl implements BoardService {
     // 0 = 升序，1 = 降序；带 5 分钟缓存
     // ============================================================
     @Override
-    public List<Board> queryBoardListByOrder(Integer orderBy) {
+    public List<BoardPublicVO> queryBoardListByOrder(Integer orderBy) {
         if (orderBy == null || orderBy < 0 || orderBy > 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -70,7 +72,7 @@ public class BoardServiceImpl implements BoardService {
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
             try {
-                return objectMapper.readValue(cached, new TypeReference<List<Board>>() {});
+                return BoardConverter.toPublicVOList(objectMapper.readValue(cached, new TypeReference<List<Board>>() {}));
             } catch (Exception e) {
                 log.error("反序列化板块列表缓存失败, orderBy: {}", orderBy, e);
             }
@@ -92,11 +94,24 @@ public class BoardServiceImpl implements BoardService {
         } catch (Exception e) {
             log.error("序列化板块列表写入缓存失败, orderBy: {}", orderBy, e);
         }
-        return resultList;
+        return BoardConverter.toPublicVOList(resultList);
     }
 
     @Override
-    public Board queryBoardByBoardId(Long boardId) {
+    public BoardPublicVO queryBoardByBoardId(Long boardId) {
+        if (boardId == null || boardId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        Board board = boardMapper.selectOne(new LambdaQueryWrapper<Board>()
+                .eq(Board::getId, boardId).eq(Board::getDeleteState, (byte) 0));
+        if (board == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        return BoardConverter.toPublicVO(board);
+    }
+
+    @Override
+    public Board requireBoardEntity(Long boardId) {
         if (boardId == null || boardId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -161,7 +176,7 @@ public class BoardServiceImpl implements BoardService {
     // ============================================================
     @Override
     public void addOneById(Long boardId) {
-        queryBoardByBoardId(boardId);
+        requireBoardEntity(boardId);
         int result = boardMapper.update(null, new LambdaUpdateWrapper<Board>()
                 .eq(Board::getId, boardId).setSql("article_count = article_count + 1"));
         if (result <= 0) {
@@ -172,7 +187,7 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public void deleteOneById(Long boardId) {
-        queryBoardByBoardId(boardId);
+        requireBoardEntity(boardId);
         int result = boardMapper.update(null, new LambdaUpdateWrapper<Board>()
                 .eq(Board::getId, boardId).setSql("article_count = article_count - 1"));
         if (result <= 0) {

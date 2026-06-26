@@ -3,7 +3,6 @@
 set -euo pipefail
 ROOT="${1:-.}"
 USER_ROOT="${ROOT}/dist/user"
-ADMIN_ROOT="${ROOT}/dist/admin"
 fail=0
 
 check_spa() {
@@ -38,12 +37,11 @@ check_spa() {
 }
 
 check_spa "user" "$USER_ROOT"
-check_spa "admin" "$ADMIN_ROOT"
 
 if [[ "$fail" -ne 0 ]]; then
   echo ""
-  echo "Fix: re-upload the FULL dist/user and dist/admin folders from the same package build."
-  echo "On server, remove stale assets first: rm -rf ~/package/dist/user/assets/* ~/package/dist/admin/assets/*"
+  echo "Fix: re-upload the FULL dist/user folder from the same package build."
+  echo "On server, remove stale assets first: rm -rf ~/package/dist/user/assets/*"
   exit 1
 fi
 

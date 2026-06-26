@@ -4,7 +4,6 @@ param([string]$PkgRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) "package"
 $ErrorActionPreference = "Stop"
 $required = @(
     "dist\user\index.html",
-    "dist\admin\index.html",
     "images\forum-backend.tar",
     "images\forum-ai-server.tar",
     "images\infra.tar",

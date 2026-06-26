@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import logging
-from typing import Iterable
+from typing import Any, Iterable
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -297,7 +297,7 @@ def node_to_approved(state: AuditState) -> AuditState:
 # ────────────────────────────────────────────────────────────
 # 图构建
 # ────────────────────────────────────────────────────────────
-def build_graph():
+def build_graph() -> StateGraph:
     g = StateGraph(AuditState)
     g.add_node("validate_text", node_validate_text)
     g.add_node("validate_images", node_validate_images)
@@ -340,7 +340,7 @@ def build_graph():
 _compiled = None
 
 
-def get_audit_app():
+def get_audit_app() -> Any:
     """编译图 + 绑定 PostgresSaver; 进程级缓存"""
     global _compiled
     if _compiled is not None:

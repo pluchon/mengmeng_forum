@@ -5,7 +5,6 @@
         <el-icon class="sub-expand-icon"><component :is="expanded ? CaretTop : CaretBottom" /></el-icon>
         <span>{{ expanded ? '收起回复' : `展开 ${total} 条回复` }}</span>
       </button>
-      <span v-else class="sub-no-nested">暂无楼中楼回复</span>
     </div>
 
     <el-collapse-transition>
@@ -38,6 +37,10 @@
                   </template>
                   <el-text size="small" class="sub-text-content">: {{ sub.subReply.content }}</el-text>
                 </el-space>
+                <CommentReplyMediaDisplay
+                  :media-list="sub.mediaList"
+                  @open-shop="(id) => emit('open-shop', id)"
+                />
               </div>
               <div class="sub-item-meta">
                 <div class="sub-item-meta-left">
@@ -46,7 +49,8 @@
                 </div>
                 <div class="sub-item-meta-actions">
                   <button type="button" class="comment-action-btn" @click="toggleSubLike(sub)">
-                    <span :class="{ 'is-liked': sub.liked }">赞 {{ sub.subReply.likeCount || 0 }}</span>
+                    <LikeCountIcon class="comment-like-icon" :filled="sub.liked" />
+                    <span :class="{ 'is-liked': sub.liked }">{{ sub.subReply.likeCount || 0 }}</span>
                   </button>
                   <button type="button" class="comment-action-btn" @click="emitReply(sub)">
                     <el-icon><ChatDotRound /></el-icon>
@@ -80,15 +84,19 @@
 import { ChatDotRound } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
+import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
+import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
 import { useSubReplyArea } from '@scripts/components/article/SubReplyArea'
 
 const props = defineProps({
   replyId: { type: [Number, String], required: true },
   articleId: { type: [Number, String], required: true },
   readOnly: { type: Boolean, default: true },
+  refreshToken: { type: Number, default: 0 },
+  subReplyCount: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['reply'])
+const emit = defineEmits(['reply', 'open-shop'])
 
 const {
   CaretBottom,

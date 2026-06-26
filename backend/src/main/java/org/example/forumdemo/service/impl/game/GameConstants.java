@@ -5,6 +5,7 @@ public class GameConstants {
 
     public static final String GOBANG = "gobang";
     public static final String JINZI = "jinzi";
+    public static final String TETRIS_PK = "tetris_pk";
 
     public static final String PROFILE_IDLE = "IDLE";
     public static final String PROFILE_MATCHING = "MATCHING";
@@ -48,6 +49,10 @@ public class GameConstants {
     public static final long JINZI_GAME_TIME_MS = 2 * 60 * 1000L;
     public static final long JINZI_MOVE_TIME_MS = 20 * 1000L;
     public static final long JINZI_RECONNECT_WINDOW_MS = 30 * 1000L;
+    public static final long GOBANG_RECONNECT_WINDOW_MS = 60 * 1000L;
+    public static final long TETRIS_RECONNECT_WINDOW_MS = 60 * 1000L;
+
+    public static final int TETRIS_PK_SCORE_DELTA = 3;
 
     private GameConstants() {
     }

@@ -32,6 +32,7 @@ import { clientOssUrl } from '@/utils/clientOss'
 import { pickThinkingPhrase, startThinkingRotation } from '@/utils/mascotThinking'
 import { pickMascotIdlePhrase } from '@/utils/mascotIdleTips'
 import { formatAiUsageLine, usageStatsFromApi } from '@/utils/aiUsageDisplay'
+import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/security'
 
@@ -989,6 +990,10 @@ export function useMascotDock() {
       saveOffset()
     }
     else {
+      if (!userStore.isLoggedIn) {
+        void ensureLoggedIn('与看板娘互动需要登录')
+        return
+      }
       assistantOpen.value = !assistantOpen.value
     }
     stageMoved = false
@@ -1398,7 +1403,6 @@ export function useMascotDock() {
           res = await aiImage({
             prompt: text,
             quality: q,
-            sessionId: sid,
             ephemeral: true,
           })
         } finally {

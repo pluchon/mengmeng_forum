@@ -9,6 +9,7 @@ import org.example.forumdemo.entity.dto.message.SendMessageRequest;
 import org.example.forumdemo.entity.vo.message.MessageDetailResponse;
 import org.example.forumdemo.entity.vo.message.MessageListResponse;
 import org.example.forumdemo.entity.vo.message.MessageSessionResponse;
+import org.example.forumdemo.entity.vo.message.MessageVO;
 import org.example.forumdemo.entity.vo.message.UserChatEmojiResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 
@@ -19,13 +20,11 @@ import java.util.List;
  */
 public interface MessageService {
 
-    Message send(SendMessageRequest req, Long sendUserId);
+    MessageVO send(SendMessageRequest req, Long sendUserId);
 
-    // 发送图片/GIF 消息: 完全独立的接口, 不接受 content 字段
-    Message sendImage(SendImageMessageRequest req, Long sendUserId);
+    MessageVO sendImage(SendImageMessageRequest req, Long sendUserId);
 
-    // 收藏表情(自上传或来自他人聊天图片), 返回落库实体
-    UserChatEmoji favoriteEmoji(FavoriteEmojiRequest req, Long userId);
+    UserChatEmojiResponse favoriteEmoji(FavoriteEmojiRequest req, Long userId);
 
     // 取消收藏(软删, 仅作用于自己的)
     void cancelFavoriteEmoji(Long emojiId, Long userId);

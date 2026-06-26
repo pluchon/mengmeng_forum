@@ -11,6 +11,7 @@ import org.example.forumdemo.common.utils.PasswordUtils;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.UUIDUtils;
+import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.db.ForumMascotModel;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;
@@ -327,11 +328,11 @@ public class UserServiceImpl implements UserService {
         if (user == null || user.getId() == null) {
             return;
         }
-        Map<String, Object> payload = new HashMap<>(4);
-        payload.put("userId", user.getId());
-        payload.put("nickname", user.getNickname());
-        payload.put("username", user.getUsername());
-        payload.put("remark", user.getRemark());
+        RagUserIndexDTO payload = new RagUserIndexDTO();
+        payload.setUserId(user.getId());
+        payload.setNickname(user.getNickname());
+        payload.setUsername(user.getUsername());
+        payload.setRemark(user.getRemark());
         aiHubService.indexUserRag(payload);
     }
 

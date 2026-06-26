@@ -4,10 +4,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.converter.AiHubConverter;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
+import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
+import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
+import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
+import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -38,6 +48,13 @@ public class AiHubServiceImpl implements AiHubService {
     @Value("${forum.ai.internal-key:}")
     private String internalKey;
 
+    @Autowired
+    private RestTemplate forumRestTemplate;
+
+    @Autowired
+    @Qualifier("aiRestTemplate")
+    private RestTemplate aiRestTemplate;
+
     private String joinUrl(String path) {
         String base = hubBaseUrl.endsWith("/") ? hubBaseUrl.substring(0, hubBaseUrl.length() - 1) : hubBaseUrl;
         return base + path;
@@ -54,7 +71,11 @@ public class AiHubServiceImpl implements AiHubService {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Map<String, Object> postJson(String path, Map<String, Object> body) {
-        RestTemplate restTemplate = new RestTemplate();
+        return postJson(forumRestTemplate, path, body);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Map<String, Object> postJson(RestTemplate restTemplate, String path, Map<String, Object> body) {
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, jsonHeaders());
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(joinUrl(path), entity, Map.class);
@@ -99,46 +120,46 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
-    public Map<String, Object> write(Long userId, AiWriteRequest request) {
+    public AiHubWriteResultVO write(Long userId, AiWriteRequest request) {
         Map<String, Object> body = new HashMap<>();
         body.put("user_id", userId);
         body.put("kind", request.getKind());
         body.put("messages", request.getMessages());
-        return postJson("/api/v1/ai/write", body);
+        return AiHubConverter.toWriteResult(postJson("/api/v1/ai/write", body));
     }
 
     @Override
-    public Map<String, Object> coverHints(Long userId, AiCoverHintsRequest request) {
+    public AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest request) {
         Map<String, Object> body = new HashMap<>();
         body.put("user_id", userId);
         body.put("article_text", request.getArticleText());
-        return postJson("/api/v1/ai/cover-hints", body);
+        return AiHubConverter.toCoverHintsResult(postJson("/api/v1/ai/cover-hints", body));
     }
 
     @Override
-    public Map<String, Object> image(Long userId, AiImageRequest request) {
+    public AiHubImageResultVO image(Long userId, AiImageRequest request) {
         Map<String, Object> body = new HashMap<>();
         body.put("user_id", userId);
         body.put("prompt", request.getPrompt());
         body.put("quality", request.getQuality());
-        return postJson("/api/v1/ai/image", body);
+        return AiHubConverter.toImageResult(postJson(aiRestTemplate, "/api/v1/ai/image", body));
     }
 
     @Override
-    public void indexArticleRag(Map<String, Object> payload) {
+    public void indexArticleRag(RagArticleIndexDTO payload) {
         try {
-            postJson("/api/v1/rag/index-article", payload);
+            postJson("/api/v1/rag/index-article", AiHubConverter.ragArticleIndexToMap(payload));
         } catch (Exception e) {
-            log.warn("RAG 帖子索引失败 articleId={}: {}", payload.get("articleId"), e.getMessage());
+            log.warn("RAG 帖子索引失败 articleId={}: {}", payload != null ? payload.getArticleId() : null, e.getMessage());
         }
     }
 
     @Override
-    public void indexUserRag(Map<String, Object> payload) {
+    public void indexUserRag(RagUserIndexDTO payload) {
         try {
-            postJson("/api/v1/rag/index-user", payload);
+            postJson("/api/v1/rag/index-user", AiHubConverter.ragUserIndexToMap(payload));
         } catch (Exception e) {
-            log.warn("RAG 用户索引失败 userId={}: {}", payload.get("userId"), e.getMessage());
+            log.warn("RAG 用户索引失败 userId={}: {}", payload != null ? payload.getUserId() : null, e.getMessage());
         }
     }
 
@@ -152,9 +173,8 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            RestTemplate restTemplate = new RestTemplate();
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = restTemplate.postForEntity(
+            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
                     joinUrl("/api/v1/rag/article-vector-search"), req, Map.class);
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
                 log.warn("RAG 帖子向量 HTTP 异常 status={}", resp.getStatusCode());
@@ -218,7 +238,7 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public List<Map<String, Object>> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates) {
+    public List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates) {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
         }
@@ -226,9 +246,8 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            RestTemplate restTemplate = new RestTemplate();
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = restTemplate.postForEntity(
+            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
                     joinUrl("/api/v1/rag/article-vector-search"), req, Map.class);
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
                 return Collections.emptyList();
@@ -237,25 +256,10 @@ public class AiHubServiceImpl implements AiHubService {
             if (!(results instanceof List<?> list)) {
                 return Collections.emptyList();
             }
-            List<Map<String, Object>> ranked = new ArrayList<>();
-            for (Object item : list) {
-                if (!(item instanceof Map<?, ?> m)) {
-                    continue;
-                }
-                Object idObj = m.get("articleId");
-                if (idObj == null) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("articleId", idObj);
-                Object scoreObj = m.get("score");
-                double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
-                row.put("score", score);
-                ranked.add(row);
-            }
+            List<RagArticleVectorHitVO> ranked = AiHubConverter.toArticleVectorHits(list);
             ranked.sort((a, b) -> Double.compare(
-                    ((Number) b.getOrDefault("score", 0)).doubleValue(),
-                    ((Number) a.getOrDefault("score", 0)).doubleValue()));
+                    b.getScore() != null ? b.getScore() : 0.0,
+                    a.getScore() != null ? a.getScore() : 0.0));
             return ranked;
         } catch (Exception e) {
             log.warn("RAG 向量检索(含分数)失败: {}", e.getMessage());
@@ -265,7 +269,7 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public List<Map<String, Object>> ragUserVectorRanked(String query) {
+    public List<RagUserVectorHitVO> ragUserVectorRanked(String query) {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
         }
@@ -273,9 +277,8 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", Collections.emptyList());
-            RestTemplate restTemplate = new RestTemplate();
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = restTemplate.postForEntity(
+            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
                     joinUrl("/api/v1/rag/user-vector-search"), req, Map.class);
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
                 return Collections.emptyList();
@@ -284,28 +287,10 @@ public class AiHubServiceImpl implements AiHubService {
             if (!(results instanceof List<?> list)) {
                 return Collections.emptyList();
             }
-            List<Map<String, Object>> ranked = new ArrayList<>();
-            for (Object item : list) {
-                if (!(item instanceof Map<?, ?> m)) {
-                    continue;
-                }
-                Object idObj = m.get("userId");
-                if (idObj == null) {
-                    idObj = m.get("user_id");
-                }
-                if (idObj == null) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("userId", idObj);
-                Object scoreObj = m.get("score");
-                double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
-                row.put("score", score);
-                ranked.add(row);
-            }
+            List<RagUserVectorHitVO> ranked = AiHubConverter.toUserVectorHits(list);
             ranked.sort((a, b) -> Double.compare(
-                    ((Number) b.getOrDefault("score", 0)).doubleValue(),
-                    ((Number) a.getOrDefault("score", 0)).doubleValue()));
+                    b.getScore() != null ? b.getScore() : 0.0,
+                    a.getScore() != null ? a.getScore() : 0.0));
             return ranked;
         } catch (Exception e) {
             log.warn("RAG 用户向量检索(含分数)失败 keyword={}: {}", query.trim(), e.getMessage());
@@ -323,9 +308,8 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            RestTemplate restTemplate = new RestTemplate();
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = restTemplate.postForEntity(
+            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
                     joinUrl("/api/v1/rag/user-vector-search"), req, Map.class);
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
                 return Collections.emptyList();

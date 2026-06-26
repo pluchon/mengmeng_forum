@@ -1,7 +1,7 @@
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick } from '@element-plus/icons-vue'
+import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick, Picture, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
 import { getArticleDetail, streamArticleGuide, getAuditStatus, getLatestLikers } from '@/api/article'
@@ -25,6 +25,11 @@ import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
+import { uploadChatImage } from '@/api/message'
+import { useEmojiShopStore } from '@/stores/emojiShop'
+import { validateLocalImageFile, openImageUploadLoading, getBatchImageUploadLoadingText } from '@/utils/imageUploadFeedback'
+import { validateChatImageMime } from '@/utils/chatMedia'
+import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
 import likersMenuListIconUrl from '@/assets/svg/列表.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
@@ -77,6 +82,177 @@ export function useArticleDetail() {
   const replies = ref([])
   const replyContent = ref('')
   const replyTarget = ref(null)
+  const replyImageInput = ref(null)
+  const emojiShopStore = useEmojiShopStore()
+  const replyPendingImages = ref([])
+  const replyPendingEmojis = ref([])
+  const replyEmojiPanelOpen = ref(false)
+  const replySelectedPackId = ref(null)
+  const replyPackBarRef = ref(null)
+  const replyPackBarCanScrollLeft = ref(false)
+  const replyPackBarCanScrollRight = ref(false)
+  const subReplyRefreshTokens = ref({})
+
+  const REPLY_MEDIA_TYPE_IMAGE = 1
+  const REPLY_MEDIA_TYPE_SHOP_EMOJI = 2
+  const REPLY_IMAGE_MAX = 6
+  const REPLY_EMOJI_MAX = 5
+
+  const canSubmitReply = computed(() => {
+    const text = replyContent.value.trim()
+    return !!text || replyPendingImages.value.length > 0 || replyPendingEmojis.value.length > 0
+  })
+
+  const replyVisiblePacks = computed(() => emojiShopStore.myPacks)
+
+  const replySelectedPack = computed(() => {
+    const packs = replyVisiblePacks.value
+    if (!packs.length) return null
+    const id = replySelectedPackId.value
+    if (id != null) {
+      const hit = packs.find((p) => Number(p.shopId) === Number(id) || Number(p.userEmojiId) === Number(id))
+      if (hit) return hit
+    }
+    return packs[0]
+  })
+
+  function buildReplyMediaList() {
+    const list = []
+    for (const img of replyPendingImages.value) {
+      list.push({ mediaType: REPLY_MEDIA_TYPE_IMAGE, mediaUrl: img.mediaUrl })
+    }
+    for (const em of replyPendingEmojis.value) {
+      list.push({ mediaType: REPLY_MEDIA_TYPE_SHOP_EMOJI, mediaUrl: em.mediaUrl, shopId: em.shopId })
+    }
+    return list
+  }
+
+  function clearReplyPendingMedia() {
+    replyPendingImages.value = []
+    replyPendingEmojis.value = []
+  }
+
+  function removePendingImage(idx) {
+    replyPendingImages.value = replyPendingImages.value.filter((_, i) => i !== idx)
+  }
+
+  function removePendingEmoji(idx) {
+    replyPendingEmojis.value = replyPendingEmojis.value.filter((_, i) => i !== idx)
+  }
+
+  function triggerReplyImagePick() {
+    replyImageInput.value?.click()
+  }
+
+  async function onReplyImageFileChange(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+
+    const current = replyPendingImages.value.length
+    const remaining = REPLY_IMAGE_MAX - current
+    if (remaining <= 0) {
+      ElMessage.warning(`最多上传 ${REPLY_IMAGE_MAX} 张图片`)
+      return
+    }
+    if (files.length > remaining) {
+      ElMessage.warning(`最多还能上传 ${remaining} 张，请重新选择`)
+      return
+    }
+
+    for (const file of files) {
+      const mimeOk = validateChatImageMime(file)
+      if (!mimeOk.ok) {
+        ElMessage.warning(`${file.name}：${mimeOk.message}`)
+        return
+      }
+      const sizeOk = validateLocalImageFile(file)
+      if (!sizeOk.ok) {
+        ElMessage.warning(`${file.name}：${sizeOk.message}`)
+        return
+      }
+    }
+
+    const uploadTip = getBatchImageUploadLoadingText(files, '正在上传评论图片…')
+    const tipMsg = ElMessage.info({ message: uploadTip, duration: 0, showClose: false, grouping: true })
+    const batchLoading = openImageUploadLoading(files[0], uploadTip)
+    try {
+      for (const file of files) {
+        const up = await uploadChatImage(file)
+        if (up.code === 0 && up.data) {
+          replyPendingImages.value.push({ mediaUrl: up.data })
+        }
+      }
+    } catch {
+      /* 拦截器已提示 */
+    } finally {
+      tipMsg.close()
+      batchLoading.close()
+    }
+  }
+
+  async function onReplyEmojiPopoverShow() {
+    if (!userStore.isLoggedIn) return
+    try {
+      await emojiShopStore.fetchMyPacks()
+      const packs = replyVisiblePacks.value
+      if (packs.length && replySelectedPackId.value == null) {
+        replySelectedPackId.value = packs[0].shopId
+      }
+      await nextTick()
+      updateReplyPackBarScrollState()
+    } catch {
+      /* 已提示 */
+    }
+  }
+
+  function selectReplyPack(pack) {
+    replySelectedPackId.value = pack?.shopId ?? null
+    nextTick(updateReplyPackBarScrollState)
+  }
+
+  function scrollReplyPackBarRight() {
+    replyPackBarRef.value?.scrollBy({ left: 120, behavior: 'smooth' })
+  }
+
+  function scrollReplyPackBarLeft() {
+    replyPackBarRef.value?.scrollBy({ left: -120, behavior: 'smooth' })
+  }
+
+  function onReplyPackBarScroll() {
+    updateReplyPackBarScrollState()
+  }
+
+  function updateReplyPackBarScrollState() {
+    const el = replyPackBarRef.value
+    if (!el) {
+      replyPackBarCanScrollLeft.value = false
+      replyPackBarCanScrollRight.value = false
+      return
+    }
+    const overflow = el.scrollWidth > el.clientWidth + 4
+    replyPackBarCanScrollLeft.value = overflow && el.scrollLeft > 2
+    replyPackBarCanScrollRight.value = overflow && el.scrollLeft < el.scrollWidth - el.clientWidth - 2
+  }
+
+  function addReplyShopEmoji(url) {
+    const pack = replySelectedPack.value
+    if (!pack || !url) return
+    if (replyPendingEmojis.value.length >= REPLY_EMOJI_MAX) {
+      ElMessage.warning(`最多添加 ${REPLY_EMOJI_MAX} 个表情`)
+      return
+    }
+    if (replyPendingEmojis.value.some((item) => item.mediaUrl === url)) return
+    replyPendingEmojis.value.push({ mediaUrl: url, shopId: pack.shopId })
+    replyEmojiPanelOpen.value = false
+  }
+
+  function openCommentShopDetail(shopId) {
+    const id = Number(shopId)
+    if (!Number.isFinite(id) || id <= 0) return
+    router.push({ path: '/emoji-shop', query: { detail: String(id) } }).catch(() => {})
+  }
+
   const contentExpanded = ref(false)
   const isFollowingAuthor = ref(false)
   const followSaving = ref(false)
@@ -373,6 +549,23 @@ export function useArticleDetail() {
     }
   }
 
+  function shouldReturnToProfile() {
+    return route.query.from === 'profile'
+  }
+
+  function getProfileReturnPath() {
+    try {
+      const raw = sessionStorage.getItem('profile-return-state')
+      if (raw) {
+        const state = JSON.parse(raw)
+        if (state.profileUserId) return `/profile/${state.profileUserId}`
+      }
+    } catch {
+      /* ignore */
+    }
+    return '/profile'
+  }
+
   async function handleBeforeClose(done) {
     if (detailClosing) {
       done()
@@ -393,6 +586,15 @@ export function useArticleDetail() {
     } finally {
       done()
       detailClosing = false
+      if (shouldReturnToProfile()) {
+        skipDialogClosedNav = true
+        if (window.history.length > 1) {
+          router.back()
+        } else {
+          router.replace(getProfileReturnPath())
+        }
+        return
+      }
       if (fromHome && window.history.length > 1) {
         skipDialogClosedNav = true
         clearFeedNavigationState()
@@ -409,6 +611,10 @@ export function useArticleDetail() {
       return
     }
     if (/^\/article\//.test(route.path)) {
+      if (shouldReturnToProfile()) {
+        router.replace(getProfileReturnPath())
+        return
+      }
       clearFeedNavigationState()
       router.replace('/').then(() => restoreFeedScroll())
     }
@@ -678,24 +884,35 @@ export function useArticleDetail() {
     if (!(await ensureLoggedIn('评论需要登录'))) return
     if (blockIfMuted(userStore)) return
     const text = replyContent.value.trim()
-    if (!text) return
+    const mediaList = buildReplyMediaList()
+    if (!text && !mediaList.length) return
     try {
       let res
+      const payload = { content: text, mediaList }
       if (replyTarget.value?.mode === 'sub' && replyTarget.value.replyId) {
         res = await submitSubReply({
           articleId: article.value.id,
           replyId: replyTarget.value.replyId,
           replyUserId: replyTarget.value.replyUserId,
-          content: text,
+          ...payload,
         })
       } else {
-        res = await apiSubmitReply({ articleId: article.value.id, content: text })
+        res = await apiSubmitReply({ articleId: article.value.id, ...payload })
       }
       if (res.code === 0) {
         ElMessage.success('发送成功')
         replyContent.value = ''
+        const wasSub = replyTarget.value?.mode === 'sub' && replyTarget.value.replyId
+        const subReplyId = wasSub ? replyTarget.value.replyId : null
         replyTarget.value = null
-        loadReplies()
+        clearReplyPendingMedia()
+        await loadReplies()
+        if (subReplyId != null) {
+          subReplyRefreshTokens.value = {
+            ...subReplyRefreshTokens.value,
+            [subReplyId]: (subReplyRefreshTokens.value[subReplyId] || 0) + 1,
+          }
+        }
       } else {
         ElMessage.error(res.message || '评论发送失败')
       }
@@ -766,10 +983,13 @@ export function useArticleDetail() {
   }
 
   return {
+    ArrowLeft,
+    ArrowRight,
     ChatDotRound,
     Close,
     CollectionTag,
     MagicStick,
+    Picture,
     PictureFilled,
     Share,
     ArticleDetailVideo,
@@ -790,6 +1010,8 @@ export function useArticleDetail() {
     isVideoArticle,
     replayDetailVideo,
     author,
+    addReplyShopEmoji,
+    canSubmitReply,
     clearReplyTarget,
     confirmFavorite,
     contentExpanded,
@@ -823,11 +1045,17 @@ export function useArticleDetail() {
     latestLikers,
     likersMenuListIconUrl,
     emptyCommentIconUrl,
+    emojiPackIconUrl,
+    emojiShopStore,
     loadAiSummary,
     loading,
     loadingLikers,
     loadFavoriteFolders,
     onGalleryStripScroll,
+    onReplyEmojiPopoverShow,
+    onReplyImageFileChange,
+    onReplyPackBarScroll,
+    openCommentShopDetail,
     ownerAuditNotice,
     renderedContent,
     renderCommentHtml,
@@ -835,16 +1063,32 @@ export function useArticleDetail() {
     sendIconUrl,
     replyContent,
     replyCountDisplay,
+    replyEmojiPanelOpen,
+    replyImageInput,
+    replyPackBarCanScrollLeft,
+    replyPackBarCanScrollRight,
+    replyPackBarRef,
+    replyPendingEmojis,
+    replyPendingImages,
     replyPlaceholder,
+    replySelectedPack,
     replyTarget,
+    replyVisiblePacks,
+    removePendingEmoji,
+    removePendingImage,
+    scrollReplyPackBarLeft,
+    scrollReplyPackBarRight,
+    selectReplyPack,
     selectedFolderId,
     setActiveGalleryIndex,
     showLikersDialog,
     startReplyToFloor,
     startReplyToSub,
+    subReplyRefreshTokens,
     submitReply,
     toggleReplyLike,
     toggleFavorite,
+    triggerReplyImagePick,
     formatForumDateTimeShanghai,
   }
 }

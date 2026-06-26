@@ -22,4 +22,5 @@ public class ArticleReplyListResponse {
     private Integer subReplyCount;
     // 当前登录用户是否已点赞
     private Boolean liked;
+    private java.util.List<ArticleReplyMediaVO> mediaList;
 }

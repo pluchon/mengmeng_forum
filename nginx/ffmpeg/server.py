@@ -1,7 +1,11 @@
+"""FFmpeg 转码微服务（视频压缩、审核抽帧）."""
+
+from __future__ import annotations
+
+import base64
 import json
 import logging
 import os
-import base64
 import shutil
 import subprocess
 import tempfile
@@ -48,7 +52,7 @@ def _check_internal_key() -> None:
 
 def _internal_protected(view):
     @wraps(view)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: object, **kwargs: object):
         _check_internal_key()
         return view(*args, **kwargs)
 
@@ -85,7 +89,7 @@ def _run(cmd: list[str], *, timeout: int | None = None) -> subprocess.CompletedP
     return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=timeout)
 
 
-def _probe(in_path: str) -> dict:
+def _probe(in_path: str) -> dict[str, object]:
     proc = _run(
         [
             "ffprobe",
@@ -107,14 +111,14 @@ def _probe(in_path: str) -> dict:
         return {}
 
 
-def _first_stream(probe: dict, codec_type: str) -> dict | None:
+def _first_stream(probe: dict[str, object], codec_type: str) -> dict[str, object] | None:
     for s in probe.get("streams") or []:
         if s.get("codec_type") == codec_type:
             return s
     return None
 
 
-def _can_remux_copy(probe: dict) -> bool:
+def _can_remux_copy(probe: dict[str, object]) -> bool:
     v = _first_stream(probe, "video")
     if not v:
         return False
@@ -128,7 +132,7 @@ def _can_remux_copy(probe: dict) -> bool:
     return acodec in ("aac", "mp4a")
 
 
-def _video_height(probe: dict) -> int:
+def _video_height(probe: dict[str, object]) -> int:
     v = _first_stream(probe, "video")
     if not v:
         return 0
@@ -138,7 +142,7 @@ def _video_height(probe: dict) -> int:
         return 0
 
 
-def _transcode(in_path: str, out_path: str, *, mode: str, probe: dict) -> None:
+def _transcode(in_path: str, out_path: str, *, mode: str, probe: dict[str, object]) -> None:
     if mode == "remux":
         cmd = [
             "ffmpeg",
@@ -188,7 +192,7 @@ def _transcode(in_path: str, out_path: str, *, mode: str, probe: dict) -> None:
 
 @app.post("/compress")
 @_internal_protected
-def compress():
+def compress() -> Response:
     if not request.files or "file" not in request.files:
         abort(400, "missing file")
     f = request.files["file"]
@@ -245,11 +249,11 @@ def compress():
 
 
 @app.get("/healthz")
-def healthz():
+def healthz() -> dict[str, bool]:
     return {"ok": True}
 
 
-def _probe_url(url: str) -> dict:
+def _probe_url(url: str) -> dict[str, object]:
     proc = _run(
         [
             "ffprobe",
@@ -272,7 +276,7 @@ def _probe_url(url: str) -> dict:
 
 @app.post("/extract-audit-frames")
 @_internal_protected
-def extract_audit_frames():
+def extract_audit_frames() -> Response:
     """从视频 URL 抽取若干 JPEG 帧，供 ai-server 视频审核兜底（OSS 私有桶需传签名 URL）。"""
     data = request.get_json(force=True, silent=True) or {}
     url = (data.get("url") or "").strip()

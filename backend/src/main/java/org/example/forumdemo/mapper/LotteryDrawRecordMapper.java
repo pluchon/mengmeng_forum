@@ -5,7 +5,6 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.example.forumdemo.entity.db.LotteryDrawRecord;
-import org.example.forumdemo.entity.vo.admin.LotteryDrawUserAggRow;
 import org.example.forumdemo.entity.vo.lottery.LotteryPrizeHeatVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryRecentDrawVO;
 
@@ -35,14 +34,4 @@ public interface LotteryDrawRecordMapper extends BaseMapper<LotteryDrawRecord> {
     @Select("SELECT COUNT(DISTINCT user_id) FROM lottery_draw_record "
             + "WHERE activity_id = #{activityId} AND delete_state = 0")
     long countDistinctDrawUsers(@Param("activityId") Long activityId);
-
-    @Select("SELECT user_id AS userId, MAX(create_time) AS lastDrawTime, COUNT(*) AS drawCount "
-            + "FROM lottery_draw_record "
-            + "WHERE activity_id = #{activityId} AND delete_state = 0 "
-            + "GROUP BY user_id "
-            + "ORDER BY lastDrawTime DESC "
-            + "LIMIT #{offset}, #{size}")
-    List<LotteryDrawUserAggRow> selectDrawUserPage(@Param("activityId") Long activityId,
-                                                   @Param("offset") long offset,
-                                                   @Param("size") long size);
 }

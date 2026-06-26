@@ -15,11 +15,15 @@ public interface GameUserProfileService {
 
     GameUserProfileVO getProfileVO(Long userId, String gameCode);
 
-    PageResult<GameMatchRecordVO> listRecords(Long userId, String gameCode, Integer pageNum, Integer pageSize);
+    PageResult<GameMatchRecordVO> listGobangRecords(Long userId, Integer pageNum, Integer pageSize);
+
+    PageResult<GameMatchRecordVO> listJinziRecords(Long userId, Integer pageNum, Integer pageSize);
 
     List<GameUserProfileVO> listLeaderboard(String gameCode, Integer pageSize);
 
-    GobangReplayVO getReplay(Long userId, Long recordId);
+    GobangReplayVO getGobangReplay(Long userId, Long recordId);
+
+    GobangReplayVO getJinziReplay(Long userId, Long recordId);
 
     void updateStatus(Long userId, String gameCode, String status, String roomId);
 }

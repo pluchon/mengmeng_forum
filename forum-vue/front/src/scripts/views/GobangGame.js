@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Back, CircleClose, Timer, VideoPlay } from '@element-plus/icons-vue'
@@ -188,8 +188,8 @@ function onRecordPageChange(page) {
 function rebuildReplayBoard(index) {
   const board = emptyBoard()
   replayMoves.value.slice(0, index).forEach((move) => {
-    const row = Number(move.row)
-    const col = Number(move.col)
+    const row = Number(move.row ?? move.rowIndex)
+    const col = Number(move.col ?? move.colIndex)
     if (Number.isInteger(row) && Number.isInteger(col) && row >= 0 && row < 15 && col >= 0 && col < 15) {
       board[row][col] = Number(move.chess) || 0
     }
@@ -204,8 +204,10 @@ async function openReplay(row) {
     replayMoves.value = Array.isArray(res.data.moves) ? res.data.moves : []
     replayIndex.value = 0
     rebuildReplayBoard(0)
-    replayPlaying.value = false
+    stopReplayAuto()
     replayVisible.value = true
+    await nextTick()
+    toggleReplayAuto()
   }
 }
 
@@ -257,4 +259,40 @@ onUnmounted(() => {
   if (refreshTimer) window.clearInterval(refreshTimer)
   stopReplayAuto()
   gameSocket.close()
+})
+
+defineExpose({
+  Back,
+  CircleClose,
+  Timer,
+  VideoPlay,
+  activeRoomText,
+  backCenter,
+  canResumeRoom,
+  endReasonText,
+  formatDateTime,
+  gameOnlineText,
+  loading,
+  matching,
+  onRecordPageChange,
+  openReplay,
+  pointsBalance,
+  profile,
+  recordPage,
+  recordPageSize,
+  recordTotal,
+  records,
+  replayBoard,
+  replayCurrentText,
+  replayIndex,
+  replayMoves,
+  replayNext,
+  replayPlaying,
+  replayPrev,
+  replayVisible,
+  resumeRoom,
+  startMatch,
+  stopMatch,
+  stopReplayAuto,
+  toggleReplayAuto,
 })

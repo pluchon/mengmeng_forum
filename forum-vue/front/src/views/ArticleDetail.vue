@@ -22,6 +22,7 @@
                 <ArticleDetailVideo
                   v-if="isVideoArticle && articleVideoUrl"
                   :key="articleVideoUrl"
+                  :article-id="article.id"
                   :src="articleVideoUrl"
                   @ended="replayDetailVideo"
                 />
@@ -253,6 +254,10 @@
                       </el-tag>
                     </div>
                     <div class="comment-text" v-html="renderCommentHtml(item.articleReply.content)"></div>
+                    <CommentReplyMediaDisplay
+                      :media-list="item.mediaList"
+                      @open-shop="openCommentShopDetail"
+                    />
                     <div class="comment-footer">
                       <div class="comment-footer-left">
                         <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
@@ -260,7 +265,8 @@
                       </div>
                       <div class="comment-footer-actions">
                         <button type="button" class="comment-action-btn" @click="toggleReplyLike(item)">
-                          <span :class="{ 'is-liked': item.liked }">赞 {{ item.articleReply.likeCount || 0 }}</span>
+                          <LikeCountIcon class="comment-like-icon" :filled="item.liked" />
+                          <span :class="{ 'is-liked': item.liked }">{{ item.articleReply.likeCount || 0 }}</span>
                         </button>
                         <button type="button" class="comment-action-btn" @click="startReplyToFloor(item)">
                           <el-icon><ChatDotRound /></el-icon>
@@ -271,8 +277,11 @@
                     <SubReplyArea
                       :reply-id="item.articleReply.id"
                       :article-id="article.id"
+                      :refresh-token="subReplyRefreshTokens[item.articleReply.id] || 0"
+                      :sub-reply-count="item.subReplyCount || 0"
                       read-only
                       @reply="startReplyToSub"
+                      @open-shop="openCommentShopDetail"
                     />
                   </div>
                 </div>
@@ -296,6 +305,32 @@
                 <button type="button" class="reply-target-clear" @click="clearReplyTarget">取消</button>
               </div>
               <div
+                v-if="replyPendingImages.length || replyPendingEmojis.length"
+                class="reply-pending-media"
+              >
+                <div
+                  v-for="(img, idx) in replyPendingImages"
+                  :key="`img-${img.mediaUrl}`"
+                  class="reply-pending-card"
+                >
+                  <img :src="img.mediaUrl" alt="" class="reply-pending-thumb">
+                  <button type="button" class="reply-pending-remove" aria-label="移除" @click="removePendingImage(idx)">
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+                <div
+                  v-for="(em, idx) in replyPendingEmojis"
+                  :key="`em-${em.mediaUrl}`"
+                  class="reply-pending-card reply-pending-card--emoji"
+                >
+                  <img :src="em.mediaUrl" alt="" class="reply-pending-thumb">
+                  <img :src="emojiPackIconUrl" alt="" class="reply-pending-emoji-badge" aria-hidden="true">
+                  <button type="button" class="reply-pending-remove" aria-label="移除" @click="removePendingEmoji(idx)">
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+              </div>
+              <div
                 class="comment-input-wrap comment-input-full"
                 :class="{ 'vip-comment-gold': isVipGold }"
               >
@@ -306,20 +341,127 @@
                   @keyup.enter="submitReply"
                 >
                   <template #suffix>
-                    <img
-                      :src="sendIconUrl"
-                      alt=""
-                      class="detail-plain-svg detail-plain-svg--send"
-                      :class="{ 'is-disabled': !replyContent.trim() }"
-                      role="button"
-                      tabindex="0"
-                      aria-label="发送"
-                      @click="submitReply"
-                      @keydown.enter.prevent="submitReply"
-                    />
+                    <div class="comment-suffix-tools">
+                      <button
+                        type="button"
+                        class="comment-tool-btn comment-tool-btn--muted"
+                        title="上传图片"
+                        @click.stop="triggerReplyImagePick"
+                      >
+                        <el-icon><Picture /></el-icon>
+                      </button>
+                      <el-popover
+                        v-model:visible="replyEmojiPanelOpen"
+                        placement="top-start"
+                        :width="320"
+                        trigger="click"
+                        teleported
+                        popper-class="comment-emoji-popper"
+                        :z-index="6500"
+                        @show="onReplyEmojiPopoverShow"
+                      >
+                        <template #reference>
+                          <button
+                            type="button"
+                            class="comment-tool-btn comment-tool-btn--muted"
+                            title="已购表情"
+                            @click.stop
+                          >
+                            <img :src="emojiPackIconUrl" alt="" class="comment-emoji-pack-icon">
+                          </button>
+                        </template>
+                        <div v-loading="emojiShopStore.myPacksLoading" class="comment-emoji-panel">
+                          <div v-if="!replyVisiblePacks.length" class="comment-emoji-empty">暂无已购表情包</div>
+                          <div v-else class="mc-emoji-purchased-layout">
+                            <div class="mc-emoji-pack-body">
+                              <div class="mc-emoji-grid mc-emoji-grid--pack mc-emoji-grid--scroll">
+                                <img
+                                  v-for="(url, uidx) in (replySelectedPack?.imageUrls || [])"
+                                  :key="uidx"
+                                  :src="url"
+                                  alt=""
+                                  class="mc-emoji-thumb"
+                                  @click="addReplyShopEmoji(url)"
+                                >
+                              </div>
+                            </div>
+                            <div class="mc-emoji-pack-bar">
+                              <button
+                                v-if="replyPackBarCanScrollLeft"
+                                type="button"
+                                class="mc-emoji-pack-more"
+                                aria-label="向左查看更多"
+                                @click="scrollReplyPackBarLeft"
+                              >
+                                <el-icon><ArrowLeft /></el-icon>
+                              </button>
+                              <div
+                                ref="replyPackBarRef"
+                                class="mc-emoji-pack-bar-scroll"
+                                @scroll="onReplyPackBarScroll"
+                              >
+                                <div
+                                  v-for="pack in replyVisiblePacks"
+                                  :key="pack.userEmojiId"
+                                  class="mc-emoji-pack-bar-item"
+                                >
+                                  <button
+                                    type="button"
+                                    class="mc-emoji-pack-cover"
+                                    :class="{ 'is-active': Number(replySelectedPack?.shopId) === Number(pack.shopId) }"
+                                    :title="pack.name"
+                                    @click="selectReplyPack(pack)"
+                                  >
+                                    <img :src="pack.coverUrl || pack.imageUrls?.[0]" alt="">
+                                  </button>
+                                  <transition name="mc-pack-name">
+                                    <span
+                                      v-if="Number(replySelectedPack?.shopId) === Number(pack.shopId)"
+                                      :key="pack.shopId"
+                                      class="mc-emoji-pack-name"
+                                    >{{ pack.name }}</span>
+                                  </transition>
+                                </div>
+                              </div>
+                              <button
+                                v-if="replyPackBarCanScrollRight"
+                                type="button"
+                                class="mc-emoji-pack-more"
+                                aria-label="向右查看更多"
+                                @click="scrollReplyPackBarRight"
+                              >
+                                <el-icon><ArrowRight /></el-icon>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </el-popover>
+                      <button
+                        type="button"
+                        class="comment-send-btn"
+                        :class="{ 'is-disabled': !canSubmitReply }"
+                        aria-label="发送"
+                        :disabled="!canSubmitReply"
+                        @click="submitReply"
+                      >
+                        <img
+                          :src="sendIconUrl"
+                          alt=""
+                          class="detail-plain-svg detail-plain-svg--send"
+                        />
+                      </button>
+                    </div>
                   </template>
                 </el-input>
               </div>
+              <input
+                ref="replyImageInput"
+                type="file"
+                accept="image/jpeg,image/png,image/gif"
+                multiple
+                class="sr-only"
+                @change="onReplyImageFileChange"
+              >
               <div class="action-btns action-btns-row">
                 <el-button class="action-item" :class="{ active: isLiked }" @click="handleLike">
                   <el-icon :size="24">
@@ -427,12 +569,17 @@ defineOptions({ name: 'ArticleDetail' })
 
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
+import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
+import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
 import { useArticleDetail } from '@scripts/views/ArticleDetail'
 
 const {
+  ArrowLeft,
+  ArrowRight,
   ChatDotRound,
   Close,
   CollectionTag,
+  Picture,
   PictureFilled,
   Share,
   ArticleDetailVideo,
@@ -453,6 +600,8 @@ const {
   isVideoArticle,
   replayDetailVideo,
   author,
+  addReplyShopEmoji,
+  canSubmitReply,
   clearReplyTarget,
   closeDetailDialog,
   confirmFavorite,
@@ -464,6 +613,8 @@ const {
   isFollowingAuthor,
   toggleFollowAuthor,
   emptyCommentIconUrl,
+  emojiPackIconUrl,
+  emojiShopStore,
   fetchLikers,
   galleryStripFadeLeft,
   galleryStripFadeRight,
@@ -491,6 +642,10 @@ const {
   loadingLikers,
   loadFavoriteFolders,
   onGalleryStripScroll,
+  onReplyEmojiPopoverShow,
+  onReplyImageFileChange,
+  onReplyPackBarScroll,
+  openCommentShopDetail,
   ownerAuditNotice,
   renderedContent,
   renderCommentHtml,
@@ -498,16 +653,32 @@ const {
   sendIconUrl,
   replyContent,
   replyCountDisplay,
+  replyEmojiPanelOpen,
+  replyImageInput,
+  replyPackBarCanScrollLeft,
+  replyPackBarCanScrollRight,
+  replyPackBarRef,
+  replyPendingEmojis,
+  replyPendingImages,
   replyPlaceholder,
+  replySelectedPack,
   replyTarget,
+  replyVisiblePacks,
+  removePendingEmoji,
+  removePendingImage,
+  scrollReplyPackBarLeft,
+  scrollReplyPackBarRight,
+  selectReplyPack,
   selectedFolderId,
   setActiveGalleryIndex,
   showLikersDialog,
   startReplyToFloor,
   startReplyToSub,
+  subReplyRefreshTokens,
   submitReply,
   toggleReplyLike,
   toggleFavorite,
+  triggerReplyImagePick,
   formatForumDateTimeShanghai,
 } = useArticleDetail()
 </script>

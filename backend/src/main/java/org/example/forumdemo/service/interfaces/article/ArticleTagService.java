@@ -1,5 +1,6 @@
 package org.example.forumdemo.service.interfaces.article;
 
+import org.example.forumdemo.entity.vo.article.ArticleTagFeedbackVO;
 import org.example.forumdemo.entity.vo.article.ArticleTagVO;
 
 import java.util.List;
@@ -16,5 +17,5 @@ public interface ArticleTagService {
 
     List<ArticleTagVO> suggestTags(Long boardId, String title, String contentSnippet);
 
-    Long submitTagFeedback(Long userId, Long boardId, String proposedName);
+    ArticleTagFeedbackVO submitTagFeedback(Long userId, Long boardId, String proposedName);
 }

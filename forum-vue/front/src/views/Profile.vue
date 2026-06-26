@@ -117,7 +117,7 @@
                   class="note-card animate-fade-up"
                   :body-style="{ padding: '0px' }"
                   shadow="hover"
-                  @click="$router.push(`/article/${item.id}`)"
+                  @click="openArticleFromNotes(item)"
                 >
                   <div class="note-cover" :style="coverStyle(item)">
                     <span v-if="!item.coverImg" class="cover-text">{{ item.title?.substring(0, 1) }}</span>
@@ -134,14 +134,17 @@
               </el-col>
             </el-row>
             <el-empty v-if="articles.length === 0" description="还没有发布过笔记哦" />
-            <div v-if="notesHasMore" class="profile-load-more-wrap">
-              <el-button
-                class="profile-load-more-btn"
-                :loading="notesLoadingMore"
-                @click="loadMoreNotes"
-              >
-                查看更多
-              </el-button>
+            <div v-if="notesTotalPages > 1" class="profile-pager">
+              <el-button size="small" @click="goNotesFirst">首页</el-button>
+              <el-button size="small" :disabled="notesPageNum <= 1" @click="goNotesPrev">上一页</el-button>
+              <el-input
+                v-model="notesPageInput"
+                size="small"
+                class="profile-pager-input"
+                @keyup.enter="jumpNotesPage"
+              />
+              <span class="profile-pager-sep">/ {{ notesTotalPages }}</span>
+              <el-button size="small" :disabled="notesPageNum >= notesTotalPages" @click="goNotesNext">下一页</el-button>
             </div>
           </div>
 
@@ -187,7 +190,7 @@
                   class="note-card note-card--outlined animate-fade-up"
                   :body-style="{ padding: '0px' }"
                   shadow="never"
-                  @click="$router.push(`/article/${item.article?.id || item.id}`)"
+                  @click="openArticleFromLiked(item)"
                 >
                   <div class="note-cover" :style="coverStyle(item.article || item)">
                     <span
@@ -207,14 +210,17 @@
               </el-col>
             </el-row>
             <el-empty v-if="likedArticles.length === 0" description="还没有点赞过帖子哦" />
-            <div v-if="isMe && likedHasMore" class="profile-load-more-wrap">
-              <el-button
-                class="profile-load-more-btn"
-                :loading="likedLoadingMore"
-                @click="loadMoreLiked"
-              >
-                查看更多
-              </el-button>
+            <div v-if="isMe && likedTotalPages > 1" class="profile-pager">
+              <el-button size="small" @click="goLikedFirst">首页</el-button>
+              <el-button size="small" :disabled="likedPageNum <= 1" @click="goLikedPrev">上一页</el-button>
+              <el-input
+                v-model="likedPageInput"
+                size="small"
+                class="profile-pager-input"
+                @keyup.enter="jumpLikedPage"
+              />
+              <span class="profile-pager-sep">/ {{ likedTotalPages }}</span>
+              <el-button size="small" :disabled="likedPageNum >= likedTotalPages" @click="goLikedNext">下一页</el-button>
             </div>
           </div>
         </div>
@@ -239,7 +245,31 @@
     >
       <template #header>
         <div class="profile-fav-dialog-head">
-          <div class="profile-fav-dialog-title">{{ favoriteDialogTitle }}</div>
+          <div class="profile-fav-dialog-title-wrap">
+            <template v-if="favoriteFolderRenaming && isMe">
+              <el-input
+                v-model="favoriteFolderRenameValue"
+                maxlength="25"
+                show-word-limit
+                size="small"
+                class="profile-fav-rename-input"
+                @keyup.enter="confirmFavoriteFolderRename"
+              />
+              <el-button size="small" type="primary" @click="confirmFavoriteFolderRename">保存</el-button>
+            </template>
+            <template v-else>
+              <span class="profile-fav-dialog-title">{{ favoriteDialogTitle }}</span>
+              <button
+                v-if="isMe"
+                type="button"
+                class="profile-fav-edit-btn"
+                aria-label="编辑收藏夹名称"
+                @click="startFavoriteFolderRename"
+              >
+                <el-icon><Edit /></el-icon>
+              </button>
+            </template>
+          </div>
           <div class="profile-fav-dialog-head-actions">
             <div v-if="isMe && favoriteDialogVisible" class="profile-fav-visibility">
               <span class="profile-fav-visibility-label">公开</span>
@@ -284,6 +314,24 @@
           </div>
         </div>
         <el-empty v-if="!favoriteDialogLoading && !favoriteDialogItems.length" description="暂无收藏帖子" />
+        <div v-if="favoriteDialogTotalPages > 1" class="profile-pager profile-pager--dialog">
+          <el-button size="small" @click="goFavoriteDialogFirst">首页</el-button>
+          <el-button size="small" :disabled="favoriteDialogPageNum <= 1" @click="goFavoriteDialogPrev">上一页</el-button>
+          <el-input
+            v-model="favoriteDialogPageInput"
+            size="small"
+            class="profile-pager-input"
+            @keyup.enter="jumpFavoriteDialogPage"
+          />
+          <span class="profile-pager-sep">/ {{ favoriteDialogTotalPages }}</span>
+          <el-button
+            size="small"
+            :disabled="favoriteDialogPageNum >= favoriteDialogTotalPages"
+            @click="goFavoriteDialogNext"
+          >
+            下一页
+          </el-button>
+        </div>
       </div>
     </el-dialog>
 
@@ -298,7 +346,7 @@
         <el-form-item label="名称">
           <el-input
             v-model="favoriteCreateForm.name"
-            maxlength="50"
+            maxlength="25"
             show-word-limit
             placeholder="输入收藏夹名称"
           />
@@ -322,6 +370,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { Edit } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import UserFollowListDialog from '@/components/user/UserFollowListDialog.vue'
@@ -342,7 +391,22 @@ const {
   avatarSrc,
   bgFileInput,
   bgStyle,
+  confirmFavoriteFolderRename,
   coverStyle,
+  favoriteDialogPageInput,
+  favoriteDialogPageNum,
+  favoriteDialogTotalPages,
+  favoriteFolderRenaming,
+  favoriteFolderRenameValue,
+  goFavoriteDialogFirst,
+  goFavoriteDialogNext,
+  goFavoriteDialogPrev,
+  goLikedFirst,
+  goLikedNext,
+  goLikedPrev,
+  goNotesFirst,
+  goNotesNext,
+  goNotesPrev,
   handleBgUpload,
   handleChat,
   toggleFollow,
@@ -351,10 +415,13 @@ const {
   followingCount,
   followerCount,
   isMe,
+  jumpFavoriteDialogPage,
+  jumpLikedPage,
+  jumpNotesPage,
   likedArticles,
-  likedHasMore,
-  likedLoadingMore,
-  loadMoreLiked,
+  likedPageInput,
+  likedPageNum,
+  likedTotalPages,
   favoriteCreateForm,
   favoriteCreateSaving,
   favoriteCreateVisible,
@@ -368,15 +435,18 @@ const {
   favoriteSnippet,
   favoriteVisibilitySaving,
   loadingFavorites,
-  loadMoreNotes,
-  notesHasMore,
-  notesLoadingMore,
   loading,
+  notesPageInput,
+  notesPageNum,
+  notesTotalPages,
   openArticleFromFavorite,
+  openArticleFromLiked,
+  openArticleFromNotes,
   openCreateFavoriteFolder,
   openFavoriteDialog,
   profileIpRegion,
   saveFavoriteFolder,
+  startFavoriteFolderRename,
   toggleFavoriteFolderPublic,
   total,
   triggerBgUpload,

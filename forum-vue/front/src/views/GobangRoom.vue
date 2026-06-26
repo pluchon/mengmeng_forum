@@ -116,7 +116,6 @@
             </template>
             <div v-if="isFinished" class="gobang-board-result">
               <strong>{{ winnerText }}</strong>
-              <span>{{ endReasonText(room.endReason) }}</span>
               <em>{{ finishCountdownText }}</em>
             </div>
           </div>
@@ -148,30 +147,19 @@
               </div>
               <div v-if="!chatMessages.length" class="gobang-chat-empty">暂无消息</div>
             </div>
-            <div class="gobang-emoji-strip">
-              <button
-                v-for="emoji in visibleEmojiImages"
-                :key="emoji.key"
-                type="button"
-                class="gobang-emoji-pack"
-                :title="emoji.name"
-                @click="sendEmoji(emoji.url)"
-              >
-                <img :src="emoji.url" alt="" />
-              </button>
-              <button v-if="hasMoreEmoji" type="button" class="gobang-emoji-more" title="更多表情" @click="emojiDialogVisible = true">
-                <el-icon><MoreFilled /></el-icon>
-              </button>
-            </div>
-            <div class="gobang-chat-input">
+            <div v-if="!isSpectator" class="gobang-chat-input">
               <el-input
                 v-model="chatText"
                 :disabled="!canChat"
                 maxlength="200"
                 placeholder="发送消息"
                 @keyup.enter="sendChat"
-              />
-              <el-button type="primary" :disabled="!canChat || !chatText.trim()" @click="sendChat">
+              >
+                <template #suffix>
+                  <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendEmoji" />
+                </template>
+              </el-input>
+              <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
                 发送
               </el-button>
             </div>
@@ -220,21 +208,6 @@
           :page-size="spectatorPageSize"
           :total="spectators.length"
         />
-      </div>
-    </el-dialog>
-
-    <el-dialog v-model="emojiDialogVisible" title="选择表情" width="520px" destroy-on-close>
-      <div class="gobang-emoji-dialog-grid">
-        <button
-          v-for="emoji in emojiImages"
-          :key="emoji.key"
-          type="button"
-          class="gobang-emoji-dialog-item"
-          :title="emoji.name"
-          @click="sendEmoji(emoji.url)"
-        >
-          <img :src="emoji.url" alt="" />
-        </button>
       </div>
     </el-dialog>
   </div>

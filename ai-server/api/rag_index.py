@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from flask import Response, jsonify, request
+from flask import jsonify
 
 from api import api
+from api.common import RouteResponse, ai_hub_auth_error, json_payload
 from rag.indexer import index_published_article
 from rag.search_service import clean_query, search_articles_by_vector, search_users_by_vector
 from rag.user_indexer import index_user_profile
@@ -15,29 +16,12 @@ from rag.user_indexer import index_user_profile
 logger = logging.getLogger(__name__)
 
 
-def _internal_auth_ok() -> bool:
-    from api.ai_hub import _internal_auth_ok as ok
-
-    return ok()
-
-
-def _internal_auth_error() -> tuple[Response, int] | None:
-    if _internal_auth_ok():
-        return None
-    return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
-
-
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
-
-
 @api.route("/rag/index-article", methods=["POST"])
-def rag_index_article():
-    auth_error = _internal_auth_error()
+def rag_index_article() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
     if auth_error:
         return auth_error
-    data = _json_payload()
+    data = json_payload()
     try:
         result = index_published_article(data)
     except Exception:
@@ -47,12 +31,12 @@ def rag_index_article():
 
 
 @api.route("/rag/article-vector-search", methods=["POST"])
-def rag_article_vector_search():
+def rag_article_vector_search() -> RouteResponse:
     """query 向量召回 + 可选 candidates 融合 rerank."""
-    auth_error = _internal_auth_error()
+    auth_error = ai_hub_auth_error()
     if auth_error:
         return auth_error
-    data = _json_payload()
+    data = json_payload()
     query = clean_query(data.get("query"))
     if not query:
         return jsonify({"code": 400, "results": [], "msg": "Missing query"}), 400
@@ -68,11 +52,11 @@ def rag_article_vector_search():
 
 
 @api.route("/rag/index-user", methods=["POST"])
-def rag_index_user():
-    auth_error = _internal_auth_error()
+def rag_index_user() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
     if auth_error:
         return auth_error
-    data = _json_payload()
+    data = json_payload()
     try:
         result = index_user_profile(data)
     except Exception:
@@ -82,11 +66,11 @@ def rag_index_user():
 
 
 @api.route("/rag/user-vector-search", methods=["POST"])
-def rag_user_vector_search():
-    auth_error = _internal_auth_error()
+def rag_user_vector_search() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
     if auth_error:
         return auth_error
-    data = _json_payload()
+    data = json_payload()
     query = clean_query(data.get("query"))
     if not query:
         return jsonify({"code": 400, "results": [], "msg": "Missing query"}), 400

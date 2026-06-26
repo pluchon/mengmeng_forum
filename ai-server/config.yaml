@@ -191,3 +191,11 @@ baidu_map:
 # Java BFF 调用 /api/v1/ai/* 时校验 X-Internal-Key；可与 mascot 共用 MASCOT_INTERNAL_KEY
 ai_hub:
   internal_key: ""
+
+# Java 论坛后端（看板娘站点帮助语料来源：公告中心已发布列表）
+forum:
+  base_url: "http://localhost:10086"
+  notice_list_path: "/notice/center/list"
+  request_timeout: 15
+  site_help_cache_ttl: 600
+  site_help_max_notice_chars: 4000

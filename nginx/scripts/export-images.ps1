@@ -51,7 +51,6 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $pkg "logs") | Out-Null
 
 Require-Path (Join-Path $nginxRoot "dist\user\index.html") "front dist index.html"
-Require-Path (Join-Path $nginxRoot "dist\admin\index.html") "admin dist index.html"
 Require-Path (Join-Path $nginxRoot "conf.d") "nginx conf.d"
 
 $userIndex = Join-Path $nginxRoot "dist\user\index.html"

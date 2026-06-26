@@ -62,18 +62,27 @@ def search_articles_by_vector(
 
 def search_users_by_vector(query: str) -> tuple[list[dict[str, Any]], str]:
     """用户向量召回."""
-    qvec = embed_query(query)
+    q = clean_query(query)
+    if not q:
+        return [], "empty query"
+
+    # 明显是找帖子/内容时，不召回无关用户（避免「帖子」搜出一批昵称向量近邻）
+    post_intent_tokens = ("帖子", "文章", "笔记", "图文", "视频", "动态", "tag", "标签")
+    if any(tok in q for tok in post_intent_tokens):
+        return [], "post-intent skip users"
+
+    qvec = embed_query(q)
     if not qvec:
         return [], "embedding unavailable"
 
     vector_hits = vector_search_users(
         qvec,
-        query_text=query,
+        query_text=q,
         top_k=int(_RAG.get("embedding_top_k", 80)),
     )
     if not vector_hits:
         return [], "no index hits"
 
-    min_vec = float(_RAG.get("vector_min_score_user", 0.22))
+    min_vec = float(_RAG.get("vector_min_score_user", 0.32))
     vector_hits = [h for h in vector_hits if float(h.get("score") or 0) >= min_vec]
     return vector_hits, "vector_only"

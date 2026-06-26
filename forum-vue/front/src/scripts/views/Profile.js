@@ -1,4 +1,4 @@
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onActivated, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Star, Camera, Plus, Lock, Unlock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
@@ -19,7 +19,9 @@ import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
 
-const PROFILE_PAGE_SIZE = 8
+const PROFILE_PAGE_SIZE = 12
+const FAVORITE_DIALOG_PAGE_SIZE = 10
+const PROFILE_RETURN_KEY = 'profile-return-state'
 
 export function useProfile() {
   const route = useRoute()
@@ -35,14 +37,14 @@ export function useProfile() {
   const activeTab = ref('notes')
   const total = ref(0)
   const notesPageNum = ref(1)
-  const notesHasMore = ref(false)
-  const notesLoadingMore = ref(false)
+  const notesTotal = ref(0)
+  const notesPageInput = ref('1')
 
   const bgFileInput = ref(null)
   const likedArticles = ref([])
   const likedPageNum = ref(1)
-  const likedHasMore = ref(false)
-  const likedLoadingMore = ref(false)
+  const likedTotal = ref(0)
+  const likedPageInput = ref('1')
 
   const favoriteFolders = ref([])
   const loadingFavorites = ref(false)
@@ -50,6 +52,11 @@ export function useProfile() {
   const favoriteDialogLoading = ref(false)
   const favoriteDialogTitle = ref('收藏')
   const favoriteDialogItems = ref([])
+  const favoriteDialogPageNum = ref(1)
+  const favoriteDialogTotal = ref(0)
+  const favoriteDialogPageInput = ref('1')
+  const favoriteFolderRenaming = ref(false)
+  const favoriteFolderRenameValue = ref('')
   const activeFavoriteFolder = ref(null)
   const favoriteFolderPublic = ref(1)
   const favoriteVisibilitySaving = ref(false)
@@ -71,42 +78,40 @@ export function useProfile() {
 
   watch(activeTab, (tab) => {
     if (tab === 'liked' && likedArticles.value.length === 0) {
-      loadLikedArticles(true)
+      loadLikedArticles(1)
     }
     if (tab === 'collect' && favoriteFolders.value.length === 0) {
       loadFavoriteFolders()
     }
   })
 
-  async function loadLikedArticles(reset = false) {
+  const notesTotalPages = computed(() =>
+    Math.max(1, Math.ceil((notesTotal.value || 0) / PROFILE_PAGE_SIZE)),
+  )
+
+  const likedTotalPages = computed(() =>
+    Math.max(1, Math.ceil((likedTotal.value || 0) / PROFILE_PAGE_SIZE)),
+  )
+
+  const favoriteDialogTotalPages = computed(() =>
+    Math.max(1, Math.ceil((favoriteDialogTotal.value || 0) / FAVORITE_DIALOG_PAGE_SIZE)),
+  )
+
+  async function loadLikedArticles(page = 1) {
     if (!isMe.value) return
-    if (reset) {
-      likedPageNum.value = 1
-      likedArticles.value = []
-    }
+    likedPageNum.value = page
+    likedPageInput.value = String(page)
     try {
       const res = await getMyLikeList({
         pageNum: likedPageNum.value,
         pageSize: PROFILE_PAGE_SIZE,
       })
       if (res.code === 0) {
-        const rows = res.data?.records || []
-        likedArticles.value = reset ? rows : [...likedArticles.value, ...rows]
-        likedHasMore.value = !!res.data?.hasNextPage
+        likedArticles.value = res.data?.records || []
+        likedTotal.value = Number(res.data?.total) || 0
       }
     } catch (e) {
       console.warn('加载点赞列表失败:', e)
-    }
-  }
-
-  async function loadMoreLiked() {
-    if (!likedHasMore.value || likedLoadingMore.value) return
-    likedLoadingMore.value = true
-    likedPageNum.value += 1
-    try {
-      await loadLikedArticles(false)
-    } finally {
-      likedLoadingMore.value = false
     }
   }
 
@@ -186,24 +191,25 @@ export function useProfile() {
     return String(targetId) === String(userStore.id)
   })
 
-  onMounted(() => {
-    loadProfile(true)
+  onMounted(async () => {
+    await loadProfile(1)
+    await tryRestoreProfileState()
   })
 
-  watch(() => route.params.id, () => {
-    loadProfile(true)
+  onActivated(async () => {
+    await tryRestoreProfileState()
   })
 
-  async function loadProfile(resetNotes = true) {
+  watch(() => route.params.id, async () => {
+    await loadProfile(1)
+    await tryRestoreProfileState()
+  })
+
+  async function loadProfile(page = 1) {
     loading.value = true
     const userId = route.params.id || userStore.id
-    if (resetNotes) {
-      notesPageNum.value = 1
-      articles.value = []
-      likedArticles.value = []
-      likedPageNum.value = 1
-      favoriteFolders.value = []
-    }
+    notesPageNum.value = page
+    notesPageInput.value = String(page)
     try {
       const res = await getArticleListWithUser({
         userId,
@@ -212,10 +218,9 @@ export function useProfile() {
       })
       if (res.code === 0) {
         userInfo.value = res.data.user
-        const rows = res.data.records || []
-        articles.value = resetNotes ? rows : [...articles.value, ...rows]
+        articles.value = res.data.records || []
         total.value = res.data.total || 0
-        notesHasMore.value = !!res.data.hasNextPage
+        notesTotal.value = Number(res.data.total) || 0
       }
       await loadFollowStats(userId)
     } catch (e) {
@@ -225,15 +230,40 @@ export function useProfile() {
     }
   }
 
-  async function loadMoreNotes() {
-    if (!notesHasMore.value || notesLoadingMore.value) return
-    notesLoadingMore.value = true
-    notesPageNum.value += 1
-    try {
-      await loadProfile(false)
-    } finally {
-      notesLoadingMore.value = false
-    }
+  function goNotesFirst() {
+    loadProfile(1)
+  }
+
+  function goNotesPrev() {
+    if (notesPageNum.value > 1) loadProfile(notesPageNum.value - 1)
+  }
+
+  function goNotesNext() {
+    if (notesPageNum.value < notesTotalPages.value) loadProfile(notesPageNum.value + 1)
+  }
+
+  function jumpNotesPage() {
+    const n = Number(notesPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadProfile(Math.min(notesTotalPages.value, Math.max(1, Math.floor(n))))
+  }
+
+  function goLikedFirst() {
+    loadLikedArticles(1)
+  }
+
+  function goLikedPrev() {
+    if (likedPageNum.value > 1) loadLikedArticles(likedPageNum.value - 1)
+  }
+
+  function goLikedNext() {
+    if (likedPageNum.value < likedTotalPages.value) loadLikedArticles(likedPageNum.value + 1)
+  }
+
+  function jumpLikedPage() {
+    const n = Number(likedPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadLikedArticles(Math.min(likedTotalPages.value, Math.max(1, Math.floor(n))))
   }
 
   async function openFavoriteDialog(folder) {
@@ -242,16 +272,120 @@ export function useProfile() {
     activeFavoriteFolder.value = folder
     favoriteFolderPublic.value = Number(folder.isPublic) === 1 ? 1 : 0
     favoriteDialogTitle.value = folder.name || '收藏'
+    favoriteFolderRenaming.value = false
     favoriteDialogVisible.value = true
+    await loadFavoriteDialogArticles(1)
+  }
+
+  async function loadFavoriteDialogArticles(page = 1) {
+    const fid = activeFavoriteFolder.value?.id
+    if (!fid) return
+    favoriteDialogPageNum.value = page
+    favoriteDialogPageInput.value = String(page)
     favoriteDialogLoading.value = true
-    favoriteDialogItems.value = []
     try {
-      const res = await getFavoriteFolderArticles(fid, { pageNum: 1, pageSize: 50 })
+      const res = await getFavoriteFolderArticles(fid, {
+        pageNum: favoriteDialogPageNum.value,
+        pageSize: FAVORITE_DIALOG_PAGE_SIZE,
+      })
       if (res.code === 0) {
         favoriteDialogItems.value = res.data?.records || []
+        favoriteDialogTotal.value = Number(res.data?.total) || 0
       }
     } finally {
       favoriteDialogLoading.value = false
+    }
+  }
+
+  function goFavoriteDialogFirst() {
+    loadFavoriteDialogArticles(1)
+  }
+
+  function goFavoriteDialogPrev() {
+    if (favoriteDialogPageNum.value > 1) loadFavoriteDialogArticles(favoriteDialogPageNum.value - 1)
+  }
+
+  function goFavoriteDialogNext() {
+    if (favoriteDialogPageNum.value < favoriteDialogTotalPages.value) {
+      loadFavoriteDialogArticles(favoriteDialogPageNum.value + 1)
+    }
+  }
+
+  function jumpFavoriteDialogPage() {
+    const n = Number(favoriteDialogPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadFavoriteDialogArticles(Math.min(favoriteDialogTotalPages.value, Math.max(1, Math.floor(n))))
+  }
+
+  function startFavoriteFolderRename() {
+    if (!isMe.value) return
+    favoriteFolderRenameValue.value = activeFavoriteFolder.value?.name || ''
+    favoriteFolderRenaming.value = true
+  }
+
+  async function confirmFavoriteFolderRename() {
+    const folder = activeFavoriteFolder.value
+    if (!folder?.id) return
+    const name = favoriteFolderRenameValue.value.trim().slice(0, 25)
+    if (!name) {
+      ElMessage.warning('请输入收藏夹名称')
+      return
+    }
+    const res = await updateFavoriteFolder({ folderId: folder.id, name })
+    if (res.code === 0) {
+      folder.name = name
+      favoriteDialogTitle.value = name
+      const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
+      if (idx >= 0) favoriteFolders.value[idx].name = name
+      favoriteFolderRenaming.value = false
+      ElMessage.success('已更新名称')
+    } else {
+      ElMessage.error(res.message || '更新失败')
+    }
+  }
+
+  function saveProfileReturnState(extra = {}) {
+    const state = {
+      tab: activeTab.value,
+      profileUserId: route.params.id || userStore.id,
+      scrollY: window.scrollY,
+      ...extra,
+    }
+    sessionStorage.setItem(PROFILE_RETURN_KEY, JSON.stringify(state))
+  }
+
+  async function tryRestoreProfileState() {
+    const raw = sessionStorage.getItem(PROFILE_RETURN_KEY)
+    if (!raw) return
+    let state
+    try {
+      state = JSON.parse(raw)
+    } catch {
+      sessionStorage.removeItem(PROFILE_RETURN_KEY)
+      return
+    }
+    if (String(state.profileUserId) !== String(route.params.id || userStore.id)) return
+    sessionStorage.removeItem(PROFILE_RETURN_KEY)
+    if (state.tab) activeTab.value = state.tab
+    if (state.tab === 'notes' && state.page) {
+      await loadProfile(Number(state.page) || 1)
+    }
+    if (state.tab === 'liked' && state.page) {
+      await loadLikedArticles(Number(state.page) || 1)
+    }
+    if (state.tab === 'collect' && state.folderId) {
+      if (!favoriteFolders.value.length) await loadFavoriteFolders()
+      const folder = favoriteFolders.value.find((f) => Number(f.id) === Number(state.folderId))
+      if (folder) {
+        activeFavoriteFolder.value = folder
+        favoriteDialogTitle.value = folder.name || '收藏'
+        favoriteDialogVisible.value = true
+        await loadFavoriteDialogArticles(Number(state.page) || 1)
+      }
+    }
+    await nextTick()
+    if (Number.isFinite(state.scrollY)) {
+      window.scrollTo({ top: Math.max(0, state.scrollY), behavior: 'auto' })
     }
   }
 
@@ -300,7 +434,27 @@ export function useProfile() {
 
   function openArticleFromFavorite(row) {
     const id = row?.article?.id
-    if (id) router.push(`/article/${id}`)
+    if (!id) return
+    saveProfileReturnState({
+      tab: 'collect',
+      folderId: activeFavoriteFolder.value?.id,
+      page: favoriteDialogPageNum.value,
+    })
+    router.push({ path: `/article/${id}`, query: { from: 'profile' } })
+  }
+
+  function openArticleFromNotes(item) {
+    const id = item?.article?.id || item?.id
+    if (!id) return
+    saveProfileReturnState({ tab: 'notes', page: notesPageNum.value })
+    router.push({ path: `/article/${id}`, query: { from: 'profile' } })
+  }
+
+  function openArticleFromLiked(item) {
+    const id = item?.article?.id || item?.id
+    if (!id) return
+    saveProfileReturnState({ tab: 'liked', page: likedPageNum.value })
+    router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
   function coverStyle(article) {
@@ -419,7 +573,22 @@ export function useProfile() {
     avatarSrc,
     bgFileInput,
     bgStyle,
+    confirmFavoriteFolderRename,
     coverStyle,
+    favoriteDialogPageInput,
+    favoriteDialogPageNum,
+    favoriteDialogTotalPages,
+    favoriteFolderRenaming,
+    favoriteFolderRenameValue,
+    goFavoriteDialogFirst,
+    goFavoriteDialogNext,
+    goFavoriteDialogPrev,
+    goLikedFirst,
+    goLikedNext,
+    goLikedPrev,
+    goNotesFirst,
+    goNotesNext,
+    goNotesPrev,
     handleBgUpload,
     handleChat,
     toggleFollow,
@@ -428,10 +597,14 @@ export function useProfile() {
     followSaving,
     followingCount,
     followerCount,
+    jumpFavoriteDialogPage,
+    jumpLikedPage,
+    jumpNotesPage,
     likedArticles,
-    likedHasMore,
-    likedLoadingMore,
-    loadMoreLiked,
+    likedPageInput,
+    likedPageNum,
+    likedTotalPages,
+    loadLikedArticles,
     favoriteCreateForm,
     favoriteCreateSaving,
     favoriteCreateVisible,
@@ -445,15 +618,19 @@ export function useProfile() {
     favoriteSnippet,
     favoriteVisibilitySaving,
     loadFavoriteFolders,
-    loadMoreNotes,
     loadingFavorites,
-    notesHasMore,
-    notesLoadingMore,
+    loading,
+  notesPageInput,
+    notesPageNum,
+    notesTotalPages,
     openArticleFromFavorite,
+    openArticleFromLiked,
+    openArticleFromNotes,
     openCreateFavoriteFolder,
     openFavoriteDialog,
     profileIpRegion,
     saveFavoriteFolder,
+    startFavoriteFolderRename,
     toggleFavoriteFolderPublic,
     loading,
     total,

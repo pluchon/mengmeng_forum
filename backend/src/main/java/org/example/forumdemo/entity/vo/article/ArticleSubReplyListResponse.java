@@ -19,4 +19,5 @@ public class ArticleSubReplyListResponse {
     private String replyUserNickname;
     // 当前登录用户是否已点赞
     private Boolean liked;
+    private java.util.List<ArticleReplyMediaVO> mediaList;
 }

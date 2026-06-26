@@ -8,6 +8,7 @@ import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.mapper.ArticleMapper;
+import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -65,9 +66,10 @@ public class MascotArticleRagHelper {
         Set<Long> exclude = toExcludeSet(excludeArticleIds);
         try {
             // 1) 优先全库向量召回（Redis + qwen3-vl-embedding）
-            List<Map<String, Object>> vectorRanked = aiHubService.ragArticleVectorRanked(query, List.of());
+            List<RagArticleVectorHitVO> vectorRanked = aiHubService.ragArticleVectorRanked(query, List.of());
             if (!vectorRanked.isEmpty()) {
-                List<Map<String, Object>> fromVector = enrichTitles(query, vectorRanked, exclude);
+                List<Map<String, Object>> rankedMaps = toRankedMaps(vectorRanked);
+                List<Map<String, Object>> fromVector = enrichTitles(query, rankedMaps, exclude);
                 if (!fromVector.isEmpty()) {
                     return fromVector;
                 }
@@ -243,7 +245,7 @@ public class MascotArticleRagHelper {
 
     private List<Map<String, Object>> fallbackVectorRank(
             String query, List<Map<String, Object>> payload, Set<Long> exclude) {
-        List<Map<String, Object>> ranked = aiHubService.ragArticleVectorRanked(query, payload);
+        List<Map<String, Object>> ranked = toRankedMaps(aiHubService.ragArticleVectorRanked(query, payload));
         List<Map<String, Object>> candidates = new ArrayList<>();
         for (Map<String, Object> row : ranked) {
             double score = row.get("score") instanceof Number n ? n.doubleValue() : 0.0;
@@ -332,5 +334,22 @@ public class MascotArticleRagHelper {
             sb.append("正文:\n").append(body).append('\n');
         }
         return sb.toString().trim();
+    }
+
+    private static List<Map<String, Object>> toRankedMaps(List<RagArticleVectorHitVO> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Map<String, Object>> ranked = new ArrayList<>(hits.size());
+        for (RagArticleVectorHitVO hit : hits) {
+            if (hit.getArticleId() == null) {
+                continue;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("articleId", hit.getArticleId());
+            row.put("score", hit.getScore() != null ? hit.getScore() : 0.0);
+            ranked.add(row);
+        }
+        return ranked;
     }
 }

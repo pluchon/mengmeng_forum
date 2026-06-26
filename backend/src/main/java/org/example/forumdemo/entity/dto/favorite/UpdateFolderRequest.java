@@ -13,7 +13,7 @@ public class UpdateFolderRequest {
     @Schema(description = "收藏夹ID", example = "1")
     private Long folderId;
 
-    @Size(max = 50, message = "收藏夹名称不能超过 50 字")
+    @Size(max = 25, message = "收藏夹名称不能超过 25 字")
     @Schema(description = "新名称(留空则不改名)", example = "技术干货")
     private String name;
 

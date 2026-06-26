@@ -12,6 +12,7 @@ import org.example.forumdemo.entity.db.Board;
 import org.example.forumdemo.entity.db.ForumArticleTag;
 import org.example.forumdemo.entity.db.ForumArticleTagLink;
 import org.example.forumdemo.entity.db.ForumArticleTagRequest;
+import org.example.forumdemo.entity.vo.article.ArticleTagFeedbackVO;
 import org.example.forumdemo.entity.vo.article.ArticleTagVO;
 import org.example.forumdemo.mapper.BoardMapper;
 import org.example.forumdemo.mapper.ForumArticleTagLinkMapper;
@@ -110,7 +111,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
             return List.of();
         }
         List<Long> ids = links.stream().map(ForumArticleTagLink::getTagId).toList();
-        List<ForumArticleTag> tags = tagMapper.selectBatchIds(ids);
+        List<ForumArticleTag> tags = tagMapper.selectByIds(ids);
         return dedupeVo(tags);
     }
 
@@ -121,6 +122,10 @@ public class ArticleTagServiceImpl implements ArticleTagService {
 
     @Override
     public List<ArticleTagVO> suggestTags(Long boardId, String title, String contentSnippet) {
+        String snippet = contentSnippet;
+        if (snippet != null && snippet.length() > 200) {
+            snippet = snippet.substring(0, 200);
+        }
         List<ArticleTagVO> pool = listForBoard(boardId);
         if (pool.isEmpty()) {
             return List.of();
@@ -147,7 +152,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long submitTagFeedback(Long userId, Long boardId, String proposedName) {
+    public ArticleTagFeedbackVO submitTagFeedback(Long userId, Long boardId, String proposedName) {
         String name = normalizeTagName(proposedName);
         if (name == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "标签名需 2～12 字"));
@@ -202,7 +207,14 @@ public class ArticleTagServiceImpl implements ArticleTagService {
                 tag.getId(),
                 null);
 
-        return tag.getId();
+        return toTagFeedbackVO(tag.getId());
+    }
+
+    private static ArticleTagFeedbackVO toTagFeedbackVO(Long tagId) {
+        ArticleTagFeedbackVO vo = new ArticleTagFeedbackVO();
+        vo.setTagId(tagId);
+        vo.setMessage("标签已通过审核，可在列表中选用");
+        return vo;
     }
 
     private Board requireActiveBoard(Long boardId) {

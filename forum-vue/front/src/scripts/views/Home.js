@@ -22,6 +22,9 @@ import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { shanghaiCalendarYmd } from '@/utils/datetime'
 import { blockIfMuted } from '@/utils/userMute'
+import { ensureLoggedIn } from '@/utils/loginPrompt'
+import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
+import { useMascotUiStore } from '@/stores/mascotUi'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
@@ -40,6 +43,8 @@ export function useHome() {
   const checkinSnapshotStore = useCheckinSnapshotStore()
   const messageStore = useMessageStore()
   const pointsWalletStore = usePointsWalletStore()
+  const messageCenterUi = useMessageCenterUiStore()
+  const mascotUi = useMascotUiStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
 
   const { streakDays, totalPoints, todaySigned, loaded: checkinLoaded } = storeToRefs(checkinSnapshotStore)
@@ -394,14 +399,69 @@ export function useHome() {
   function submitSearch() {
     const kw = searchQuery.value?.trim()
     if (!kw) return
-    const query = { keyword: kw }
-    if (aiSearchMode.value) query.ai = '1'
-    router.push({ path: '/search', query })
+    void (async () => {
+      if (!(await ensureLoggedIn('搜索需要登录'))) return
+      const query = { keyword: kw }
+      if (aiSearchMode.value) query.ai = '1'
+      router.push({ path: '/search', query })
+    })()
   }
 
   function goToCreative() {
-    if (blockIfMuted(userStore)) return
-    router.push('/creative')
+    void (async () => {
+      if (!(await ensureLoggedIn('创作中心需要登录'))) return
+      if (blockIfMuted(userStore)) return
+      router.push('/creative')
+    })()
+  }
+
+  function openMessageCenter() {
+    void (async () => {
+      if (!(await ensureLoggedIn('查看消息需要登录'))) return
+      messageCenterUi.open()
+    })()
+  }
+
+  function goSettings() {
+    void (async () => {
+      if (!(await ensureLoggedIn('设置需要登录'))) return
+      router.push('/settings')
+    })()
+  }
+
+  function goPoints() {
+    void (async () => {
+      if (!(await ensureLoggedIn('积分中心需要登录'))) return
+      router.push('/points')
+    })()
+  }
+
+  function goProfile() {
+    void (async () => {
+      if (!(await ensureLoggedIn('个人主页需要登录'))) return
+      router.push(`/profile/${userStore.id}`)
+    })()
+  }
+
+  function goCheckin() {
+    void (async () => {
+      if (!(await ensureLoggedIn('签到需要登录'))) return
+      router.push('/checkin')
+    })()
+  }
+
+  function goLottery() {
+    void (async () => {
+      if (!(await ensureLoggedIn('积分抽奖需要登录'))) return
+      router.push('/lottery')
+    })()
+  }
+
+  function toggleMascotPassthrough() {
+    void (async () => {
+      if (!(await ensureLoggedIn('该功能需要登录'))) return
+      mascotUi.togglePointerPassThrough()
+    })()
   }
 
   function showAnnouncement() {
@@ -457,13 +517,20 @@ export function useHome() {
     fetchCheckinSummary,
     fetchHotFeed,
     getRandomPastel,
+    goCheckin,
+    goLottery,
+    goPoints,
+    goProfile,
+    goSettings,
     goToCreative,
     handleLogout,
     hotFeedList,
     isHotFeed,
     loading,
+    mascotUi,
     menuActiveKey,
     msgUnread,
+    openMessageCenter,
     pageNum,
     pageSize,
     placeholderMinHeight,
@@ -479,6 +546,7 @@ export function useHome() {
     showCheckinHomeStrip,
     submitSearch,
     toggleAiSearchMode,
+    toggleMascotPassthrough,
     toggleSearchTargetMode,
     total,
     userSearchIconUrl,

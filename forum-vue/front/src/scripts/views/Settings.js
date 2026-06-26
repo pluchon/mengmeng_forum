@@ -148,8 +148,9 @@ export function useSettings(captchaDialogRef) {
         : await updatePasswordBySms(contact, pwdForm.code, pwdForm.newPassword, submitTicket)
 
     if (res.code === 0) {
-      ElMessage.success('密码修改成功')
+      ElMessage.success('密码修改成功，请重新登录')
       pwdDialogVisible.value = false
+      userStore.logout()
     }
   }
 

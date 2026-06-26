@@ -19,6 +19,8 @@ import org.example.forumdemo.entity.vo.search.SearchUserResponse;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
+import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.search.ArticleSearchIndexService;
 import org.example.forumdemo.service.interfaces.search.SearchService;
@@ -122,7 +124,7 @@ public class SearchServiceImpl implements SearchService {
         }
 
         if (rankedIds.isEmpty()) {
-            rankedIds = extractRankedIds(aiHubService.ragArticleVectorRanked(kw, Collections.emptyList()),
+            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(kw, Collections.emptyList()),
                     ARTICLE_AI_VECTOR_MIN_SCORE);
         }
 
@@ -185,7 +187,7 @@ public class SearchServiceImpl implements SearchService {
         }
 
         if (rankedIds.isEmpty()) {
-            rankedIds = extractRankedIds(aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
+            rankedIds = extractUserHitIds(aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
         }
 
         if (rankedIds.isEmpty()) {
@@ -205,6 +207,42 @@ public class SearchServiceImpl implements SearchService {
         PageResult<UserBriefVO> pageResult = new PageResult<>(
                 records, total, p, s, pages, toIdx < rankedIds.size());
         return new SearchUserResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
+    }
+
+    private List<Long> extractArticleHitIds(List<RagArticleVectorHitVO> ranked, double minScore) {
+        if (ranked == null || ranked.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> out = new ArrayList<>();
+        Set<Long> seen = new LinkedHashSet<>();
+        for (RagArticleVectorHitVO row : ranked) {
+            double score = row.getScore() != null ? row.getScore() : 0.0;
+            if (score < minScore || row.getArticleId() == null) {
+                continue;
+            }
+            if (seen.add(row.getArticleId())) {
+                out.add(row.getArticleId());
+            }
+        }
+        return out;
+    }
+
+    private List<Long> extractUserHitIds(List<RagUserVectorHitVO> ranked, double minScore) {
+        if (ranked == null || ranked.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> out = new ArrayList<>();
+        Set<Long> seen = new LinkedHashSet<>();
+        for (RagUserVectorHitVO row : ranked) {
+            double score = row.getScore() != null ? row.getScore() : 0.0;
+            if (score < minScore || row.getUserId() == null) {
+                continue;
+            }
+            if (seen.add(row.getUserId())) {
+                out.add(row.getUserId());
+            }
+        }
+        return out;
     }
 
     private List<Long> extractRankedIds(List<Map<String, Object>> ranked, double minScore) {

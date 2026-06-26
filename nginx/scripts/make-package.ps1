@@ -5,7 +5,6 @@
 param(
     [switch]$SkipDocker,
     [switch]$SkipFront,
-    [switch]$SkipAdmin,
     [switch]$SkipBackend
 )
 
@@ -23,7 +22,6 @@ Write-Host ""
 $buildArgs = @()
 if ($SkipDocker) { $buildArgs += "-SkipDocker" }
 if ($SkipFront) { $buildArgs += "-SkipFront" }
-if ($SkipAdmin) { $buildArgs += "-SkipAdmin" }
 if ($SkipBackend) { $buildArgs += "-SkipBackend" }
 
 & (Join-Path $scriptsDir "build-all.ps1") @buildArgs

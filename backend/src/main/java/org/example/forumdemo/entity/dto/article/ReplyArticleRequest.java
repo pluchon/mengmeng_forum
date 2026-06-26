@@ -13,4 +13,5 @@ public class ReplyArticleRequest {
     private Long articleId;//帖子ID
     private Long postUserId;//发送者ID
     private String content;//内容
+    private java.util.List<ArticleReplyMediaItemDTO> mediaList;
 }

@@ -10,9 +10,10 @@ import logging
 import re
 from typing import Any
 
-from flask import Response, jsonify, request, stream_with_context
+from flask import Response, jsonify, stream_with_context
 
 from api import api
+from api.common import RouteResponse, json_payload, mascot_auth_error
 from config import settings
 from graphs.mascot_graph import run_mascot_chat, stream_mascot_chat
 
@@ -25,12 +26,6 @@ _ALLOWED_TIERS = {"basic", "vip"}
 def _client_datetime_from_body(data: dict[str, Any]) -> str:
     raw = data.get("client_datetime") or data.get("clientDatetime") or ""
     return str(raw).strip()[:64]
-
-
-def _internal_auth_ok() -> bool:
-    from security.internal_auth import internal_auth_ok
-
-    return internal_auth_ok((settings.mascot.get("internal_key") or "").strip())
 
 
 def _sanitize_appearance(raw: Any) -> str:
@@ -63,14 +58,9 @@ def _clean_history(raw: Any, max_len: int) -> list[dict[str, str]]:
     return clean_history
 
 
-def _json_payload() -> dict[str, Any]:
-    data = request.get_json(silent=True) or {}
-    return data if isinstance(data, dict) else {}
-
-
 def _parse_mascot_payload(
     data: dict[str, Any],
-) -> tuple[dict[str, Any] | None, tuple[Response, int] | None]:
+) -> tuple[dict[str, Any] | None, RouteResponse | None]:
     message = str(data.get("message") or "").strip()
     if not message:
         return None, (jsonify({"code": 400, "msg": "message required"}), 400)
@@ -101,11 +91,12 @@ def _parse_mascot_payload(
 
 
 @api.route("/mascot/chat", methods=["POST"])
-def mascot_chat():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
+def mascot_chat() -> RouteResponse:
+    auth_error = mascot_auth_error()
+    if auth_error:
+        return auth_error
 
-    data = _json_payload()
+    data = json_payload()
     payload, error = _parse_mascot_payload(data)
     if error:
         return error
@@ -134,11 +125,12 @@ def mascot_chat():
 
 
 @api.route("/mascot/chat/stream", methods=["POST"])
-def mascot_chat_stream():
-    if not _internal_auth_ok():
-        return jsonify({"code": 403, "msg": "invalid X-Internal-Key"}), 403
+def mascot_chat_stream() -> RouteResponse:
+    auth_error = mascot_auth_error()
+    if auth_error:
+        return auth_error
 
-    data = _json_payload()
+    data = json_payload()
     payload, error = _parse_mascot_payload(data)
     if error:
         return error
