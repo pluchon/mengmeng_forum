@@ -1,4 +1,4 @@
-## 萌部落社区 v1.6
+## 萌部落社区 v1.7
 
 > 本项目出于个人兴趣爱好搭建；线上地址仅供学习交流。
 
@@ -35,6 +35,49 @@
 - 用户端：`https://www.nuonuoya.cn`
 
 > 前后端分离技术社区：发帖（图文 / 视频）、评论楼中楼、视频弹幕、私信、关注、收藏夹、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋、井字棋与俄罗斯方块（单人 + PK）。
+
+---
+
+## v1.7 更新摘要
+
+相对 **v1.6**，本版重点完成 **并发安全与幂等整改**（Phase 01~05），并补齐线上**增量发布**流程说明。详细设计与实现记录见仓库内 `.codex/concurrency-update/`（本地文档，不提交 Git）。
+
+```mermaid
+flowchart TB
+  subgraph v17[v1.7 并发整改版图]
+    W[写路径一致性<br/>点赞 / 积分 / VIP / 抽奖 / 关注]
+    D[派生数据<br/>热帖蓝绿榜 / 搜索 / RAG / 缓存失效]
+    A[AI 与游戏<br/>预记录计费 / 匹配建房幂等]
+    M[异步与观测<br/>MQ 去重 / Outbox / Micrometer]
+  end
+  v16[v1.6 基线] --> v17
+```
+
+| 维度 | v1.6 | v1.7（本版） |
+|------|------|----------------|
+| 写一致性 | 部分接口有竞态风险 | 点赞/评论/积分/抽奖/VIP/关注等幂等 + 条件更新 |
+| 热帖榜 | 单 ZSet，重算可能空榜 | **蓝绿双槽**切换 + 7 天窗口衰减 + DB 兜底 |
+| 帖子下线 | 副作用分散 | `TransactionHooks.afterCommit` 统一热榜/搜索/RAG |
+| AI 计费 | 事后写 usage_log | **`forum_ai_call_record` 预记录** + 流式断网规则 |
+| 游戏匹配 | 仅部分幂等 | **gobang / jinzi / tetris** 匹配建房 Redis 幂等键 |
+| MQ 私信 | 直接发 RabbitMQ | 事务后 **本地消息表** + 定时投递；消费 **Redis 去重** |
+| 分页 | offset + pageSize 上限 | 签到/积分流水新增 **游标分页** API |
+| 数据库 | 仅 `create.sql` | 新增 **`incremental_concurrency.sql`** 等增量脚本 |
+
+**后端核心（P0 / P1）**
+
+- **事务外副作用**：`TransactionHooks.afterCommit` — Redis、MQ、热帖、搜索/RAG 索引仅在 DB 提交成功后执行。
+- **票据与验证码**：`RedisAtomicValueConsumer` Lua 原子消费，防并发重复用码。
+- **热帖榜**：`HotArticleRedisOps` 蓝绿 key（`hot:articles:a|b` + active 指针），重算期间旧榜可读。
+- **AI 调用**：调用前 `PENDING` 预记录；成功/失败/停止/断网分状态结算；前端可传 `clientRequestId` 防重试重复扣费。
+- **收藏移动**：`folder_id` 条件更新，并发移动幂等。
+- **签到**：`GET /checkin/trend` 按月萌币趋势；`GET /checkin/log/cursor` 游标分页。
+
+**工程与发布**
+
+- **SQL**：全新环境用 `create.sql`；**已有线上库**用 `incremental_concurrency.sql` + `incremental_postgres_ai_session.sql`（可重复执行）。
+- **打包发布**：仍为本机 `make-package.ps1` → 上传整包 → 服务器 **`bash up.sh`**；增量发布**禁止** `reset-db.sh` / `down -v`。
+- **待办 backlog**：`.codex/todo/concurrency-backend-pending.md`、`concurrency-frontend-pending.md`。
 
 ---
 
@@ -450,18 +493,22 @@ flowchart LR
   J1 -->|无 B 连接| Skip[忽略]
 ```
 
-### 7) 热帖榜（Redis ZSet）
+### 7) 热帖榜（Redis ZSet 蓝绿切换）
 
-热帖榜用 Redis **ZSet**：member 为帖子 ID，score 为热度。点赞 / 浏览 / 回复 / 收藏等行为触发 `ZINCRBY`；删帖、驳回、下线时 `ZREM`。定时任务可从 DB 全量重算做兜底。
+热帖榜用 Redis **ZSet**：member 为帖子 ID，score 为热度。点赞 / 浏览 / 回复 / 收藏等行为通过 `ArticleHotRankingService.incrementScore` 更新；删帖、驳回、下线时在 **事务提交后** `ZREM` 并清理搜索/RAG。定时任务在**非活跃槽**重建完整榜单，再原子切换 `hot:articles:active` 指针，重算期间读侧始终命中旧槽，避免空榜。
 
 ```mermaid
 flowchart TD
-  E[用户行为: 浏览 / 点赞 / 回复 / 收藏] --> Z[Redis ZSet hot_rank]
-  Z --> I[ZINCRBY 加分]
-  D[删帖 / 审核驳回 / 下线] --> R[ZREM 移除]
-  T[定时兜底任务] --> Recalc[从 MySQL 重算热度]
-  Recalc --> Z
-  Z --> API[首页 / 热榜接口 ZREVRANGE]
+  E[用户行为: 浏览 / 点赞 / 回复 / 收藏] --> S[ArticleHotRankingService]
+  S --> ZA[ZSet 槽位 A 或 B]
+  D[删帖 / 审核驳回 / 下线] --> AC[afterCommit]
+  AC --> R[ZREM + 搜索/RAG 下线]
+  T[定时重算 03:00] --> INAC[写入非活跃槽]
+  INAC --> SW[切换 active 指针]
+  SW --> ZA
+  ZA --> API[首页 / 热榜 ZREVRANGE]
+  EMPTY{活跃槽为空?} --> API
+  EMPTY -->|是| DB[MySQL 兜底 TopN]
 ```
 
 ### 8) 智能搜索（快搜 + 语义增强）
@@ -510,6 +557,61 @@ flowchart TD
   S --> MQ[RabbitMQ 事件]
   S --> WS[WebSocket 推送]
 ```
+
+### 10) 并发写一致性与幂等（v1.7）
+
+核心原则：**MySQL 是唯一事实来源**；Redis、热帖榜、搜索/RAG、MQ 推送均为派生数据，且尽量在 **事务提交后** 更新。
+
+```mermaid
+flowchart TD
+  REQ[客户端请求] --> TX[Service 事务内写 DB]
+  TX -->|提交成功| HOOK[TransactionHooks.afterCommit]
+  TX -->|回滚| NOP[不更新 Redis / MQ / 索引]
+  HOOK --> R[Redis 热帖 / 点赞集]
+  HOOK --> MQ[MQ / Outbox 投递]
+  HOOK --> IDX[搜索 / RAG 下线]
+```
+
+**典型幂等模式**
+
+| 场景 | 手段 |
+|------|------|
+| 点赞 / 关注 | 唯一索引 + `DuplicateKeyException` |
+| 积分 / VIP / 抽奖 | `idempotency_key` 或 `requestId` + `FOR UPDATE` |
+| AI 计费 | `forum_ai_call_record` 预记录 + `clientRequestId` |
+| MQ 消费 | `MqEventDedupHelper` Redis `SET NX` |
+| 游戏匹配建房 | `GameMatchRoomHelper` 用户对 Redis 键 |
+| 验证码 / 票据 | `RedisAtomicValueConsumer` Lua 原子删 |
+
+```mermaid
+sequenceDiagram
+  participant FE as 前端
+  participant J as Java
+  participant DB as MySQL
+  participant R as Redis
+  participant Q as RabbitMQ
+
+  FE->>J: 写操作（可带 requestId）
+  J->>DB: 事务内 INSERT/UPDATE（条件/唯一约束）
+  alt 提交成功
+    J->>J: afterCommit 注册副作用
+    J-->>DB: COMMIT
+    J->>R: 更新派生缓存 / 热帖分
+    J->>Q: Outbox 或 MQ 通知
+  else 回滚
+    J-->>DB: ROLLBACK
+    Note over J,R: 不发送 MQ、不推 WebSocket
+  end
+```
+
+**SQL 迁移文件**（`backend/src/main/resources/sql/`，打包时复制到 `package/sql/`）
+
+| 文件 | 使用场景 |
+|------|----------|
+| `create.sql` | 全新 MySQL 删库重建（**线上增量禁用**） |
+| `incremental_concurrency.sql` | 已有 `forum_db` 增量（幂等键、AI 预记录、Outbox 等） |
+| `postgres_ai_session.sql` | Postgres 会话表全量（可重复执行） |
+| `incremental_postgres_ai_session.sql` | 已有 Postgres 库补字段/触发器 |
 
 ---
 
@@ -584,13 +686,23 @@ copy scripts\dev-secrets.ps1.example scripts\dev-secrets.ps1
 . .\scripts\load-dev-env.ps1
 ```
 
-真实 `.env`、`scripts/dev-secrets.ps1`、`ai-server/config.local.yaml` 不提交。数据库全量结构在 `backend/src/main/resources/sql/create.sql`，增量 SQL 放在 `backend/src/main/resources/sql/`。
+真实 `.env`、`scripts/dev-secrets.ps1`、`ai-server/config.local.yaml` 不提交。
+
+**数据库脚本**
+
+| 场景 | 命令 / 文件 |
+|------|-------------|
+| 本地空库初始化 | `docker compose.dev` 启动后执行 `create.sql` |
+| 已有库升级（对齐 v1.7） | `incremental_concurrency.sql`、`incremental_postgres_ai_session.sql` |
+| 切勿在线上 | `reset-db.sh` / `create.sql`（会 DROP 库） |
 
 ### 快速验收
 
 ```powershell
 cd backend
 mvn clean test
+# 并发相关（需本地 MySQL + Redis）
+mvn test -Dtest=Phase01RedisAtomicConsumeTest,Phase02ConcurrencyAcceptanceTest
 
 cd ..\forum-vue\front
 npm run build
@@ -600,33 +712,97 @@ npm run build
 
 ## 生产部署
 
-生产部署遵循“本机构建完整包，服务器只加载完整包”的原则，避免前端 `index.html` 与 `assets` 版本不一致。
+生产部署遵循「**本机构建完整包，服务器只加载完整包**」的原则，避免前端 `index.html` 与 `assets` 版本不一致。
+
+### 发布模式对比
 
 ```mermaid
-flowchart LR
-  Local[本地 make-package.ps1] --> Pack[nginx/package]
-  Pack --> Upload[上传整包到服务器]
-  Upload --> Env[确认 package/.env 与 ssl]
-  Env --> Up[bash up.sh]
-  Up --> Load[docker load 镜像]
-  Load --> Recreate[compose up --force-recreate]
-  Recreate --> Check[healthz / 前端资源校验]
+flowchart TB
+  subgraph first[首次部署 / 空库重建]
+    F1[make-package.ps1] --> F2[上传 package/]
+    F2 --> F3[配置 .env + ssl]
+    F3 --> F4[bash start.sh]
+    F4 --> F5[可选 reset-db.sh 初始化表]
+  end
+
+  subgraph incr[日常增量发布 — 推荐]
+    I1[make-package.ps1] --> I2[上传 package/ 覆盖]
+    I2 --> I3[执行增量 SQL]
+    I3 --> I4[bash up.sh]
+    I4 --> I5[healthz + verify-frontend-dist]
+  end
 ```
 
-### 日常更新
+| 步骤 | 首次部署 | 增量发布（已有数据） |
+|------|----------|----------------------|
+| 打包 | `.\scripts\make-package.ps1` | 同左 |
+| 上传 | 整包 `nginx/package/` → `~/package/` | 同左 |
+| 数据库 | `bash start.sh` 或 `reset-db.sh` + `create.sql` | **`incremental_*.sql`  only** |
+| 启停 | `bash start.sh` | **`bash up.sh`** |
+| 数据卷 | 新建 | **保留**（禁止 `down -v`） |
+
+### 增量发布流程（线上常规）
+
+```mermaid
+sequenceDiagram
+  participant Dev as 本机开发
+  participant Pkg as nginx/package
+  participant Srv as 服务器
+  participant DB as MySQL/Postgres
+  participant Docker as 容器栈
+
+  Dev->>Pkg: make-package.ps1
+  Dev->>Srv: 上传整包覆盖 ~/package
+  Srv->>DB: incremental_concurrency.sql
+  Srv->>DB: incremental_postgres_ai_session.sql
+  Srv->>Docker: bash up.sh
+  Note over Docker: docker load + force-recreate
+  Srv->>Srv: healthz + verify-frontend-dist.sh
+```
+
+**本机**
 
 ```powershell
 cd nginx
 .\scripts\make-package.ps1
 ```
 
-服务器：
+**服务器**（在 `~/package` 执行）
 
 ```bash
-cd ~/package
+# 1. 增量 SQL（v1.7 并发整改；可重复执行）
+docker exec -i forum-mysql mysql -uroot -p'<MYSQL_ROOT_PASSWORD>' forum_db \
+  < sql/incremental_concurrency.sql
+
+docker exec -i forum-postgres psql -U langgraph -d langgraph_db \
+  < sql/incremental_postgres_ai_session.sql
+
+# 2. 重建容器（保留数据卷）
 bash up.sh
+
+# 3. 验证
 curl -s http://127.0.0.1/healthz
 ./verify-frontend-dist.sh .
+docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
+```
+
+```mermaid
+flowchart LR
+  Local[本地 make-package.ps1] --> Pack[nginx/package]
+  Pack --> Upload[上传整包]
+  Upload --> SQL[增量 SQL]
+  SQL --> Up[bash up.sh]
+  Up --> Load[docker load 镜像]
+  Load --> Recreate[compose up --force-recreate]
+  Recreate --> Check[healthz / 前端资源校验]
+```
+
+### 日常更新（无 schema 变更时）
+
+若本次发布**仅改代码、不改表**，可跳过 SQL 步骤，直接：
+
+```bash
+cd ~/package && bash up.sh
 ```
 
 ### 首次部署
@@ -636,9 +812,29 @@ cd ~/package
 cp .env.example .env
 nano .env
 bash start.sh
+# 需要重建表结构时（会清空数据）：
+# bash reset-db.sh
 ```
 
-`up.sh` 保留数据卷；`docker compose down -v` 会删除数据库数据，线上慎用。需要排查时优先执行 `bash collect-logs.sh` 收集日志包。
+### 增量发布禁止事项
+
+```mermaid
+flowchart TD
+  OK[bash up.sh] --> Safe[保留 MySQL/Redis 数据卷]
+  BAD1[bash reset-db.sh] --> X1[DROP + CREATE 全库]
+  BAD2[docker compose down -v] --> X2[删除数据卷]
+  BAD3[仅上传 dist 不传 images] --> X3[index.html 与 assets 错位]
+  BAD4[线上执行 create.sql] --> X4[删库重建]
+```
+
+| 禁止操作 | 后果 |
+|----------|------|
+| `docker compose down -v` | 删除 MySQL / Redis 等持久化数据 |
+| `bash reset-db.sh` / 线上 `create.sql` | 全库 DROP 重建 |
+| 服务器 `docker compose up --build` | 不 load 离线镜像，易 403 / 镜像不一致 |
+| 只替换单个 `assets/*.js` | `index.html` 引用版本错位 |
+
+`up.sh` 保留数据卷；需要排查时执行 `bash collect-logs.sh`。更多说明见打包内 `DEPLOY.txt`。
 
 ---
 
@@ -711,6 +907,14 @@ v1.6 起首页搜索、创作中心、私信、看板娘等交互应弹出「需
 
 验证失败（业务码 `1168`）须自动关闭弹窗，由用户下次手动触发。检查 `BehaviorCaptchaDialog.failAndClose` 与 `checkCaptcha` 的 `silentBizCodes` 配置。
 
+### 11) 增量发布后接口 500 / 缺表
+
+v1.7 起若后端报 `forum_ai_call_record`、`forum_outbox_message` 等表不存在，说明**未执行增量 SQL**。在 `~/package` 执行 `sql/incremental_concurrency.sql` 后 `docker compose restart backend-1`。切勿用 `reset-db.sh` 修表。
+
+### 12) AI 重试重复扣费
+
+看板娘 / 写作 / 生图请求应携带 **`clientRequestId`**（同一轮重试复用同一 UUID）。未传时预记录表不生效，极端重试仍可能重复计费。详见 `.codex/todo/concurrency-frontend-pending.md`。
+
 ---
 
 ## 仓库结构
@@ -718,16 +922,24 @@ v1.6 起首页搜索、创作中心、私信、看板娘等交互应弹出「需
 ```text
 luntan/
   backend/                 # Java 后端：API、WebSocket、积分、弹幕、关注、五子棋 / 井字棋 / 俄罗斯方块
+    src/main/resources/sql/
+      create.sql           # 全量建库（仅新环境）
+      incremental_concurrency.sql      # MySQL 增量（线上常规）
+      incremental_postgres_ai_session.sql
   ai-server/               # Python AI（审核 / 看板娘 / RAG）
   forum-vue/               # 用户端前端
   nginx/                   # Compose、Nginx、FFmpeg、打包脚本
     scripts/
       make-package.ps1     # 一键打包
       build-all.ps1        # 构建前后端与镜像
-      export-images.ps1    # 组装 package/
+      export-images.ps1    # 组装 package/（含 sql/）
       verify-package.ps1   # 打包自检
       server-up.sh         # → package/up.sh
+    package/               # 上传服务器的完整部署包（gitignore）
     ffmpeg/                # 视频压缩 / 审核抽帧
+  .codex/                  # 本地设计 / 待办文档（gitignore）
+    concurrency-update/    # 并发整改阶段说明与 IMPLEMENTATION.md
+    todo/                  # 前后端 backlog
   scripts/
     dev-secrets.ps1.example
     load-dev-env.ps1       # 本地加载密钥到当前 PowerShell 会话
