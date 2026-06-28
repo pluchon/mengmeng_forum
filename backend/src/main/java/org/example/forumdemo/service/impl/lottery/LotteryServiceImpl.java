@@ -6,8 +6,10 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.LotteryActivity;
 import org.example.forumdemo.entity.db.LotteryDrawRecord;
+import org.example.forumdemo.entity.db.LotteryDrawRequest;
 import org.example.forumdemo.entity.db.LotteryPrizeMysteryItem;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.lottery.LotteryDrawDTO;
@@ -25,6 +27,7 @@ import org.example.forumdemo.mapper.LotteryActivityMapper;
 import org.example.forumdemo.mapper.LotteryActivityPrizeMapper;
 import org.example.forumdemo.mapper.LotteryDrawHourlyStatMapper;
 import org.example.forumdemo.mapper.LotteryDrawRecordMapper;
+import org.example.forumdemo.mapper.LotteryDrawRequestMapper;
 import org.example.forumdemo.mapper.LotteryPrizeMysteryItemMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.lottery.guard.LotteryDrawContext;
@@ -34,6 +37,7 @@ import org.example.forumdemo.service.interfaces.lottery.LotteryService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +48,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -64,6 +67,9 @@ public class LotteryServiceImpl implements LotteryService {
 
     @Autowired
     private LotteryDrawRecordMapper lotteryDrawRecordMapper;
+
+    @Autowired
+    private LotteryDrawRequestMapper lotteryDrawRequestMapper;
 
     @Autowired
     private LotteryDrawHourlyStatMapper lotteryDrawHourlyStatMapper;
@@ -167,7 +173,7 @@ public class LotteryServiceImpl implements LotteryService {
         }
         int amt = Constant.POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT;
         int balanceAfter = pointsService.addPoints(userId, amt, Constant.POINTS_SOURCE_LOTTERY_PAGE_SURPRISE,
-                null, "抽奖页彩蛋·点我看看");
+                null, "抽奖页彩蛋·点我看看", "lottery_surprise:" + userId);
         int rows = userMapper.markLotterySurpriseClaimed(userId);
         if (rows != 1) {
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
@@ -194,16 +200,44 @@ public class LotteryServiceImpl implements LotteryService {
     @Transactional(rollbackFor = Exception.class)
     public LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto) {
         checkLotteryDrawGuard(LotteryDrawContext.requestOnly(userId, dto));
+        if (dto.getRequestId() == null || dto.getRequestId().isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "requestId 不能为空"));
+        }
+        String requestId = dto.getRequestId().trim();
+        LotteryDrawRequest existingRequest = findDrawRequest(userId, requestId);
+        if (existingRequest != null) {
+            return rebuildDrawResult(userId, existingRequest);
+        }
+
         LotteryActivity activity = resolveActivity(dto.getActivityId());
         User lockedUser = userMapper.selectByIdForUpdate(userId);
         checkLotteryDrawGuard(LotteryDrawContext.resolved(userId, dto, activity, lockedUser));
         int times = dto.getTimes() == null ? 0 : dto.getTimes();
         int pity = lockedUser.getLotteryPityDraws() == null ? 0 : lockedUser.getLotteryPityDraws();
         int totalCost = activity.getCostPointsPerDraw() * times;
+        String batchKey = requestId;
+
+        LotteryDrawRequest drawRequest = new LotteryDrawRequest();
+        drawRequest.setUserId(userId);
+        drawRequest.setActivityId(activity.getId());
+        drawRequest.setRequestId(requestId);
+        drawRequest.setTimes(times);
+        drawRequest.setBatchKey(batchKey);
+        try {
+            lotteryDrawRequestMapper.insert(drawRequest);
+        } catch (DuplicateKeyException ex) {
+            LotteryDrawRequest raced = findDrawRequest(userId, requestId);
+            if (raced != null) {
+                return rebuildDrawResult(userId, raced);
+            }
+            throw ex;
+        }
+
         String costRemark = times == 1 ? "积分抽奖·单抽" : "积分抽奖·十连";
+        String costIdempotencyKey = "lottery_cost:" + userId + ":" + requestId;
         pointsService.deductPoints(userId, totalCost, Constant.POINTS_SOURCE_LOTTERY_COST,
-                activity.getId(), costRemark);
-        String batchKey = times > 1 ? UUID.randomUUID().toString().replace("-", "") : null;
+                activity.getId(), costRemark, costIdempotencyKey);
+
         List<LotteryDrawItemVO> results = new ArrayList<>(times);
         boolean tenHasRare = false;
         for (int i = 0; i < times; i++) {
@@ -223,8 +257,53 @@ public class LotteryServiceImpl implements LotteryService {
                 tenHasRare = true;
             }
         }
+
+        drawRequest.setPityAfter(pity);
+        lotteryDrawRequestMapper.updateById(drawRequest);
+
         int balanceAfter = pointsService.getWallet(userId).getBalance();
         return new LotteryDrawResultVO(balanceAfter, batchKey, results, pity);
+    }
+
+    private LotteryDrawRequest findDrawRequest(Long userId, String requestId) {
+        return lotteryDrawRequestMapper.selectOne(Wrappers.lambdaQuery(LotteryDrawRequest.class)
+                .eq(LotteryDrawRequest::getUserId, userId)
+                .eq(LotteryDrawRequest::getRequestId, requestId)
+                .ne(LotteryDrawRequest::getDeleteState, 1)
+                .last("LIMIT 1"));
+    }
+
+    private LotteryDrawResultVO rebuildDrawResult(Long userId, LotteryDrawRequest request) {
+        List<LotteryDrawRecord> records = lotteryDrawRecordMapper.selectByUserAndBatchKey(userId, request.getBatchKey());
+        List<LotteryDrawItemVO> items = new ArrayList<>(records.size());
+        for (LotteryDrawRecord rec : records) {
+            items.add(toDrawItemVO(rec));
+        }
+        int pity = request.getPityAfter() == null ? 0 : request.getPityAfter();
+        int balanceAfter = pointsService.getWallet(userId).getBalance();
+        return new LotteryDrawResultVO(balanceAfter, request.getBatchKey(), items, pity);
+    }
+
+    private LotteryDrawItemVO toDrawItemVO(LotteryDrawRecord rec) {
+        int grantPoints = rec.getGrantPoints() == null ? 0 : rec.getGrantPoints();
+        int grantVipDays = 0;
+        if (Objects.equals(rec.getMysteryItemType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
+            grantVipDays = rec.getMysteryItemValue() == null ? 0 : rec.getMysteryItemValue();
+        } else if (Objects.equals(rec.getPrizeType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
+            grantVipDays = rec.getPrizeValue() == null ? 0 : rec.getPrizeValue();
+        }
+        boolean jackpot = rec.getIsJackpot() != null && rec.getIsJackpot() == 1;
+        String rewardDetail = buildRewardDetail(rec.getMysteryItemType(), rec.getMysteryItemValue(),
+                grantPoints, grantVipDays, rec.getPrizeType(),
+                rec.getPrizeValue() == null ? 0 : rec.getPrizeValue());
+        return new LotteryDrawItemVO(
+                rec.getId(),
+                rec.getPrizeName(),
+                rec.getPrizeType(),
+                rec.getPrizeValue(),
+                grantPoints,
+                jackpot,
+                rewardDetail);
     }
 
     private void checkLotteryDrawGuard(LotteryDrawContext context) {
@@ -367,11 +446,12 @@ public class LotteryServiceImpl implements LotteryService {
         lotteryDrawRecordMapper.insert(rec);
 
         ZonedDateTime hourBucket = ZonedDateTime.now(ZONE_SH).withMinute(0).withSecond(0).withNano(0);
-        lotteryDrawHourlyStatMapper.incrementCount(activityId, Timestamp.from(hourBucket.toInstant()));
+        Timestamp statHour = Timestamp.from(hourBucket.toInstant());
+        TransactionHooks.afterCommit(() -> lotteryDrawHourlyStatMapper.incrementCount(activityId, statHour));
 
         if (grantPoints > 0) {
             pointsService.addPoints(userId, grantPoints, Constant.POINTS_SOURCE_LOTTERY_WIN,
-                    rec.getId(), "积分抽奖·中奖");
+                    rec.getId(), "积分抽奖·中奖", "lottery_win:" + userId + ":" + rec.getId());
         }
         if (grantVipDays > 0) {
             vipSubscribeService.grantTrialVipDays(userId, grantVipDays);

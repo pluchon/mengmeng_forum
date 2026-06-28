@@ -43,8 +43,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Override
     public void resetByMail(String email, String code, String newPassword) {
         assertParamsValid(email, code, newPassword);
-        String cachedCode = mailCodeService.getForReset(email);
-        if (!StringUtils.hasText(cachedCode) || !cachedCode.equals(code)) {
+        if (!mailCodeService.consumeResetCode(email, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
         }
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
@@ -53,15 +52,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
         updatePassword(user.getId(), newPassword);
-        stringRedisTemplate.delete(Constant.REDIS_KEY_MAIL_VERIFY_RESET + email);
-        log.info("用户 {} 通过邮箱 {} 重置密码成功", user.getId(), email);
+        log.info("用户 {} 通过邮箱重置密码成功", user.getId());
     }
 
     @Override
     public void resetBySms(String phoneNumber, String code, String newPassword) {
         assertParamsValid(phoneNumber, code, newPassword);
-        String cachedCode = smsCodeService.getForReset(phoneNumber);
-        if (!StringUtils.hasText(cachedCode) || !cachedCode.equals(code)) {
+        if (!smsCodeService.consumeResetCode(phoneNumber, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
         }
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
@@ -70,8 +67,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
         updatePassword(user.getId(), newPassword);
-        stringRedisTemplate.delete(Constant.REDIS_KEY_SMS_VERIFY_RESET + phoneNumber);
-        log.info("用户 {} 通过手机号 {} 重置密码成功", user.getId(), phoneNumber);
+        log.info("用户 {} 通过手机号重置密码成功", user.getId());
     }
 
     @Override

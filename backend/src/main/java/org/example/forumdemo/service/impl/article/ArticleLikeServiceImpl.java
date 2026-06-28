@@ -9,6 +9,7 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleLike;
 import org.example.forumdemo.entity.db.User;
@@ -21,6 +22,7 @@ import org.example.forumdemo.service.interfaces.article.ArticleLikeService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,9 +52,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     @Autowired
     private UserService userService;
 
-    // ============================================================
-    // 点赞 / 取消
-    // ============================================================
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void likeArticle(Long articleId, Long userId) {
@@ -60,19 +59,20 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         articleService.selectArticleByArticleId(articleId);
-        ArticleLike existing = articleLikeMapper.selectOne(new LambdaQueryWrapper<ArticleLike>()
-                .eq(ArticleLike::getArticleId, articleId).eq(ArticleLike::getUserId, userId));
-        if (existing != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
-        }
         ArticleLike newLike = new ArticleLike();
         newLike.setArticleId(articleId);
         newLike.setUserId(userId);
-        articleLikeMapper.insert(newLike);
+        try {
+            articleLikeMapper.insert(newLike);
+        } catch (DuplicateKeyException ex) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
+        }
         updateLikeCount(articleId, 1);
-        syncLikeCacheOnLike(articleId, userId);
-        // 维护热帖榜分数：likeCount +1
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), 1D);
+        TransactionHooks.afterCommit(() -> {
+            syncLikeCacheOnLike(articleId, userId);
+            stringRedisTemplate.opsForZSet().incrementScore(
+                    Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), 1D);
+        });
         log.info("用户 {} 点赞帖子 {}", userId, articleId);
     }
 
@@ -82,30 +82,34 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         if (articleId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        ArticleLike existing = articleLikeMapper.selectOne(new LambdaQueryWrapper<ArticleLike>()
-                .eq(ArticleLike::getArticleId, articleId).eq(ArticleLike::getUserId, userId));
-        if (existing == null) {
+        int deleted = articleLikeMapper.delete(new LambdaQueryWrapper<ArticleLike>()
+                .eq(ArticleLike::getArticleId, articleId)
+                .eq(ArticleLike::getUserId, userId));
+        if (deleted <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED, "未点赞，无法取消"));
         }
-        articleLikeMapper.delete(new LambdaQueryWrapper<ArticleLike>()
-                .eq(ArticleLike::getArticleId, articleId).eq(ArticleLike::getUserId, userId));
         updateLikeCount(articleId, -1);
-        syncLikeCacheOnUnlike(articleId, userId);
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), -1D);
+        TransactionHooks.afterCommit(() -> {
+            syncLikeCacheOnUnlike(articleId, userId);
+            stringRedisTemplate.opsForZSet().incrementScore(
+                    Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), -1D);
+        });
         log.info("用户 {} 取消点赞帖子 {}", userId, articleId);
     }
 
-    /** 帖子点赞数 +1 / -1 */
+    /** 帖子点赞数 +1 / -1，扣减时不低于 0 */
     private void updateLikeCount(Long articleId, int delta) {
-        String sql = delta > 0 ? "like_count = like_count + 1" : "like_count = like_count - 1";
+        String sql = delta > 0 ? "like_count = like_count + 1" : "like_count = GREATEST(like_count - 1, 0)";
         int result = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
-                .eq(Article::getId, articleId).ne(Article::getDeleteState, 1).ne(Article::getState, 1).setSql(sql));
+                .eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, 1)
+                .ne(Article::getState, 1)
+                .setSql(sql));
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
     }
 
-    /** 点赞成功：同步用户点赞 Set + 帖子被点赞用户 Set */
     private void syncLikeCacheOnLike(Long articleId, Long userId) {
         String userLikesKey = Constant.REDIS_KEY_USER_LIKES + userId;
         stringRedisTemplate.opsForSet().add(userLikesKey, String.valueOf(articleId));
@@ -115,16 +119,11 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         stringRedisTemplate.expire(articleLikersKey, Constant.REDIS_TTL_ARTICLE_LIKERS, TimeUnit.SECONDS);
     }
 
-    /** 取消点赞：同步移除两个 Set 中的对应成员 */
     private void syncLikeCacheOnUnlike(Long articleId, Long userId) {
         stringRedisTemplate.opsForSet().remove(Constant.REDIS_KEY_USER_LIKES + userId, String.valueOf(articleId));
         stringRedisTemplate.opsForSet().remove(Constant.REDIS_KEY_ARTICLE_LIKERS + articleId, String.valueOf(userId));
     }
 
-    // ============================================================
-    // 我点赞过的帖子（分页）
-    // 走 DB 分页：article_like 与 article 联合按时间倒序，避免一次性把所有点赞拉到内存
-    // ============================================================
     @Override
     public PageResult<ArticleListByLikeResponse> queryArticleListForLikeWithPage(Long userId, Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
@@ -141,7 +140,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
                 result.getPages(), result.hasNext());
     }
 
-    /** 单条点赞 -> 列表项的装配；帖子已删除时返回 null（由调用方过滤） */
     private ArticleListByLikeResponse buildLikeResponse(ArticleLike like) {
         try {
             Article article = articleService.selectArticleByArticleId(like.getArticleId());
@@ -156,9 +154,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
     }
 
-    // ============================================================
-    // 谁点赞了我的帖子（仅作者本人）
-    // ============================================================
     @Override
     public List<User> queryWhoLikedArticle(Long articleId, Long loginUserId) {
         Article article = articleService.selectArticleByArticleId(articleId);
@@ -171,7 +166,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         if (cachedIds != null && !cachedIds.isEmpty()) {
             return loadUsersByIdStrings(cachedIds, cacheKey);
         }
-        // 缓存未命中 -> DB 回源 + 回填
         List<ArticleLike> likes = articleLikeMapper.selectList(new LambdaQueryWrapper<ArticleLike>()
                 .eq(ArticleLike::getArticleId, articleId));
         if (likes.isEmpty()) {
@@ -190,7 +184,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         return result;
     }
 
-    /** 缓存命中场景：把 userId 字符串集合还原为 User 对象，遇到无效用户顺手清理 */
     private List<User> loadUsersByIdStrings(Set<String> userIdStrings, String cacheKey) {
         List<User> result = new ArrayList<>();
         for (String idStr : userIdStrings) {
@@ -204,10 +197,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         return result;
     }
 
-    // ============================================================
-    // 最新 N 位点赞用户（仅作者本人）
-    // 直接走 DB 排序，缓存对"最新"敏感不太适合 Set
-    // ============================================================
     @Override
     public List<User> getLatestLikerUsers(Long articleId, Long loginUserId, Integer count) {
         Article article = articleService.selectArticleByArticleId(articleId);
@@ -216,8 +205,8 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
         List<ArticleLike> latest = articleLikeMapper.selectPage(new Page<>(1, count, false),
                 new LambdaQueryWrapper<ArticleLike>()
-                .eq(ArticleLike::getArticleId, articleId)
-                .orderByDesc(ArticleLike::getCreateTime)).getRecords();
+                        .eq(ArticleLike::getArticleId, articleId)
+                        .orderByDesc(ArticleLike::getCreateTime)).getRecords();
         List<User> users = new ArrayList<>();
         for (ArticleLike like : latest) {
             try {

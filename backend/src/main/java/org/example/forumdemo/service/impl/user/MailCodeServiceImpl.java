@@ -8,6 +8,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CaptchaUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.MailUtil;
+import org.example.forumdemo.common.utils.RedisAtomicValueConsumer;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.entity.db.User;
@@ -100,13 +101,14 @@ public class MailCodeServiceImpl implements MailCodeService {
 
     @Override
     public User loginByMail(String email, String code) {
-        assertCodeValid(email, code);
+        if (!consumeVerificationCode(email, code)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
+        }
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getEmailHash, PiiUtils.hmac(email)).ne(User::getDeleteState, 1));
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
-        stringRedisTemplate.delete(Constant.REDIS_KEY_MAIL_VERIFY + email);
         user.setToken(authTokenService.issueToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
@@ -115,7 +117,9 @@ public class MailCodeServiceImpl implements MailCodeService {
 
     @Override
     public void verifyAndBind(String email, String code, Long userId) {
-        assertCodeValid(email, code);
+        if (!consumeVerificationCode(email, code)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
+        }
         String emailHash = PiiUtils.hmac(email);
         User existing = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getEmailHash, emailHash).ne(User::getDeleteState, 1));
@@ -125,14 +129,23 @@ public class MailCodeServiceImpl implements MailCodeService {
         userMapper.update(null, new LambdaUpdateWrapper<User>().eq(User::getId, userId)
                 .set(User::getEmail, PiiUtils.encrypt(email)).set(User::getEmailHash, emailHash));
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
-        stringRedisTemplate.delete(Constant.REDIS_KEY_MAIL_VERIFY + email);
     }
 
-    /** 校验验证码，不匹配则抛异常，验证逻辑唯一入口 */
-    private void assertCodeValid(String email, String code) {
-        String cachedCode = stringRedisTemplate.opsForValue().get(Constant.REDIS_KEY_MAIL_VERIFY + email);
-        if (cachedCode == null || !cachedCode.equals(code)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
+    @Override
+    public boolean consumeVerificationCode(String email, String code) {
+        if (!RegexUtil.checkMail(email) || code == null || code.isBlank()) {
+            return false;
         }
+        return RedisAtomicValueConsumer.consumeIfMatch(
+                stringRedisTemplate, Constant.REDIS_KEY_MAIL_VERIFY + email, code);
+    }
+
+    @Override
+    public boolean consumeResetCode(String email, String code) {
+        if (!RegexUtil.checkMail(email) || code == null || code.isBlank()) {
+            return false;
+        }
+        return RedisAtomicValueConsumer.consumeIfMatch(
+                stringRedisTemplate, Constant.REDIS_KEY_MAIL_VERIFY_RESET + email, code);
     }
 }

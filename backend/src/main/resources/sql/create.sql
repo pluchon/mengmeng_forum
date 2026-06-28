@@ -714,11 +714,13 @@ CREATE TABLE `points_log` (
                               `balance_after` int NOT NULL COMMENT '变动后余额快照',
                               `source_type` tinyint NOT NULL COMMENT '来源: 0签到基础 1连签奖励 2商城 3退款 4抽奖消耗 5抽奖奖励 6注册 7VIP订阅 8抽奖彩蛋 9AI陪伴 10AI生图 99管理员',
                               `related_id` bigint DEFAULT NULL COMMENT '关联业务行ID(可空)',
+                              `idempotency_key` varchar(128) DEFAULT NULL COMMENT '业务幂等键，一次性变动必填',
                               `remark` varchar(200) DEFAULT NULL COMMENT '人类可读描述',
                               `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
                               `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                               `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                               PRIMARY KEY (`id`),
+                              UNIQUE KEY `uk_points_user_idempotency` (`user_id`, `idempotency_key`),
                               INDEX `idx_user_time` (`user_id`, `create_time`),
                               INDEX `idx_user_source` (`user_id`, `source_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='积分钱包流水表';
@@ -1055,6 +1057,24 @@ CREATE TABLE `lottery_activity_prize` (
 -- 23. 抽奖记录表 (lottery_draw_record)
 -- mystery_item_*: 神秘大奖开奖后实际子项快照; 非神秘时为 NULL
 -- ----------------------------
+DROP TABLE IF EXISTS `lottery_draw_request`;
+CREATE TABLE `lottery_draw_request` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `activity_id` bigint NOT NULL COMMENT '活动ID',
+    `request_id` varchar(64) NOT NULL COMMENT '客户端幂等键',
+    `times` int NOT NULL COMMENT '抽奖次数 1或10',
+    `batch_key` varchar(40) DEFAULT NULL COMMENT '批次键，关联 lottery_draw_record.draw_batch_key',
+    `pity_after` int DEFAULT NULL COMMENT '批次结束后的硬保底计数',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_lottery_user_request` (`user_id`, `request_id`),
+    KEY `idx_lottery_request_batch` (`batch_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='抽奖请求幂等表';
+
+DROP TABLE IF EXISTS `lottery_draw_record`;
 CREATE TABLE `lottery_draw_record` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',

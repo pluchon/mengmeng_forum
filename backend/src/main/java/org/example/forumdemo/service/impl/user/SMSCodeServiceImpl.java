@@ -8,6 +8,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CaptchaUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.SMSUtils;
+import org.example.forumdemo.common.utils.RedisAtomicValueConsumer;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.entity.db.User;
@@ -103,13 +104,14 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Override
     public User loginBySms(String phoneNumber, String code) {
-        assertCodeValid(phoneNumber, code);
+        if (!consumeVerificationCode(phoneNumber, code)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
+        }
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getPhoneHash, PiiUtils.hmac(phoneNumber)).ne(User::getDeleteState, 1));
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
-        stringRedisTemplate.delete(Constant.REDIS_KEY_SMS_VERIFY + phoneNumber);
         user.setToken(authTokenService.issueToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
@@ -118,7 +120,9 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Override
     public void verifyAndBind(String phoneNumber, String code, Long userId) {
-        assertCodeValid(phoneNumber, code);
+        if (!consumeVerificationCode(phoneNumber, code)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
+        }
         String phoneHash = PiiUtils.hmac(phoneNumber);
         User existing = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getPhoneHash, phoneHash).ne(User::getDeleteState, 1));
@@ -128,7 +132,24 @@ public class SMSCodeServiceImpl implements SMSCodeService {
         userMapper.update(null, new LambdaUpdateWrapper<User>().eq(User::getId, userId)
                 .set(User::getPhoneNum, PiiUtils.encrypt(phoneNumber)).set(User::getPhoneHash, phoneHash));
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
-        stringRedisTemplate.delete(Constant.REDIS_KEY_SMS_VERIFY + phoneNumber);
+    }
+
+    @Override
+    public boolean consumeVerificationCode(String phoneNumber, String code) {
+        if (!RegexUtil.checkMobile(phoneNumber) || code == null || code.isBlank()) {
+            return false;
+        }
+        return RedisAtomicValueConsumer.consumeIfMatch(
+                stringRedisTemplate, Constant.REDIS_KEY_SMS_VERIFY + phoneNumber, code);
+    }
+
+    @Override
+    public boolean consumeResetCode(String phoneNumber, String code) {
+        if (!RegexUtil.checkMobile(phoneNumber) || code == null || code.isBlank()) {
+            return false;
+        }
+        return RedisAtomicValueConsumer.consumeIfMatch(
+                stringRedisTemplate, Constant.REDIS_KEY_SMS_VERIFY_RESET + phoneNumber, code);
     }
 
     private void assertCanBindPhone(String phoneNumber, Long userId) {
@@ -161,13 +182,5 @@ public class SMSCodeServiceImpl implements SMSCodeService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         return phoneNumber;
-    }
-
-    /** 校验验证码，不匹配则抛异常，验证逻辑唯一入口 */
-    private void assertCodeValid(String phoneNumber, String code) {
-        String cachedCode = stringRedisTemplate.opsForValue().get(Constant.REDIS_KEY_SMS_VERIFY + phoneNumber);
-        if (cachedCode == null || !cachedCode.equals(code)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
-        }
     }
 }

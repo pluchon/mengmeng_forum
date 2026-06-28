@@ -91,7 +91,8 @@ public class UserEmojiServiceImpl implements UserEmojiService {
         int balanceAfter;
         if (price > 0) {
             balanceAfter = pointsService.deductPoints(userId, price, Constant.POINTS_SOURCE_SHOP_PURCHASE,
-                    record.getId(), "购买 " + shop.getName() + " -" + price);
+                    record.getId(), "购买 " + shop.getName() + " -" + price,
+                    "shop_purchase:" + userId + ":" + shopId);
         } else {
             balanceAfter = pointsService.getWallet(userId).getBalance();
         }

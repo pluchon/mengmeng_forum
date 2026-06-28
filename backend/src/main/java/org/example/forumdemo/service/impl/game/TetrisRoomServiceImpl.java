@@ -352,12 +352,14 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 gameUserProfileMapper.applyWin(winnerId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
                 gameUserProfileMapper.applyLose(loserId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
                 pointsService.addPoints(winnerId, PK_SCORE_DELTA,
-                        Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励");
+                        Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励",
+                        "game:tetrispk:win:" + room.getRoomId());
                 User loser = userMapper.selectByIdForUpdate(loserId);
                 int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
                 if (loserPoints >= PK_SCORE_DELTA) {
                     pointsService.deductPoints(loserId, PK_SCORE_DELTA,
-                            Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除");
+                            Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除",
+                            "game:tetrispk:lose:" + room.getRoomId());
                 }
             }
             gameUserProfileMapper.updatePlayStatus(room.getPlayer1UserId(), GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);

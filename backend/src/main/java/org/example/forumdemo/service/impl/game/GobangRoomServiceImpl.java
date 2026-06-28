@@ -414,14 +414,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 gameUserProfileMapper.applyLose(loserId, GameConstants.GOBANG, GameConstants.SCORE_DELTA);
                 if (!GameConstants.AI_USER_ID.equals(winnerId)) {
                     pointsService.addPoints(winnerId, GameConstants.SCORE_DELTA,
-                            Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "五子棋胜利奖励");
+                            Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "五子棋胜利奖励",
+                            "game:gobang:win:" + room.getRoomId());
                 }
                 if (!GameConstants.AI_USER_ID.equals(loserId)) {
                     User loser = userMapper.selectByIdForUpdate(loserId);
                     int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
                     if (loserPoints >= GameConstants.SCORE_DELTA) {
                         pointsService.deductPoints(loserId, GameConstants.SCORE_DELTA,
-                                Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "五子棋对局扣除");
+                                Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "五子棋对局扣除",
+                                "game:gobang:lose:" + room.getRoomId());
                     }
                 }
             }

@@ -13,30 +13,26 @@ import java.util.List;
  */
 public interface PointsService {
 
-    /**
-     * 原子加积分 + 写流水. amount 必须 > 0; 失败抛 ApplicationException.
-     * @return 变动后余额
-     */
     int addPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark);
 
-    /**
-     * 原子扣积分 + 写流水. amount 必须 > 0; 余额不足直接抛 FAILED_POINTS_NOT_ENOUGH.
-     * @return 变动后余额
-     */
     int deductPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark);
 
     /**
-     * 钱包概览(余额 + 累计签到入账 + 累计商城消费), 用于"我的积分"页头部展示.
+     * 带幂等键的加积分。idempotencyKey 为空时与 {@link #addPoints} 行为一致。
      */
+    int addPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark, String idempotencyKey);
+
+    /**
+     * 带幂等键的扣积分。idempotencyKey 为空时与 {@link #deductPoints} 行为一致。
+     */
+    int deductPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark, String idempotencyKey);
+
+    /** 是否已存在相同幂等键的成功流水（用于整单重试短路） */
+    boolean hasIdempotencyRecord(Long userId, String idempotencyKey);
+
     PointsWalletVO getWallet(Long userId);
 
-    /**
-     * 分页查询积分流水.
-     */
     PageResult<PointsLogVO> getLogWithPage(Long userId, Integer pageNum, Integer pageSize, Byte sourceType);
 
-    /**
-     * 最近 N 天按自然日聚合, 给 ECharts 用. days 默认 30, 上限 365.
-     */
     List<PointsDailyVO> getDailyAggregation(Long userId, Integer days);
 }

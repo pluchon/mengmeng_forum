@@ -175,10 +175,11 @@ public class CheckinServiceImpl implements CheckinService {
         UserCheckinInfo afterCheckin = upsertUserCheckinInfo(info, userId, newStreak, addPoints, todayDate);
         // 入账积分钱包: 基础 + 连签奖励分两条流水, 来源不同, 便于前端 ECharts 分色展示
         pointsService.addPoints(userId, pointsToday, Constant.POINTS_SOURCE_CHECKIN_BASIC,
-                logRow.getId(), "签到 +" + pointsToday);
+                logRow.getId(), "签到 +" + pointsToday, "checkin_basic:" + userId + ":" + today);
         if (bonusPoints > 0) {
             pointsService.addPoints(userId, bonusPoints, Constant.POINTS_SOURCE_CHECKIN_BONUS,
-                    logRow.getId(), "连续 " + newStreak + " 天奖励 +" + bonusPoints);
+                    logRow.getId(), "连续 " + newStreak + " 天奖励 +" + bonusPoints,
+                    "checkin_bonus:" + userId + ":" + today);
         }
         // 主动失效 status 缓存, 下一次 /info 调用会重新从 DB 拉取并回填
         invalidateStatusCache(userId);
