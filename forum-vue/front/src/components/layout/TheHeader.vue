@@ -3,7 +3,7 @@
     <div class="header-inner">
       <div class="header-left">
         <router-link to="/" class="logo">
-          <img src="/picture.ico" alt="logo">
+          <img src="/logo.ico" alt="logo">
           <span class="logo-text">{{ siteName }}</span>
         </router-link>
       </div>

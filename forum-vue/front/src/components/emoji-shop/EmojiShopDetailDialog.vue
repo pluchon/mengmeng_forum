@@ -37,6 +37,17 @@
                 <img :src="url" alt="" />
               </button>
             </div>
+            <div v-if="imageCount > itemPageSize" class="emoji-shop-detail-dialog__pager">
+              <el-pagination
+                v-model:current-page="itemPage"
+                :page-size="itemPageSize"
+                :total="imageCount"
+                layout="prev, pager, next"
+                small
+                background
+                @current-change="onItemPageChange"
+              />
+            </div>
             <p class="emoji-shop-detail-dialog__thumb-hint">点击预览包内表情</p>
           </aside>
 
@@ -187,6 +198,8 @@ const {
   purchasing,
   detail,
   previewIndex,
+  itemPage,
+  itemPageSize,
   previewUrl,
   imageCount,
   uploaderVipTier,
@@ -203,6 +216,7 @@ const {
   purchaseLabel,
   setPreview,
   open,
+  onItemPageChange,
   close,
   goUploaderProfile,
   onPurchase,

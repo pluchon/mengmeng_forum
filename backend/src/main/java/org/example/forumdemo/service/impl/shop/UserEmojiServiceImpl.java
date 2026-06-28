@@ -7,6 +7,7 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.EmojiItem;
 import org.example.forumdemo.entity.db.EmojiShop;
 import org.example.forumdemo.entity.db.UserEmoji;
@@ -18,6 +19,7 @@ import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.shop.UserEmojiService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,9 @@ public class UserEmojiServiceImpl implements UserEmojiService {
 
     @Autowired
     private PointsService pointsService;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -99,6 +104,10 @@ public class UserEmojiServiceImpl implements UserEmojiService {
         emojiShopMapper.update(null, new LambdaUpdateWrapper<EmojiShop>()
                 .eq(EmojiShop::getId, shopId)
                 .setSql("sales_count = sales_count + 1"));
+        TransactionHooks.afterCommit(() -> {
+            invalidateShopDetailCache(shopId);
+            invalidateShopListCache();
+        });
         log.info("购买表情包成功: userId={}, shopId={}, price={}, balanceAfter={}", userId, shopId, price, balanceAfter);
         return balanceAfter;
     }
@@ -138,6 +147,22 @@ public class UserEmojiServiceImpl implements UserEmojiService {
                     u.getCreateTime()));
         }
         return result;
+    }
+
+    private void invalidateShopDetailCache(Long shopId) {
+        try {
+            stringRedisTemplate.delete(Constant.REDIS_KEY_SHOP_DETAIL + shopId);
+        } catch (Exception e) {
+            log.warn("失效商城详情缓存失败: shopId={}, {}", shopId, e.getMessage());
+        }
+    }
+
+    private void invalidateShopListCache() {
+        try {
+            stringRedisTemplate.opsForValue().increment(Constant.REDIS_KEY_SHOP_LIST_VERSION);
+        } catch (Exception e) {
+            log.warn("失效表情商城列表缓存失败: {}", e.getMessage());
+        }
     }
 
 }

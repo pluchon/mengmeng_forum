@@ -5,7 +5,7 @@
       <main class="privacy-content">
         <div class="hero-section">
           <h1>用户协议</h1>
-          <p>使用萌萌技术分享笔记前，请仔细阅读以下条款。注册、登录或使用本平台服务即表示您同意本协议。</p>
+          <p>使用萌部落前，请仔细阅读以下条款。注册、登录或使用本平台服务即表示您同意本协议。</p>
           <div class="update-tag">最近更新：2026-05-14</div>
         </div>
 

@@ -1,8 +1,8 @@
 /** 工信部备案信息（与控制台登记一致） */
-export const SITE_NAME = '萌萌技术分享笔记'
-export const SITE_TAGLINE = '记录与分享编程学习笔记'
+export const SITE_NAME = '萌部落'
+export const SITE_TAGLINE = '记录生活，分享热爱'
 export const SITE_DESC =
-  '本网站为个人技术学习成果的在线展示，用于记录和分享编程项目的开发过程与代码示例，与大家一起做技术分享。'
+  '萌部落是一个温暖的 ACGN 兴趣社区，记录生活、分享热爱，发布图文与视频，遇见更多同频伙伴。'
 export const SITE_ICP_NUMBER = '湘ICP备2026019722号-1'
 export const SITE_ICP_URL = 'https://beian.miit.gov.cn/'
 

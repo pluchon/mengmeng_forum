@@ -4,12 +4,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.example.forumdemo.entity.vo.common.PageResult;
 
 import java.util.Date;
 import java.util.List;
 
 /**
- * 商品详情 VO. 包含包内所有单图(按 sort 升序).
+ * 商品详情 VO. 包内单图按分页返回.
  */
 @Data
 @AllArgsConstructor
@@ -53,8 +54,11 @@ public class EmojiShopDetailVO {
     @Schema(description = "上传者 VIP 到期时间")
     private Date uploadUserVipExpireAt;
 
-    @Schema(description = "包内表情图URL列表(按 sort 升序)")
+    @Schema(description = "当前页包内表情图URL列表(按 sort 升序)")
     private List<String> imageUrls;
+
+    @Schema(description = "包内表情图分页结果")
+    private PageResult<String> imagePage;
 
     @Schema(description = "当前登录用户是否已购买; 未登录返回 false")
     private Boolean owned;

@@ -70,7 +70,15 @@ public final class ForumRedisKeys {
     public static final long TTL_CHECKIN_RULE = 21600L;
 
     public static final String SHOP_DETAIL = "shop:detail:";
+    public static final String SHOP_DETAIL_VERSION = "shop:detail:version:";
+    public static final String SHOP_DETAIL_LOCK = "shop:detail:lock:";
     public static final long TTL_SHOP_DETAIL = 1800L;
+    public static final long TTL_SHOP_DETAIL_LOCK = 3L;
+    public static final String SHOP_LIST = "shop:list:";
+    public static final String SHOP_LIST_VERSION = "shop:list:version";
+    public static final String SHOP_LIST_LOCK = "shop:list:lock:";
+    public static final long TTL_SHOP_LIST = 300L;
+    public static final long TTL_SHOP_LIST_LOCK = 3L;
 
     public static final String AUDIT_RESULT_DEDUP = "ai_audit:result_dedup:";
     public static final long TTL_AUDIT_RESULT_DEDUP = 86400L;

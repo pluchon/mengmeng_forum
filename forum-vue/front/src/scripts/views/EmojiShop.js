@@ -28,7 +28,7 @@ export function useEmojiShop(detailDialogRef, uploadDialogRef) {
   const records = ref([])
   const total = ref(0)
   const pageNum = ref(1)
-  const pageSize = ref(20)
+  const pageSize = ref(12)
   const sort = ref('new')
   const keyword = ref('')
   const viewMode = ref('all')

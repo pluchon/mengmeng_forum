@@ -29,5 +29,5 @@ public interface EmojiShopService {
     /**
      * 查询商品详情. 上架商品所有人可见; 非上架仅创建者本人 + 管理员可见(防止用户访问已下架商品的死链).
      */
-    EmojiShopDetailVO queryShopDetail(Long shopId, Long loginUserId);
+    EmojiShopDetailVO queryShopDetail(Long shopId, Long loginUserId, Integer itemPageNum, Integer itemPageSize);
 }

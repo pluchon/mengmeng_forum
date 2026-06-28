@@ -6,6 +6,8 @@ import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { formatCheckinLogDateOnly } from '@/utils/datetime'
 
+const ITEM_PAGE_SIZE = 9
+
 function effectiveVipTier(tier, expireAt) {
   const t = Number(tier) || 0
   if (t <= 0) return 0
@@ -25,6 +27,8 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
   const purchasing = ref(false)
   const detail = ref(null)
   const previewIndex = ref(0)
+  const itemPage = ref(1)
+  const itemPageSize = ref(ITEM_PAGE_SIZE)
 
   const previewUrl = computed(() => {
     const urls = detail.value?.imageUrls
@@ -32,7 +36,11 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     return detail.value?.coverUrl || ''
   })
 
-  const imageCount = computed(() => detail.value?.imageUrls?.length || 0)
+  const imageCount = computed(() => {
+    const total = Number(detail.value?.imagePage?.total)
+    if (Number.isFinite(total)) return total
+    return detail.value?.imageUrls?.length || 0
+  })
 
   const uploaderVipTier = computed(() =>
     effectiveVipTier(detail.value?.uploadUserVipTier, detail.value?.uploadUserVipExpireAt),
@@ -110,18 +118,22 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     previewIndex.value = idx
   }
 
-  async function open(shopId) {
-    const id = Number(shopId)
-    if (!Number.isFinite(id) || id <= 0) return
-    visible.value = true
+  async function loadDetail(id, page, clearDetail = false) {
     loading.value = true
     previewIndex.value = 0
-    detail.value = null
+    if (clearDetail) {
+      detail.value = null
+    }
     try {
-      if (userStore.isLoggedIn) await wallet.refresh()
-      const res = await getShopDetail(id)
+      const res = await getShopDetail(id, {
+        itemPageNum: page,
+        itemPageSize: itemPageSize.value,
+      })
       if (res.code === 0 && res.data) {
         detail.value = res.data
+        const pageData = res.data.imagePage
+        itemPage.value = Number(pageData?.pageNum) || page
+        itemPageSize.value = Number(pageData?.pageSize) || ITEM_PAGE_SIZE
         if (isAuthor.value) {
           detail.value.owned = true
         }
@@ -134,10 +146,34 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     }
   }
 
+  async function open(shopId) {
+    const id = Number(shopId)
+    if (!Number.isFinite(id) || id <= 0) return
+    visible.value = true
+    previewIndex.value = 0
+    itemPage.value = 1
+    itemPageSize.value = ITEM_PAGE_SIZE
+    detail.value = null
+    try {
+      if (userStore.isLoggedIn) await wallet.refresh()
+      await loadDetail(id, 1, true)
+    } catch {
+      loading.value = false
+    }
+  }
+
+  async function onItemPageChange(page) {
+    const id = Number(detail.value?.id)
+    if (!Number.isFinite(id) || id <= 0) return
+    await loadDetail(id, page, false)
+  }
+
   function close() {
     visible.value = false
     detail.value = null
     previewIndex.value = 0
+    itemPage.value = 1
+    itemPageSize.value = ITEM_PAGE_SIZE
     onClosed?.()
   }
 
@@ -148,6 +184,8 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     visible.value = false
     detail.value = null
     previewIndex.value = 0
+    itemPage.value = 1
+    itemPageSize.value = ITEM_PAGE_SIZE
     router.push(`/profile/${uid}`)
   }
 
@@ -203,6 +241,8 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     purchasing,
     detail,
     previewIndex,
+    itemPage,
+    itemPageSize,
     previewUrl,
     imageCount,
     uploaderVipTier,
@@ -219,6 +259,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     purchaseLabel,
     setPreview,
     open,
+    onItemPageChange,
     close,
     goUploaderProfile,
     onPurchase,

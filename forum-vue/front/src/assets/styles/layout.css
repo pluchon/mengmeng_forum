@@ -28,16 +28,31 @@
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  transition: background 0.16s ease, transform 0.16s ease;
 }
 
 .logo img {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(255, 36, 66, 0.16);
 }
 
 .logo-text {
   font-size: 20px;
   font-weight: 900;
+  color: #28212a;
+}
+
+.logo:hover {
+  background: #fff4f6;
+  transform: translateY(-1px);
+}
+
+.logo:hover .logo-text {
   color: var(--primary-red);
 }
 

@@ -1,11 +1,13 @@
 package org.example.forumdemo.service.impl.lottery;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.LotteryActivity;
 import org.example.forumdemo.entity.db.LotteryDrawRecord;
@@ -13,9 +15,11 @@ import org.example.forumdemo.entity.db.LotteryDrawRequest;
 import org.example.forumdemo.entity.db.LotteryPrizeMysteryItem;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.lottery.LotteryDrawDTO;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityInfoVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityListItemVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawItemVO;
+import org.example.forumdemo.entity.vo.lottery.LotteryDrawRecordVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawResultVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryPrizeHeatVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryPrizeLineVO;
@@ -46,7 +50,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -56,6 +62,8 @@ import java.util.stream.Collectors;
 public class LotteryServiceImpl implements LotteryService {
 
     private static final int MAX_STOCK_RETRY = 64;
+
+    private static final int DEFAULT_RECORD_PAGE_SIZE = 12;
 
     private static final ZoneId ZONE_SH = ZoneId.of("Asia/Shanghai");
 
@@ -151,6 +159,28 @@ public class LotteryServiceImpl implements LotteryService {
         vo.setLotterySurpriseClaimed(userRow != null && userRow.getLotterySurpriseClaimed() != null
                 && userRow.getLotterySurpriseClaimed() == 1);
         return vo;
+    }
+
+    @Override
+    public PageResult<LotteryDrawRecordVO> queryDrawRecords(Long userId, Long activityId,
+                                                            Integer pageNum, Integer pageSize) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int requestedPageSize = pageSize == null || pageSize < 1 ? DEFAULT_RECORD_PAGE_SIZE : pageSize;
+        int validPageSize = PageUtils.getValidPageSize(requestedPageSize);
+        Page<LotteryDrawRecord> page = new Page<>(validPageNum, validPageSize);
+        Page<LotteryDrawRecord> result = lotteryDrawRecordMapper.selectPage(
+                page,
+                Wrappers.lambdaQuery(LotteryDrawRecord.class)
+                        .eq(LotteryDrawRecord::getUserId, userId)
+                        .eq(activityId != null && activityId > 0, LotteryDrawRecord::getActivityId, activityId)
+                        .ne(LotteryDrawRecord::getDeleteState, 1)
+                        .orderByDesc(LotteryDrawRecord::getId));
+        List<LotteryDrawRecordVO> records = buildDrawRecordRows(userId, result.getRecords());
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
     }
 
     @Override
@@ -282,6 +312,63 @@ public class LotteryServiceImpl implements LotteryService {
         int pity = request.getPityAfter() == null ? 0 : request.getPityAfter();
         int balanceAfter = pointsService.getWallet(userId).getBalance();
         return new LotteryDrawResultVO(balanceAfter, request.getBatchKey(), items, pity);
+    }
+
+    private List<LotteryDrawRecordVO> buildDrawRecordRows(Long userId, List<LotteryDrawRecord> records) {
+        if (records == null || records.isEmpty()) {
+            return List.of();
+        }
+        List<String> batchKeys = records.stream()
+                .map(LotteryDrawRecord::getDrawBatchKey)
+                .filter(Objects::nonNull)
+                .filter(key -> !key.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, Integer> drawTimesByBatchKey = loadDrawTimesByBatchKey(userId, batchKeys);
+        List<LotteryDrawRecordVO> rows = new ArrayList<>(records.size());
+        for (LotteryDrawRecord record : records) {
+            rows.add(toDrawRecordVO(record, drawTimesByBatchKey));
+        }
+        return rows;
+    }
+
+    private Map<String, Integer> loadDrawTimesByBatchKey(Long userId, List<String> batchKeys) {
+        if (batchKeys == null || batchKeys.isEmpty()) {
+            return Map.of();
+        }
+        List<LotteryDrawRequest> requests = lotteryDrawRequestMapper.selectList(
+                Wrappers.lambdaQuery(LotteryDrawRequest.class)
+                        .eq(LotteryDrawRequest::getUserId, userId)
+                        .in(LotteryDrawRequest::getBatchKey, batchKeys)
+                        .ne(LotteryDrawRequest::getDeleteState, 1));
+        Map<String, Integer> result = new HashMap<>();
+        for (LotteryDrawRequest request : requests) {
+            if (request.getBatchKey() != null) {
+                result.put(request.getBatchKey(), request.getTimes());
+            }
+        }
+        return result;
+    }
+
+    private LotteryDrawRecordVO toDrawRecordVO(LotteryDrawRecord record, Map<String, Integer> drawTimesByBatchKey) {
+        int grantPoints = record.getGrantPoints() == null ? 0 : record.getGrantPoints();
+        int grantVipDays = 0;
+        if (Objects.equals(record.getMysteryItemType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
+            grantVipDays = record.getMysteryItemValue() == null ? 0 : record.getMysteryItemValue();
+        } else if (Objects.equals(record.getPrizeType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
+            grantVipDays = record.getPrizeValue() == null ? 0 : record.getPrizeValue();
+        }
+        String rewardDetail = buildRewardDetail(record.getMysteryItemType(), record.getMysteryItemValue(),
+                grantPoints, grantVipDays, record.getPrizeType(),
+                record.getPrizeValue() == null ? 0 : record.getPrizeValue());
+        Integer times = drawTimesByBatchKey.get(record.getDrawBatchKey());
+        LotteryDrawRecordVO vo = new LotteryDrawRecordVO();
+        vo.setRecordId(record.getId());
+        vo.setPrizeName(record.getPrizeName());
+        vo.setRewardDetail(rewardDetail);
+        vo.setMultiDraw(times != null && times > 1 ? 1 : 0);
+        vo.setCreateTime(record.getCreateTime());
+        return vo;
     }
 
     private LotteryDrawItemVO toDrawItemVO(LotteryDrawRecord rec) {

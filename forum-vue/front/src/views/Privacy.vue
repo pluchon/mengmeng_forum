@@ -5,7 +5,7 @@
       <main class="privacy-content">
         <div class="hero-section">
           <h1>隐私政策</h1>
-          <p>萌萌技术分享笔记重视您的隐私。注册或使用本平台前，请仔细阅读以下内容。</p>
+          <p>萌部落重视您的隐私。注册或使用本平台前，请仔细阅读以下内容。</p>
           <div class="update-tag">最近更新：2026-05-14</div>
         </div>
 

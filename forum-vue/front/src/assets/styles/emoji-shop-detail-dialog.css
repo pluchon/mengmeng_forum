@@ -96,6 +96,12 @@
   border: 2px solid var(--primary-red, #ff2442);
 }
 
+.emoji-shop-detail-dialog__pager {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
 .emoji-shop-detail-dialog__thumb-hint {
   margin: 0;
   font-size: 11px;

@@ -14,6 +14,7 @@ import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import {
   getLotteryActivities,
   getLotteryInfo,
+  getLotteryRecords,
   lotteryDraw,
   claimLotterySurpriseBonus,
 } from '@/api/lottery'
@@ -23,6 +24,7 @@ import recordIconUrl from '@/assets/svg/抽奖记录.svg?url'
 import { clientOssUrl } from '@/utils/clientOss'
 
 const VISIBLE_ACTIVITY_LIMIT = 3
+const HISTORY_PAGE_SIZE = 12
 
 const surpriseTeaserImg = clientOssUrl('抽奖惊喜.webp')
 const surpriseRewardImg = clientOssUrl('抽奖.webp')
@@ -65,10 +67,17 @@ const info = reactive({
 })
 
 const historyDialogVisible = ref(false)
+const historyLoading = ref(false)
+const historyRecords = ref([])
+const historyPage = ref(1)
+const historyPageSize = ref(HISTORY_PAGE_SIZE)
+const historyTotal = ref(0)
 const historyTableRows = computed(() =>
-  (info.recentDraws || []).map((r) => ({
+  historyRecords.value.map((r) => ({
     kind: r.multiDraw === 1 ? '十连' : '单抽',
     prizeName: (r.prizeName != null && String(r.prizeName).trim() !== '' ? String(r.prizeName).trim() : null) || '—',
+    rewardDetail: (r.rewardDetail != null && String(r.rewardDetail).trim() !== '' ? String(r.rewardDetail).trim() : null) || '—',
+    createTime: formatDrawTime(r.createTime),
   })),
 )
 
@@ -204,6 +213,10 @@ async function onSelectActivity(id) {
   if (selectedActivityId.value === id) return
   selectedActivityId.value = id
   await loadInfo({ activityId: id, silent: true })
+  if (historyDialogVisible.value) {
+    historyPage.value = 1
+    await loadHistoryRecords()
+  }
 }
 
 async function onSelectActivityFromDialog(id) {
@@ -317,6 +330,14 @@ function formatOutcome(row) {
   return '谢谢参与'
 }
 
+function formatDrawTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 async function loadInfo(opts = {}) {
   const silent = opts.silent === true
   const activityId = opts.activityId ?? selectedActivityId.value
@@ -334,6 +355,41 @@ async function loadInfo(opts = {}) {
   } finally {
     if (!silent) loading.value = false
   }
+}
+
+async function loadHistoryRecords() {
+  historyLoading.value = true
+  try {
+    const params = {
+      pageNum: historyPage.value,
+      pageSize: historyPageSize.value,
+    }
+    if (selectedActivityId.value != null) {
+      params.activityId = selectedActivityId.value
+    }
+    const res = await getLotteryRecords(params)
+    if (res.code === 0 && res.data) {
+      historyRecords.value = Array.isArray(res.data.records) ? res.data.records : []
+      historyTotal.value = Number(res.data.total) || 0
+      historyPage.value = Number(res.data.pageNum) || historyPage.value
+      historyPageSize.value = Number(res.data.pageSize) || HISTORY_PAGE_SIZE
+    }
+  } catch {
+    /* request 已提示 */
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function openHistoryDialog() {
+  historyDialogVisible.value = true
+  historyPage.value = 1
+  await loadHistoryRecords()
+}
+
+async function onHistoryPageChange(page) {
+  historyPage.value = page
+  await loadHistoryRecords()
 }
 
 function resetRound() {
@@ -360,6 +416,10 @@ async function syncAfterDraw(res) {
   }
   await pointsWallet.refresh()
   await loadInfo({ silent: true })
+  if (historyDialogVisible.value) {
+    historyPage.value = 1
+    await loadHistoryRecords()
+  }
 }
 
 async function onSingle() {

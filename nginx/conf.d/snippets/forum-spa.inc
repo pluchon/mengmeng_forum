@@ -13,6 +13,12 @@ location = /index.html {
     add_header Expires "0";
 }
 
+location ~ ^/(sign-in|sign-up|forgot-password|settings|message)(/|$) {
+    root $forum_spa_root;
+    add_header X-Robots-Tag "noindex, nofollow";
+    try_files /index.html =404;
+}
+
 location / {
     root $forum_spa_root;
     index index.html;
