@@ -23,6 +23,7 @@ import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.user.UserService;
+import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -67,6 +68,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private AuthTokenService authTokenService;
+
+    @Autowired
+    private UserDerivedCacheInvalidator userDerivedCacheInvalidator;
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
@@ -400,14 +404,14 @@ public class UserServiceImpl implements UserService {
     public void updateAvatarUrl(Long userId, String url) {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId).set(User::getAvatarUrl, url));
-        stringRedisTemplate.opsForHash().put(Constant.REDIS_KEY_USER_INFO + userId, "avatarUrl", url);
+        userDerivedCacheInvalidator.invalidateUserCaches(userId);
     }
 
     @Override
     public void updateBackgroundUrl(Long userId, String url) {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId).set(User::getBackgroundUrl, url));
-        stringRedisTemplate.opsForHash().put(Constant.REDIS_KEY_USER_INFO + userId, "backgroundUrl", url);
+        userDerivedCacheInvalidator.invalidateUserCaches(userId);
     }
 
     // ============================================================

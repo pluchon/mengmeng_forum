@@ -26,6 +26,8 @@ public interface AiHubService {
 
     void indexUserRag(RagUserIndexDTO payload);
 
+    void removeArticleRag(Long articleId);
+
     List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates);
 
     List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates);

@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.points.PointsDailyVO;
 import org.example.forumdemo.entity.vo.points.PointsLogVO;
@@ -42,6 +43,17 @@ public class PointsController {
                                                           HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getLogWithPage(loginUser.getId(), pageNum, pageSize, sourceType));
+    }
+
+    @Operation(summary = "积分流水游标分页", description = "深分页推荐；cursor 取自上一页 nextCursor")
+    @GetMapping("/log/cursor")
+    public Result<CursorPageResult<PointsLogVO>> getLogWithCursor(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) Byte sourceType,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.getLogWithCursor(loginUser.getId(), cursor, pageSize, sourceType));
     }
 
     @Operation(summary = "积分按日聚合", description = "最近 N 天的入账 / 消费 / 净变动, 给前端 ECharts 直接喂数据. days 默认 30, 上限 365")

@@ -1,6 +1,8 @@
 package org.example.forumdemo.task;
 
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.example.forumdemo.common.metrics.ForumMetrics;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -21,25 +23,34 @@ public class HotArticleRankingTask {
     @Autowired
     private ArticleService articleService;
 
+    @Autowired
+    private ForumMetrics forumMetrics;
+
     @Scheduled(cron = "0 0 3 * * ?")
     public void rebuildDaily() {
+        Timer.Sample sample = forumMetrics.startHotRankingRebuild();
         try {
             log.info("[HotArticleRankingTask] 凌晨重算开始");
             articleService.rebuildHotArticleRanking();
             log.info("[HotArticleRankingTask] 凌晨重算完成");
         } catch (Exception e) {
             log.error("[HotArticleRankingTask] 凌晨重算异常: {}", e.getMessage(), e);
+        } finally {
+            forumMetrics.recordHotRankingRebuild(sample);
         }
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void rebuildOnStartup() {
+        Timer.Sample sample = forumMetrics.startHotRankingRebuild();
         try {
             log.info("[HotArticleRankingTask] 启动重算开始");
             articleService.rebuildHotArticleRanking();
             log.info("[HotArticleRankingTask] 启动重算完成");
         } catch (Exception e) {
             log.warn("[HotArticleRankingTask] 启动重算异常(可忽略, 下次定时仍会补): {}", e.getMessage());
+        } finally {
+            forumMetrics.recordHotRankingRebuild(sample);
         }
     }
 }

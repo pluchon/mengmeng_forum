@@ -19,6 +19,7 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleLikeService;
+import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,9 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private ArticleHotRankingService articleHotRankingService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void likeArticle(Long articleId, Long userId) {
@@ -70,8 +74,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         updateLikeCount(articleId, 1);
         TransactionHooks.afterCommit(() -> {
             syncLikeCacheOnLike(articleId, userId);
-            stringRedisTemplate.opsForZSet().incrementScore(
-                    Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), 1D);
+            articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_LIKE);
         });
         log.info("用户 {} 点赞帖子 {}", userId, articleId);
     }
@@ -91,8 +94,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         updateLikeCount(articleId, -1);
         TransactionHooks.afterCommit(() -> {
             syncLikeCacheOnUnlike(articleId, userId);
-            stringRedisTemplate.opsForZSet().incrementScore(
-                    Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId), -1D);
+            articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_LIKE);
         });
         log.info("用户 {} 取消点赞帖子 {}", userId, articleId);
     }

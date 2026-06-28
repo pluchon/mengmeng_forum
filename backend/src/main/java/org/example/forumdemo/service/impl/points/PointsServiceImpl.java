@@ -6,9 +6,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.CursorUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.PointsLog;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.points.PointsDailyVO;
 import org.example.forumdemo.entity.vo.points.PointsLogVO;
@@ -144,6 +146,45 @@ public class PointsServiceImpl implements PointsService {
         }
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
+    }
+
+    @Override
+    public CursorPageResult<PointsLogVO> getLogWithCursor(Long userId, String cursor, Integer pageSize, Byte sourceType) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int size = PageUtils.getValidPageSize(pageSize);
+        LambdaQueryWrapper<PointsLog> wrapper = new LambdaQueryWrapper<PointsLog>()
+                .eq(PointsLog::getUserId, userId)
+                .ne(PointsLog::getDeleteState, 1);
+        if (sourceType != null) {
+            wrapper.eq(PointsLog::getSourceType, sourceType);
+        }
+        if (StringUtils.hasText(cursor)) {
+            CursorUtils.CursorToken token = CursorUtils.decode(cursor);
+            Date cursorTime = new Date(token.timeMillis());
+            wrapper.and(w -> w.lt(PointsLog::getCreateTime, cursorTime)
+                    .or(w2 -> w2.eq(PointsLog::getCreateTime, cursorTime)
+                            .lt(PointsLog::getId, token.id())));
+        }
+        wrapper.orderByDesc(PointsLog::getCreateTime).orderByDesc(PointsLog::getId);
+        Page<PointsLog> page = new Page<>(1, size + 1, false);
+        List<PointsLog> rows = pointsLogMapper.selectPage(page, wrapper).getRecords();
+        boolean hasNext = rows.size() > size;
+        if (hasNext) {
+            rows = new ArrayList<>(rows.subList(0, size));
+        }
+        List<PointsLogVO> records = new ArrayList<>(rows.size());
+        for (PointsLog row : rows) {
+            records.add(new PointsLogVO(row.getId(), row.getDelta(), row.getBalanceAfter(),
+                    row.getSourceType(), row.getRelatedId(), row.getRemark(), row.getCreateTime()));
+        }
+        String nextCursor = null;
+        if (hasNext && !rows.isEmpty()) {
+            PointsLog last = rows.get(rows.size() - 1);
+            nextCursor = CursorUtils.encode(last.getCreateTime(), last.getId());
+        }
+        return new CursorPageResult<>(records, nextCursor, hasNext, size);
     }
 
     @Override

@@ -164,6 +164,20 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
+    public void removeArticleRag(Long articleId) {
+        if (articleId == null || articleId <= 0) {
+            return;
+        }
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("article_id", articleId);
+            postJson("/api/v1/rag/remove-article", body);
+        } catch (Exception e) {
+            log.warn("RAG 帖子索引删除失败 articleId={}: {}", articleId, e.getMessage());
+        }
+    }
+
+    @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
     public List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates) {
         if (query == null || query.trim().isEmpty()) {

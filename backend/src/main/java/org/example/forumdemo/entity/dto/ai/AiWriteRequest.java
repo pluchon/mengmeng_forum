@@ -16,4 +16,7 @@ public class AiWriteRequest {
 
     /** use points billing when quota is exhausted */
     private Boolean usePointsBilling;
+
+    /** 客户端幂等键，重试时必须相同 */
+    private String clientRequestId;
 }

@@ -10,15 +10,19 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.CursorUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.CheckinLog;
 import org.example.forumdemo.entity.db.CheckinRule;
 import org.example.forumdemo.entity.db.CheckinStreakReward;
 import org.example.forumdemo.entity.db.UserCheckinInfo;
+import org.example.forumdemo.entity.vo.checkin.CheckinDayTrendVO;
+import org.example.forumdemo.entity.vo.checkin.CheckinMonthTrendResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinResultResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleDayResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinStatusResponse;
+import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.mapper.CheckinLogMapper;
 import org.example.forumdemo.mapper.CheckinRuleMapper;
@@ -294,6 +298,65 @@ public class CheckinServiceImpl implements CheckinService {
         monthRule.forEach((day, points) -> days.add(new CheckinRuleDayResponse(day, points)));
         days.sort(Comparator.comparingInt(CheckinRuleDayResponse::getDayNumber));
         return new CheckinRuleMonthResponse(target, days);
+    }
+
+    @Override
+    public CheckinMonthTrendResponse getMonthTrend(Long userId, Integer year, Integer month) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        LocalDate now = LocalDate.now(SHANGHAI);
+        int targetYear = year != null && year >= 2000 ? year : now.getYear();
+        int targetMonth = month != null && month >= 1 && month <= 12 ? month : now.getMonthValue();
+        LocalDate monthStart = LocalDate.of(targetYear, targetMonth, 1);
+        LocalDate monthEnd = monthStart.plusMonths(1);
+        List<CheckinLog> rows = checkinLogMapper.selectList(new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ge(CheckinLog::getCheckinDate, toDate(monthStart))
+                .lt(CheckinLog::getCheckinDate, toDate(monthEnd))
+                .ne(CheckinLog::getDeleteState, 1)
+                .orderByAsc(CheckinLog::getCheckinDate));
+        List<CheckinDayTrendVO> days = new ArrayList<>(rows.size());
+        int totalPoints = 0;
+        for (CheckinLog row : rows) {
+            int base = row.getPoints() != null ? row.getPoints() : 0;
+            int bonus = row.getBonusPoints() != null ? row.getBonusPoints() : 0;
+            int dayTotal = base + bonus;
+            totalPoints += dayTotal;
+            days.add(new CheckinDayTrendVO(row.getCheckinDate(), dayTotal));
+        }
+        return new CheckinMonthTrendResponse(targetYear, targetMonth, days.size(), totalPoints, days);
+    }
+
+    @Override
+    public CursorPageResult<CheckinLog> getLogWithCursor(Long userId, String cursor, Integer pageSize) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int size = PageUtils.getValidPageSize(pageSize);
+        LambdaQueryWrapper<CheckinLog> wrapper = new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1);
+        if (cursor != null && !cursor.isBlank()) {
+            CursorUtils.CursorToken token = CursorUtils.decode(cursor);
+            Date cursorTime = new Date(token.timeMillis());
+            wrapper.and(w -> w.lt(CheckinLog::getCheckinDate, cursorTime)
+                    .or(w2 -> w2.eq(CheckinLog::getCheckinDate, cursorTime)
+                            .lt(CheckinLog::getId, token.id())));
+        }
+        wrapper.orderByDesc(CheckinLog::getCheckinDate).orderByDesc(CheckinLog::getId);
+        Page<CheckinLog> page = new Page<>(1, size + 1, false);
+        List<CheckinLog> rows = checkinLogMapper.selectPage(page, wrapper).getRecords();
+        boolean hasNext = rows.size() > size;
+        if (hasNext) {
+            rows = new ArrayList<>(rows.subList(0, size));
+        }
+        String nextCursor = null;
+        if (hasNext && !rows.isEmpty()) {
+            CheckinLog last = rows.get(rows.size() - 1);
+            nextCursor = CursorUtils.encode(last.getCheckinDate(), last.getId());
+        }
+        return new CursorPageResult<>(rows, nextCursor, hasNext, size);
     }
 
     /** 根据上次签到日期推算签到后的连续天数 */

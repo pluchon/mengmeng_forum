@@ -30,6 +30,25 @@ def rag_index_article() -> RouteResponse:
     return jsonify({"code": 200, "msg": "ok", "data": result})
 
 
+@api.route("/rag/remove-article", methods=["POST"])
+def rag_remove_article() -> RouteResponse:
+    auth_error = ai_hub_auth_error()
+    if auth_error:
+        return auth_error
+    data = json_payload()
+    article_id = data.get("article_id")
+    if article_id is None:
+        return jsonify({"code": 400, "msg": "Missing article_id"}), 400
+    try:
+        from rag.store import remove_article_index
+
+        remove_article_index(int(article_id))
+    except Exception:
+        logger.exception("rag remove-article 失败")
+        return jsonify({"code": 500, "msg": "rag remove failed"}), 500
+    return jsonify({"code": 200, "msg": "ok"})
+
+
 @api.route("/rag/article-vector-search", methods=["POST"])
 def rag_article_vector_search() -> RouteResponse:
     """query 向量召回 + 可选 candidates 融合 rerank."""

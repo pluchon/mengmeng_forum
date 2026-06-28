@@ -31,6 +31,14 @@ public final class ForumBusinessConstants {
     public static final double HOT_SCORE_WEIGHT_FAVORITE = 0.7;
     public static final double HOT_SCORE_WEIGHT_REPLY = 0.5;
 
+    /** 热帖榜只纳入最近 N 天发布的帖子 */
+    public static final int HOT_RANK_WINDOW_DAYS = 7;
+    /** 24 小时内新帖扶持系数 */
+    public static final double HOT_RANK_NEW_POST_BOOST = 1.5;
+    public static final int HOT_RANK_NEW_POST_HOURS = 24;
+    /** 搜索关键词最大长度 */
+    public static final int SEARCH_KEYWORD_MAX_LEN = 100;
+
     public static final int SMS_MAX_COUNT = 10;
     public static final int MAIL_MAX_COUNT = 10;
 

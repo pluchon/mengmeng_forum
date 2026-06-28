@@ -121,11 +121,21 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     @Autowired
     private ForumProducer forumProducer;
 
+    @Autowired
+    private GameMatchRoomHelper gameMatchRoomHelper;
+
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
         if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        return gameMatchRoomHelper.resolveMatchedRoomId(
+                "jinzi", userIdA, userIdB,
+                () -> createMatchedRoomInternal(userIdA, userIdB),
+                rooms::containsKey);
+    }
+
+    private String createMatchedRoomInternal(Long userIdA, Long userIdB) {
         JinziRoom room = new JinziRoom(userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);

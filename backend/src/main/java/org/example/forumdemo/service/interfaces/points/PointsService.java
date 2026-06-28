@@ -1,5 +1,6 @@
 package org.example.forumdemo.service.interfaces.points;
 
+import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.points.PointsDailyVO;
 import org.example.forumdemo.entity.vo.points.PointsLogVO;
@@ -33,6 +34,9 @@ public interface PointsService {
     PointsWalletVO getWallet(Long userId);
 
     PageResult<PointsLogVO> getLogWithPage(Long userId, Integer pageNum, Integer pageSize, Byte sourceType);
+
+    /** 游标分页积分流水，适用于深分页 */
+    CursorPageResult<PointsLogVO> getLogWithCursor(Long userId, String cursor, Integer pageSize, Byte sourceType);
 
     List<PointsDailyVO> getDailyAggregation(Long userId, Integer days);
 }

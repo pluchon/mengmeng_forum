@@ -84,11 +84,21 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private GameMatchRoomHelper gameMatchRoomHelper;
+
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
         if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        return gameMatchRoomHelper.resolveMatchedRoomId(
+                "tetris", userIdA, userIdB,
+                () -> createMatchedRoomInternal(userIdA, userIdB),
+                rooms::containsKey);
+    }
+
+    private String createMatchedRoomInternal(Long userIdA, Long userIdB) {
         boolean swap = garbageRandom.nextBoolean();
         Long redUserId = swap ? userIdB : userIdA;
         Long blueUserId = swap ? userIdA : userIdB;

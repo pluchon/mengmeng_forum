@@ -17,6 +17,7 @@ import org.example.forumdemo.mapper.UserFollowMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,12 +53,16 @@ public class UserFollowServiceImpl implements UserFollowService {
                 .eq(UserFollow::getFollowerId, followerId)
                 .eq(UserFollow::getFolloweeId, followeeId));
         if (existing != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_ALREADY_FOLLOWING));
+            return;
         }
         UserFollow row = new UserFollow();
         row.setFollowerId(followerId);
         row.setFolloweeId(followeeId);
-        userFollowMapper.insert(row);
+        try {
+            userFollowMapper.insert(row);
+        } catch (DuplicateKeyException ex) {
+            return;
+        }
         log.info("用户 {} 关注了 {}", followerId, followeeId);
     }
 
@@ -69,7 +74,7 @@ public class UserFollowServiceImpl implements UserFollowService {
                 .eq(UserFollow::getFollowerId, followerId)
                 .eq(UserFollow::getFolloweeId, followeeId));
         if (deleted <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_FOLLOWING));
+            return;
         }
         log.info("用户 {} 取消关注 {}", followerId, followeeId);
     }
