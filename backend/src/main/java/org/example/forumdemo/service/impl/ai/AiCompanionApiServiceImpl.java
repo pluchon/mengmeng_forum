@@ -2,6 +2,7 @@ package org.example.forumdemo.service.impl.ai;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.enums.AiCallState;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -14,6 +15,7 @@ import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
 import org.example.forumdemo.entity.vo.ai.AiWriteResponseVO;
@@ -54,6 +56,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
     @Autowired
     private AiPointsBillingService aiPointsBillingService;
+
+    @Autowired
+    private AiCallRecordService aiCallRecordService;
 
     @Autowired
     private CompanionMemoryService companionMemoryService;
@@ -107,6 +112,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
         boolean reservedDeepseekFree = false;
         boolean reservedAdvanced = false;
+        AiCallBeginResult begin = aiCallRecordService.beginCall(
+                user.getId(), "ai_write", req.getClientRequestId(), modelCode);
+        rejectDuplicateAiBegin(begin);
+        long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
                 if (K_DEEPSEEK_FLASH.equals(kind) || K_DEEPSEEK_PRO.equals(kind)) {
@@ -125,13 +134,19 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             }
             AiHubWriteResultVO hubResult = aiHubService.write(user.getId(), req);
             AiModelUsageDTO usage = aiPointsBillingService.normalizeUsage(hubResult.getUsage(), modelCode);
-            Map<String, Object> billing = aiPointsBillingService.bill(
-                    user, "ai_write", usage, null, Constant.POINTS_SOURCE_AI_COMPANION, usePoints);
+            String relatedId = StringUtils.hasText(req.getClientRequestId())
+                    ? req.getClientRequestId().trim() : null;
+            Map<String, Object> billing = aiCallRecordService.settleSuccess(
+                    begin, user, "ai_write", usage, relatedId,
+                    Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
+                    System.currentTimeMillis() - startMs);
             return AiHubConverter.toWriteResponse(hubResult, billing);
         } catch (ApplicationException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
             throw ex;
         } catch (RuntimeException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
             throw ex;
         }
@@ -174,6 +189,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
         boolean reservedNormal = false;
         boolean reservedPremium = false;
+        AiCallBeginResult begin = aiCallRecordService.beginCall(
+                user.getId(), "companion_image", req.getClientRequestId(), modelCode);
+        rejectDuplicateAiBegin(begin);
+        long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
                 if ("normal".equals(q)) {
@@ -194,11 +213,15 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             if (usage.getImageCount() == null || usage.getImageCount() < 1) {
                 usage = aiPointsBillingService.usageForImage(modelCode, 1);
             }
-            String chargeRef = ephemeral
+            String chargeRef = StringUtils.hasText(req.getClientRequestId())
+                    ? req.getClientRequestId().trim()
+                    : (ephemeral
                     ? (req.getSessionId() != null ? req.getSessionId() : "ephemeral-image")
-                    : String.valueOf(dbSessionId);
-            Map<String, Object> billing = aiPointsBillingService.bill(
-                    user, "companion_image", usage, chargeRef, Constant.POINTS_SOURCE_AI_IMAGE, usePoints);
+                    : String.valueOf(dbSessionId));
+            Map<String, Object> billing = aiCallRecordService.settleSuccess(
+                    begin, user, "companion_image", usage, chargeRef,
+                    Constant.POINTS_SOURCE_AI_IMAGE, usePoints,
+                    System.currentTimeMillis() - startMs);
             String url = hubResult.getUrl();
             if (!ephemeral && dbSessionId != null) {
                 companionMemoryService.appendTextMessage(dbSessionId, "user", req.getPrompt().trim());
@@ -226,9 +249,11 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             }
             return AiHubConverter.toImageResponse(hubResult, modelCode, chargeRef, storedUrl, billing);
         } catch (ApplicationException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseImageReservation(user, reservedNormal, reservedPremium);
             throw ex;
         } catch (RuntimeException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseImageReservation(user, reservedNormal, reservedPremium);
             log.error("AI 生图失败 userId={} quality={}: {}", user.getId(), q, ex.getMessage(), ex);
             String detail = ex.getMessage() != null && !ex.getMessage().isBlank()
@@ -263,6 +288,18 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
         if (reservedPremium) {
             aiQuotaService.releaseImagePremium(user);
+        }
+    }
+
+    private void rejectDuplicateAiBegin(AiCallBeginResult begin) {
+        if (begin == null) {
+            return;
+        }
+        if (begin.isDuplicateSuccess()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该 AI 请求已处理，请勿重复提交"));
+        }
+        if (begin.isTerminalFailure()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该 AI 请求已失败，请更换 clientRequestId 后重试"));
         }
     }
 

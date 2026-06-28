@@ -10,6 +10,7 @@ import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleReply;
 import org.example.forumdemo.entity.db.ArticleReplyLike;
@@ -113,8 +114,10 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             summary = content.length() > 50 ? content.substring(0, 50) : content;
         }
         String postUsername = userService.getUserInfoById(loginUserId).getUsername();
-        forumProducer.sendReplyNotify(new ReplyNotifyMqVO("", articleId, loginUserId,
-                postUsername, article.getUserId(), summary, System.currentTimeMillis()));
+        String eventId = "reply:" + newReply.getId();
+        ReplyNotifyMqVO notifyVo = new ReplyNotifyMqVO(eventId, articleId, loginUserId,
+                postUsername, article.getUserId(), summary, System.currentTimeMillis());
+        TransactionHooks.afterCommit(() -> forumProducer.sendReplyNotify(notifyVo));
         // 帖子回复数 +1
         articleService.addReply(articleId);
     }

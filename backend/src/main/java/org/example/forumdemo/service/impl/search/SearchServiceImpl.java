@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.constant.ForumBusinessConstants;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
@@ -54,6 +55,17 @@ public class SearchServiceImpl implements SearchService {
     /** AI 用户搜索：纯向量兜底最低分 */
     private static final double USER_AI_VECTOR_MIN_SCORE = 0.38;
     private static final int RAG_TEXT_TRUNCATE = 1200;
+
+    private String normalizeSearchKeyword(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SEARCH_KEYWORD_EMPTY));
+        }
+        String kw = keyword.trim();
+        if (kw.length() > ForumBusinessConstants.SEARCH_KEYWORD_MAX_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "搜索关键词过长"));
+        }
+        return kw;
+    }
     @Autowired
     private ArticleMapper articleMapper;
 
@@ -71,10 +83,7 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
-        if (!StringUtils.hasText(keyword)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_SEARCH_KEYWORD_EMPTY));
-        }
-        String kw = keyword.trim();
+        String kw = normalizeSearchKeyword(keyword);
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
 
@@ -154,10 +163,7 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
-        if (!StringUtils.hasText(keyword)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_SEARCH_KEYWORD_EMPTY));
-        }
-        String kw = keyword.trim();
+        String kw = normalizeSearchKeyword(keyword);
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
 

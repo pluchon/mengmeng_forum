@@ -17,6 +17,7 @@ import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.Message;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.db.UserChatEmoji;
@@ -71,6 +72,9 @@ public class MessageServiceImpl implements MessageService {
 
     @Autowired
     private ForumProducer forumProducer;
+
+    @Autowired
+    private LocalMessageOutboxService localMessageOutboxService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -212,6 +216,9 @@ public class MessageServiceImpl implements MessageService {
     @Override
     public void recallMessage(Long messageId, Long loginUserId) {
         Message msg = queryMessageByMessageId(messageId);
+        if (Objects.equals(msg.getState(), Constant.MESSAGE_STATE_RECALLED)) {
+            return;
+        }
         if (!msg.getPostUserId().equals(loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
@@ -220,8 +227,11 @@ public class MessageServiceImpl implements MessageService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED, "超过撤回时间窗口（2分钟），无法撤回"));
         }
         int result = messageMapper.update(null, new LambdaUpdateWrapper<Message>()
-                .eq(Message::getId, messageId).eq(Message::getPostUserId, loginUserId)
-                .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE).set(Message::getState, Constant.MESSAGE_STATE_RECALLED));
+                .eq(Message::getId, messageId)
+                .eq(Message::getPostUserId, loginUserId)
+                .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .ne(Message::getState, Constant.MESSAGE_STATE_RECALLED)
+                .set(Message::getState, Constant.MESSAGE_STATE_RECALLED));
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED, "撤回失败，可能已超时或无权限"));
         }
@@ -545,8 +555,11 @@ public class MessageServiceImpl implements MessageService {
         User sender = userService.getUserInfoById(sendUserId);
         String senderLabel = sender != null && StringUtils.hasLength(sender.getNickname())
                 ? sender.getNickname() : (sender != null ? sender.getUsername() : "用户");
-        forumProducer.sendMessageNotify(new MessageNotifyMqVO("", messageId, sendUserId,
-                senderLabel, receiveUserId, safeSummary, System.currentTimeMillis()));
+        String eventId = "msg:" + messageId;
+        MessageNotifyMqVO vo = new MessageNotifyMqVO(eventId, messageId, sendUserId,
+                senderLabel, receiveUserId, safeSummary, System.currentTimeMillis());
+        TransactionHooks.afterCommit(() -> localMessageOutboxService.enqueue(
+                Constant.ROUTING_KEY_QUEUE_2, eventId, vo));
     }
 
     /**

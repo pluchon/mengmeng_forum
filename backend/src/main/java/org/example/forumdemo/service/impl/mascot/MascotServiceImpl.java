@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.enums.AiCallState;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -13,9 +14,11 @@ import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
 import org.example.forumdemo.converter.MascotConverter;
+import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
+import org.example.forumdemo.service.impl.ai.AiCallRecordService;
 import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
@@ -78,6 +81,9 @@ public class MascotServiceImpl implements MascotService {
 
     @Resource
     private AiPointsBillingService aiPointsBillingService;
+
+    @Resource
+    private AiCallRecordService aiCallRecordService;
 
     @Resource
     private AiQuotaService aiQuotaService;
@@ -297,15 +303,37 @@ public class MascotServiceImpl implements MascotService {
         return aiPointsBillingService.normalizeUsage(dto, fallbackModel);
     }
 
-    private Map<String, Object> billMascotUsage(User user, String skill, AiModelUsageDTO usage, String relatedId,
-                                                boolean usePointsBilling) {
-        return aiPointsBillingService.bill(
+    private Map<String, Object> billMascotUsage(AiCallBeginResult begin, User user, String skill,
+                                                AiModelUsageDTO usage, String relatedId,
+                                                boolean usePointsBilling, long latencyMs) {
+        return aiCallRecordService.settleSuccess(
+                begin,
                 user,
                 featureCode(skill),
                 usage,
                 relatedId,
                 Constant.POINTS_SOURCE_AI_COMPANION,
-                usePointsBilling);
+                usePointsBilling,
+                latencyMs);
+    }
+
+    private String billingRelatedId(MascotChatRequest request, String fallback) {
+        if (request.getClientRequestId() != null && !request.getClientRequestId().isBlank()) {
+            return request.getClientRequestId().trim();
+        }
+        return fallback;
+    }
+
+    private void rejectDuplicateMascotBegin(AiCallBeginResult begin) {
+        if (begin == null) {
+            return;
+        }
+        if (begin.isDuplicateSuccess()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该对话请求已处理，请勿重复提交"));
+        }
+        if (begin.isTerminalFailure()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该对话请求已失败，请更换 clientRequestId"));
+        }
     }
 
     private void reserveUsageQuota(User user, boolean vip, String skill, String route,
@@ -383,6 +411,11 @@ public class MascotServiceImpl implements MascotService {
                 ? (request.getSessionId() != null && !request.getSessionId().isBlank()
                 ? request.getSessionId().trim() : String.valueOf(user.getId()))
                 : String.valueOf(dbSessionId);
+        String billingRelatedId = billingRelatedId(request, pySessionKey);
+        AiCallBeginResult begin = aiCallRecordService.beginCall(
+                user.getId(), featureCode(skill), request.getClientRequestId(), fallbackModel);
+        rejectDuplicateMascotBegin(begin);
+        long startMs = System.currentTimeMillis();
 
         Map<String, Object> pyBody = new HashMap<>();
         pyBody.put("message", request.getMessage().trim());
@@ -421,6 +454,7 @@ public class MascotServiceImpl implements MascotService {
             }
             body = response.getBody();
         } catch (ApplicationException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
@@ -428,6 +462,7 @@ public class MascotServiceImpl implements MascotService {
             throw ex;
         } catch (Exception e) {
             log.warn("看板娘 Python 调用失败: {}", e.getMessage());
+            aiCallRecordService.markFailure(begin, AiCallState.TIMEOUT, e.getMessage());
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
@@ -438,6 +473,7 @@ public class MascotServiceImpl implements MascotService {
         Object codeObj = body.get("code");
         int code = codeObj instanceof Number ? ((Number) codeObj).intValue() : -1;
         if (code != 200) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, "mascot error code=" + code);
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
@@ -449,8 +485,10 @@ public class MascotServiceImpl implements MascotService {
         AiModelUsageDTO usage = parseUsage(body, fallbackModel);
         Map<String, Object> billing;
         try {
-            billing = billMascotUsage(user, skill, usage, pySessionKey, usePoints);
+            billing = billMascotUsage(begin, user, skill, usage, billingRelatedId, usePoints,
+                    System.currentTimeMillis() - startMs);
         } catch (ApplicationException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
@@ -574,6 +612,25 @@ public class MascotServiceImpl implements MascotService {
         final String userMessage = request.getMessage().trim();
         final StringBuilder replyBuffer = new StringBuilder();
         final AtomicReference<String> streamSearchImageUrl = new AtomicReference<>();
+        final String billingRelatedId = billingRelatedId(request, pySessionKey);
+        final AiCallBeginResult streamBegin = aiCallRecordService.beginCall(
+                user.getId(), featureCode(skill), request.getClientRequestId(), fallbackModel);
+        try {
+            rejectDuplicateMascotBegin(streamBegin);
+        } catch (ApplicationException ex) {
+            if (reservedBasic) {
+                releaseBasicSlot(user.getId());
+            }
+            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            try {
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "duplicate"));
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(ex);
+            }
+            return;
+        }
+        final long streamStartMs = System.currentTimeMillis();
 
         if (!ephemeral && persistSessionId != null) {
             companionMemoryService.appendTextMessage(persistSessionId, "user", userMessage);
@@ -647,6 +704,7 @@ public class MascotServiceImpl implements MascotService {
                     releaseBasicSlot(user.getId());
                 }
                 releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                aiCallRecordService.markFailure(streamBegin, AiCallState.TIMEOUT, "stream http " + code);
                 persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用"));
                 emitter.complete();
@@ -707,12 +765,14 @@ public class MascotServiceImpl implements MascotService {
             }
             Map<String, Object> billing;
             try {
-                billing = billMascotUsage(user, skill, usage, pySessionKey, usePoints);
+                billing = billMascotUsage(streamBegin, user, skill, usage, billingRelatedId, usePoints,
+                        System.currentTimeMillis() - streamStartMs);
             } catch (ApplicationException ex) {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
                 }
                 releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                aiCallRecordService.markFailure(streamBegin, AiCallState.FAILED, ex.getMessage());
                 persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
                 emitter.complete();
@@ -747,6 +807,14 @@ public class MascotServiceImpl implements MascotService {
                 releaseBasicSlot(user.getId());
             }
             releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            if (replyBuffer.length() > 0) {
+                aiCallRecordService.settlePartialOutput(
+                        streamBegin, user, featureCode(skill), fallbackModel,
+                        replyBuffer.length(), billingRelatedId,
+                        Constant.POINTS_SOURCE_AI_COMPANION, usePoints);
+            } else {
+                aiCallRecordService.markFailure(streamBegin, AiCallState.DISCONNECTED, e.getMessage());
+            }
             persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
             try {
                 sendMascotSse(emitter, Map.of("error", "对话失败，请稍后重试"));

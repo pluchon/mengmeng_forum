@@ -13,6 +13,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.MailUtil;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RequestIpUtils;
+import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.db.User;
@@ -172,10 +173,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         );
         forumProducer.sendArticleAuditTask(task);
         if (wasPublished) {
-            stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
-            boardService.deleteOneById(article.getBoardId());
-            userService.deleteOneById(loginUserId);
-            articleSearchIndexService.removeArticle(articleId);
+            final Long boardId = article.getBoardId();
+            TransactionHooks.afterCommit(() ->
+                    articlePublishSideEffectService.rollbackPublishedExposure(articleId, boardId, loginUserId));
         }
         log.info("提交审核成功: articleId={}, userId={}, taskId={}, retry={}/{}",
                 articleId, loginUserId, taskId, curRetry + 1, Constant.ARTICLE_AUDIT_MAX_RETRY);

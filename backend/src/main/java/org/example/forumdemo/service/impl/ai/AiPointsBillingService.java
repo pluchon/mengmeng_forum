@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
+import org.example.forumdemo.common.metrics.ForumMetrics;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.ForumAiModelPrice;
 import org.example.forumdemo.entity.db.ForumAiUsageLog;
@@ -54,6 +55,9 @@ public class AiPointsBillingService {
 
     @Resource
     private UserMapper userMapper;
+
+    @Resource
+    private ForumMetrics forumMetrics;
 
     private volatile Map<String, Map<String, BigDecimal>> priceCache;
 
@@ -252,6 +256,24 @@ public class AiPointsBillingService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> bill(User user, String featureCode, AiModelUsageDTO usage, String relatedId,
                                     Byte pointsSource, boolean usePointsBilling) {
+        if (relatedId != null && !relatedId.isBlank()) {
+            Long dupCount = forumAiUsageLogMapper.selectCount(
+                    Wrappers.lambdaQuery(ForumAiUsageLog.class)
+                            .eq(ForumAiUsageLog::getUserId, user.getId())
+                            .eq(ForumAiUsageLog::getFeatureCode, featureCode)
+                            .eq(ForumAiUsageLog::getRelatedId, relatedId.trim()));
+            if (dupCount != null && dupCount > 0) {
+                forumMetrics.recordIdempotencyHit();
+                User fresh = userMapper.selectById(user.getId());
+                int balanceAfter = fresh != null && fresh.getPoints() != null ? fresh.getPoints() : 0;
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("pointsCost", 0);
+                out.put("balanceAfter", balanceAfter);
+                out.put("billingMode", "duplicate");
+                out.put("usageStats", buildUsageStats(usage, 0, "duplicate"));
+                return out;
+            }
+        }
         AiModelUsageDTO u = usage;
         int referenceCost = calcPoints(u);
         if (referenceCost <= 0) {

@@ -193,8 +193,7 @@ public class ArticleServiceImpl implements ArticleService {
                 .eq(Article::getId, articleId).setSql("visit_count = visit_count + 1")) > 0) {
             articleInfo.setVisitCount(articleInfo.getVisitCount() + 1);
             if (ArticleStatus.isPublished(articleInfo.getStatus())) {
-                stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                        String.valueOf(articleId), Constant.HOT_SCORE_WEIGHT_VISIT);
+                articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_VISIT);
             }
         }
         User userInfo = userService.getUserInfoById(articleInfo.getUserId());
@@ -280,10 +279,10 @@ public class ArticleServiceImpl implements ArticleService {
         }
         stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
         if (wasPublished) {
-            stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
-            boardService.deleteOneById(article.getBoardId());
-            userService.deleteOneById(loginUserId);
-            articleSearchIndexService.removeArticle(articleId);
+            final Long boardId = article.getBoardId();
+            final Long authorId = loginUserId;
+            TransactionHooks.afterCommit(() ->
+                    articlePublishSideEffectService.rollbackPublishedExposure(articleId, boardId, authorId));
         }
         if (req.getTagIds() != null) {
             articleTagService.bindArticleTags(articleId, article.getBoardId(), req.getTagIds());
@@ -306,14 +305,23 @@ public class ArticleServiceImpl implements ArticleService {
                 .ne(Article::getState, STATE_FORBIDDEN)
                 .set(Article::getDeleteState, DELETE_TRUE));
         if (result <= 0) {
+            Article current = articleMapper.selectById(articleId);
+            if (current != null && Objects.equals(current.getDeleteState(), DELETE_TRUE)
+                    && Objects.equals(current.getUserId(), loginUserId)) {
+                return;
+            }
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        if (ArticleStatus.isPublished(article.getStatus())) {
-            userService.deleteOneById(loginUserId);
-            boardService.deleteOneById(article.getBoardId());
-        }
-        stringRedisTemplate.opsForZSet().remove(Constant.REDIS_KEY_HOT_ARTICLES, String.valueOf(articleId));
-        articleSearchIndexService.removeArticle(articleId);
+        final boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        final Long boardId = article.getBoardId();
+        TransactionHooks.afterCommit(() -> {
+            if (wasPublished) {
+                articlePublishSideEffectService.rollbackPublishedExposure(articleId, boardId, loginUserId);
+            } else {
+                articleHotRankingService.removeFromRanking(articleId);
+                articleSearchIndexService.removeArticle(articleId);
+            }
+        });
         log.info("帖子 {} 已逻辑删除并从热帖榜单移除", articleId);
     }
 
@@ -332,8 +340,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                String.valueOf(articleId), Constant.HOT_SCORE_WEIGHT_REPLY);
+        articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_REPLY);
     }
 
     @Override
@@ -348,8 +355,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                String.valueOf(articleId), -Constant.HOT_SCORE_WEIGHT_REPLY);
+        articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_REPLY);
     }
 
     @Override
@@ -364,8 +370,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                String.valueOf(articleId), Constant.HOT_SCORE_WEIGHT_REPLY);
+        articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_REPLY);
     }
 
     @Override
@@ -380,8 +385,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (result <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                String.valueOf(articleId), -Constant.HOT_SCORE_WEIGHT_REPLY);
+        articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_REPLY);
     }
 
     // ============================================================

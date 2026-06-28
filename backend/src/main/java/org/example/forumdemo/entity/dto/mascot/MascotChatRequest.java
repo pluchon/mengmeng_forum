@@ -45,4 +45,7 @@ public class MascotChatRequest {
 
     @Schema(description = "本会话已推荐过的帖子 ID，用于换一批相关推荐")
     private List<Long> excludeArticleIds;
+
+    @Schema(description = "客户端幂等键；流式/重试时传相同值防重复扣费")
+    private String clientRequestId;
 }

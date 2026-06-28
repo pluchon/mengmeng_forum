@@ -17,6 +17,7 @@ import org.example.forumdemo.entity.vo.favorite.FolderVO;
 import org.example.forumdemo.mapper.ArticleFavoriteMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserFavoriteFolderMapper;
+import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -54,6 +55,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ArticleHotRankingService articleHotRankingService;
 
     // ============================================================
     // 创建 / 修改 / 删除
@@ -146,8 +150,7 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                     .eq(Article::getId, f.getArticleId())
                     .setSql("favorite_count = GREATEST(favorite_count - 1, 0)"));
-            stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                    String.valueOf(f.getArticleId()), -Constant.HOT_SCORE_WEIGHT_FAVORITE);
+            articleHotRankingService.incrementScore(f.getArticleId(), -Constant.HOT_SCORE_WEIGHT_FAVORITE);
         }
         log.info("用户 {} 删除收藏夹 {} 完成, 联动清理 {} 条收藏记录", loginUserId, folderId, favorites.size());
     }

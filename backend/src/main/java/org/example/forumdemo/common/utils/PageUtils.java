@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 public class PageUtils {
 
+    public static final int MAX_PAGE_SIZE = 50;
+
     /**
      * 获取校验后的当前页码
      */
@@ -12,10 +14,11 @@ public class PageUtils {
     }
 
     /**
-     * 获取校验后的每页数量
+     * 获取校验后的每页数量（上限 {@link #MAX_PAGE_SIZE}）
      */
     public static int getValidPageSize(Integer pageSize) {
-        return (pageSize == null || pageSize < 1) ? 10 : pageSize;
+        int size = (pageSize == null || pageSize < 1) ? 10 : pageSize;
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     /**

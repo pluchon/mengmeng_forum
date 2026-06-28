@@ -14,4 +14,8 @@ public interface ArticleHotRankingService {
     double computeHotScore(Article article);
 
     void addToHotRanking(Long articleId);
+
+    void incrementScore(Long articleId, double delta);
+
+    void removeFromRanking(Long articleId);
 }

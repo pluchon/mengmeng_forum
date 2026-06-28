@@ -1,7 +1,8 @@
 -- 全库初始化脚本（执行即删库重建 forum_db；勿与 PostgreSQL 的 postgres_ai_session.sql 混跑）
 -- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、抽奖演示）。
 -- 不含用户/帖子等业务数据；生产数据请走用户端注册与日常运营维护。
--- 结构变更请整库重跑本脚本，勿做增量 patch。
+-- 结构变更：全新环境请整库重跑本脚本；已有库请执行同目录 incremental_concurrency.sql（MySQL）与 postgres_ai_session.sql（PostgreSQL）。
+-- 并发幂等（Phase 01~05）：points_log.idempotency_key、lottery_draw_request、forum_ai_usage_log(related_id 唯一)、user_follow 唯一、article_like 唯一。
 DROP DATABASE IF EXISTS `forum_db`;
 CREATE DATABASE `forum_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -704,6 +705,9 @@ CREATE TABLE `user_emoji` (
 -- 钱包级流水: 任何 user.points 变动都要在同一事务里 INSERT 一条; 用于前端 ECharts 渲染.
 -- source_type: 0签到基础 / 1签到连签奖励 / 2商城购买 / 3退款回补 / 4抽奖消耗 / 5抽奖积分奖励 / 6注册赠送 / 7VIP订阅扣款 / 8抽奖页彩蛋 / 9AI陪伴消耗 / 10AI生图消耗 / 99管理员调整
 -- related_id: 关联业务行ID(checkin_log.id / user_emoji.id / lottery_draw_record.id 等), 仅做溯源, 允许空
+-- idempotency_key: 一次性积分变动幂等键(非空时 uk_points_user_idempotency 约束); 示例:
+--   vip_sub:{userId}:{requestId} / lottery_cost:{userId}:{requestId} / ai_bill:{userId}:{relatedId}
+--   game:gobang:win:{roomId} / game:gobang:lose:{roomId} 等
 -- delta:      正数=入账, 负数=消费; balance_after=变动后余额
 -- ----------------------------
 DROP TABLE IF EXISTS `points_log`;
@@ -889,6 +893,7 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 
 -- ----------------------------
 -- 19.3 AI 调用明细 (forum_ai_usage_log)
+-- related_id: 会话/业务关联 ID；与 (user_id, feature_code) 组成计费幂等键（AiPointsBillingService）
 -- ----------------------------
 DROP TABLE IF EXISTS `forum_ai_usage_log`;
 CREATE TABLE `forum_ai_usage_log` (
@@ -901,13 +906,59 @@ CREATE TABLE `forum_ai_usage_log` (
     `image_count` int NOT NULL DEFAULT 0 COMMENT '图片张数',
     `points_cost` int NOT NULL DEFAULT 0 COMMENT '扣除积分',
     `estimated` tinyint NOT NULL DEFAULT 0 COMMENT '1=用量为估算',
-    `related_id` varchar(64) DEFAULT NULL COMMENT '会话或业务关联ID',
+    `related_id` varchar(64) DEFAULT NULL COMMENT '会话或业务关联ID(有值时参与计费幂等)',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_ai_usage_user_feature_related` (`user_id`, `feature_code`, `related_id`),
     KEY `idx_ai_usage_log_user_time` (`user_id`, `create_time`),
     KEY `idx_ai_usage_log_feature` (`feature_code`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI调用积分明细';
+
+-- ----------------------------
+-- 19.3.1 AI 调用预记录 (forum_ai_call_record)
+-- 调用前 PENDING，结算后 SUCCESS/FAILED/TIMEOUT/STOPPED/DISCONNECTED
+-- ----------------------------
+DROP TABLE IF EXISTS `forum_ai_call_record`;
+CREATE TABLE `forum_ai_call_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `feature_code` varchar(64) NOT NULL COMMENT '功能编码',
+    `client_request_id` varchar(64) NOT NULL COMMENT '客户端幂等键',
+    `model_code` varchar(64) DEFAULT NULL COMMENT '计划调用模型',
+    `call_state` tinyint NOT NULL DEFAULT 0 COMMENT '0待调用 1成功 2失败 3超时 4停止 5断开',
+    `estimated_points` int NOT NULL DEFAULT 0 COMMENT '预估积分',
+    `points_charged` int NOT NULL DEFAULT 0 COMMENT '实际扣除积分',
+    `input_tokens` int NOT NULL DEFAULT 0 COMMENT '输入token',
+    `output_tokens` int NOT NULL DEFAULT 0 COMMENT '输出token',
+    `error_summary` varchar(200) DEFAULT NULL COMMENT '失败摘要(脱敏)',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_ai_call_user_feature_request` (`user_id`, `feature_code`, `client_request_id`),
+    KEY `idx_ai_call_user_time` (`user_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI调用预记录表';
+
+-- ----------------------------
+-- 19.3.2 MQ 本地消息表 (forum_outbox_message)
+-- ----------------------------
+DROP TABLE IF EXISTS `forum_outbox_message`;
+CREATE TABLE `forum_outbox_message` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `event_id` varchar(128) NOT NULL COMMENT '业务事件ID',
+    `routing_key` varchar(64) NOT NULL COMMENT 'RabbitMQ routing key',
+    `payload_json` mediumtext NOT NULL COMMENT '消息体 JSON',
+    `message_state` tinyint NOT NULL DEFAULT 0 COMMENT '0待投递 1已投递 2已消费 3失败 4死信',
+    `retry_count` int NOT NULL DEFAULT 0 COMMENT '重试次数',
+    `last_error` varchar(200) DEFAULT NULL COMMENT '最近错误摘要',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_outbox_event_id` (`event_id`),
+    KEY `idx_outbox_state_time` (`message_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='MQ本地消息表';
 
 -- ----------------------------
 -- 19.4 AI 模型调用按日汇总 (forum_ai_model_usage_daily)
@@ -969,6 +1020,7 @@ CREATE TABLE `forum_companion_message` (
 -- ----------------------------
 DROP TABLE IF EXISTS `lottery_draw_hourly_stat`;
 DROP TABLE IF EXISTS `lottery_draw_record`;
+DROP TABLE IF EXISTS `lottery_draw_request`;
 DROP TABLE IF EXISTS `lottery_activity_prize`;
 DROP TABLE IF EXISTS `lottery_activity`;
 DROP TABLE IF EXISTS `lottery_prize_mystery_item`;
@@ -1054,10 +1106,9 @@ CREATE TABLE `lottery_activity_prize` (
 
 
 -- ----------------------------
--- 23. 抽奖记录表 (lottery_draw_record)
--- mystery_item_*: 神秘大奖开奖后实际子项快照; 非神秘时为 NULL
+-- 22.9 抽奖请求幂等表 (lottery_draw_request)
+-- 客户端 requestId 重试时返回同批次结果，不重复扣积分
 -- ----------------------------
-DROP TABLE IF EXISTS `lottery_draw_request`;
 CREATE TABLE `lottery_draw_request` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id` bigint NOT NULL COMMENT '用户ID',
@@ -1074,7 +1125,11 @@ CREATE TABLE `lottery_draw_request` (
     KEY `idx_lottery_request_batch` (`batch_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='抽奖请求幂等表';
 
-DROP TABLE IF EXISTS `lottery_draw_record`;
+-- ----------------------------
+-- 23. 抽奖记录表 (lottery_draw_record)
+-- mystery_item_*: 神秘大奖开奖后实际子项快照; 非神秘时为 NULL
+-- draw_batch_key: 与 lottery_draw_request.batch_key / request_id 对应
+-- ----------------------------
 CREATE TABLE `lottery_draw_record` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',

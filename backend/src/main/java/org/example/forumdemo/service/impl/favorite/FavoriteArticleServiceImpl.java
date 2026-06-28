@@ -21,6 +21,7 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleFavoriteMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserFavoriteFolderMapper;
+import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
@@ -65,6 +66,9 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ArticleHotRankingService articleHotRankingService;
 
     // ============================================================
     // 收藏 / 取消 / 移动
@@ -127,8 +131,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             folderMapper.incrementItemCount(folderId);
             articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                     .eq(Article::getId, articleId).setSql("favorite_count = favorite_count + 1"));
-            stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                    String.valueOf(articleId), Constant.HOT_SCORE_WEIGHT_FAVORITE);
+            articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE);
         }
         log.info("用户 {} 收藏帖子 {} 到夹 {}", loginUserId, articleId, folderId);
         return folderId;
@@ -159,8 +162,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .setSql("favorite_count = GREATEST(favorite_count - 1, 0)"));
-        stringRedisTemplate.opsForZSet().incrementScore(Constant.REDIS_KEY_HOT_ARTICLES,
-                String.valueOf(articleId), -Constant.HOT_SCORE_WEIGHT_FAVORITE);
+        articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_FAVORITE);
         log.info("用户 {} 取消收藏帖子 {}", loginUserId, articleId);
     }
 
@@ -184,9 +186,21 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             return;
         }
         Long fromFolderId = row.getFolderId();
-        favoriteMapper.update(null, new LambdaUpdateWrapper<ArticleFavorite>()
+        int updated = favoriteMapper.update(null, new LambdaUpdateWrapper<ArticleFavorite>()
                 .eq(ArticleFavorite::getId, row.getId())
+                .eq(ArticleFavorite::getFolderId, fromFolderId)
+                .ne(ArticleFavorite::getDeleteState, DELETE_YES)
                 .set(ArticleFavorite::getFolderId, toFolderId));
+        if (updated <= 0) {
+            ArticleFavorite latest = favoriteMapper.selectById(row.getId());
+            if (latest == null || Objects.equals(latest.getDeleteState(), DELETE_YES)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_FAVORITE_NOT_EXISTS));
+            }
+            if (Objects.equals(latest.getFolderId(), toFolderId)) {
+                return;
+            }
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "收藏正在移动中，请刷新后重试"));
+        }
         folderMapper.decrementItemCount(fromFolderId);
         folderMapper.incrementItemCount(toFolderId);
         log.info("用户 {} 把帖子 {} 从夹 {} 移到夹 {}", loginUserId, articleId, fromFolderId, toFolderId);

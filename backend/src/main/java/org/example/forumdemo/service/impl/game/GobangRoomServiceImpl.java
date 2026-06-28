@@ -54,6 +54,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import java.util.concurrent.Executor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -135,6 +138,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     @Autowired
     private ForumProducer forumProducer;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    @Qualifier("gameAiExecutor")
+    private Executor gameAiExecutor;
+
+    @Autowired
+    private GameMatchRoomHelper gameMatchRoomHelper;
+
     private GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
 
     @Value("${forum.ai.internal-key:}")
@@ -156,6 +169,13 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        return gameMatchRoomHelper.resolveMatchedRoomId(
+                "gobang", userIdA, userIdB,
+                () -> createMatchedRoomInternal(userIdA, userIdB),
+                rooms::containsKey);
+    }
+
+    private String createMatchedRoomInternal(Long userIdA, Long userIdB) {
         GobangRoom room = new GobangRoom(userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
@@ -784,7 +804,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         room.setAiThinking(true);
         sendStateToRoom(room, "room_state_updated");
         final boolean llm = consultLlm;
-        CompletableFuture.runAsync(() -> executeAiTurn(room.getRoomId(), llm, minThinkMs));
+        CompletableFuture.runAsync(() -> executeAiTurn(room.getRoomId(), llm, minThinkMs), gameAiExecutor);
     }
 
     private void executeAiTurn(String roomId, boolean consultLlm, long minThinkMs) {
