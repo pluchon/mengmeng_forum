@@ -82,7 +82,15 @@ public final class Constant {
     public static final String REDIS_KEY_CHECKIN_RULE = ForumRedisKeys.CHECKIN_RULE;
     public static final long REDIS_TTL_CHECKIN_RULE = ForumRedisKeys.TTL_CHECKIN_RULE;
     public static final String REDIS_KEY_SHOP_DETAIL = ForumRedisKeys.SHOP_DETAIL;
+    public static final String REDIS_KEY_SHOP_DETAIL_VERSION = ForumRedisKeys.SHOP_DETAIL_VERSION;
+    public static final String REDIS_KEY_SHOP_DETAIL_LOCK = ForumRedisKeys.SHOP_DETAIL_LOCK;
     public static final long REDIS_TTL_SHOP_DETAIL = ForumRedisKeys.TTL_SHOP_DETAIL;
+    public static final long REDIS_TTL_SHOP_DETAIL_LOCK = ForumRedisKeys.TTL_SHOP_DETAIL_LOCK;
+    public static final String REDIS_KEY_SHOP_LIST = ForumRedisKeys.SHOP_LIST;
+    public static final String REDIS_KEY_SHOP_LIST_VERSION = ForumRedisKeys.SHOP_LIST_VERSION;
+    public static final String REDIS_KEY_SHOP_LIST_LOCK = ForumRedisKeys.SHOP_LIST_LOCK;
+    public static final long REDIS_TTL_SHOP_LIST = ForumRedisKeys.TTL_SHOP_LIST;
+    public static final long REDIS_TTL_SHOP_LIST_LOCK = ForumRedisKeys.TTL_SHOP_LIST_LOCK;
     public static final String REDIS_KEY_AUDIT_RESULT_DEDUP = ForumRedisKeys.AUDIT_RESULT_DEDUP;
     public static final long REDIS_TTL_AUDIT_RESULT_DEDUP = ForumRedisKeys.TTL_AUDIT_RESULT_DEDUP;
     public static final String REDIS_KEY_AUDIT_TASK_STATE = ForumRedisKeys.AUDIT_TASK_STATE;

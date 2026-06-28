@@ -24,8 +24,8 @@ export function getShopList(params) {
   return request({ url: '/shop/list', method: 'get', params })
 }
 
-export function getShopDetail(shopId) {
-  return request({ url: '/shop/detail', method: 'get', params: { shopId } })
+export function getShopDetail(shopId, params = {}) {
+  return request({ url: '/shop/detail', method: 'get', params: { shopId, ...params } })
 }
 
 export function purchaseShop(shopId) {

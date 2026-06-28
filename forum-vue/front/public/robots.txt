@@ -1,5 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /forgot-password
+Disallow: /settings
+Disallow: /message
 
 # 仅索引用户端公开页面；管理后台使用独立域名且已禁止抓取
 Sitemap: https://www.nuonuoya.cn/sitemap.xml

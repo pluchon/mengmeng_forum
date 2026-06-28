@@ -7,8 +7,10 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.lottery.LotteryDrawDTO;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityInfoVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityListItemVO;
+import org.example.forumdemo.entity.vo.lottery.LotteryDrawRecordVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawResultVO;
 import org.example.forumdemo.entity.vo.lottery.LotterySurpriseClaimVO;
 import org.example.forumdemo.service.interfaces.lottery.LotteryService;
@@ -43,6 +45,17 @@ public class LotteryController {
             HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         return Result.success(lotteryService.getActivityInfo(loginUser.getId(), activityId));
+    }
+
+    @Operation(summary = "我的抽奖记录", description = "需登录; 每页默认 12 条，activityId 可选")
+    @GetMapping("/records")
+    public Result<PageResult<LotteryDrawRecordVO>> records(
+            @RequestParam(required = false) Long activityId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "12") Integer pageSize,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(lotteryService.queryDrawRecords(loginUser.getId(), activityId, pageNum, pageSize));
     }
 
     @Operation(summary = "抽奖", description = "times=1 单抽 times=10 十连; 先扣积分再开奖")

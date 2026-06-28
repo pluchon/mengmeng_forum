@@ -6,6 +6,9 @@ import java.util.Random;
 // 单个玩家的权威棋盘状态，服务端推进下落与消行
 public class TetrisPlayerState {
 
+    // tickFall 未发生任何状态变化时的返回值
+    public static final int TICK_UNCHANGED = Integer.MIN_VALUE;
+
     // 棋盘矩阵
     private String[][] matrix;
 
@@ -105,10 +108,7 @@ public class TetrisPlayerState {
                 moveHorizontal(false);
                 yield 0;
             }
-            case "down" -> {
-                softFall(false, nowMs);
-                yield 0;
-            }
+            case "down" -> softFall(false, nowMs);
             case "rotate" -> {
                 rotatePiece();
                 yield 0;
@@ -122,19 +122,18 @@ public class TetrisPlayerState {
         };
     }
 
-    // 服务端重力 tick
+    // 服务端重力 tick，未变化返回 TICK_UNCHANGED，否则返回本次消行应攻击对手的垃圾行数
     public int tickFall(long nowMs) {
         if (gameOver || lock || cur == null) {
-            return 0;
+            return TICK_UNCHANGED;
         }
         if (nowMs < nextFallAtMs) {
-            return 0;
+            return TICK_UNCHANGED;
         }
-        softFall(true, nowMs);
-        return 0;
+        return softFall(true, nowMs);
     }
 
-    public void addGarbageLines(int count, Random random) {
+    public void addGarbageLines(int count, Random random, long nowMs) {
         if (gameOver || count <= 0) {
             return;
         }
@@ -144,8 +143,7 @@ public class TetrisPlayerState {
             }
             int hole = random.nextInt(TetrisEngineConstants.COLS);
             if (TetrisMatrixUtil.isOver(matrix)) {
-                gameOver = true;
-                cur = null;
+                finishGame();
                 return;
             }
             String[][] next = TetrisMatrixUtil.copyMatrix(matrix);
@@ -158,9 +156,17 @@ public class TetrisPlayerState {
             }
             next[TetrisEngineConstants.ROWS - 1] = garbageRow;
             matrix = next;
+            if (cur != null && !lock) {
+                TetrisBlock shifted = cur.fall(-1);
+                if (!TetrisMatrixUtil.canPlace(shifted, matrix)) {
+                    finishGame();
+                    return;
+                }
+                cur = shifted;
+                scheduleFall(nowMs);
+            }
             if (TetrisMatrixUtil.isOver(matrix)) {
-                gameOver = true;
-                cur = null;
+                finishGame();
             }
         }
     }
@@ -190,14 +196,14 @@ public class TetrisPlayerState {
         }
     }
 
-    private void softFall(boolean auto, long nowMs) {
+    private int softFall(boolean auto, long nowMs) {
         TetrisBlock next = cur.fall(1);
         if (TetrisMatrixUtil.canPlace(next, matrix)) {
             cur = next;
             scheduleFall(nowMs);
-            return;
+            return 0;
         }
-        lockCurrent(nowMs);
+        return lockCurrent(nowMs);
     }
 
     private void holdPiece(long nowMs) {

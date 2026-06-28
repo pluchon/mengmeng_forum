@@ -2,7 +2,7 @@
   <div class="vip-page shell-page-scroll animate-fade-in" v-loading="loading">
     <div class="vip-inner">
       <header class="vip-hero">
-        <h1 class="vip-title">萌萌技术分享笔记 · 会员方案</h1>
+        <h1 class="vip-title">萌部落 · 会员方案</h1>
         <p class="vip-desc">选择适合你的方案，解锁更多 AI 创作与互动权益</p>
       </header>
 

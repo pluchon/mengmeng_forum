@@ -1,6 +1,9 @@
 <template>
   <header class="home-shell-header">
-    <router-link to="/" class="home-shell-brand">{{ siteName }}</router-link>
+    <router-link to="/" class="home-shell-brand">
+      <img class="home-shell-brand-logo" src="/logo.ico" alt="" />
+      <span>{{ siteName }}</span>
+    </router-link>
 
     <div class="home-shell-search">
       <div class="home-search-inner" :class="{ 'home-search-inner--ai-rag': aiSearchMode }">

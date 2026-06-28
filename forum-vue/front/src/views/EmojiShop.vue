@@ -78,7 +78,7 @@
       </div>
 
       <div v-if="loading" class="emoji-shop-grid emoji-shop-grid--loading">
-        <div v-for="i in 8" :key="i" class="emoji-shop-grid-item">
+        <div v-for="i in 12" :key="i" class="emoji-shop-grid-item">
           <el-skeleton animated>
             <template #template>
               <el-skeleton-item variant="image" style="width: 100%; aspect-ratio: 1; border-radius: 16px" />

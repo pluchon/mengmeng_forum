@@ -154,17 +154,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             }
             long now = System.currentTimeMillis();
             int garbage = state.handleInput(action, now);
-            if (garbage > 0) {
-                Long opponentId = room.opponentOf(userId);
-                TetrisPlayerState opponentState = room.stateOf(opponentId);
-                if (opponentState != null) {
-                    opponentState.addGarbageLines(garbage, garbageRandom);
-                    broadcast(roomId, GameWsResponse.ok("garbage_received", requestId, Map.of(
-                            "targetUserId", opponentId,
-                            "lines", garbage
-                    )));
-                }
-            }
+            applyGarbageToOpponent(room, userId, garbage, now, requestId);
             checkFinishAfterMove(room, userId);
             if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 broadcastState(room, "room_state_updated", requestId);
@@ -282,23 +272,55 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     continue;
                 }
                 boolean changed = false;
+                Long player1Id = room.getPlayer1UserId();
+                Long player2Id = room.getPlayer2UserId();
                 if (!room.getPlayer1State().isGameOver()) {
-                    room.getPlayer1State().tickFall(now);
-                    changed = true;
+                    int garbage = room.getPlayer1State().tickFall(now);
+                    if (garbage != TetrisPlayerState.TICK_UNCHANGED) {
+                        applyGarbageToOpponent(room, player1Id, garbage, now, null);
+                        checkFinishAfterMove(room, player1Id);
+                        changed = true;
+                    }
                 }
                 if (!room.getPlayer2State().isGameOver()) {
-                    room.getPlayer2State().tickFall(now);
-                    changed = true;
+                    int garbage = room.getPlayer2State().tickFall(now);
+                    if (garbage != TetrisPlayerState.TICK_UNCHANGED) {
+                        applyGarbageToOpponent(room, player2Id, garbage, now, null);
+                        checkFinishAfterMove(room, player2Id);
+                        changed = true;
+                    }
                 }
                 if (!changed) {
                     continue;
                 }
-                checkFinishAfterMove(room, room.getPlayer1UserId());
                 if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                     broadcastState(room, "room_state_updated", null);
                 }
             }
         }
+    }
+
+    // 消行后向对手追加垃圾行，与单人模式 lock → clear 链路一致
+    private void applyGarbageToOpponent(
+            TetrisRoom room,
+            Long actorUserId,
+            int garbage,
+            long nowMs,
+            String requestId
+    ) {
+        if (garbage <= 0) {
+            return;
+        }
+        Long opponentId = room.opponentOf(actorUserId);
+        TetrisPlayerState opponentState = room.stateOf(opponentId);
+        if (opponentState == null || opponentState.isGameOver()) {
+            return;
+        }
+        opponentState.addGarbageLines(garbage, garbageRandom, nowMs);
+        broadcast(room.getRoomId(), GameWsResponse.ok("garbage_received", requestId, Map.of(
+                "targetUserId", opponentId,
+                "lines", garbage
+        )));
     }
 
     @Scheduled(fixedDelay = 5_000)

@@ -20,6 +20,11 @@ export function getLotteryInfo(activityId) {
   return request({ url: '/lottery/info', method: 'get', params })
 }
 
+/** @param {{activityId?: number|string, pageNum?: number, pageSize?: number}} [params] */
+export function getLotteryRecords(params = {}) {
+  return request({ url: '/lottery/records', method: 'get', params })
+}
+
 /** @param {1|10} times @param {number|string|null|undefined} [activityId] @param {string} [requestId] */
 export function lotteryDraw(times, activityId, requestId) {
   const data = {

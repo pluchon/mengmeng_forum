@@ -103,6 +103,12 @@
   overflow: hidden;
 }
 
+.lottery-history-pager {
+  display: flex;
+  justify-content: center;
+  padding-top: 14px;
+}
+
 .lottery-surprise-reward-wrap {
   padding: 0 0 4px;
 }

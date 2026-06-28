@@ -60,7 +60,7 @@ public class EmojiShopController {
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(defaultValue = "12") Integer pageSize,
             HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
@@ -69,10 +69,13 @@ public class EmojiShopController {
 
     @Operation(summary = "商品详情", description = "上架商品对所有人可见; 已下架/待审仅作者本人 + 管理员可见")
     @GetMapping("/detail")
-    public Result<EmojiShopDetailVO> queryShopDetail(@RequestParam Long shopId, HttpServletRequest request) {
+    public Result<EmojiShopDetailVO> queryShopDetail(@RequestParam Long shopId,
+                                                     @RequestParam(defaultValue = "1") Integer itemPageNum,
+                                                     @RequestParam(defaultValue = "9") Integer itemPageSize,
+                                                     HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
-        return Result.success(emojiShopService.queryShopDetail(shopId, loginUserId));
+        return Result.success(emojiShopService.queryShopDetail(shopId, loginUserId, itemPageNum, itemPageSize));
     }
 
     @Operation(summary = "购买表情包",
