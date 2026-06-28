@@ -169,8 +169,11 @@ export function useVipCenter() {
       return
     }
     subLoading.value = true
+    const requestId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Date.now()}${Math.random().toString(16).slice(2)}`
     try {
-      const res = await vipSubscribe({ tier: plan.tier })
+      const res = await vipSubscribe({ tier: plan.tier, requestId })
       const d = res?.data
       try {
         await userStore.fetchUserInfo()

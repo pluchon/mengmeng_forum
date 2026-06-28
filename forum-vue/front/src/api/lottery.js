@@ -1,5 +1,12 @@
 import request from './request'
 
+function newRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  return `${Date.now()}${Math.random().toString(16).slice(2)}`
+}
+
 export function getLotteryActivities() {
   return request({ url: '/lottery/activities', method: 'get' })
 }
@@ -13,9 +20,12 @@ export function getLotteryInfo(activityId) {
   return request({ url: '/lottery/info', method: 'get', params })
 }
 
-/** @param {1|10} times @param {number|string|null|undefined} [activityId] */
-export function lotteryDraw(times, activityId) {
-  const data = { times }
+/** @param {1|10} times @param {number|string|null|undefined} [activityId] @param {string} [requestId] */
+export function lotteryDraw(times, activityId, requestId) {
+  const data = {
+    times,
+    requestId: requestId || newRequestId(),
+  }
   if (activityId != null && activityId !== '') {
     data.activityId = activityId
   }
