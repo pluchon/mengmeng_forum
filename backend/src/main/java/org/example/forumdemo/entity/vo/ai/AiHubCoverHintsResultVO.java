@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 public class AiHubCoverHintsResultVO {
 
+    private String content;
     private List<String> hints;
     private List<String> themes;
     private String summary;
