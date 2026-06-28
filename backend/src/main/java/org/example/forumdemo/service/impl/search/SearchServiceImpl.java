@@ -135,6 +135,11 @@ public class SearchServiceImpl implements SearchService {
         if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
             rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
         }
+        rankedIds = retainPublishedArticleIds(rankedIds);
+        if (rankedIds.isEmpty()) {
+            log.info("AI 帖子语义搜索命中结果均不可公开 keyword={}", kw);
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
+        }
         long total = rankedIds.size();
         int fromIdx = (p - 1) * s;
         int toIdx = Math.min(fromIdx + s, rankedIds.size());
@@ -270,6 +275,29 @@ public class SearchServiceImpl implements SearchService {
                 }
             } catch (NumberFormatException ignore) {
                 // skip
+            }
+        }
+        return out;
+    }
+
+    // RAG 索引属于事务外副作用，展示前必须以数据库公开状态为准，避免撤稿或回退草稿的帖子被旧向量命中。
+    private List<Long> retainPublishedArticleIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Article> rows = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                .in(Article::getId, ids)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .ne(Article::getState, STATE_FORBIDDEN)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                .select(Article::getId));
+        Set<Long> publishedIds = rows.stream()
+                .map(Article::getId)
+                .collect(Collectors.toSet());
+        List<Long> out = new ArrayList<>(ids.size());
+        for (Long id : ids) {
+            if (publishedIds.contains(id)) {
+                out.add(id);
             }
         }
         return out;
@@ -449,7 +477,7 @@ public class SearchServiceImpl implements SearchService {
         return rows.stream().map(this::toListResponse).collect(Collectors.toList());
     }
 
-    /** RAG 命中 ID 回表（仅展示，不参与检索）；不按 PUBLISHED 过滤，避免与向量库不同步导致空列表。 */
+    /** RAG 命中 ID 回表；展示前仍以数据库公开状态为准，避免旧向量索引泄露未发布帖子。 */
     private List<ArticleListResponse> buildListResponsesForRag(List<Long> ids) {
         if (ids.isEmpty()) {
             return Collections.emptyList();
@@ -457,7 +485,8 @@ public class SearchServiceImpl implements SearchService {
         List<Article> rows = articleMapper.selectList(new LambdaQueryWrapper<Article>()
                 .in(Article::getId, ids)
                 .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN));
+                .ne(Article::getState, STATE_FORBIDDEN)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()));
         Map<Long, Article> byId = new HashMap<>(rows.size() * 2);
         for (Article a : rows) {
             byId.put(a.getId(), a);

@@ -28,7 +28,11 @@ public final class AiHubConverter {
         if (data == null) {
             return vo;
         }
-        vo.setText(stringVal(data.get("text")));
+        String text = stringVal(data.get("text"));
+        if (text == null) {
+            text = stringVal(data.get("content"));
+        }
+        vo.setText(text);
         vo.setModel(stringVal(data.get("model")));
         vo.setProvider(stringVal(data.get("provider")));
         vo.setUsage(parseUsage(data.get("usage")));
@@ -40,6 +44,7 @@ public final class AiHubConverter {
         if (data == null) {
             return vo;
         }
+        vo.setContent(stringVal(data.get("content")));
         vo.setHints(stringList(data.get("hints")));
         vo.setThemes(stringList(data.get("themes")));
         vo.setSummary(stringVal(data.get("summary")));
