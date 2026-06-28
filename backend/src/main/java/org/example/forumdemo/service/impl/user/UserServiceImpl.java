@@ -118,7 +118,8 @@ public class UserServiceImpl implements UserService {
         userMapper.insert(register);
         // 注册的新用户默认都给指定的初始积分
         pointsService.addPoints(register.getId(), Constant.POINTS_REGISTER_BONUS_AMOUNT,
-                Constant.POINTS_SOURCE_REGISTER_BONUS, register.getId(), "新用户注册赠送积分");
+                Constant.POINTS_SOURCE_REGISTER_BONUS, register.getId(), "新用户注册赠送积分",
+                "register:" + register.getId());
         // 立即把用户信息存入缓存
         storeUserNameMapping(register.getUsername(), register.getId());
         // 注册成功后立刻为用户创建默认收藏夹; 失败仅记日志, 不影响注册主流程,

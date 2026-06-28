@@ -297,7 +297,10 @@ public class AiPointsBillingService {
                                    Byte pointsSource, int cost) {
         ensureBalance(user, cost);
         String remark = featureRemark(featureCode, u.getModelCode(), cost);
-        int balanceAfter = pointsService.deductPoints(user.getId(), cost, pointsSource, null, remark);
+        String idempotencyKey = relatedId != null && !relatedId.isBlank()
+                ? "ai_bill:" + user.getId() + ":" + relatedId.trim()
+                : null;
+        int balanceAfter = pointsService.deductPoints(user.getId(), cost, pointsSource, null, remark, idempotencyKey);
         persistUsageLog(user.getId(), featureCode, u, relatedId, cost);
         return balanceAfter;
     }

@@ -12,8 +12,14 @@ public interface MailCodeService {
     // 发送邮箱验证码 (重置密码专用)
     void sendForReset(String email);
 
-    // 获取验证码 (重置密码专用)
+    // 获取验证码 (重置密码专用，仅开发排查；生产流程应使用 consumeResetCode)
     String getForReset(String email);
+
+    /** 原子消费绑定/登录验证码，成功返回 true */
+    boolean consumeVerificationCode(String email, String code);
+
+    /** 原子消费重置密码验证码，成功返回 true */
+    boolean consumeResetCode(String email, String code);
 
     // 邮箱登录
     User loginByMail(String email, String code);

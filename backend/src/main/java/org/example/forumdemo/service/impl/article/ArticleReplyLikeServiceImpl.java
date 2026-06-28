@@ -16,6 +16,7 @@ import org.example.forumdemo.mapper.ArticleSubReplyLikeMapper;
 import org.example.forumdemo.mapper.ArticleSubReplyMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyLikeService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,31 +40,26 @@ public class ArticleReplyLikeServiceImpl implements ArticleReplyLikeService {
     @Transactional(rollbackFor = Exception.class)
     public void likeReply(Long replyId, Long userId) {
         requireReply(replyId);
-        ArticleReplyLike existing = articleReplyLikeMapper.selectOne(new LambdaQueryWrapper<ArticleReplyLike>()
-                .eq(ArticleReplyLike::getReplyId, replyId)
-                .eq(ArticleReplyLike::getUserId, userId));
-        if (existing != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
-        }
         ArticleReplyLike row = new ArticleReplyLike();
         row.setReplyId(replyId);
         row.setUserId(userId);
-        articleReplyLikeMapper.insert(row);
+        try {
+            articleReplyLikeMapper.insert(row);
+        } catch (DuplicateKeyException ex) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
+        }
         bumpReplyLikeCount(replyId, 1);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void unlikeReply(Long replyId, Long userId) {
-        ArticleReplyLike existing = articleReplyLikeMapper.selectOne(new LambdaQueryWrapper<ArticleReplyLike>()
+        int deleted = articleReplyLikeMapper.delete(new LambdaQueryWrapper<ArticleReplyLike>()
                 .eq(ArticleReplyLike::getReplyId, replyId)
                 .eq(ArticleReplyLike::getUserId, userId));
-        if (existing == null) {
+        if (deleted <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED, "未点赞，无法取消"));
         }
-        articleReplyLikeMapper.delete(new LambdaQueryWrapper<ArticleReplyLike>()
-                .eq(ArticleReplyLike::getReplyId, replyId)
-                .eq(ArticleReplyLike::getUserId, userId));
         bumpReplyLikeCount(replyId, -1);
     }
 
@@ -71,31 +67,26 @@ public class ArticleReplyLikeServiceImpl implements ArticleReplyLikeService {
     @Transactional(rollbackFor = Exception.class)
     public void likeSubReply(Long subReplyId, Long userId) {
         requireSubReply(subReplyId);
-        ArticleSubReplyLike existing = articleSubReplyLikeMapper.selectOne(new LambdaQueryWrapper<ArticleSubReplyLike>()
-                .eq(ArticleSubReplyLike::getSubReplyId, subReplyId)
-                .eq(ArticleSubReplyLike::getUserId, userId));
-        if (existing != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
-        }
         ArticleSubReplyLike row = new ArticleSubReplyLike();
         row.setSubReplyId(subReplyId);
         row.setUserId(userId);
-        articleSubReplyLikeMapper.insert(row);
+        try {
+            articleSubReplyLikeMapper.insert(row);
+        } catch (DuplicateKeyException ex) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "您已经点赞过了"));
+        }
         bumpSubReplyLikeCount(subReplyId, 1);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void unlikeSubReply(Long subReplyId, Long userId) {
-        ArticleSubReplyLike existing = articleSubReplyLikeMapper.selectOne(new LambdaQueryWrapper<ArticleSubReplyLike>()
+        int deleted = articleSubReplyLikeMapper.delete(new LambdaQueryWrapper<ArticleSubReplyLike>()
                 .eq(ArticleSubReplyLike::getSubReplyId, subReplyId)
                 .eq(ArticleSubReplyLike::getUserId, userId));
-        if (existing == null) {
+        if (deleted <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED, "未点赞，无法取消"));
         }
-        articleSubReplyLikeMapper.delete(new LambdaQueryWrapper<ArticleSubReplyLike>()
-                .eq(ArticleSubReplyLike::getSubReplyId, subReplyId)
-                .eq(ArticleSubReplyLike::getUserId, userId));
         bumpSubReplyLikeCount(subReplyId, -1);
     }
 

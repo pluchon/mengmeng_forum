@@ -1,6 +1,7 @@
 package org.example.forumdemo.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -193,19 +194,27 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteReply(Long replyId, Long loginUserId) {
         ArticleReply reply = articleReplyMapper.selectById(replyId);
-        if (reply == null || (reply.getDeleteState() != null && reply.getDeleteState() == 1) || (reply.getState() != null && reply.getState() == 1)) {
+        if (reply == null || (reply.getState() != null && reply.getState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
-        // 校验帖子存在 + 权限：必须是回复作者本人，或者是帖子楼主
+        if (reply.getDeleteState() != null && reply.getDeleteState() == 1) {
+            return;
+        }
         Article article = articleService.selectArticleByArticleId(reply.getArticleId());
         if (!reply.getPostUserId().equals(loginUserId) && !article.getUserId().equals(loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
-        reply.setDeleteState((byte) 1);
-        if (articleReplyMapper.updateById(reply) <= 0) {
+        int updated = articleReplyMapper.update(null, new LambdaUpdateWrapper<ArticleReply>()
+                .eq(ArticleReply::getId, replyId)
+                .eq(ArticleReply::getDeleteState, 0)
+                .set(ArticleReply::getDeleteState, (byte) 1));
+        if (updated <= 0) {
+            ArticleReply latest = articleReplyMapper.selectById(replyId);
+            if (latest != null && latest.getDeleteState() != null && latest.getDeleteState() == 1) {
+                return;
+            }
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
-        // 帖子回复数 -1
         articleService.deleteReply(reply.getArticleId());
     }
 }

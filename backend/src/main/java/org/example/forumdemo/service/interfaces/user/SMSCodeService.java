@@ -16,8 +16,14 @@ public interface SMSCodeService {
     // 已登录用户通过当前绑定手机号重置密码时，由后端解密手机号后发送验证码
     void sendForResetBound(Long userId);
 
-    // 获取验证码 (重置密码专用)
+    // 获取验证码 (重置密码专用，仅开发排查；生产流程应使用 consumeResetCode)
     String getForReset(String phoneNumber);
+
+    /** 原子消费绑定/登录验证码，成功返回 true */
+    boolean consumeVerificationCode(String phoneNumber, String code);
+
+    /** 原子消费重置密码验证码，成功返回 true */
+    boolean consumeResetCode(String phoneNumber, String code);
 
     // 短信验证码登录
     User loginBySms(String phoneNumber, String code);

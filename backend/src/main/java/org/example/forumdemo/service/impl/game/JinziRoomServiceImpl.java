@@ -419,14 +419,16 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         gameUserProfileMapper.applyLose(loserId, GameConstants.JINZI, scoreDelta);
         if (!GameConstants.AI_USER_ID.equals(winnerId)) {
             pointsService.addPoints(winnerId, scoreDelta,
-                    Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "井字棋胜利奖励");
+                    Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "井字棋胜利奖励",
+                    "game:jinzi:win:" + room.getRoomId());
         }
         if (!GameConstants.AI_USER_ID.equals(loserId)) {
             User loser = userMapper.selectByIdForUpdate(loserId);
             int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
             if (loserPoints >= scoreDelta) {
                 pointsService.deductPoints(loserId, scoreDelta,
-                        Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除");
+                        Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除",
+                        "game:jinzi:lose:" + room.getRoomId());
             }
         }
     }

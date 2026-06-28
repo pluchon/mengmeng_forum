@@ -146,7 +146,8 @@ public class TetrisServiceImpl implements TetrisService {
                     forumPoints,
                     Constant.POINTS_SOURCE_TETRIS,
                     record.getId(),
-                    "俄罗斯方块单局奖励"
+                    "俄罗斯方块单局奖励",
+                    "game:tetris:solo:" + record.getId()
             );
         }
 

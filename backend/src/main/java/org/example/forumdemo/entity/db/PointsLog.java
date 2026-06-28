@@ -39,6 +39,9 @@ public class PointsLog {
     @Schema(description = "人类可读描述")
     private String remark;
 
+    @Schema(description = "业务幂等键，一次性扣费/发奖必填")
+    private String idempotencyKey;
+
     @Schema(description = "是否删除: 0否 1是")
     @JsonIgnore
     private Byte deleteState;

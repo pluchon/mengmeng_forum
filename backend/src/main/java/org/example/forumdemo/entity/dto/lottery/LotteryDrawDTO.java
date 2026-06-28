@@ -12,4 +12,7 @@ public class LotteryDrawDTO {
 
     @Schema(description = "活动 ID；不传则使用当前默认进行中活动（最新一条）")
     private Long activityId;
+
+    @Schema(description = "客户端幂等键，同一抽奖请求重试必须复用")
+    private String requestId;
 }
