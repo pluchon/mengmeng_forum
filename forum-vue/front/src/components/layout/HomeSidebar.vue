@@ -46,6 +46,10 @@
           <el-icon><Trophy /></el-icon>
           <span>游戏中心</span>
         </button>
+        <button type="button" class="home-sidebar-link" @click="$router.push('/drift-bottle')">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>漂流瓶</span>
+        </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/emoji-shop')">
           <el-icon><ShoppingBag /></el-icon>
           <span>积分商城</span>
