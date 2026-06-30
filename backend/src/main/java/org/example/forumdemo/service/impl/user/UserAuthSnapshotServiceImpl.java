@@ -38,12 +38,16 @@ public class UserAuthSnapshotServiceImpl implements UserAuthSnapshotService {
     private boolean applyFromRedisCache(User user) {
         String cacheKey = Constant.REDIS_KEY_USER_INFO + user.getId();
         Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(cacheKey);
-        if (map.isEmpty() || !map.containsKey("vipTier") || !map.containsKey("state")) {
+        if (map.isEmpty()
+                || !map.containsKey("vipTier")
+                || !map.containsKey("state")
+                || !map.containsKey("creatorState")) {
             return false;
         }
         user.setVipTier(parseByte(map.get("vipTier"), (byte) 0));
         user.setIsAdmin(parseByte(map.get("isAdmin"), (byte) 0));
         user.setState(parseByte(map.get("state"), (byte) 0));
+        user.setCreatorState(parseByte(map.get("creatorState"), (byte) 0));
         String vipExpireMs = map.getOrDefault("vipExpireMs", "").toString();
         if (StringUtils.hasText(vipExpireMs)) {
             user.setVipExpireAt(new Date(Long.parseLong(vipExpireMs.trim())));
@@ -61,6 +65,7 @@ public class UserAuthSnapshotServiceImpl implements UserAuthSnapshotService {
             user.setVipExpireAt(dbUser.getVipExpireAt());
             user.setIsAdmin(dbUser.getIsAdmin());
             user.setState(dbUser.getState());
+            user.setCreatorState(dbUser.getCreatorState());
         } catch (Exception e) {
             log.warn("补全用户鉴权字段失败 userId={}, err={}", user.getId(), e.getMessage());
         }

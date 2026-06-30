@@ -435,6 +435,7 @@ public class UserServiceImpl implements UserService {
         map.put("points", user.getPoints() == null ? "0" : String.valueOf(user.getPoints()));
         map.put("mascotModelId", user.getMascotModelId() == null ? "" : String.valueOf(user.getMascotModelId()));
         map.put("state", user.getState() == null ? "0" : String.valueOf(user.getState().intValue()));
+        map.put("creatorState", user.getCreatorState() == null ? "0" : String.valueOf(user.getCreatorState().intValue()));
         map.put("ipRegion", nullToEmpty(user.getIpRegion()));
         // 敏感信息（password / salt）不入缓存
         stringRedisTemplate.opsForHash().putAll(redisKey, map);
@@ -458,6 +459,10 @@ public class UserServiceImpl implements UserService {
             return null;
         }
         if (!map.containsKey("state")) {
+            stringRedisTemplate.delete(redisKey);
+            return null;
+        }
+        if (!map.containsKey("creatorState")) {
             stringRedisTemplate.delete(redisKey);
             return null;
         }
@@ -488,6 +493,7 @@ public class UserServiceImpl implements UserService {
             user.setMascotModelId(Long.valueOf(mid.trim()));
         }
         user.setState(Byte.valueOf(map.getOrDefault("state", "0").toString()));
+        user.setCreatorState(Byte.valueOf(map.getOrDefault("creatorState", "0").toString()));
         user.setIpRegion(map.getOrDefault("ipRegion", "").toString());
         return user;
     }
