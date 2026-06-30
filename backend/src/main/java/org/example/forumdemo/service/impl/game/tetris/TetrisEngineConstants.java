@@ -61,16 +61,8 @@ public final class TetrisEngineConstants {
         return matrix;
     }
 
+    // PK 消行与单人模式一致：只更新己方棋盘，不向对手发送垃圾行
     public static int garbageLinesForClear(int lines) {
-        if (lines == 2) {
-            return 1;
-        }
-        if (lines == 3) {
-            return 2;
-        }
-        if (lines == 4) {
-            return 4;
-        }
         return 0;
     }
 }

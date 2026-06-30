@@ -9,6 +9,9 @@ public class TetrisPlayerState {
     // tickFall 未发生任何状态变化时的返回值
     public static final int TICK_UNCHANGED = Integer.MIN_VALUE;
 
+    // 落锁后等待消行/生成下一块的毫秒数，与前端 useTetrisEngine 一致
+    private static final int LOCK_DELAY_MS = 100;
+
     // 棋盘矩阵
     private String[][] matrix;
 
@@ -50,6 +53,12 @@ public class TetrisPlayerState {
 
     // 下次自动下落时间戳
     private long nextFallAtMs;
+
+    // 落锁后延迟消行/生成
+    private boolean pendingLockComplete;
+
+    // 落锁完成时间戳
+    private long lockUntilMs;
 
     public TetrisPlayerState(long seed) {
         this.seed = seed;
@@ -94,9 +103,20 @@ public class TetrisPlayerState {
         return seed;
     }
 
+    // 落锁延迟结束后完成消行并生成下一块，返回应攻击对手的垃圾行数
+    public int advanceLockIfReady(long nowMs) {
+        if (!pendingLockComplete || nowMs < lockUntilMs) {
+            return TICK_UNCHANGED;
+        }
+        return completePendingLock(nowMs);
+    }
+
     // 处理玩家输入，返回本次消行后应给对手增加的垃圾行数
     public int handleInput(String action, long nowMs) {
-        if (gameOver || lock || cur == null) {
+        if (gameOver) {
+            return 0;
+        }
+        if (pendingLockComplete || lock || cur == null) {
             return 0;
         }
         return switch (action) {
@@ -124,7 +144,14 @@ public class TetrisPlayerState {
 
     // 服务端重力 tick，未变化返回 TICK_UNCHANGED，否则返回本次消行应攻击对手的垃圾行数
     public int tickFall(long nowMs) {
-        if (gameOver || lock || cur == null) {
+        if (gameOver) {
+            return TICK_UNCHANGED;
+        }
+        int garbage = advanceLockIfReady(nowMs);
+        if (garbage != TICK_UNCHANGED) {
+            return garbage;
+        }
+        if (pendingLockComplete || lock || cur == null) {
             return TICK_UNCHANGED;
         }
         if (nowMs < nextFallAtMs) {
@@ -221,9 +248,7 @@ public class TetrisPlayerState {
         canHold = false;
         if (!TetrisMatrixUtil.canPlace(cur, matrix)) {
             finishGame();
-            return;
         }
-        scheduleFall(nowMs);
     }
 
     private int lockCurrent(long nowMs) {
@@ -233,7 +258,13 @@ public class TetrisPlayerState {
         matrix = merged;
         points += 10 + (speedRun - 1) * 2;
         canHold = true;
+        pendingLockComplete = true;
+        lockUntilMs = nowMs + LOCK_DELAY_MS;
+        return 0;
+    }
 
+    private int completePendingLock(long nowMs) {
+        pendingLockComplete = false;
         List<Integer> lines = TetrisMatrixUtil.findClearLines(matrix);
         if (lines != null) {
             matrix = TetrisMatrixUtil.clearLineRows(matrix, lines);
@@ -278,6 +309,7 @@ public class TetrisPlayerState {
         gameOver = true;
         cur = null;
         lock = false;
+        pendingLockComplete = false;
     }
 
     private void scheduleFall(long nowMs) {

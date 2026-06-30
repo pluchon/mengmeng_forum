@@ -2,7 +2,9 @@ package org.example.forumdemo.service.impl.game.tetris;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // 棋盘碰撞与消行工具
 public final class TetrisMatrixUtil {
@@ -87,12 +89,21 @@ public final class TetrisMatrixUtil {
     }
 
     public static String[][] clearLineRows(String[][] matrix, List<Integer> lines) {
-        String[][] next = copyMatrix(matrix);
-        List<Integer> sorted = new ArrayList<>(lines);
-        sorted.sort(Integer::compareTo);
-        for (int index = sorted.size() - 1; index >= 0; index--) {
-            int lineIndex = sorted.get(index);
-            next = removeRow(next, lineIndex);
+        Set<Integer> clearSet = new HashSet<>(lines);
+        List<String[]> kept = new ArrayList<>();
+        for (int row = 0; row < TetrisEngineConstants.ROWS; row++) {
+            if (!clearSet.contains(row)) {
+                kept.add(Arrays.copyOf(matrix[row], TetrisEngineConstants.COLS));
+            }
+        }
+        int padCount = lines.size();
+        String[][] next = new String[TetrisEngineConstants.ROWS][];
+        for (int i = 0; i < padCount; i++) {
+            next[i] = new String[TetrisEngineConstants.COLS];
+            Arrays.fill(next[i], "");
+        }
+        for (int i = 0; i < kept.size(); i++) {
+            next[padCount + i] = kept.get(i);
         }
         return next;
     }
@@ -113,20 +124,6 @@ public final class TetrisMatrixUtil {
             copy[row] = Arrays.copyOf(matrix[row], TetrisEngineConstants.COLS);
         }
         return copy;
-    }
-
-    private static String[][] removeRow(String[][] matrix, int lineIndex) {
-        String[][] next = new String[TetrisEngineConstants.ROWS][];
-        int target = 0;
-        for (int row = 0; row < TetrisEngineConstants.ROWS; row++) {
-            if (row == lineIndex) {
-                continue;
-            }
-            next[target++] = Arrays.copyOf(matrix[row], TetrisEngineConstants.COLS);
-        }
-        next[TetrisEngineConstants.ROWS - 1] = new String[TetrisEngineConstants.COLS];
-        Arrays.fill(next[TetrisEngineConstants.ROWS - 1], "");
-        return next;
     }
 
     private static boolean isEmpty(String cell) {
