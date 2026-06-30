@@ -6,7 +6,9 @@ import java.util.Set;
 public final class ForumBusinessConstants {
 
     public static final Byte DELETE_STATE_TRUE = 1;
+    public static final Byte DELETE_STATE_FALSE = 0;
     public static final Byte STATE_BANNED = 1;
+    public static final Byte CREATOR_STATE_CERTIFIED = 1;
 
     public static final Byte MESSAGE_STATE_UNREAD = 0;
     public static final Byte MESSAGE_STATE_READ = 1;
@@ -108,6 +110,15 @@ public final class ForumBusinessConstants {
     public static final Byte VIP_TIER_FREE = 0;
     public static final Byte VIP_TIER_PRO = 1;
     public static final Byte VIP_TIER_MAX = 2;
+    public static final int GROUP_CHAT_CREATE_LIMIT_FREE = 3;
+    public static final int GROUP_CHAT_CREATE_LIMIT_PRO = 10;
+    public static final int GROUP_CHAT_CREATE_LIMIT_MAX = 30;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_FREE = 100;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_PRO = 200;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_MAX = 350;
+    public static final int GROUP_CHAT_NAME_MAX_LEN = 24;
+    public static final int GROUP_CHAT_INTRO_MAX_LEN = 120;
+    public static final int GROUP_CHAT_MESSAGE_MAX_LEN = 500;
 
     public static final Byte LOTTERY_PRIZE_THANKS = 0;
     public static final Byte LOTTERY_PRIZE_GRAND = 1;

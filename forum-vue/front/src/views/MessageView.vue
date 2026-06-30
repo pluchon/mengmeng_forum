@@ -18,7 +18,18 @@
     <div class="mc" @focusout="onDialogBlurRoot">
       <aside class="mc-left">
         <div class="mc-left-top">
-          <div class="mc-left-title">消息中心</div>
+          <div class="mc-left-title-row">
+            <div class="mc-left-title">消息中心</div>
+            <button
+              v-if="activeTab === 'group'"
+              type="button"
+              class="mc-create-group-btn"
+              title="创建群聊"
+              @click="openCreateGroup"
+            >
+              <el-icon><Plus /></el-icon>
+            </button>
+          </div>
           <div class="mc-tabs" role="tablist">
             <button
               type="button"
@@ -37,6 +48,15 @@
             >
               私信
               <span v-if="tabBadges.pm > 0" class="mc-tab-badge">{{ tabBadges.pm > 99 ? '99+' : tabBadges.pm }}</span>
+            </button>
+            <button
+              type="button"
+              class="mc-tab"
+              :class="{ 'is-on': activeTab === 'group' }"
+              @click="activeTab = 'group'"
+            >
+              群聊
+              <span v-if="tabBadges.group > 0" class="mc-tab-badge">{{ tabBadges.group > 99 ? '99+' : tabBadges.group }}</span>
             </button>
             <button
               type="button"
@@ -82,6 +102,9 @@
                   :vip-expire-at="item.user?.vipExpireAt"
                 />
               </template>
+              <div v-else-if="item.kind === 'group'" class="mc-sys-ava mc-sys-ava--group">
+                <el-icon :size="18"><UserFilled /></el-icon>
+              </div>
               <div v-else class="mc-sys-ava mc-sys-ava--group">
                 <el-icon :size="18"><component :is="item.listIcon" /></el-icon>
               </div>
@@ -97,7 +120,16 @@
               </div>
             </div>
           </button>
-          <div v-if="listItems.length === 0" class="mc-list-empty">
+          <div v-if="activeTab === 'group' && groupListLoading" class="mc-list-empty">
+            <el-icon :size="40" color="#dcdfe6"><UserFilled /></el-icon>
+          </div>
+          <div v-else-if="activeTab === 'group' && groupListError" class="mc-list-empty">
+            <el-icon :size="40" color="#dcdfe6"><Warning /></el-icon>
+          </div>
+          <div
+            v-if="listItems.length === 0 && !(activeTab === 'group' && (groupListLoading || groupListError))"
+            class="mc-list-empty"
+          >
             <el-icon :size="48" color="#dcdfe6"><ChatLineSquare /></el-icon>
           </div>
         </el-scrollbar>
@@ -118,18 +150,25 @@
       </aside>
 
       <section class="mc-right">
-        <template v-if="currentSession">
+        <template v-if="currentSession || currentGroupSession">
           <header class="mc-rhead">
             <div class="mc-rhead-left">
               <UserAvatarVip
+                v-if="currentSession"
                 :size="34"
                 :src="currentSession.user?.avatarUrl || defaultAvatar"
                 :vip-tier="Number(currentSession.user?.vipTier) || 0"
                 :vip-expire-at="currentSession.user?.vipExpireAt"
               />
-              <span class="mc-rname">{{ currentSession.user?.nickname }}</span>
+              <div v-else class="mc-sys-ava mc-sys-ava--head">
+                <el-icon :size="18"><UserFilled /></el-icon>
+              </div>
+              <div class="mc-rtitle-stack">
+                <span class="mc-rname">{{ activeChatTitle }}</span>
+                <span v-if="currentGroupSession" class="mc-rmeta">{{ activeChatSubtitle }}</span>
+              </div>
             </div>
-            <div class="mc-online mc-online--trailing" :class="{ 'is-offline': !peerOnline }">
+            <div v-if="currentSession" class="mc-online mc-online--trailing" :class="{ 'is-offline': !peerOnline }">
               <span class="mc-online-dot" />
               <span>{{ peerOnline ? '在线' : '离线' }}</span>
             </div>
@@ -149,9 +188,9 @@
                 <div class="mc-mrow-ava">
                   <UserAvatarVip
                     :size="28"
-                    :src="row.msg.isOwner ? (userStore.avatarUrl || defaultAvatar) : (currentSession.user?.avatarUrl || defaultAvatar)"
-                    :vip-tier="row.msg.isOwner ? Number(userStore.vipTier) || 0 : Number(currentSession.user?.vipTier) || 0"
-                    :vip-expire-at="row.msg.isOwner ? userStore.vipExpireAt : currentSession.user?.vipExpireAt"
+                    :src="bubbleAvatar(row.msg)"
+                    :vip-tier="bubbleVipTier(row.msg)"
+                    :vip-expire-at="bubbleVipExpireAt(row.msg)"
                   />
                 </div>
                 <div class="mc-bwrap">
@@ -192,7 +231,7 @@
                       <span v-else>{{ row.msg.message?.content }}</span>
                     </div>
                     <button
-                      v-if="row.msg.isOwner && Number(row.msg.message?.state) !== 2"
+                      v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       type="button"
                       class="mc-recall-btn"
                       @click="handleRecall(row.msg)"
@@ -203,7 +242,7 @@
                   <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
                     <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
                     <span
-                      v-if="row.msg.isOwner && Number(row.msg.message?.state) !== 2"
+                      v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       class="mc-read"
                     >
                       {{ Number(row.msg.message?.state) === 1 ? '已读' : '未读' }}
@@ -217,6 +256,7 @@
 
           <footer class="mc-rinput">
             <input
+              v-if="isPrivateChat"
               ref="chatImageInput"
               type="file"
               class="mc-hidden-file"
@@ -224,13 +264,14 @@
               @change="onChatImageFileChange"
             >
             <input
+              v-if="isPrivateChat"
               ref="emojiStickerInput"
               type="file"
               class="mc-hidden-file"
               accept="image/jpeg,image/jpg,image/png,image/gif"
               @change="onEmojiStickerFileChange"
             >
-            <div class="mc-itools">
+            <div v-if="isPrivateChat" class="mc-itools">
               <button type="button" class="mc-itbtn" title="发送图片" @click="triggerChatImagePick">
                 <el-icon><Picture /></el-icon>
               </button>
@@ -474,6 +515,47 @@
       </section>
     </div>
   </el-dialog>
+
+  <el-dialog
+    v-model="groupCreateVisible"
+    title="创建群聊"
+    width="360px"
+    append-to-body
+  >
+    <div class="mc-group-form">
+      <el-input
+        v-model="groupCreateForm.name"
+        maxlength="24"
+        show-word-limit
+        placeholder="群名称"
+      />
+      <el-select v-model="groupCreateForm.groupType" class="mc-group-form-control">
+        <el-option label="公开群" :value="0" />
+        <el-option label="私有群" :value="1" />
+      </el-select>
+      <el-input
+        v-model="groupCreateForm.intro"
+        type="textarea"
+        maxlength="120"
+        show-word-limit
+        :rows="3"
+        placeholder="群简介"
+      />
+    </div>
+    <template #footer>
+      <button type="button" class="mc-dialog-action" @click="groupCreateVisible = false">
+        取消
+      </button>
+      <button
+        type="button"
+        class="mc-dialog-action mc-dialog-action--primary"
+        :disabled="creatingGroup"
+        @click="submitCreateGroup"
+      >
+        {{ creatingGroup ? '创建中' : '创建' }}
+      </button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -490,14 +572,21 @@ const {
   Picture,
   Plus,
   Search,
+  UserFilled,
   activeSystemMessages,
   activeTab,
+  activeChatSubtitle,
+  activeChatTitle,
   autoResizeInput,
+  bubbleAvatar,
   bubbleImageStyle,
+  bubbleVipExpireAt,
+  bubbleVipTier,
   canFavoriteChatImage,
   chatEmojiStore,
   chatImageInput,
   currentSession,
+  currentGroupSession,
   currentSystemGroup,
   defaultAvatar,
   dialogVisible,
@@ -522,6 +611,7 @@ const {
   inputBoxRef,
   isActiveItem,
   isMediaMessage,
+  isPrivateChat,
   listItems,
   messageTimeline,
   messages,
@@ -549,6 +639,10 @@ const {
   showUploadOnCurrentPage,
   parseSystemMessageContent,
   peerOnline,
+  groupCreateForm,
+  groupCreateVisible,
+  groupListError,
+  groupListLoading,
   scrollPackBarLeft,
   scrollPackBarRight,
   scrollToBottom,
@@ -557,11 +651,14 @@ const {
   selectedPurchasedPack,
   selfOnline,
   selectListItem,
+  openCreateGroup,
+  submitCreateGroup,
   sendContent,
   sendMessageFromEmoji,
   sendMessageFromShopUrl,
   sendMsg,
   sending,
+  creatingGroup,
   sysTagClass,
   sysTagLabel,
   tabBadges,

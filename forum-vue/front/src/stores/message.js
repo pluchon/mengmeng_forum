@@ -11,6 +11,7 @@ export const useMessageStore = defineStore('message', () => {
   const auditResultSignal = ref(null)
   const systemUnreadCount = ref(0)
   const systemMessageSignal = ref(null)
+  const groupMessageSignal = ref(null)
   const showTip = ref(false)
   const tipText = ref('')
   const incomingPreview = ref(null)
@@ -98,6 +99,12 @@ export const useMessageStore = defineStore('message', () => {
     tipText.value = payload?.title || '您有一条新的系统通知'
   }
 
+  function onGroupMessage(payload) {
+    groupMessageSignal.value = { ...payload, seq: Date.now() }
+    showTip.value = true
+    tipText.value = payload?.summary ? `群聊：${payload.summary}` : '你收到一条新的群聊消息'
+  }
+
   return {
     unreadCount,
     incomingMessage,
@@ -107,6 +114,7 @@ export const useMessageStore = defineStore('message', () => {
     auditResultSignal,
     systemUnreadCount,
     systemMessageSignal,
+    groupMessageSignal,
     showTip,
     tipText,
     setUnreadCount,
@@ -119,9 +127,10 @@ export const useMessageStore = defineStore('message', () => {
     onAuditResult,
     setSystemUnreadCount,
     onSystemMessage,
+    onGroupMessage,
   }
 }, {
   persist: {
-    omit: ['readReceiptSignal', 'auditResultSignal', 'systemMessageSignal', 'incomingPreview', 'incomingSignal'],
+    omit: ['readReceiptSignal', 'auditResultSignal', 'systemMessageSignal', 'groupMessageSignal', 'incomingPreview', 'incomingSignal'],
   },
 })

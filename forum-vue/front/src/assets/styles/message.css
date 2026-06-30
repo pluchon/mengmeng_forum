@@ -99,10 +99,28 @@
 }
 
 .mc-left-title {
-  margin-bottom: 10px;
+  margin-bottom: 0;
   font-size: 15px;
   font-weight: 600;
   color: #1d2129;
+}
+
+.mc-create-group-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: #f7f8fa;
+  color: #d4537e;
+  cursor: pointer;
+}
+
+.mc-create-group-btn:hover {
+  background: #fbeaf0;
 }
 
 .mc-close-btn {
@@ -469,6 +487,18 @@
   font-size: 14px;
   font-weight: 500;
   color: #1d2129;
+}
+
+.mc-rtitle-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mc-rmeta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #86909c;
 }
 
 .mc-rsub {
@@ -1164,4 +1194,35 @@
   border-radius: 10px;
   font-size: 13px;
   color: #4e5969;
+}
+
+.mc-group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mc-group-form-control {
+  width: 100%;
+}
+
+.mc-dialog-action {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.mc-dialog-action--primary {
+  border-color: #d4537e;
+  background: #d4537e;
+  color: #fff;
+}
+
+.mc-dialog-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

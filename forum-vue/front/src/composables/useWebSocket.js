@@ -67,6 +67,11 @@ function handleNotifyMessage(notifyData) {
   if (notifyData.type === 'system_message') {
     const messageStore = useMessageStore()
     messageStore.onSystemMessage(notifyData)
+    return
+  }
+  if (notifyData.type === 'group_message') {
+    const messageStore = useMessageStore()
+    messageStore.onGroupMessage(notifyData)
   }
 }
 
