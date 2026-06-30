@@ -130,6 +130,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'drift-bottle',
+          name: 'driftBottle',
+          component: () => import('../views/DriftBottle.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
           path: 'games',
           name: 'gameCenter',
           component: () => import('../views/GameCenter.vue'),

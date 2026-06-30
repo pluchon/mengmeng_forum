@@ -1,5 +1,6 @@
 import {
   Calendar,
+  ChatDotRound,
   Compass,
   EditPen,
   Food,
