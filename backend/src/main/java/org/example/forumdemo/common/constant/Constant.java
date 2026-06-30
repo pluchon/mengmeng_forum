@@ -97,7 +97,9 @@ public final class Constant {
 
     // =================== 业务（ForumBusinessConstants）===================
     public static final Byte DELETE_STATE_TRUE = ForumBusinessConstants.DELETE_STATE_TRUE;
+    public static final Byte DELETE_STATE_FALSE = ForumBusinessConstants.DELETE_STATE_FALSE;
     public static final Byte STATE_BANNED = ForumBusinessConstants.STATE_BANNED;
+    public static final Byte CREATOR_STATE_CERTIFIED = ForumBusinessConstants.CREATOR_STATE_CERTIFIED;
     public static final Byte MESSAGE_STATE_UNREAD = ForumBusinessConstants.MESSAGE_STATE_UNREAD;
     public static final Byte MESSAGE_STATE_READ = ForumBusinessConstants.MESSAGE_STATE_READ;
     public static final Byte MESSAGE_STATE_RECALLED = ForumBusinessConstants.MESSAGE_STATE_RECALLED;
@@ -174,6 +176,15 @@ public final class Constant {
     public static final Byte VIP_TIER_FREE = ForumBusinessConstants.VIP_TIER_FREE;
     public static final Byte VIP_TIER_PRO = ForumBusinessConstants.VIP_TIER_PRO;
     public static final Byte VIP_TIER_MAX = ForumBusinessConstants.VIP_TIER_MAX;
+    public static final int GROUP_CHAT_CREATE_LIMIT_FREE = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_FREE;
+    public static final int GROUP_CHAT_CREATE_LIMIT_PRO = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_PRO;
+    public static final int GROUP_CHAT_CREATE_LIMIT_MAX = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_MAX;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_FREE = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_FREE;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_PRO = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_PRO;
+    public static final int GROUP_CHAT_MEMBER_LIMIT_MAX = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_MAX;
+    public static final int GROUP_CHAT_NAME_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_NAME_MAX_LEN;
+    public static final int GROUP_CHAT_INTRO_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_INTRO_MAX_LEN;
+    public static final int GROUP_CHAT_MESSAGE_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_MESSAGE_MAX_LEN;
     public static final Byte LOTTERY_PRIZE_THANKS = ForumBusinessConstants.LOTTERY_PRIZE_THANKS;
     public static final Byte LOTTERY_PRIZE_GRAND = ForumBusinessConstants.LOTTERY_PRIZE_GRAND;
     public static final Byte LOTTERY_PRIZE_SMALL = ForumBusinessConstants.LOTTERY_PRIZE_SMALL;

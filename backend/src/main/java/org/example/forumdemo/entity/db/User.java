@@ -92,6 +92,9 @@ public class User {
     @Schema(description = "VIP到期时间")
     private Date vipExpireAt;
 
+    @Schema(description = "创作者认证状态: 0未认证 1已认证")
+    private Byte creatorState;
+
     @Schema(description = "用户选择的看板娘模型 forum_mascot_model.id")
     private Long mascotModelId;
 

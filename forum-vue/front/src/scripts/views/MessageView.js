@@ -17,6 +17,7 @@ import {
   ChatLineSquare,
   Warning,
   Document,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -38,6 +39,13 @@ import {
   getSystemMessageUnreadCount,
   markSystemMessageRead,
 } from '@/api/systemMessage'
+import {
+  createGroupChat,
+  getGroupChatMessages,
+  getGroupChatSessions,
+  markGroupChatRead,
+  sendGroupChatMessage,
+} from '@/api/groupChat'
 import { useMessageStore } from '@/stores/message'
 import { useChatEmojiStore } from '@/stores/chatEmoji'
 import { useEmojiShopStore } from '@/stores/emojiShop'
@@ -111,11 +119,18 @@ export function useMessageView() {
   const systemMessages = ref([])
   const systemUnread = ref(0)
   const currentSession = ref(null)
+  const currentGroupSession = ref(null)
   /** @type {import('vue').Ref<{ groupId: string, messages: object[] } | null>} */
   const currentSystemGroup = ref(null)
   const messages = ref([])
   const sendContent = ref('')
   const sending = ref(false)
+  const groupSessions = ref([])
+  const groupCreateVisible = ref(false)
+  const groupCreateForm = ref({ name: '', groupType: 0, intro: '' })
+  const creatingGroup = ref(false)
+  const groupListLoading = ref(false)
+  const groupListError = ref('')
   const peerOnline = ref(false)
   const selfOnline = ref(false)
   let onlinePollTimer = null
@@ -179,10 +194,21 @@ export function useMessageView() {
       const tb = parseForumDateTime(b.time)?.getTime() || 0
       return tb - ta
     })
+    const groupItems = groupSessions.value.map((s) => ({
+      key: `group-${s.groupId}`,
+      kind: 'group',
+      group: s,
+      name: s.name || '群聊',
+      time: s.lastMessageTime,
+      preview: s.lastMessage || '暂无消息',
+      unread: Number(s.unreadCount) || 0,
+      listIcon: UserFilled,
+    }))
     let merged = []
     if (activeTab.value === 'pm') merged = pmItems
+    else if (activeTab.value === 'group') merged = groupItems
     else if (activeTab.value === 'notif') merged = sysItems
-    else merged = [...pmItems, ...sysItems].sort((a, b) => {
+    else merged = [...pmItems, ...groupItems, ...sysItems].sort((a, b) => {
       const ta = parseForumDateTime(a.time)?.getTime() || 0
       const tb = parseForumDateTime(b.time)?.getTime() || 0
       return tb - ta
@@ -193,10 +219,30 @@ export function useMessageView() {
   })
 
   const tabBadges = computed(() => ({
-    all: (messageStore.unreadCount || 0) + (systemUnread.value || 0),
+    all: (messageStore.unreadCount || 0) + groupUnreadCount.value + (systemUnread.value || 0),
     pm: messageStore.unreadCount || 0,
+    group: groupUnreadCount.value,
     notif: systemUnread.value || 0,
   }))
+
+  const groupUnreadCount = computed(() =>
+    groupSessions.value.reduce((sum, item) => sum + (Number(item.unreadCount) || 0), 0),
+  )
+
+  const isPrivateChat = computed(() => !!currentSession.value && !currentGroupSession.value)
+
+  const activeChatTitle = computed(() => {
+    if (currentSession.value) return currentSession.value.user?.nickname || '私信'
+    if (currentGroupSession.value) return currentGroupSession.value.name || '群聊'
+    return ''
+  })
+
+  const activeChatSubtitle = computed(() => {
+    if (!currentGroupSession.value) return ''
+    const count = Number(currentGroupSession.value.memberCount) || 0
+    const limit = Number(currentGroupSession.value.memberLimit) || 0
+    return limit > 0 ? `${count}/${limit} 人` : `${count} 人`
+  })
 
   const visiblePacks = computed(() => {
     let hidden = []
@@ -422,9 +468,18 @@ export function useMessageView() {
       return currentSession.value?.user?.id != null
         && String(currentSession.value.user.id) === String(item.session?.user?.id)
         && !currentSystemGroup.value
+        && !currentGroupSession.value
+    }
+    if (item.kind === 'group') {
+      return currentGroupSession.value?.groupId != null
+        && String(currentGroupSession.value.groupId) === String(item.group?.groupId)
+        && !currentSession.value
+        && !currentSystemGroup.value
     }
     if (item.kind === 'sys-group') {
-      return currentSystemGroup.value?.groupId === item.groupId && !currentSession.value
+      return currentSystemGroup.value?.groupId === item.groupId
+        && !currentSession.value
+        && !currentGroupSession.value
     }
     return false
   }
@@ -483,6 +538,23 @@ export function useMessageView() {
     }
   }
 
+  async function loadGroupSessions() {
+    groupListLoading.value = true
+    groupListError.value = ''
+    try {
+      const res = await getGroupChatSessions({ pageNum: 1, pageSize: 50 })
+      if (res.code === 0) {
+        groupSessions.value = unwrapPageRecords(res.data)
+      } else {
+        groupListError.value = res.message || '群聊加载失败'
+      }
+    } catch {
+      groupListError.value = '群聊加载失败'
+    } finally {
+      groupListLoading.value = false
+    }
+  }
+
   async function applyOpenTarget() {
     const t = messageCenterUi.openTarget
     if (!t?.userId) return
@@ -518,7 +590,7 @@ export function useMessageView() {
       initWebSocket()
       await userStore.fetchUserInfo()
     }
-    await Promise.all([loadSessions(), loadSystemMessages()])
+    await Promise.all([loadSessions(), loadGroupSessions(), loadSystemMessages()])
     await applyOpenTarget()
   }
 
@@ -540,6 +612,7 @@ export function useMessageView() {
     } else {
       stopOnlinePolling()
       currentSession.value = null
+      currentGroupSession.value = null
       currentSystemGroup.value = null
       messages.value = []
       focusedConvKey.value = null
@@ -581,6 +654,24 @@ export function useMessageView() {
       await syncPmUnreadFromServer()
     } else {
       loadSessions()
+    }
+  })
+
+  watch(() => messageStore.groupMessageSignal, async (newMsg) => {
+    if (!newMsg || newMsg.type !== 'group_message') return
+    if (!messageCenterUi.visible && router.currentRoute.value.name !== 'messages') return
+    const groupId = Number(newMsg.groupId)
+    const currentGroupId = currentGroupSession.value?.groupId
+      ? Number(currentGroupSession.value.groupId)
+      : null
+    if (currentGroupId && groupId === currentGroupId) {
+      await loadMessagesForGroup(groupId)
+      await markCurrentGroupRead()
+      await loadGroupSessions()
+      await nextTick()
+      scrollToBottom()
+    } else {
+      await loadGroupSessions()
     }
   })
 
@@ -626,6 +717,35 @@ export function useMessageView() {
     const res = await getSessionList({ pageNum: 1, pageSize: 50 })
     if (res.code === 0) {
       sessionList.value = unwrapPageRecords(res.data).filter((s) => s?.user?.id != null)
+    }
+  }
+
+  function mapGroupMessage(row) {
+    const sender = row.sender || {}
+    return {
+      isOwner: row.isOwner,
+      user: sender,
+      message: {
+        id: row.id,
+        groupId: row.groupId,
+        messageType: row.messageType,
+        content: row.content,
+        createTime: row.createTime,
+        updateTime: row.updateTime,
+        state: row.status,
+      },
+      rawGroupMessage: row,
+    }
+  }
+
+  async function loadMessagesForGroup(groupId) {
+    const res = await getGroupChatMessages(groupId, {
+      pageNum: 1,
+      pageSize: 100,
+    })
+    if (res.code === 0) {
+      messages.value = unwrapPageRecords(res.data).map(mapGroupMessage)
+      await scrollToBottom()
     }
   }
 
@@ -691,6 +811,7 @@ export function useMessageView() {
 
   async function selectPmSession(session) {
     currentSystemGroup.value = null
+    currentGroupSession.value = null
     currentSession.value = session
     focusedConvKey.value = `pm-${session.user?.id}`
     await refreshOnlineStatus()
@@ -712,6 +833,7 @@ export function useMessageView() {
 
   async function selectSysGroup(item) {
     currentSession.value = null
+    currentGroupSession.value = null
     currentSystemGroup.value = {
       groupId: item.groupId,
       name: item.name,
@@ -735,9 +857,21 @@ export function useMessageView() {
     }
   }
 
+  async function selectGroupSession(group) {
+    currentSession.value = null
+    currentSystemGroup.value = null
+    currentGroupSession.value = group
+    focusedConvKey.value = `group-${group.groupId}`
+    peerOnline.value = false
+    await loadMessagesForGroup(group.groupId)
+    await markCurrentGroupRead()
+    await loadGroupSessions()
+  }
+
   async function selectListItem(item) {
     focusedConvKey.value = item.key
     if (item.kind === 'pm') await selectPmSession(item.session)
+    else if (item.kind === 'group') await selectGroupSession(item.group)
     else if (item.kind === 'sys-group') await selectSysGroup(item)
   }
 
@@ -776,9 +910,24 @@ export function useMessageView() {
 
   async function sendMsg() {
     const text = sendContent.value.trim()
-    if (!text || !currentSession.value) return
+    if (!text || (!currentSession.value && !currentGroupSession.value)) return
     sending.value = true
     try {
+      if (currentGroupSession.value) {
+        const res = await sendGroupChatMessage({
+          groupId: currentGroupSession.value.groupId,
+          messageType: 0,
+          content: text,
+        })
+        if (res.code === 0 && res.data) {
+          messages.value.push(mapGroupMessage(res.data))
+          sendContent.value = ''
+          await nextTick()
+          scrollToBottom()
+          await loadGroupSessions()
+        }
+        return
+      }
       const res = await sendMessage({
         receiveUserId: currentSession.value.user?.id,
         content: text,
@@ -808,6 +957,47 @@ export function useMessageView() {
       }
     } finally {
       sending.value = false
+    }
+  }
+
+  async function markCurrentGroupRead() {
+    const groupId = currentGroupSession.value?.groupId
+    if (!groupId) return
+    const latest = messages.value[messages.value.length - 1]?.message
+    try {
+      await markGroupChatRead(groupId, latest?.id)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function openCreateGroup() {
+    groupCreateForm.value = { name: '', groupType: 0, intro: '' }
+    groupCreateVisible.value = true
+  }
+
+  async function submitCreateGroup() {
+    const name = groupCreateForm.value.name.trim()
+    if (!name) {
+      ElMessage.warning('请输入群名称')
+      return
+    }
+    creatingGroup.value = true
+    try {
+      const res = await createGroupChat({
+        name,
+        groupType: Number(groupCreateForm.value.groupType),
+        intro: groupCreateForm.value.intro?.trim() || undefined,
+      })
+      if (res.code === 0) {
+        ElMessage.success('群聊已创建')
+        groupCreateVisible.value = false
+        await loadGroupSessions()
+        const created = groupSessions.value.find((item) => String(item.groupId) === String(res.data?.id))
+        if (created) await selectGroupSession(created)
+      }
+    } finally {
+      creatingGroup.value = false
     }
   }
 
@@ -1015,6 +1205,24 @@ export function useMessageView() {
     return t === 1 || t === 2
   }
 
+  function bubbleAvatar(msg) {
+    if (msg?.isOwner) return userStore.avatarUrl || defaultAvatar
+    if (currentGroupSession.value) return msg?.user?.avatarUrl || defaultAvatar
+    return currentSession.value?.user?.avatarUrl || defaultAvatar
+  }
+
+  function bubbleVipTier(msg) {
+    if (msg?.isOwner) return Number(userStore.vipTier) || 0
+    if (currentGroupSession.value) return Number(msg?.user?.vipTier) || 0
+    return Number(currentSession.value?.user?.vipTier) || 0
+  }
+
+  function bubbleVipExpireAt(msg) {
+    if (msg?.isOwner) return userStore.vipExpireAt
+    if (currentGroupSession.value) return msg?.user?.vipExpireAt
+    return currentSession.value?.user?.vipExpireAt
+  }
+
   function bubbleImageStyle(message) {
     const w = message?.mediaWidth
     const h = message?.mediaHeight
@@ -1063,15 +1271,22 @@ export function useMessageView() {
     Plus,
     Search,
     Warning,
+    UserFilled,
     activeSystemMessages,
     activeTab,
+    activeChatSubtitle,
+    activeChatTitle,
     emojiPackIconUrl,
     autoResizeInput,
+    bubbleAvatar,
     bubbleImageStyle,
+    bubbleVipExpireAt,
+    bubbleVipTier,
     canFavoriteChatImage,
     chatEmojiStore,
     chatImageInput,
     currentSession,
+    currentGroupSession,
     currentSystemGroup,
     defaultAvatar,
     dialogVisible,
@@ -1087,6 +1302,7 @@ export function useMessageView() {
     handleRecall,
     inputBoxRef,
     isActiveItem,
+    isPrivateChat,
     isMediaMessage,
     listItems,
     messageTimeline,
@@ -1105,15 +1321,22 @@ export function useMessageView() {
     openPeerProfile,
     parseSystemMessageContent,
     peerOnline,
+    groupCreateForm,
+    groupCreateVisible,
+    groupListError,
+    groupListLoading,
     scrollToBottom,
     searchQuery,
     selfOnline,
     selectListItem,
+    openCreateGroup,
+    submitCreateGroup,
     sendContent,
     sendMessageFromEmoji,
     sendMessageFromShopUrl,
     sendMsg,
     sending,
+    creatingGroup,
     sysIcon,
     sysTagClass,
     sysTagLabel,
