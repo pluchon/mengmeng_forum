@@ -28,7 +28,7 @@ public class CaptchaController {
     @Autowired
     private CaptchaFacadeService captchaFacadeService;
 
-    /** 生成验证码。支持多类型（type 为天爱常量字符串，如 SLIDER / WORD_IMAGE_CLICK）。 */
+    /** 生成验证码。支持多类型（type 为天爱常量字符串，如 SLIDER / WORD_IMAGE_CLICK） */
     @PostMapping("/generate")
     public ApiResponse<ImageCaptchaVO> generate(@RequestBody(required = false) CaptchaGenerateRequest body) {
         String type = (body != null && StringUtils.hasText(body.getType()))
@@ -37,7 +37,7 @@ public class CaptchaController {
         return imageCaptchaApplication.generateCaptcha(type);
     }
 
-    /** 校验轨迹并签发业务票据 captchaTicket（短 TTL，一次性）。 */
+    /** 校验轨迹并签发业务票据 captchaTicket（短 TTL，一次性） */
     @PostMapping("/check")
     public Result<CaptchaCheckResponseVO> check(@Valid @RequestBody CaptchaCheckRequest req) {
         return Result.success(captchaFacadeService.checkAndIssue(req));
