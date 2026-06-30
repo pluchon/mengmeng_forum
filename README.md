@@ -4,29 +4,27 @@
 
 ## 部分界面演示
 
-![image-20260618112324233](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260618112324431.png)
+![image-20260630172104679](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172105172.png)
 
-![image-20260620132214399](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132214769.png)
+![image-20260630172147388](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172147768.png)
 
-![image-20260620132229021](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132229262.png)
+![image-20260630172212504](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172212793.png)
 
-![image-20260620132244567](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132244754.png)
+![image-20260630172231590](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172231860.png)
 
-![image-20260620132313826](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132314012.png)
+![image-20260630172248416](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172248648.png)
 
-![image-20260620132340560](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132340782.png)
+![image-20260630172323201](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172323485.png)
 
-![image-20260620132355767](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132355938.png)
+![image-20260630172342921](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172343216.png)
 
-![image-20260620132418922](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132419135.png)
+![image-20260630172416362](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172416663.png)
 
-![image-20260620132431965](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260620132432116.png)
+![image-20260630172447415](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172447743.png)
 
-> 管理界面还没完全做好，目前比较糙
+![image-20260630172505107](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172505395.png)
 
-![image-20260605175951669](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605175951857.png)
-
-![image-20260605180011517](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260605180011700.png)
+![image-20260630172522945](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172523299.png)
 
 ***
 
@@ -198,6 +196,75 @@ flowchart TB
 - 五子棋 / 井字棋 / 俄罗斯方块 PK 实时链路 → Java WebSocket（大厅在线、游戏在线、房间对局三类连接）
 - 局部责任链 → Java 后端 Guard Chain，只拦截前置准入规则，不接管事务核心流程
 - ai-server → PostgreSQL（LangGraph checkpoint）、DashScope、OSS 签名读私有媒体
+
+## 现有 AI 模块结构
+
+当前 AI 模块是 **Java 业务权威 + Python AI 服务中心** 的混合架构：Java 负责鉴权、配额、业务状态、消息落库与最终发布；Python 负责模型调用、LangGraph 审核、看板娘对话、RAG 检索和 MCP 工具调用。
+
+```mermaid
+flowchart TB
+  FE[前端用户操作] --> BE[Java 后端]
+
+  subgraph JavaSide[Java 侧业务边界]
+    BE --> AUTH[鉴权 / 配额 / 积分 / 业务状态]
+    AUTH --> MASCOT_J[MascotService<br/>看板娘会话与计费]
+    AUTH --> AIHUB_J[AiHubService<br/>AI 写作 / 生图 / RAG 客户端]
+    AUTH --> SEARCH_J[SearchService<br/>DB 搜索 + AI 语义增强]
+    AUTH --> AUDIT_J[ArticleAuditService<br/>发帖审核状态流转]
+  end
+
+  subgraph PythonApi[Python ai-server API]
+    MASCOT_API[/mascot/chat<br/>/mascot/chat/stream/]
+    AI_API[/ai/write<br/>/ai/cover-hints<br/>/ai/image/]
+    RAG_API[/rag/index-*<br/>/rag/*-vector-search/]
+    VALIDATE_API[/validate-text<br/>/validate-image/]
+  end
+
+  MASCOT_J --> MASCOT_API
+  AIHUB_J --> AI_API
+  AIHUB_J --> RAG_API
+  SEARCH_J --> RAG_API
+
+  subgraph PythonCore[Python AI 核心能力]
+    MASCOT_API --> MASCOT_G[mascot_graph<br/>看板娘 StateGraph]
+    AI_API --> HUB_SVC[ai_hub_service<br/>写作 / 生图 / 棋类 AI]
+    RAG_API --> RAG[RAG<br/>文章 / 用户向量检索]
+    VALIDATE_API --> SYNC_AUDIT[同步短内容审核]
+    MASCOT_G --> MCP[MCP Registry<br/>Tavily / 时间 / 地图 / 天气]
+  end
+
+  subgraph AsyncAudit[异步帖子审核]
+    AUDIT_J --> MQ_TASK[(RabbitMQ<br/>forum.audit.article)]
+    MQ_TASK --> WORKER[audit_worker]
+    WORKER --> AUDIT_G[article_audit<br/>LangGraph]
+    AUDIT_G --> MQ_RESULT[(RabbitMQ<br/>forum.audit.result)]
+    MQ_RESULT --> AUDIT_J
+  end
+
+  subgraph Storage[存储与外部服务]
+    MYSQL[(MySQL<br/>业务数据 / 看板娘消息)]
+    REDIS[(Redis<br/>RAG 索引 / 缓存 / 幂等)]
+    PG[(PostgreSQL<br/>LangGraph checkpoint)]
+    MODEL[DeepSeek / DashScope / HuanAPI]
+    OSS[(OSS<br/>图片 / 视频 / 产物)]
+  end
+
+  BE --> MYSQL
+  RAG --> REDIS
+  AUDIT_G --> PG
+  MASCOT_G --> MODEL
+  HUB_SVC --> MODEL
+  SYNC_AUDIT --> MODEL
+  HUB_SVC --> OSS
+```
+
+现状要点：
+
+- `article_audit.py` 是真实 LangGraph 固定审核流程，并绑定 PostgreSQL checkpoint。
+- `mascot_graph.py` 是看板娘对话图，已接入站内 RAG、Tavily、地图、天气等 MCP 工具。
+- RAG 当前主要使用 Redis 保存文章 / 用户向量索引，展示前仍回到 Java / MySQL 过滤公开状态。
+- 看板娘会话消息持久化在 MySQL，Python 只接收 Java 传入的历史上下文。
+- 异步审核采用 MQ 双向回执：Java 投递审核任务，Python 回投审核结果，最终发布状态由 Java 决定。
 
 ---
 
