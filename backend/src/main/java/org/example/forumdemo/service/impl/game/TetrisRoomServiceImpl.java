@@ -153,6 +153,18 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 return;
             }
             long now = System.currentTimeMillis();
+            int lockGarbage = state.advanceLockIfReady(now);
+            if (lockGarbage != TetrisPlayerState.TICK_UNCHANGED) {
+                applyGarbageToOpponent(room, userId, lockGarbage, now, requestId);
+                checkFinishAfterMove(room, userId);
+            }
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                return;
+            }
+            if (state.isGameOver()) {
+                sendRoomError(roomId, userId, requestId, "本局已结束");
+                return;
+            }
             int garbage = state.handleInput(action, now);
             applyGarbageToOpponent(room, userId, garbage, now, requestId);
             checkFinishAfterMove(room, userId);

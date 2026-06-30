@@ -1,3 +1,5 @@
+import { blankLine } from './constants'
+
 export function want(next, matrix) {
   const xy = next.xy
   const shape = next.shape
@@ -43,13 +45,10 @@ export function mergeBlock(matrix, block) {
 }
 
 export function clearLineRows(matrix, lines) {
-  const next = matrix.map((row) => [...row])
-  const sorted = [...lines].sort((a, b) => b - a)
-  sorted.forEach((lineIndex) => {
-    next.splice(lineIndex, 1)
-    next.unshift([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-  })
-  return next
+  const clearSet = new Set(lines)
+  const kept = matrix.filter((_, index) => !clearSet.has(index))
+  const emptyRows = lines.map(() => [...blankLine])
+  return [...emptyRows, ...kept]
 }
 
 export function ghostDrop(block, matrix) {
