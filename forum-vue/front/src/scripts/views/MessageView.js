@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Close,
   ChatDotRound,
@@ -41,10 +41,20 @@ import {
 } from '@/api/systemMessage'
 import {
   createGroupChat,
+  dissolveGroupChat,
   getGroupChatMessages,
+  getGroupChatMembers,
   getGroupChatSessions,
+  getPublicGroupChats,
+  inviteGroupChatMember,
+  joinPublicGroupChat,
+  leaveGroupChat,
   markGroupChatRead,
+  muteGroupChatMember,
+  removeGroupChatMember,
+  reportGroupChatMessage,
   sendGroupChatMessage,
+  updateGroupChat,
 } from '@/api/groupChat'
 import { useMessageStore } from '@/stores/message'
 import { useChatEmojiStore } from '@/stores/chatEmoji'
@@ -131,6 +141,17 @@ export function useMessageView() {
   const creatingGroup = ref(false)
   const groupListLoading = ref(false)
   const groupListError = ref('')
+  const publicGroupVisible = ref(false)
+  const publicGroups = ref([])
+  const publicGroupsLoading = ref(false)
+  const groupMembersVisible = ref(false)
+  const groupMembers = ref([])
+  const groupMembersLoading = ref(false)
+  const groupEditVisible = ref(false)
+  const groupEditForm = ref({ name: '', groupType: 0, intro: '' })
+  const savingGroupEdit = ref(false)
+  const inviteUserIdInput = ref('')
+  const invitingMember = ref(false)
   const peerOnline = ref(false)
   const selfOnline = ref(false)
   let onlinePollTimer = null
@@ -243,6 +264,11 @@ export function useMessageView() {
     const limit = Number(currentGroupSession.value.memberLimit) || 0
     return limit > 0 ? `${count}/${limit} 人` : `${count} 人`
   })
+
+  const isCurrentGroupOwner = computed(() =>
+    currentGroupSession.value?.ownerUserId != null
+      && Number(currentGroupSession.value.ownerUserId) === Number(userStore.id),
+  )
 
   const visiblePacks = computed(() => {
     let hidden = []
@@ -730,6 +756,7 @@ export function useMessageView() {
         groupId: row.groupId,
         messageType: row.messageType,
         content: row.content,
+        mediaUrl: Number(row.messageType) === 1 ? row.content : undefined,
         createTime: row.createTime,
         updateTime: row.updateTime,
         state: row.status,
@@ -1001,6 +1028,213 @@ export function useMessageView() {
     }
   }
 
+  async function refreshCurrentGroupSession() {
+    await loadGroupSessions()
+    const gid = currentGroupSession.value?.groupId
+    if (!gid) return
+    const next = groupSessions.value.find((item) => String(item.groupId) === String(gid))
+    if (next) currentGroupSession.value = next
+  }
+
+  async function openPublicGroups() {
+    publicGroupVisible.value = true
+    await loadPublicGroups()
+  }
+
+  async function loadPublicGroups() {
+    publicGroupsLoading.value = true
+    try {
+      const res = await getPublicGroupChats({ pageNum: 1, pageSize: 50 })
+      if (res.code === 0) {
+        publicGroups.value = unwrapPageRecords(res.data)
+      }
+    } finally {
+      publicGroupsLoading.value = false
+    }
+  }
+
+  function isJoinedPublicGroup(group) {
+    return groupSessions.value.some((item) => String(item.groupId) === String(group.id))
+  }
+
+  async function joinPublicGroup(group) {
+    if (!group?.id || isJoinedPublicGroup(group)) return
+    try {
+      const res = await joinPublicGroupChat(group.id)
+      if (res.code === 0) {
+        ElMessage.success('已加入群聊')
+        await loadGroupSessions()
+        const joined = groupSessions.value.find((item) => String(item.groupId) === String(group.id))
+        if (joined) await selectGroupSession(joined)
+        await loadPublicGroups()
+      }
+    } catch {
+      /* 拦截器已提示 */
+    }
+  }
+
+  async function openGroupMembers() {
+    if (!currentGroupSession.value?.groupId) return
+    groupMembersVisible.value = true
+    await loadGroupMembers()
+  }
+
+  async function loadGroupMembers() {
+    const gid = currentGroupSession.value?.groupId
+    if (!gid) return
+    groupMembersLoading.value = true
+    try {
+      const res = await getGroupChatMembers(gid)
+      if (res.code === 0) groupMembers.value = Array.isArray(res.data) ? res.data : []
+    } finally {
+      groupMembersLoading.value = false
+    }
+  }
+
+  function openGroupEdit() {
+    if (!currentGroupSession.value) return
+    groupEditForm.value = {
+      name: currentGroupSession.value.name || '',
+      groupType: Number(currentGroupSession.value.groupType) || 0,
+      intro: currentGroupSession.value.intro || '',
+    }
+    groupEditVisible.value = true
+  }
+
+  async function submitGroupEdit() {
+    const gid = currentGroupSession.value?.groupId
+    const name = groupEditForm.value.name.trim()
+    if (!gid || !name) {
+      ElMessage.warning('请输入群名称')
+      return
+    }
+    savingGroupEdit.value = true
+    try {
+      const res = await updateGroupChat(gid, {
+        name,
+        groupType: Number(groupEditForm.value.groupType),
+        intro: groupEditForm.value.intro?.trim() || undefined,
+      })
+      if (res.code === 0) {
+        ElMessage.success('群资料已更新')
+        groupEditVisible.value = false
+        await refreshCurrentGroupSession()
+      }
+    } finally {
+      savingGroupEdit.value = false
+    }
+  }
+
+  async function inviteMemberById() {
+    const gid = currentGroupSession.value?.groupId
+    const inviteeUserId = Number(inviteUserIdInput.value)
+    if (!gid || !Number.isFinite(inviteeUserId) || inviteeUserId <= 0) {
+      ElMessage.warning('请输入正确的用户 ID')
+      return
+    }
+    invitingMember.value = true
+    try {
+      const res = await inviteGroupChatMember(gid, inviteeUserId)
+      if (res.code === 0) {
+        ElMessage.success('已邀请成员加入')
+        inviteUserIdInput.value = ''
+        await refreshCurrentGroupSession()
+        await loadGroupMembers()
+      }
+    } finally {
+      invitingMember.value = false
+    }
+  }
+
+  async function leaveCurrentGroup() {
+    const gid = currentGroupSession.value?.groupId
+    if (!gid) return
+    await ElMessageBox.confirm('确认退出当前群聊吗？退出后不会再接收新消息。', '退出群聊', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await leaveGroupChat(gid)
+    ElMessage.success('已退出群聊')
+    currentGroupSession.value = null
+    messages.value = []
+    await loadGroupSessions()
+  }
+
+  async function dissolveCurrentGroup() {
+    const gid = currentGroupSession.value?.groupId
+    if (!gid) return
+    await ElMessageBox.confirm('确认解散当前群聊吗？解散后成员将无法继续聊天。', '解散群聊', {
+      confirmButtonText: '解散',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await dissolveGroupChat(gid)
+    ElMessage.success('群聊已解散')
+    currentGroupSession.value = null
+    messages.value = []
+    await loadGroupSessions()
+  }
+
+  async function removeMember(member) {
+    const gid = currentGroupSession.value?.groupId
+    const targetUserId = member?.user?.id
+    if (!gid || !targetUserId) return
+    await ElMessageBox.confirm(`确认移除「${member.user?.nickname || targetUserId}」吗？`, '移除成员', {
+      confirmButtonText: '移除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await removeGroupChatMember(gid, targetUserId)
+    ElMessage.success('已移除成员')
+    await refreshCurrentGroupSession()
+    await loadGroupMembers()
+  }
+
+  async function muteMember(member, minutes) {
+    const gid = currentGroupSession.value?.groupId
+    const targetUserId = member?.user?.id
+    if (!gid || !targetUserId) return
+    const title = minutes > 0 ? '禁言成员' : '解除禁言'
+    const text = minutes > 0 ? '确认禁言该成员 30 分钟吗？' : '确认解除该成员禁言吗？'
+    await ElMessageBox.confirm(text, title, {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await muteGroupChatMember(gid, targetUserId, minutes)
+    ElMessage.success(minutes > 0 ? '已禁言成员' : '已解除禁言')
+    await loadGroupMembers()
+  }
+
+  async function reportGroupMessage(msgRow) {
+    const gid = currentGroupSession.value?.groupId
+    const mid = coerceMessageId(msgRow?.message?.id)
+    if (!gid || !Number.isFinite(mid) || mid <= 0 || msgRow?.isOwner) return
+    const { value } = await ElMessageBox.prompt('请填写举报原因', '举报群消息', {
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPattern: /\S+/,
+      inputErrorMessage: '举报原因不能为空',
+    })
+    await reportGroupChatMessage(gid, {
+      messageId: mid,
+      reason: String(value || '').trim(),
+    })
+    ElMessage.success('举报已提交')
+  }
+
+  function memberRoleLabel(role) {
+    return Number(role) === 0 ? '群主' : '成员'
+  }
+
+  function memberMuteLabel(member) {
+    const until = parseForumDateTime(member?.muteUntil)
+    if (!until || until.getTime() <= Date.now()) return ''
+    return `禁言至 ${formatSessionTime(member.muteUntil)}`
+  }
+
   function autoResizeInput() {
     const el = inputBoxRef.value
     if (!el) return
@@ -1132,6 +1366,10 @@ export function useMessageView() {
   }
 
   async function sendMessageFromShopUrl(mediaUrl) {
+    if (currentGroupSession.value) {
+      await sendGroupEmojiMessage(mediaUrl)
+      return
+    }
     const recvId = currentSession.value?.user?.id
     if (recvId == null || !mediaUrl) return
     if (Number(recvId) === Number(userStore.id)) {
@@ -1161,6 +1399,10 @@ export function useMessageView() {
   }
 
   async function sendMessageFromEmoji(emoji) {
+    if (currentGroupSession.value) {
+      await sendGroupEmojiMessage(emoji?.mediaUrl)
+      return
+    }
     const recvId = currentSession.value?.user?.id
     if (recvId == null) return
     if (Number(recvId) === Number(userStore.id)) {
@@ -1180,6 +1422,26 @@ export function useMessageView() {
         await nextTick()
         scrollToBottom()
         await loadSessions()
+      }
+    } catch {
+      /* 已提示 */
+    }
+  }
+
+  async function sendGroupEmojiMessage(mediaUrl) {
+    const gid = currentGroupSession.value?.groupId
+    if (!gid || !mediaUrl) return
+    try {
+      const sendRes = await sendGroupChatMessage({
+        groupId: gid,
+        messageType: 1,
+        content: mediaUrl,
+      })
+      if (sendRes.code === 0 && sendRes.data) {
+        messages.value.push(mapGroupMessage(sendRes.data))
+        await nextTick()
+        scrollToBottom()
+        await loadGroupSessions()
       }
     } catch {
       /* 已提示 */
@@ -1290,6 +1552,7 @@ export function useMessageView() {
     currentSystemGroup,
     defaultAvatar,
     dialogVisible,
+    dissolveCurrentGroup,
     emojiPanelTab,
     emojiPopoverVisible,
     emojiShopStore,
@@ -1302,9 +1565,18 @@ export function useMessageView() {
     handleRecall,
     inputBoxRef,
     isActiveItem,
+    isCurrentGroupOwner,
+    isJoinedPublicGroup,
     isPrivateChat,
     isMediaMessage,
+    inviteMemberById,
+    inviteUserIdInput,
+    invitingMember,
+    joinPublicGroup,
+    leaveCurrentGroup,
     listItems,
+    memberMuteLabel,
+    memberRoleLabel,
     messageTimeline,
     messages,
     msgContainer,
@@ -1318,25 +1590,41 @@ export function useMessageView() {
     onEmojiTabChange,
     onEmojiStickerFileChange,
     openArticleFromSystem,
+    openGroupEdit,
+    openGroupMembers,
+    openPublicGroups,
     openPeerProfile,
     parseSystemMessageContent,
     peerOnline,
     groupCreateForm,
     groupCreateVisible,
+    groupEditForm,
+    groupEditVisible,
     groupListError,
     groupListLoading,
+    groupMembers,
+    groupMembersLoading,
+    groupMembersVisible,
+    publicGroups,
+    publicGroupsLoading,
+    publicGroupVisible,
+    removeMember,
+    reportGroupMessage,
+    savingGroupEdit,
     scrollToBottom,
     searchQuery,
     selfOnline,
     selectListItem,
     openCreateGroup,
     submitCreateGroup,
+    submitGroupEdit,
     sendContent,
     sendMessageFromEmoji,
     sendMessageFromShopUrl,
     sendMsg,
     sending,
     creatingGroup,
+    muteMember,
     sysIcon,
     sysTagClass,
     sysTagLabel,

@@ -123,6 +123,12 @@
   background: #fbeaf0;
 }
 
+.mc-left-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .mc-close-btn {
   display: inline-flex;
   align-items: center;
@@ -499,6 +505,34 @@
   margin-top: 2px;
   font-size: 11px;
   color: #86909c;
+}
+
+.mc-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding-top: 1px;
+}
+
+.mc-group-action-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #4e5969;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mc-group-action-btn:hover {
+  border-color: #ed93b1;
+  color: #d4537e;
+}
+
+.mc-group-action-btn.is-danger {
+  color: #d4537e;
 }
 
 .mc-rsub {
@@ -1225,4 +1259,122 @@
 .mc-dialog-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.mc-public-groups,
+.mc-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+}
+
+.mc-public-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mc-public-group:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.mc-public-group-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mc-public-group-name,
+.mc-member-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.mc-public-group-desc,
+.mc-member-meta {
+  font-size: 12px;
+  color: #86909c;
+}
+
+.mc-public-group-meta,
+.mc-public-group-join {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #4e5969;
+}
+
+.mc-public-group-join {
+  color: #d4537e;
+  font-weight: 600;
+}
+
+.mc-public-empty {
+  padding: 32px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #86909c;
+}
+
+.mc-member-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mc-invite-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mc-invite-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mc-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f2f3f5;
+}
+
+.mc-member-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mc-member-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.mc-member-action {
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: #f7f8fa;
+  color: #4e5969;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mc-member-action.is-danger {
+  color: #d4537e;
 }

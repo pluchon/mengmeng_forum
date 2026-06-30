@@ -10,6 +10,7 @@ import org.example.forumdemo.common.enums.GroupChatMemberRole;
 import org.example.forumdemo.common.enums.GroupChatMemberStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageType;
+import org.example.forumdemo.common.enums.GroupChatReportStatus;
 import org.example.forumdemo.common.enums.GroupChatStatus;
 import org.example.forumdemo.common.enums.GroupChatType;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -23,10 +24,12 @@ import org.example.forumdemo.converter.GroupChatConverter;
 import org.example.forumdemo.entity.db.GroupChat;
 import org.example.forumdemo.entity.db.GroupChatMember;
 import org.example.forumdemo.entity.db.GroupChatMessage;
+import org.example.forumdemo.entity.db.GroupChatReport;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.groupchat.CreateGroupChatRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
+import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -37,6 +40,7 @@ import org.example.forumdemo.entity.vo.groupchat.GroupChatSessionVO;
 import org.example.forumdemo.mapper.GroupChatMapper;
 import org.example.forumdemo.mapper.GroupChatMemberMapper;
 import org.example.forumdemo.mapper.GroupChatMessageMapper;
+import org.example.forumdemo.mapper.GroupChatReportMapper;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.groupchat.GroupChatService;
 import org.example.forumdemo.service.interfaces.user.UserService;
@@ -71,6 +75,10 @@ public class GroupChatServiceImpl implements GroupChatService {
     // 群消息 Mapper
     @Autowired
     private GroupChatMessageMapper groupChatMessageMapper;
+
+    // 群举报 Mapper
+    @Autowired
+    private GroupChatReportMapper groupChatReportMapper;
 
     // 用户服务
     @Autowired
@@ -346,6 +354,37 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatMember::getId, member.getId())
                 .set(GroupChatMember::getLastReadMessageId, targetMessageId)
                 .set(GroupChatMember::getUpdateTime, ForumDateTimes.now()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void reportMessage(Long groupId, ReportGroupChatMessageRequest request, Long loginUserId) {
+        assertActiveMember(groupId, loginUserId);
+        GroupChatMessage message = groupChatMessageMapper.selectOne(new LambdaQueryWrapper<GroupChatMessage>()
+                .eq(GroupChatMessage::getId, request.getMessageId())
+                .eq(GroupChatMessage::getGroupId, groupId)
+                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE));
+        if (message == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        if (message.getSenderUserId() == null || Objects.equals(message.getSenderUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能举报该消息"));
+        }
+        String reason = normalizeReportReason(request.getReason());
+        Date now = ForumDateTimes.now();
+        GroupChatReport report = new GroupChatReport();
+        report.setGroupId(groupId);
+        report.setMessageId(message.getId());
+        report.setReporterUserId(loginUserId);
+        report.setTargetUserId(message.getSenderUserId());
+        report.setReason(reason);
+        report.setStatus(GroupChatReportStatus.PENDING.getCode());
+        report.setDeleteState(Constant.DELETE_STATE_FALSE);
+        report.setCreateTime(now);
+        report.setUpdateTime(now);
+        if (groupChatReportMapper.insert(report) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
+        }
     }
 
     @Override
@@ -674,6 +713,17 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "消息内容过长"));
         }
         return content;
+    }
+
+    private String normalizeReportReason(String rawReason) {
+        String reason = normalizeOptional(rawReason);
+        if (!StringUtils.hasText(reason)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "举报原因不能为空"));
+        }
+        if (reason.length() > 200) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "举报原因过长"));
+        }
+        return reason;
     }
 
     private String normalizeOptional(String raw) {

@@ -53,3 +53,19 @@ CREATE TABLE `group_chat_message` (
     KEY `idx_group_message` (`group_id`, `delete_state`, `id`),
     KEY `idx_sender_time` (`sender_user_id`, `delete_state`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息表';
+
+CREATE TABLE `group_chat_report` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '举报记录ID',
+    `group_id` bigint NOT NULL COMMENT '群聊ID',
+    `message_id` bigint NOT NULL COMMENT '群消息ID',
+    `reporter_user_id` bigint NOT NULL COMMENT '举报人用户ID',
+    `target_user_id` bigint NOT NULL COMMENT '被举报用户ID',
+    `reason` varchar(200) NOT NULL COMMENT '举报原因',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '处理状态: 0待处理 1已处理 2驳回',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_group_report` (`group_id`, `status`, `delete_state`, `create_time`),
+    KEY `idx_message_report` (`message_id`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊举报表';

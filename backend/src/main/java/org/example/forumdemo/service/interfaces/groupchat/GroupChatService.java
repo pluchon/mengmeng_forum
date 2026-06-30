@@ -3,6 +3,7 @@ package org.example.forumdemo.service.interfaces.groupchat;
 import org.example.forumdemo.entity.dto.groupchat.CreateGroupChatRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
+import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -41,6 +42,8 @@ public interface GroupChatService {
     PageResult<GroupChatMessageVO> queryMessages(Long groupId, Long loginUserId, Integer pageNum, Integer pageSize);
 
     void markRead(Long groupId, Long messageId, Long loginUserId);
+
+    void reportMessage(Long groupId, ReportGroupChatMessageRequest request, Long loginUserId);
 
     List<GroupChatMemberVO> queryMembers(Long groupId, Long loginUserId);
 }

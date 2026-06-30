@@ -8,6 +8,7 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.groupchat.CreateGroupChatRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
+import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -154,6 +155,16 @@ public class GroupChatController {
         User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.markRead(groupId, messageId, sessionUser.getId());
         return Result.success("已标记群聊为已读");
+    }
+
+    /** 举报群聊消息 */
+    @PostMapping("/{groupId}/messages/report")
+    public Result<String> reportMessage(@PathVariable Long groupId,
+                                        @Valid @RequestBody ReportGroupChatMessageRequest request,
+                                        HttpServletRequest httpServletRequest) {
+        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        groupChatService.reportMessage(groupId, request, sessionUser.getId());
+        return Result.success("举报已提交");
     }
 
     /** 查询群成员 */
