@@ -352,10 +352,10 @@
                 v-model:visible="mentionPopoverVisible"
                 placement="top-start"
                 :width="260"
-                trigger="click"
+                trigger="manual"
               >
                 <template #reference>
-                  <button type="button" class="mc-itbtn mc-at-btn" title="@群成员" @click="openMentionPicker">
+                  <button type="button" class="mc-itbtn mc-at-btn" title="@群成员" @click.stop="toggleMentionPicker">
                     @
                   </button>
                 </template>
@@ -382,7 +382,7 @@
                       :vip-tier="Number(member.user?.vipTier) || 0"
                       :vip-expire-at="member.user?.vipExpireAt"
                     />
-                    <span>{{ member.remarkName || member.user?.nickname || ('用户' + member.user?.id) }}</span>
+                    <span>{{ memberDisplayName(member) }}</span>
                   </button>
                 </div>
               </el-popover>
@@ -738,11 +738,15 @@
               v-if="isCurrentGroupOwner && Number(member.role) !== 0"
               class="mc-member-actions"
             >
-              <button type="button" class="mc-member-action" @click.stop="muteMember(member, 30)">
-                禁言
-              </button>
-              <button type="button" class="mc-member-action" @click.stop="muteMember(member, 0)">
-                解禁
+              <button
+                type="button"
+                class="mc-member-action mc-member-action--icon"
+                :class="{ 'is-muted': isMemberMuted(member) }"
+                :title="isMemberMuted(member) ? '解除禁言' : '禁言成员'"
+                @click.stop="toggleMuteMember(member)"
+              >
+                <span v-if="isMemberMuted(member)">🚫</span>
+                <el-icon v-else><ChatLineRound /></el-icon>
               </button>
               <button type="button" class="mc-member-action is-danger" @click.stop="removeMember(member)">
                 移除
@@ -829,13 +833,15 @@
 
       <section v-else class="mc-group-settings-section">
         <div class="mc-group-readonly-profile">
-          <div class="mc-group-readonly-row">
-            <span>群名称：</span>
-            <strong>{{ currentGroupSession?.name || '群聊' }}</strong>
-          </div>
-          <div class="mc-group-readonly-row">
-            <span>公开性：</span>
-            <strong>{{ groupTypeLabel(currentGroupSession?.groupType) }}</strong>
+          <div class="mc-group-readonly-grid">
+            <div class="mc-group-readonly-row">
+              <span>群名称：</span>
+              <strong>{{ currentGroupSession?.groupName || currentGroupSession?.name || '群聊' }}</strong>
+            </div>
+            <div class="mc-group-readonly-row">
+              <span>公开性：</span>
+              <strong>{{ groupTypeLabel(currentGroupSession?.groupType) }}</strong>
+            </div>
           </div>
           <div class="mc-group-readonly-intro">
             {{ currentGroupSession?.intro || '暂无群简介' }}
