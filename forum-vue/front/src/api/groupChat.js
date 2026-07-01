@@ -15,6 +15,18 @@ export function updateGroupChat(groupId, data) {
   return request({ url: `/group-chat/${groupId}`, method: 'put', data })
 }
 
+// 上传群头像
+export function uploadGroupAvatar(file, { onUploadProgress } = {}) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/file/uploadAvatar',
+    method: 'post',
+    data: formData,
+    onUploadProgress,
+  })
+}
+
 // 查询群聊消息
 export function getGroupChatMessages(groupId, params) {
   return request({ url: `/group-chat/${groupId}/messages`, method: 'get', params })

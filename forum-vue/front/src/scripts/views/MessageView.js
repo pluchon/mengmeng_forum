@@ -46,7 +46,6 @@ import {
   getGroupChatMembers,
   getGroupChatSessions,
   getPublicGroupChats,
-  inviteGroupChatMember,
   joinPublicGroupChat,
   leaveGroupChat,
   markGroupChatRead,
@@ -55,6 +54,7 @@ import {
   reportGroupChatMessage,
   sendGroupChatMessage,
   updateGroupChat,
+  uploadGroupAvatar,
 } from '@/api/groupChat'
 import { useMessageStore } from '@/stores/message'
 import { useChatEmojiStore } from '@/stores/chatEmoji'
@@ -141,20 +141,22 @@ export function useMessageView() {
   const creatingGroup = ref(false)
   const groupListLoading = ref(false)
   const groupListError = ref('')
-  const publicGroupVisible = ref(false)
   const publicGroups = ref([])
   const publicGroupsLoading = ref(false)
-  const groupMembersVisible = ref(false)
+  const groupSettingsVisible = ref(false)
   const groupMembers = ref([])
   const groupMembersLoading = ref(false)
-  const groupEditVisible = ref(false)
-  const groupEditForm = ref({ name: '', groupType: 0, intro: '' })
+  const groupMembersPage = ref(1)
+  const groupEditForm = ref({ name: '', groupType: 0, intro: '', avatarUrl: '' })
+  const groupAvatarInputRef = ref(null)
+  const groupIntroEditorRef = ref(null)
+  const uploadingGroupAvatar = ref(false)
   const savingGroupEdit = ref(false)
-  const inviteUserIdInput = ref('')
-  const invitingMember = ref(false)
+  const groupTypeSwitchLocked = ref(false)
   const peerOnline = ref(false)
   const selfOnline = ref(false)
   let onlinePollTimer = null
+  let groupTypeSwitchTimer = null
 
   const dialogVisible = computed({
     get: () => messageCenterUi.visible,
@@ -225,9 +227,22 @@ export function useMessageView() {
       unread: Number(s.unreadCount) || 0,
       listIcon: UserFilled,
     }))
+    const joinedGroupIds = new Set(groupSessions.value.map((s) => String(s.groupId)))
+    const publicGroupItems = publicGroups.value
+      .filter((group) => !joinedGroupIds.has(String(group.id)))
+      .map((group) => ({
+        key: `public-group-${group.id}`,
+        kind: 'public-group',
+        group,
+        name: group.name || '公开群',
+        time: group.updateTime || group.createTime,
+        preview: group.intro || '暂无简介',
+        unread: 0,
+        listIcon: UserFilled,
+      }))
     let merged = []
     if (activeTab.value === 'pm') merged = pmItems
-    else if (activeTab.value === 'group') merged = groupItems
+    else if (activeTab.value === 'group') merged = [...groupItems, ...publicGroupItems]
     else if (activeTab.value === 'notif') merged = sysItems
     else merged = [...pmItems, ...groupItems, ...sysItems].sort((a, b) => {
       const ta = parseForumDateTime(a.time)?.getTime() || 0
@@ -269,6 +284,18 @@ export function useMessageView() {
     currentGroupSession.value?.ownerUserId != null
       && Number(currentGroupSession.value.ownerUserId) === Number(userStore.id),
   )
+
+  const groupMembersTotalPages = computed(() =>
+    Math.max(1, Math.ceil(groupMembers.value.length / 50)),
+  )
+
+  const paginatedGroupMembers = computed(() => {
+    const start = (groupMembersPage.value - 1) * 50
+    return groupMembers.value
+      .slice()
+      .sort(sortGroupMember)
+      .slice(start, start + 50)
+  })
 
   const visiblePacks = computed(() => {
     let hidden = []
@@ -510,6 +537,18 @@ export function useMessageView() {
     return false
   }
 
+  function openGroupMemberProfile(member) {
+    const uid = member?.user?.id
+    if (!uid) return
+    groupSettingsVisible.value = false
+    handleClose()
+    router.push(`/profile/${uid}`)
+  }
+
+  function groupTypeLabel(type) {
+    return Number(type) === 1 ? '私密群' : '公开群'
+  }
+
   function sysIcon(type) {
     return SYS_TYPE_ICON[Number(type)] || Bell
   }
@@ -616,7 +655,7 @@ export function useMessageView() {
       initWebSocket()
       await userStore.fetchUserInfo()
     }
-    await Promise.all([loadSessions(), loadGroupSessions(), loadSystemMessages()])
+    await Promise.all([loadSessions(), loadGroupSessions(), loadPublicGroups(), loadSystemMessages()])
     await applyOpenTarget()
   }
 
@@ -629,6 +668,10 @@ export function useMessageView() {
 
   onUnmounted(() => {
     stopOnlinePolling()
+    if (groupTypeSwitchTimer) {
+      clearTimeout(groupTypeSwitchTimer)
+      groupTypeSwitchTimer = null
+    }
   })
 
   watch(() => messageCenterUi.visible, (v) => {
@@ -899,6 +942,7 @@ export function useMessageView() {
     focusedConvKey.value = item.key
     if (item.kind === 'pm') await selectPmSession(item.session)
     else if (item.kind === 'group') await selectGroupSession(item.group)
+    else if (item.kind === 'public-group') await joinPublicGroup(item.group)
     else if (item.kind === 'sys-group') await selectSysGroup(item)
   }
 
@@ -1019,10 +1063,12 @@ export function useMessageView() {
       if (res.code === 0) {
         ElMessage.success('群聊已创建')
         groupCreateVisible.value = false
-        await loadGroupSessions()
+        await Promise.all([loadGroupSessions(), loadPublicGroups()])
         const created = groupSessions.value.find((item) => String(item.groupId) === String(res.data?.id))
         if (created) await selectGroupSession(created)
       }
+    } catch {
+      /* 拦截器已提示 */
     } finally {
       creatingGroup.value = false
     }
@@ -1036,11 +1082,6 @@ export function useMessageView() {
     if (next) currentGroupSession.value = next
   }
 
-  async function openPublicGroups() {
-    publicGroupVisible.value = true
-    await loadPublicGroups()
-  }
-
   async function loadPublicGroups() {
     publicGroupsLoading.value = true
     try {
@@ -1048,34 +1089,36 @@ export function useMessageView() {
       if (res.code === 0) {
         publicGroups.value = unwrapPageRecords(res.data)
       }
+    } catch {
+      publicGroups.value = []
     } finally {
       publicGroupsLoading.value = false
     }
   }
 
-  function isJoinedPublicGroup(group) {
-    return groupSessions.value.some((item) => String(item.groupId) === String(group.id))
-  }
-
   async function joinPublicGroup(group) {
-    if (!group?.id || isJoinedPublicGroup(group)) return
+    if (!group?.id) return
+    const joined = groupSessions.value.some((item) => String(item.groupId) === String(group.id))
+    if (joined) return
     try {
       const res = await joinPublicGroupChat(group.id)
       if (res.code === 0) {
         ElMessage.success('已加入群聊')
-        await loadGroupSessions()
+        await Promise.all([loadGroupSessions(), loadPublicGroups()])
         const joined = groupSessions.value.find((item) => String(item.groupId) === String(group.id))
         if (joined) await selectGroupSession(joined)
-        await loadPublicGroups()
       }
     } catch {
       /* 拦截器已提示 */
     }
   }
 
-  async function openGroupMembers() {
+  async function openGroupSettings() {
     if (!currentGroupSession.value?.groupId) return
-    groupMembersVisible.value = true
+    groupSettingsVisible.value = true
+    openGroupEdit()
+    await nextTick()
+    syncGroupIntroEditor()
     await loadGroupMembers()
   }
 
@@ -1085,7 +1128,10 @@ export function useMessageView() {
     groupMembersLoading.value = true
     try {
       const res = await getGroupChatMembers(gid)
-      if (res.code === 0) groupMembers.value = Array.isArray(res.data) ? res.data : []
+      if (res.code === 0) {
+        groupMembers.value = Array.isArray(res.data) ? res.data : []
+        groupMembersPage.value = 1
+      }
     } finally {
       groupMembersLoading.value = false
     }
@@ -1097,8 +1143,98 @@ export function useMessageView() {
       name: currentGroupSession.value.name || '',
       groupType: Number(currentGroupSession.value.groupType) || 0,
       intro: currentGroupSession.value.intro || '',
+      avatarUrl: currentGroupSession.value.avatarUrl || '',
     }
-    groupEditVisible.value = true
+  }
+
+  function groupAvatarText(groupLike) {
+    const name = groupLike?.name || groupLike?.group?.name || '群'
+    return String(name).trim().charAt(0) || '群'
+  }
+
+  function groupAvatarUrl(groupLike) {
+    return groupLike?.avatarUrl || groupLike?.group?.avatarUrl || ''
+  }
+
+  function triggerGroupAvatarUpload() {
+    groupAvatarInputRef.value?.click()
+  }
+
+  function validateGroupAvatarFile(file) {
+    if (!file) return { ok: false, message: '请选择头像图片' }
+    const type = (file.type || '').toLowerCase()
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/gif'].includes(type)) {
+      return { ok: false, message: '群头像仅支持 JPG / PNG / GIF' }
+    }
+    return validateLocalImageFile(file)
+  }
+
+  async function onGroupAvatarFileChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    const check = validateGroupAvatarFile(file)
+    if (!check.ok) {
+      ElMessage.warning(check.message)
+      return
+    }
+    uploadingGroupAvatar.value = true
+    const loading = openImageUploadLoading(file, '正在上传群头像…')
+    try {
+      const res = await uploadGroupAvatar(file)
+      if (res.code === 0 && res.data) {
+        groupEditForm.value.avatarUrl = res.data
+        ElMessage.success('群头像已上传，保存后生效')
+      }
+    } finally {
+      loading.close()
+      uploadingGroupAvatar.value = false
+    }
+  }
+
+  function syncGroupIntroEditor() {
+    const el = groupIntroEditorRef.value
+    if (!el) return
+    const text = groupEditForm.value.intro || ''
+    if (el.innerText !== text) el.innerText = text
+  }
+
+  function normalizeGroupIntro(value) {
+    return String(value || '').replace(/\r\n?/g, '\n').slice(0, 120)
+  }
+
+  function placeCaretAtEnd(el) {
+    const selection = window.getSelection()
+    if (!selection) return
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
+  function onGroupIntroInput(event) {
+    const el = event?.currentTarget
+    if (!el) return
+    const text = normalizeGroupIntro(el.innerText)
+    groupEditForm.value.intro = text
+    if (el.innerText !== text) {
+      el.innerText = text
+      placeCaretAtEnd(el)
+    }
+  }
+
+  function switchGroupType(type) {
+    if (groupTypeSwitchLocked.value) {
+      ElMessage.warning('操作太频繁，请稍后再试')
+      return
+    }
+    groupEditForm.value.groupType = Number(type)
+    groupTypeSwitchLocked.value = true
+    if (groupTypeSwitchTimer) clearTimeout(groupTypeSwitchTimer)
+    groupTypeSwitchTimer = setTimeout(() => {
+      groupTypeSwitchLocked.value = false
+      groupTypeSwitchTimer = null
+    }, 1200)
   }
 
   async function submitGroupEdit() {
@@ -1114,35 +1250,15 @@ export function useMessageView() {
         name,
         groupType: Number(groupEditForm.value.groupType),
         intro: groupEditForm.value.intro?.trim() || undefined,
+        avatarUrl: groupEditForm.value.avatarUrl?.trim() || undefined,
       })
       if (res.code === 0) {
-        ElMessage.success('群资料已更新')
-        groupEditVisible.value = false
+        ElMessage.success('群信息已更新')
+        groupSettingsVisible.value = false
         await refreshCurrentGroupSession()
       }
     } finally {
       savingGroupEdit.value = false
-    }
-  }
-
-  async function inviteMemberById() {
-    const gid = currentGroupSession.value?.groupId
-    const inviteeUserId = Number(inviteUserIdInput.value)
-    if (!gid || !Number.isFinite(inviteeUserId) || inviteeUserId <= 0) {
-      ElMessage.warning('请输入正确的用户 ID')
-      return
-    }
-    invitingMember.value = true
-    try {
-      const res = await inviteGroupChatMember(gid, inviteeUserId)
-      if (res.code === 0) {
-        ElMessage.success('已邀请成员加入')
-        inviteUserIdInput.value = ''
-        await refreshCurrentGroupSession()
-        await loadGroupMembers()
-      }
-    } finally {
-      invitingMember.value = false
     }
   }
 
@@ -1156,6 +1272,7 @@ export function useMessageView() {
     })
     await leaveGroupChat(gid)
     ElMessage.success('已退出群聊')
+    groupSettingsVisible.value = false
     currentGroupSession.value = null
     messages.value = []
     await loadGroupSessions()
@@ -1171,6 +1288,7 @@ export function useMessageView() {
     })
     await dissolveGroupChat(gid)
     ElMessage.success('群聊已解散')
+    groupSettingsVisible.value = false
     currentGroupSession.value = null
     messages.value = []
     await loadGroupSessions()
@@ -1229,10 +1347,27 @@ export function useMessageView() {
     return Number(role) === 0 ? '群主' : '成员'
   }
 
+  function sortGroupMember(a, b) {
+    const roleA = Number(a?.role)
+    const roleB = Number(b?.role)
+    if (roleA !== roleB) return roleA - roleB
+    const nameA = a?.user?.nickname || ''
+    const nameB = b?.user?.nickname || ''
+    return nameA.localeCompare(nameB, 'zh-Hans-CN')
+  }
+
   function memberMuteLabel(member) {
     const until = parseForumDateTime(member?.muteUntil)
     if (!until || until.getTime() <= Date.now()) return ''
     return `禁言至 ${formatSessionTime(member.muteUntil)}`
+  }
+
+  function goGroupMembersPrev() {
+    if (groupMembersPage.value > 1) groupMembersPage.value -= 1
+  }
+
+  function goGroupMembersNext() {
+    if (groupMembersPage.value < groupMembersTotalPages.value) groupMembersPage.value += 1
   }
 
   function autoResizeInput() {
@@ -1532,6 +1667,7 @@ export function useMessageView() {
     Picture,
     Plus,
     Search,
+    Setting,
     Warning,
     UserFilled,
     activeSystemMessages,
@@ -1561,17 +1697,15 @@ export function useMessageView() {
     focusedConvKey,
     formatSessionTime,
     formatTime,
+    groupAvatarText,
+    groupAvatarUrl,
     handleClose,
     handleRecall,
     inputBoxRef,
     isActiveItem,
     isCurrentGroupOwner,
-    isJoinedPublicGroup,
     isPrivateChat,
     isMediaMessage,
-    inviteMemberById,
-    inviteUserIdInput,
-    invitingMember,
     joinPublicGroup,
     leaveCurrentGroup,
     listItems,
@@ -1589,25 +1723,27 @@ export function useMessageView() {
     onEmojiPopoverShow,
     onEmojiTabChange,
     onEmojiStickerFileChange,
+    onGroupAvatarFileChange,
+    onGroupIntroInput,
     openArticleFromSystem,
-    openGroupEdit,
-    openGroupMembers,
-    openPublicGroups,
+    openGroupSettings,
+    openGroupMemberProfile,
     openPeerProfile,
     parseSystemMessageContent,
     peerOnline,
+    groupAvatarInputRef,
     groupCreateForm,
     groupCreateVisible,
     groupEditForm,
-    groupEditVisible,
+    groupIntroEditorRef,
     groupListError,
     groupListLoading,
     groupMembers,
+    groupMembersPage,
     groupMembersLoading,
-    groupMembersVisible,
-    publicGroups,
-    publicGroupsLoading,
-    publicGroupVisible,
+    groupMembersTotalPages,
+    groupSettingsVisible,
+    groupTypeSwitchLocked,
     removeMember,
     reportGroupMessage,
     savingGroupEdit,
@@ -1615,9 +1751,11 @@ export function useMessageView() {
     searchQuery,
     selfOnline,
     selectListItem,
+    groupTypeLabel,
     openCreateGroup,
     submitCreateGroup,
     submitGroupEdit,
+    switchGroupType,
     sendContent,
     sendMessageFromEmoji,
     sendMessageFromShopUrl,
@@ -1629,9 +1767,11 @@ export function useMessageView() {
     sysTagClass,
     sysTagLabel,
     tabBadges,
+    triggerGroupAvatarUpload,
     triggerChatImagePick,
     triggerEmojiStickerPick,
     userStore,
+    uploadingGroupAvatar,
     viewerIsVip,
     favoriteEmojis,
     favoritePage,
@@ -1642,8 +1782,11 @@ export function useMessageView() {
     goFavoritePrev,
     jumpFavoritePage,
     jumpUploadedPage,
+    goGroupMembersNext,
+    goGroupMembersPrev,
     onPackBarScroll,
     paginatedFavorites,
+    paginatedGroupMembers,
     paginatedUploaded,
     removeEmojiKeepPopover,
     showUploadOnCurrentPage,
