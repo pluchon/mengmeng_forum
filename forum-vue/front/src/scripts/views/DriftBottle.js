@@ -6,6 +6,17 @@ import {
   Delete,
   Refresh,
   Warning,
+  Sunny,
+  Umbrella,
+  EditPen,
+  Document,
+  Message,
+  Promotion,
+  ArrowDown,
+  Check,
+  Box,
+  ArrowRight,
+  IceDrink
 } from '@element-plus/icons-vue'
 import {
   commentDriftBottle,
@@ -34,10 +45,14 @@ export function useDriftBottle() {
   const commentSubmitting = ref(false)
   const mineLoading = ref(false)
   const myBottles = ref([])
+  const expandedBottles = ref({})
+  const commentPages = ref({})
+  const commentPageSize = 5
   const myTotal = ref(0)
   const myPage = ref(1)
-  const myPageSize = 8
+  const myPageSize = 5
   const quota = ref(null)
+  const moodDialogVisible = ref(false)
 
   const createForm = reactive({
     content: '',
@@ -84,12 +99,13 @@ export function useDriftBottle() {
     }
   }
 
-  async function submitBottle() {
+  async function submitBottle(e) {
     const content = createForm.content.trim()
     if (content.length < 20 || content.length > 500) {
       ElMessage.warning('瓶子内容需要 20 到 500 字')
       return
     }
+    const btnEl = e?.currentTarget || e?.target
     createSubmitting.value = true
     try {
       const res = await createDriftBottle({
@@ -97,7 +113,9 @@ export function useDriftBottle() {
         moodType: createForm.moodType,
       })
       if (res.code === 0) {
-        activeBottle.value = res.data
+        if (btnEl) {
+          playThrowAnimation(btnEl)
+        }
         createForm.content = ''
         ElMessage.success('瓶子已经漂向海里')
         await Promise.all([loadQuota(), loadMine(1)])
@@ -107,14 +125,70 @@ export function useDriftBottle() {
     }
   }
 
+  function playThrowAnimation(btn) {
+    const rect = btn.getBoundingClientRect()
+    const startX = rect.left + rect.width / 2 - 16
+    const startY = rect.top - 16
+    const endX = window.innerWidth / 2 + (Math.random() * 200 - 100)
+    const endY = window.innerHeight - 60
+
+    const bottle = document.createElement('div')
+    bottle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%;color:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2))"><path d="M10 2v3a6 6 0 0 0-3 5v7a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-7a6 6 0 0 0-3-5V2"></path><path d="M8.5 2h7"></path></svg>`
+    bottle.style.position = 'fixed'
+    bottle.style.left = '0px'
+    bottle.style.top = '0px'
+    bottle.style.width = '32px'
+    bottle.style.height = '32px'
+    bottle.style.zIndex = '9999'
+    bottle.style.pointerEvents = 'none'
+    document.body.appendChild(bottle)
+
+    const animX = bottle.animate([
+      { transform: `translateX(${startX}px)` },
+      { transform: `translateX(${endX}px)` }
+    ], { duration: 1000, easing: 'linear', fill: 'forwards' })
+
+    const animY = bottle.children[0].animate([
+      { transform: `translateY(${startY}px) rotate(0deg)`, easing: 'ease-out' },
+      { transform: `translateY(${startY - 150}px) rotate(180deg)`, offset: 0.4, easing: 'ease-in' },
+      { transform: `translateY(${endY}px) rotate(360deg)` }
+    ], { duration: 1000, fill: 'forwards' })
+
+    animX.onfinish = () => {
+      bottle.remove()
+      const splash = document.createElement('div')
+      splash.style.position = 'fixed'
+      splash.style.left = `${endX - 14}px`
+      splash.style.top = `${endY + 16}px`
+      splash.style.width = '60px'
+      splash.style.height = '20px'
+      splash.style.borderRadius = '50%'
+      splash.style.border = '3px solid rgba(255,255,255,0.8)'
+      splash.style.zIndex = '9998'
+      splash.style.pointerEvents = 'none'
+      splash.style.opacity = '1'
+      document.body.appendChild(splash)
+
+      splash.animate([
+        { transform: 'scale(0.5)', opacity: 0.8, borderWidth: '3px' },
+        { transform: 'scale(2)', opacity: 0, borderWidth: '0px' }
+      ], { duration: 500, easing: 'ease-out', fill: 'forwards' }).onfinish = () => splash.remove()
+    }
+  }
+
   async function pickOne() {
     pickLoading.value = true
     pageError.value = ''
     try {
       const res = await pickDriftBottle()
       if (res.code === 0) {
-        activeBottle.value = res.data
-        commentContent.value = ''
+        if (res.data == null) {
+          activeBottle.value = null
+          pageError.value = '海里暂时没有可打捞的瓶子了~'
+        } else {
+          activeBottle.value = res.data
+          commentContent.value = ''
+        }
         await loadQuota()
       }
     } catch (e) {
@@ -147,11 +221,19 @@ export function useDriftBottle() {
 
   async function openMyBottle(row) {
     if (!row?.id) return
-    const res = await getDriftBottleDetail(row.id)
-    if (res.code === 0) {
-      activeBottle.value = res.data
+    if (expandedBottles.value[row.id]) {
+      expandedBottles.value[row.id] = false
+      return
     }
-    pageError.value = ''
+    if (!row.commentsFetched) {
+      const res = await getDriftBottleDetail(row.id)
+      if (res.code === 0) {
+        row.fullContent = res.data.content
+        row.comments = res.data.comments || []
+        row.commentsFetched = true
+      }
+    }
+    expandedBottles.value[row.id] = true
   }
 
   async function deleteMine(row) {
@@ -193,10 +275,10 @@ export function useDriftBottle() {
 
   async function promptReport(title) {
     try {
-      const { value } = await ElMessageBox.prompt('请填写举报原因', title, {
+      const { value } = await ElMessageBox.prompt('', title, {
         confirmButtonText: '提交',
         cancelButtonText: '取消',
-        inputType: 'textarea',
+        inputType: 'text',
         inputPlaceholder: '例如：广告、辱骂、暴露隐私等',
         inputValidator(value) {
           const text = String(value || '').trim()
@@ -215,6 +297,17 @@ export function useDriftBottle() {
     loadMine(page)
   }
 
+  function pagedComments(row) {
+    if (!row.comments || !row.comments.length) return []
+    const page = commentPages.value[row.id] || 1
+    const start = (page - 1) * commentPageSize
+    return row.comments.slice(start, start + commentPageSize)
+  }
+
+  function onCommentPageChange(bottleId, page) {
+    commentPages.value[bottleId] = page
+  }
+
   function formatTime(value) {
     return formatForumDateTimeShanghai(value)
   }
@@ -230,9 +323,22 @@ export function useDriftBottle() {
     DRIFT_MOODS,
     Refresh,
     Warning,
+    Sunny,
+    Umbrella,
+    EditPen,
+    Document,
+    Message,
+    Promotion,
+    ArrowDown,
+    Check,
+    Box,
+    ArrowRight,
+    IceDrink,
     activeBottle,
     commentContent,
     commentCount,
+    commentPages,
+    commentPageSize,
     commentSubmitting,
     comments,
     contentCount,
@@ -240,6 +346,7 @@ export function useDriftBottle() {
     createSubmitting,
     currentBottleEmptyText,
     deleteMine,
+    expandedBottles,
     formatTime,
     hasActiveBottle,
     loadEntry,
@@ -249,8 +356,11 @@ export function useDriftBottle() {
     myPage,
     myPageSize,
     myTotal,
+    moodDialogVisible,
+    onCommentPageChange,
     onMinePageChange,
     openMyBottle,
+    pagedComments,
     pageError,
     pickLoading,
     pickOne,

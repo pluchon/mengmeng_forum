@@ -117,7 +117,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
             bottle = pickCandidate(loginUserId, false);
         }
         if (bottle == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS, "暂时没有可打捞的瓶子"));
+            return null;
         }
         Date now = ForumDateTimes.now();
         DriftBottlePickLog log = new DriftBottlePickLog();
