@@ -13,6 +13,8 @@ public class GroupChatSessionVO {
     private String name;
     // 群头像 URL
     private String avatarUrl;
+    // 群简介
+    private String intro;
     // 群类型
     private Byte groupType;
     // 群状态

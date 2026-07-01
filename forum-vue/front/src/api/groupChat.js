@@ -61,6 +61,11 @@ export function getGroupChatMembers(groupId) {
   return request({ url: `/group-chat/${groupId}/members`, method: 'get' })
 }
 
+// 修改我的群内备注
+export function updateMyGroupRemark(groupId, data) {
+  return request({ url: `/group-chat/${groupId}/members/me/remark`, method: 'put', data })
+}
+
 // 邀请群成员
 export function inviteGroupChatMember(groupId, inviteeUserId) {
   return request({

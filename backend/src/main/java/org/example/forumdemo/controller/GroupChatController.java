@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
+import org.example.forumdemo.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatDetailVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatMemberVO;
@@ -173,5 +174,14 @@ public class GroupChatController {
                                                         HttpServletRequest httpServletRequest) {
         User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMembers(groupId, sessionUser.getId()));
+    }
+
+    /** 修改我的群内备注 */
+    @PutMapping("/{groupId}/members/me/remark")
+    public Result<GroupChatMemberVO> updateMyRemark(@PathVariable Long groupId,
+                                                    @RequestBody UpdateGroupMemberRemarkRequest request,
+                                                    HttpServletRequest httpServletRequest) {
+        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(groupChatService.updateMyRemark(groupId, request, sessionUser.getId()));
     }
 }

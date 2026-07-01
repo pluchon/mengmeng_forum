@@ -12,11 +12,14 @@ public class SendGroupChatMessageRequest {
     @NotNull
     private Long groupId;
 
-    // 消息类型: 0文本 1表情
+    // 消息类型: 0文本 1表情 2图片
     @NotNull
     private Byte messageType;
 
     // 消息内容
     @NotBlank
     private String content;
+
+    // 回复的群消息 ID
+    private Long replyMessageId;
 }

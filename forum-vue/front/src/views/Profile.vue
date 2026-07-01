@@ -94,6 +94,15 @@
               >
                 点赞
               </button>
+              <button
+                v-if="isMe"
+                type="button"
+                class="profile-tab-btn"
+                :class="{ 'is-active': activeTab === 'groups' }"
+                @click="activeTab = 'groups'"
+              >
+                群聊
+              </button>
             </nav>
             <div v-if="activeTab === 'notes'" class="profile-tab-post-count">
               <span class="profile-tab-post-count-val">{{ total }}</span>
@@ -221,6 +230,48 @@
               />
               <span class="profile-pager-sep">/ {{ likedTotalPages }}</span>
               <el-button size="small" :disabled="likedPageNum >= likedTotalPages" @click="goLikedNext">下一页</el-button>
+            </div>
+          </div>
+
+          <div v-if="isMe" v-show="activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
+            <div
+              v-for="group in publicGroups"
+              :key="group.id"
+              class="profile-public-group-row"
+            >
+              <div class="profile-public-group-avatar">
+                <img v-if="group.avatarUrl" :src="group.avatarUrl" alt="">
+                <span v-else>{{ groupAvatarText(group) }}</span>
+              </div>
+              <div class="profile-public-group-main">
+                <div class="profile-public-group-name">{{ group.name }}</div>
+                <div class="profile-public-group-meta">
+                  <span>{{ group.memberCount || 0 }}/{{ group.memberLimit || 0 }} 人</span>
+                  <span>建群 {{ formatProfileDate(group.createTime) }}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="profile-public-group-join"
+                :class="{ 'is-joined': isJoinedPublicGroup(group) }"
+                :disabled="isJoinedPublicGroup(group) || Number(joiningGroupId) === Number(group.id)"
+                @click="applyJoinPublicGroup(group)"
+              >
+                {{ isJoinedPublicGroup(group) ? '已加入' : (Number(joiningGroupId) === Number(group.id) ? '申请中' : '申请加群') }}
+              </button>
+            </div>
+            <el-empty v-if="!publicGroupsLoading && publicGroups.length === 0" description="暂无公开群聊" />
+            <div v-if="publicGroupsTotalPages > 1" class="profile-pager">
+              <el-button size="small" @click="goPublicGroupsFirst">首页</el-button>
+              <el-button size="small" :disabled="publicGroupsPageNum <= 1" @click="goPublicGroupsPrev">上一页</el-button>
+              <el-input
+                v-model="publicGroupsPageInput"
+                size="small"
+                class="profile-pager-input"
+                @keyup.enter="jumpPublicGroupsPage"
+              />
+              <span class="profile-pager-sep">/ {{ publicGroupsTotalPages }}</span>
+              <el-button size="small" :disabled="publicGroupsPageNum >= publicGroupsTotalPages" @click="goPublicGroupsNext">下一页</el-button>
             </div>
           </div>
         </div>
@@ -387,6 +438,7 @@ const {
   Star,
   Unlock,
   activeTab,
+  applyJoinPublicGroup,
   articles,
   avatarSrc,
   bgFileInput,
@@ -434,6 +486,14 @@ const {
   favoriteFolders,
   favoriteSnippet,
   favoriteVisibilitySaving,
+  formatProfileDate,
+  goPublicGroupsFirst,
+  goPublicGroupsNext,
+  goPublicGroupsPrev,
+  groupAvatarText,
+  isJoinedPublicGroup,
+  joiningGroupId,
+  jumpPublicGroupsPage,
   loadingFavorites,
   loading,
   notesPageInput,
@@ -444,6 +504,11 @@ const {
   openArticleFromNotes,
   openCreateFavoriteFolder,
   openFavoriteDialog,
+  publicGroups,
+  publicGroupsLoading,
+  publicGroupsPageInput,
+  publicGroupsPageNum,
+  publicGroupsTotalPages,
   profileIpRegion,
   saveFavoriteFolder,
   startFavoriteFolderRename,

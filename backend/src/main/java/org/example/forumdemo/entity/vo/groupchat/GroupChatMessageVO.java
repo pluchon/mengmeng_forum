@@ -18,6 +18,12 @@ public class GroupChatMessageVO {
     private Byte messageType;
     // 消息内容
     private String content;
+    // 回复的群消息 ID
+    private Long replyMessageId;
+    // 被回复消息发送者昵称快照
+    private String replySenderName;
+    // 被回复消息内容快照
+    private String replyContent;
     // 消息状态
     private Byte status;
     // 是否当前登录用户发送

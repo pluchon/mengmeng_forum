@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.config.OssConfig;
 import org.example.forumdemo.common.enums.GroupChatMemberRole;
 import org.example.forumdemo.common.enums.GroupChatMemberStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageStatus;
@@ -32,6 +33,7 @@ import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
+import org.example.forumdemo.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatDetailVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatMemberVO;
@@ -87,6 +89,10 @@ public class GroupChatServiceImpl implements GroupChatService {
     // WebSocket 推送服务
     @Autowired
     private WebSocketPushService webSocketPushService;
+
+    // OSS 配置
+    @Autowired
+    private OssConfig ossConfig;
 
     // JSON 序列化器
     @Autowired
@@ -302,6 +308,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         assertNotMuted(member);
         Byte messageType = normalizeMessageType(request.getMessageType());
         String content = normalizeMessageContent(request.getContent());
+        validateGroupMediaContent(messageType, content);
+        GroupChatMessage repliedMessage = queryReplyMessage(group.getId(), request.getReplyMessageId());
 
         Date now = ForumDateTimes.now();
         GroupChatMessage message = new GroupChatMessage();
@@ -309,6 +317,11 @@ public class GroupChatServiceImpl implements GroupChatService {
         message.setSenderUserId(loginUserId);
         message.setMessageType(messageType);
         message.setContent(content);
+        if (repliedMessage != null) {
+            message.setReplyMessageId(repliedMessage.getId());
+            message.setReplySenderName(replySenderName(repliedMessage));
+            message.setReplyContent(replyContent(repliedMessage));
+        }
         message.setStatus(GroupChatMessageStatus.NORMAL.getCode());
         message.setDeleteState(Constant.DELETE_STATE_FALSE);
         message.setCreateTime(now);
@@ -399,6 +412,23 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .stream()
                 .map(member -> GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId())))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatMemberVO updateMyRemark(Long groupId, UpdateGroupMemberRemarkRequest request, Long loginUserId) {
+        GroupChatMember member = assertActiveMember(groupId, loginUserId);
+        String remarkName = normalizeRemarkName(request == null ? null : request.getRemarkName());
+        int affected = groupChatMemberMapper.update(null, new LambdaUpdateWrapper<GroupChatMember>()
+                .eq(GroupChatMember::getId, member.getId())
+                .set(GroupChatMember::getRemarkName, remarkName)
+                .set(GroupChatMember::getUpdateTime, ForumDateTimes.now()));
+        if (affected <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        member.setRemarkName(remarkName);
+        member.setUpdateTime(ForumDateTimes.now());
+        return GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(loginUserId));
     }
 
     private GroupChat queryGroup(Long groupId) {
@@ -522,6 +552,7 @@ public class GroupChatServiceImpl implements GroupChatService {
             member.setGroupId(group.getId());
             member.setUserId(user.getId());
             member.setRole(role);
+            member.setRemarkName(null);
             member.setMuteUntil(null);
             member.setLastReadMessageId(latestId);
             member.setJoinTime(now);
@@ -616,6 +647,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setGroupId(group.getId());
         vo.setName(group.getName());
         vo.setAvatarUrl(group.getAvatarUrl());
+        vo.setIntro(group.getIntro());
         vo.setGroupType(group.getGroupType());
         vo.setStatus(group.getStatus());
         vo.setOwnerUserId(group.getOwnerUserId());
@@ -660,6 +692,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (GroupChatMessageType.EMOJI.getCode().equals(message.getMessageType())) {
             return "[表情]";
         }
+        if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
+            return "[图片]";
+        }
         return message.getContent() == null ? "" : message.getContent();
     }
 
@@ -683,6 +718,44 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群消息类型不合法"));
         }
         return messageType;
+    }
+
+    private GroupChatMessage queryReplyMessage(Long groupId, Long replyMessageId) {
+        if (replyMessageId == null) {
+            return null;
+        }
+        if (replyMessageId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "回复消息不合法"));
+        }
+        GroupChatMessage message = groupChatMessageMapper.selectOne(new LambdaQueryWrapper<GroupChatMessage>()
+                .eq(GroupChatMessage::getId, replyMessageId)
+                .eq(GroupChatMessage::getGroupId, groupId)
+                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE));
+        if (message == null || GroupChatMessageType.SYSTEM.getCode().equals(message.getMessageType())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "回复消息不存在"));
+        }
+        return message;
+    }
+
+    private String replySenderName(GroupChatMessage message) {
+        if (message == null || message.getSenderUserId() == null) {
+            return "系统";
+        }
+        return displayName(userService.queryUserByUserId(message.getSenderUserId()));
+    }
+
+    private String replyContent(GroupChatMessage message) {
+        if (message == null) {
+            return "";
+        }
+        if (GroupChatMessageType.EMOJI.getCode().equals(message.getMessageType())) {
+            return "[表情]";
+        }
+        if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
+            return "[图片]";
+        }
+        String content = message.getContent() == null ? "" : message.getContent().trim();
+        return content.length() > 120 ? content.substring(0, 120) : content;
     }
 
     private String normalizeName(String rawName) {
@@ -713,6 +786,27 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "消息内容过长"));
         }
         return content;
+    }
+
+    private void validateGroupMediaContent(Byte messageType, String content) {
+        if (GroupChatMessageType.IMAGE.getCode().equals(messageType)
+                && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_MESSAGE)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+        if (GroupChatMessageType.EMOJI.getCode().equals(messageType)
+                && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_EMOJI)
+                && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_MESSAGE)
+                && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_EMOJI_SHOP)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+    }
+
+    private String normalizeRemarkName(String rawRemarkName) {
+        String remarkName = normalizeOptional(rawRemarkName);
+        if (remarkName != null && remarkName.length() > 24) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群备注过长"));
+        }
+        return remarkName;
     }
 
     private String normalizeReportReason(String rawReason) {

@@ -14,13 +14,20 @@ import {
 } from '@/api/favorite'
 import { uploadProfileBackground, updateBackgroundUrl } from '@/api/settings'
 import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
+import {
+  getGroupChatSessions,
+  getPublicGroupChats,
+  joinPublicGroupChat,
+} from '@/api/groupChat'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
+import { formatChatSessionTimeShanghai } from '@/utils/datetime'
 
 const PROFILE_PAGE_SIZE = 12
 const FAVORITE_DIALOG_PAGE_SIZE = 10
+const PUBLIC_GROUP_PAGE_SIZE = 10
 const PROFILE_RETURN_KEY = 'profile-return-state'
 
 export function useProfile() {
@@ -65,6 +72,14 @@ export function useProfile() {
   const favoriteCreateSaving = ref(false)
   const favoriteCreateForm = ref({ name: '', isPublic: 1 })
 
+  const publicGroups = ref([])
+  const publicGroupsLoading = ref(false)
+  const publicGroupsPageNum = ref(1)
+  const publicGroupsTotal = ref(0)
+  const publicGroupsPageInput = ref('1')
+  const myGroupSessions = ref([])
+  const joiningGroupId = ref(null)
+
   const followingCount = ref(0)
   const followerCount = ref(0)
   const isFollowing = ref(false)
@@ -83,6 +98,9 @@ export function useProfile() {
     if (tab === 'collect' && favoriteFolders.value.length === 0) {
       loadFavoriteFolders()
     }
+    if (tab === 'groups' && isMe.value && publicGroups.value.length === 0) {
+      loadPublicGroups(1)
+    }
   })
 
   const notesTotalPages = computed(() =>
@@ -95,6 +113,14 @@ export function useProfile() {
 
   const favoriteDialogTotalPages = computed(() =>
     Math.max(1, Math.ceil((favoriteDialogTotal.value || 0) / FAVORITE_DIALOG_PAGE_SIZE)),
+  )
+
+  const publicGroupsTotalPages = computed(() =>
+    Math.max(1, Math.ceil((publicGroupsTotal.value || 0) / PUBLIC_GROUP_PAGE_SIZE)),
+  )
+
+  const joinedGroupIds = computed(() =>
+    new Set(myGroupSessions.value.map((item) => String(item.groupId))),
   )
 
   async function loadLikedArticles(page = 1) {
@@ -264,6 +290,85 @@ export function useProfile() {
     const n = Number(likedPageInput.value)
     if (!Number.isFinite(n)) return
     loadLikedArticles(Math.min(likedTotalPages.value, Math.max(1, Math.floor(n))))
+  }
+
+  async function loadMyGroupSessions() {
+    if (!isMe.value) return
+    try {
+      const res = await getGroupChatSessions({ pageNum: 1, pageSize: 100 })
+      if (res.code === 0) {
+        myGroupSessions.value = res.data?.records || []
+      }
+    } catch {
+      myGroupSessions.value = []
+    }
+  }
+
+  async function loadPublicGroups(page = 1) {
+    if (!isMe.value) return
+    publicGroupsPageNum.value = page
+    publicGroupsPageInput.value = String(page)
+    publicGroupsLoading.value = true
+    try {
+      const [groupsRes] = await Promise.all([
+        getPublicGroupChats({ pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE }),
+        loadMyGroupSessions(),
+      ])
+      if (groupsRes.code === 0) {
+        publicGroups.value = groupsRes.data?.records || []
+        publicGroupsTotal.value = Number(groupsRes.data?.total) || 0
+      }
+    } finally {
+      publicGroupsLoading.value = false
+    }
+  }
+
+  function goPublicGroupsFirst() {
+    loadPublicGroups(1)
+  }
+
+  function goPublicGroupsPrev() {
+    if (publicGroupsPageNum.value > 1) loadPublicGroups(publicGroupsPageNum.value - 1)
+  }
+
+  function goPublicGroupsNext() {
+    if (publicGroupsPageNum.value < publicGroupsTotalPages.value) {
+      loadPublicGroups(publicGroupsPageNum.value + 1)
+    }
+  }
+
+  function jumpPublicGroupsPage() {
+    const n = Number(publicGroupsPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadPublicGroups(Math.min(publicGroupsTotalPages.value, Math.max(1, Math.floor(n))))
+  }
+
+  async function applyJoinPublicGroup(group) {
+    const gid = group?.id
+    if (!gid || joinedGroupIds.value.has(String(gid))) return
+    joiningGroupId.value = gid
+    try {
+      const res = await joinPublicGroupChat(gid)
+      if (res.code === 0) {
+        ElMessage.success('已加入群聊')
+        await Promise.all([loadMyGroupSessions(), loadPublicGroups(publicGroupsPageNum.value)])
+      }
+    } finally {
+      joiningGroupId.value = null
+    }
+  }
+
+  function groupAvatarText(group) {
+    const name = group?.name || '群'
+    return String(name).trim().charAt(0) || '群'
+  }
+
+  function isJoinedPublicGroup(group) {
+    return joinedGroupIds.value.has(String(group?.id))
+  }
+
+  function formatProfileDate(time) {
+    return formatChatSessionTimeShanghai(time)
   }
 
   async function openFavoriteDialog(folder) {
@@ -569,6 +674,7 @@ export function useProfile() {
     Star,
     Unlock,
     activeTab,
+    applyJoinPublicGroup,
     articles,
     avatarSrc,
     bgFileInput,
@@ -617,7 +723,9 @@ export function useProfile() {
     favoriteFolders,
     favoriteSnippet,
     favoriteVisibilitySaving,
+    formatProfileDate,
     loadFavoriteFolders,
+    loadPublicGroups,
     loadingFavorites,
     loading,
   notesPageInput,
@@ -628,7 +736,19 @@ export function useProfile() {
     openArticleFromNotes,
     openCreateFavoriteFolder,
     openFavoriteDialog,
+    publicGroups,
+    publicGroupsLoading,
+    publicGroupsPageInput,
+    publicGroupsPageNum,
+    publicGroupsTotalPages,
     profileIpRegion,
+    goPublicGroupsFirst,
+    goPublicGroupsNext,
+    goPublicGroupsPrev,
+    groupAvatarText,
+    isJoinedPublicGroup,
+    joiningGroupId,
+    jumpPublicGroupsPage,
     saveFavoriteFolder,
     startFavoriteFolderRename,
     toggleFavoriteFolderPublic,
