@@ -24,14 +24,6 @@
               <button
                 type="button"
                 class="mc-create-group-btn"
-                title="公开群"
-                @click="openPublicGroups"
-              >
-                <el-icon><Search /></el-icon>
-              </button>
-              <button
-                type="button"
-                class="mc-create-group-btn"
                 title="创建群聊"
                 @click="openCreateGroup"
               >
@@ -97,6 +89,8 @@
             :class="{
               'is-on': isActiveItem(item),
               'is-focus-ring': focusedConvKey === item.key,
+              'is-group-private': item.kind === 'group' && Number(item.group?.groupType) === 1,
+              'is-public-discover': item.kind === 'public-group',
             }"
             @click="selectListItem(item)"
             @focus="onConvFocus(item)"
@@ -111,8 +105,9 @@
                   :vip-expire-at="item.user?.vipExpireAt"
                 />
               </template>
-              <div v-else-if="item.kind === 'group'" class="mc-sys-ava mc-sys-ava--group">
-                <el-icon :size="18"><UserFilled /></el-icon>
+              <div v-else-if="item.kind === 'group' || item.kind === 'public-group'" class="mc-group-avatar">
+                <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
+                <span v-else>{{ groupAvatarText(item.group) }}</span>
               </div>
               <div v-else class="mc-sys-ava mc-sys-ava--group">
                 <el-icon :size="18"><component :is="item.listIcon" /></el-icon>
@@ -126,6 +121,12 @@
               </div>
               <div class="mc-conv-prev" :class="{ 'is-unread': item.unread > 0 }">
                 {{ item.preview }}
+              </div>
+              <div v-if="item.kind === 'group' || item.kind === 'public-group'" class="mc-conv-meta-row">
+                <span class="mc-group-type-badge" :class="{ 'is-private': Number(item.group?.groupType) === 1 }">
+                  {{ groupTypeLabel(item.group?.groupType) }}
+                </span>
+                <span v-if="item.kind === 'public-group'" class="mc-group-join-hint">点击加入</span>
               </div>
             </div>
           </button>
@@ -169,46 +170,29 @@
                 :vip-tier="Number(currentSession.user?.vipTier) || 0"
                 :vip-expire-at="currentSession.user?.vipExpireAt"
               />
-              <div v-else class="mc-sys-ava mc-sys-ava--head">
-                <el-icon :size="18"><UserFilled /></el-icon>
+              <div v-else class="mc-group-avatar mc-group-avatar--head">
+                <img v-if="groupAvatarUrl(currentGroupSession)" :src="groupAvatarUrl(currentGroupSession)" alt="">
+                <span v-else>{{ groupAvatarText(currentGroupSession) }}</span>
               </div>
               <div class="mc-rtitle-stack">
-                <span class="mc-rname">{{ activeChatTitle }}</span>
+                <span class="mc-rname">
+                  {{ activeChatTitle }}
+                  <button
+                    v-if="currentGroupSession"
+                    type="button"
+                    class="mc-group-settings-trigger"
+                    title="群设置"
+                    @click="openGroupSettings"
+                  >
+                    <el-icon><Setting /></el-icon>
+                  </button>
+                </span>
                 <span v-if="currentGroupSession" class="mc-rmeta">{{ activeChatSubtitle }}</span>
               </div>
             </div>
             <div v-if="currentSession" class="mc-online mc-online--trailing" :class="{ 'is-offline': !peerOnline }">
               <span class="mc-online-dot" />
               <span>{{ peerOnline ? '在线' : '离线' }}</span>
-            </div>
-            <div v-if="currentGroupSession" class="mc-group-actions">
-              <button type="button" class="mc-group-action-btn" @click="openGroupMembers">
-                成员
-              </button>
-              <button
-                v-if="isCurrentGroupOwner"
-                type="button"
-                class="mc-group-action-btn"
-                @click="openGroupEdit"
-              >
-                资料
-              </button>
-              <button
-                v-if="isCurrentGroupOwner"
-                type="button"
-                class="mc-group-action-btn is-danger"
-                @click="dissolveCurrentGroup"
-              >
-                解散
-              </button>
-              <button
-                v-else
-                type="button"
-                class="mc-group-action-btn is-danger"
-                @click="leaveCurrentGroup"
-              >
-                退出
-              </button>
             </div>
           </header>
 
@@ -581,159 +565,195 @@
       </el-select>
       <el-input
         v-model="groupCreateForm.intro"
-        type="textarea"
         maxlength="120"
         show-word-limit
-        :rows="3"
         placeholder="群简介"
       />
     </div>
     <template #footer>
-      <button type="button" class="mc-dialog-action" @click="groupCreateVisible = false">
-        取消
-      </button>
-      <button
-        type="button"
-        class="mc-dialog-action mc-dialog-action--primary"
-        :disabled="creatingGroup"
-        @click="submitCreateGroup"
-      >
-        {{ creatingGroup ? '创建中' : '创建' }}
-      </button>
-    </template>
-  </el-dialog>
-
-  <el-dialog
-    v-model="publicGroupVisible"
-    title="公开群"
-    width="520px"
-    append-to-body
-  >
-    <div v-loading="publicGroupsLoading" class="mc-public-groups">
-      <button
-        v-for="group in publicGroups"
-        :key="group.id"
-        type="button"
-        class="mc-public-group"
-        :disabled="isJoinedPublicGroup(group)"
-        @click="joinPublicGroup(group)"
-      >
-        <div class="mc-public-group-main">
-          <span class="mc-public-group-name">{{ group.name }}</span>
-          <span class="mc-public-group-desc">{{ group.intro || '暂无简介' }}</span>
-        </div>
-        <span class="mc-public-group-meta">{{ group.memberCount }}/{{ group.memberLimit }}</span>
-        <span class="mc-public-group-join">{{ isJoinedPublicGroup(group) ? '已加入' : '加入' }}</span>
-      </button>
-      <div v-if="!publicGroupsLoading && publicGroups.length === 0" class="mc-public-empty">
-        暂无公开群
-      </div>
-    </div>
-  </el-dialog>
-
-  <el-dialog
-    v-model="groupEditVisible"
-    title="群资料"
-    width="360px"
-    append-to-body
-  >
-    <div class="mc-group-form">
-      <el-input
-        v-model="groupEditForm.name"
-        maxlength="24"
-        show-word-limit
-        placeholder="群名称"
-      />
-      <el-select v-model="groupEditForm.groupType" class="mc-group-form-control">
-        <el-option label="公开群" :value="0" />
-        <el-option label="私有群" :value="1" />
-      </el-select>
-      <el-input
-        v-model="groupEditForm.intro"
-        type="textarea"
-        maxlength="120"
-        show-word-limit
-        :rows="3"
-        placeholder="群简介"
-      />
-    </div>
-    <template #footer>
-      <button type="button" class="mc-dialog-action" @click="groupEditVisible = false">
-        取消
-      </button>
-      <button
-        type="button"
-        class="mc-dialog-action mc-dialog-action--primary"
-        :disabled="savingGroupEdit"
-        @click="submitGroupEdit"
-      >
-        {{ savingGroupEdit ? '保存中' : '保存' }}
-      </button>
-    </template>
-  </el-dialog>
-
-  <el-drawer
-    v-model="groupMembersVisible"
-    title="群成员"
-    size="360px"
-    append-to-body
-  >
-    <div class="mc-member-drawer">
-      <div v-if="isCurrentGroupOwner" class="mc-invite-row">
-        <el-input
-          v-model="inviteUserIdInput"
-          placeholder="输入用户 ID"
-          class="mc-invite-input"
-        />
+      <div class="mc-group-dialog-footer">
+        <button type="button" class="mc-dialog-action" @click="groupCreateVisible = false">
+          取消
+        </button>
         <button
           type="button"
           class="mc-dialog-action mc-dialog-action--primary"
-          :disabled="invitingMember"
-          @click="inviteMemberById"
+          :disabled="creatingGroup"
+          @click="submitCreateGroup"
         >
-          邀请
+          {{ creatingGroup ? '创建中' : '创建' }}
         </button>
       </div>
-      <div v-loading="groupMembersLoading" class="mc-member-list">
-        <div
-          v-for="member in groupMembers"
-          :key="member.id"
-          class="mc-member-row"
-        >
-          <UserAvatarVip
-            :size="32"
-            :src="member.user?.avatarUrl || defaultAvatar"
-            :vip-tier="Number(member.user?.vipTier) || 0"
-            :vip-expire-at="member.user?.vipExpireAt"
-          />
-          <div class="mc-member-body">
-            <span class="mc-member-name">{{ member.user?.nickname || ('用户' + member.user?.id) }}</span>
-            <span class="mc-member-meta">
-              {{ memberRoleLabel(member.role) }}
-              <template v-if="memberMuteLabel(member)"> · {{ memberMuteLabel(member) }}</template>
-            </span>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="groupSettingsVisible"
+    width="640px"
+    append-to-body
+    class="mc-group-settings-dialog"
+  >
+    <div class="mc-group-settings">
+      <div class="mc-group-profile-title">群资料</div>
+
+      <section class="mc-group-settings-section">
+        <div class="mc-group-settings-head">
+          <div class="mc-group-settings-title">群成员</div>
+          <div class="mc-group-settings-head-right">
+            <div class="mc-group-settings-subtitle">{{ groupMembers.length }} 人</div>
+            <div v-if="groupMembersTotalPages > 1" class="mc-group-member-pager">
+              <button type="button" :disabled="groupMembersPage <= 1" @click="goGroupMembersPrev">
+                上一页
+              </button>
+              <span>{{ groupMembersPage }}/{{ groupMembersTotalPages }}</span>
+              <button
+                type="button"
+                :disabled="groupMembersPage >= groupMembersTotalPages"
+                @click="goGroupMembersNext"
+              >
+                下一页
+              </button>
+            </div>
           </div>
+        </div>
+
+        <div v-loading="groupMembersLoading" class="mc-member-list mc-member-list--settings">
           <div
-            v-if="isCurrentGroupOwner && Number(member.role) !== 0"
-            class="mc-member-actions"
+            v-for="member in paginatedGroupMembers"
+            :key="member.id"
+            class="mc-member-card"
+            role="button"
+            tabindex="0"
+            @click="openGroupMemberProfile(member)"
+            @keydown.enter="openGroupMemberProfile(member)"
+            @keydown.space.prevent="openGroupMemberProfile(member)"
           >
-            <button type="button" class="mc-member-action" @click="muteMember(member, 30)">
-              禁言
-            </button>
-            <button type="button" class="mc-member-action" @click="muteMember(member, 0)">
-              解禁
-            </button>
-            <button type="button" class="mc-member-action is-danger" @click="removeMember(member)">
-              移除
-            </button>
+            <UserAvatarVip
+              :size="32"
+              :src="member.user?.avatarUrl || defaultAvatar"
+              :vip-tier="Number(member.user?.vipTier) || 0"
+              :vip-expire-at="member.user?.vipExpireAt"
+            />
+            <div class="mc-member-body">
+              <span class="mc-member-name">{{ member.user?.nickname || ('用户' + member.user?.id) }}</span>
+              <span class="mc-member-meta">
+                {{ memberRoleLabel(member.role) }}
+                <template v-if="memberMuteLabel(member)"> · {{ memberMuteLabel(member) }}</template>
+              </span>
+            </div>
+            <div
+              v-if="isCurrentGroupOwner && Number(member.role) !== 0"
+              class="mc-member-actions"
+            >
+              <button type="button" class="mc-member-action" @click.stop="muteMember(member, 30)">
+                禁言
+              </button>
+              <button type="button" class="mc-member-action" @click.stop="muteMember(member, 0)">
+                解禁
+              </button>
+              <button type="button" class="mc-member-action is-danger" @click.stop="removeMember(member)">
+                移除
+              </button>
+            </div>
+          </div>
+          <div v-if="!groupMembersLoading && groupMembers.length === 0" class="mc-public-empty">
+            暂无成员
           </div>
         </div>
-        <div v-if="!groupMembersLoading && groupMembers.length === 0" class="mc-public-empty">
-          暂无成员
+      </section>
+
+      <section class="mc-group-settings-section">
+        <div class="mc-group-form">
+          <div class="mc-group-field">
+            <span class="mc-group-field-label">群昵称：</span>
+            <div class="mc-group-name-row">
+              <el-input
+                v-model="groupEditForm.name"
+                maxlength="24"
+                show-word-limit
+                placeholder="群名称"
+              />
+              <input
+                ref="groupAvatarInputRef"
+                type="file"
+                class="mc-hidden-file"
+                accept="image/jpeg,image/png,image/gif"
+                @change="onGroupAvatarFileChange"
+              >
+              <button
+                type="button"
+                class="mc-group-avatar-upload-btn"
+                :disabled="uploadingGroupAvatar"
+                @click="triggerGroupAvatarUpload"
+              >
+                {{ uploadingGroupAvatar ? '上传中' : '修改群头像' }}
+              </button>
+            </div>
+          </div>
+          <div class="mc-group-field">
+            <span class="mc-group-field-label">公开性：</span>
+            <div class="mc-group-type-toggle">
+              <button
+                type="button"
+                :class="{ 'is-active': Number(groupEditForm.groupType) === 0 }"
+                :disabled="groupTypeSwitchLocked"
+                @click="switchGroupType(0)"
+              >
+                公开群
+              </button>
+              <button
+                type="button"
+                :class="{ 'is-active': Number(groupEditForm.groupType) === 1 }"
+                :disabled="groupTypeSwitchLocked"
+                @click="switchGroupType(1)"
+              >
+                私有群
+              </button>
+            </div>
+          </div>
+          <div class="mc-group-intro-card">
+            <div
+              ref="groupIntroEditorRef"
+              class="mc-group-intro-editor"
+              contenteditable="true"
+              role="textbox"
+              aria-label="群简介"
+              data-placeholder="群简介"
+              @input="onGroupIntroInput"
+            />
+            <span class="mc-group-intro-count">{{ groupEditForm.intro.length }} / 120</span>
+          </div>
+          <button
+            type="button"
+            class="mc-dialog-action mc-dialog-action--primary mc-group-save-btn"
+            :disabled="savingGroupEdit"
+            @click="submitGroupEdit"
+          >
+            {{ savingGroupEdit ? '保存中' : '保存' }}
+          </button>
         </div>
-      </div>
+      </section>
+
+      <section class="mc-group-danger-zone">
+        <button
+          v-if="isCurrentGroupOwner"
+          type="button"
+          class="mc-group-danger-btn"
+          @click="dissolveCurrentGroup"
+        >
+          解散群聊
+        </button>
+        <button
+          v-else
+          type="button"
+          class="mc-group-danger-btn"
+          @click="leaveCurrentGroup"
+        >
+          退出群聊
+        </button>
+      </section>
     </div>
-  </el-drawer>
+  </el-dialog>
 </template>
 
 <script setup>
@@ -750,6 +770,7 @@ const {
   Picture,
   Plus,
   Search,
+  Setting,
   UserFilled,
   activeSystemMessages,
   activeTab,
@@ -779,23 +800,23 @@ const {
   favoritePage,
   favoritePageInput,
   favoriteTotalPages,
+  goGroupMembersNext,
+  goGroupMembersPrev,
   focusedConvKey,
   formatSessionTime,
   formatTime,
   goFavoriteFirst,
   goFavoriteNext,
   goFavoritePrev,
+  groupAvatarText,
+  groupAvatarUrl,
   handleClose,
   handleRecall,
   inputBoxRef,
   isActiveItem,
   isCurrentGroupOwner,
-  isJoinedPublicGroup,
   isMediaMessage,
   isPrivateChat,
-  inviteMemberById,
-  inviteUserIdInput,
-  invitingMember,
   joinPublicGroup,
   leaveCurrentGroup,
   listItems,
@@ -816,32 +837,35 @@ const {
   jumpUploadedPage,
   onPackBarScroll,
   onEmojiStickerFileChange,
+  onGroupAvatarFileChange,
+  onGroupIntroInput,
   openArticleFromSystem,
+  openGroupMemberProfile,
   openPeerProfile,
-  openGroupEdit,
-  openGroupMembers,
-  openPublicGroups,
+  openGroupSettings,
   packBarCanScrollLeft,
   packBarCanScrollRight,
   packBarRef,
   paginatedFavorites,
+  paginatedGroupMembers,
   paginatedUploaded,
   removeEmojiKeepPopover,
   showUploadOnCurrentPage,
   parseSystemMessageContent,
   peerOnline,
+  groupAvatarInputRef,
   groupCreateForm,
   groupCreateVisible,
   groupEditForm,
-  groupEditVisible,
+  groupIntroEditorRef,
   groupListError,
   groupListLoading,
   groupMembers,
+  groupMembersPage,
   groupMembersLoading,
-  groupMembersVisible,
-  publicGroups,
-  publicGroupsLoading,
-  publicGroupVisible,
+  groupMembersTotalPages,
+  groupSettingsVisible,
+  groupTypeSwitchLocked,
   removeMember,
   reportGroupMessage,
   savingGroupEdit,
@@ -853,9 +877,11 @@ const {
   selectedPurchasedPack,
   selfOnline,
   selectListItem,
+  groupTypeLabel,
   openCreateGroup,
   submitCreateGroup,
   submitGroupEdit,
+  switchGroupType,
   sendContent,
   sendMessageFromEmoji,
   sendMessageFromShopUrl,
@@ -866,6 +892,7 @@ const {
   sysTagClass,
   sysTagLabel,
   tabBadges,
+  triggerGroupAvatarUpload,
   triggerChatImagePick,
   triggerEmojiStickerPick,
   uploadedEmojis,
@@ -876,6 +903,7 @@ const {
   goUploadedNext,
   goUploadedPrev,
   userStore,
+  uploadingGroupAvatar,
   viewerIsVip,
   visiblePacks,
 } = useMessageView()
