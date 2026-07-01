@@ -653,9 +653,6 @@ public class GroupChatServiceImpl implements GroupChatService {
                 if (Objects.equals(member.getUserId(), senderUserId)) {
                     continue;
                 }
-                if (!shouldNotifyMember(message, member)) {
-                    continue;
-                }
                 try {
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("type", "group_message");
@@ -663,6 +660,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                     payload.put("dbMessageId", message.getId());
                     payload.put("fromUserId", senderUserId);
                     payload.put("summary", messageSummary(message));
+                    payload.put("notify", shouldNotifyMember(message, member));
                     webSocketPushService.push(member.getUserId(), objectMapper.writeValueAsString(payload));
                 } catch (Exception e) {
                     log.warn("群聊 WebSocket 推送失败 groupId={} userId={}", group.getId(), member.getUserId(), e);
