@@ -47,7 +47,11 @@
           <span>游戏中心</span>
         </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/drift-bottle')">
-          <el-icon><ChatDotRound /></el-icon>
+          <el-icon>
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+              <path fill="currentColor" d="M848 830.6L619.5 352H608V160h64c8.8 0 16-7.2 16-16v-64c0-8.8-7.2-16-16-16H352c-8.8 0-16 7.2-16 16v64c0 8.8 7.2 16 16 16h64v192h-11.5L176 830.6c-21.7 45.4 11.4 97.4 61.6 97.4h548.8c50.2 0 83.3-52 61.6-97.4zM472 160h80v196h-80V160zm-62 260h204l114.7 240H295.3L410 420zm385.2 436H230.8L269 732h486l38.2 124z"></path>
+            </svg>
+          </el-icon>
           <span>漂流瓶</span>
         </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/emoji-shop')">
