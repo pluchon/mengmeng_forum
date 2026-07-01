@@ -139,7 +139,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (groupChatMemberMapper.insert(ownerMember) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        appendSystemMessage(group.getId(), displayName(owner) + " 创建了群聊");
         return GroupChatConverter.toDetailVO(group);
     }
 
@@ -163,7 +162,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (affected <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
-        appendSystemMessage(groupId, "群主修改了群资料");
         return GroupChatConverter.toDetailVO(queryGroup(groupId));
     }
 
@@ -215,7 +213,7 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "私有群只能由群主邀请加入"));
         }
         assertJoinable(group);
-        upsertActiveMember(group, user, GroupChatMemberRole.MEMBER.getCode(), "加入了群聊");
+        upsertActiveMember(group, user, GroupChatMemberRole.MEMBER.getCode());
         return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(queryGroup(groupId)));
     }
 
@@ -226,7 +224,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         assertOwner(group, loginUserId);
         assertJoinable(group);
         User invitee = userService.queryUserByUserId(request.getInviteeUserId());
-        upsertActiveMember(group, invitee, GroupChatMemberRole.MEMBER.getCode(), "被邀请加入了群聊");
+        upsertActiveMember(group, invitee, GroupChatMemberRole.MEMBER.getCode());
         return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(queryGroup(groupId)));
     }
 
@@ -240,7 +238,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
         updateMemberStatus(member.getId(), GroupChatMemberStatus.LEFT.getCode());
         updateMemberCount(groupId, -1);
-        appendSystemMessage(groupId, displayName(userService.queryUserByUserId(loginUserId)) + " 退出了群聊");
         refreshGroupLimitStatus(group);
     }
 
@@ -255,7 +252,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
         updateMemberStatus(target.getId(), GroupChatMemberStatus.REMOVED.getCode());
         updateMemberCount(groupId, -1);
-        appendSystemMessage(groupId, displayName(userService.queryUserByUserId(targetUserId)) + " 被群主移出了群聊");
         refreshGroupLimitStatus(group);
     }
 
@@ -278,7 +274,6 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatMember::getId, target.getId())
                 .set(GroupChatMember::getMuteUntil, muteUntil)
                 .set(GroupChatMember::getUpdateTime, ForumDateTimes.now()));
-        appendSystemMessage(groupId, request.getMinutes() == 0 ? "群主解除了一名成员的禁言" : "群主禁言了一名成员");
     }
 
     @Override
@@ -294,7 +289,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (affected <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
-        appendSystemMessage(groupId, "群聊已被群主解散");
     }
 
     @Override
@@ -342,6 +336,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         Page<GroupChatMessage> page = PageUtils.getPage(validPageNum, validPageSize);
         Page<GroupChatMessage> result = groupChatMessageMapper.selectPage(page, new LambdaQueryWrapper<GroupChatMessage>()
                 .eq(GroupChatMessage::getGroupId, groupId)
+                .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
                 .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByAsc(GroupChatMessage::getCreateTime));
         List<GroupChatMessageVO> records = result.getRecords().stream()
@@ -410,7 +405,13 @@ public class GroupChatServiceImpl implements GroupChatService {
                         .orderByAsc(GroupChatMember::getRole)
                         .orderByAsc(GroupChatMember::getJoinTime))
                 .stream()
-                .map(member -> GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId())))
+                .map(member -> {
+                    GroupChatMemberVO vo = GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId()));
+                    if (vo != null && !Objects.equals(member.getUserId(), loginUserId)) {
+                        vo.setRemarkName(null);
+                    }
+                    return vo;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -537,7 +538,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group));
     }
 
-    private void upsertActiveMember(GroupChat group, User user, Byte role, String systemAction) {
+    private void upsertActiveMember(GroupChat group, User user, Byte role) {
         GroupChatMember existed = groupChatMemberMapper.selectOne(new LambdaQueryWrapper<GroupChatMember>()
                 .eq(GroupChatMember::getGroupId, group.getId())
                 .eq(GroupChatMember::getUserId, user.getId())
@@ -574,7 +575,6 @@ public class GroupChatServiceImpl implements GroupChatService {
                     .set(GroupChatMember::getUpdateTime, now));
         }
         updateMemberCount(group.getId(), 1);
-        appendSystemMessage(group.getId(), displayName(user) + " " + systemAction);
     }
 
     private void updateMemberStatus(Long memberId, Byte status) {
@@ -645,7 +645,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         GroupChatMessage latest = latestMessage(group.getId());
         GroupChatSessionVO vo = new GroupChatSessionVO();
         vo.setGroupId(group.getId());
-        vo.setName(group.getName());
+        vo.setName(sessionDisplayName(group, member));
+        vo.setGroupName(group.getName());
+        vo.setRemarkName(member.getRemarkName());
         vo.setAvatarUrl(group.getAvatarUrl());
         vo.setIntro(group.getIntro());
         vo.setGroupType(group.getGroupType());
@@ -662,6 +664,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     private GroupChatMessage latestMessage(Long groupId) {
         return groupChatMessageMapper.selectList(new LambdaQueryWrapper<GroupChatMessage>()
                         .eq(GroupChatMessage::getGroupId, groupId)
+                        .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
                         .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE)
                         .orderByDesc(GroupChatMessage::getId)
                         .last("limit 1"))
@@ -679,6 +682,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         return groupChatMessageMapper.selectCount(new LambdaQueryWrapper<GroupChatMessage>()
                 .eq(GroupChatMessage::getGroupId, groupId)
                 .gt(GroupChatMessage::getId, lastReadMessageId)
+                .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
                 .and(w -> w.isNull(GroupChatMessage::getSenderUserId)
                         .or()
                         .ne(GroupChatMessage::getSenderUserId, loginUserId))
@@ -696,6 +700,13 @@ public class GroupChatServiceImpl implements GroupChatService {
             return "[图片]";
         }
         return message.getContent() == null ? "" : message.getContent();
+    }
+
+    private String sessionDisplayName(GroupChat group, GroupChatMember member) {
+        if (StringUtils.hasText(member.getRemarkName())) {
+            return member.getRemarkName();
+        }
+        return group.getName();
     }
 
     private User queryUserNullable(Long userId) {

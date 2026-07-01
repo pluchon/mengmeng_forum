@@ -577,7 +577,7 @@ export function useMessageView() {
   }
 
   function memberDisplayName(member) {
-    return member?.remarkName || member?.user?.nickname || `用户${member?.user?.id || ''}`
+    return member?.user?.nickname || `用户${member?.user?.id || ''}`
   }
 
   function groupTypeLabel(type) {
@@ -1150,7 +1150,7 @@ export function useMessageView() {
   function openGroupEdit() {
     if (!currentGroupSession.value) return
     groupEditForm.value = {
-      name: currentGroupSession.value.name || '',
+      name: currentGroupSession.value.groupName || currentGroupSession.value.name || '',
       groupType: Number(currentGroupSession.value.groupType) || 0,
       intro: currentGroupSession.value.intro || '',
       avatarUrl: currentGroupSession.value.avatarUrl || '',
@@ -1159,7 +1159,7 @@ export function useMessageView() {
   }
 
   function groupAvatarText(groupLike) {
-    const name = groupLike?.name || groupLike?.group?.name || '群'
+    const name = groupLike?.groupName || groupLike?.group?.groupName || groupLike?.name || groupLike?.group?.name || '群'
     return String(name).trim().charAt(0) || '群'
   }
 
@@ -1298,6 +1298,7 @@ export function useMessageView() {
         const me = myGroupMember.value
         if (me) me.remarkName = res.data?.remarkName || ''
         groupRemarkForm.value.remarkName = res.data?.remarkName || ''
+        await refreshCurrentGroupSession()
         ElMessage.success('群昵称备注已保存')
       }
     } finally {
@@ -1368,6 +1369,10 @@ export function useMessageView() {
     await loadGroupMembers()
   }
 
+  function toggleMuteMember(member) {
+    return muteMember(member, isMemberMuted(member) ? 0 : 30)
+  }
+
   async function reportGroupMessage(msgRow) {
     const gid = currentGroupSession.value?.groupId
     const mid = coerceMessageId(msgRow?.message?.id)
@@ -1393,6 +1398,14 @@ export function useMessageView() {
     if (!groupMembers.value.length) {
       loadGroupMembers()
     }
+  }
+
+  function toggleMentionPicker() {
+    if (mentionPopoverVisible.value) {
+      mentionPopoverVisible.value = false
+      return
+    }
+    openMentionPicker()
   }
 
   function selectMentionMember(member) {
@@ -1446,9 +1459,13 @@ export function useMessageView() {
   }
 
   function memberMuteLabel(member) {
-    const until = parseForumDateTime(member?.muteUntil)
-    if (!until || until.getTime() <= Date.now()) return ''
+    if (!isMemberMuted(member)) return ''
     return `禁言至 ${formatSessionTime(member.muteUntil)}`
+  }
+
+  function isMemberMuted(member) {
+    const until = parseForumDateTime(member?.muteUntil)
+    return !!until && until.getTime() > Date.now()
   }
 
   function goGroupMembersPrev() {
@@ -1824,10 +1841,12 @@ export function useMessageView() {
     inputBoxRef,
     isActiveItem,
     isCurrentGroupOwner,
+    isMemberMuted,
     isPrivateChat,
     isMediaMessage,
     leaveCurrentGroup,
     listItems,
+    memberDisplayName,
     memberMuteLabel,
     memberRoleLabel,
     messageTimeline,
@@ -1845,6 +1864,7 @@ export function useMessageView() {
     onGroupAvatarFileChange,
     onGroupIntroInput,
     openMentionPicker,
+    toggleMentionPicker,
     openArticleFromSystem,
     openGroupSettings,
     openGroupMemberProfile,
@@ -1891,6 +1911,7 @@ export function useMessageView() {
     sending,
     creatingGroup,
     muteMember,
+    toggleMuteMember,
     sysIcon,
     sysTagClass,
     sysTagLabel,

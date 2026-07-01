@@ -674,7 +674,7 @@
 
 .mc-mrow {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
   width: fit-content;
   max-width: min(72%, 520px);
@@ -693,8 +693,13 @@
 
 .mc-mrow-ava {
   flex-shrink: 0;
-  align-self: flex-end;
+  align-self: flex-start;
+  margin-top: 20px;
   line-height: 0;
+}
+
+.mc-mrow.is-me .mc-mrow-ava {
+  margin-top: 0;
 }
 
 .mc-mrow-ava :deep(.user-avatar-vip),
@@ -1406,7 +1411,6 @@
 }
 
 .mc-at-btn {
-  color: #d4537e;
   font-size: 17px;
   font-weight: 800;
 }
@@ -1631,12 +1635,18 @@
 
 .mc-member-list.mc-member-list--settings.is-member-view {
   max-height: 500px;
-  min-height: 210px;
+  min-height: 300px;
 }
 
 .mc-group-readonly-profile {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.mc-group-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1934,6 +1944,21 @@
   color: #4e5969;
   font-size: 12px;
   cursor: pointer;
+}
+
+.mc-member-action--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.mc-member-action--icon.is-muted {
+  background: #fff3f5;
+  color: #d4537e;
 }
 
 .mc-member-action.is-danger {

@@ -11,6 +11,10 @@ public class GroupChatSessionVO {
     private Long groupId;
     // 群名称
     private String name;
+    // 群原始名称
+    private String groupName;
+    // 我的群昵称备注
+    private String remarkName;
     // 群头像 URL
     private String avatarUrl;
     // 群简介
