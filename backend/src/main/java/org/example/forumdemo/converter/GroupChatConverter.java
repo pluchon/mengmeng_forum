@@ -45,6 +45,7 @@ public final class GroupChatConverter {
         vo.setGroupId(member.getGroupId());
         vo.setUser(user == null ? null : new UserBriefVO(user));
         vo.setRole(member.getRole());
+        vo.setRemarkName(member.getRemarkName());
         vo.setMuteUntil(member.getMuteUntil());
         vo.setLastReadMessageId(member.getLastReadMessageId());
         vo.setJoinTime(member.getJoinTime());
@@ -62,6 +63,9 @@ public final class GroupChatConverter {
         vo.setSender(sender == null ? null : new UserBriefVO(sender));
         vo.setMessageType(message.getMessageType());
         vo.setContent(message.getContent());
+        vo.setReplyMessageId(message.getReplyMessageId());
+        vo.setReplySenderName(message.getReplySenderName());
+        vo.setReplyContent(message.getReplyContent());
         vo.setStatus(message.getStatus());
         vo.setIsOwner(Objects.equals(message.getSenderUserId(), loginUserId));
         vo.setCreateTime(message.getCreateTime());

@@ -25,6 +25,9 @@ public class GroupChatMember {
     // 角色: 0群主 1成员
     private Byte role;
 
+    // 群内备注昵称
+    private String remarkName;
+
     // 禁言截止时间
     private Date muteUntil;
 

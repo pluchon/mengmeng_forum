@@ -22,11 +22,20 @@ public class GroupChatMessage {
     // 发送者用户 ID，系统消息为空
     private Long senderUserId;
 
-    // 消息类型: 0文本 1表情 9系统
+    // 消息类型: 0文本 1表情 2图片 9系统
     private Byte messageType;
 
     // 消息内容
     private String content;
+
+    // 回复的群消息 ID
+    private Long replyMessageId;
+
+    // 被回复消息发送者昵称快照
+    private String replySenderName;
+
+    // 被回复消息内容快照
+    private String replyContent;
 
     // 状态: 0正常 1举报隐藏 2删除
     private Byte status;

@@ -6,6 +6,7 @@ import org.example.forumdemo.entity.dto.groupchat.GroupMuteMemberRequest;
 import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
+import org.example.forumdemo.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatDetailVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatMemberVO;
@@ -46,4 +47,6 @@ public interface GroupChatService {
     void reportMessage(Long groupId, ReportGroupChatMessageRequest request, Long loginUserId);
 
     List<GroupChatMemberVO> queryMembers(Long groupId, Long loginUserId);
+
+    GroupChatMemberVO updateMyRemark(Long groupId, UpdateGroupMemberRemarkRequest request, Long loginUserId);
 }

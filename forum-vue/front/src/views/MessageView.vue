@@ -90,7 +90,6 @@
               'is-on': isActiveItem(item),
               'is-focus-ring': focusedConvKey === item.key,
               'is-group-private': item.kind === 'group' && Number(item.group?.groupType) === 1,
-              'is-public-discover': item.kind === 'public-group',
             }"
             @click="selectListItem(item)"
             @focus="onConvFocus(item)"
@@ -105,7 +104,7 @@
                   :vip-expire-at="item.user?.vipExpireAt"
                 />
               </template>
-              <div v-else-if="item.kind === 'group' || item.kind === 'public-group'" class="mc-group-avatar">
+              <div v-else-if="item.kind === 'group'" class="mc-group-avatar">
                 <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
                 <span v-else>{{ groupAvatarText(item.group) }}</span>
               </div>
@@ -122,11 +121,10 @@
               <div class="mc-conv-prev" :class="{ 'is-unread': item.unread > 0 }">
                 {{ item.preview }}
               </div>
-              <div v-if="item.kind === 'group' || item.kind === 'public-group'" class="mc-conv-meta-row">
+              <div v-if="item.kind === 'group'" class="mc-conv-meta-row">
                 <span class="mc-group-type-badge" :class="{ 'is-private': Number(item.group?.groupType) === 1 }">
                   {{ groupTypeLabel(item.group?.groupType) }}
                 </span>
-                <span v-if="item.kind === 'public-group'" class="mc-group-join-hint">点击加入</span>
               </div>
             </div>
           </button>
@@ -203,11 +201,23 @@
                 <span>{{ row.label }}</span>
               </div>
               <div
+                v-else-if="Number(row.msg.message?.messageType) === 9"
+                class="mc-group-system-tip"
+              >
+                <span>{{ row.msg.message?.content }}</span>
+              </div>
+              <div
                 v-else
                 class="mc-mrow"
                 :class="row.msg.isOwner ? 'is-me' : 'is-other'"
               >
-                <div class="mc-mrow-ava">
+                <div
+                  class="mc-mrow-ava"
+                  role="button"
+                  tabindex="0"
+                  @click="openMessageSenderProfile(row.msg)"
+                  @keydown.enter.prevent="openMessageSenderProfile(row.msg)"
+                >
                   <UserAvatarVip
                     :size="28"
                     :src="bubbleAvatar(row.msg)"
@@ -216,6 +226,14 @@
                   />
                 </div>
                 <div class="mc-bwrap">
+                  <button
+                    v-if="currentGroupSession && !row.msg.isOwner"
+                    type="button"
+                    class="mc-sender-name"
+                    @click="openMessageSenderProfile(row.msg)"
+                  >
+                    {{ row.msg.user?.nickname || '群成员' }}
+                  </button>
                   <div class="mc-bubble-action">
                     <div
                       class="mc-bbl"
@@ -248,9 +266,19 @@
                           >
                             添加到表情
                           </button>
+                          <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote mc-reply-quote--media">
+                            {{ row.msg.message?.replySenderName || '成员' }}:
+                            {{ row.msg.message?.replyContent || '消息' }}
+                          </div>
                         </div>
                       </template>
-                      <span v-else>{{ row.msg.message?.content }}</span>
+                      <template v-else>
+                        <span>{{ row.msg.message?.content }}</span>
+                        <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote">
+                          {{ row.msg.message?.replySenderName || '成员' }}:
+                          {{ row.msg.message?.replyContent || '消息' }}
+                        </div>
+                      </template>
                     </div>
                     <button
                       v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
@@ -267,6 +295,14 @@
                       @click="reportGroupMessage(row.msg)"
                     >
                       举报
+                    </button>
+                    <button
+                      v-if="currentGroupSession && Number(row.msg.message?.messageType) !== 9"
+                      type="button"
+                      class="mc-reply-btn"
+                      @click="startReply(row.msg)"
+                    >
+                      回复
                     </button>
                   </div>
                   <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
@@ -286,7 +322,7 @@
 
           <footer class="mc-rinput">
             <input
-              v-if="isPrivateChat"
+              v-if="currentSession || currentGroupSession"
               ref="chatImageInput"
               type="file"
               class="mc-hidden-file"
@@ -302,9 +338,54 @@
               @change="onEmojiStickerFileChange"
             >
             <div class="mc-itools">
-              <button v-if="isPrivateChat" type="button" class="mc-itbtn" title="发送图片" @click="triggerChatImagePick">
+              <button
+                v-if="currentSession || currentGroupSession"
+                type="button"
+                class="mc-itbtn"
+                title="发送图片"
+                @click="triggerChatImagePick"
+              >
                 <el-icon><Picture /></el-icon>
               </button>
+              <el-popover
+                v-if="currentGroupSession"
+                v-model:visible="mentionPopoverVisible"
+                placement="top-start"
+                :width="260"
+                trigger="click"
+              >
+                <template #reference>
+                  <button type="button" class="mc-itbtn mc-at-btn" title="@群成员" @click="openMentionPicker">
+                    @
+                  </button>
+                </template>
+                <div class="mc-mention-panel">
+                  <input
+                    v-model="mentionSearch"
+                    type="search"
+                    class="mc-mention-search"
+                    placeholder="搜索群成员"
+                  >
+                  <div v-if="!filteredMentionMembers.length" class="mc-mention-empty">
+                    暂无成员
+                  </div>
+                  <button
+                    v-for="member in filteredMentionMembers"
+                    :key="member.id"
+                    type="button"
+                    class="mc-mention-item"
+                    @click="selectMentionMember(member)"
+                  >
+                    <UserAvatarVip
+                      :size="26"
+                      :src="member.user?.avatarUrl || defaultAvatar"
+                      :vip-tier="Number(member.user?.vipTier) || 0"
+                      :vip-expire-at="member.user?.vipExpireAt"
+                    />
+                    <span>{{ member.remarkName || member.user?.nickname || ('用户' + member.user?.id) }}</span>
+                  </button>
+                </div>
+              </el-popover>
               <el-popover
                 v-model:visible="emojiPopoverVisible"
                 placement="top-start"
@@ -482,6 +563,10 @@
                 </div>
               </el-popover>
             </div>
+            <div v-if="replyTarget" class="mc-reply-draft">
+              <span>回复 {{ replyTarget.senderName }}: {{ replyTarget.content }}</span>
+              <button type="button" @click="clearReplyTarget">取消</button>
+            </div>
             <div class="mc-irow">
               <textarea
                 ref="inputBoxRef"
@@ -592,9 +677,13 @@
     width="640px"
     append-to-body
     class="mc-group-settings-dialog"
+    :before-close="beforeCloseGroupSettings"
   >
     <div class="mc-group-settings">
-      <div class="mc-group-profile-title">群资料</div>
+      <div class="mc-group-profile-title">
+        群资料
+        <span v-if="groupEditDirty" class="mc-group-save-hint">保存后生效</span>
+      </div>
 
       <section class="mc-group-settings-section">
         <div class="mc-group-settings-head">
@@ -617,7 +706,11 @@
           </div>
         </div>
 
-        <div v-loading="groupMembersLoading" class="mc-member-list mc-member-list--settings">
+        <div
+          v-loading="groupMembersLoading"
+          class="mc-member-list mc-member-list--settings"
+          :class="{ 'is-member-view': !isCurrentGroupOwner }"
+        >
           <div
             v-for="member in paginatedGroupMembers"
             :key="member.id"
@@ -662,7 +755,7 @@
         </div>
       </section>
 
-      <section class="mc-group-settings-section">
+      <section v-if="isCurrentGroupOwner" class="mc-group-settings-section">
         <div class="mc-group-form">
           <div class="mc-group-field">
             <span class="mc-group-field-label">群昵称：</span>
@@ -734,6 +827,41 @@
         </div>
       </section>
 
+      <section v-else class="mc-group-settings-section">
+        <div class="mc-group-readonly-profile">
+          <div class="mc-group-readonly-row">
+            <span>群名称：</span>
+            <strong>{{ currentGroupSession?.name || '群聊' }}</strong>
+          </div>
+          <div class="mc-group-readonly-row">
+            <span>公开性：</span>
+            <strong>{{ groupTypeLabel(currentGroupSession?.groupType) }}</strong>
+          </div>
+          <div class="mc-group-readonly-intro">
+            {{ currentGroupSession?.intro || '暂无群简介' }}
+          </div>
+          <div class="mc-group-field">
+            <span class="mc-group-field-label">群昵称备注：</span>
+            <div class="mc-group-name-row">
+              <el-input
+                v-model="groupRemarkForm.remarkName"
+                maxlength="24"
+                show-word-limit
+                placeholder="给这个群起个备注"
+              />
+              <button
+                type="button"
+                class="mc-group-avatar-upload-btn"
+                :disabled="savingGroupRemark"
+                @click="submitGroupRemark"
+              >
+                {{ savingGroupRemark ? '保存中' : '保存备注' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="mc-group-danger-zone">
         <button
           v-if="isCurrentGroupOwner"
@@ -800,6 +928,7 @@ const {
   favoritePage,
   favoritePageInput,
   favoriteTotalPages,
+  filteredMentionMembers,
   goGroupMembersNext,
   goGroupMembersPrev,
   focusedConvKey,
@@ -817,7 +946,6 @@ const {
   isCurrentGroupOwner,
   isMediaMessage,
   isPrivateChat,
-  joinPublicGroup,
   leaveCurrentGroup,
   listItems,
   memberMuteLabel,
@@ -839,8 +967,10 @@ const {
   onEmojiStickerFileChange,
   onGroupAvatarFileChange,
   onGroupIntroInput,
+  openMentionPicker,
   openArticleFromSystem,
   openGroupMemberProfile,
+  openMessageSenderProfile,
   openPeerProfile,
   openGroupSettings,
   packBarCanScrollLeft,
@@ -856,6 +986,7 @@ const {
   groupAvatarInputRef,
   groupCreateForm,
   groupCreateVisible,
+  groupEditDirty,
   groupEditForm,
   groupIntroEditorRef,
   groupListError,
@@ -864,11 +995,14 @@ const {
   groupMembersPage,
   groupMembersLoading,
   groupMembersTotalPages,
+  groupRemarkForm,
   groupSettingsVisible,
   groupTypeSwitchLocked,
   removeMember,
   reportGroupMessage,
+  replyTarget,
   savingGroupEdit,
+  savingGroupRemark,
   scrollPackBarLeft,
   scrollPackBarRight,
   scrollToBottom,
@@ -876,11 +1010,14 @@ const {
   selectPurchasedPack,
   selectedPurchasedPack,
   selfOnline,
+  selectMentionMember,
   selectListItem,
   groupTypeLabel,
   openCreateGroup,
   submitCreateGroup,
   submitGroupEdit,
+  submitGroupRemark,
+  startReply,
   switchGroupType,
   sendContent,
   sendMessageFromEmoji,
@@ -895,6 +1032,10 @@ const {
   triggerGroupAvatarUpload,
   triggerChatImagePick,
   triggerEmojiStickerPick,
+  beforeCloseGroupSettings,
+  clearReplyTarget,
+  mentionPopoverVisible,
+  mentionSearch,
   uploadedEmojis,
   uploadedPage,
   uploadedPageInput,
