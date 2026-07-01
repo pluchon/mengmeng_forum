@@ -101,6 +101,9 @@ export const useMessageStore = defineStore('message', () => {
 
   function onGroupMessage(payload) {
     groupMessageSignal.value = { ...payload, seq: Date.now() }
+    if (payload?.notify === false) {
+      return
+    }
     showTip.value = true
     tipText.value = payload?.summary ? `群聊：${payload.summary}` : '你收到一条新的群聊消息'
   }

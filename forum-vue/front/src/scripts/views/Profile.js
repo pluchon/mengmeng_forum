@@ -298,7 +298,6 @@ export function useProfile() {
   }
 
   async function loadMyGroupSessions() {
-    if (!isMe.value) return
     try {
       const res = await getGroupChatSessions({ pageNum: 1, pageSize: 100 })
       if (res.code === 0) {
