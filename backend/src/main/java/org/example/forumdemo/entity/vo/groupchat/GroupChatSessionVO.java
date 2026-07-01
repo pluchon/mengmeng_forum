@@ -15,6 +15,8 @@ public class GroupChatSessionVO {
     private String groupName;
     // 我的群昵称备注
     private String remarkName;
+    // 我的提醒模式
+    private Byte notifyMode;
     // 群头像 URL
     private String avatarUrl;
     // 群简介

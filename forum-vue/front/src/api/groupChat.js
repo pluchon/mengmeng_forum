@@ -51,6 +51,11 @@ export function getPublicGroupChats(params) {
   return request({ url: '/group-chat/public', method: 'get', params })
 }
 
+// 查询某个用户创建的公开群聊
+export function getUserPublicGroupChats(ownerUserId, params) {
+  return request({ url: `/group-chat/public/users/${ownerUserId}`, method: 'get', params })
+}
+
 // 加入公开群聊
 export function joinPublicGroupChat(groupId) {
   return request({ url: `/group-chat/${groupId}/join`, method: 'post' })

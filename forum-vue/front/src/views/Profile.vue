@@ -95,7 +95,6 @@
                 点赞
               </button>
               <button
-                v-if="isMe"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'groups' }"
@@ -233,7 +232,7 @@
             </div>
           </div>
 
-          <div v-if="isMe" v-show="activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
+          <div v-show="activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
             <div
               v-for="group in publicGroups"
               :key="group.id"

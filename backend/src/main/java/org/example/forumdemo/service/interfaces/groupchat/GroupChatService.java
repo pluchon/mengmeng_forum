@@ -26,6 +26,8 @@ public interface GroupChatService {
 
     PageResult<GroupChatDetailVO> queryPublicGroups(Long loginUserId, Integer pageNum, Integer pageSize);
 
+    PageResult<GroupChatDetailVO> queryPublicGroupsByOwner(Long loginUserId, Long ownerUserId, Integer pageNum, Integer pageSize);
+
     GroupChatDetailVO joinPublicGroup(Long groupId, Long loginUserId);
 
     GroupChatDetailVO inviteMember(Long groupId, GroupInviteMemberRequest request, Long loginUserId);

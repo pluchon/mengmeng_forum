@@ -76,6 +76,17 @@ public class GroupChatController {
         return Result.success(groupChatService.queryPublicGroups(sessionUser.getId(), pageNum, pageSize));
     }
 
+    /** 查询某个用户创建的公开群聊 */
+    @GetMapping("/public/users/{ownerUserId}")
+    public Result<PageResult<GroupChatDetailVO>> queryOwnerPublicGroups(
+            @PathVariable Long ownerUserId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(groupChatService.queryPublicGroupsByOwner(sessionUser.getId(), ownerUserId, pageNum, pageSize));
+    }
+
     /** 加入公开群聊 */
     @PostMapping("/{groupId}/join")
     public Result<GroupChatDetailVO> joinPublicGroup(@PathVariable Long groupId,

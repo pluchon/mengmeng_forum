@@ -360,6 +360,9 @@
                   </button>
                 </template>
                 <div class="mc-mention-panel">
+                  <button type="button" class="mc-mention-all" @click="selectMentionAll">
+                    @所有人
+                  </button>
                   <input
                     v-model="mentionSearch"
                     type="search"
@@ -370,7 +373,7 @@
                     暂无成员
                   </div>
                   <button
-                    v-for="member in filteredMentionMembers"
+                    v-for="member in paginatedMentionMembers"
                     :key="member.id"
                     type="button"
                     class="mc-mention-item"
@@ -384,6 +387,19 @@
                     />
                     <span>{{ memberDisplayName(member) }}</span>
                   </button>
+                  <div v-if="mentionMembersTotalPages > 1" class="mc-mention-pager">
+                    <button type="button" :disabled="mentionMembersPage <= 1" @click="goMentionMembersPrev">
+                      上页
+                    </button>
+                    <span>{{ mentionMembersPage }}/{{ mentionMembersTotalPages }}</span>
+                    <button
+                      type="button"
+                      :disabled="mentionMembersPage >= mentionMembersTotalPages"
+                      @click="goMentionMembersNext"
+                    >
+                      下页
+                    </button>
+                  </div>
                 </div>
               </el-popover>
               <el-popover
@@ -788,6 +804,20 @@
             </div>
           </div>
           <div class="mc-group-field">
+            <span class="mc-group-field-label">免打扰：</span>
+            <div class="mc-group-notify-toggle">
+              <button
+                v-for="option in groupNotifyOptions"
+                :key="option.value"
+                type="button"
+                :class="{ 'is-active': Number(groupRemarkForm.notifyMode) === Number(option.value) }"
+                @click="setGroupNotifyMode(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+          <div class="mc-group-field">
             <span class="mc-group-field-label">公开性：</span>
             <div class="mc-group-type-toggle">
               <button
@@ -865,6 +895,20 @@
               </button>
             </div>
           </div>
+          <div class="mc-group-field">
+            <span class="mc-group-field-label">免打扰：</span>
+            <div class="mc-group-notify-toggle">
+              <button
+                v-for="option in groupNotifyOptions"
+                :key="option.value"
+                type="button"
+                :class="{ 'is-active': Number(groupRemarkForm.notifyMode) === Number(option.value) }"
+                @click="setGroupNotifyMode(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -937,6 +981,8 @@ const {
   filteredMentionMembers,
   goGroupMembersNext,
   goGroupMembersPrev,
+  goMentionMembersNext,
+  goMentionMembersPrev,
   focusedConvKey,
   formatSessionTime,
   formatTime,
@@ -987,6 +1033,7 @@ const {
   packBarRef,
   paginatedFavorites,
   paginatedGroupMembers,
+  paginatedMentionMembers,
   paginatedUploaded,
   removeEmojiKeepPopover,
   showUploadOnCurrentPage,
@@ -1004,6 +1051,7 @@ const {
   groupMembersPage,
   groupMembersLoading,
   groupMembersTotalPages,
+  groupNotifyOptions,
   groupRemarkForm,
   groupSettingsVisible,
   groupTypeSwitchLocked,
@@ -1020,6 +1068,7 @@ const {
   selectedPurchasedPack,
   selfOnline,
   selectMentionMember,
+  selectMentionAll,
   selectListItem,
   groupTypeLabel,
   openCreateGroup,
@@ -1028,6 +1077,7 @@ const {
   submitGroupRemark,
   startReply,
   switchGroupType,
+  setGroupNotifyMode,
   sendContent,
   sendMessageFromEmoji,
   sendMessageFromShopUrl,
@@ -1044,6 +1094,8 @@ const {
   triggerEmojiStickerPick,
   beforeCloseGroupSettings,
   clearReplyTarget,
+  mentionMembersPage,
+  mentionMembersTotalPages,
   mentionPopoverVisible,
   mentionSearch,
   uploadedEmojis,

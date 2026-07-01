@@ -28,6 +28,9 @@ public class GroupChatMember {
     // 群内备注昵称
     private String remarkName;
 
+    // 提醒模式: 0正常 1仅@提醒 2完全不提醒
+    private Byte notifyMode;
+
     // 禁言截止时间
     private Date muteUntil;
 

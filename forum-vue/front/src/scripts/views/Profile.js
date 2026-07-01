@@ -17,6 +17,7 @@ import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
 import {
   getGroupChatSessions,
   getPublicGroupChats,
+  getUserPublicGroupChats,
   joinPublicGroupChat,
 } from '@/api/groupChat'
 import { ElMessage } from 'element-plus'
@@ -98,7 +99,7 @@ export function useProfile() {
     if (tab === 'collect' && favoriteFolders.value.length === 0) {
       loadFavoriteFolders()
     }
-    if (tab === 'groups' && isMe.value && publicGroups.value.length === 0) {
+    if (tab === 'groups' && publicGroups.value.length === 0) {
       loadPublicGroups(1)
     }
   })
@@ -227,7 +228,11 @@ export function useProfile() {
   })
 
   watch(() => route.params.id, async () => {
+    resetPublicGroups()
     await loadProfile(1)
+    if (activeTab.value === 'groups') {
+      await loadPublicGroups(1)
+    }
     await tryRestoreProfileState()
   })
 
@@ -305,13 +310,15 @@ export function useProfile() {
   }
 
   async function loadPublicGroups(page = 1) {
-    if (!isMe.value) return
+    const userId = route.params.id || userStore.id
     publicGroupsPageNum.value = page
     publicGroupsPageInput.value = String(page)
     publicGroupsLoading.value = true
     try {
       const [groupsRes] = await Promise.all([
-        getPublicGroupChats({ pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE }),
+        isMe.value
+          ? getPublicGroupChats({ pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE })
+          : getUserPublicGroupChats(userId, { pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE }),
         loadMyGroupSessions(),
       ])
       if (groupsRes.code === 0) {
@@ -321,6 +328,13 @@ export function useProfile() {
     } finally {
       publicGroupsLoading.value = false
     }
+  }
+
+  function resetPublicGroups() {
+    publicGroups.value = []
+    publicGroupsTotal.value = 0
+    publicGroupsPageNum.value = 1
+    publicGroupsPageInput.value = '1'
   }
 
   function goPublicGroupsFirst() {

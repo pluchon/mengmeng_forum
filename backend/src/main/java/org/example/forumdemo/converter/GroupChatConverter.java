@@ -46,6 +46,7 @@ public final class GroupChatConverter {
         vo.setUser(user == null ? null : new UserBriefVO(user));
         vo.setRole(member.getRole());
         vo.setRemarkName(member.getRemarkName());
+        vo.setNotifyMode(member.getNotifyMode());
         vo.setMuteUntil(member.getMuteUntil());
         vo.setLastReadMessageId(member.getLastReadMessageId());
         vo.setJoinTime(member.getJoinTime());

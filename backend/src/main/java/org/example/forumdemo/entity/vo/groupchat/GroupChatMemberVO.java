@@ -18,6 +18,8 @@ public class GroupChatMemberVO {
     private Byte role;
     // 群内备注昵称
     private String remarkName;
+    // 提醒模式
+    private Byte notifyMode;
     // 禁言截止时间
     private Date muteUntil;
     // 最后已读消息 ID
