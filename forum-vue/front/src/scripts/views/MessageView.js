@@ -144,9 +144,11 @@ export function useMessageView() {
   const groupMembers = ref([])
   const groupMembersLoading = ref(false)
   const groupMembersPage = ref(1)
+  const mentionMembersPage = ref(1)
   const groupEditForm = ref({ name: '', groupType: 0, intro: '', avatarUrl: '' })
   const groupEditSnapshot = ref('')
-  const groupRemarkForm = ref({ remarkName: '' })
+  const groupMemberSettingsSnapshot = ref('')
+  const groupRemarkForm = ref({ remarkName: '', notifyMode: 0 })
   const groupAvatarInputRef = ref(null)
   const groupIntroEditorRef = ref(null)
   const uploadingGroupAvatar = ref(false)
@@ -283,8 +285,13 @@ export function useMessageView() {
     groupMembers.value.find((member) => Number(member?.user?.id) === Number(userStore.id)) || null,
   )
 
+  const groupMemberSettingsDirty = computed(() =>
+    groupMemberSettingsSnapshot.value !== serializeGroupMemberSettings(),
+  )
+
   const groupEditDirty = computed(() =>
-    isCurrentGroupOwner.value && groupEditSnapshot.value !== serializeGroupEditForm(),
+    isCurrentGroupOwner.value
+      && (groupEditSnapshot.value !== serializeGroupEditForm() || groupMemberSettingsDirty.value),
   )
 
   const filteredMentionMembers = computed(() => {
@@ -296,7 +303,15 @@ export function useMessageView() {
         const name = memberDisplayName(member).toLowerCase()
         return !keyword || name.includes(keyword) || String(member?.user?.id || '').includes(keyword)
       })
-      .slice(0, 12)
+  })
+
+  const mentionMembersTotalPages = computed(() =>
+    Math.max(1, Math.ceil(filteredMentionMembers.value.length / MENTION_PAGE_SIZE)),
+  )
+
+  const paginatedMentionMembers = computed(() => {
+    const start = (mentionMembersPage.value - 1) * MENTION_PAGE_SIZE
+    return filteredMentionMembers.value.slice(start, start + MENTION_PAGE_SIZE)
   })
 
   const paginatedGroupMembers = computed(() => {
@@ -319,7 +334,13 @@ export function useMessageView() {
     return emojiShopStore.myPacks.filter((p) => !set.has(Number(p.userEmojiId)))
   })
 
-  const FAVORITES_PAGE_SIZE = 8
+const FAVORITES_PAGE_SIZE = 8
+const MENTION_PAGE_SIZE = 5
+const GROUP_NOTIFY_OPTIONS = [
+  { value: 0, label: '关闭' },
+  { value: 1, label: '仅@消息提醒' },
+  { value: 2, label: '完全不提醒' },
+]
   const favoritePage = ref(1)
   const favoritePageInput = ref('1')
   const uploadedPage = ref(1)
@@ -528,8 +549,19 @@ export function useMessageView() {
     })
   }
 
+  function serializeGroupMemberSettings() {
+    return JSON.stringify({
+      remarkName: groupRemarkForm.value.remarkName || '',
+      notifyMode: Number(groupRemarkForm.value.notifyMode) || 0,
+    })
+  }
+
   function setGroupEditSnapshot() {
     groupEditSnapshot.value = serializeGroupEditForm()
+  }
+
+  function setGroupMemberSettingsSnapshot() {
+    groupMemberSettingsSnapshot.value = serializeGroupMemberSettings()
   }
 
   function previewForSysMessage(m) {
@@ -781,6 +813,10 @@ export function useMessageView() {
 
   watch(() => messageStore.systemMessageSignal, () => {
     if (messageCenterUi.visible) loadSystemMessages()
+  })
+
+  watch(mentionSearch, () => {
+    mentionMembersPage.value = 1
   })
 
   watch(() => messageStore.readReceiptSignal, async (sig) => {
@@ -1140,7 +1176,12 @@ export function useMessageView() {
       if (res.code === 0) {
         groupMembers.value = Array.isArray(res.data) ? res.data : []
         groupMembersPage.value = 1
-        groupRemarkForm.value.remarkName = myGroupMember.value?.remarkName || ''
+        mentionMembersPage.value = 1
+        groupRemarkForm.value = {
+          remarkName: myGroupMember.value?.remarkName || '',
+          notifyMode: Number(myGroupMember.value?.notifyMode) || 0,
+        }
+        setGroupMemberSettingsSnapshot()
       }
     } finally {
       groupMembersLoading.value = false
@@ -1276,6 +1317,13 @@ export function useMessageView() {
         avatarUrl: groupEditForm.value.avatarUrl?.trim() || undefined,
       })
       if (res.code === 0) {
+        if (groupMemberSettingsDirty.value) {
+          await updateMyGroupRemark(gid, {
+            remarkName: groupRemarkForm.value.remarkName?.trim() || undefined,
+            notifyMode: Number(groupRemarkForm.value.notifyMode) || 0,
+          })
+          setGroupMemberSettingsSnapshot()
+        }
         ElMessage.success('群信息已更新')
         setGroupEditSnapshot()
         groupSettingsVisible.value = false
@@ -1293,13 +1341,17 @@ export function useMessageView() {
     try {
       const res = await updateMyGroupRemark(gid, {
         remarkName: groupRemarkForm.value.remarkName?.trim() || undefined,
+        notifyMode: Number(groupRemarkForm.value.notifyMode) || 0,
       })
       if (res.code === 0) {
         const me = myGroupMember.value
         if (me) me.remarkName = res.data?.remarkName || ''
+        if (me) me.notifyMode = Number(res.data?.notifyMode) || 0
         groupRemarkForm.value.remarkName = res.data?.remarkName || ''
+        groupRemarkForm.value.notifyMode = Number(res.data?.notifyMode) || 0
+        setGroupMemberSettingsSnapshot()
         await refreshCurrentGroupSession()
-        ElMessage.success('群昵称备注已保存')
+        ElMessage.success('群聊设置已保存')
       }
     } finally {
       savingGroupRemark.value = false
@@ -1394,6 +1446,7 @@ export function useMessageView() {
   function openMentionPicker() {
     if (!currentGroupSession.value) return
     mentionSearch.value = ''
+    mentionMembersPage.value = 1
     mentionPopoverVisible.value = true
     if (!groupMembers.value.length) {
       loadGroupMembers()
@@ -1411,13 +1464,34 @@ export function useMessageView() {
   function selectMentionMember(member) {
     const name = memberDisplayName(member).trim()
     if (!name) return
-    const prefix = sendContent.value.trimEnd()
-    sendContent.value = `${prefix}${prefix ? ' ' : ''}@${name} `
+    insertMentionText(`@${name}`)
     mentionPopoverVisible.value = false
+  }
+
+  function selectMentionAll() {
+    insertMentionText('@所有人')
+    mentionPopoverVisible.value = false
+  }
+
+  function insertMentionText(text) {
+    const prefix = sendContent.value.trimEnd()
+    sendContent.value = `${prefix}${prefix ? ' ' : ''}${text} `
     nextTick(() => {
       inputBoxRef.value?.focus()
       autoResizeInput()
     })
+  }
+
+  function goMentionMembersPrev() {
+    if (mentionMembersPage.value > 1) mentionMembersPage.value -= 1
+  }
+
+  function goMentionMembersNext() {
+    if (mentionMembersPage.value < mentionMembersTotalPages.value) mentionMembersPage.value += 1
+  }
+
+  function setGroupNotifyMode(mode) {
+    groupRemarkForm.value.notifyMode = Number(mode)
   }
 
   function startReply(msgRow) {
@@ -1834,8 +1908,11 @@ export function useMessageView() {
     focusedConvKey,
     formatSessionTime,
     formatTime,
+    goMentionMembersNext,
+    goMentionMembersPrev,
     groupAvatarText,
     groupAvatarUrl,
+    groupNotifyOptions: GROUP_NOTIFY_OPTIONS,
     handleClose,
     handleRecall,
     inputBoxRef,
@@ -1884,6 +1961,7 @@ export function useMessageView() {
     groupMembersPage,
     groupMembersLoading,
     groupMembersTotalPages,
+    groupMemberSettingsDirty,
     groupSettingsVisible,
     groupTypeSwitchLocked,
     groupRemarkForm,
@@ -1896,6 +1974,7 @@ export function useMessageView() {
     searchQuery,
     selfOnline,
     selectMentionMember,
+    selectMentionAll,
     selectListItem,
     groupTypeLabel,
     openCreateGroup,
@@ -1904,6 +1983,7 @@ export function useMessageView() {
     submitGroupRemark,
     startReply,
     switchGroupType,
+    setGroupNotifyMode,
     sendContent,
     sendMessageFromEmoji,
     sendMessageFromShopUrl,
@@ -1921,6 +2001,8 @@ export function useMessageView() {
     triggerEmojiStickerPick,
     beforeCloseGroupSettings,
     clearReplyTarget,
+    mentionMembersPage,
+    mentionMembersTotalPages,
     mentionPopoverVisible,
     mentionSearch,
     userStore,
@@ -1940,6 +2022,7 @@ export function useMessageView() {
     onPackBarScroll,
     paginatedFavorites,
     paginatedGroupMembers,
+    paginatedMentionMembers,
     paginatedUploaded,
     removeEmojiKeepPopover,
     showUploadOnCurrentPage,

@@ -11,6 +11,7 @@ import org.example.forumdemo.common.enums.GroupChatMemberRole;
 import org.example.forumdemo.common.enums.GroupChatMemberStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageType;
+import org.example.forumdemo.common.enums.GroupChatNotifyMode;
 import org.example.forumdemo.common.enums.GroupChatReportStatus;
 import org.example.forumdemo.common.enums.GroupChatStatus;
 import org.example.forumdemo.common.enums.GroupChatType;
@@ -129,6 +130,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         ownerMember.setGroupId(group.getId());
         ownerMember.setUserId(loginUserId);
         ownerMember.setRole(GroupChatMemberRole.OWNER.getCode());
+        ownerMember.setNotifyMode(GroupChatNotifyMode.NORMAL.getCode());
         ownerMember.setMuteUntil(null);
         ownerMember.setLastReadMessageId(0L);
         ownerMember.setJoinTime(now);
@@ -197,6 +199,29 @@ public class GroupChatServiceImpl implements GroupChatService {
                         GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByDesc(GroupChat::getUpdateTime));
+        List<GroupChatDetailVO> records = result.getRecords().stream()
+                .map(this::refreshAndConvert)
+                .collect(Collectors.toList());
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
+    }
+
+    @Override
+    public PageResult<GroupChatDetailVO> queryPublicGroupsByOwner(Long loginUserId, Long ownerUserId, Integer pageNum, Integer pageSize) {
+        userService.queryUserByUserId(loginUserId);
+        userService.queryUserByUserId(ownerUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<GroupChat> page = PageUtils.getPage(validPageNum, validPageSize);
+        Page<GroupChat> result = groupChatMapper.selectPage(page, new LambdaQueryWrapper<GroupChat>()
+                .eq(GroupChat::getOwnerUserId, ownerUserId)
+                .eq(GroupChat::getGroupType, GroupChatType.PUBLIC.getCode())
+                .in(GroupChat::getStatus, List.of(
+                        GroupChatStatus.NORMAL.getCode(),
+                        GroupChatStatus.FULL.getCode(),
+                        GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
+                .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .orderByDesc(GroupChat::getCreateTime));
         List<GroupChatDetailVO> records = result.getRecords().stream()
                 .map(this::refreshAndConvert)
                 .collect(Collectors.toList());
@@ -409,6 +434,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                     GroupChatMemberVO vo = GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId()));
                     if (vo != null && !Objects.equals(member.getUserId(), loginUserId)) {
                         vo.setRemarkName(null);
+                        vo.setNotifyMode(null);
                     }
                     return vo;
                 })
@@ -420,14 +446,19 @@ public class GroupChatServiceImpl implements GroupChatService {
     public GroupChatMemberVO updateMyRemark(Long groupId, UpdateGroupMemberRemarkRequest request, Long loginUserId) {
         GroupChatMember member = assertActiveMember(groupId, loginUserId);
         String remarkName = normalizeRemarkName(request == null ? null : request.getRemarkName());
+        Byte notifyMode = request == null || request.getNotifyMode() == null
+                ? safeNotifyMode(member.getNotifyMode())
+                : normalizeNotifyMode(request.getNotifyMode());
         int affected = groupChatMemberMapper.update(null, new LambdaUpdateWrapper<GroupChatMember>()
                 .eq(GroupChatMember::getId, member.getId())
                 .set(GroupChatMember::getRemarkName, remarkName)
+                .set(GroupChatMember::getNotifyMode, notifyMode)
                 .set(GroupChatMember::getUpdateTime, ForumDateTimes.now()));
         if (affected <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
         member.setRemarkName(remarkName);
+        member.setNotifyMode(notifyMode);
         member.setUpdateTime(ForumDateTimes.now());
         return GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(loginUserId));
     }
@@ -554,6 +585,7 @@ public class GroupChatServiceImpl implements GroupChatService {
             member.setUserId(user.getId());
             member.setRole(role);
             member.setRemarkName(null);
+            member.setNotifyMode(GroupChatNotifyMode.NORMAL.getCode());
             member.setMuteUntil(null);
             member.setLastReadMessageId(latestId);
             member.setJoinTime(now);
@@ -621,6 +653,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                 if (Objects.equals(member.getUserId(), senderUserId)) {
                     continue;
                 }
+                if (!shouldNotifyMember(message, member)) {
+                    continue;
+                }
                 try {
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put("type", "group_message");
@@ -648,6 +683,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setName(sessionDisplayName(group, member));
         vo.setGroupName(group.getName());
         vo.setRemarkName(member.getRemarkName());
+        vo.setNotifyMode(safeNotifyMode(member.getNotifyMode()));
         vo.setAvatarUrl(group.getAvatarUrl());
         vo.setIntro(group.getIntro());
         vo.setGroupType(group.getGroupType());
@@ -657,7 +693,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setMemberLimit(group.getMemberLimit());
         vo.setLastMessage(messageSummary(latest));
         vo.setLastMessageTime(latest == null ? group.getUpdateTime() : latest.getCreateTime());
-        vo.setUnreadCount(unreadCount(group.getId(), safeLong(member.getLastReadMessageId()), loginUserId));
+        vo.setUnreadCount(unreadCount(group.getId(), safeLong(member.getLastReadMessageId()), member, loginUserId));
         return vo;
     }
 
@@ -678,8 +714,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         return message == null ? 0L : message.getId();
     }
 
-    private Long unreadCount(Long groupId, Long lastReadMessageId, Long loginUserId) {
-        return groupChatMessageMapper.selectCount(new LambdaQueryWrapper<GroupChatMessage>()
+    private Long unreadCount(Long groupId, Long lastReadMessageId, GroupChatMember member, Long loginUserId) {
+        List<GroupChatMessage> unreadMessages = groupChatMessageMapper.selectList(new LambdaQueryWrapper<GroupChatMessage>()
                 .eq(GroupChatMessage::getGroupId, groupId)
                 .gt(GroupChatMessage::getId, lastReadMessageId)
                 .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
@@ -687,6 +723,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                         .or()
                         .ne(GroupChatMessage::getSenderUserId, loginUserId))
                 .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE));
+        return unreadMessages.stream()
+                .filter(message -> shouldNotifyMember(message, member))
+                .count();
     }
 
     private String messageSummary(GroupChatMessage message) {
@@ -709,6 +748,25 @@ public class GroupChatServiceImpl implements GroupChatService {
         return group.getName();
     }
 
+    private boolean shouldNotifyMember(GroupChatMessage message, GroupChatMember member) {
+        Byte notifyMode = safeNotifyMode(member.getNotifyMode());
+        if (GroupChatNotifyMode.NONE.getCode().equals(notifyMode)) {
+            return false;
+        }
+        if (GroupChatNotifyMode.NORMAL.getCode().equals(notifyMode)) {
+            return true;
+        }
+        if (!GroupChatMessageType.TEXT.getCode().equals(message.getMessageType())) {
+            return false;
+        }
+        String content = message.getContent() == null ? "" : message.getContent();
+        if (content.contains("@所有人")) {
+            return true;
+        }
+        User user = userService.queryUserByUserId(member.getUserId());
+        return user != null && StringUtils.hasText(user.getNickname()) && content.contains("@" + user.getNickname());
+    }
+
     private User queryUserNullable(Long userId) {
         if (userId == null) {
             return null;
@@ -729,6 +787,20 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群消息类型不合法"));
         }
         return messageType;
+    }
+
+    private Byte normalizeNotifyMode(Byte notifyMode) {
+        GroupChatNotifyMode mode = GroupChatNotifyMode.fromCode(notifyMode);
+        if (mode == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "提醒模式不合法"));
+        }
+        return notifyMode;
+    }
+
+    private Byte safeNotifyMode(Byte notifyMode) {
+        return GroupChatNotifyMode.fromCode(notifyMode) == null
+                ? GroupChatNotifyMode.NORMAL.getCode()
+                : notifyMode;
     }
 
     private GroupChatMessage queryReplyMessage(Long groupId, Long replyMessageId) {
