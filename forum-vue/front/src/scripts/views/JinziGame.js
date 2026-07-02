@@ -48,7 +48,7 @@ const profile = reactive({
   loseCount: 0,
   drawCount: 0,
   winRate: 0,
-  rankName: '青铜先手 III',
+  rankName: '青铜 III',
   nextRankDistance: 100,
   currentStatus: 'IDLE',
   currentRoomId: '',
@@ -111,6 +111,11 @@ const gameOnlineText = computed(() => `${Number(jinziGame.value.onlineCount) || 
 const rankNextText = computed(() => {
   const distance = Number(profile.nextRankDistance) || 0
   return distance > 0 ? `差 ${distance} 分` : '已达顶段'
+})
+const rankProgressPercent = computed(() => {
+  const percent = Number(profile.rankInfo?.progressPercent)
+  if (!Number.isFinite(percent)) return 0
+  return Math.max(0, Math.min(100, percent))
 })
 const replayCurrentText = computed(() => {
   if (!replayMoves.value.length) return '0 / 0'

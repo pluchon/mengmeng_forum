@@ -46,7 +46,7 @@ function useTetrisPkGame() {
     winCount: 0,
     loseCount: 0,
     winRate: 0,
-    rankName: '青铜堆叠者 III',
+    rankName: '青铜 III',
     nextRankDistance: 100,
     currentStatus: 'IDLE',
     currentRoomId: '',
@@ -102,6 +102,11 @@ function useTetrisPkGame() {
   const rankNextText = computed(() => {
     const distance = Number(profile.nextRankDistance) || 0
     return distance > 0 ? `差 ${distance} 分` : '已达顶段'
+  })
+  const rankProgressPercent = computed(() => {
+    const percent = Number(profile.rankInfo?.progressPercent)
+    if (!Number.isFinite(percent)) return 0
+    return Math.max(0, Math.min(100, percent))
   })
 
   async function loadProfile() {
@@ -220,6 +225,7 @@ function useTetrisPkGame() {
     onRecordPageChange,
     pointsBalance,
     profile,
+    rankProgressPercent,
     rankNextText,
     recordPage,
     recordPageSize,
@@ -245,6 +251,8 @@ const {
   onRecordPageChange,
   pointsBalance,
   profile,
+  rankProgressPercent,
+  rankNextText,
   recordPage,
   recordPageSize,
   recordTotal,

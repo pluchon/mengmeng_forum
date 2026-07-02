@@ -35,7 +35,7 @@ public class GameRankRules {
         int safeScore = normalizeScore(score);
         if (safeScore >= MASTER_SCORE) {
             return new GameRankInfoVO(
-                    themeRankName(gameCode, "大师", null),
+                    rankName("大师", null),
                     "大师",
                     null,
                     MASTER_SCORE,
@@ -52,7 +52,7 @@ public class GameRankRules {
         int next = min + TIER_SCORE;
         int progress = Math.max(0, Math.min(99, safeScore - min));
         return new GameRankInfoVO(
-                themeRankName(gameCode, MAJOR_NAMES[majorIndex], TIER_NAMES[tierIndex]),
+                rankName(MAJOR_NAMES[majorIndex], TIER_NAMES[tierIndex]),
                 MAJOR_NAMES[majorIndex],
                 TIER_NAMES[tierIndex],
                 min,
@@ -63,18 +63,17 @@ public class GameRankRules {
         );
     }
 
-    public static String themeRankName(String gameCode, String majorName, String tierName) {
-        String title = majorName + themeSuffix(gameCode);
-        return tierName == null ? title : title + " " + tierName;
-    }
-
-    private static String themeSuffix(String gameCode) {
+    public static double gameWeight(String gameCode) {
         if (GameConstants.JINZI.equals(gameCode)) {
-            return "先手";
+            return 0.6D;
         }
         if (GameConstants.TETRIS_PK.equals(gameCode)) {
-            return "堆叠者";
+            return 0.85D;
         }
-        return "棋士";
+        return 1.0D;
+    }
+
+    public static String rankName(String majorName, String tierName) {
+        return tierName == null ? majorName : majorName + " " + tierName;
     }
 }

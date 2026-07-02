@@ -189,6 +189,39 @@
   text-align: right;
 }
 
+.game-rank-progress {
+  margin: -2px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid #e7e0d7;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.game-rank-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.game-rank-progress-head strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.game-rank-progress .el-progress-bar__outer {
+  background-color: #eee7dd;
+}
+
+.game-rank-progress .el-progress-bar__inner {
+  background: linear-gradient(90deg, #ff2442, #ff9f1c);
+}
+
 .gobang-match-line {
   display: flex;
   align-items: center;

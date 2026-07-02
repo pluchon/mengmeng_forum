@@ -177,7 +177,7 @@
           <span>{{ index + 1 }}</span>
           <div>
             <strong>{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
-            <em>{{ row.rankName || '青铜棋士 III' }} · {{ row.totalCount ?? 0 }} 局 · 胜率 {{ row.winRate ?? 0 }}%</em>
+            <em>{{ row.rankName || '青铜 III' }} · {{ row.totalCount ?? 0 }} 局 · 胜率 {{ row.winRate ?? 0 }}%</em>
           </div>
           <b>{{ row.score ?? 0 }}</b>
         </li>

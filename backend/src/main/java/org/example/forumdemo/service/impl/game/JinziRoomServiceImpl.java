@@ -449,7 +449,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         command.setWinnerUserId(winnerId);
         command.setLoserUserId(loserId);
         command.setEndReason(endReason);
-        command.setEffectiveForRank(countMoves(room) >= 3);
+        command.setEffectiveForRank(true);
         return command;
     }
 
