@@ -237,6 +237,11 @@
               v-for="group in publicGroups"
               :key="group.id"
               class="profile-public-group-row"
+              :class="{ 'is-clickable': isJoinedPublicGroup(group) }"
+              :role="isJoinedPublicGroup(group) ? 'button' : undefined"
+              :tabindex="isJoinedPublicGroup(group) ? 0 : undefined"
+              @click="openPublicGroupCard(group)"
+              @keydown.enter.prevent="openPublicGroupCard(group)"
             >
               <div class="profile-public-group-avatar">
                 <img v-if="group.avatarUrl" :src="group.avatarUrl" alt="">
@@ -252,11 +257,11 @@
               <button
                 type="button"
                 class="profile-public-group-join"
-                :class="{ 'is-joined': isJoinedPublicGroup(group) }"
-                :disabled="isJoinedPublicGroup(group) || Number(joiningGroupId) === Number(group.id)"
-                @click="applyJoinPublicGroup(group)"
+                :class="{ 'is-joined': isJoinedPublicGroup(group), 'is-pending': isPendingPublicGroup(group) }"
+                :disabled="isPendingPublicGroup(group) || Number(joiningGroupId) === Number(group.id)"
+                @click.stop="applyJoinPublicGroup(group)"
               >
-                {{ isJoinedPublicGroup(group) ? '已加入' : (Number(joiningGroupId) === Number(group.id) ? '申请中' : '申请加群') }}
+                {{ isJoinedPublicGroup(group) ? '已加入' : (isPendingPublicGroup(group) || Number(joiningGroupId) === Number(group.id) ? '申请中' : '申请加群') }}
               </button>
             </div>
             <el-empty v-if="!publicGroupsLoading && publicGroups.length === 0" description="暂无公开群聊" />
@@ -491,6 +496,7 @@ const {
   goPublicGroupsPrev,
   groupAvatarText,
   isJoinedPublicGroup,
+  isPendingPublicGroup,
   joiningGroupId,
   jumpPublicGroupsPage,
   loadingFavorites,
@@ -503,6 +509,7 @@ const {
   openArticleFromNotes,
   openCreateFavoriteFolder,
   openFavoriteDialog,
+  openPublicGroupCard,
   publicGroups,
   publicGroupsLoading,
   publicGroupsPageInput,

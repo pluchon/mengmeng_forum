@@ -24,7 +24,7 @@ import { ElMessage } from 'element-plus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
-import { formatChatSessionTimeShanghai } from '@/utils/datetime'
+import { parseForumDateTime } from '@/utils/datetime'
 
 const PROFILE_PAGE_SIZE = 12
 const FAVORITE_DIALOG_PAGE_SIZE = 10
@@ -358,17 +358,37 @@ export function useProfile() {
 
   async function applyJoinPublicGroup(group) {
     const gid = group?.id
-    if (!gid || joinedGroupIds.value.has(String(gid))) return
+    if (!gid) return
+    if (isJoinedPublicGroup(group)) {
+      openJoinedGroup(group)
+      return
+    }
+    if (isPendingPublicGroup(group)) return
     joiningGroupId.value = gid
     try {
       const res = await joinPublicGroupChat(gid)
       if (res.code === 0) {
-        ElMessage.success('已加入群聊')
-        await Promise.all([loadMyGroupSessions(), loadPublicGroups(publicGroupsPageNum.value)])
+        ElMessage.success('申请已发送')
+        if (res.data?.id) {
+          group.currentUserRequestId = res.data.id
+          group.currentUserRequestStatus = res.data.status
+        }
+        await loadPublicGroups(publicGroupsPageNum.value)
       }
     } finally {
       joiningGroupId.value = null
     }
+  }
+
+  function openPublicGroupCard(group) {
+    if (!isJoinedPublicGroup(group)) return
+    openJoinedGroup(group)
+  }
+
+  function openJoinedGroup(group) {
+    const gid = group?.id
+    if (!gid) return
+    messageCenterUi.open({ groupId: Number(gid) })
   }
 
   function groupAvatarText(group) {
@@ -377,11 +397,33 @@ export function useProfile() {
   }
 
   function isJoinedPublicGroup(group) {
-    return joinedGroupIds.value.has(String(group?.id))
+    return group?.currentUserJoined === true || joinedGroupIds.value.has(String(group?.id))
+  }
+
+  function isPendingPublicGroup(group) {
+    return Number(group?.currentUserRequestStatus) === 0
   }
 
   function formatProfileDate(time) {
-    return formatChatSessionTimeShanghai(time)
+    const date = parseForumDateTime(time)
+    if (!date) return ''
+    const now = new Date()
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const dayDiff = Math.floor((startToday.getTime() - startTarget.getTime()) / 86400000)
+    if (dayDiff === 0) {
+      return `${padTime(date.getHours())}:${padTime(date.getMinutes())}`
+    }
+    if (dayDiff === 1) return '昨天'
+    if (dayDiff === 2) return '前天'
+    if (dayDiff < 30) return `${dayDiff}天前`
+    const monthDiff = (now.getFullYear() - date.getFullYear()) * 12 + now.getMonth() - date.getMonth()
+    if (monthDiff < 12) return `${Math.max(1, monthDiff)}月前`
+    return `${date.getFullYear()}-${padTime(date.getMonth() + 1)}-${padTime(date.getDate())} ${padTime(date.getHours())}:${padTime(date.getMinutes())}`
+  }
+
+  function padTime(value) {
+    return String(value).padStart(2, '0')
   }
 
   async function openFavoriteDialog(folder) {
@@ -760,8 +802,10 @@ export function useProfile() {
     goPublicGroupsPrev,
     groupAvatarText,
     isJoinedPublicGroup,
+    isPendingPublicGroup,
     joiningGroupId,
     jumpPublicGroupsPage,
+    openPublicGroupCard,
     saveFavoriteFolder,
     startFavoriteFolderRename,
     toggleFavoriteFolderPublic,

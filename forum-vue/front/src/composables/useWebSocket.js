@@ -1,9 +1,14 @@
 import { useUserStore } from '../stores/user'
 import { useMessageStore } from '../stores/message'
+import { useGroupVoiceStore } from '@/stores/groupVoice'
 
 /** 全局单例，避免 MainLayout / Header 等多处 useWebSocket() 各自 new 一份连接或互相 close 掉 CONNECTING */
 let sharedSocket = null
+let sharedToken = ''
 let heartbeatInterval = null
+let reconnectTimer = null
+let allowReconnect = false
+const pendingMessages = []
 
 function stopHeartbeat() {
   if (heartbeatInterval) {
@@ -12,9 +17,31 @@ function stopHeartbeat() {
   }
 }
 
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+}
+
+function scheduleReconnect() {
+  if (!allowReconnect || reconnectTimer) return
+  if (sharedSocket?.readyState === WebSocket.OPEN || sharedSocket?.readyState === WebSocket.CONNECTING) return
+  const userStore = useUserStore()
+  if (!userStore.token) return
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    const latestUserStore = useUserStore()
+    if (!allowReconnect || !latestUserStore.token) return
+    useWebSocket().initWebSocket()
+  }, 1200)
+}
+
 function attachHandlers(socket) {
   socket.onopen = () => {
     stopHeartbeat()
+    clearReconnectTimer()
+    flushPendingMessages()
     heartbeatInterval = setInterval(() => {
       if (sharedSocket?.readyState === WebSocket.OPEN) {
         sharedSocket.send('ping')
@@ -34,7 +61,11 @@ function attachHandlers(socket) {
 
   socket.onclose = () => {
     stopHeartbeat()
-    if (sharedSocket === socket) sharedSocket = null
+    if (sharedSocket === socket) {
+      sharedSocket = null
+      sharedToken = ''
+    }
+    scheduleReconnect()
   }
 
   socket.onerror = (error) => {
@@ -72,6 +103,23 @@ function handleNotifyMessage(notifyData) {
   if (notifyData.type === 'group_message') {
     const messageStore = useMessageStore()
     messageStore.onGroupMessage(notifyData)
+    return
+  }
+  if (notifyData.type === 'group_voice_status') {
+    const groupVoiceStore = useGroupVoiceStore()
+    groupVoiceStore.onVoiceStatus(notifyData)
+    return
+  }
+  if (notifyData.type === 'group_voice_signal') {
+    const groupVoiceStore = useGroupVoiceStore()
+    groupVoiceStore.onVoiceSignal(notifyData)
+  }
+}
+
+function flushPendingMessages() {
+  if (sharedSocket?.readyState !== WebSocket.OPEN) return
+  while (pendingMessages.length) {
+    sharedSocket.send(pendingMessages.shift())
   }
 }
 
@@ -89,26 +137,64 @@ function buildNotifyWsUrl(token) {
 export function useWebSocket() {
   const initWebSocket = () => {
     const userStore = useUserStore()
-    if (!userStore.token) return
+    const token = userStore.token
+    if (!token) return
+    allowReconnect = true
+    clearReconnectTimer()
+
+    if (sharedSocket && sharedToken !== token) {
+      stopHeartbeat()
+      try {
+        sharedSocket.close()
+      } catch {}
+      sharedSocket = null
+      sharedToken = ''
+    }
 
     if (sharedSocket?.readyState === WebSocket.OPEN) return
     if (sharedSocket?.readyState === WebSocket.CONNECTING) return
 
-    const wsUrl = buildNotifyWsUrl(userStore.token)
+    const wsUrl = buildNotifyWsUrl(token)
 
     sharedSocket = new WebSocket(wsUrl)
+    sharedToken = token
     attachHandlers(sharedSocket)
   }
 
   const closeWebSocket = () => {
+    allowReconnect = false
+    clearReconnectTimer()
     stopHeartbeat()
+    pendingMessages.length = 0
     if (sharedSocket) {
       try {
         sharedSocket.close()
       } catch {}
       sharedSocket = null
     }
+    sharedToken = ''
   }
 
-  return { initWebSocket, closeWebSocket }
+  const sendNotifyMessage = (payload) => {
+    if (!payload) return false
+    const userStore = useUserStore()
+    if (!userStore.token) return false
+    const data = typeof payload === 'string' ? payload : JSON.stringify(payload)
+    if (sharedSocket?.readyState === WebSocket.OPEN && sharedToken === userStore.token) {
+      sharedSocket.send(data)
+      return true
+    }
+    pendingMessages.push(data)
+    initWebSocket()
+    return true
+  }
+
+  const notifySocketState = () => ({
+    readyState: sharedSocket?.readyState ?? WebSocket.CLOSED,
+    open: sharedSocket?.readyState === WebSocket.OPEN,
+    connecting: sharedSocket?.readyState === WebSocket.CONNECTING,
+    pending: pendingMessages.length,
+  })
+
+  return { initWebSocket, closeWebSocket, notifySocketState, sendNotifyMessage }
 }

@@ -7,8 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.config.OssConfig;
+import org.example.forumdemo.common.enums.GroupChatJoinRequestReadState;
 import org.example.forumdemo.common.enums.GroupChatMemberRole;
 import org.example.forumdemo.common.enums.GroupChatMemberStatus;
+import org.example.forumdemo.common.enums.GroupChatJoinRequestStatus;
+import org.example.forumdemo.common.enums.GroupChatJoinRequestType;
 import org.example.forumdemo.common.enums.GroupChatMessageStatus;
 import org.example.forumdemo.common.enums.GroupChatMessageType;
 import org.example.forumdemo.common.enums.GroupChatNotifyMode;
@@ -24,6 +27,7 @@ import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.converter.GroupChatConverter;
 import org.example.forumdemo.entity.db.GroupChat;
+import org.example.forumdemo.entity.db.GroupChatJoinRequest;
 import org.example.forumdemo.entity.db.GroupChatMember;
 import org.example.forumdemo.entity.db.GroupChatMessage;
 import org.example.forumdemo.entity.db.GroupChatReport;
@@ -35,17 +39,22 @@ import org.example.forumdemo.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.example.forumdemo.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
+import org.example.forumdemo.entity.dto.groupchat.UpdateGroupMemberRoleRequest;
+import org.example.forumdemo.entity.dto.message.SendMessageRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatDetailVO;
+import org.example.forumdemo.entity.vo.groupchat.GroupChatJoinRequestVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatMemberVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatMessageVO;
 import org.example.forumdemo.entity.vo.groupchat.GroupChatSessionVO;
 import org.example.forumdemo.mapper.GroupChatMapper;
+import org.example.forumdemo.mapper.GroupChatJoinRequestMapper;
 import org.example.forumdemo.mapper.GroupChatMemberMapper;
 import org.example.forumdemo.mapper.GroupChatMessageMapper;
 import org.example.forumdemo.mapper.GroupChatReportMapper;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.groupchat.GroupChatService;
+import org.example.forumdemo.service.interfaces.message.MessageService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -67,6 +76,9 @@ import java.util.stream.Collectors;
 // 群聊业务实现
 public class GroupChatServiceImpl implements GroupChatService {
 
+    // 私信邀请卡片内容前缀
+    private static final String GROUP_INVITE_CARD_PREFIX = "[[GROUP_INVITE:";
+
     // 群聊主表 Mapper
     @Autowired
     private GroupChatMapper groupChatMapper;
@@ -74,6 +86,10 @@ public class GroupChatServiceImpl implements GroupChatService {
     // 群成员 Mapper
     @Autowired
     private GroupChatMemberMapper groupChatMemberMapper;
+
+    // 群加入申请 Mapper
+    @Autowired
+    private GroupChatJoinRequestMapper groupChatJoinRequestMapper;
 
     // 群消息 Mapper
     @Autowired
@@ -86,6 +102,10 @@ public class GroupChatServiceImpl implements GroupChatService {
     // 用户服务
     @Autowired
     private UserService userService;
+
+    // 私信服务
+    @Autowired
+    private MessageService messageService;
 
     // WebSocket 推送服务
     @Autowired
@@ -200,7 +220,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByDesc(GroupChat::getUpdateTime));
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(this::refreshAndConvert)
+                .map(group -> refreshAndConvert(group, loginUserId))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -223,7 +243,33 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByDesc(GroupChat::getCreateTime));
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(this::refreshAndConvert)
+                .map(group -> refreshAndConvert(group, loginUserId))
+                .collect(Collectors.toList());
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
+    }
+
+    @Override
+    public PageResult<GroupChatDetailVO> queryMyOwnedGroups(Long loginUserId, String keyword, Integer pageNum, Integer pageSize) {
+        userService.queryUserByUserId(loginUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<GroupChat> page = PageUtils.getPage(validPageNum, validPageSize);
+        LambdaQueryWrapper<GroupChat> wrapper = new LambdaQueryWrapper<GroupChat>()
+                .eq(GroupChat::getOwnerUserId, loginUserId)
+                .in(GroupChat::getStatus, List.of(
+                        GroupChatStatus.NORMAL.getCode(),
+                        GroupChatStatus.FULL.getCode(),
+                        GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
+                .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .orderByDesc(GroupChat::getCreateTime);
+        String normalizedKeyword = normalizeOptional(keyword);
+        if (StringUtils.hasText(normalizedKeyword)) {
+            wrapper.like(GroupChat::getName, normalizedKeyword);
+        }
+        Page<GroupChat> result = groupChatMapper.selectPage(page, wrapper);
+        List<GroupChatDetailVO> records = result.getRecords().stream()
+                .map(group -> refreshAndConvert(group, loginUserId))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -231,26 +277,145 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public GroupChatDetailVO joinPublicGroup(Long groupId, Long loginUserId) {
+    public GroupChatJoinRequestVO joinPublicGroup(Long groupId, Long loginUserId) {
         User user = userService.queryUserByUserId(loginUserId);
         GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
         if (!GroupChatType.PUBLIC.getCode().equals(group.getGroupType())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "私有群只能由群主邀请加入"));
         }
+        if (isActiveMember(group.getId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "你已经在群聊中"));
+        }
         assertJoinable(group);
-        upsertActiveMember(group, user, GroupChatMemberRole.MEMBER.getCode());
-        return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(queryGroup(groupId)));
+        GroupChatJoinRequest request = createOrReuseJoinRequest(group, user.getId(), user.getId(),
+                GroupChatJoinRequestType.APPLY.getCode());
+        return toJoinRequestVO(request);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public GroupChatDetailVO inviteMember(Long groupId, GroupInviteMemberRequest request, Long loginUserId) {
+    public GroupChatJoinRequestVO inviteMember(Long groupId, GroupInviteMemberRequest request, Long loginUserId) {
         GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
         assertOwner(group, loginUserId);
         assertJoinable(group);
         User invitee = userService.queryUserByUserId(request.getInviteeUserId());
-        upsertActiveMember(group, invitee, GroupChatMemberRole.MEMBER.getCode());
-        return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(queryGroup(groupId)));
+        if (Objects.equals(invitee.getId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能邀请自己"));
+        }
+        if (isActiveMember(group.getId(), invitee.getId())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "对方已在群聊中"));
+        }
+        GroupChatJoinRequest joinRequest = createOrReuseJoinRequest(group, invitee.getId(), loginUserId,
+                GroupChatJoinRequestType.INVITE.getCode());
+        sendGroupInvitePrivateMessage(group, invitee.getId(), loginUserId, joinRequest.getId());
+        return toJoinRequestVO(joinRequest);
+    }
+
+    @Override
+    public GroupChatJoinRequestVO queryJoinRequest(Long requestId, Long loginUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        if (!Objects.equals(request.getTargetUserId(), loginUserId)
+                && !Objects.equals(request.getInitiatorUserId(), loginUserId)
+                && !Objects.equals(request.getOwnerUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        return toJoinRequestVO(request);
+    }
+
+    @Override
+    public PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, Integer pageNum, Integer pageSize) {
+        userService.queryUserByUserId(loginUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<GroupChatJoinRequest> page = PageUtils.getPage(validPageNum, validPageSize);
+        Page<GroupChatJoinRequest> result = groupChatJoinRequestMapper.selectPage(page, new LambdaQueryWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getOwnerUserId, loginUserId)
+                .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
+                .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .orderByDesc(GroupChatJoinRequest::getId));
+        List<GroupChatJoinRequestVO> records = result.getRecords().stream()
+                .map(this::toJoinRequestVO)
+                .collect(Collectors.toList());
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markReceivedJoinRequestsRead(Long loginUserId) {
+        userService.queryUserByUserId(loginUserId);
+        groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getOwnerUserId, loginUserId)
+                .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
+                .eq(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.UNREAD.getCode())
+                .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .set(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.READ.getCode())
+                .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatJoinRequestVO approveJoinRequest(Long requestId, Long loginUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        assertJoinRequestType(request, GroupChatJoinRequestType.APPLY.getCode());
+        GroupChat group = refreshGroupLimitStatus(queryGroup(request.getGroupId()));
+        assertOwner(group, loginUserId);
+        assertPendingJoinRequest(request);
+        if (isActiveMember(group.getId(), request.getTargetUserId())) {
+            updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.OBSOLETE.getCode(), loginUserId);
+            return toJoinRequestVO(queryJoinRequestEntity(requestId));
+        }
+        assertJoinable(group);
+        User target = userService.queryUserByUserId(request.getTargetUserId());
+        upsertActiveMember(group, target, GroupChatMemberRole.MEMBER.getCode());
+        updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.APPROVED.getCode(), loginUserId);
+        return toJoinRequestVO(queryJoinRequestEntity(requestId));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatJoinRequestVO rejectJoinRequest(Long requestId, Long loginUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        assertJoinRequestType(request, GroupChatJoinRequestType.APPLY.getCode());
+        GroupChat group = queryGroup(request.getGroupId());
+        assertOwner(group, loginUserId);
+        assertPendingJoinRequest(request);
+        if (isActiveMember(group.getId(), request.getTargetUserId())) {
+            updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.OBSOLETE.getCode(), loginUserId);
+            return toJoinRequestVO(queryJoinRequestEntity(requestId));
+        }
+        updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.REJECTED.getCode(), loginUserId);
+        return toJoinRequestVO(queryJoinRequestEntity(requestId));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatJoinRequestVO acceptInvitation(Long requestId, Long loginUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        assertJoinRequestType(request, GroupChatJoinRequestType.INVITE.getCode());
+        if (!Objects.equals(request.getTargetUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        assertPendingJoinRequest(request);
+        GroupChat group = refreshGroupLimitStatus(queryGroup(request.getGroupId()));
+        assertJoinable(group);
+        User target = userService.queryUserByUserId(loginUserId);
+        upsertActiveMember(group, target, GroupChatMemberRole.MEMBER.getCode());
+        updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.APPROVED.getCode(), loginUserId);
+        return toJoinRequestVO(queryJoinRequestEntity(requestId));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatJoinRequestVO rejectInvitation(Long requestId, Long loginUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        assertJoinRequestType(request, GroupChatJoinRequestType.INVITE.getCode());
+        if (!Objects.equals(request.getTargetUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        assertPendingJoinRequest(request);
+        updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.REJECTED.getCode(), loginUserId);
+        return toJoinRequestVO(queryJoinRequestEntity(requestId));
     }
 
     @Override
@@ -303,6 +468,26 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void updateMemberRole(Long groupId, UpdateGroupMemberRoleRequest request, Long loginUserId) {
+        GroupChat group = queryGroup(groupId);
+        assertOwner(group, loginUserId);
+        GroupChatMember target = assertActiveMember(groupId, request.getTargetUserId());
+        if (GroupChatMemberRole.OWNER.getCode().equals(target.getRole())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "不能修改群主角色"));
+        }
+        Byte targetRole = request.getRole();
+        if (!GroupChatMemberRole.MEMBER.getCode().equals(targetRole)
+                && !GroupChatMemberRole.ADMIN.getCode().equals(targetRole)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群成员角色不合法"));
+        }
+        groupChatMemberMapper.update(null, new LambdaUpdateWrapper<GroupChatMember>()
+                .eq(GroupChatMember::getId, target.getId())
+                .set(GroupChatMember::getRole, targetRole)
+                .set(GroupChatMember::getUpdateTime, ForumDateTimes.now()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void dissolveGroup(Long groupId, Long loginUserId) {
         GroupChat group = queryGroup(groupId);
         assertOwner(group, loginUserId);
@@ -328,6 +513,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         Byte messageType = normalizeMessageType(request.getMessageType());
         String content = normalizeMessageContent(request.getContent());
         validateGroupMediaContent(messageType, content);
+        if (GroupChatMessageType.TEXT.getCode().equals(messageType) && content.contains("@所有人")) {
+            assertGroupManager(group, member);
+        }
         GroupChatMessage repliedMessage = queryReplyMessage(group.getId(), request.getReplyMessageId());
 
         Date now = ForumDateTimes.now();
@@ -427,9 +615,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                         .eq(GroupChatMember::getGroupId, groupId)
                         .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
                         .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE)
-                        .orderByAsc(GroupChatMember::getRole)
                         .orderByAsc(GroupChatMember::getJoinTime))
                 .stream()
+                .sorted(Comparator.comparingInt(member -> roleSortWeight(member.getRole())))
                 .map(member -> {
                     GroupChatMemberVO vo = GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId()));
                     if (vo != null && !Objects.equals(member.getUserId(), loginUserId)) {
@@ -488,10 +676,41 @@ public class GroupChatServiceImpl implements GroupChatService {
         return member;
     }
 
+    private boolean isActiveMember(Long groupId, Long userId) {
+        if (groupId == null || userId == null) {
+            return false;
+        }
+        Long count = groupChatMemberMapper.selectCount(new LambdaQueryWrapper<GroupChatMember>()
+                .eq(GroupChatMember::getGroupId, groupId)
+                .eq(GroupChatMember::getUserId, userId)
+                .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
+                .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
+        return count != null && count > 0;
+    }
+
     private void assertOwner(GroupChat group, Long loginUserId) {
         if (!Objects.equals(group.getOwnerUserId(), loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "只有群主可以操作"));
         }
+    }
+
+    private void assertGroupManager(GroupChat group, GroupChatMember member) {
+        if (Objects.equals(group.getOwnerUserId(), member.getUserId())
+                || GroupChatMemberRole.OWNER.getCode().equals(member.getRole())
+                || GroupChatMemberRole.ADMIN.getCode().equals(member.getRole())) {
+            return;
+        }
+        throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "只有群主或管理员可以@所有人"));
+    }
+
+    private int roleSortWeight(Byte role) {
+        if (GroupChatMemberRole.OWNER.getCode().equals(role)) {
+            return 0;
+        }
+        if (GroupChatMemberRole.ADMIN.getCode().equals(role)) {
+            return 1;
+        }
+        return 2;
     }
 
     private void assertCertifiedCreator(User user) {
@@ -567,6 +786,134 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     private GroupChatDetailVO refreshAndConvert(GroupChat group) {
         return GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group));
+    }
+
+    private GroupChatDetailVO refreshAndConvert(GroupChat group, Long loginUserId) {
+        GroupChatDetailVO vo = GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group));
+        fillViewerRelation(vo, loginUserId);
+        return vo;
+    }
+
+    private void fillViewerRelation(GroupChatDetailVO vo, Long loginUserId) {
+        if (vo == null || loginUserId == null) {
+            return;
+        }
+        vo.setCurrentUserJoined(isActiveMember(vo.getId(), loginUserId));
+        GroupChatJoinRequest latest = latestPendingJoinRequest(vo.getId(), loginUserId);
+        vo.setCurrentUserRequestStatus(latest == null ? null : latest.getStatus());
+        vo.setCurrentUserRequestId(latest == null ? null : latest.getId());
+    }
+
+    private GroupChatJoinRequest createOrReuseJoinRequest(GroupChat group, Long targetUserId, Long initiatorUserId, Byte requestType) {
+        GroupChatJoinRequest pending = groupChatJoinRequestMapper.selectList(new LambdaQueryWrapper<GroupChatJoinRequest>()
+                        .eq(GroupChatJoinRequest::getGroupId, group.getId())
+                        .eq(GroupChatJoinRequest::getTargetUserId, targetUserId)
+                        .eq(GroupChatJoinRequest::getRequestType, requestType)
+                        .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                        .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .orderByDesc(GroupChatJoinRequest::getId)
+                        .last("limit 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        if (pending != null) {
+            return pending;
+        }
+        Date now = ForumDateTimes.now();
+        GroupChatJoinRequest request = new GroupChatJoinRequest();
+        request.setGroupId(group.getId());
+        request.setTargetUserId(targetUserId);
+        request.setInitiatorUserId(initiatorUserId);
+        request.setOwnerUserId(group.getOwnerUserId());
+        request.setRequestType(requestType);
+        request.setStatus(GroupChatJoinRequestStatus.PENDING.getCode());
+        request.setOwnerReadState(GroupChatJoinRequestReadState.UNREAD.getCode());
+        request.setHandledByUserId(null);
+        request.setHandleTime(null);
+        request.setDeleteState(Constant.DELETE_STATE_FALSE);
+        request.setCreateTime(now);
+        request.setUpdateTime(now);
+        if (groupChatJoinRequestMapper.insert(request) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
+        }
+        return request;
+    }
+
+    private GroupChatJoinRequest latestPendingJoinRequest(Long groupId, Long targetUserId) {
+        return groupChatJoinRequestMapper.selectList(new LambdaQueryWrapper<GroupChatJoinRequest>()
+                        .eq(GroupChatJoinRequest::getGroupId, groupId)
+                        .eq(GroupChatJoinRequest::getTargetUserId, targetUserId)
+                        .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                        .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .orderByDesc(GroupChatJoinRequest::getId)
+                        .last("limit 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private GroupChatJoinRequest queryJoinRequestEntity(Long requestId) {
+        if (requestId == null || requestId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        GroupChatJoinRequest request = groupChatJoinRequestMapper.selectOne(new LambdaQueryWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getId, requestId)
+                .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE));
+        if (request == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        return request;
+    }
+
+    private GroupChatJoinRequestVO toJoinRequestVO(GroupChatJoinRequest request) {
+        if (request == null) {
+            return null;
+        }
+        GroupChatJoinRequestVO vo = new GroupChatJoinRequestVO();
+        vo.setId(request.getId());
+        vo.setGroup(refreshAndConvert(queryGroup(request.getGroupId()), request.getTargetUserId()));
+        vo.setTargetUser(new org.example.forumdemo.entity.vo.user.UserBriefVO(userService.queryUserByUserId(request.getTargetUserId())));
+        vo.setInitiatorUser(new org.example.forumdemo.entity.vo.user.UserBriefVO(userService.queryUserByUserId(request.getInitiatorUserId())));
+        vo.setRequestType(request.getRequestType());
+        vo.setStatus(request.getStatus());
+        vo.setOwnerReadState(request.getOwnerReadState());
+        vo.setTargetJoined(isActiveMember(request.getGroupId(), request.getTargetUserId()));
+        vo.setCreateTime(request.getCreateTime());
+        vo.setHandleTime(request.getHandleTime());
+        return vo;
+    }
+
+    private void updateJoinRequestStatus(Long requestId, Byte status, Long handledByUserId) {
+        int affected = groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getId, requestId)
+                .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                .set(GroupChatJoinRequest::getStatus, status)
+                .set(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.READ.getCode())
+                .set(GroupChatJoinRequest::getHandledByUserId, handledByUserId)
+                .set(GroupChatJoinRequest::getHandleTime, ForumDateTimes.now())
+                .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
+        if (affected <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+    }
+
+    private void assertPendingJoinRequest(GroupChatJoinRequest request) {
+        if (!GroupChatJoinRequestStatus.PENDING.getCode().equals(request.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "该请求已处理"));
+        }
+    }
+
+    private void assertJoinRequestType(GroupChatJoinRequest request, Byte requestType) {
+        if (!Objects.equals(request.getRequestType(), requestType)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求类型不合法"));
+        }
+    }
+
+    private void sendGroupInvitePrivateMessage(GroupChat group, Long inviteeUserId, Long inviterUserId, Long requestId) {
+        SendMessageRequest messageRequest = new SendMessageRequest();
+        messageRequest.setReceiveUserId(inviteeUserId);
+        messageRequest.setContent(GROUP_INVITE_CARD_PREFIX + requestId + "]]");
+        messageService.send(messageRequest, inviterUserId);
     }
 
     private void upsertActiveMember(GroupChat group, User user, Byte role) {

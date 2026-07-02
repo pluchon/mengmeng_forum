@@ -866,6 +866,22 @@
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
 }
 
+.profile-public-group-row.is-clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.profile-public-group-row.is-clickable:hover,
+.profile-public-group-row.is-clickable:focus-visible {
+  border-color: rgba(212, 83, 126, 0.28);
+  box-shadow: 0 10px 24px rgba(212, 83, 126, 0.08);
+  outline: none;
+  transform: translateY(-1px);
+}
+
 .profile-public-group-avatar {
   display: inline-flex;
   align-items: center;
@@ -926,7 +942,16 @@
   background: #ffdce7;
 }
 
-.profile-public-group-join.is-joined,
+.profile-public-group-join.is-joined {
+  background: #f2f3f5;
+  color: #9aa0aa;
+}
+
+.profile-public-group-join.is-joined:hover {
+  background: #e9edf3;
+}
+
+.profile-public-group-join.is-pending,
 .profile-public-group-join:disabled {
   background: #f2f3f5;
   color: #9aa0aa;

@@ -2,6 +2,7 @@ package org.example.forumdemo.common.utils;
 
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -12,13 +13,19 @@ public class OnlineUserManageUtil {
     // key=userId，value=对应的 WebSocket 会话
     private final ConcurrentHashMap<Long, WebSocketSession> manage = new ConcurrentHashMap<>();
 
-    // 用户上线：已存在且连接正常则跳过，防多开；旧 session 已失效（网络闪断）则覆盖
+    // 用户上线：新连接覆盖旧连接，避免消息继续推到旧页面
     public void online(Long userId, WebSocketSession webSocketSession) {
-        WebSocketSession existing = manage.get(userId);
-        if (existing != null && existing.isOpen()) {
+        if (userId == null || webSocketSession == null) {
             return;
         }
-        manage.put(userId, webSocketSession);
+        WebSocketSession existing = manage.put(userId, webSocketSession);
+        if (existing != null && existing != webSocketSession && existing.isOpen()) {
+            try {
+                existing.close(CloseStatus.NORMAL);
+            } catch (Exception ignored) {
+                // 旧连接关闭失败不影响新连接接管推送。
+            }
+        }
     }
 
     // 用户下线：只允许移除自己的会话，防止多开时误删他人

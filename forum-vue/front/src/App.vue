@@ -7,6 +7,7 @@
         <router-view />
         <MascotDock v-if="showMascot" />
         <MessageView />
+        <GroupVoiceDock />
       </div>
     </div>
   </el-config-provider>
@@ -16,6 +17,7 @@
 import { useApp } from '@scripts/App'
 import ParticleSea from '@/components/common/ParticleSea.vue'
 import MascotDock from '@/components/mascot/MascotDock.vue'
+import GroupVoiceDock from '@/components/group-voice/GroupVoiceDock.vue'
 import MessageView from '@/views/MessageView.vue'
 const {
   ElConfigProvider,

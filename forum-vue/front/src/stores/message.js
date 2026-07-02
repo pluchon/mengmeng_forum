@@ -2,6 +2,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showMessageIncomingToast } from '@/utils/messageIncomingToast'
 
+const RECENT_MESSAGE_LIMIT = 120
+const recentIncomingMessageIds = new Set()
+
 export const useMessageStore = defineStore('message', () => {
   const unreadCount = ref(0)
   const incomingMessage = ref(null)
@@ -42,6 +45,17 @@ export const useMessageStore = defineStore('message', () => {
 
   function onNewMessage(msg) {
     const payload = msg && typeof msg === 'object' ? { ...msg } : {}
+    const dbMessageId = payload.dbMessageId != null ? String(payload.dbMessageId) : ''
+    if (dbMessageId && recentIncomingMessageIds.has(dbMessageId)) {
+      return
+    }
+    if (dbMessageId) {
+      recentIncomingMessageIds.add(dbMessageId)
+      if (recentIncomingMessageIds.size > RECENT_MESSAGE_LIMIT) {
+        const first = recentIncomingMessageIds.values().next().value
+        recentIncomingMessageIds.delete(first)
+      }
+    }
     incomingMessage.value = payload
 
     const sender = (

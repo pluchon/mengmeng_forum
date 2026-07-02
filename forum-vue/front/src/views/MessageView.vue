@@ -14,6 +14,16 @@
     <button type="button" class="mc-dialog-close" aria-label="关闭" @click="handleClose">
       <el-icon><Close /></el-icon>
     </button>
+    <button
+      v-if="showGroupVoiceEntry"
+      type="button"
+      class="mc-voice-entry"
+      :class="{ 'is-active': groupVoiceEntryText.includes('正在聊天') }"
+      @click="handleGroupVoiceEntry"
+    >
+      <el-icon><Phone /></el-icon>
+      <span>{{ groupVoiceEntryText }}</span>
+    </button>
 
     <div class="mc" @focusout="onDialogBlurRoot">
       <aside class="mc-left">
@@ -32,15 +42,6 @@
             </div>
           </div>
           <div class="mc-tabs" role="tablist">
-            <button
-              type="button"
-              class="mc-tab"
-              :class="{ 'is-on': activeTab === 'all' }"
-              @click="activeTab = 'all'"
-            >
-              全部
-              <span v-if="tabBadges.all > 0" class="mc-tab-badge">{{ tabBadges.all > 99 ? '99+' : tabBadges.all }}</span>
-            </button>
             <button
               type="button"
               class="mc-tab"
@@ -246,6 +247,31 @@
                       <span v-if="Number(row.msg.message?.state) === 2" class="mc-recalled">
                         {{ row.msg.isOwner ? '你撤回了一条消息' : '对方撤回了一条消息' }}
                       </span>
+                      <template v-else-if="isGroupInviteCard(row.msg)">
+                        <div class="mc-group-invite-card">
+                          <div class="mc-group-avatar mc-group-avatar--invite">
+                            <img
+                              v-if="groupAvatarUrl(groupInviteInfo(row.msg)?.group)"
+                              :src="groupAvatarUrl(groupInviteInfo(row.msg)?.group)"
+                              alt=""
+                            >
+                            <span v-else>{{ groupAvatarText(groupInviteInfo(row.msg)?.group) }}</span>
+                          </div>
+                          <div class="mc-group-invite-main">
+                            <div class="mc-group-invite-title">
+                              {{ groupInviteInfo(row.msg)?.group?.name || '群聊邀请' }}
+                            </div>
+                            <div class="mc-group-invite-meta">
+                              {{ groupInviteInfo(row.msg)?.group ? `${groupInviteInfo(row.msg).group.memberCount || 0}/${groupInviteInfo(row.msg).group.memberLimit || 0} 人` : '正在加载' }}
+                              · {{ groupInviteStatusText(groupInviteInfo(row.msg)) }}
+                            </div>
+                          </div>
+                          <div v-if="canRespondGroupInvite(row.msg)" class="mc-group-invite-actions">
+                            <button type="button" @click="acceptInviteCard(row.msg)">✓ 同意</button>
+                            <button type="button" @click="declineInviteCard(row.msg)">✕ 拒绝</button>
+                          </div>
+                        </div>
+                      </template>
                       <template v-else-if="isMediaMessage(row.msg)">
                         <div class="mc-media-stack">
                           <el-image
@@ -360,7 +386,12 @@
                   </button>
                 </template>
                 <div class="mc-mention-panel">
-                  <button type="button" class="mc-mention-all" @click="selectMentionAll">
+                  <button
+                    v-if="isCurrentGroupManager"
+                    type="button"
+                    class="mc-mention-all"
+                    @click="selectMentionAll"
+                  >
                     @所有人
                   </button>
                   <input
@@ -578,6 +609,50 @@
                   </el-tabs>
                 </div>
               </el-popover>
+              <el-popover
+                v-if="isPrivateChat"
+                v-model:visible="ownedGroupInviteVisible"
+                placement="top-start"
+                :width="300"
+                trigger="manual"
+              >
+                <template #reference>
+                  <button type="button" class="mc-itbtn" title="邀请入群" @click="openOwnedGroupInvitePicker">
+                    <el-icon><UserFilled /></el-icon>
+                  </button>
+                </template>
+                <div class="mc-owned-group-panel" v-loading="ownedGroupsLoading">
+                  <input
+                    v-model="ownedGroupSearch"
+                    type="search"
+                    class="mc-mention-search"
+                    placeholder="搜索我的群聊"
+                  >
+                  <button
+                    v-for="group in ownedGroups"
+                    :key="group.id"
+                    type="button"
+                    class="mc-owned-group-item"
+                    :disabled="Number(invitingGroupId) === Number(group.id)"
+                    @click="sendGroupInviteFromPm(group)"
+                  >
+                    <div class="mc-group-avatar mc-group-avatar--mini">
+                      <img v-if="groupAvatarUrl(group)" :src="groupAvatarUrl(group)" alt="">
+                      <span v-else>{{ groupAvatarText(group) }}</span>
+                    </div>
+                    <span class="mc-owned-group-name">{{ group.name }}</span>
+                    <span class="mc-owned-group-count">{{ ownedGroupMemberText(group) }}</span>
+                  </button>
+                  <div v-if="!ownedGroupsLoading && ownedGroups.length === 0" class="mc-mention-empty">
+                    暂无可邀请的群聊
+                  </div>
+                  <div v-if="ownedGroupTotalPages > 1" class="mc-mention-pager">
+                    <button type="button" :disabled="ownedGroupPage <= 1" @click="goOwnedGroupPrev">上页</button>
+                    <span>{{ ownedGroupPage }}/{{ ownedGroupTotalPages }}</span>
+                    <button type="button" :disabled="ownedGroupPage >= ownedGroupTotalPages" @click="goOwnedGroupNext">下页</button>
+                  </div>
+                </div>
+              </el-popover>
             </div>
             <div v-if="replyTarget" class="mc-reply-draft">
               <span>回复 {{ replyTarget.senderName }}: {{ replyTarget.content }}</span>
@@ -597,6 +672,50 @@
               </button>
             </div>
           </footer>
+        </template>
+
+        <template v-else-if="currentSystemGroup && currentSystemGroup.groupId === 'joinRequest'">
+          <header class="mc-rhead">
+            <div class="mc-rhead-left">
+              <div class="mc-sys-ava mc-sys-ava--group mc-sys-ava--head">
+                <el-icon :size="18"><UserFilled /></el-icon>
+              </div>
+              <span class="mc-rname">进群申请</span>
+            </div>
+          </header>
+          <el-scrollbar class="mc-rbody-scroll">
+            <div class="mc-rbody mc-rbody--notify">
+              <article
+                v-for="item in activeJoinRequests"
+                :key="item.id"
+                class="mc-join-request-row"
+              >
+                <UserAvatarVip
+                  :size="34"
+                  :src="item.targetUser?.avatarUrl || defaultAvatar"
+                  :vip-tier="Number(item.targetUser?.vipTier) || 0"
+                  :vip-expire-at="item.targetUser?.vipExpireAt"
+                />
+                <span class="mc-join-request-name">{{ item.targetUser?.nickname || '用户' }}</span>
+                <div class="mc-join-request-group">
+                  <div class="mc-group-avatar mc-group-avatar--mini">
+                    <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
+                    <span v-else>{{ groupAvatarText(item.group) }}</span>
+                  </div>
+                  <span>{{ item.group?.name || '群聊' }}</span>
+                </div>
+                <span class="mc-join-request-time">{{ formatJoinRequestTime(item.createTime) }}</span>
+                <div class="mc-join-request-actions">
+                  <template v-if="Number(item.status) === 0">
+                    <button type="button" @click="approveJoinRequestItem(item)">批准</button>
+                    <button type="button" class="is-plain" @click="rejectJoinRequestItem(item)">拒绝</button>
+                  </template>
+                  <span v-else>{{ Number(item.status) === 1 ? '已批准' : Number(item.status) === 3 ? '已作废' : '已拒绝' }}</span>
+                </div>
+              </article>
+              <div v-if="!activeJoinRequests.length" class="mc-public-empty">暂无进群申请</div>
+            </div>
+          </el-scrollbar>
         </template>
 
         <template v-else-if="currentSystemGroup">
@@ -705,6 +824,21 @@
         <div class="mc-group-settings-head">
           <div class="mc-group-settings-title">群成员</div>
           <div class="mc-group-settings-head-right">
+            <button
+              v-if="isCurrentGroupOwner"
+              type="button"
+              class="mc-group-admin-switch"
+              :class="{ 'is-on': groupAdminManageMode }"
+              :title="groupAdminManageMode ? '关闭管理员设置' : '设置管理员'"
+              aria-label="设置管理员"
+              @click="toggleGroupAdminManageMode"
+            >
+              <span class="mc-group-admin-switch-track">
+                <span class="mc-group-admin-switch-thumb">
+                  <el-icon><UserFilled /></el-icon>
+                </span>
+              </span>
+            </button>
             <div class="mc-group-settings-subtitle">{{ groupMembers.length }} 人</div>
             <div v-if="groupMembersTotalPages > 1" class="mc-group-member-pager">
               <button type="button" :disabled="groupMembersPage <= 1" @click="goGroupMembersPrev">
@@ -754,6 +888,14 @@
               v-if="isCurrentGroupOwner && Number(member.role) !== 0"
               class="mc-member-actions"
             >
+              <button
+                v-if="groupAdminManageMode"
+                type="button"
+                class="mc-member-action"
+                @click.stop="toggleGroupAdminRole(member)"
+              >
+                {{ Number(member.role) === 2 ? '下管' : '设管' }}
+              </button>
               <button
                 type="button"
                 class="mc-member-action mc-member-action--icon"
@@ -946,10 +1088,12 @@ const {
   Close,
   Document,
   Picture,
+  Phone,
   Plus,
   Search,
   Setting,
   UserFilled,
+  activeJoinRequests,
   activeSystemMessages,
   activeTab,
   activeChatSubtitle,
@@ -960,6 +1104,7 @@ const {
   bubbleVipExpireAt,
   bubbleVipTier,
   canFavoriteChatImage,
+  canRespondGroupInvite,
   chatEmojiStore,
   chatImageInput,
   currentSession,
@@ -983,27 +1128,43 @@ const {
   goGroupMembersPrev,
   goMentionMembersNext,
   goMentionMembersPrev,
+  goOwnedGroupNext,
+  goOwnedGroupPrev,
   focusedConvKey,
   formatSessionTime,
+  formatJoinRequestTime,
   formatTime,
   goFavoriteFirst,
   goFavoriteNext,
   goFavoritePrev,
+  groupAdminManageMode,
   groupAvatarText,
   groupAvatarUrl,
+  groupVoiceEntryText,
   handleClose,
+  handleGroupVoiceEntry,
   handleRecall,
   inputBoxRef,
   isActiveItem,
   isCurrentGroupOwner,
+  isCurrentGroupManager,
   isMemberMuted,
   isMediaMessage,
+  isGroupInviteCard,
   isPrivateChat,
   leaveCurrentGroup,
   listItems,
   memberDisplayName,
   memberMuteLabel,
   memberRoleLabel,
+  ownedGroupInviteVisible,
+  ownedGroupSearch,
+  ownedGroupPage,
+  ownedGroupTotalPages,
+  ownedGroups,
+  ownedGroupsLoading,
+  ownedGroupMemberText,
+  invitingGroupId,
   messageTimeline,
   messages,
   msgContainer,
@@ -1022,7 +1183,10 @@ const {
   onGroupAvatarFileChange,
   onGroupIntroInput,
   openMentionPicker,
+  openOwnedGroupInvitePicker,
   toggleMentionPicker,
+  toggleGroupAdminManageMode,
+  toggleGroupAdminRole,
   openArticleFromSystem,
   openGroupMemberProfile,
   openMessageSenderProfile,
@@ -1037,6 +1201,7 @@ const {
   paginatedUploaded,
   removeEmojiKeepPopover,
   showUploadOnCurrentPage,
+  showGroupVoiceEntry,
   parseSystemMessageContent,
   peerOnline,
   groupAvatarInputRef,
@@ -1053,9 +1218,15 @@ const {
   groupMembersTotalPages,
   groupNotifyOptions,
   groupRemarkForm,
+  groupInviteInfo,
+  groupInviteStatusText,
   groupSettingsVisible,
   groupTypeSwitchLocked,
   removeMember,
+  approveJoinRequestItem,
+  rejectJoinRequestItem,
+  acceptInviteCard,
+  declineInviteCard,
   reportGroupMessage,
   replyTarget,
   savingGroupEdit,
@@ -1079,6 +1250,7 @@ const {
   switchGroupType,
   setGroupNotifyMode,
   sendContent,
+  sendGroupInviteFromPm,
   sendMessageFromEmoji,
   sendMessageFromShopUrl,
   sendMsg,
