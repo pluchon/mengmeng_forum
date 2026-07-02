@@ -31,6 +31,14 @@
                 <span>总局数</span>
                 <strong>{{ totalCount }}</strong>
               </div>
+              <div>
+                <span>当前段位</span>
+                <strong>{{ profile.rankName || '青铜先手 III' }}</strong>
+              </div>
+              <div>
+                <span>排位分</span>
+                <strong>{{ profile.score ?? 1000 }}</strong>
+              </div>
             </div>
             <div class="gobang-match-line">
               <h2>{{ matching ? '正在寻找对手' : '进入快速匹配' }}</h2>
@@ -68,7 +76,7 @@
           </el-table-column>
           <el-table-column label="积分" width="82">
             <template #default="{ row }">
-              <span :class="['gobang-score-delta', { 'is-plus': row.winnerUserId === profile.userId }]">
+              <span :class="['gobang-score-delta', { 'is-plus': recordScoreDelta(row) > 0 }]">
                 {{ scoreDeltaText(row) }}
               </span>
             </template>

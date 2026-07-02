@@ -39,6 +39,15 @@ public class GameMatchRecordVO {
     // 积分变化
     private Integer scoreDelta;
 
+    // 胜方真实排位分变化
+    private Integer winnerScoreDelta;
+
+    // 败方真实排位分变化
+    private Integer loserScoreDelta;
+
+    // 当前查看用户本局排位分变化
+    private Integer viewerScoreDelta;
+
     // 开始时间
     private Date startedAt;
 

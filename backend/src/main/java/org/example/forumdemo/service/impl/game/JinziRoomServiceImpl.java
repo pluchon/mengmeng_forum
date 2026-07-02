@@ -11,6 +11,8 @@ import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementCommand;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementResult;
 import org.example.forumdemo.entity.db.GameJinziMatchRecord;
 import org.example.forumdemo.entity.db.GameJinziRoomMove;
 import org.example.forumdemo.entity.db.GameRoomPlayer;
@@ -35,6 +37,7 @@ import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
+import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.JinziRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.impl.game.ai.GameAiPlanner;
@@ -78,6 +81,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
+
+    @Autowired
+    private GameRankService gameRankService;
 
     @Autowired
     private GameRoomSnapshotService gameRoomSnapshotService;
@@ -382,7 +388,8 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         room.setEndReason(endReason);
         Long loserId = winnerId == null ? null : room.opponentOf(winnerId);
         GameFinishedMqVO finishedEvent = transactionTemplate.execute(status -> {
-            int scoreDelta = resolveScoreDelta(room, winnerId, loserId);
+            GameRankSettlementResult rankResult = gameRankService.settleRank(createRankCommand(room, winnerId, loserId, endReason));
+            int scoreDelta = winnerDelta(rankResult);
             GameJinziMatchRecord record = new GameJinziMatchRecord();
             record.setRoomId(room.getRoomId());
             record.setBlackUserId(room.getBlackUserId());
@@ -391,11 +398,13 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             record.setLoserUserId(loserId);
             record.setEndReason(endReason);
             record.setScoreDelta(scoreDelta);
+            record.setWinnerScoreDelta(scoreDelta);
+            record.setLoserScoreDelta(loserDelta(rankResult));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
             record.setDeleteState((byte) 0);
             gameJinziMatchRecordMapper.insert(record);
-            settleProfilesAndPoints(room, record, winnerId, loserId, scoreDelta);
+            settlePoints(room, record, winnerId, loserId, scoreDelta, Math.abs(loserDelta(rankResult)));
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
         saveRoomSnapshot(room);
@@ -404,29 +413,17 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         cleanupRoom(room);
     }
 
-    private int resolveScoreDelta(JinziRoom room, Long winnerId, Long loserId) {
-        if (winnerId == null || loserId == null) {
-            return 0;
-        }
-        return room.isAiRoom() ? GameConstants.JINZI_AI_SCORE_DELTA : GameConstants.JINZI_SCORE_DELTA;
-    }
-
-    private void settleProfilesAndPoints(
+    private void settlePoints(
             JinziRoom room,
             GameJinziMatchRecord record,
             Long winnerId,
             Long loserId,
-            int scoreDelta
+            int scoreDelta,
+            int loserPenalty
     ) {
-        if (winnerId == null || loserId == null) {
-            gameUserProfileMapper.applyDraw(room.getBlackUserId(), GameConstants.JINZI);
-            if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
-                gameUserProfileMapper.applyDraw(room.getWhiteUserId(), GameConstants.JINZI);
-            }
+        if (winnerId == null || loserId == null || scoreDelta <= 0) {
             return;
         }
-        gameUserProfileMapper.applyWin(winnerId, GameConstants.JINZI, scoreDelta);
-        gameUserProfileMapper.applyLose(loserId, GameConstants.JINZI, scoreDelta);
         if (!GameConstants.AI_USER_ID.equals(winnerId)) {
             pointsService.addPoints(winnerId, scoreDelta,
                     Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "井字棋胜利奖励",
@@ -435,12 +432,37 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         if (!GameConstants.AI_USER_ID.equals(loserId)) {
             User loser = userMapper.selectByIdForUpdate(loserId);
             int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
-            if (loserPoints >= scoreDelta) {
-                pointsService.deductPoints(loserId, scoreDelta,
+            if (loserPenalty > 0 && loserPoints >= loserPenalty) {
+                pointsService.deductPoints(loserId, loserPenalty,
                         Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除",
                         "game:jinzi:lose:" + room.getRoomId());
             }
         }
+    }
+
+    private GameRankSettlementCommand createRankCommand(JinziRoom room, Long winnerId, Long loserId, String endReason) {
+        GameRankSettlementCommand command = new GameRankSettlementCommand();
+        command.setGameCode(GameConstants.JINZI);
+        command.setRoomId(room.getRoomId());
+        command.setPlayerAUserId(room.getBlackUserId());
+        command.setPlayerBUserId(room.getWhiteUserId());
+        command.setWinnerUserId(winnerId);
+        command.setLoserUserId(loserId);
+        command.setEndReason(endReason);
+        command.setEffectiveForRank(countMoves(room) >= 3);
+        return command;
+    }
+
+    private int winnerDelta(GameRankSettlementResult result) {
+        return result == null || result.getWinnerChange() == null || result.getWinnerChange().getDelta() == null
+                ? 0
+                : Math.max(0, result.getWinnerChange().getDelta());
+    }
+
+    private int loserDelta(GameRankSettlementResult result) {
+        return result == null || result.getLoserChange() == null || result.getLoserChange().getDelta() == null
+                ? 0
+                : Math.min(0, result.getLoserChange().getDelta());
     }
 
     private JinziRoomStateVO toStateVO(JinziRoom room, Long userId) {

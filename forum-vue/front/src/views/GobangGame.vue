@@ -34,6 +34,14 @@
                 <span>房间总数</span>
                 <strong>{{ activeRoomText }}</strong>
               </div>
+              <div>
+                <span>当前段位</span>
+                <strong>{{ profile.rankName || '青铜棋士 III' }}</strong>
+              </div>
+              <div>
+                <span>排位分</span>
+                <strong>{{ profile.score ?? 1000 }}</strong>
+              </div>
             </div>
             <div class="gobang-match-line">
               <h2>{{ matching ? '棋局正在排队' : '进入快速匹配' }}</h2>
@@ -71,8 +79,8 @@
           </el-table-column>
           <el-table-column label="积分" width="82">
             <template #default="{ row }">
-              <span :class="['gobang-score-delta', { 'is-plus': row.winnerUserId === profile.userId }]">
-                {{ row.winnerUserId === profile.userId ? '+' : '-' }}{{ row.scoreDelta ?? 0 }}
+              <span :class="['gobang-score-delta', { 'is-plus': recordScoreDelta(row) > 0 }]">
+                {{ scoreDeltaText(row) }}
               </span>
             </template>
           </el-table-column>

@@ -49,6 +49,12 @@ public class GameTetrisPkMatchRecord {
     // 积分变动
     private Integer scoreDelta;
 
+    // 胜方本局排位分变化
+    private Integer winnerScoreDelta;
+
+    // 败方本局排位分变化，负数
+    private Integer loserScoreDelta;
+
     // 回放 JSON
     private String replayPayload;
 

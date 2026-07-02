@@ -47,6 +47,8 @@ const profile = reactive({
   loseCount: 0,
   drawCount: 0,
   winRate: 0,
+  rankName: '青铜棋士 III',
+  nextRankDistance: 100,
   currentStatus: 'IDLE',
   currentRoomId: '',
 })
@@ -99,6 +101,10 @@ const gameSocket = useGameWebSocket('games/gobang', {
 const winRateText = computed(() => `${Number(profile.winRate) || 0}%`)
 const statusLabel = computed(() => statusText(profile.currentStatus))
 const canResumeRoom = computed(() => profile.currentStatus === 'PLAYING' && profile.currentRoomId)
+const rankNextText = computed(() => {
+  const distance = Number(profile.nextRankDistance) || 0
+  return distance > 0 ? `差 ${distance} 分` : '已达顶段'
+})
 const gobangGame = computed(() =>
   overview.games.find((item) => item?.gameCode === 'gobang') || {
     gameCode: 'gobang',
@@ -183,6 +189,20 @@ function backCenter() {
 function onRecordPageChange(page) {
   recordPage.value = page
   loadRecords()
+}
+
+function recordScoreDelta(row) {
+  if (row?.viewerScoreDelta !== null && row?.viewerScoreDelta !== undefined) {
+    return Number(row.viewerScoreDelta) || 0
+  }
+  if (!row?.winnerUserId) return 0
+  const delta = Number(row.scoreDelta) || 0
+  return row.winnerUserId === profile.userId ? delta : -delta
+}
+
+function scoreDeltaText(row) {
+  const delta = recordScoreDelta(row)
+  return delta > 0 ? `+${delta}` : String(delta)
 }
 
 function rebuildReplayBoard(index) {
@@ -281,6 +301,7 @@ defineExpose({
   recordPage,
   recordPageSize,
   recordTotal,
+  recordScoreDelta,
   records,
   replayBoard,
   replayCurrentText,
@@ -291,6 +312,8 @@ defineExpose({
   replayPrev,
   replayVisible,
   resumeRoom,
+  rankNextText,
+  scoreDeltaText,
   startMatch,
   stopMatch,
   stopReplayAuto,

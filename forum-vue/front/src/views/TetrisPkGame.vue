@@ -27,6 +27,14 @@
                 <span>可观战房间</span>
                 <strong>{{ activeRoomText }}</strong>
               </div>
+              <div>
+                <span>当前段位</span>
+                <strong>{{ profile.rankName || '青铜堆叠者 III' }}</strong>
+              </div>
+              <div>
+                <span>排位分</span>
+                <strong>{{ profile.score ?? 1000 }}</strong>
+              </div>
             </div>
             <div class="gobang-match-line">
               <h2>{{ matching ? '匹配中，请稍候' : '进入快速匹配' }}</h2>
