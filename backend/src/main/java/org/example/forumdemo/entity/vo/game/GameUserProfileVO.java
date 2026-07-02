@@ -28,6 +28,15 @@ public class GameUserProfileVO {
     // 天梯分
     private Integer score;
 
+    // 当前段位展示
+    private GameRankInfoVO rankInfo;
+
+    // 当前段位名称
+    private String rankName;
+
+    // 距离下一小段还差多少分
+    private Integer nextRankDistance;
+
     // 论坛积分余额
     private Integer forumPoints;
 

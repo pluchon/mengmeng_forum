@@ -9,6 +9,8 @@ import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.websocket.game.GameConnectionRegistry;
 import org.example.forumdemo.common.websocket.game.GameWsResponse;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementCommand;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementResult;
 import org.example.forumdemo.entity.db.GameTetrisPkMatchRecord;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
@@ -26,6 +28,7 @@ import org.example.forumdemo.service.impl.game.tetris.TetrisBlock;
 import org.example.forumdemo.service.impl.game.tetris.TetrisEngineConstants;
 import org.example.forumdemo.service.impl.game.tetris.TetrisMatrixUtil;
 import org.example.forumdemo.service.impl.game.tetris.TetrisPlayerState;
+import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
@@ -65,6 +68,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
+
+    @Autowired
+    private GameRankService gameRankService;
 
     @Autowired
     private GameUserProfileMapper gameUserProfileMapper;
@@ -386,28 +392,29 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             record.setPlayer1Score(room.scoreOf(room.getPlayer1UserId()));
             record.setPlayer2Score(room.scoreOf(room.getPlayer2UserId()));
             record.setEndReason(endReason);
-            record.setScoreDelta(PK_SCORE_DELTA);
+            GameRankSettlementResult rankResult = gameRankService.settleRank(createRankCommand(room, winnerId, loserId, endReason));
+            int scoreDelta = winnerDelta(rankResult);
+            int loserPenalty = Math.abs(loserDelta(rankResult));
+            record.setScoreDelta(scoreDelta);
+            record.setWinnerScoreDelta(scoreDelta);
+            record.setLoserScoreDelta(loserDelta(rankResult));
             record.setReplayPayload(buildReplayPayload(room));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
             record.setDeleteState((byte) 0);
             gameTetrisPkMatchRecordMapper.insert(record);
-            if (winnerId != null && loserId != null) {
-                gameUserProfileMapper.applyWin(winnerId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
-                gameUserProfileMapper.applyLose(loserId, GameConstants.TETRIS_PK, PK_SCORE_DELTA);
-                pointsService.addPoints(winnerId, PK_SCORE_DELTA,
+            if (winnerId != null && loserId != null && scoreDelta > 0) {
+                pointsService.addPoints(winnerId, scoreDelta,
                         Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励",
                         "game:tetrispk:win:" + room.getRoomId());
                 User loser = userMapper.selectByIdForUpdate(loserId);
                 int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
-                if (loserPoints >= PK_SCORE_DELTA) {
-                    pointsService.deductPoints(loserId, PK_SCORE_DELTA,
+                if (loserPenalty > 0 && loserPoints >= loserPenalty) {
+                    pointsService.deductPoints(loserId, loserPenalty,
                             Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除",
                             "game:tetrispk:lose:" + room.getRoomId());
                 }
             }
-            gameUserProfileMapper.updatePlayStatus(room.getPlayer1UserId(), GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
-            gameUserProfileMapper.updatePlayStatus(room.getPlayer2UserId(), GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
             return null;
         });
         broadcastState(room, "game_finished", null);
@@ -425,6 +432,31 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    private GameRankSettlementCommand createRankCommand(TetrisRoom room, Long winnerId, Long loserId, String endReason) {
+        GameRankSettlementCommand command = new GameRankSettlementCommand();
+        command.setGameCode(GameConstants.TETRIS_PK);
+        command.setRoomId(room.getRoomId());
+        command.setPlayerAUserId(room.getPlayer1UserId());
+        command.setPlayerBUserId(room.getPlayer2UserId());
+        command.setWinnerUserId(winnerId);
+        command.setLoserUserId(loserId);
+        command.setEndReason(endReason);
+        command.setEffectiveForRank(System.currentTimeMillis() - room.getStartedAt().getTime() >= 30_000L);
+        return command;
+    }
+
+    private int winnerDelta(GameRankSettlementResult result) {
+        return result == null || result.getWinnerChange() == null || result.getWinnerChange().getDelta() == null
+                ? 0
+                : Math.max(0, result.getWinnerChange().getDelta());
+    }
+
+    private int loserDelta(GameRankSettlementResult result) {
+        return result == null || result.getLoserChange() == null || result.getLoserChange().getDelta() == null
+                ? 0
+                : Math.min(0, result.getLoserChange().getDelta());
     }
 
     private void cleanupRoom(TetrisRoom room) {

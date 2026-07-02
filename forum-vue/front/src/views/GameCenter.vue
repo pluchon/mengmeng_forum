@@ -177,7 +177,7 @@
           <span>{{ index + 1 }}</span>
           <div>
             <strong>{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
-            <em>{{ row.totalCount ?? 0 }} 局 · 胜率 {{ row.winRate ?? 0 }}%</em>
+            <em>{{ row.rankName || '青铜棋士 III' }} · {{ row.totalCount ?? 0 }} 局 · 胜率 {{ row.winRate ?? 0 }}%</em>
           </div>
           <b>{{ row.score ?? 0 }}</b>
         </li>
@@ -208,8 +208,8 @@
             <strong>{{ recordResultText(row) }}</strong>
             <span>{{ endReasonText(row.endReason) }} · {{ formatRecordTime(row.endedAt) }}</span>
           </div>
-          <em :class="{ 'is-win': row.winnerUserId === profile.userId }">
-            {{ row.winnerUserId === profile.userId ? '+' : '-' }}{{ row.scoreDelta ?? scoreDelta }}
+          <em :class="{ 'is-win': recordScoreDelta(row) > 0 }">
+            {{ formatScoreDelta(row) }}
           </em>
         </li>
       </ul>

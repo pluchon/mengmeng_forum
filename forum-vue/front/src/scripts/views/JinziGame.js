@@ -48,6 +48,8 @@ const profile = reactive({
   loseCount: 0,
   drawCount: 0,
   winRate: 0,
+  rankName: '青铜先手 III',
+  nextRankDistance: 100,
   currentStatus: 'IDLE',
   currentRoomId: '',
 })
@@ -106,6 +108,10 @@ const jinziGame = computed(() =>
   },
 )
 const gameOnlineText = computed(() => `${Number(jinziGame.value.onlineCount) || 0}人`)
+const rankNextText = computed(() => {
+  const distance = Number(profile.nextRankDistance) || 0
+  return distance > 0 ? `差 ${distance} 分` : '已达顶段'
+})
 const replayCurrentText = computed(() => {
   if (!replayMoves.value.length) return '0 / 0'
   return `${Math.min(replayIndex.value, replayMoves.value.length)} / ${replayMoves.value.length}`
@@ -117,8 +123,17 @@ function recordResultText(row) {
 }
 
 function scoreDeltaText(row) {
-  if (!row.winnerUserId) return '0'
-  return row.winnerUserId === profile.userId ? `+${row.scoreDelta ?? 0}` : `-${row.scoreDelta ?? 0}`
+  const delta = recordScoreDelta(row)
+  return delta > 0 ? `+${delta}` : String(delta)
+}
+
+function recordScoreDelta(row) {
+  if (row?.viewerScoreDelta !== null && row?.viewerScoreDelta !== undefined) {
+    return Number(row.viewerScoreDelta) || 0
+  }
+  if (!row?.winnerUserId) return 0
+  const delta = Number(row.scoreDelta) || 0
+  return row.winnerUserId === profile.userId ? delta : -delta
 }
 
 async function loadProfile() {

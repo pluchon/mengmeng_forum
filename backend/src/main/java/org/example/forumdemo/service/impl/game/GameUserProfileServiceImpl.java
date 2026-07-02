@@ -112,7 +112,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     ) {
         List<GameMatchRecordVO> rows = new ArrayList<>(result.getRecords().size());
         for (GameGobangMatchRecord record : result.getRecords()) {
-            rows.add(GameConverter.toGobangRecordVO(record));
+            rows.add(GameConverter.toGobangRecordVO(record, userId));
         }
         return new PageResult<>(
                 rows,
@@ -132,7 +132,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     ) {
         List<GameMatchRecordVO> rows = new ArrayList<>(result.getRecords().size());
         for (GameJinziMatchRecord record : result.getRecords()) {
-            rows.add(GameConverter.toJinziRecordVO(record));
+            rows.add(GameConverter.toJinziRecordVO(record, userId));
         }
         return new PageResult<>(
                 rows,
@@ -233,7 +233,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         for (GameGobangRoomMove move : moves) {
             moveRows.add(GameConverter.toGobangMoveVO(move));
         }
-        return new GobangReplayVO(GameConverter.toGobangRecordVO(record), moveRows);
+        return new GobangReplayVO(GameConverter.toGobangRecordVO(record, userId), moveRows);
     }
 
     @Override
@@ -257,7 +257,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         for (GameJinziRoomMove move : moves) {
             moveRows.add(GameConverter.toJinziMoveVO(move));
         }
-        return new GobangReplayVO(GameConverter.toJinziRecordVO(record), moveRows);
+        return new GobangReplayVO(GameConverter.toJinziRecordVO(record, userId), moveRows);
     }
 
     @Override

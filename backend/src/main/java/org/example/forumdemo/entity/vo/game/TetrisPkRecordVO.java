@@ -39,6 +39,12 @@ public class TetrisPkRecordVO {
     // 积分变动
     private Integer scoreDelta;
 
+    // 胜方真实排位分变化
+    private Integer winnerScoreDelta;
+
+    // 败方真实排位分变化
+    private Integer loserScoreDelta;
+
     // 结束原因
     private String endReason;
 

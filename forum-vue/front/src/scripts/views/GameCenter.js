@@ -23,7 +23,6 @@ import { createReplayRunner } from '@/scripts/games/tetris/replayRunner'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
 
-const scoreDelta = 10
 const TETRIS_REPLAY_CELL = 20
 let refreshTimer = null
 let tetrisReplayTimer = null
@@ -163,11 +162,7 @@ const activeGameName = computed(() => {
   return '五子棋'
 })
 const rankText = computed(() => {
-  const points = Number(gobangProfile.value.score) || 0
-  if (points >= 2000) return '大师'
-  if (points >= 1200) return '熟手'
-  if (points >= 300) return '棋友'
-  return '新手'
+  return gobangProfile.value.rankName || '青铜棋士 III'
 })
 
 async function loadOverview(silent = false) {
@@ -336,6 +331,20 @@ function recordResultText(row) {
   }
   if (!row.winnerUserId) return '平局'
   return row.winnerUserId === profile.value.userId ? '胜利' : '失败'
+}
+
+function recordScoreDelta(row) {
+  if (row?.viewerScoreDelta !== null && row?.viewerScoreDelta !== undefined) {
+    return Number(row.viewerScoreDelta) || 0
+  }
+  if (!row?.winnerUserId) return 0
+  const delta = Number(row.scoreDelta) || 0
+  return row.winnerUserId === profile.value.userId ? delta : -delta
+}
+
+function formatScoreDelta(row) {
+  const delta = recordScoreDelta(row)
+  return delta > 0 ? `+${delta}` : String(delta)
 }
 
 function enterGobang() {

@@ -18,6 +18,8 @@ import org.example.forumdemo.entity.db.GameRoomPlayer;
 import org.example.forumdemo.entity.db.GameSettlementEvent;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementCommand;
+import org.example.forumdemo.entity.bo.game.GameRankSettlementResult;
 import org.example.forumdemo.entity.dto.game.GobangChatRequest;
 import org.example.forumdemo.entity.vo.game.GobangActiveRoomVO;
 import org.example.forumdemo.entity.vo.game.GobangChatVO;
@@ -33,6 +35,7 @@ import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
+import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
@@ -95,6 +98,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
+
+    @Autowired
+    private GameRankService gameRankService;
 
     @Autowired
     private GameRoomSnapshotService gameRoomSnapshotService;
@@ -424,32 +430,32 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             record.setWinnerUserId(winnerId);
             record.setLoserUserId(loserId);
             record.setEndReason(endReason);
-            record.setScoreDelta(GameConstants.SCORE_DELTA);
+            GameRankSettlementCommand rankCommand = createRankCommand(room, winnerId, loserId, endReason);
+            GameRankSettlementResult rankResult = gameRankService.settleRank(rankCommand);
+            int scoreDelta = winnerDelta(rankResult);
+            record.setScoreDelta(scoreDelta);
+            record.setWinnerScoreDelta(scoreDelta);
+            record.setLoserScoreDelta(loserDelta(rankResult));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
             record.setDeleteState((byte) 0);
             gameGobangMatchRecordMapper.insert(record);
-            if (winnerId != null && loserId != null) {
-                gameUserProfileMapper.applyWin(winnerId, GameConstants.GOBANG, GameConstants.SCORE_DELTA);
-                gameUserProfileMapper.applyLose(loserId, GameConstants.GOBANG, GameConstants.SCORE_DELTA);
+            if (winnerId != null && loserId != null && scoreDelta > 0) {
                 if (!GameConstants.AI_USER_ID.equals(winnerId)) {
-                    pointsService.addPoints(winnerId, GameConstants.SCORE_DELTA,
+                    pointsService.addPoints(winnerId, scoreDelta,
                             Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "五子棋胜利奖励",
                             "game:gobang:win:" + room.getRoomId());
                 }
                 if (!GameConstants.AI_USER_ID.equals(loserId)) {
                     User loser = userMapper.selectByIdForUpdate(loserId);
                     int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
-                    if (loserPoints >= GameConstants.SCORE_DELTA) {
-                        pointsService.deductPoints(loserId, GameConstants.SCORE_DELTA,
+                    int loserPenalty = Math.abs(loserDelta(rankResult));
+                    if (loserPenalty > 0 && loserPoints >= loserPenalty) {
+                        pointsService.deductPoints(loserId, loserPenalty,
                                 Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "五子棋对局扣除",
                                 "game:gobang:lose:" + room.getRoomId());
                     }
                 }
-            }
-            gameUserProfileMapper.updatePlayStatus(room.getBlackUserId(), GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
-            if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
-                gameUserProfileMapper.updatePlayStatus(room.getWhiteUserId(), GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
             }
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
@@ -567,6 +573,31 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
             userRoomIds.remove(room.getWhiteUserId());
         }
+    }
+
+    private GameRankSettlementCommand createRankCommand(GobangRoom room, Long winnerId, Long loserId, String endReason) {
+        GameRankSettlementCommand command = new GameRankSettlementCommand();
+        command.setGameCode(GameConstants.GOBANG);
+        command.setRoomId(room.getRoomId());
+        command.setPlayerAUserId(room.getBlackUserId());
+        command.setPlayerBUserId(room.getWhiteUserId());
+        command.setWinnerUserId(winnerId);
+        command.setLoserUserId(loserId);
+        command.setEndReason(endReason);
+        command.setEffectiveForRank(countMoves(room) >= 6);
+        return command;
+    }
+
+    private int winnerDelta(GameRankSettlementResult result) {
+        return result == null || result.getWinnerChange() == null || result.getWinnerChange().getDelta() == null
+                ? 0
+                : Math.max(0, result.getWinnerChange().getDelta());
+    }
+
+    private int loserDelta(GameRankSettlementResult result) {
+        return result == null || result.getLoserChange() == null || result.getLoserChange().getDelta() == null
+                ? 0
+                : Math.min(0, result.getLoserChange().getDelta());
     }
 
     private GobangRoom requireRoom(String roomId, Long userId) {

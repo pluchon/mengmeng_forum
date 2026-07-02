@@ -164,7 +164,7 @@
 
 .gobang-live-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -183,9 +183,10 @@
 
 .gobang-live-stats strong {
   color: #111827;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
   font-weight: 900;
+  text-align: right;
 }
 
 .gobang-match-line {

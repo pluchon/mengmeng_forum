@@ -14,7 +14,9 @@ public class TetrisPkConverter {
         Long opponentUserId = isPlayer1 ? record.getPlayer2UserId() : record.getPlayer1UserId();
         int myScore = isPlayer1 ? value(record.getPlayer1Score()) : value(record.getPlayer2Score());
         int opponentScore = isPlayer1 ? value(record.getPlayer2Score()) : value(record.getPlayer1Score());
-        int delta = record.getScoreDelta() == null ? 0 : record.getScoreDelta();
+        int legacyDelta = record.getScoreDelta() == null ? 0 : record.getScoreDelta();
+        int winnerDelta = record.getWinnerScoreDelta() == null ? legacyDelta : record.getWinnerScoreDelta();
+        int loserDelta = record.getLoserScoreDelta() == null ? -legacyDelta : record.getLoserScoreDelta();
         boolean win = viewerUserId != null && viewerUserId.equals(record.getWinnerUserId());
         return new TetrisPkRecordVO(
                 record.getId(),
@@ -25,7 +27,9 @@ public class TetrisPkConverter {
                 myScore,
                 opponentScore,
                 record.getWinnerUserId(),
-                win ? delta : -delta,
+                win ? winnerDelta : loserDelta,
+                winnerDelta,
+                loserDelta,
                 record.getEndReason(),
                 record.getStartedAt(),
                 record.getEndedAt()

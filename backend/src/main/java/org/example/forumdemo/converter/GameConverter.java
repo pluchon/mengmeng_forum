@@ -33,6 +33,10 @@ public class GameConverter {
         int total = value(profile.getTotalCount());
         int wins = value(profile.getWinCount());
         int winRate = total == 0 ? 0 : (int) Math.round(wins * 100.0 / total);
+        var rankInfo = org.example.forumdemo.service.impl.game.GameRankRules.buildRankInfo(
+                profile.getGameCode(),
+                profile.getScore()
+        );
         return new GameUserProfileVO(
                 profile.getUserId(),
                 user == null ? null : user.getUsername(),
@@ -40,6 +44,9 @@ public class GameConverter {
                 user == null ? null : user.getAvatarUrl(),
                 profile.getGameCode(),
                 value(profile.getScore()),
+                rankInfo,
+                rankInfo.getRankName(),
+                rankInfo.getNextRankDistance(),
                 user == null ? 0 : value(user.getPoints()),
                 total,
                 wins,
@@ -52,15 +59,25 @@ public class GameConverter {
     }
 
     public static GameMatchRecordVO toGobangRecordVO(GameGobangMatchRecord row) {
+        return toGobangRecordVO(row, null);
+    }
+
+    public static GameMatchRecordVO toGobangRecordVO(GameGobangMatchRecord row, Long viewerUserId) {
         return toRecordVO(GameConstants.GOBANG, row.getId(), row.getRoomId(), row.getBlackUserId(),
                 row.getWhiteUserId(), row.getWinnerUserId(), row.getLoserUserId(), row.getEndReason(),
-                row.getScoreDelta(), row.getStartedAt(), row.getEndedAt());
+                row.getScoreDelta(), row.getWinnerScoreDelta(), row.getLoserScoreDelta(), viewerUserId,
+                row.getStartedAt(), row.getEndedAt());
     }
 
     public static GameMatchRecordVO toJinziRecordVO(GameJinziMatchRecord row) {
+        return toJinziRecordVO(row, null);
+    }
+
+    public static GameMatchRecordVO toJinziRecordVO(GameJinziMatchRecord row, Long viewerUserId) {
         return toRecordVO(GameConstants.JINZI, row.getId(), row.getRoomId(), row.getBlackUserId(),
                 row.getWhiteUserId(), row.getWinnerUserId(), row.getLoserUserId(), row.getEndReason(),
-                row.getScoreDelta(), row.getStartedAt(), row.getEndedAt());
+                row.getScoreDelta(), row.getWinnerScoreDelta(), row.getLoserScoreDelta(), viewerUserId,
+                row.getStartedAt(), row.getEndedAt());
     }
 
     public static GobangMoveVO toGobangMoveVO(GameGobangRoomMove row) {
@@ -81,9 +98,15 @@ public class GameConverter {
             Long loserUserId,
             String endReason,
             Integer scoreDelta,
+            Integer winnerScoreDelta,
+            Integer loserScoreDelta,
+            Long viewerUserId,
             java.util.Date startedAt,
             java.util.Date endedAt
     ) {
+        int legacyDelta = value(scoreDelta);
+        int safeWinnerDelta = winnerScoreDelta == null ? legacyDelta : winnerScoreDelta;
+        int safeLoserDelta = loserScoreDelta == null ? -legacyDelta : loserScoreDelta;
         return new GameMatchRecordVO(
                 id,
                 gameCode,
@@ -94,6 +117,9 @@ public class GameConverter {
                 loserUserId,
                 endReason,
                 scoreDelta,
+                safeWinnerDelta,
+                safeLoserDelta,
+                resolveViewerScoreDelta(viewerUserId, winnerUserId, loserUserId, safeWinnerDelta, safeLoserDelta),
                 startedAt,
                 endedAt
         );
@@ -114,5 +140,24 @@ public class GameConverter {
 
     private static int value(Integer number) {
         return number == null ? 0 : number;
+    }
+
+    private static Integer resolveViewerScoreDelta(
+            Long viewerUserId,
+            Long winnerUserId,
+            Long loserUserId,
+            Integer winnerScoreDelta,
+            Integer loserScoreDelta
+    ) {
+        if (viewerUserId == null) {
+            return null;
+        }
+        if (winnerUserId != null && viewerUserId.equals(winnerUserId)) {
+            return value(winnerScoreDelta);
+        }
+        if (loserUserId != null && viewerUserId.equals(loserUserId)) {
+            return value(loserScoreDelta);
+        }
+        return 0;
     }
 }
