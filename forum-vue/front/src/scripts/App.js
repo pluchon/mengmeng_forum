@@ -5,10 +5,12 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import TheHeader from '@/components/layout/TheHeader.vue'
 import { useUserStore } from '@/stores/user'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useGroupVoiceStore } from '@/stores/groupVoice'
 
 export function useApp() {
   const route = useRoute()
   const userStore = useUserStore()
+  const groupVoiceStore = useGroupVoiceStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
 
   function cleanupMascotDom() {
@@ -21,8 +23,13 @@ export function useApp() {
   watch(
     () => userStore.isLoggedIn,
     (loggedIn) => {
-      if (loggedIn) initWebSocket()
-      else closeWebSocket()
+      if (loggedIn) {
+        initWebSocket()
+        void groupVoiceStore.restorePersistedSession()
+      } else {
+        closeWebSocket()
+        void groupVoiceStore.leave(false)
+      }
     },
     { immediate: true },
   )

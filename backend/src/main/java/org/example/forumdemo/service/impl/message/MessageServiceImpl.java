@@ -558,8 +558,30 @@ public class MessageServiceImpl implements MessageService {
         String eventId = "msg:" + messageId;
         MessageNotifyMqVO vo = new MessageNotifyMqVO(eventId, messageId, sendUserId,
                 senderLabel, receiveUserId, safeSummary, System.currentTimeMillis());
-        TransactionHooks.afterCommit(() -> localMessageOutboxService.enqueue(
-                Constant.ROUTING_KEY_QUEUE_2, eventId, vo));
+        TransactionHooks.afterCommit(() -> {
+            pushMessageNotify(vo);
+            try {
+                localMessageOutboxService.enqueue(Constant.ROUTING_KEY_QUEUE_2, eventId, vo);
+            } catch (Exception e) {
+                log.warn("私信 Outbox 写入失败，主消息已提交 eventId={}", eventId, e);
+            }
+        });
+    }
+
+    private void pushMessageNotify(MessageNotifyMqVO vo) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("type", "message");
+            payload.put("dbMessageId", vo.getDbMessageId());
+            payload.put("fromUserId", vo.getSendUserId());
+            payload.put("fromUser", vo.getSendUsername());
+            payload.put("senderNickname", vo.getSendUsername());
+            payload.put("summary", vo.getContentSummary());
+            webSocketPushService.push(vo.getReceiveUserId(), objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.warn("私信 WebSocket 推送失败 receiveUserId={} dbMessageId={}",
+                    vo.getReceiveUserId(), vo.getDbMessageId(), e);
+        }
     }
 
     /**

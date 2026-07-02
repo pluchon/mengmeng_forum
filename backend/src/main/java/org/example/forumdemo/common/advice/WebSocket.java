@@ -1,8 +1,11 @@
 package org.example.forumdemo.common.advice;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.utils.OnlineUserManageUtil;
+import org.example.forumdemo.entity.dto.groupchat.GroupVoiceSignalRequest;
+import org.example.forumdemo.service.interfaces.groupchat.GroupVoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,6 +23,12 @@ public class WebSocket extends TextWebSocketHandler {
 
     @Autowired
     private OnlineUserManageUtil onlineUserManageUtil;
+
+    @Autowired
+    private GroupVoiceService groupVoiceService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     // 心跳超时阈值：90 秒内未收到 ping 则视为死连接
     private static final long HEARTBEAT_TIMEOUT_MS = 90_000;
@@ -51,6 +60,26 @@ public class WebSocket extends TextWebSocketHandler {
         if ("ping".equalsIgnoreCase(message.getPayload())) {
             lastPingTime.put(session.getId(), System.currentTimeMillis());
             session.sendMessage(new TextMessage("pong"));
+            return;
+        }
+        handleBusinessMessage(session, message.getPayload());
+    }
+
+    private void handleBusinessMessage(WebSocketSession session, String payload) {
+        Long userId = resolveUserId(session);
+        if (userId == null || payload == null || payload.isBlank()) {
+            return;
+        }
+        try {
+            GroupVoiceSignalEnvelope envelope = objectMapper.readValue(payload, GroupVoiceSignalEnvelope.class);
+            if (!"group_voice_signal".equals(envelope.getType())) {
+                return;
+            }
+            log.debug("[WebSocket] 收到语音信令 | from={} | target={} | roomVersion={} | type={}",
+                    userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
+            groupVoiceService.handleSignal(envelope, userId);
+        } catch (Exception e) {
+            log.debug("[WebSocket] 业务消息处理失败 | sessionId={} | error={}", session.getId(), e.getMessage(), e);
         }
     }
 
@@ -112,5 +141,18 @@ public class WebSocket extends TextWebSocketHandler {
     private Long resolveUserId(WebSocketSession session) {
         Object userId = session.getAttributes().get(Constant.JWT_USER_ID);
         return userId instanceof Long ? (Long) userId : null;
+    }
+
+    // 群语音信令外壳
+    private static class GroupVoiceSignalEnvelope extends GroupVoiceSignalRequest {
+        private String type;
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
     }
 }

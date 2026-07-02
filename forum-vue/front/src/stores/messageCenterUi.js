@@ -3,7 +3,7 @@ import { ref } from 'vue'
 
 export const useMessageCenterUiStore = defineStore('messageCenterUi', () => {
   const visible = ref(false)
-  /** @type {import('vue').Ref<{ userId?: number, nickname?: string, avatarUrl?: string } | null>} */
+  /** @type {import('vue').Ref<{ userId?: number, groupId?: number, nickname?: string, avatarUrl?: string } | null>} */
   const openTarget = ref(null)
 
   function open(target) {

@@ -29,4 +29,10 @@ public class GroupChatDetailVO {
     private Date createTime;
     // 更新时间
     private Date updateTime;
+    // 当前用户是否已加入
+    private Boolean currentUserJoined;
+    // 当前用户加群申请状态
+    private Byte currentUserRequestStatus;
+    // 当前用户加群申请 ID
+    private Long currentUserRequestId;
 }
