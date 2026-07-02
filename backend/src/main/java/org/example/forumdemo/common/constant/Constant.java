@@ -107,6 +107,7 @@ public final class Constant {
     public static final Byte MESSAGE_TYPE_TEXT = ForumBusinessConstants.MESSAGE_TYPE_TEXT;
     public static final Byte MESSAGE_TYPE_IMAGE = ForumBusinessConstants.MESSAGE_TYPE_IMAGE;
     public static final Byte MESSAGE_TYPE_GIF = ForumBusinessConstants.MESSAGE_TYPE_GIF;
+    public static final Byte MESSAGE_TYPE_VOICE = ForumBusinessConstants.MESSAGE_TYPE_VOICE;
     public static final Byte EMOJI_MEDIA_TYPE_IMAGE = ForumBusinessConstants.EMOJI_MEDIA_TYPE_IMAGE;
     public static final Byte EMOJI_MEDIA_TYPE_GIF = ForumBusinessConstants.EMOJI_MEDIA_TYPE_GIF;
     public static final int EMOJI_MAX_PER_USER = ForumBusinessConstants.EMOJI_MAX_PER_USER;

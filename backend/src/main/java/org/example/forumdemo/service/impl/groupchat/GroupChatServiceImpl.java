@@ -542,6 +542,31 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public GroupChatMessageVO appendVoiceCallSummary(Long groupId, Long senderUserId, String durationText) {
+        User sender = userService.queryUserByUserId(senderUserId);
+        GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
+        assertChatAvailable(group);
+        assertActiveMember(group.getId(), senderUserId);
+        Date now = ForumDateTimes.now();
+        GroupChatMessage message = new GroupChatMessage();
+        message.setGroupId(group.getId());
+        message.setSenderUserId(senderUserId);
+        message.setMessageType(GroupChatMessageType.VOICE.getCode());
+        message.setContent(durationText == null ? "00:00" : durationText);
+        message.setStatus(GroupChatMessageStatus.NORMAL.getCode());
+        message.setDeleteState(Constant.DELETE_STATE_FALSE);
+        message.setCreateTime(now);
+        message.setUpdateTime(now);
+        if (groupChatMessageMapper.insert(message) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
+        }
+        markRead(group.getId(), message.getId(), senderUserId);
+        pushGroupMessage(group, message, senderUserId, false);
+        return GroupChatConverter.toMessageVO(message, sender, senderUserId);
+    }
+
+    @Override
     public PageResult<GroupChatMessageVO> queryMessages(Long groupId, Long loginUserId, Integer pageNum, Integer pageSize) {
         assertActiveMember(groupId, loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
@@ -991,13 +1016,18 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     private void pushGroupMessage(GroupChat group, GroupChatMessage message, Long senderUserId) {
+        pushGroupMessage(group, message, senderUserId, true);
+    }
+
+    private void pushGroupMessage(GroupChat group, GroupChatMessage message, Long senderUserId, boolean skipSender) {
         List<GroupChatMember> members = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
                 .eq(GroupChatMember::getGroupId, group.getId())
                 .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
                 .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
         TransactionHooks.afterCommit(() -> {
             for (GroupChatMember member : members) {
-                if (Objects.equals(member.getUserId(), senderUserId)) {
+                boolean isSender = Objects.equals(member.getUserId(), senderUserId);
+                if (skipSender && isSender) {
                     continue;
                 }
                 try {
@@ -1007,7 +1037,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                     payload.put("dbMessageId", message.getId());
                     payload.put("fromUserId", senderUserId);
                     payload.put("summary", messageSummary(message));
-                    payload.put("notify", shouldNotifyMember(message, member));
+                    payload.put("notify", !isSender && shouldNotifyMember(message, member));
                     webSocketPushService.push(member.getUserId(), objectMapper.writeValueAsString(payload));
                 } catch (Exception e) {
                     log.warn("群聊 WebSocket 推送失败 groupId={} userId={}", group.getId(), member.getUserId(), e);
@@ -1083,6 +1113,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
             return "[图片]";
         }
+        if (GroupChatMessageType.VOICE.getCode().equals(message.getMessageType())) {
+            return "[语音聊天] " + (message.getContent() == null ? "" : message.getContent());
+        }
         return message.getContent() == null ? "" : message.getContent();
     }
 
@@ -1128,7 +1161,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     private Byte normalizeMessageType(Byte messageType) {
         GroupChatMessageType type = GroupChatMessageType.fromCode(messageType);
-        if (type == null || GroupChatMessageType.SYSTEM.equals(type)) {
+        if (type == null || GroupChatMessageType.SYSTEM.equals(type) || GroupChatMessageType.VOICE.equals(type)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群消息类型不合法"));
         }
         return messageType;
@@ -1181,6 +1214,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
         if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
             return "[图片]";
+        }
+        if (GroupChatMessageType.VOICE.getCode().equals(message.getMessageType())) {
+            return "[语音聊天]";
         }
         String content = message.getContent() == null ? "" : message.getContent().trim();
         return content.length() > 120 ? content.substring(0, 120) : content;

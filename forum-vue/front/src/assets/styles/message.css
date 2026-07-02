@@ -46,7 +46,7 @@
 .mc-voice-entry {
   position: absolute;
   top: 10px;
-  right: 50px;
+  right: 74px;
   z-index: 30;
   display: inline-flex;
   align-items: center;
@@ -63,9 +63,20 @@
   box-shadow: 0 1px 4px rgba(29, 33, 41, 0.08);
 }
 
+.mc-voice-entry.is-waiting {
+  border-color: #ffe3b3;
+  background: #fff8ea;
+  color: #a86500;
+}
+
 .mc-voice-entry:hover {
   border-color: #a9e7c8;
   background: #e7f8ef;
+}
+
+.mc-voice-entry.is-waiting:hover {
+  border-color: #ffd28a;
+  background: #fff2d7;
 }
 
 .mc-voice-entry.is-active {
@@ -81,7 +92,58 @@
 
 .mc-dialog--vip .mc-voice-entry {
   top: 12px;
-  right: 52px;
+  right: 76px;
+}
+
+.mc-voice-answer {
+  position: absolute;
+  top: 10px;
+  right: 74px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d9f2e6;
+  border-radius: 999px;
+  background: #f7fcfa;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(29, 33, 41, 0.08);
+}
+
+.mc-voice-answer button {
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mc-voice-answer-accept {
+  color: #1b8f5a;
+}
+
+.mc-voice-answer-accept:hover {
+  background: #e7f8ef;
+}
+
+.mc-voice-answer-decline {
+  color: #d4537e;
+}
+
+.mc-voice-answer-decline:hover {
+  background: #fff0f5;
+}
+
+.mc-dialog--vip .mc-voice-answer {
+  top: 12px;
+  right: 76px;
 }
 
 .mc-dialog--vip.el-dialog {
@@ -513,6 +575,12 @@
   margin-left: auto;
 }
 
+.mc-online--inline {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .mc-online-dot {
   width: 6px;
   height: 6px;
@@ -572,11 +640,6 @@
   gap: 10px;
   min-width: 0;
   padding-top: 2px;
-}
-
-.mc-rhead .mc-online--trailing {
-  flex-shrink: 0;
-  padding-top: 4px;
 }
 
 .mc-rname {
@@ -819,6 +882,19 @@
 .mc-bbl.is-media {
   padding: 4px;
   background: transparent;
+}
+
+.mc-voice-call-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 76px;
+  color: inherit;
+  font-weight: 700;
+}
+
+.mc-voice-call-msg .el-icon {
+  font-size: 15px;
 }
 
 .mc-chat-img {

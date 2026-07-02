@@ -22,7 +22,7 @@ public class GroupChatMessage {
     // 发送者用户 ID，系统消息为空
     private Long senderUserId;
 
-    // 消息类型: 0文本 1表情 2图片 9系统
+    // 消息类型: 0文本 1表情 2图片 3语音通话摘要 9系统
     private Byte messageType;
 
     // 消息内容

@@ -24,6 +24,9 @@ public interface MessageService {
 
     MessageVO sendImage(SendImageMessageRequest req, Long sendUserId);
 
+    // 追加私聊语音通话摘要
+    MessageVO appendVoiceCallSummary(Long sendUserId, Long receiveUserId, String durationText);
+
     UserChatEmojiResponse favoriteEmoji(FavoriteEmojiRequest req, Long userId);
 
     // 取消收藏(软删, 仅作用于自己的)

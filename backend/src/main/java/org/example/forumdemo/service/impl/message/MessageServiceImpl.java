@@ -188,6 +188,29 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public MessageVO appendVoiceCallSummary(Long sendUserId, Long receiveUserId, String durationText) {
+        userService.queryUserByUserId(sendUserId);
+        userService.queryUserByUserId(receiveUserId);
+        Message newMessage = new Message();
+        newMessage.setPostUserId(sendUserId);
+        newMessage.setReceiveUserId(receiveUserId);
+        newMessage.setMessageType(Constant.MESSAGE_TYPE_VOICE);
+        newMessage.setContent(durationText == null ? "00:00" : durationText);
+        newMessage.setState(Constant.MESSAGE_STATE_UNREAD);
+        stampMessageTimes(newMessage);
+        if (messageMapper.insert(newMessage) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
+        }
+        String summary = sessionSummary(newMessage);
+        publishNotify(newMessage.getId(), sendUserId, receiveUserId, summary);
+        pushMessageRefreshToSender(newMessage.getId(), sendUserId, receiveUserId, summary);
+        incrementUnreadCount(receiveUserId, 1L);
+        invalidateSessionCache(sendUserId, receiveUserId);
+        return MessageConverter.toMessageVO(queryMessageByMessageId(newMessage.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void replyMessage(MessageReplyRequest req, Long sendUserId) {
         checkMessageSendGuard(MessageSendContext.reply(req, sendUserId));
         Long receiveId = req.getReceiveId();
@@ -584,6 +607,23 @@ public class MessageServiceImpl implements MessageService {
         }
     }
 
+    private void pushMessageRefreshToSender(Long messageId, Long sendUserId, Long receiveUserId, String summary) {
+        TransactionHooks.afterCommit(() -> {
+            try {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("type", "message");
+                payload.put("dbMessageId", messageId);
+                payload.put("fromUserId", receiveUserId);
+                payload.put("summary", summary);
+                payload.put("selfEcho", true);
+                webSocketPushService.push(sendUserId, objectMapper.writeValueAsString(payload));
+            } catch (Exception e) {
+                log.warn("私信语音摘要发送方刷新失败 sendUserId={} dbMessageId={}",
+                        sendUserId, messageId, e);
+            }
+        });
+    }
+
     /**
      * 计算会话/通知中展示的"最近一条消息"文案.
      * - 文本: 直接用 content
@@ -599,6 +639,9 @@ public class MessageServiceImpl implements MessageService {
         }
         if (Constant.MESSAGE_TYPE_GIF.equals(msg.getMessageType())) {
             return "[GIF]";
+        }
+        if (Constant.MESSAGE_TYPE_VOICE.equals(msg.getMessageType())) {
+            return "[语音聊天] " + (msg.getContent() == null ? "" : msg.getContent());
         }
         return msg.getContent() == null ? "" : msg.getContent();
     }

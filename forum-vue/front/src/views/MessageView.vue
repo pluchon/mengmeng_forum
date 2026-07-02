@@ -14,15 +14,20 @@
     <button type="button" class="mc-dialog-close" aria-label="关闭" @click="handleClose">
       <el-icon><Close /></el-icon>
     </button>
+    <div v-if="showPrivateVoiceAnswerActions" class="mc-voice-answer">
+      <el-icon><Phone /></el-icon>
+      <button type="button" class="mc-voice-answer-accept" @click="handleAcceptPrivateVoice">接听 ✓</button>
+      <button type="button" class="mc-voice-answer-decline" @click="handleDeclinePrivateVoice">拒绝 ✕</button>
+    </div>
     <button
-      v-if="showGroupVoiceEntry"
+      v-else-if="showVoiceEntry"
       type="button"
       class="mc-voice-entry"
-      :class="{ 'is-active': groupVoiceEntryText.includes('正在聊天') }"
-      @click="handleGroupVoiceEntry"
+      :class="{ 'is-active': voiceEntryActive, 'is-waiting': voiceEntryText === '等待对方回应...' }"
+      @click="handleVoiceEntry"
     >
       <el-icon><Phone /></el-icon>
-      <span>{{ groupVoiceEntryText }}</span>
+      <span>{{ voiceEntryText }}</span>
     </button>
 
     <div class="mc" @focusout="onDialogBlurRoot">
@@ -176,6 +181,10 @@
               <div class="mc-rtitle-stack">
                 <span class="mc-rname">
                   {{ activeChatTitle }}
+                  <span v-if="currentSession" class="mc-online mc-online--inline" :class="{ 'is-offline': !peerOnline }">
+                    <span class="mc-online-dot" />
+                    <span>{{ peerOnline ? '在线' : '离线' }}</span>
+                  </span>
                   <button
                     v-if="currentGroupSession"
                     type="button"
@@ -188,10 +197,6 @@
                 </span>
                 <span v-if="currentGroupSession" class="mc-rmeta">{{ activeChatSubtitle }}</span>
               </div>
-            </div>
-            <div v-if="currentSession" class="mc-online mc-online--trailing" :class="{ 'is-offline': !peerOnline }">
-              <span class="mc-online-dot" />
-              <span>{{ peerOnline ? '在线' : '离线' }}</span>
             </div>
           </header>
 
@@ -296,6 +301,16 @@
                             {{ row.msg.message?.replySenderName || '成员' }}:
                             {{ row.msg.message?.replyContent || '消息' }}
                           </div>
+                        </div>
+                      </template>
+                      <template v-else-if="isVoiceCallMessage(row.msg)">
+                        <span class="mc-voice-call-msg">
+                          <el-icon><Phone /></el-icon>
+                          <span>{{ voiceCallDurationText(row.msg) }}</span>
+                        </span>
+                        <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote">
+                          {{ row.msg.message?.replySenderName || '成员' }}:
+                          {{ row.msg.message?.replyContent || '消息' }}
                         </div>
                       </template>
                       <template v-else>
@@ -1141,8 +1156,11 @@ const {
   groupAvatarText,
   groupAvatarUrl,
   groupVoiceEntryText,
+  handleAcceptPrivateVoice,
   handleClose,
+  handleDeclinePrivateVoice,
   handleGroupVoiceEntry,
+  handleVoiceEntry,
   handleRecall,
   inputBoxRef,
   isActiveItem,
@@ -1150,6 +1168,7 @@ const {
   isCurrentGroupManager,
   isMemberMuted,
   isMediaMessage,
+  isVoiceCallMessage,
   isGroupInviteCard,
   isPrivateChat,
   leaveCurrentGroup,
@@ -1202,6 +1221,11 @@ const {
   removeEmojiKeepPopover,
   showUploadOnCurrentPage,
   showGroupVoiceEntry,
+  showPrivateVoiceAnswerActions,
+  showVoiceEntry,
+  voiceEntryActive,
+  voiceEntryText,
+  voiceCallDurationText,
   parseSystemMessageContent,
   peerOnline,
   groupAvatarInputRef,

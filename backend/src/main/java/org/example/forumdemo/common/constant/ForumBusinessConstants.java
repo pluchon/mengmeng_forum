@@ -18,6 +18,7 @@ public final class ForumBusinessConstants {
     public static final Byte MESSAGE_TYPE_TEXT = 0;
     public static final Byte MESSAGE_TYPE_IMAGE = 1;
     public static final Byte MESSAGE_TYPE_GIF = 2;
+    public static final Byte MESSAGE_TYPE_VOICE = 3;
 
     public static final Byte EMOJI_MEDIA_TYPE_IMAGE = 0;
     public static final Byte EMOJI_MEDIA_TYPE_GIF = 1;

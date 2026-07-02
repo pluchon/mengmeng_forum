@@ -113,6 +113,16 @@ function handleNotifyMessage(notifyData) {
   if (notifyData.type === 'group_voice_signal') {
     const groupVoiceStore = useGroupVoiceStore()
     groupVoiceStore.onVoiceSignal(notifyData)
+    return
+  }
+  if (notifyData.type === 'private_voice_status') {
+    const groupVoiceStore = useGroupVoiceStore()
+    groupVoiceStore.onVoiceStatus(notifyData)
+    return
+  }
+  if (notifyData.type === 'private_voice_signal') {
+    const groupVoiceStore = useGroupVoiceStore()
+    groupVoiceStore.onVoiceSignal(notifyData)
   }
 }
 

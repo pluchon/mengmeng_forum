@@ -58,6 +58,10 @@ export const useMessageStore = defineStore('message', () => {
     }
     incomingMessage.value = payload
 
+    if (payload.selfEcho === true) {
+      return
+    }
+
     const sender = (
       payload.fromUser
       || payload.senderNickname

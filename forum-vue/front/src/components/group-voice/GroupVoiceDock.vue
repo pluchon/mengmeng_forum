@@ -4,7 +4,7 @@
       type="button"
       class="group-voice-float"
       :style="dockStyle"
-      title="群语音聊天"
+      :title="voiceStore.floatTitle"
       @click="openDialog"
       @pointerdown="startDrag"
     >
@@ -20,10 +20,10 @@
     :show-close="false"
   >
     <template #header>
-      <div class="group-voice-head">
-        <div class="group-voice-title-row">
-          <strong>群语音</strong>
-          <span>{{ voiceStore.memberCount }}/6 人正在聊天</span>
+      <div class="group-voice-head" :class="{ 'is-private': voiceStore.voiceKind === 'private' }">
+        <div class="group-voice-title-row" :class="{ 'is-private': voiceStore.voiceKind === 'private' }">
+          <strong>{{ voiceStore.dialogTitle }}</strong>
+          <span v-if="voiceStore.voiceKind !== 'private'">{{ voiceStore.memberCount }}/{{ voiceStore.maxSeats }} 人正在聊天</span>
         </div>
         <button type="button" class="group-voice-icon-btn" aria-label="关闭" @click="voiceStore.dialogVisible = false">
           <el-icon><Close /></el-icon>
@@ -31,7 +31,7 @@
       </div>
     </template>
 
-    <div class="group-voice-seats">
+    <div class="group-voice-seats" :class="{ 'is-private': voiceStore.maxSeats === 2 }">
       <div
         v-for="seat in seats"
         :key="seat.key"
@@ -99,8 +99,7 @@
       </button>
     </div>
 
-    <div class="group-voice-audio-line">
-      <span>{{ voiceStore.remotePeerCount > 0 ? `已连接 ${voiceStore.remotePeerCount} 路远端声音` : '等待新伙伴加入' }}</span>
+    <div v-if="voiceStore.outputDevices.length || voiceStore.remoteAudioBlocked" class="group-voice-audio-line">
       <label v-if="voiceStore.outputDevices.length" class="group-voice-output-select">
         <span>音频输出设备：</span>
         <select

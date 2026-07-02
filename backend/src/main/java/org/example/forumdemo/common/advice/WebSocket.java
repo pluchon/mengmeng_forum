@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.utils.OnlineUserManageUtil;
 import org.example.forumdemo.entity.dto.groupchat.GroupVoiceSignalRequest;
+import org.example.forumdemo.entity.dto.message.PrivateVoiceSignalRequest;
 import org.example.forumdemo.service.interfaces.groupchat.GroupVoiceService;
+import org.example.forumdemo.service.interfaces.message.PrivateVoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,6 +28,9 @@ public class WebSocket extends TextWebSocketHandler {
 
     @Autowired
     private GroupVoiceService groupVoiceService;
+
+    @Autowired
+    private PrivateVoiceService privateVoiceService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -71,13 +76,21 @@ public class WebSocket extends TextWebSocketHandler {
             return;
         }
         try {
-            GroupVoiceSignalEnvelope envelope = objectMapper.readValue(payload, GroupVoiceSignalEnvelope.class);
-            if (!"group_voice_signal".equals(envelope.getType())) {
+            String type = objectMapper.readTree(payload).path("type").asText("");
+            if ("group_voice_signal".equals(type)) {
+                GroupVoiceSignalEnvelope envelope = objectMapper.readValue(payload, GroupVoiceSignalEnvelope.class);
+                log.debug("[WebSocket] 收到群语音信令 | from={} | target={} | roomVersion={} | type={}",
+                        userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
+                groupVoiceService.handleSignal(envelope, userId);
                 return;
             }
-            log.debug("[WebSocket] 收到语音信令 | from={} | target={} | roomVersion={} | type={}",
-                    userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
-            groupVoiceService.handleSignal(envelope, userId);
+            if ("private_voice_signal".equals(type)) {
+                PrivateVoiceSignalEnvelope envelope = objectMapper.readValue(payload, PrivateVoiceSignalEnvelope.class);
+                log.debug("[WebSocket] 收到私聊语音信令 | from={} | target={} | roomVersion={} | type={}",
+                        userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
+                privateVoiceService.handleSignal(envelope, userId);
+                return;
+            }
         } catch (Exception e) {
             log.debug("[WebSocket] 业务消息处理失败 | sessionId={} | error={}", session.getId(), e.getMessage(), e);
         }
@@ -145,6 +158,19 @@ public class WebSocket extends TextWebSocketHandler {
 
     // 群语音信令外壳
     private static class GroupVoiceSignalEnvelope extends GroupVoiceSignalRequest {
+        private String type;
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+    }
+
+    // 私聊语音信令外壳
+    private static class PrivateVoiceSignalEnvelope extends PrivateVoiceSignalRequest {
         private String type;
 
         public String getType() {
