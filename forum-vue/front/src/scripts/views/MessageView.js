@@ -346,6 +346,56 @@ export function useMessageView() {
     return '发起语音'
   })
 
+  const currentPrivateVoiceSession = computed(() => {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId) return null
+    return groupVoiceStore.privateSessionFor(peerUserId)
+  })
+
+  const currentPrivateVoiceActive = computed(() =>
+    currentPrivateVoiceSession.value?.active === true,
+  )
+
+  const showPrivateVoiceEntry = computed(() =>
+    !!currentSession.value?.user?.id && !currentSession.value?._virtual,
+  )
+
+  const privateVoiceEntryText = computed(() => {
+    if (!currentPrivateVoiceActive.value) return '发起语音'
+    if (privateVoiceWaiting.value) return '等待对方回应...'
+    if (currentPrivateVoiceSession.value?.currentUserJoined) return '语音中'
+    return '接听语音'
+  })
+
+  const privateVoiceWaiting = computed(() =>
+    currentPrivateVoiceActive.value
+    && currentPrivateVoiceSession.value?.currentUserJoined === true
+    && currentPrivateVoiceSession.value?.currentUserInitiator === true
+    && (Number(currentPrivateVoiceSession.value?.memberCount) || 0) < 2,
+  )
+
+  const showPrivateVoiceAnswerActions = computed(() =>
+    !!currentSession.value?.user?.id
+    && currentPrivateVoiceActive.value
+    && currentPrivateVoiceSession.value?.currentUserJoined !== true,
+  )
+
+  const showVoiceEntry = computed(() =>
+    currentSession.value
+      ? showPrivateVoiceEntry.value && !showPrivateVoiceAnswerActions.value
+      : showGroupVoiceEntry.value,
+  )
+
+  const voiceEntryText = computed(() =>
+    currentSession.value ? privateVoiceEntryText.value : groupVoiceEntryText.value,
+  )
+
+  const voiceEntryActive = computed(() =>
+    currentSession.value
+      ? currentPrivateVoiceActive.value && !privateVoiceWaiting.value
+      : currentGroupVoiceActive.value,
+  )
+
   const groupMembersTotalPages = computed(() =>
     Math.max(1, Math.ceil(groupMembers.value.length / 50)),
   )
@@ -1151,6 +1201,7 @@ const GROUP_NOTIFY_OPTIONS = [
     }
     await loadMessagesForPeer(session.user?.id)
     await scrollToBottom()
+    await refreshCurrentPrivateVoice()
     if ((session.unReadMessage || 0) > 0) {
       await markRead(session.user?.id)
       session.unReadMessage = 0
@@ -1240,6 +1291,85 @@ const GROUP_NOTIFY_OPTIONS = [
       await groupVoiceStore.fetchSession(groupId)
     } catch {
       /* ignore */
+    }
+  }
+
+  async function refreshCurrentPrivateVoice() {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId || currentSession.value?._virtual) return
+    try {
+      await groupVoiceStore.fetchPrivateSession(peerUserId)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleVoiceEntry() {
+    if (currentSession.value) {
+      await handlePrivateVoiceEntry()
+      return
+    }
+    await handleGroupVoiceEntry()
+  }
+
+  async function handlePrivateVoiceEntry() {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId || currentSession.value?._virtual) return
+    if (currentPrivateVoiceActive.value) {
+      if (privateVoiceWaiting.value) {
+        ElMessage.info('等待对方接听中')
+        return
+      }
+      if (currentPrivateVoiceSession.value?.currentUserJoined) {
+        try {
+          await groupVoiceStore.openVoiceDialog()
+        } catch {
+          /* 已提示 */
+        }
+        return
+      }
+      await ElMessageBox.confirm('接听当前私聊语音吗？', '接听语音', {
+        confirmButtonText: '接听',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+      try {
+        await groupVoiceStore.acceptPrivate(peerUserId)
+      } catch {
+        /* 已提示 */
+      }
+      return
+    }
+    await ElMessageBox.confirm('确认发起私聊语音吗？', '发起语音', {
+      confirmButtonText: '发起',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    try {
+      await groupVoiceStore.startPrivate(peerUserId)
+    } catch {
+      /* 已提示 */
+    }
+  }
+
+  async function handleAcceptPrivateVoice() {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId || currentSession.value?._virtual) return
+    try {
+      await groupVoiceStore.acceptPrivate(peerUserId)
+    } catch {
+      /* 已提示 */
+    }
+  }
+
+  async function handleDeclinePrivateVoice() {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId || currentSession.value?._virtual) return
+    try {
+      await groupVoiceStore.declinePrivate(peerUserId)
+      ElMessage.success('已拒绝语音邀请')
+    } catch {
+      /* 已提示 */
     }
   }
 
@@ -1872,6 +2002,7 @@ const GROUP_NOTIFY_OPTIONS = [
     const type = Number(message.messageType)
     if (type === 1) return '[表情]'
     if (type === 2) return '[图片]'
+    if (type === 3) return '[语音聊天]'
     return String(message.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)
   }
 
@@ -2218,6 +2349,14 @@ const GROUP_NOTIFY_OPTIONS = [
     return t === 1 || t === 2
   }
 
+  function isVoiceCallMessage(msg) {
+    return Number(msg?.message?.messageType) === 3
+  }
+
+  function voiceCallDurationText(msg) {
+    return String(msg?.message?.content || '00:00').trim() || '00:00'
+  }
+
   function bubbleAvatar(msg) {
     if (msg?.isOwner) return userStore.avatarUrl || defaultAvatar
     if (currentGroupSession.value) return msg?.user?.avatarUrl || defaultAvatar
@@ -2329,6 +2468,9 @@ const GROUP_NOTIFY_OPTIONS = [
     groupNotifyOptions: GROUP_NOTIFY_OPTIONS,
     handleClose,
     handleGroupVoiceEntry,
+    handleAcceptPrivateVoice,
+    handleDeclinePrivateVoice,
+    handleVoiceEntry,
     handleRecall,
     inputBoxRef,
     isActiveItem,
@@ -2337,6 +2479,7 @@ const GROUP_NOTIFY_OPTIONS = [
     isMemberMuted,
     isPrivateChat,
     isMediaMessage,
+    isVoiceCallMessage,
     isGroupInviteCard,
     leaveCurrentGroup,
     listItems,
@@ -2462,6 +2605,11 @@ const GROUP_NOTIFY_OPTIONS = [
     removeEmojiKeepPopover,
     showUploadOnCurrentPage,
     showGroupVoiceEntry,
+    showPrivateVoiceAnswerActions,
+    showVoiceEntry,
+    voiceEntryActive,
+    voiceEntryText,
+    voiceCallDurationText,
     packBarCanScrollLeft,
     packBarCanScrollRight,
     packBarRef,

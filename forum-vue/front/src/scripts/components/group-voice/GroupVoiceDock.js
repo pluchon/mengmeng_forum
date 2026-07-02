@@ -6,17 +6,13 @@ import { useGroupVoiceStore } from '@/stores/groupVoice'
 import { useUserStore } from '@/stores/user'
 import { isVipActive } from '@/utils/vip'
 
-const MAX_SEATS = 6
-
 export function useGroupVoiceDock() {
   const route = useRoute()
   const voiceStore = useGroupVoiceStore()
   const userStore = useUserStore()
   const failedAvatarMap = ref({})
 
-  const isBlockedPage = computed(() =>
-    route.meta.layout === 'auth' || route.path === '/games' || route.path.startsWith('/games/'),
-  )
+  const isBlockedPage = computed(() => route.meta.layout === 'auth')
 
   const showDock = computed(() =>
     userStore.isLoggedIn && voiceStore.active && voiceStore.joined && !isBlockedPage.value,
@@ -28,8 +24,9 @@ export function useGroupVoiceDock() {
   }))
 
   const seats = computed(() => {
-    const participants = voiceStore.participants.slice(0, MAX_SEATS)
-    return Array.from({ length: MAX_SEATS }, (_, index) => ({
+    const limit = Number(voiceStore.maxSeats) || 6
+    const participants = voiceStore.participants.slice(0, limit)
+    return Array.from({ length: limit }, (_, index) => ({
       key: participants[index]?.user?.id || `empty-${index}`,
       participant: participants[index] || null,
     }))
@@ -92,7 +89,7 @@ export function useGroupVoiceDock() {
   }
 
   async function leaveVoice() {
-    await ElMessageBox.confirm('确认退出当前群语音吗？', '退出语音', {
+    await ElMessageBox.confirm('确认退出当前语音聊天吗？', '退出语音', {
       confirmButtonText: '退出',
       cancelButtonText: '取消',
       type: 'warning',

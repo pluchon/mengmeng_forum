@@ -7,15 +7,25 @@ import {
   leaveGroupVoiceSession,
   startGroupVoiceSession,
 } from '@/api/groupChat'
+import {
+  acceptPrivateVoiceSession,
+  declinePrivateVoiceSession,
+  getPrivateVoiceSession,
+  leavePrivateVoiceSession,
+  startPrivateVoiceSession,
+} from '@/api/message'
+import { getVoiceIceConfig } from '@/api/voice'
 import { useUserStore } from '@/stores/user'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 
-const MAX_SEATS = 6
-const RTC_CONFIG = {
+const GROUP_MAX_SEATS = 6
+const PRIVATE_MAX_SEATS = 2
+const DEFAULT_RTC_CONFIG = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 }
-const VOICE_GROUP_STORAGE_KEY = 'forum:group-voice:joined-group-id'
+const VOICE_SESSION_STORAGE_KEY = 'forum:voice:joined-session'
+const LEGACY_GROUP_STORAGE_KEY = 'forum:group-voice:joined-group-id'
 const CONNECT_RETRY_DELAYS = [0, 700, 1800]
 
 const CONNECTION_STATUS_TEXT = {
@@ -29,6 +39,7 @@ const CONNECTION_STATUS_TEXT = {
 export const useGroupVoiceStore = defineStore('groupVoice', () => {
   const session = ref(null)
   const sessionsByGroup = ref({})
+  const privateSessionsByPeer = ref({})
   const dialogVisible = ref(false)
   const floatPosition = ref({ top: 86, right: 24 })
   const muted = ref(false)
@@ -48,6 +59,7 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     failed: 0,
     dropped: 0,
   })
+  const iceConfig = ref(DEFAULT_RTC_CONFIG)
 
   const peerConnections = new Map()
   const remoteAudioEls = new Map()
@@ -56,55 +68,78 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
   let analyser = null
   let volumeFrameId = 0
   let webRtcUnsupportedShown = false
+  let iceConfigLoaded = false
 
   const userStore = useUserStore()
+  const voiceKind = computed(() => session.value?.voiceKind || null)
   const active = computed(() => session.value?.active === true)
   const joined = computed(() => session.value?.currentUserJoined === true)
   const participants = computed(() => session.value?.participants || [])
   const memberCount = computed(() => Number(session.value?.memberCount) || 0)
-  const currentGroupId = computed(() => session.value?.groupId || null)
+  const maxSeats = computed(() =>
+    Number(session.value?.maxSeats) || (voiceKind.value === 'private' ? PRIVATE_MAX_SEATS : GROUP_MAX_SEATS),
+  )
+  const currentGroupId = computed(() =>
+    voiceKind.value === 'group' ? session.value?.groupId || null : null,
+  )
+  const currentPeerUserId = computed(() =>
+    voiceKind.value === 'private' ? session.value?.peerUserId || null : null,
+  )
+  const currentVoiceKey = computed(() => sessionKeyFor(session.value))
   const roomVersion = computed(() => session.value?.roomVersion || null)
   const currentConnectionId = computed(() => session.value?.currentConnectionId || '')
   const remotePeerCount = computed(() => Object.keys(remoteStreams.value).length)
-  const connectionStatusText = computed(() => connectionMessage.value || CONNECTION_STATUS_TEXT[connectionStatus.value] || '未连接')
+  const connectionStatusText = computed(() =>
+    connectionMessage.value || CONNECTION_STATUS_TEXT[connectionStatus.value] || '未连接',
+  )
+  const dialogTitle = computed(() => (voiceKind.value === 'private' ? '私聊语音' : '群语音'))
+  const floatTitle = computed(() => (voiceKind.value === 'private' ? '私聊语音聊天' : '群语音聊天'))
 
   async function fetchSession(groupId) {
     if (!groupId || !userStore.isLoggedIn) return null
     const res = await getGroupVoiceSession(groupId)
     if (res.code === 0) {
-      const next = normalizeSession(res.data)
+      const next = normalizeGroupSession(res.data)
       cacheSession(next)
-      if (next?.currentUserJoined || !joined.value || Number(currentGroupId.value) === Number(groupId)) {
-        applySession(next)
-      }
-      if (next?.currentUserJoined) {
-        persistJoinedGroupId(next.groupId)
-      } else if (Number(readPersistedGroupId()) === Number(groupId)) {
-        clearPersistedGroupId()
-      }
+      applyStatusSession(next)
+      persistIfJoined(next)
+      return next
+    }
+    return null
+  }
+
+  async function fetchPrivateSession(peerUserId) {
+    if (!peerUserId || !userStore.isLoggedIn) return null
+    const res = await getPrivateVoiceSession(peerUserId)
+    if (res.code === 0) {
+      const next = normalizePrivateSession(res.data)
+      cacheSession(next)
+      applyStatusSession(next)
+      persistIfJoined(next)
       return next
     }
     return null
   }
 
   async function start(groupId) {
-    if (!groupId) return null
+    if (!groupId || !canEnterVoice('group', groupId)) return null
     joining.value = true
     try {
       const res = await startGroupVoiceSession(groupId)
       if (res.code !== 0) return null
-      applySession(res.data)
-      persistJoinedGroupId(groupId)
+      const next = normalizeGroupSession(res.data)
+      applySession(next)
+      persistJoinedSession(next)
       await showDialogNextFrame()
       await startLocalVoiceOrLeave()
-      return res.data
+      return next
     } finally {
       joining.value = false
     }
   }
 
   async function join(groupId) {
-    if (!groupId) return null
+    if (!groupId || !canEnterVoice('group', groupId)) return null
     if (active.value && joined.value && Number(currentGroupId.value) === Number(groupId) && localStream.value) {
       dialogVisible.value = true
       scheduleConnectPeers()
@@ -112,32 +147,94 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     }
     joining.value = true
     try {
-      if (joined.value && Number(currentGroupId.value) !== Number(groupId)) {
-        await leave(false)
-      }
       const res = await joinGroupVoiceSession(groupId)
       if (res.code !== 0) return null
-      applySession(res.data)
-      persistJoinedGroupId(groupId)
+      const next = normalizeGroupSession(res.data)
+      applySession(next)
+      persistJoinedSession(next)
       await showDialogNextFrame()
       await startLocalVoiceOrLeave()
-      return res.data
+      return next
     } finally {
       joining.value = false
     }
   }
 
+  async function startPrivate(peerUserId) {
+    if (!peerUserId || !canEnterVoice('private', peerUserId)) return null
+    joining.value = true
+    try {
+      const res = await startPrivateVoiceSession(peerUserId)
+      if (res.code !== 0) return null
+      const next = normalizePrivateSession(res.data)
+      applySession(next)
+      persistJoinedSession(next)
+      await startLocalVoiceOrLeave()
+      return next
+    } finally {
+      joining.value = false
+    }
+  }
+
+  async function acceptPrivate(peerUserId) {
+    if (!peerUserId || !canEnterVoice('private', peerUserId)) return null
+    if (active.value && joined.value && Number(currentPeerUserId.value) === Number(peerUserId) && localStream.value) {
+      dialogVisible.value = true
+      scheduleConnectPeers()
+      return session.value
+    }
+    joining.value = true
+    try {
+      const res = await acceptPrivateVoiceSession(peerUserId)
+      if (res.code !== 0) return null
+      const next = normalizePrivateSession(res.data)
+      applySession(next)
+      persistJoinedSession(next)
+      await showDialogNextFrame()
+      await startLocalVoiceOrLeave()
+      return next
+    } finally {
+      joining.value = false
+    }
+  }
+
+  async function declinePrivate(peerUserId) {
+    if (!peerUserId) return null
+    const res = await declinePrivateVoiceSession(peerUserId)
+    if (res.code !== 0) return null
+    const next = normalizePrivateSession(res.data)
+    cacheSession(next)
+    if (currentVoiceKey.value === sessionKeyFor(next)) {
+      await leave(false)
+    }
+    return next
+  }
+
   async function leave(callApi = true) {
-    const groupId = currentGroupId.value
+    const previous = session.value
+    const groupId = previous?.voiceKind === 'group' ? previous.groupId : null
+    const peerUserId = previous?.voiceKind === 'private' ? previous.peerUserId : null
     resetPeerRuntime()
     stopLocalStream()
     dialogVisible.value = false
-    clearPersistedGroupId()
-    if (callApi && groupId) {
+    clearPersistedSession()
+    if (callApi && previous?.voiceKind === 'group' && groupId) {
       try {
         const res = await leaveGroupVoiceSession(groupId)
         if (res.code === 0) {
-          applySession(res.data)
+          applySession(normalizeGroupSession(res.data))
+          return
+        }
+      } catch {
+        clearSession()
+        return
+      }
+    }
+    if (callApi && previous?.voiceKind === 'private' && peerUserId) {
+      try {
+        const res = await leavePrivateVoiceSession(peerUserId)
+        if (res.code === 0) {
+          applySession(normalizePrivateSession(res.data))
           return
         }
       } catch {
@@ -149,27 +246,31 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
   }
 
   function onVoiceStatus(payload) {
-    const next = normalizeSession(payload?.session || null)
+    const next = normalizeStatusSession(payload)
     if (!next) return
-    const previousConnectionId = currentConnectionId.value
-    const wasJoined = joined.value
-    const current = currentGroupId.value
     cacheSession(next)
-    if (current && Number(current) !== Number(next.groupId) && !next.currentUserJoined) {
-      return
-    }
-    if (next.currentUserJoined || !wasJoined || Number(current) === Number(next.groupId)) {
-      applySession(next)
-    }
-    if (wasJoined && next.active === false) {
+    const previousKey = currentVoiceKey.value
+    const wasJoined = joined.value
+    const wasPrivateWaiting = session.value?.voiceKind === 'private'
+      && session.value?.active === true
+      && session.value?.currentUserJoined === true
+      && session.value?.currentUserInitiator === true
+      && (Number(session.value?.memberCount) || 0) < PRIVATE_MAX_SEATS
+    const nextKey = sessionKeyFor(next)
+    if (wasJoined && previousKey === nextKey && next.active === false) {
       void leave(false)
       return
     }
-    if (next.currentUserJoined) {
-      persistJoinedGroupId(next.groupId)
-    }
-    if (previousConnectionId && currentConnectionId.value && previousConnectionId !== currentConnectionId.value) {
+    applyStatusSession(next)
+    persistIfJoined(next)
+    if (previousKey && currentVoiceKey.value && previousKey !== currentVoiceKey.value) {
       resetPeerRuntime()
+    }
+    if (wasPrivateWaiting
+        && next.voiceKind === 'private'
+        && next.currentUserJoined === true
+        && (Number(next.memberCount) || 0) >= PRIVATE_MAX_SEATS) {
+      void showDialogNextFrame()
     }
     if (joined.value && localStream.value) {
       scheduleConnectPeers()
@@ -179,13 +280,12 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
   }
 
   async function onVoiceSignal(payload) {
-    const signalGroupId = Number(payload?.groupId)
     const fromUserId = Number(payload?.fromUserId)
-    if (!Number.isFinite(signalGroupId) || !Number.isFinite(fromUserId) || fromUserId === selfUserId()) {
+    if (!Number.isFinite(fromUserId) || fromUserId === selfUserId()) {
       return
     }
     try {
-      const ready = await ensureSignalSession(signalGroupId)
+      const ready = await ensureSignalSession(payload)
       if (!ready || !isSignalForCurrentConnection(payload)) {
         incrementSignalStat('dropped')
         return
@@ -210,11 +310,25 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     }
   }
 
-  async function ensureSignalSession(groupId) {
-    if (joined.value && Number(currentGroupId.value) === Number(groupId)) {
-      return true
+  async function ensureSignalSession(payload) {
+    const type = payload?.type === 'private_voice_signal' ? 'private' : 'group'
+    if (type === voiceKind.value && joined.value) {
+      if (type === 'group' && Number(payload?.groupId) === Number(currentGroupId.value)) {
+        return true
+      }
+      if (type === 'private' && payload?.sessionId === session.value?.sessionId) {
+        return true
+      }
     }
-    const next = await fetchSession(groupId)
+    if (type === 'group') {
+      const groupId = Number(payload?.groupId)
+      if (!Number.isFinite(groupId)) return false
+      const next = await fetchSession(groupId)
+      return next?.active === true && next.currentUserJoined === true
+    }
+    const peerUserId = Number(payload?.peerUserId)
+    if (!Number.isFinite(peerUserId)) return false
+    const next = await fetchPrivateSession(peerUserId)
     return next?.active === true && next.currentUserJoined === true
   }
 
@@ -341,6 +455,7 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
 
   async function startLocalVoiceOrLeave() {
     try {
+      await loadIceConfig()
       await enterMedia()
       scheduleConnectPeers()
     } catch (error) {
@@ -414,29 +529,43 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
 
   function sendSignal(targetUserId, signalType, payload) {
     const target = participantByUserId(targetUserId)
-    if (!currentGroupId.value
-        || !roomVersion.value
+    if (!roomVersion.value
         || !currentConnectionId.value
         || !target?.connectionId
         || !payload) {
       return
     }
     const { sendNotifyMessage } = useWebSocket()
-    sendNotifyMessage({
-      type: 'group_voice_signal',
-      groupId: currentGroupId.value,
-      roomVersion: roomVersion.value,
-      senderConnectionId: currentConnectionId.value,
-      targetUserId,
-      targetConnectionId: target.connectionId,
-      signalType,
-      payload,
-    })
+    if (voiceKind.value === 'group' && currentGroupId.value) {
+      sendNotifyMessage({
+        type: 'group_voice_signal',
+        groupId: currentGroupId.value,
+        roomVersion: roomVersion.value,
+        senderConnectionId: currentConnectionId.value,
+        targetUserId,
+        targetConnectionId: target.connectionId,
+        signalType,
+        payload,
+      })
+      return
+    }
+    if (voiceKind.value === 'private' && currentPeerUserId.value) {
+      sendNotifyMessage({
+        type: 'private_voice_signal',
+        peerUserId: currentPeerUserId.value,
+        roomVersion: roomVersion.value,
+        senderConnectionId: currentConnectionId.value,
+        targetUserId,
+        targetConnectionId: target.connectionId,
+        signalType,
+        payload,
+      })
+    }
   }
 
   function applySession(next) {
     const previous = session.value
-    const normalized = normalizeSession(next)
+    const normalized = normalizeStatusSession({ session: next }) || next
     session.value = normalized
     cacheSession(normalized)
     if (!normalized?.active) {
@@ -453,6 +582,16 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     refreshConnectionStatus()
   }
 
+  function applyStatusSession(next) {
+    if (!next) return
+    const nextKey = sessionKeyFor(next)
+    const currentKey = currentVoiceKey.value
+    const wasJoined = joined.value
+    if (next.currentUserJoined || (currentKey && currentKey === nextKey) || (!wasJoined && !session.value)) {
+      applySession(next)
+    }
+  }
+
   function clearSession() {
     session.value = null
     muted.value = false
@@ -465,10 +604,19 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
   }
 
   function cacheSession(next) {
-    if (!next?.groupId) return
-    sessionsByGroup.value = {
-      ...sessionsByGroup.value,
-      [String(next.groupId)]: next,
+    if (!next) return
+    if (next.voiceKind === 'group' && next.groupId) {
+      sessionsByGroup.value = {
+        ...sessionsByGroup.value,
+        [String(next.groupId)]: next,
+      }
+      return
+    }
+    if (next.voiceKind === 'private' && next.peerUserId) {
+      privateSessionsByPeer.value = {
+        ...privateSessionsByPeer.value,
+        [String(next.peerUserId)]: next,
+      }
     }
   }
 
@@ -477,12 +625,19 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     return sessionsByGroup.value[String(groupId)] || null
   }
 
+  function privateSessionFor(peerUserId) {
+    if (!peerUserId) return null
+    return privateSessionsByPeer.value[String(peerUserId)] || null
+  }
+
   async function restorePersistedSession() {
-    const groupId = readPersistedGroupId()
-    if (!groupId || !userStore.isLoggedIn) return null
-    const next = await fetchSession(groupId)
+    const persisted = readPersistedSession()
+    if (!persisted || !userStore.isLoggedIn) return null
+    const next = persisted.voiceKind === 'private'
+      ? await fetchPrivateSession(persisted.peerUserId)
+      : await fetchSession(persisted.groupId)
     if (!next?.active || !next.currentUserJoined) {
-      clearPersistedGroupId()
+      clearPersistedSession()
       return null
     }
     applySession(next)
@@ -493,21 +648,50 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     if (!active.value || !joined.value) return
     await showDialogNextFrame()
     if (!localStream.value) {
-      await join(currentGroupId.value)
+      if (voiceKind.value === 'private') {
+        await acceptPrivate(currentPeerUserId.value)
+      } else {
+        await join(currentGroupId.value)
+      }
       return
     }
     scheduleConnectPeers()
   }
 
-  function normalizeSession(raw) {
+  function normalizeStatusSession(payload) {
+    const raw = payload?.session || payload
     if (!raw) return null
-    const list = Array.isArray(raw.participants) ? raw.participants.slice(0, MAX_SEATS) : []
+    if (raw.voiceKind === 'private' || raw.peerUserId != null || raw.sessionId != null) {
+      return normalizePrivateSession(raw)
+    }
+    return normalizeGroupSession(raw)
+  }
+
+  function normalizeGroupSession(raw) {
+    if (!raw) return null
+    const list = Array.isArray(raw.participants) ? raw.participants.slice(0, GROUP_MAX_SEATS) : []
     return {
       ...raw,
+      voiceKind: 'group',
       active: raw.active === true,
       participants: list,
       memberCount: Number(raw.memberCount) || list.length,
-      maxSeats: Number(raw.maxSeats) || MAX_SEATS,
+      maxSeats: Number(raw.maxSeats) || GROUP_MAX_SEATS,
+      roomVersion: raw.roomVersion == null ? null : Number(raw.roomVersion),
+      currentConnectionId: raw.currentConnectionId || '',
+    }
+  }
+
+  function normalizePrivateSession(raw) {
+    if (!raw) return null
+    const list = Array.isArray(raw.participants) ? raw.participants.slice(0, PRIVATE_MAX_SEATS) : []
+    return {
+      ...raw,
+      voiceKind: 'private',
+      active: raw.active === true,
+      participants: list,
+      memberCount: Number(raw.memberCount) || list.length,
+      maxSeats: Number(raw.maxSeats) || PRIVATE_MAX_SEATS,
       roomVersion: raw.roomVersion == null ? null : Number(raw.roomVersion),
       currentConnectionId: raw.currentConnectionId || '',
     }
@@ -744,6 +928,30 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     return Number(userStore.id)
   }
 
+  function canEnterVoice(kind, id) {
+    if (!active.value || !joined.value) return true
+    const currentKey = currentVoiceKey.value
+    const nextKey = kind === 'private' ? privateSessionKeyByPeer(id) : groupSessionKey(id)
+    if (!currentKey || currentKey === nextKey) return true
+    ElMessage.warning('请先退出当前语音聊天')
+    return false
+  }
+
+  async function loadIceConfig() {
+    if (iceConfigLoaded) return
+    try {
+      const res = await getVoiceIceConfig()
+      const servers = Array.isArray(res?.data?.iceServers) ? res.data.iceServers : []
+      if (servers.length > 0) {
+        iceConfig.value = { iceServers: servers }
+      }
+    } catch {
+      iceConfig.value = DEFAULT_RTC_CONFIG
+    } finally {
+      iceConfigLoaded = true
+    }
+  }
+
   function startVolumeMeter(stream) {
     stopVolumeMeter()
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext
@@ -841,7 +1049,7 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
       throw webRtcUnavailableError()
     }
     try {
-      return new PeerConnectionCtor(RTC_CONFIG)
+      return new PeerConnectionCtor(iceConfig.value || DEFAULT_RTC_CONFIG)
     } catch (error) {
       try {
         return new PeerConnectionCtor()
@@ -890,47 +1098,103 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     connectionMessage.value = '语音连接失败，请退出后重新加入'
   }
 
-  function persistJoinedGroupId(groupId) {
-    if (!groupId) return
+  function persistIfJoined(next) {
+    if (next?.currentUserJoined) {
+      persistJoinedSession(next)
+      return
+    }
+    const persisted = readPersistedSession()
+    if (persisted && persisted.key === sessionKeyFor(next)) {
+      clearPersistedSession()
+    }
+  }
+
+  function persistJoinedSession(next) {
+    if (!next?.voiceKind) return
+    const data = {
+      voiceKind: next.voiceKind,
+      groupId: next.groupId || null,
+      peerUserId: next.peerUserId || null,
+      key: sessionKeyFor(next),
+    }
     try {
-      localStorage.setItem(VOICE_GROUP_STORAGE_KEY, String(groupId))
+      localStorage.setItem(VOICE_SESSION_STORAGE_KEY, JSON.stringify(data))
+      localStorage.removeItem(LEGACY_GROUP_STORAGE_KEY)
     } catch {
       /* ignore */
     }
   }
 
-  function readPersistedGroupId() {
+  function readPersistedSession() {
     try {
-      const raw = localStorage.getItem(VOICE_GROUP_STORAGE_KEY)
-      const groupId = Number(raw)
-      return Number.isFinite(groupId) && groupId > 0 ? groupId : null
+      const raw = localStorage.getItem(VOICE_SESSION_STORAGE_KEY)
+      if (raw) {
+        const data = JSON.parse(raw)
+        if (data?.voiceKind === 'private' && data.peerUserId) return data
+        if (data?.voiceKind === 'group' && data.groupId) return data
+      }
+      const legacyGroupId = Number(localStorage.getItem(LEGACY_GROUP_STORAGE_KEY))
+      if (Number.isFinite(legacyGroupId) && legacyGroupId > 0) {
+        return {
+          voiceKind: 'group',
+          groupId: legacyGroupId,
+          key: groupSessionKey(legacyGroupId),
+        }
+      }
+      return null
     } catch {
       return null
     }
   }
 
-  function clearPersistedGroupId() {
+  function clearPersistedSession() {
     try {
-      localStorage.removeItem(VOICE_GROUP_STORAGE_KEY)
+      localStorage.removeItem(VOICE_SESSION_STORAGE_KEY)
+      localStorage.removeItem(LEGACY_GROUP_STORAGE_KEY)
     } catch {
       /* ignore */
     }
   }
 
+  function sessionKeyFor(next) {
+    if (!next) return ''
+    if (next.voiceKind === 'private') {
+      return privateSessionKeyByPeer(next.peerUserId)
+    }
+    if (next.voiceKind === 'group') {
+      return groupSessionKey(next.groupId)
+    }
+    return ''
+  }
+
+  function groupSessionKey(groupId) {
+    return groupId ? `group:${groupId}` : ''
+  }
+
+  function privateSessionKeyByPeer(peerUserId) {
+    return peerUserId ? `private-peer:${peerUserId}` : ''
+  }
+
   return {
+    acceptPrivate,
     active,
     avatarFor,
     connectionStatus,
     connectionStatusText,
     currentGroupId,
+    currentPeerUserId,
     deafened,
+    dialogTitle,
     dialogVisible,
+    fetchPrivateSession,
     fetchSession,
     floatPosition,
+    floatTitle,
     join,
     joined,
     joining,
     leave,
+    maxSeats,
     memberCount,
     muted,
     nameFor,
@@ -941,6 +1205,7 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     outputDeviceId,
     outputDevices,
     participants,
+    privateSessionFor,
     remoteAudioBlocked,
     remotePeerCount,
     session,
@@ -949,9 +1214,12 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     restorePersistedSession,
     setOutputDevice,
     start,
+    startPrivate,
+    declinePrivate,
     toggleDeafened,
     toggleMuted,
     unlockRemoteAudio,
+    voiceKind,
     volumeLevel,
   }
 })

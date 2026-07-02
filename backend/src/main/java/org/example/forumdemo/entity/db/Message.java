@@ -26,7 +26,7 @@ public class Message {
     @Schema(description = "接收者用户ID", example = "20")
     private Long receiveUserId;
 
-    @Schema(description = "消息类型: 0文本 1图片 2GIF", example = "0")
+    @Schema(description = "消息类型: 0文本 1图片 2GIF 3语音通话摘要", example = "0")
     private Byte messageType;
 
     @Schema(description = "文本内容(图片/GIF 消息为 null)", example = "你好，欢迎来到论坛！")

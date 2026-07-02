@@ -65,6 +65,14 @@ forum:
     allowed-origins: https://www.nuonuoya.cn
   ffmpeg:
     internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
+  voice:
+    ice:
+      stun-urls: ${FORUM_VOICE_STUN_URLS:stun:stun.l.google.com:19302}
+      turn-urls: ${FORUM_VOICE_TURN_URLS:}
+      turn-username: ${FORUM_VOICE_TURN_USERNAME:}
+      turn-credential: ${FORUM_VOICE_TURN_CREDENTIAL:}
+      turn-secret: ${FORUM_VOICE_TURN_SECRET:}
+      turn-ttl-seconds: ${FORUM_VOICE_TURN_TTL_SECONDS:3600}
 
 pii:
   secret: ${PII_CRYPTO_SECRET}

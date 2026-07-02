@@ -91,3 +91,28 @@ export function deleteFavoriteEmoji(emojiId) {
 export function getEmojiList() {
   return request({ url: '/message/emoji/list', method: 'get' })
 }
+
+// 查询私聊语音状态
+export function getPrivateVoiceSession(peerUserId) {
+  return request({ url: `/message/private-voice/${peerUserId}`, method: 'get' })
+}
+
+// 发起私聊语音
+export function startPrivateVoiceSession(peerUserId) {
+  return request({ url: `/message/private-voice/${peerUserId}/start`, method: 'post' })
+}
+
+// 接听私聊语音
+export function acceptPrivateVoiceSession(peerUserId) {
+  return request({ url: `/message/private-voice/${peerUserId}/accept`, method: 'post' })
+}
+
+// 拒绝私聊语音
+export function declinePrivateVoiceSession(peerUserId) {
+  return request({ url: `/message/private-voice/${peerUserId}/decline`, method: 'post' })
+}
+
+// 离开私聊语音
+export function leavePrivateVoiceSession(peerUserId) {
+  return request({ url: `/message/private-voice/${peerUserId}/leave`, method: 'post' })
+}

@@ -62,6 +62,9 @@ public interface GroupChatService {
 
     GroupChatMessageVO sendMessage(SendGroupChatMessageRequest request, Long loginUserId);
 
+    // 追加群聊语音通话摘要
+    GroupChatMessageVO appendVoiceCallSummary(Long groupId, Long senderUserId, String durationText);
+
     PageResult<GroupChatMessageVO> queryMessages(Long groupId, Long loginUserId, Integer pageNum, Integer pageSize);
 
     void markRead(Long groupId, Long messageId, Long loginUserId);

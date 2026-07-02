@@ -21,9 +21,11 @@ import org.example.forumdemo.entity.vo.groupchat.GroupVoiceSessionVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.GroupChatMapper;
 import org.example.forumdemo.mapper.GroupChatMemberMapper;
+import org.example.forumdemo.service.interfaces.groupchat.GroupChatService;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.groupchat.GroupVoiceService;
 import org.example.forumdemo.service.interfaces.user.UserService;
+import org.example.forumdemo.service.interfaces.voice.VoiceOccupancyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -75,6 +77,12 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
     @Autowired
     private WebSocketPushService webSocketPushService;
 
+    @Autowired
+    private VoiceOccupancyService voiceOccupancyService;
+
+    @Autowired
+    private GroupChatService groupChatService;
+
     @Override
     public GroupVoiceSessionVO querySession(Long groupId, Long loginUserId) {
         assertActiveMember(groupId, loginUserId);
@@ -90,6 +98,8 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
         assertManager(member);
         VoiceSessionState state;
         synchronized (voiceLock) {
+            String occupancySessionId = occupancySessionId(groupId);
+            voiceOccupancyService.assertAvailable(loginUserId, occupancySessionId);
             state = loadState(groupId);
             if (state == null || state.getParticipants().isEmpty()) {
                 state = new VoiceSessionState();
@@ -101,6 +111,7 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
             }
             putParticipant(state, loginUserId, true);
             saveState(state);
+            voiceOccupancyService.bind(loginUserId, occupancySessionId, SESSION_TTL);
         }
         broadcastStatus(group);
         return toSessionVO(groupId, state, loginUserId);
@@ -113,6 +124,8 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
         assertActiveMember(groupId, loginUserId);
         VoiceSessionState state;
         synchronized (voiceLock) {
+            String occupancySessionId = occupancySessionId(groupId);
+            voiceOccupancyService.assertAvailable(loginUserId, occupancySessionId);
             state = loadState(groupId);
             if (state == null || state.getParticipants().isEmpty()) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS, "当前没有群语音聊天"));
@@ -123,6 +136,7 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
             }
             putParticipant(state, loginUserId, true);
             saveState(state);
+            voiceOccupancyService.bind(loginUserId, occupancySessionId, SESSION_TTL);
         }
         broadcastStatus(group);
         return toSessionVO(groupId, state, loginUserId);
@@ -134,16 +148,24 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
         GroupChat group = queryGroup(groupId);
         assertActiveMember(groupId, loginUserId);
         VoiceSessionState state;
+        boolean ended = false;
+        String durationText = null;
         synchronized (voiceLock) {
             state = loadState(groupId);
             if (state != null) {
                 state.getParticipants().remove(String.valueOf(loginUserId));
                 if (state.getParticipants().isEmpty()) {
+                    ended = true;
+                    durationText = formatDuration(state.getStartedAt(), ForumDateTimes.now());
                     deleteState(groupId);
                 } else {
                     saveState(state);
                 }
             }
+            voiceOccupancyService.release(loginUserId, occupancySessionId(groupId));
+        }
+        if (ended) {
+            groupChatService.appendVoiceCallSummary(groupId, loginUserId, durationText);
         }
         broadcastStatus(group);
         return toSessionVO(groupId, state, loginUserId);
@@ -325,6 +347,10 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
         return SESSION_KEY_PREFIX + groupId;
     }
 
+    private String occupancySessionId(Long groupId) {
+        return "group:" + groupId;
+    }
+
     private GroupVoiceSessionVO toSessionVO(Long groupId, VoiceSessionState state, Long currentUserId) {
         GroupChatMember currentMember = null;
         try {
@@ -372,6 +398,20 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
         vo.setConnectionId(participant.getConnectionId());
         vo.setJoinedAt(participant.getJoinedAt());
         return vo;
+    }
+
+    private String formatDuration(Date startTime, Date endTime) {
+        if (startTime == null || endTime == null) {
+            return "00:00";
+        }
+        long seconds = Math.max(0L, Duration.between(startTime.toInstant(), endTime.toInstant()).getSeconds());
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        long remainSeconds = seconds % 60;
+        if (hours > 0) {
+            return String.format("%d:%02d:%02d", hours, minutes, remainSeconds);
+        }
+        return String.format("%02d:%02d", minutes, remainSeconds);
     }
 
     // Redis 中保存的群语音会话状态
