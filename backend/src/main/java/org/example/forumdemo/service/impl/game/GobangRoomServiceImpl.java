@@ -584,7 +584,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         command.setWinnerUserId(winnerId);
         command.setLoserUserId(loserId);
         command.setEndReason(endReason);
-        command.setEffectiveForRank(countMoves(room) >= 6);
+        command.setEffectiveForRank(countChess(room, 1) >= 4 && countChess(room, 2) >= 4);
         return command;
     }
 
@@ -821,6 +821,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
                 if (board[i][j] != 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private int countChess(GobangRoom room, int chess) {
+        int count = 0;
+        int[][] board = room.getBoard();
+        for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
+            for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
+                if (board[i][j] == chess) {
                     count++;
                 }
             }

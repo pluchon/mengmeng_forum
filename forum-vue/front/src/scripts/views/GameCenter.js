@@ -162,7 +162,7 @@ const activeGameName = computed(() => {
   return '五子棋'
 })
 const rankText = computed(() => {
-  return gobangProfile.value.rankName || '青铜棋士 III'
+  return gobangProfile.value.rankName || '青铜 III'
 })
 
 async function loadOverview(silent = false) {

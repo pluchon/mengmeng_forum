@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GameRankInfoVO {
 
-    // 段位名称，例如黄金棋士 II
+    // 段位名称，例如黄金 II
     private String rankName;
 
     // 大段名称，例如黄金

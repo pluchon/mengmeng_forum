@@ -24,15 +24,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.util.Date;
-
 // 游戏排位结算服务，统一处理真人 PK 的段位分变化
 @Service
 public class GameRankServiceImpl implements GameRankService {
-
-    private static final ZoneId CHINA_ZONE = ZoneId.of("Asia/Shanghai");
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
@@ -102,18 +96,8 @@ public class GameRankServiceImpl implements GameRankService {
     }
 
     private int computeWinnerDelta(GameRankSettlementCommand command, GameUserProfile winner, GameUserProfile loser) {
-        int delta = baseWinDelta(winner.getScore(), loser.getScore());
+        int delta = weighted(baseWinDelta(winner.getScore(), loser.getScore()), command.getGameCode());
         delta += streakBonus(command.getGameCode(), winner.getUserId());
-        int recentCount = countAgainstSince(
-                command.getGameCode(),
-                winner.getUserId(),
-                loser.getUserId(),
-                new Date(System.currentTimeMillis() - 30 * 60 * 1000L)
-        );
-        int todayCount = countAgainstSince(command.getGameCode(), winner.getUserId(), loser.getUserId(), todayStart());
-        if (recentCount >= 1 || todayCount >= 3) {
-            delta = Math.max(1, delta / 2);
-        }
         return Math.min(20, Math.max(1, delta));
     }
 
@@ -121,8 +105,12 @@ public class GameRankServiceImpl implements GameRankService {
         if (isEscapeReason(command.getEndReason())) {
             return -12;
         }
-        int penalty = baseLosePenalty(loser.getScore(), winner.getScore());
+        int penalty = weighted(baseLosePenalty(loser.getScore(), winner.getScore()), command.getGameCode());
         return -Math.min(15, Math.max(1, penalty));
+    }
+
+    private int weighted(int value, String gameCode) {
+        return Math.max(1, (int) Math.round(value * GameRankRules.gameWeight(gameCode)));
     }
 
     private int baseWinDelta(Integer winnerScore, Integer loserScore) {
@@ -305,41 +293,6 @@ public class GameRankServiceImpl implements GameRankService {
             wins++;
         }
         return wins;
-    }
-
-    private int countAgainstSince(String gameCode, Long userA, Long userB, Date since) {
-        if (GameConstants.GOBANG.equals(gameCode)) {
-            return Math.toIntExact(gameGobangMatchRecordMapper.selectCount(
-                    new LambdaQueryWrapper<GameGobangMatchRecord>()
-                            .eq(GameGobangMatchRecord::getDeleteState, (byte) 0)
-                            .ge(GameGobangMatchRecord::getEndedAt, since)
-                            .and(w -> w.and(x -> x.eq(GameGobangMatchRecord::getBlackUserId, userA)
-                                            .eq(GameGobangMatchRecord::getWhiteUserId, userB))
-                                    .or(x -> x.eq(GameGobangMatchRecord::getBlackUserId, userB)
-                                            .eq(GameGobangMatchRecord::getWhiteUserId, userA)))));
-        }
-        if (GameConstants.JINZI.equals(gameCode)) {
-            return Math.toIntExact(gameJinziMatchRecordMapper.selectCount(
-                    new LambdaQueryWrapper<GameJinziMatchRecord>()
-                            .eq(GameJinziMatchRecord::getDeleteState, (byte) 0)
-                            .ge(GameJinziMatchRecord::getEndedAt, since)
-                            .and(w -> w.and(x -> x.eq(GameJinziMatchRecord::getBlackUserId, userA)
-                                            .eq(GameJinziMatchRecord::getWhiteUserId, userB))
-                                    .or(x -> x.eq(GameJinziMatchRecord::getBlackUserId, userB)
-                                            .eq(GameJinziMatchRecord::getWhiteUserId, userA)))));
-        }
-        return Math.toIntExact(gameTetrisPkMatchRecordMapper.selectCount(
-                new LambdaQueryWrapper<GameTetrisPkMatchRecord>()
-                        .eq(GameTetrisPkMatchRecord::getDeleteState, (byte) 0)
-                        .ge(GameTetrisPkMatchRecord::getEndedAt, since)
-                        .and(w -> w.and(x -> x.eq(GameTetrisPkMatchRecord::getPlayer1UserId, userA)
-                                        .eq(GameTetrisPkMatchRecord::getPlayer2UserId, userB))
-                                .or(x -> x.eq(GameTetrisPkMatchRecord::getPlayer1UserId, userB)
-                                        .eq(GameTetrisPkMatchRecord::getPlayer2UserId, userA)))));
-    }
-
-    private Date todayStart() {
-        return Date.from(LocalDate.now(CHINA_ZONE).atStartOfDay(CHINA_ZONE).toInstant());
     }
 
     private int value(Integer n) {

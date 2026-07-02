@@ -443,7 +443,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         command.setWinnerUserId(winnerId);
         command.setLoserUserId(loserId);
         command.setEndReason(endReason);
-        command.setEffectiveForRank(System.currentTimeMillis() - room.getStartedAt().getTime() >= 30_000L);
+        command.setEffectiveForRank(Math.max(
+                room.scoreOf(room.getPlayer1UserId()),
+                room.scoreOf(room.getPlayer2UserId())) >= 300);
         return command;
     }
 
