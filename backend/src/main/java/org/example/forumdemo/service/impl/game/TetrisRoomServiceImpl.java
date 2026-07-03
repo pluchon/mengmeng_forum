@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -261,6 +262,15 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     @Override
     public List<TetrisActiveRoomVO> listActiveRooms() {
         List<TetrisActiveRoomVO> rows = new ArrayList<>();
+        Set<Long> userIds = new HashSet<>();
+        for (TetrisRoom room : rooms.values()) {
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                continue;
+            }
+            collectActiveUserId(userIds, room.getRedUserId());
+            collectActiveUserId(userIds, room.getBlueUserId());
+        }
+        Map<Long, User> userMap = loadActiveRoomUsers(userIds);
         for (TetrisRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
@@ -270,7 +280,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     room.getPlayer1UserId(),
                     room.getPlayer2UserId(),
                     room.getRedUserId(),
+                    activeRoomNickname(userMap.get(room.getRedUserId()), room.getRedUserId()),
                     room.getBlueUserId(),
+                    activeRoomNickname(userMap.get(room.getBlueUserId()), room.getBlueUserId()),
                     room.scoreOf(room.getRedUserId()),
                     room.scoreOf(room.getBlueUserId()),
                     room.getStartedAt()
@@ -278,6 +290,36 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         }
         rows.sort(Comparator.comparing(TetrisActiveRoomVO::getStartedAt).reversed());
         return rows;
+    }
+
+    private void collectActiveUserId(Set<Long> userIds, Long userId) {
+        if (userId != null) {
+            userIds.add(userId);
+        }
+    }
+
+    private Map<Long, User> loadActiveRoomUsers(Set<Long> userIds) {
+        Map<Long, User> userMap = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return userMap;
+        }
+        userMapper.selectList(new LambdaQueryWrapper<User>()
+                        .in(User::getId, userIds))
+                .forEach(user -> userMap.put(user.getId(), user));
+        return userMap;
+    }
+
+    private String activeRoomNickname(User user, Long userId) {
+        if (user == null) {
+            return "用户 " + userId;
+        }
+        if (user.getNickname() != null && !user.getNickname().isBlank()) {
+            return user.getNickname();
+        }
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            return user.getUsername();
+        }
+        return "用户 " + userId;
     }
 
     // 定时推进双方重力
@@ -650,7 +692,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         return new GobangRoomParticipantVO(
                 userId,
                 user == null ? null : user.getUsername(),
-                user == null ? null : user.getNickname(),
+                activeRoomNickname(user, userId),
                 user == null ? null : user.getAvatarUrl(),
                 user == null ? null : user.getVipTier(),
                 user != null && user.getVipTier() != null && user.getVipTier() > 0,

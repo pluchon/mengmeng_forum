@@ -18,8 +18,14 @@ public class GobangActiveRoomVO {
     // 黑方用户 ID
     private Long blackUserId;
 
+    // 黑方昵称
+    private String blackNickname;
+
     // 白方用户 ID
     private Long whiteUserId;
+
+    // 白方昵称
+    private String whiteNickname;
 
     // 当前回合用户 ID
     private Long currentTurnUserId;
