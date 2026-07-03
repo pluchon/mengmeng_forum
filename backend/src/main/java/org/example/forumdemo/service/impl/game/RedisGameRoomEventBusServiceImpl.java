@@ -21,6 +21,10 @@ import java.util.UUID;
 @Service
 public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService {
 
+    private static final String TARGET_ROOM = "ROOM";
+
+    private static final String TARGET_GAME = "GAME";
+
     private final String instanceId = UUID.randomUUID().toString();
 
     @Autowired
@@ -46,20 +50,56 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
                 if (instanceId.equals(String.valueOf(sourceObj))) {
                     return;
                 }
-                Object roomIdObj = envelope.get("roomId");
                 Object payloadObj = envelope.get("payload");
-                if (roomIdObj == null || payloadObj == null) {
+                if (payloadObj == null) {
                     return;
                 }
                 String payload = payloadObj instanceof String s
                         ? s
                         : objectMapper.writeValueAsString(payloadObj);
-                gameConnectionRegistry.broadcastRoom(String.valueOf(roomIdObj), payload);
+                String targetType = String.valueOf(envelope.getOrDefault("targetType", TARGET_ROOM));
+                if (TARGET_GAME.equals(targetType)) {
+                    deliverGameEvent(envelope, payload);
+                    return;
+                }
+                deliverRoomEvent(envelope, payload);
             } catch (Exception e) {
                 log.debug("游戏房间 Redis 事件处理失败: {}", e.getMessage());
             }
         };
         redisMessageListenerContainer.addMessageListener(listener, new ChannelTopic(Constant.GAME_ROOM_EVENT_CHANNEL));
+    }
+
+    private void deliverRoomEvent(Map<String, Object> envelope, String payload) {
+        Object roomIdObj = envelope.get("roomId");
+        if (roomIdObj == null) {
+            return;
+        }
+        gameConnectionRegistry.broadcastRoom(String.valueOf(roomIdObj), payload);
+    }
+
+    private void deliverGameEvent(Map<String, Object> envelope, String payload) {
+        Object gameCodeObj = envelope.get("gameCode");
+        Object userIdObj = envelope.get("userId");
+        if (gameCodeObj == null || userIdObj == null) {
+            return;
+        }
+        Long userId = toLong(userIdObj);
+        if (userId == null) {
+            return;
+        }
+        gameConnectionRegistry.sendToGame(String.valueOf(gameCodeObj), userId, payload);
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @Override
@@ -70,12 +110,32 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
         try {
             String envelope = objectMapper.writeValueAsString(Map.of(
                     "sourceInstanceId", instanceId,
+                    "targetType", TARGET_ROOM,
                     "roomId", roomId,
                     "payload", payload
             ));
             stringRedisTemplate.convertAndSend(Constant.GAME_ROOM_EVENT_CHANNEL, envelope);
         } catch (Exception e) {
             log.debug("发布游戏房间 Redis 事件失败 roomId={}, error={}", roomId, e.getMessage());
+        }
+    }
+
+    @Override
+    public void publishGameEvent(String gameCode, Long userId, String payload) {
+        if (gameCode == null || gameCode.isBlank() || userId == null || payload == null) {
+            return;
+        }
+        try {
+            String envelope = objectMapper.writeValueAsString(Map.of(
+                    "sourceInstanceId", instanceId,
+                    "targetType", TARGET_GAME,
+                    "gameCode", gameCode,
+                    "userId", userId,
+                    "payload", payload
+            ));
+            stringRedisTemplate.convertAndSend(Constant.GAME_ROOM_EVENT_CHANNEL, envelope);
+        } catch (Exception e) {
+            log.debug("发布游戏大厅 Redis 事件失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
         }
     }
 }

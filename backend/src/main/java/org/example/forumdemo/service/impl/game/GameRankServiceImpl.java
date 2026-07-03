@@ -226,6 +226,9 @@ public class GameRankServiceImpl implements GameRankService {
                 .eq(GameUserProfile::getUserId, userId)
                 .eq(GameUserProfile::getGameCode, gameCode)
                 .eq(GameUserProfile::getDeleteState, (byte) 0);
+        if (update.getCurrentRoomId() == null) {
+            wrapper.set(GameUserProfile::getCurrentRoomId, null);
+        }
         gameUserProfileMapper.update(update, wrapper);
     }
 

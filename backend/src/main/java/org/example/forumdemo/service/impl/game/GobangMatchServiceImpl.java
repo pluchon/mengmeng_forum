@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.game.GameMatchSuccessVO;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameMatchQueueService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GobangMatchService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
@@ -47,6 +48,9 @@ public class GobangMatchServiceImpl implements GobangMatchService {
 
     @Autowired
     private GameMatchQueueService gameMatchQueueService;
+
+    @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -168,11 +172,11 @@ public class GobangMatchServiceImpl implements GobangMatchService {
 
     private void sendToGame(Long userId, GameWsResponse<?> response) {
         try {
-            gameConnectionRegistry.sendToGame(
-                    GameConstants.GOBANG,
-                    userId,
-                    objectMapper.writeValueAsString(response)
-            );
+            String payload = objectMapper.writeValueAsString(response);
+            boolean sent = gameConnectionRegistry.sendToGame(GameConstants.GOBANG, userId, payload);
+            if (!sent) {
+                gameRoomEventBusService.publishGameEvent(GameConstants.GOBANG, userId, payload);
+            }
         } catch (Exception e) {
             log.debug("发送五子棋匹配消息失败 userId={}, error={}", userId, e.getMessage());
         }
