@@ -62,6 +62,7 @@
           <el-icon><Medal /></el-icon>
           <span>会员中心</span>
         </button>
+        <ThemeToggle />
         <button type="button" class="home-sidebar-link" @click="goToCreative">
           <el-icon><EditPen /></el-icon>
           <span>创作中心</span>
