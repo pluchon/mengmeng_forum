@@ -1,0 +1,21 @@
+.theme-toggle-entry {
+  position: relative;
+}
+
+.theme-toggle-entry__mode {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 36, 66, 0.08);
+  color: var(--primary-red, #ff2442);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .theme-toggle-entry__mode {
+    display: none;
+  }
+}
