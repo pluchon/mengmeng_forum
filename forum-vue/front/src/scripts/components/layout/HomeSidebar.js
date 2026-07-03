@@ -14,7 +14,6 @@ import {
 } from '@element-plus/icons-vue'
 
 import { useHomeShellContext } from '@/composables/useHomeShell'
-import ThemeToggle from '@/components/theme/ThemeToggle.vue'
 
 const CATEGORY_ICONS = [Location, Trophy, ShoppingBag, Food, Compass]
 
