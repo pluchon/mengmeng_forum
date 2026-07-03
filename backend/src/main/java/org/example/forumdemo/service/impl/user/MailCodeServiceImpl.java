@@ -109,7 +109,7 @@ public class MailCodeServiceImpl implements MailCodeService {
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
-        user.setToken(authTokenService.issueToken(user));
+        user.setToken(authTokenService.issueLoginToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
         return user;

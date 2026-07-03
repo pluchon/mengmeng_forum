@@ -16,3 +16,11 @@ export function getUserByIdForLogin() {
     method: 'get',
   })
 }
+
+/** 当前账号退出登录，后端会让当前 JWT 立即失效 */
+export function logoutCurrentUser() {
+  return request({
+    url: '/user/logout',
+    method: 'post',
+  })
+}

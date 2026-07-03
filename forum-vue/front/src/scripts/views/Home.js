@@ -469,7 +469,7 @@ export function useHome() {
   }
 
   function handleLogout() {
-    userStore.logout()
+    userStore.logout({ remote: true })
   }
 
   function getRandomPastel() {

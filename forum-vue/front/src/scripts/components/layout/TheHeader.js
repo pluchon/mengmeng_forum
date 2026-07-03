@@ -100,7 +100,7 @@ export function useTheHeader() {
   })
 
   const handleLogout = () => {
-    userStore.logout()
+    userStore.logout({ remote: true })
   }
 
   const showAnnouncement = () => {

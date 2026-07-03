@@ -112,7 +112,7 @@ public class SMSCodeServiceImpl implements SMSCodeService {
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
-        user.setToken(authTokenService.issueToken(user));
+        user.setToken(authTokenService.issueLoginToken(user));
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
         return user;

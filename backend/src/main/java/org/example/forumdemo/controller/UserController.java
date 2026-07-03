@@ -83,6 +83,14 @@ public class UserController {
         return Result.success(userAuthFlowService.getSessionUser(sessionUser.getId()));
     }
 
+    @Operation(summary = "退出登录", description = "递增当前账号 token 版本，使当前 JWT 立即失效")
+    @PostMapping("/logout")
+    public Result<String> logout(HttpServletRequest httpServletRequest) {
+        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        userService.logout(sessionUser.getId());
+        return Result.success("退出成功");
+    }
+
     @Operation(summary = "更新用户信息", description = "不包括密码、头像、背景图等需要单独流程的字段")
     @PutMapping("/modifyUser")
     public Result<UserSessionVO> modifyUser(@RequestBody ModifyUserRequest modifyUserRequest, HttpServletRequest httpServletRequest) {
