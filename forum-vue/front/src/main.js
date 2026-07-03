@@ -13,6 +13,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 // 全局样式
 import './assets/styles/global.css'
 import './assets/styles/banner.css'
+import './assets/styles/dark-mode.css'
 
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import { useUserStore } from './stores/user'

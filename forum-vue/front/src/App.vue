@@ -1,6 +1,6 @@
 <template>
   <el-config-provider :locale="zhCn">
-    <div :class="['app-root', { 'has-header-padding': showGlobalHeader }]">
+    <div :class="['app-root', { 'has-header-padding': showGlobalHeader, 'is-theme-adapted': isThemeAdaptedPage }]">
       <ParticleSea v-if="isAuthPage" />
       <TheHeader v-if="showGlobalHeader" />
       <div class="app-shell">
@@ -25,6 +25,7 @@ const {
   isAuthPage,
   showGlobalHeader,
   showMascot,
+  isThemeAdaptedPage,
   zhCn,
 } = useApp()
 </script>

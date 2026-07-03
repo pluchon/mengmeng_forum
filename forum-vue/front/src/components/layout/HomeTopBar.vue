@@ -35,6 +35,7 @@
     </div>
 
     <div class="home-shell-tools">
+      <ThemeModeSwitch />
       <el-tooltip
         :content="mascotPassthroughTip"
         placement="bottom"
