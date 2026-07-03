@@ -30,6 +30,8 @@ public interface UserService {
 
     User login(UserLoginRequest userLoginRequest);
 
+    void logout(Long userId);
+
     User getUserInfoById(Long userId);
 
     // ============ 信息修改 ============

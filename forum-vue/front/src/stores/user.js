@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getUserByIdForLogin } from '../api/user'
+import { getUserByIdForLogin, logoutCurrentUser } from '../api/user'
 import router from '../router'
 
 export const useUserStore = defineStore('user', () => {
@@ -73,7 +73,15 @@ export const useUserStore = defineStore('user', () => {
     if (has('gender')) gender.value = fields.gender != null ? Number(fields.gender) : 2
   }
 
-  function logout() {
+  async function logout(options = {}) {
+    const shouldRemoteLogout = options?.remote === true
+    if (shouldRemoteLogout && token.value) {
+      try {
+        await logoutCurrentUser()
+      } catch {
+        // 退出登录不能因为服务端失效或网络失败阻塞本地清理
+      }
+    }
     token.value = ''
     id.value = ''
     nickname.value = ''

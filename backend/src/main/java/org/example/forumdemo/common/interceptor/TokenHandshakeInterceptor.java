@@ -4,6 +4,8 @@ import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.utils.JWTUtils;
+import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -17,6 +19,9 @@ import java.util.Map;
 @Slf4j
 @Component
 public class TokenHandshakeInterceptor implements HandshakeInterceptor {
+
+    @Autowired
+    private JwtTokenVersionService jwtTokenVersionService;
 
     // 握手前执行
     @Override
@@ -54,8 +59,22 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
         }
         // 从 JWT 载荷中取出 userId 和 username，存入 attributes
         // 后续 WebSocket 处理器可直接取用
-        Long userId = Long.valueOf(claims.get(Constant.JWT_USER_ID).toString());
-        String username = (String) claims.get(Constant.JWT_USER_NAME);
+        Long userId;
+        String username;
+        try {
+            userId = Long.valueOf(claims.get(Constant.JWT_USER_ID).toString());
+            username = (String) claims.get(Constant.JWT_USER_NAME);
+        } catch (Exception e) {
+            log.warn("[WS握手] 拒绝：token 载荷缺少用户身份 | error={}", e.getMessage());
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        long jwtTv = JWTUtils.readTokenVersion(claims);
+        if (!jwtTokenVersionService.isValid(userId, jwtTv)) {
+            log.warn("[WS握手] 拒绝：JWT 版本失效 | userId={}", userId);
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
         attributes.put(Constant.JWT_USER_ID, userId);
         attributes.put(Constant.JWT_USER_NAME, username);
         log.debug("[WS握手] 鉴权通过 | userId={} | username={}", userId, username);

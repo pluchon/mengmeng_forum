@@ -222,7 +222,7 @@ public class UserServiceImpl implements UserService {
             user.setPassword(bcrypt);
             user.setSalt("");
         }
-        user.setToken(authTokenService.issueToken(user));
+        user.setToken(authTokenService.issueLoginToken(user));
         log.info("用户 {} 登录校验通过", user.getUsername());
         //用户完整信息存入缓存
         storeRedis(user);
@@ -395,6 +395,15 @@ public class UserServiceImpl implements UserService {
         // 盐值变更必须清缓存，下次读取时重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
         log.info("用户 {} 修改密码成功，缓存已清除", userId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void logout(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+        jwtTokenVersionService.bump(userId);
     }
 
     // ============================================================
