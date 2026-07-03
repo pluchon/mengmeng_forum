@@ -15,6 +15,10 @@ public interface JinziRoomService {
 
     JinziRoomStateVO getRoomState(String roomId, Long userId);
 
+    boolean hasLocalRoom(String roomId);
+
+    void pushRoomState(String roomId, String requestId);
+
     void handleMove(String roomId, Long userId, Integer row, Integer col, String requestId);
 
     void surrender(String roomId, Long userId, String requestId);

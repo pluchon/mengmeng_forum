@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.dto.game.TetrisInputRequest;
 import org.example.forumdemo.entity.vo.game.TetrisRoomStateVO;
 import org.example.forumdemo.service.impl.game.GameConstants;
 import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,9 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
     private GameOnlineStateService gameOnlineStateService;
 
     @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -53,13 +57,15 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
                     state
             )));
         } catch (Exception e) {
-            log.warn("俄罗斯方块房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
-            gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
-                    "room_error",
-                    null,
-                    "房间不存在或已结束，请返回大厅重新进入"
-            )));
-            session.close(CloseStatus.POLICY_VIOLATION);
+            if (!proxyJoin(session, roomId, userId)) {
+                log.warn("俄罗斯方块房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
+                gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
+                        "room_error",
+                        null,
+                        "房间不存在或已结束，请返回大厅重新进入"
+                )));
+                session.close(CloseStatus.POLICY_VIOLATION);
+            }
         }
     }
 
@@ -105,6 +111,10 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
                                    Long userId,
                                    GameWsMessage wsMessage) throws Exception {
         if ("input".equals(wsMessage.getType())) {
+            if (!tetrisRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             TetrisInputRequest request = wsMessage.getData() == null || wsMessage.getData().isNull()
                     ? new TetrisInputRequest()
                     : objectMapper.treeToValue(wsMessage.getData(), TetrisInputRequest.class);
@@ -113,6 +123,10 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("chat".equals(wsMessage.getType())) {
+            if (!tetrisRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             TetrisChatRequest request = wsMessage.getData() == null || wsMessage.getData().isNull()
                     ? new TetrisChatRequest()
                     : objectMapper.treeToValue(wsMessage.getData(), TetrisChatRequest.class);
@@ -120,6 +134,10 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("surrender".equals(wsMessage.getType())) {
+            if (!tetrisRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             tetrisRoomService.surrender(roomId, userId, wsMessage.getRequestId());
             return;
         }
@@ -135,7 +153,12 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            tetrisRoomService.handleDisconnect(roomId, userId, session);
+            if (tetrisRoomService.hasLocalRoom(roomId)) {
+                tetrisRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.TETRIS_PK, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.TETRIS_PK, userId);
         }
     }
@@ -145,7 +168,12 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            tetrisRoomService.handleDisconnect(roomId, userId, session);
+            if (tetrisRoomService.hasLocalRoom(roomId)) {
+                tetrisRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.TETRIS_PK, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.TETRIS_PK, userId);
         }
         log.debug("俄罗斯方块房间 WS 异常 sessionId={}, error={}", session.getId(), exception.getMessage());
@@ -163,5 +191,33 @@ public class TetrisRoomWebSocketHandler extends TextWebSocketHandler {
             return null;
         }
         return path.substring(prefix.length());
+    }
+
+    private boolean proxyJoin(WebSocketSession session, String roomId, Long userId) throws Exception {
+        TetrisRoomStateVO state = tetrisRoomService.getRoomState(roomId, userId);
+        if (state == null) {
+            return false;
+        }
+        gameConnectionRegistry.enterRoom(roomId, userId, session);
+        gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
+                "room_ready",
+                null,
+                state
+        )));
+        gameRoomEventBusService.publishRoomCommand(GameConstants.TETRIS_PK, roomId, userId, "state", null, null);
+        return true;
+    }
+
+    private void publishProxyCommand(String roomId, Long userId, GameWsMessage wsMessage) throws Exception {
+        gameRoomEventBusService.publishRoomCommand(
+                GameConstants.TETRIS_PK,
+                roomId,
+                userId,
+                wsMessage.getType(),
+                wsMessage.getRequestId(),
+                wsMessage.getData() == null || wsMessage.getData().isNull()
+                        ? null
+                        : objectMapper.writeValueAsString(wsMessage.getData())
+        );
     }
 }

@@ -23,7 +23,11 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
 
     private static final String TARGET_ROOM = "ROOM";
 
+    private static final String TARGET_ROOM_USER = "ROOM_USER";
+
     private static final String TARGET_GAME = "GAME";
+
+    private static final String TARGET_COMMAND = "ROOM_COMMAND";
 
     private final String instanceId = UUID.randomUUID().toString();
 
@@ -62,7 +66,13 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
                     deliverGameEvent(envelope, payload);
                     return;
                 }
-                deliverRoomEvent(envelope, payload);
+                if (TARGET_ROOM.equals(targetType)) {
+                    deliverRoomEvent(envelope, payload);
+                    return;
+                }
+                if (TARGET_ROOM_USER.equals(targetType)) {
+                    deliverRoomUserEvent(envelope, payload);
+                }
             } catch (Exception e) {
                 log.debug("游戏房间 Redis 事件处理失败: {}", e.getMessage());
             }
@@ -76,6 +86,19 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
             return;
         }
         gameConnectionRegistry.broadcastRoom(String.valueOf(roomIdObj), payload);
+    }
+
+    private void deliverRoomUserEvent(Map<String, Object> envelope, String payload) {
+        Object roomIdObj = envelope.get("roomId");
+        Object userIdObj = envelope.get("userId");
+        if (roomIdObj == null || userIdObj == null) {
+            return;
+        }
+        Long userId = toLong(userIdObj);
+        if (userId == null) {
+            return;
+        }
+        gameConnectionRegistry.sendToRoom(String.valueOf(roomIdObj), userId, payload);
     }
 
     private void deliverGameEvent(Map<String, Object> envelope, String payload) {
@@ -121,6 +144,25 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
     }
 
     @Override
+    public void publishRoomUserEvent(String roomId, Long userId, String payload) {
+        if (roomId == null || roomId.isBlank() || userId == null || payload == null) {
+            return;
+        }
+        try {
+            String envelope = objectMapper.writeValueAsString(Map.of(
+                    "sourceInstanceId", instanceId,
+                    "targetType", TARGET_ROOM_USER,
+                    "roomId", roomId,
+                    "userId", userId,
+                    "payload", payload
+            ));
+            stringRedisTemplate.convertAndSend(Constant.GAME_ROOM_EVENT_CHANNEL, envelope);
+        } catch (Exception e) {
+            log.debug("发布游戏房间定向事件失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
+        }
+    }
+
+    @Override
     public void publishGameEvent(String gameCode, Long userId, String payload) {
         if (gameCode == null || gameCode.isBlank() || userId == null || payload == null) {
             return;
@@ -136,6 +178,41 @@ public class RedisGameRoomEventBusServiceImpl implements GameRoomEventBusService
             stringRedisTemplate.convertAndSend(Constant.GAME_ROOM_EVENT_CHANNEL, envelope);
         } catch (Exception e) {
             log.debug("发布游戏大厅 Redis 事件失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
+        }
+    }
+
+    @Override
+    public void publishRoomCommand(String gameCode,
+                                   String roomId,
+                                   Long userId,
+                                   String commandType,
+                                   String requestId,
+                                   String data) {
+        if (gameCode == null || gameCode.isBlank()
+                || roomId == null || roomId.isBlank()
+                || userId == null
+                || commandType == null || commandType.isBlank()) {
+            return;
+        }
+        try {
+            String envelope = objectMapper.writeValueAsString(Map.of(
+                    "sourceInstanceId", instanceId,
+                    "targetType", TARGET_COMMAND,
+                    "gameCode", gameCode,
+                    "roomId", roomId,
+                    "userId", userId,
+                    "commandType", commandType,
+                    "requestId", requestId == null ? "" : requestId,
+                    "data", data == null ? "" : data
+            ));
+            stringRedisTemplate.convertAndSend(Constant.GAME_ROOM_EVENT_CHANNEL, envelope);
+        } catch (Exception e) {
+            log.debug("发布游戏房间命令失败 gameCode={}, roomId={}, userId={}, type={}, error={}",
+                    gameCode,
+                    roomId,
+                    userId,
+                    commandType,
+                    e.getMessage());
         }
     }
 }

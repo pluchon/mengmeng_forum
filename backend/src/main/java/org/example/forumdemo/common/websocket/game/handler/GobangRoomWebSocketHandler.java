@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.dto.game.GobangMoveRequest;
 import org.example.forumdemo.entity.vo.game.GobangRoomStateVO;
 import org.example.forumdemo.service.impl.game.GameConstants;
 import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,9 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
     private GameOnlineStateService gameOnlineStateService;
 
     @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -53,14 +57,16 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
                     state
             )));
         } catch (Exception e) {
-            // 房间可能已经结算并被内存清理，握手成功后也要给前端可处理的错误，避免 1011 异常断连。
-            log.warn("五子棋房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
-            gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
-                    "room_error",
-                    null,
-                    "房间不存在或已结束，请返回大厅重新进入"
-            )));
-            session.close(CloseStatus.POLICY_VIOLATION);
+            if (!proxyJoin(session, roomId, userId)) {
+                // 房间可能已经结算并被内存清理，握手成功后也要给前端可处理的错误，避免 1011 异常断连。
+                log.warn("五子棋房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
+                gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
+                        "room_error",
+                        null,
+                        "房间不存在或已结束，请返回大厅重新进入"
+                )));
+                session.close(CloseStatus.POLICY_VIOLATION);
+            }
         }
     }
 
@@ -106,6 +112,10 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
                                    Long userId,
                                    GameWsMessage wsMessage) throws Exception {
         if ("move".equals(wsMessage.getType())) {
+            if (!gobangRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             if (wsMessage.getData() == null || wsMessage.getData().isNull()) {
                 gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
                         "move_rejected",
@@ -119,6 +129,10 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("chat".equals(wsMessage.getType())) {
+            if (!gobangRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             GobangChatRequest request = wsMessage.getData() == null || wsMessage.getData().isNull()
                     ? new GobangChatRequest()
                     : objectMapper.treeToValue(wsMessage.getData(), GobangChatRequest.class);
@@ -126,6 +140,10 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("surrender".equals(wsMessage.getType())) {
+            if (!gobangRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             gobangRoomService.surrender(roomId, userId, wsMessage.getRequestId());
             return;
         }
@@ -141,7 +159,12 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            gobangRoomService.handleDisconnect(roomId, userId, session);
+            if (gobangRoomService.hasLocalRoom(roomId)) {
+                gobangRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.GOBANG, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
         }
     }
@@ -151,7 +174,12 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            gobangRoomService.handleDisconnect(roomId, userId, session);
+            if (gobangRoomService.hasLocalRoom(roomId)) {
+                gobangRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.GOBANG, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.GOBANG, userId);
         }
         log.debug("五子棋房间 WS 异常 sessionId={}, error={}", session.getId(), exception.getMessage());
@@ -169,5 +197,33 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
             return null;
         }
         return path.substring(prefix.length());
+    }
+
+    private boolean proxyJoin(WebSocketSession session, String roomId, Long userId) throws Exception {
+        GobangRoomStateVO state = gobangRoomService.getRoomState(roomId, userId);
+        if (state == null) {
+            return false;
+        }
+        gameConnectionRegistry.enterRoom(roomId, userId, session);
+        gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
+                "room_ready",
+                null,
+                state
+        )));
+        gameRoomEventBusService.publishRoomCommand(GameConstants.GOBANG, roomId, userId, "state", null, null);
+        return true;
+    }
+
+    private void publishProxyCommand(String roomId, Long userId, GameWsMessage wsMessage) throws Exception {
+        gameRoomEventBusService.publishRoomCommand(
+                GameConstants.GOBANG,
+                roomId,
+                userId,
+                wsMessage.getType(),
+                wsMessage.getRequestId(),
+                wsMessage.getData() == null || wsMessage.getData().isNull()
+                        ? null
+                        : objectMapper.writeValueAsString(wsMessage.getData())
+        );
     }
 }

@@ -35,6 +35,7 @@ import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
+import org.example.forumdemo.service.interfaces.game.GameRoomStateCacheService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GameRankService;
@@ -90,6 +91,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     @Autowired
     private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
+    private GameRoomStateCacheService gameRoomStateCacheService;
 
     @Autowired
     private GameUserProfileMapper gameUserProfileMapper;
@@ -152,6 +156,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
         saveRoomSnapshot(room);
+        cacheRoomState(room);
         return room.getRoomId();
     }
 
@@ -172,6 +177,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         saveRoomPlayer(room.getRoomId(), userId, "BLACK");
         saveRoomPlayer(room.getRoomId(), GameConstants.AI_USER_ID, "AI");
         saveRoomSnapshot(room);
+        cacheRoomState(room);
         return room.getRoomId();
     }
 
@@ -186,7 +192,37 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     @Override
     public JinziRoomStateVO getRoomState(String roomId, Long userId) {
-        return toStateVO(requireRoom(roomId, userId), userId);
+        JinziRoom room = rooms.get(roomId);
+        if (room == null) {
+            JinziRoomStateVO cached = gameRoomStateCacheService.getState(
+                    GameConstants.JINZI,
+                    roomId,
+                    userId,
+                    JinziRoomStateVO.class
+            );
+            if (cached != null) {
+                return cached;
+            }
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
+        }
+        if (!room.contains(userId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
+        }
+        return toStateVO(room, userId);
+    }
+
+    @Override
+    public boolean hasLocalRoom(String roomId) {
+        return roomId != null && rooms.containsKey(roomId);
+    }
+
+    @Override
+    public void pushRoomState(String roomId, String requestId) {
+        JinziRoom room = rooms.get(roomId);
+        if (room == null) {
+            return;
+        }
+        sendStateToRoom(room, "room_state_updated", requestId);
     }
 
     @Override
@@ -219,6 +255,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
             saveRoomSnapshot(room);
+            cacheRoomState(room);
             JinziMoveVO moveVO = new JinziMoveVO(
                     userId,
                     row,
@@ -843,11 +880,16 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     }
 
     private void sendStateToRoom(JinziRoom room, String type) {
+        sendStateToRoom(room, type, null);
+    }
+
+    private void sendStateToRoom(JinziRoom room, String type, String requestId) {
+        cacheRoomState(room);
         gameConnectionRegistry.forEachRoomSession(room.getRoomId(), (userId, session) -> {
             try {
                 gameConnectionRegistry.send(
                         session,
-                        objectMapper.writeValueAsString(GameWsResponse.ok(type, null, toStateVO(room, userId)))
+                        objectMapper.writeValueAsString(GameWsResponse.ok(type, requestId, toStateVO(room, userId)))
                 );
             } catch (Exception e) {
                 log.debug("发送井字棋状态失败 roomId={}, userId={}, error={}",
@@ -856,15 +898,47 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                         e.getMessage());
             }
         });
-        publishGenericRoomState(room, type);
+        publishPlayerRoomState(room, type, requestId);
     }
 
-    private void publishGenericRoomState(JinziRoom room, String type) {
+    private void publishPlayerRoomState(JinziRoom room, String type, String requestId) {
         try {
-            String payload = objectMapper.writeValueAsString(GameWsResponse.ok(type, null, toStateVO(room, room.getBlackUserId())));
-            gameRoomEventBusService.publishRoomEvent(room.getRoomId(), payload);
+            String blackPayload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                    type,
+                    requestId,
+                    toStateVO(room, room.getBlackUserId())
+            ));
+            gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getBlackUserId(), blackPayload);
+            if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+                String whitePayload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                        type,
+                        requestId,
+                        toStateVO(room, room.getWhiteUserId())
+                ));
+                gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getWhiteUserId(), whitePayload);
+            }
         } catch (Exception e) {
             log.debug("发布井字棋房间状态事件失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
+        }
+    }
+
+    private void cacheRoomState(JinziRoom room) {
+        if (room == null) {
+            return;
+        }
+        gameRoomStateCacheService.saveState(
+                GameConstants.JINZI,
+                room.getRoomId(),
+                room.getBlackUserId(),
+                toStateVO(room, room.getBlackUserId())
+        );
+        if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+            gameRoomStateCacheService.saveState(
+                    GameConstants.JINZI,
+                    room.getRoomId(),
+                    room.getWhiteUserId(),
+                    toStateVO(room, room.getWhiteUserId())
+            );
         }
     }
 
