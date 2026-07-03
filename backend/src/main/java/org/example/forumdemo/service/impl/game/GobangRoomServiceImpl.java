@@ -38,6 +38,7 @@ import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
+import org.example.forumdemo.service.interfaces.game.GameRoomStateCacheService;
 import org.example.forumdemo.service.interfaces.game.GobangRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.impl.game.ai.GameAiPlanner;
@@ -108,6 +109,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
+    private GameRoomStateCacheService gameRoomStateCacheService;
 
     @Autowired
     private GameUserProfileMapper gameUserProfileMapper;
@@ -193,6 +197,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
         saveRoomSnapshot(room);
+        cacheRoomState(room);
         return room.getRoomId();
     }
 
@@ -213,6 +218,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         saveRoomPlayer(room.getRoomId(), userId, "BLACK");
         saveRoomPlayer(room.getRoomId(), GameConstants.AI_USER_ID, "AI");
         saveRoomSnapshot(room);
+        cacheRoomState(room);
         return room.getRoomId();
     }
 
@@ -235,8 +241,34 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Override
     public GobangRoomStateVO getRoomState(String roomId, Long userId) {
-        GobangRoom room = requireExistingRoom(roomId);
+        GobangRoom room = rooms.get(roomId);
+        if (room == null) {
+            GobangRoomStateVO cached = gameRoomStateCacheService.getState(
+                    GameConstants.GOBANG,
+                    roomId,
+                    userId,
+                    GobangRoomStateVO.class
+            );
+            if (cached != null) {
+                return cached;
+            }
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
+        }
         return toStateVO(room, userId);
+    }
+
+    @Override
+    public boolean hasLocalRoom(String roomId) {
+        return roomId != null && rooms.containsKey(roomId);
+    }
+
+    @Override
+    public void pushRoomState(String roomId, String requestId) {
+        GobangRoom room = rooms.get(roomId);
+        if (room == null) {
+            return;
+        }
+        sendStateToRoom(room, "room_state_updated", requestId);
     }
 
     @Override
@@ -266,6 +298,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
             saveRoomSnapshot(room);
+            cacheRoomState(room);
             GobangMoveVO moveVO = new GobangMoveVO(
                     userId,
                     row,
@@ -1050,13 +1083,18 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private void sendStateToRoom(GobangRoom room, String type) {
+        sendStateToRoom(room, type, null);
+    }
+
+    private void sendStateToRoom(GobangRoom room, String type, String requestId) {
+        cacheRoomState(room);
         gameConnectionRegistry.forEachRoomSession(room.getRoomId(), (userId, session) -> {
             try {
                 gameConnectionRegistry.send(
                         session,
                         objectMapper.writeValueAsString(GameWsResponse.ok(
                                 type,
-                                null,
+                                requestId,
                                 toStateVO(room, userId)
                         ))
                 );
@@ -1067,19 +1105,47 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                         e.getMessage());
             }
         });
-        publishGenericRoomState(room, type);
+        publishPlayerRoomState(room, type, requestId);
     }
 
-    private void publishGenericRoomState(GobangRoom room, String type) {
+    private void publishPlayerRoomState(GobangRoom room, String type, String requestId) {
         try {
-            String payload = objectMapper.writeValueAsString(GameWsResponse.ok(
+            String blackPayload = objectMapper.writeValueAsString(GameWsResponse.ok(
                     type,
-                    null,
-                    toStateVO(room, null)
+                    requestId,
+                    toStateVO(room, room.getBlackUserId())
             ));
-            gameRoomEventBusService.publishRoomEvent(room.getRoomId(), payload);
+            gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getBlackUserId(), blackPayload);
+            if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+                String whitePayload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                        type,
+                        requestId,
+                        toStateVO(room, room.getWhiteUserId())
+                ));
+                gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getWhiteUserId(), whitePayload);
+            }
         } catch (Exception e) {
             log.debug("发布五子棋房间状态事件失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
+        }
+    }
+
+    private void cacheRoomState(GobangRoom room) {
+        if (room == null) {
+            return;
+        }
+        gameRoomStateCacheService.saveState(
+                GameConstants.GOBANG,
+                room.getRoomId(),
+                room.getBlackUserId(),
+                toStateVO(room, room.getBlackUserId())
+        );
+        if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+            gameRoomStateCacheService.saveState(
+                    GameConstants.GOBANG,
+                    room.getRoomId(),
+                    room.getWhiteUserId(),
+                    toStateVO(room, room.getWhiteUserId())
+            );
         }
     }
 

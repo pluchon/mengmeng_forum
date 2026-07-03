@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.dto.game.GobangMoveRequest;
 import org.example.forumdemo.entity.vo.game.JinziRoomStateVO;
 import org.example.forumdemo.service.impl.game.GameConstants;
 import org.example.forumdemo.service.interfaces.game.GameOnlineStateService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.JinziRoomService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,9 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
     private GameOnlineStateService gameOnlineStateService;
 
     @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Override
@@ -53,13 +57,15 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
                     state
             )));
         } catch (Exception e) {
-            log.warn("井字棋房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
-            gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
-                    "room_error",
-                    null,
-                    "房间不存在或已结束，请返回井字棋重新进入"
-            )));
-            session.close(CloseStatus.POLICY_VIOLATION);
+            if (!proxyJoin(session, roomId, userId)) {
+                log.warn("井字棋房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
+                gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
+                        "room_error",
+                        null,
+                        "房间不存在或已结束，请返回井字棋重新进入"
+                )));
+                session.close(CloseStatus.POLICY_VIOLATION);
+            }
         }
     }
 
@@ -105,6 +111,10 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
                                    Long userId,
                                    GameWsMessage wsMessage) throws Exception {
         if ("move".equals(wsMessage.getType())) {
+            if (!jinziRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             if (wsMessage.getData() == null || wsMessage.getData().isNull()) {
                 gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
                         "move_rejected",
@@ -118,6 +128,10 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("chat".equals(wsMessage.getType())) {
+            if (!jinziRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             GobangChatRequest request = wsMessage.getData() == null || wsMessage.getData().isNull()
                     ? new GobangChatRequest()
                     : objectMapper.treeToValue(wsMessage.getData(), GobangChatRequest.class);
@@ -125,6 +139,10 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("surrender".equals(wsMessage.getType())) {
+            if (!jinziRoomService.hasLocalRoom(roomId)) {
+                publishProxyCommand(roomId, userId, wsMessage);
+                return;
+            }
             jinziRoomService.surrender(roomId, userId, wsMessage.getRequestId());
             return;
         }
@@ -140,7 +158,12 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            jinziRoomService.handleDisconnect(roomId, userId, session);
+            if (jinziRoomService.hasLocalRoom(roomId)) {
+                jinziRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.JINZI, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.JINZI, userId);
         }
     }
@@ -150,7 +173,12 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
         Long userId = resolveUserId(session);
         String roomId = resolveRoomId(session);
         if (userId != null && roomId != null) {
-            jinziRoomService.handleDisconnect(roomId, userId, session);
+            if (jinziRoomService.hasLocalRoom(roomId)) {
+                jinziRoomService.handleDisconnect(roomId, userId, session);
+            } else {
+                gameConnectionRegistry.exitRoom(roomId, userId, session);
+                gameRoomEventBusService.publishRoomCommand(GameConstants.JINZI, roomId, userId, "disconnect", null, null);
+            }
             gameOnlineStateService.leaveGame(GameConstants.JINZI, userId);
         }
         log.debug("井字棋房间 WS 异常 sessionId={}, error={}", session.getId(), exception.getMessage());
@@ -168,5 +196,33 @@ public class JinziRoomWebSocketHandler extends TextWebSocketHandler {
             return null;
         }
         return path.substring(prefix.length());
+    }
+
+    private boolean proxyJoin(WebSocketSession session, String roomId, Long userId) throws Exception {
+        JinziRoomStateVO state = jinziRoomService.getRoomState(roomId, userId);
+        if (state == null) {
+            return false;
+        }
+        gameConnectionRegistry.enterRoom(roomId, userId, session);
+        gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.ok(
+                "room_ready",
+                null,
+                state
+        )));
+        gameRoomEventBusService.publishRoomCommand(GameConstants.JINZI, roomId, userId, "state", null, null);
+        return true;
+    }
+
+    private void publishProxyCommand(String roomId, Long userId, GameWsMessage wsMessage) throws Exception {
+        gameRoomEventBusService.publishRoomCommand(
+                GameConstants.JINZI,
+                roomId,
+                userId,
+                wsMessage.getType(),
+                wsMessage.getRequestId(),
+                wsMessage.getData() == null || wsMessage.getData().isNull()
+                        ? null
+                        : objectMapper.writeValueAsString(wsMessage.getData())
+        );
     }
 }

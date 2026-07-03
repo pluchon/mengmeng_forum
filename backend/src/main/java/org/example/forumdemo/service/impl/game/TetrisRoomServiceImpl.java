@@ -29,6 +29,8 @@ import org.example.forumdemo.service.impl.game.tetris.TetrisEngineConstants;
 import org.example.forumdemo.service.impl.game.tetris.TetrisMatrixUtil;
 import org.example.forumdemo.service.impl.game.tetris.TetrisPlayerState;
 import org.example.forumdemo.service.interfaces.game.GameRankService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
+import org.example.forumdemo.service.interfaces.game.GameRoomStateCacheService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
@@ -69,6 +71,12 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
+
+    @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
+
+    @Autowired
+    private GameRoomStateCacheService gameRoomStateCacheService;
 
     @Autowired
     private GameRankService gameRankService;
@@ -115,6 +123,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         userRoomIds.put(userIdB, room.getRoomId());
         gameUserProfileService.updateStatus(userIdA, GameConstants.TETRIS_PK, GameConstants.PROFILE_PLAYING, room.getRoomId());
         gameUserProfileService.updateStatus(userIdB, GameConstants.TETRIS_PK, GameConstants.PROFILE_PLAYING, room.getRoomId());
+        cacheRoomState(room);
         return room.getRoomId();
     }
 
@@ -134,7 +143,34 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     @Override
     public TetrisRoomStateVO getRoomState(String roomId, Long userId) {
-        return toStateVO(requireExistingRoom(roomId), userId);
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            TetrisRoomStateVO cached = gameRoomStateCacheService.getState(
+                    GameConstants.TETRIS_PK,
+                    roomId,
+                    userId,
+                    TetrisRoomStateVO.class
+            );
+            if (cached != null) {
+                return cached;
+            }
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        return toStateVO(room, userId);
+    }
+
+    @Override
+    public boolean hasLocalRoom(String roomId) {
+        return roomId != null && rooms.containsKey(roomId);
+    }
+
+    @Override
+    public void pushRoomState(String roomId, String requestId) {
+        TetrisRoom room = rooms.get(roomId);
+        if (room == null) {
+            return;
+        }
+        broadcastState(room, "room_state_updated", requestId);
     }
 
     @Override
@@ -706,23 +742,62 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     }
 
     private void broadcastState(TetrisRoom room, String type, String requestId) {
+        cacheRoomState(room);
         gameConnectionRegistry.forEachRoomSession(room.getRoomId(), (uid, session) -> {
             try {
-                gameConnectionRegistry.send(
-                        session,
-                        objectMapper.writeValueAsString(GameWsResponse.ok(type, requestId, toStateVO(room, uid)))
-                );
+                String payload = objectMapper.writeValueAsString(GameWsResponse.ok(type, requestId, toStateVO(room, uid)));
+                gameConnectionRegistry.send(session, payload);
             } catch (Exception e) {
                 log.debug("广播俄罗斯方块房间状态失败 roomId={}, userId={}", room.getRoomId(), uid);
             }
         });
+        publishPlayerRoomState(room, type, requestId);
     }
 
     private void broadcast(String roomId, GameWsResponse<?> response) {
         try {
-            gameConnectionRegistry.broadcastRoom(roomId, objectMapper.writeValueAsString(response));
+            String payload = objectMapper.writeValueAsString(response);
+            gameConnectionRegistry.broadcastRoom(roomId, payload);
+            gameRoomEventBusService.publishRoomEvent(roomId, payload);
         } catch (Exception e) {
             log.debug("广播俄罗斯方块房间消息失败 roomId={}", roomId);
+        }
+    }
+
+    private void cacheRoomState(TetrisRoom room) {
+        if (room == null) {
+            return;
+        }
+        gameRoomStateCacheService.saveState(
+                GameConstants.TETRIS_PK,
+                room.getRoomId(),
+                room.getPlayer1UserId(),
+                toStateVO(room, room.getPlayer1UserId())
+        );
+        gameRoomStateCacheService.saveState(
+                GameConstants.TETRIS_PK,
+                room.getRoomId(),
+                room.getPlayer2UserId(),
+                toStateVO(room, room.getPlayer2UserId())
+        );
+    }
+
+    private void publishPlayerRoomState(TetrisRoom room, String type, String requestId) {
+        try {
+            String player1Payload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                    type,
+                    requestId,
+                    toStateVO(room, room.getPlayer1UserId())
+            ));
+            gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getPlayer1UserId(), player1Payload);
+            String player2Payload = objectMapper.writeValueAsString(GameWsResponse.ok(
+                    type,
+                    requestId,
+                    toStateVO(room, room.getPlayer2UserId())
+            ));
+            gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getPlayer2UserId(), player2Payload);
+        } catch (Exception e) {
+            log.debug("发布俄罗斯方块定向状态失败 roomId={}", room.getRoomId());
         }
     }
 

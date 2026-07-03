@@ -16,6 +16,10 @@ public interface TetrisRoomService {
 
     TetrisRoomStateVO getRoomState(String roomId, Long userId);
 
+    boolean hasLocalRoom(String roomId);
+
+    void pushRoomState(String roomId, String requestId);
+
     void handleInput(String roomId, Long userId, String action, String requestId);
 
     void chat(String roomId, Long userId, TetrisChatRequest request, String requestId);
