@@ -9,6 +9,7 @@ import org.example.forumdemo.entity.bo.game.GameMatchPair;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.vo.game.GameMatchSuccessVO;
 import org.example.forumdemo.service.interfaces.game.GameMatchQueueService;
+import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.TetrisMatchService;
 import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
@@ -42,6 +43,9 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
 
     @Autowired
     private GameMatchQueueService gameMatchQueueService;
+
+    @Autowired
+    private GameRoomEventBusService gameRoomEventBusService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -175,11 +179,11 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
 
     private void sendToGame(Long userId, GameWsResponse<?> response) {
         try {
-            gameConnectionRegistry.sendToGame(
-                    GameConstants.TETRIS_PK,
-                    userId,
-                    objectMapper.writeValueAsString(response)
-            );
+            String payload = objectMapper.writeValueAsString(response);
+            boolean sent = gameConnectionRegistry.sendToGame(GameConstants.TETRIS_PK, userId, payload);
+            if (!sent) {
+                gameRoomEventBusService.publishGameEvent(GameConstants.TETRIS_PK, userId, payload);
+            }
         } catch (Exception e) {
             log.warn("发送俄罗斯方块匹配消息失败 userId={}", userId, e);
         }
