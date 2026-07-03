@@ -6,7 +6,7 @@ import {
   eachLines,
   speeds,
 } from './constants'
-import { createGameSeed, createRng, pickBlockType } from './rng'
+import { createBlockBagPicker, createGameSeed, createRng } from './rng'
 import {
   clearLineRows,
   findClearLines,
@@ -50,6 +50,7 @@ export function useTetrisEngine(options = {}) {
   const replayMode = ref(false)
 
   let rng = createRng(1)
+  let pickNextBlockType = createBlockBagPicker(rng)
   let fallTimer = null
   let startedAtMs = 0
 
@@ -137,7 +138,7 @@ export function useTetrisEngine(options = {}) {
   }
 
   function drawNextType() {
-    return pickBlockType(rng)
+    return pickNextBlockType()
   }
 
   function lockCurrent(stopDownTrigger) {
@@ -256,6 +257,7 @@ export function useTetrisEngine(options = {}) {
     replayMode.value = false
     seed.value = createGameSeed()
     rng = createRng(seed.value)
+    pickNextBlockType = createBlockBagPicker(rng)
     startedAt.value = new Date()
     startedAtMs = Date.now()
     playing.value = true
@@ -269,7 +271,7 @@ export function useTetrisEngine(options = {}) {
 
   function buildReplayPayload() {
     return JSON.stringify({
-      v: 1,
+      v: 2,
       seed: seed.value,
       inputs: inputs.value,
     })

@@ -1,9 +1,15 @@
 package org.example.forumdemo.service.impl.game.tetris;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // 可复现伪随机，与前端 rng.js 保持一致
 public final class TetrisRng {
 
     private long state;
+
+    // 7-Bag 随机袋，保证每袋七种方块各出现一次
+    private final List<String> blockBag = new ArrayList<>();
 
     private TetrisRng(long seed) {
         this.state = (seed & 0xffffffffL);
@@ -32,10 +38,20 @@ public final class TetrisRng {
     }
 
     public String pickBlockType() {
-        int index = (int) Math.floor(nextDouble() * TetrisEngineConstants.BLOCK_TYPES.size());
-        if (index >= TetrisEngineConstants.BLOCK_TYPES.size()) {
-            index = TetrisEngineConstants.BLOCK_TYPES.size() - 1;
+        if (blockBag.isEmpty()) {
+            refillBlockBag();
         }
-        return TetrisEngineConstants.BLOCK_TYPES.get(index);
+        return blockBag.remove(0);
+    }
+
+    private void refillBlockBag() {
+        blockBag.clear();
+        blockBag.addAll(TetrisEngineConstants.BLOCK_TYPES);
+        for (int i = blockBag.size() - 1; i > 0; i--) {
+            int j = (int) Math.floor(nextDouble() * (i + 1));
+            String current = blockBag.get(i);
+            blockBag.set(i, blockBag.get(j));
+            blockBag.set(j, current);
+        }
     }
 }

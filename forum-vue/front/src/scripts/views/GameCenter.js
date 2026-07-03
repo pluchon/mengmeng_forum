@@ -430,6 +430,7 @@ async function openTetrisReplay(row) {
   tetrisReplayRunner = createReplayRunner(
     payload.seed || res.data.seed,
     payload.inputs || [],
+    payload.v || 1,
   )
   paintTetrisReplayFrame()
 }

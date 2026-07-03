@@ -17,6 +17,27 @@ export function pickBlockType(rng) {
   return blockType[index]
 }
 
+export function createBlockBagPicker(rng) {
+  let bag = []
+
+  function refillBag() {
+    bag = [...blockType]
+    for (let i = bag.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1))
+      const current = bag[i]
+      bag[i] = bag[j]
+      bag[j] = current
+    }
+  }
+
+  return () => {
+    if (!bag.length) {
+      refillBag()
+    }
+    return bag.shift()
+  }
+}
+
 export function createGameSeed() {
   return Date.now()
 }

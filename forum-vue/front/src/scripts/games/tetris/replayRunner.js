@@ -1,6 +1,6 @@
 import Block from './block'
 import { clearPoints, createBlankMatrix, eachLines, speeds } from './constants'
-import { createRng, pickBlockType } from './rng'
+import { createBlockBagPicker, createRng, pickBlockType } from './rng'
 import {
   clearLineRows,
   findClearLines,
@@ -10,18 +10,21 @@ import {
 } from './unit'
 
 // 离线重放：用种子与操作流复现棋盘，供回放抽屉使用
-export function createReplayRunner(seed, inputs = []) {
+export function createReplayRunner(seed, inputs = [], randomizerVersion = 2) {
   let rng = createRng(seed)
+  let pickNextBlockType = Number(randomizerVersion) >= 2
+    ? createBlockBagPicker(rng)
+    : () => pickBlockType(rng)
   let matrix = createBlankMatrix()
   let cur = null
-  let nextType = pickBlockType(rng)
+  let nextType = pickNextBlockType()
   let speedRun = 1
   let clearLines = 0
   let points = 0
   let playing = true
 
   function drawNextType() {
-    return pickBlockType(rng)
+    return pickNextBlockType()
   }
 
   function spawn() {

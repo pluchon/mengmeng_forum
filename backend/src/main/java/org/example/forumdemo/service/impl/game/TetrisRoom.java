@@ -67,10 +67,9 @@ public class TetrisRoom {
         this.player2UserId = player2UserId;
         this.redUserId = redUserId;
         this.blueUserId = blueUserId;
-        long seed1 = System.currentTimeMillis() ^ player1UserId;
-        long seed2 = System.currentTimeMillis() ^ player2UserId ^ 0x9e3779b97f4a7c15L;
-        this.player1State = new TetrisPlayerState(seed1);
-        this.player2State = new TetrisPlayerState(seed2);
+        long seed = System.currentTimeMillis() ^ player1UserId ^ (player2UserId << 16);
+        this.player1State = new TetrisPlayerState(seed);
+        this.player2State = new TetrisPlayerState(seed);
     }
 
     public boolean contains(Long userId) {
