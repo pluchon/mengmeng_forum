@@ -24,8 +24,14 @@ public class TetrisActiveRoomVO {
     // 红方用户 ID
     private Long redUserId;
 
+    // 红方昵称
+    private String redNickname;
+
     // 蓝方用户 ID
     private Long blueUserId;
+
+    // 蓝方昵称
+    private String blueNickname;
 
     // 红方分数
     private Integer redScore;

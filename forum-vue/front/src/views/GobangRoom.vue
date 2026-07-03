@@ -5,8 +5,9 @@
         <button type="button" class="game-icon-btn game-icon-btn--dark" aria-label="离开对局" title="离开对局" @click="backGame">
           <el-icon><HomeFilled /></el-icon>
         </button>
-        <div>
+        <div class="gobang-room-title">
           <h1>五子棋对局</h1>
+          <span>房间号：{{ room.roomId || roomId }}</span>
         </div>
         <div class="gobang-room-conn" :class="{ 'is-online': roomSocket.connected.value }">
           <span />

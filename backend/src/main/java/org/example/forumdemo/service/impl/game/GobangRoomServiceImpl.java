@@ -65,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -361,6 +362,15 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     @Override
     public List<GobangActiveRoomVO> listActiveRooms() {
         List<GobangActiveRoomVO> rows = new ArrayList<>();
+        Set<Long> userIds = new HashSet<>();
+        for (GobangRoom room : rooms.values()) {
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                continue;
+            }
+            collectRealUserId(userIds, room.getBlackUserId());
+            collectRealUserId(userIds, room.getWhiteUserId());
+        }
+        Map<Long, User> userMap = loadActiveRoomUsers(userIds);
         for (GobangRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
@@ -368,7 +378,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             rows.add(new GobangActiveRoomVO(
                     room.getRoomId(),
                     room.getBlackUserId(),
+                    activeRoomNickname(userMap.get(room.getBlackUserId()), room.getBlackUserId()),
                     room.getWhiteUserId(),
+                    room.isAiRoom() ? "AI" : activeRoomNickname(userMap.get(room.getWhiteUserId()), room.getWhiteUserId()),
                     room.getCurrentTurnUserId(),
                     room.isAiRoom(),
                     room.getStartedAt()
@@ -376,6 +388,36 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
         rows.sort(Comparator.comparing(GobangActiveRoomVO::getStartedAt).reversed());
         return rows;
+    }
+
+    private void collectRealUserId(Set<Long> userIds, Long userId) {
+        if (userId != null && !GameConstants.AI_USER_ID.equals(userId)) {
+            userIds.add(userId);
+        }
+    }
+
+    private Map<Long, User> loadActiveRoomUsers(Set<Long> userIds) {
+        Map<Long, User> userMap = new HashMap<>();
+        if (userIds.isEmpty()) {
+            return userMap;
+        }
+        userMapper.selectList(new LambdaQueryWrapper<User>()
+                        .in(User::getId, userIds))
+                .forEach(user -> userMap.put(user.getId(), user));
+        return userMap;
+    }
+
+    private String activeRoomNickname(User user, Long userId) {
+        if (user == null) {
+            return "用户 " + userId;
+        }
+        if (user.getNickname() != null && !user.getNickname().isBlank()) {
+            return user.getNickname();
+        }
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            return user.getUsername();
+        }
+        return "用户 " + userId;
     }
 
     // 定时处理超过重连窗口的玩家，结算前再次确认房间仍在进行中

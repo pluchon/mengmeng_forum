@@ -366,7 +366,7 @@ async function surrender() {
 async function backGame() {
   if (!isFinished.value) {
     try {
-      await ElMessageBox.confirm('确认离开当前对局吗？离开后可从匹配页回到进行中的房间。', '离开对局', {
+      await ElMessageBox.confirm('确认离开当前对局吗？离开后本局仍会继续进行。', '离开对局', {
         type: 'warning',
         confirmButtonText: '离开',
         cancelButtonText: '继续对局',

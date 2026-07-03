@@ -29,6 +29,13 @@
   margin-bottom: 20px;
 }
 
+.tetris-room-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .tetris-room-title h1 {
   margin: 0;
   font-size: 26px;
@@ -36,6 +43,21 @@
   font-weight: 900;
   color: #edf5f3;
   letter-spacing: 0;
+}
+
+.tetris-room-title > span {
+  min-width: 0;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #b8c9cf;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .tetris-mode-tag {

@@ -1,13 +1,12 @@
 @import "./gobang-game.css";
 
 .jinzi-match-board {
-  --board-pad: 0px;
-  border-color: #3d5a80;
+  border-color: #e6ebf4;
   background:
-    linear-gradient(#40516a 1px, transparent 1px),
-    linear-gradient(90deg, #40516a 1px, transparent 1px),
-    linear-gradient(145deg, #0b1220, #172554 58%, #111827);
-  background-size: calc(100% / 3) calc(100% / 3);
+    linear-gradient(#ffd1df 1px, transparent 1px),
+    linear-gradient(90deg, #ffd1df 1px, transparent 1px),
+    linear-gradient(135deg, #fff, #fff0f6 58%, #ffe3ed);
+  background-size: calc(100% / 3) calc(100% / 3), calc(100% / 3) calc(100% / 3), 100% 100%;
   background-position: 0 0;
 }
 
@@ -16,23 +15,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.82);
-  font-size: 28px;
+  font-size: 33px;
   line-height: 1;
   font-weight: 900;
   animation: gobangCoverDrop 7.2s ease-in-out infinite;
 }
 
 .jinzi-match-mark.is-x {
-  color: #f8fafc;
+  color: #1b5cff;
 }
 
 .jinzi-match-mark.is-o {
-  color: #7dd3fc;
-  font-size: 30px;
+  color: #67a4ff;
+  font-size: 35px;
 }
 
 .jinzi-match-piece-a {

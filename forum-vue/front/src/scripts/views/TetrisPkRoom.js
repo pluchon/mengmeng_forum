@@ -288,8 +288,8 @@ function useTetrisPkRoom() {
     }
     const p1 = room.player1
     const p2 = room.player2
-    if (p1?.userId === userId) return p1.nickname || p1.username || '玩家1'
-    if (p2?.userId === userId) return p2.nickname || p2.username || '玩家2'
+    if (p1?.userId === userId) return p1.nickname || p1.username || `用户 ${userId}`
+    if (p2?.userId === userId) return p2.nickname || p2.username || `用户 ${userId}`
     return `用户 ${userId}`
   }
 

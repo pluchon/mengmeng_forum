@@ -7,6 +7,7 @@
         </button>
         <div class="tetris-room-title">
           <h1>俄罗斯方块<span class="tetris-mode-tag"> · 在线PK模式</span></h1>
+          <span>房间号：{{ room.roomId || roomId }}</span>
         </div>
         <div class="tetris-room-conn" :class="{ 'is-online': roomSocket.connected.value }">
           <span />

@@ -1,7 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Back, CircleClose, Timer, VideoPlay } from '@element-plus/icons-vue'
+import { Back, CircleClose, VideoPlay } from '@element-plus/icons-vue'
 import {
   getGameCenterOverview,
   getJinziProfile,
@@ -99,7 +99,6 @@ const gameSocket = useGameWebSocket('games/jinzi', {
 })
 
 const totalCount = computed(() => Number(profile.totalCount) || 0)
-const canResumeRoom = computed(() => profile.currentStatus === 'PLAYING' && profile.currentRoomId)
 const jinziGame = computed(() =>
   overview.games.find((item) => item?.gameCode === 'jinzi') || {
     gameCode: 'jinzi',
@@ -186,11 +185,6 @@ function startMatch() {
 function stopMatch() {
   if (!matching.value) return
   gameSocket.send('stop_match')
-}
-
-function resumeRoom() {
-  if (!canResumeRoom.value) return
-  router.push(`/games/jinzi/rooms/${encodeURIComponent(profile.currentRoomId)}`)
 }
 
 function backCenter() {

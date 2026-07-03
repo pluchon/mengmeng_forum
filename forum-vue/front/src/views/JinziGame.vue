@@ -31,21 +31,6 @@
                 <span>总局数</span>
                 <strong>{{ totalCount }}</strong>
               </div>
-              <div>
-                <span>当前段位</span>
-                <strong>{{ profile.rankName || '青铜 III' }}</strong>
-              </div>
-              <div>
-                <span>排位分</span>
-                <strong>{{ profile.score ?? 1000 }}</strong>
-              </div>
-            </div>
-            <div class="game-rank-progress">
-              <div class="game-rank-progress-head">
-                <span>段位进度</span>
-                <strong>{{ rankNextText }}</strong>
-              </div>
-              <el-progress :percentage="rankProgressPercent" :stroke-width="8" :show-text="false" />
             </div>
             <div class="gobang-match-line">
               <h2>{{ matching ? '正在寻找对手' : '进入快速匹配' }}</h2>
@@ -57,9 +42,6 @@
               </el-button>
               <el-button v-else type="danger" size="large" :icon="CircleClose" @click="stopMatch">
                 正在匹配中........
-              </el-button>
-              <el-button v-if="canResumeRoom" size="large" :icon="Timer" @click="resumeRoom">
-                回到对局
               </el-button>
             </div>
           </div>
