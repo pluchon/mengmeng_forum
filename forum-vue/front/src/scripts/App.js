@@ -6,11 +6,13 @@ import TheHeader from '@/components/layout/TheHeader.vue'
 import { useUserStore } from '@/stores/user'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useGroupVoiceStore } from '@/stores/groupVoice'
+import { useThemeStore } from '@/stores/theme'
 
 export function useApp() {
   const route = useRoute()
   const userStore = useUserStore()
   const groupVoiceStore = useGroupVoiceStore()
+  const themeStore = useThemeStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
 
   function cleanupMascotDom() {
@@ -40,9 +42,21 @@ export function useApp() {
   )
   /** 游戏页面是独立沉浸式界面，不展示看板娘模型 */
   const isGamePage = computed(() => route.path === '/games' || route.path.startsWith('/games/'))
+  /** 深色模式首版不覆盖具体游戏详情与对战房间，游戏中心首页保留 */
+  const isGameThemeExcluded = computed(() => route.path.startsWith('/games/'))
+  const isThemeAdaptedPage = computed(() => !isAuthPage.value && !isGameThemeExcluded.value)
   /** 登录/注册等认证页不展示看板娘 */
   const showMascot = computed(
     () => import.meta.env.VITE_ENABLE_MASCOT === 'true' && !isAuthPage.value && !isGamePage.value,
+  )
+
+  watch(
+    [() => themeStore.mode, isThemeAdaptedPage],
+    ([mode, adapted]) => {
+      if (typeof document === 'undefined') return
+      document.documentElement.dataset.theme = adapted ? mode : 'light'
+    },
+    { immediate: true },
   )
 
   watch(
@@ -61,6 +75,7 @@ export function useApp() {
     isAuthPage,
     showGlobalHeader,
     showMascot,
+    isThemeAdaptedPage,
     zhCn,
   }
 }

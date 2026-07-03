@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { Coin, Message, Mouse, Search, Setting } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
+import ThemeModeSwitch from '@/components/layout/ThemeModeSwitch.vue'
 import { SITE_NAME as siteName } from '@/constants/site'
 import { useHomeShellContext } from '@/composables/useHomeShell'
 
