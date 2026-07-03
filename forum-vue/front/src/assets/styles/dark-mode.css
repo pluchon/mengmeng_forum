@@ -645,3 +645,420 @@
   background: rgba(255, 255, 255, 0.06) !important;
   color: var(--dark-text-muted) !important;
 }
+
+/* 深色模式收口：覆盖 scoped 样式和第三方组件残留浅色区域 */
+:root[data-theme='dark'] .mc-dialog.mc-dialog--vip.el-dialog,
+:root[data-theme='dark'] .mc-dialog.mc-dialog--vip :where(
+  .mc-right,
+  .mc-rhead,
+  .mc-rbody,
+  .mc-rbody-scroll,
+  .mc-rbody-scroll .el-scrollbar__wrap,
+  .mc-rbody-scroll .el-scrollbar__view,
+  .mc-rinput,
+  .mc-welcome
+) {
+  background: #111827 !important;
+  color: var(--dark-text) !important;
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .mc-dialog.mc-dialog--vip :where(
+  .mc-search,
+  .mc-search-input,
+  .mc-ibox,
+  .mc-bbl,
+  .mc-ncard,
+  .mc-join-request-row,
+  .mc-public-empty,
+  .mc-emoji-panel,
+  .mc-owned-group-panel,
+  .mc-reply-draft
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .mc-dialog.mc-dialog--vip :where(
+  .mc-rname,
+  .mc-bbl,
+  .mc-ncard-body,
+  .mc-join-request-name,
+  .mc-owned-group-name,
+  .mc-public-empty
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .mc-dialog.mc-dialog--vip :where(
+  .mc-ibox::placeholder,
+  .mc-search-input::placeholder,
+  .mc-ncard-time,
+  .mc-join-request-time,
+  .mc-join-request-group,
+  .mc-owned-group-count
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .unified-search-nav,
+  .unified-search-user-list,
+  .unified-search-user-row
+) {
+  background: var(--dark-panel) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .unified-search-nav__btn,
+  .unified-search-nav__hint,
+  .unified-search-user-sub
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .unified-search-nav__btn.is-active {
+  background: #e5edff !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .points-chart-stat-card,
+  .points-chart-area,
+  .points-filter-btn,
+  .points-filter-menu
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .points-chart-stat-label,
+  .points-chart-empty,
+  .points-log-time,
+  .points-log-balance
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .points-chart-stat-value,
+  .points-log-title,
+  .points-summary-side-value
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .points-chart-divider,
+  .points-log-item
+) {
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .lottery-demo-banner,
+  .lottery-play-card,
+  .lottery-pool-chip,
+  .lottery-chart-inner,
+  .lottery-activity-pick-card,
+  .lottery-surprise-row,
+  .lottery-surprise-preview
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .lottery-demo-banner__title,
+  .lottery-draw-strategy-title,
+  .lottery-play-card .play-label,
+  .lottery-cost-head,
+  .lottery-section-title,
+  .lottery-pool-chip .chip-name,
+  .lottery-chart-head
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .lottery-demo-banner__text,
+  .lottery-cost-name,
+  .lottery-cost-rules,
+  .lottery-pool-chip .chip-weight,
+  .lottery-pool-chip .chip-meta,
+  .lottery-chart-hint
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .lottery-play-card--ten {
+  background: linear-gradient(135deg, #254477, #5c2d56) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .lottery-pool-chip.jackpot {
+  background: rgba(255, 145, 184, 0.11) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .checkin-reward-tip,
+  .checkin-hero-calendar,
+  .checkin-calendar-wrap,
+  .checkin-stats-panel,
+  .checkin-stat-mini,
+  .checkin-trend-card
+) {
+  background: var(--dark-panel) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .checkin-cal-title,
+  .checkin-stat-mini-value,
+  .checkin-trend-title
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .checkin-reward-tip-text,
+  .checkin-stat-mini-label,
+  .checkin-trend-sub
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .checkin-icon-btn,
+  .checkin-calendar-wrap .el-calendar-table thead th,
+  .checkin-calendar-wrap .el-calendar-table td
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .checkin-calendar-wrap :where(
+  .el-calendar,
+  .el-calendar__body,
+  .el-calendar-table
+) {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .checkin-calendar-wrap :where(
+  .el-calendar-table td.is-selected,
+  .el-calendar-table td.is-today
+) {
+  background: rgba(125, 183, 255, 0.1) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .checkin-cell-day {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .checkin-stat-mini-mask {
+  background: rgba(11, 16, 32, 0.62) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .privacy-page,
+  .privacy-container,
+  .privacy-content,
+  .privacy-footer
+) {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(255, 111, 172, 0.08), transparent 34%),
+    radial-gradient(circle at 12% 18%, rgba(125, 183, 255, 0.12), transparent 32%),
+    var(--dark-panel) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .privacy-page :where(
+  .policy-card,
+  .qr-item,
+  .qr-wrapper
+) {
+  background: rgba(18, 26, 43, 0.92) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+  box-shadow: 0 24px 62px rgba(0, 0, 0, 0.28) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .privacy-page :where(
+  .hero-section h1,
+  .section-title,
+  .section-body strong,
+  .qr-item h3
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .privacy-page :where(
+  .hero-section p,
+  .section-body,
+  .section-body p,
+  .section-body li,
+  .privacy-footer
+) {
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted .privacy-page :where(.divider, hr) {
+  background: var(--dark-border) !important;
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .drift-page :where(
+  .drift-textarea .el-textarea__inner,
+  .drift-empty-sea,
+  .drift-mine-row,
+  .drift-mine-detail,
+  .drift-mine-comments-frame
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(125, 183, 255, 0.18) !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .drift-page :where(
+  .drift-compose .el-textarea__inner,
+  .drift-input-area .el-textarea__inner
+) {
+  background: rgba(18, 26, 43, 0.82) !important;
+  border-color: rgba(125, 183, 255, 0.28) !important;
+  box-shadow: inset 0 1px 16px rgba(0, 0, 0, 0.22) !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .drift-page .drift-compose .el-textarea__inner::placeholder,
+:root[data-theme='dark'] .drift-page .drift-input-area .el-textarea__inner::placeholder {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .drift-page :where(
+  .drift-empty-mark,
+  .drift-empty-sea h3,
+  .drift-mine-time,
+  .drift-mine-preview,
+  .drift-mine-replies,
+  .drift-mine-comment-time,
+  .drift-mine-no-comments
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .drift-page .drift-mine-row {
+  background: rgba(18, 26, 43, 0.88) !important;
+  border-color: rgba(125, 183, 255, 0.22) !important;
+}
+
+:root[data-theme='dark'] .drift-page .drift-mine-wrapper:hover .drift-mine-row {
+  background: rgba(28, 42, 66, 0.94) !important;
+}
+
+:root[data-theme='dark'] .drift-page :where(
+  .drift-mine-content,
+  .drift-mine-comment-body,
+  .drift-mine-comment-author,
+  .drift-mine-status
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .drift-page :where(
+  .drift-mine-divider,
+  .drift-mine-comment-divider
+) {
+  background: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .wang-editor-wrapper :where(
+  .w-e-toolbar,
+  .w-e-bar,
+  .w-e-text-container,
+  .w-e-scroll,
+  .w-e-text
+),
+:root[data-theme='dark'] .rich-container :where(
+  .wang-toolbar,
+  .wang-editor
+) {
+  background: #121a2b !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .wang-editor-wrapper :where(
+  .w-e-bar-item,
+  .w-e-bar-item button,
+  .w-e-select-list,
+  .w-e-drop-panel
+) {
+  background: transparent !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .wang-editor-wrapper .w-e-text-placeholder,
+:root[data-theme='dark'] .wang-editor-wrapper [data-placeholder]::before {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .editor-title-input .el-input__wrapper,
+  .editor-board-cascader .el-input__wrapper,
+  .editor-gallery-empty-cta,
+  .editor-gallery-slot,
+  .gallery-upload-card
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .app-root.is-theme-adapted :where(
+  .emoji-shop-card img,
+  .emoji-shop-pack-cover,
+  .emoji-shop-upload-dialog__cover,
+  .emoji-shop-upload-dialog__pack-item
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+:root[data-theme='dark'] .game-center-page :where(
+  .game-metric-card strong,
+  .game-card-title-row h3,
+  .game-card-foot em,
+  .game-watch-switch button,
+  .game-watch-search .el-input__wrapper,
+  .game-room-empty .el-empty__description
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .game-center-page :where(
+  .game-card-title-row span,
+  .game-watch-search .el-input__wrapper,
+  .game-watch-switch button:not(.is-active)
+) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .vip-page :where(
+  .vip-model-name__text,
+  .vip-quota-title,
+  .vip-dashboard-stat strong,
+  .vip-meter__used,
+  .vip-meter__limit
+) {
+  color: var(--dark-text) !important;
+}
