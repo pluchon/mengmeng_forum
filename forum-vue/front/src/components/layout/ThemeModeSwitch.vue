@@ -7,8 +7,10 @@
       'is-dark': themeStore.isDark,
       'is-motion-light': motionMode === 'light',
       'is-motion-dark': motionMode === 'dark',
+      'is-transitioning': isTransitioning,
     }"
     :aria-label="themeStore.isDark ? '切换浅色模式' : '切换深色模式'"
+    :disabled="isTransitioning"
     @click="handleToggle"
   >
     <span class="theme-mode-switch__thumb">
