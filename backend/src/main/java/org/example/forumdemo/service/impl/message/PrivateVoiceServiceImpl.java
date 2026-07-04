@@ -91,7 +91,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
                     && state.getParticipants().size() >= MAX_SEATS) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "语音聊天人数已满"));
             }
-            putParticipant(state, loginUserId, true);
+            putParticipant(state, loginUserId);
             saveState(state);
             voiceOccupancyService.bind(loginUserId, sessionId, SESSION_TTL);
         }
@@ -115,7 +115,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
                     && state.getParticipants().size() >= MAX_SEATS) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "语音聊天人数已满"));
             }
-            putParticipant(state, loginUserId, true);
+            putParticipant(state, loginUserId);
             if (state.getAcceptedAt() == null) {
                 state.setAcceptedAt(ForumDateTimes.now());
             }
@@ -228,7 +228,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
         return state;
     }
 
-    private void putParticipant(VoiceSessionState state, Long userId, boolean renewConnection) {
+    private void putParticipant(VoiceSessionState state, Long userId) {
         ParticipantState participant = state.getParticipants().get(String.valueOf(userId));
         if (participant == null) {
             participant = new ParticipantState();
@@ -236,9 +236,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
             participant.setJoinedAt(ForumDateTimes.now());
             state.getParticipants().put(String.valueOf(userId), participant);
         }
-        if (renewConnection || !StringUtils.hasText(participant.getConnectionId())) {
-            participant.setConnectionId(UUID.randomUUID().toString().replace("-", ""));
-        }
+        participant.setConnectionId(UUID.randomUUID().toString().replace("-", ""));
     }
 
     private void assertPeer(Long peerUserId, Long loginUserId) {
@@ -358,8 +356,8 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
     }
 
     private String sessionId(Long peerUserId, Long loginUserId) {
-        Long first = Math.min(peerUserId, loginUserId);
-        Long second = Math.max(peerUserId, loginUserId);
+        long first = Math.min(peerUserId, loginUserId);
+        long second = Math.max(peerUserId, loginUserId);
         return "private:" + first + ":" + second;
     }
 
