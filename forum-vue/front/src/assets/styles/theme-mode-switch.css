@@ -231,6 +231,14 @@
   z-index: 2;
 }
 
+:root.theme-transition-inward::view-transition-old(root) {
+  z-index: 2;
+}
+
+:root.theme-transition-inward::view-transition-new(root) {
+  z-index: 1;
+}
+
 .theme-transition-sweep {
   position: fixed;
   inset: 0;
@@ -252,7 +260,15 @@
 
 .theme-transition-sweep.is-active {
   clip-path: circle(var(--theme-sweep-radius) at var(--theme-sweep-x) var(--theme-sweep-y));
-  transition: clip-path 0.52s ease-in-out;
+  transition: clip-path 0.68s ease-in-out;
+}
+
+.theme-transition-sweep--inward {
+  clip-path: circle(var(--theme-sweep-radius) at var(--theme-sweep-x) var(--theme-sweep-y));
+}
+
+.theme-transition-sweep--inward.is-active {
+  clip-path: circle(0 at var(--theme-sweep-x) var(--theme-sweep-y));
 }
 
 @media (prefers-reduced-motion: reduce) {

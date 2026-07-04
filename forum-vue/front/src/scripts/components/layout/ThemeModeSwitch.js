@@ -7,7 +7,7 @@ const switchRef = ref(null)
 const motionMode = ref('')
 const isTransitioning = ref(false)
 
-const THEME_TRANSITION_DURATION = 520
+const THEME_TRANSITION_DURATION = 680
 const THEME_TRANSITION_EASING = 'ease-in-out'
 
 function prefersReducedMotion() {
@@ -44,12 +44,16 @@ function calcThemeSweepRadius(x, y) {
   return Math.ceil(Math.sqrt(maxX * maxX + maxY * maxY))
 }
 
-function createThemeSweepFallback(targetMode, x, y, radius) {
+function createThemeSweepFallback(targetMode, sourceMode, x, y, radius, isInward) {
   if (typeof document === 'undefined') return null
 
   const sweep = document.createElement('span')
 
-  sweep.className = `theme-transition-sweep theme-transition-sweep--${targetMode}`
+  sweep.className = [
+    'theme-transition-sweep',
+    `theme-transition-sweep--${isInward ? sourceMode : targetMode}`,
+    isInward ? 'theme-transition-sweep--inward' : '',
+  ].filter(Boolean).join(' ')
   sweep.style.setProperty('--theme-sweep-x', `${x}px`)
   sweep.style.setProperty('--theme-sweep-y', `${y}px`)
   sweep.style.setProperty('--theme-sweep-radius', `${radius}px`)
@@ -71,6 +75,11 @@ async function runViewTransition(targetMode, x, y, radius) {
     return false
   }
 
+  const isInward = targetMode === 'light'
+  const root = document.documentElement
+
+  root.classList.toggle('theme-transition-inward', isInward)
+
   const transition = document.startViewTransition(() => {
     themeStore.setMode(targetMode)
   })
@@ -79,15 +88,20 @@ async function runViewTransition(targetMode, x, y, radius) {
     await transition.ready
     const animation = document.documentElement.animate(
       {
-        clipPath: [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${radius}px at ${x}px ${y}px)`,
-        ],
+        clipPath: isInward
+          ? [
+              `circle(${radius}px at ${x}px ${y}px)`,
+              `circle(0px at ${x}px ${y}px)`,
+            ]
+          : [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${radius}px at ${x}px ${y}px)`,
+            ],
       },
       {
         duration: THEME_TRANSITION_DURATION,
         easing: THEME_TRANSITION_EASING,
-        pseudoElement: '::view-transition-new(root)',
+        pseudoElement: isInward ? '::view-transition-old(root)' : '::view-transition-new(root)',
       },
     )
     await animation.finished
@@ -97,6 +111,8 @@ async function runViewTransition(targetMode, x, y, radius) {
     } catch {
       // 页面切换或浏览器取消 View Transition 时，主题状态已经完成切换。
     }
+  } finally {
+    root.classList.remove('theme-transition-inward')
   }
 
   return true
@@ -106,6 +122,8 @@ async function handleToggle(event) {
   if (isTransitioning.value) return
 
   const targetMode = themeStore.isDark ? 'light' : 'dark'
+  const sourceMode = themeStore.isDark ? 'dark' : 'light'
+  const isInward = targetMode === 'light'
   const sourceEl = event?.currentTarget || switchRef.value
   const { x, y } = resolveTogglePoint(event, sourceEl)
   const radius = calcThemeSweepRadius(x, y)
@@ -122,7 +140,7 @@ async function handleToggle(event) {
     const handledByViewTransition = await runViewTransition(targetMode, x, y, radius)
 
     if (!handledByViewTransition) {
-      createThemeSweepFallback(targetMode, x, y, radius)
+      createThemeSweepFallback(targetMode, sourceMode, x, y, radius, isInward)
       themeStore.setMode(targetMode)
       await new Promise((resolve) => {
         window.setTimeout(resolve, THEME_TRANSITION_DURATION)

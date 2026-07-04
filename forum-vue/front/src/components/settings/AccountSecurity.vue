@@ -37,12 +37,22 @@
     >
       <div v-if="loadingLogs" class="login-log-loading">加载中…</div>
       <div v-else-if="loginLogs.length">
-        <el-table class="login-log-table" :data="loginLogs" size="small" stripe border>
+        <el-table class="login-log-table" :data="pagedLoginLogs" size="small" stripe border>
           <el-table-column prop="loginTime" label="登录时间" min-width="150" />
           <el-table-column prop="loginTypeLabel" label="方式" width="108" />
-          <el-table-column prop="ipAddress" label="IP" width="120" show-overflow-tooltip />
+          <el-table-column prop="ipLocation" label="IP归属地" width="120" show-overflow-tooltip />
           <el-table-column prop="deviceSummary" label="设备" min-width="120" show-overflow-tooltip />
         </el-table>
+        <div class="login-log-pager">
+          <el-pagination
+            v-model:current-page="loginLogPage"
+            background
+            layout="prev, pager, next"
+            :page-size="loginLogPageSize"
+            :total="loginLogs.length"
+            small
+          />
+        </div>
       </div>
       <div v-else class="login-log-empty">暂无登录记录，成功登录后将自动记录。</div>
     </el-dialog>
@@ -55,7 +65,15 @@ import { useAccountSecurity } from '@scripts/components/settings/AccountSecurity
 
 const emit = defineEmits(['open-password'])
 
-const { loadingLogs, loginLogVisible, loginLogs, openLoginLogs } = useAccountSecurity()
+const {
+  loadingLogs,
+  loginLogPage,
+  loginLogPageSize,
+  loginLogVisible,
+  loginLogs,
+  openLoginLogs,
+  pagedLoginLogs,
+} = useAccountSecurity()
 </script>
 
 <style scoped src="@/assets/styles/settings.css"></style>
