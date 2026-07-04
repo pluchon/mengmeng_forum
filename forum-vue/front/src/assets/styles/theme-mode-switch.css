@@ -54,6 +54,14 @@
     0 10px 26px rgba(64, 120, 210, 0.15);
 }
 
+.theme-mode-switch.is-transitioning {
+  cursor: wait;
+}
+
+.theme-mode-switch:disabled {
+  cursor: wait;
+}
+
 .theme-mode-switch.is-dark {
   background:
     radial-gradient(circle at 72% 35%, rgba(125, 183, 255, 0.28), transparent 28%),
@@ -209,36 +217,42 @@
   }
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
 .theme-transition-sweep {
   position: fixed;
+  inset: 0;
   z-index: 2147483000;
-  width: 1px;
-  height: 1px;
-  border-radius: 999px;
   pointer-events: none;
-  transform: translate(-50%, -50%) scale(0);
-  opacity: 0.98;
-  will-change: transform, opacity;
+  clip-path: circle(0 at var(--theme-sweep-x) var(--theme-sweep-y));
+  will-change: clip-path;
 }
 
 .theme-transition-sweep--light {
   background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.96) 52%, rgba(255, 255, 255, 0.86) 100%);
+    radial-gradient(circle at var(--theme-sweep-x) var(--theme-sweep-y), rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.96) 52%, rgba(255, 255, 255, 0.86) 100%);
 }
 
 .theme-transition-sweep--dark {
   background:
-    radial-gradient(circle, rgba(20, 41, 82, 0.98) 0%, rgba(10, 20, 42, 0.97) 58%, rgba(7, 12, 24, 0.92) 100%);
+    radial-gradient(circle at var(--theme-sweep-x) var(--theme-sweep-y), rgba(20, 41, 82, 0.98), rgba(10, 20, 42, 0.97) 58%, rgba(7, 12, 24, 0.92) 100%);
 }
 
 .theme-transition-sweep.is-active {
-  transform: translate(-50%, -50%) scale(calc(var(--theme-sweep-radius) * 2));
-  transition: transform 0.52s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.theme-transition-sweep.is-fading {
-  opacity: 0;
-  transition: opacity 0.32s ease;
+  clip-path: circle(var(--theme-sweep-radius) at var(--theme-sweep-x) var(--theme-sweep-y));
+  transition: clip-path 0.52s ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -250,5 +264,10 @@
   .theme-transition-sweep.is-fading {
     animation: none !important;
     transition-duration: 0.01ms !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }
