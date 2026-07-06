@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -87,6 +88,9 @@ public class AiCallRecordService {
         row.setInputTokens(0);
         row.setOutputTokens(0);
         row.setDeleteState((byte) 0);
+        Date now = new Date();
+        row.setCreateTime(now);
+        row.setUpdateTime(now);
         try {
             forumAiCallRecordMapper.insert(row);
             return AiCallBeginResult.pending(row.getId());

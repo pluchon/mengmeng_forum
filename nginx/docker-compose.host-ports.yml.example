@@ -5,7 +5,7 @@
 services:
   mysql:
     ports:
-      - "127.0.0.1:${MYSQL_HOST_PORT:-33061}:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-33306}:3306"
 
   redis:
     ports:

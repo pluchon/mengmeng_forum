@@ -1514,4 +1514,241 @@ INSERT INTO `forum_vip_quota_config`
 (2, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 800000, 'MAX', 70),
 (2, 'token_claude_sonnet', '本期 Token 配额 · 文本', 'Claude Sonnet', 'token_period', NULL, 'claude-sonnet-4-6', 'claude', NULL, 400000, 'MAX', 90);
 
+-- ----------------------------
+-- 25. 群聊模块
+-- ----------------------------
+DROP TABLE IF EXISTS `group_chat_join_request`;
+DROP TABLE IF EXISTS `group_chat_report`;
+DROP TABLE IF EXISTS `group_chat_message`;
+DROP TABLE IF EXISTS `group_chat_member`;
+DROP TABLE IF EXISTS `group_chat`;
+
+ALTER TABLE `user`
+    ADD COLUMN `creator_state` tinyint NOT NULL DEFAULT 0 COMMENT '创作者认证状态: 0未认证 1已认证'
+    AFTER `vip_expire_at`;
+
+CREATE TABLE `group_chat` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '群聊ID',
+    `owner_user_id` bigint NOT NULL COMMENT '群主用户ID',
+    `name` varchar(24) NOT NULL COMMENT '群名称',
+    `avatar_url` varchar(512) DEFAULT NULL COMMENT '群头像URL',
+    `intro` varchar(120) DEFAULT NULL COMMENT '群简介',
+    `group_type` tinyint NOT NULL DEFAULT 0 COMMENT '群类型: 0公开 1私有',
+    `member_limit` int NOT NULL DEFAULT 100 COMMENT '当前身份对应人数上限快照',
+    `member_count` int NOT NULL DEFAULT 0 COMMENT '当前成员数',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '群状态: 0正常 1满员 2超额锁定 3已解散 4违规封禁',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_group_owner_status` (`owner_user_id`, `status`, `delete_state`),
+    KEY `idx_group_public` (`group_type`, `status`, `delete_state`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊主表';
+
+CREATE TABLE `group_chat_member` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '成员记录ID',
+    `group_id` bigint NOT NULL COMMENT '群聊ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `role` tinyint NOT NULL DEFAULT 1 COMMENT '角色: 0群主 1成员 2管理员',
+    `remark_name` varchar(24) DEFAULT NULL COMMENT '群内备注昵称',
+    `notify_mode` tinyint NOT NULL DEFAULT 0 COMMENT '提醒模式: 0正常 1仅@提醒 2完全不提醒',
+    `mute_until` datetime DEFAULT NULL COMMENT '禁言截止时间',
+    `last_read_message_id` bigint NOT NULL DEFAULT 0 COMMENT '最后已读群消息ID',
+    `join_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常 1已退出 2被移除',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_group_member` (`group_id`, `user_id`, `delete_state`),
+    KEY `idx_member_user_status` (`user_id`, `status`, `delete_state`),
+    KEY `idx_member_group_status` (`group_id`, `status`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊成员表';
+
+CREATE TABLE `group_chat_message` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '群消息ID',
+    `group_id` bigint NOT NULL COMMENT '群聊ID',
+    `sender_user_id` bigint DEFAULT NULL COMMENT '发送者用户ID，系统消息为空',
+    `message_type` tinyint NOT NULL DEFAULT 0 COMMENT '消息类型: 0文本 1表情 2图片 9系统',
+    `content` varchar(500) NOT NULL COMMENT '消息内容',
+    `reply_message_id` bigint DEFAULT NULL COMMENT '回复的群消息ID',
+    `reply_sender_name` varchar(64) DEFAULT NULL COMMENT '被回复消息发送者昵称快照',
+    `reply_content` varchar(200) DEFAULT NULL COMMENT '被回复消息内容快照',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常 1举报隐藏 2删除',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_group_message` (`group_id`, `delete_state`, `id`),
+    KEY `idx_sender_time` (`sender_user_id`, `delete_state`, `create_time`),
+    KEY `idx_group_reply_message` (`reply_message_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息表';
+
+CREATE TABLE `group_chat_report` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '举报记录ID',
+    `group_id` bigint NOT NULL COMMENT '群聊ID',
+    `message_id` bigint NOT NULL COMMENT '群消息ID',
+    `reporter_user_id` bigint NOT NULL COMMENT '举报人用户ID',
+    `target_user_id` bigint NOT NULL COMMENT '被举报用户ID',
+    `reason` varchar(200) NOT NULL COMMENT '举报原因',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '处理状态: 0待处理 1已处理 2驳回',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_group_report` (`group_id`, `status`, `delete_state`, `create_time`),
+    KEY `idx_message_report` (`message_id`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊举报表';
+
+CREATE TABLE `group_chat_join_request` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '申请ID',
+    `group_id` bigint NOT NULL COMMENT '群聊ID',
+    `target_user_id` bigint NOT NULL COMMENT '目标用户ID',
+    `initiator_user_id` bigint NOT NULL COMMENT '发起人用户ID',
+    `owner_user_id` bigint NOT NULL COMMENT '群主用户ID',
+    `request_type` tinyint NOT NULL COMMENT '请求类型: 0申请加群 1邀请入群',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '处理状态: 0待处理 1已同意 2已拒绝',
+    `owner_read_state` tinyint NOT NULL DEFAULT 0 COMMENT '群主查看状态: 0未读 1已读',
+    `handled_by_user_id` bigint DEFAULT NULL COMMENT '处理人用户ID',
+    `handle_time` datetime DEFAULT NULL COMMENT '处理时间',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_group_status` (`group_id`, `status`, `delete_state`, `create_time`),
+    KEY `idx_target_status` (`target_user_id`, `status`, `delete_state`, `create_time`),
+    KEY `idx_owner_type_status` (`owner_user_id`, `request_type`, `status`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群加入申请与邀请表';
+
+-- ----------------------------
+-- 26. 漂流瓶模块
+-- ----------------------------
+DROP TABLE IF EXISTS `drift_bottle_report`;
+DROP TABLE IF EXISTS `drift_bottle_pick_log`;
+DROP TABLE IF EXISTS `drift_bottle_comment`;
+DROP TABLE IF EXISTS `drift_bottle`;
+
+CREATE TABLE `drift_bottle` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '漂流瓶ID',
+    `user_id` bigint NOT NULL COMMENT '真实作者用户ID',
+    `content` varchar(500) NOT NULL COMMENT '瓶子内容',
+    `mood_type` varchar(20) NOT NULL COMMENT '心情标签',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0可见 1隐藏 2删除',
+    `comment_count` int NOT NULL DEFAULT 0 COMMENT '评论数量',
+    `picked_count` int NOT NULL DEFAULT 0 COMMENT '被捞次数',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_time` (`user_id`, `create_time`),
+    KEY `idx_visible_time` (`status`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='漂流瓶主表';
+
+CREATE TABLE `drift_bottle_comment` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '评论ID',
+    `bottle_id` bigint NOT NULL COMMENT '漂流瓶ID',
+    `user_id` bigint NOT NULL COMMENT '真实评论用户ID',
+    `content` varchar(200) NOT NULL COMMENT '评论内容',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0可见 1隐藏 2删除',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_bottle_time` (`bottle_id`, `status`, `delete_state`, `create_time`),
+    KEY `idx_user_time` (`user_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='漂流瓶评论表';
+
+CREATE TABLE `drift_bottle_pick_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '打捞记录ID',
+    `bottle_id` bigint NOT NULL COMMENT '漂流瓶ID',
+    `user_id` bigint NOT NULL COMMENT '打捞用户ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_time` (`user_id`, `create_time`),
+    KEY `idx_user_bottle` (`user_id`, `bottle_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='漂流瓶打捞记录表';
+
+CREATE TABLE `drift_bottle_report` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '举报ID',
+    `target_type` tinyint NOT NULL COMMENT '目标类型: 0瓶子 1评论',
+    `target_id` bigint NOT NULL COMMENT '目标ID',
+    `report_user_id` bigint NOT NULL COMMENT '举报用户ID',
+    `reason_type` varchar(30) NOT NULL COMMENT '举报原因类型',
+    `reason_detail` varchar(200) DEFAULT NULL COMMENT '举报补充说明',
+    `status` tinyint NOT NULL DEFAULT 0 COMMENT '处理状态: 0待处理 1已处理 2已驳回',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_report_once` (`target_type`, `target_id`, `report_user_id`, `delete_state`),
+    KEY `idx_target_status` (`target_type`, `target_id`, `status`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='漂流瓶举报表';
+
+-- ----------------------------
+-- 27. 考试题库模块
+-- ----------------------------
+DROP TABLE IF EXISTS `exam_question_user_progress`;
+DROP TABLE IF EXISTS `exam_question`;
+DROP TABLE IF EXISTS `exam_question_bank`;
+
+CREATE TABLE `exam_question_bank` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '题库ID',
+    `user_id` bigint NOT NULL COMMENT '创建用户ID',
+    `subject` varchar(100) NOT NULL COMMENT '考试科目',
+    `source_name` varchar(255) NOT NULL COMMENT '来源文件名',
+    `total_count` int NOT NULL DEFAULT 0 COMMENT '总题数',
+    `choice_count` int NOT NULL DEFAULT 0 COMMENT '选择题数量',
+    `judgement_count` int NOT NULL DEFAULT 0 COMMENT '判断题数量',
+    `subjective_count` int NOT NULL DEFAULT 0 COMMENT '主观题数量',
+    `warnings_json` json DEFAULT NULL COMMENT '解析警告JSON',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_subject_time` (`user_id`, `subject`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='考试题库主表';
+
+CREATE TABLE `exam_question` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '题目ID',
+    `bank_id` bigint NOT NULL COMMENT '题库ID',
+    `question_order` int NOT NULL COMMENT '题目顺序',
+    `source_no` varchar(30) DEFAULT NULL COMMENT '原文题号',
+    `section_name` varchar(100) DEFAULT NULL COMMENT '原文章节或分组',
+    `question_type` varchar(20) NOT NULL COMMENT '题目类型',
+    `stem` text NOT NULL COMMENT '题干',
+    `options_json` json DEFAULT NULL COMMENT '选项JSON',
+    `standard_answer` text COMMENT '标准答案',
+    `explanation` text COMMENT '解析',
+    `answer_inferred_from_user` tinyint NOT NULL DEFAULT 0 COMMENT '答案是否从用户答案推断',
+    `needs_option_review` tinyint NOT NULL DEFAULT 0 COMMENT '是否需要人工复核选项',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    KEY `idx_bank_order` (`bank_id`, `delete_state`, `question_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='考试题库题目表';
+
+CREATE TABLE `exam_question_user_progress` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '进度ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `bank_id` bigint NOT NULL COMMENT '题库ID',
+    `question_id` bigint NOT NULL COMMENT '题目ID',
+    `answer_text` varchar(1000) DEFAULT NULL COMMENT '用户答案',
+    `answered` tinyint NOT NULL DEFAULT 0 COMMENT '是否已作答: 0否 1是',
+    `correct` tinyint DEFAULT NULL COMMENT '是否答对: 0否 1是',
+    `wrong` tinyint NOT NULL DEFAULT 0 COMMENT '是否错题: 0否 1是',
+    `focus` tinyint NOT NULL DEFAULT 0 COMMENT '是否重点记忆: 0否 1是',
+    `judge_score` int DEFAULT NULL COMMENT '主观题评分',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_exam_progress_user_question` (`user_id`, `question_id`),
+    KEY `idx_exam_progress_user_bank` (`user_id`, `bank_id`, `delete_state`),
+    KEY `idx_exam_progress_user_focus` (`user_id`, `focus`, `delete_state`),
+    KEY `idx_exam_progress_user_wrong` (`user_id`, `wrong`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='考试题库用户答题进度表';
+
 SET FOREIGN_KEY_CHECKS = 1;
