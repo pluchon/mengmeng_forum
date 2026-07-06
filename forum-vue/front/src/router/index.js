@@ -136,6 +136,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'exam-question-bank',
+          name: 'examQuestionBank',
+          component: () => import('../views/ExamQuestionBank.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
           path: 'games',
           name: 'gameCenter',
           component: () => import('../views/GameCenter.vue'),

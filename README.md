@@ -710,7 +710,7 @@ python main.py
 | 用户端 | `http://localhost:5173` |
 | 后端 | `http://localhost:10086` |
 | AI 服务 | `http://localhost:5000` |
-| MySQL | `localhost:33061` |
+| MySQL | `localhost:33306` |
 | Redis | `localhost:63790` |
 | RabbitMQ AMQP | `localhost:56690` |
 | RabbitMQ 管理台 | `localhost:25672` |
@@ -721,7 +721,7 @@ python main.py
 flowchart LR
   Dev[开发者] --> FE[forum-vue/front:5173]
   FE --> BE[backend:10086]
-  BE --> M[(MySQL:33061)]
+  BE --> M[(MySQL:33306)]
   BE --> R[(Redis:63790)]
   BE --> Q[(RabbitMQ:56690)]
   BE --> AI[ai-server:5000]

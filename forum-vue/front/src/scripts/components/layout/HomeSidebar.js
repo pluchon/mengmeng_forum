@@ -6,6 +6,7 @@ import {
   Food,
   Location,
   Medal,
+  Notebook,
   Present,
   ShoppingBag,
   TrendCharts,
