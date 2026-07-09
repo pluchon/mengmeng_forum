@@ -114,7 +114,7 @@ location = /mascot/chat/stream {
     client_max_body_size 350m;
 }
 
-location ~ ^/(user|board|article|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|vip|game|ai|notice|captcha|exam-question-bank)(/|$) {
+location ~ ^/(user|board|article|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|vip|game|ai|notice|captcha|drift-bottle|group-chat|exam-question-bank)(/|$) {
     error_page 418 = @forum_spa_fallback;
     if ($proxy_forum_api = 0) {
         return 418;
