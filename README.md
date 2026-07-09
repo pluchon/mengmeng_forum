@@ -1,30 +1,69 @@
-## 萌部落社区 v1.7
+# 萌部落社区 / Moe Community
+
+![Java](https://img.shields.io/badge/Java-17+-ED8B00?style=flat&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2+-6DB33F?style=flat&logo=springboot&logoColor=white)
+![Vue.js](https://img.shields.io/badge/Vue.js-3.5+-4FC08D?style=flat&logo=vue.js&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
+
+[![Issues](https://img.shields.io/github/issues/yourusername/luntan)](https://github.com/yourusername/luntan/issues)
+
+[![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com)
+
+---
 
 > 本项目出于个人兴趣爱好搭建；线上地址仅供学习交流。
 
-## 部分界面演示
+## 主要功能演示
 
-![image-20260630172104679](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172105172.png)
+![image-20260709080237946](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080238307.png)
 
-![image-20260630172147388](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172147768.png)
+![image-20260709080703458](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080703717.png)
 
-![image-20260630172212504](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172212793.png)
+![image-20260709081946237](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081946530.png)
 
-![image-20260630172231590](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172231860.png)
+![image-20260709081830277](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081830523.png)
 
-![image-20260630172248416](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172248648.png)
+![image-20260709080448034](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080448258.png)
 
-![image-20260630172323201](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172323485.png)
+![image-20260709080618564](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080618757.png)
 
-![image-20260630172342921](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172343216.png)
+![image-20260709090025805](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090026009.png)
 
-![image-20260630172416362](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172416663.png)
+![image-20260709085942220](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709085942431.png)
 
-![image-20260630172447415](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172447743.png)
+![image-20260709090046487](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090046681.png)
 
-![image-20260630172505107](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172505395.png)
+![image-20260709090112158](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090112349.png)
 
-![image-20260630172522945](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260630172523299.png)
+![image-20260709090131047](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090131245.png)
+
+![image-20260709081122758](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081123140.png)
+
+![image-20260709081141484](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081141687.png)
+
+![image-20260709081303397](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081303610.png)
+
+![image-20260709081343636](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081343972.png)
+
+![image-20260709081418931](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081419116.png)
+
+![image-20260709081445342](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081445540.png)
+
+![image-20260709081457209](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081457373.png)
+
+![image-20260709081510296](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081510462.png)
+
+![image-20260709081527812](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081528016.png)
+
+![image-20260709081538690](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081538867.png)
+
+![image-20260709081607597](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081607755.png)
+
+![image-20260709081652710](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081652883.png)
+
+![image-20260709081705785](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081705984.png)
+
 
 ***
 
@@ -32,134 +71,36 @@
 
 - 用户端：`https://www.nuonuoya.cn`
 
-> 前后端分离技术社区：发帖（图文 / 视频）、评论楼中楼、视频弹幕、私信、关注、收藏夹、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋、井字棋与俄罗斯方块（单人 + PK）。
+> 前后端分离技术社区：发帖（图文 / 视频）、评论楼中楼、视频弹幕、私信、群聊（带语音）、匿名漂流瓶、收藏夹、抽奖、搜索、帖子标签；发布前 AI 审核；多实例部署时私信支持跨实例实时推送；看板娘支持 RAG 推荐帖子、MCP 联网与出行工具；游戏中心已接入 WebSocket 五子棋、井字棋与俄罗斯方块（单人 + PK）与统一排位系统。
 
 ---
 
-## v1.7 更新摘要
+## v1.8 更新摘要 (全新社交体验)
 
-相对 **v1.6**，本版重点完成 **并发安全与幂等整改**（Phase 01~05），并补齐线上**增量发布**流程说明。详细设计与实现记录见仓库内 `.codex/concurrency-update/`（本地文档，不提交 Git）。
+本次更新带来更丰富的互动玩法，主打**匿名倾诉**与**圈子社交**，让社区更有温度：
 
-```mermaid
-flowchart TB
-  subgraph v17[v1.7 并发整改版图]
-    W[写路径一致性<br/>点赞 / 积分 / VIP / 抽奖 / 关注]
-    D[派生数据<br/>热帖蓝绿榜 / 搜索 / RAG / 缓存失效]
-    A[AI 与游戏<br/>预记录计费 / 匹配建房幂等]
-    M[异步与观测<br/>MQ 去重 / Outbox / Micrometer]
-  end
-  v16[v1.6 基线] --> v17
-```
+### 匿名漂流瓶 (树洞)
+丢下心事，遇见未知。无需顾虑真实身份，打造一个完全匿名的温暖角落：
+- **扔瓶子**：写下一段心情（支持选择心情标签），扔进海里。
+- **捞瓶子**：每天随机捞取别人的故事，看看这个世界的另一个角落。
+- **匿名回应**：可以给捞到的瓶子留言，双方身份全程保密，展现为“路过的人”。
+- **安全治理**：限制了每日捞瓶和发布次数，并支持举报功能，保持树洞清爽。
 
-| 维度 | v1.6 | v1.7（本版） |
-|------|------|----------------|
-| 写一致性 | 部分接口有竞态风险 | 点赞/评论/积分/抽奖/VIP/关注等幂等 + 条件更新 |
-| 热帖榜 | 单 ZSet，重算可能空榜 | **蓝绿双槽**切换 + 7 天窗口衰减 + DB 兜底 |
-| 帖子下线 | 副作用分散 | `TransactionHooks.afterCommit` 统一热榜/搜索/RAG |
-| AI 计费 | 事后写 usage_log | **`forum_ai_call_record` 预记录** + 流式断网规则 |
-| 游戏匹配 | 仅部分幂等 | **gobang / jinzi / tetris** 匹配建房 Redis 幂等键 |
-| MQ 私信 | 直接发 RabbitMQ | 事务后 **本地消息表** + 定时投递；消费 **Redis 去重** |
-| 分页 | offset + pageSize 上限 | 签到/积分流水新增 **游标分页** API |
-| 数据库 | 仅 `create.sql` | 新增 **`incremental_concurrency.sql`** 等增量脚本 |
+### 群聊系统
+沉淀圈子，即时互动。适合创作者和粉丝聚集，打造稳定的兴趣群组：
+- **创建群聊**：认证创作者专属特权，可创建公开或私有群聊，会员等级越高限制越宽松。
+- **丰富互动**：支持文字、图片、表情包、回复引用、@ 成员等常见聊天能力。
+- **群组管理**：群主可以设置管理员，支持禁言、移除成员、解散群等管理操作。
+- **群语音**：群内支持最多 6 人的实时语音房，随时开启线上派对。
 
-**后端核心（P0 / P1）**
-
-- **事务外副作用**：`TransactionHooks.afterCommit` — Redis、MQ、热帖、搜索/RAG 索引仅在 DB 提交成功后执行。
-- **票据与验证码**：`RedisAtomicValueConsumer` Lua 原子消费，防并发重复用码。
-- **热帖榜**：`HotArticleRedisOps` 蓝绿 key（`hot:articles:a|b` + active 指针），重算期间旧榜可读。
-- **AI 调用**：调用前 `PENDING` 预记录；成功/失败/停止/断网分状态结算；前端可传 `clientRequestId` 防重试重复扣费。
-- **收藏移动**：`folder_id` 条件更新，并发移动幂等。
-- **签到**：`GET /checkin/trend` 按月萌币趋势；`GET /checkin/log/cursor` 游标分页。
-
-**工程与发布**
-
-- **SQL**：全新环境用 `create.sql`；**已有线上库**用 `incremental_concurrency.sql` + `incremental_postgres_ai_session.sql`（可重复执行）。
-- **打包发布**：仍为本机 `make-package.ps1` → 上传整包 → 服务器 **`bash up.sh`**；增量发布**禁止** `reset-db.sh` / `down -v`。
-- **待办 backlog**：`.codex/todo/concurrency-backend-pending.md`、`concurrency-frontend-pending.md`。
+### 游戏排位优化
+统一竞技体验，让游戏更具目标感：
+- **统一段位**：所有真人 PK 游戏使用同一套段位名称（青铜、白银、黄金、大师等）。
+- **游戏权重**：不同游戏的胜负加减分按其节奏和对局时长应用了不同的权重。
+- **清晰展示**：匹配页面新增了进度条，清楚知道自己离下一个段位还差多少分。
 
 ---
 
-## v1.6 更新摘要
-
-相对 **v1.3（上一版 README）**，本版在保留游戏中心三套玩法的基础上，重点补齐社区互动、视频体验、登录引导与前端工程化。相对 **上一 Git 提交（`422802d`）**，本版另含大规模代码整理与仓库瘦身（约 566 个文件变更，移除独立管理端目录等）。
-
-```mermaid
-flowchart TB
-  subgraph v16[v1.6 能力版图]
-    C[社区互动<br/>楼中楼 / 点赞 / 发图 / 关注]
-    V[视频体验<br/>弹幕 / 播放器 / 音量控制]
-    G[游戏中心<br/>五子棋 / 井字棋 / 方块单人+PK]
-    A[AI 能力<br/>审核 / 看板娘 / 语义搜索]
-    X[体验与工程<br/>登录引导 / Vue 外置脚本 / 部署包]
-  end
-  v13[v1.3 基线] --> v16
-```
-
-| 维度 | v1.3 | v1.6（本版） |
-|------|------|----------------|
-| 游戏 | 五子棋、井字棋 | + 俄罗斯方块单人 / PK；匹配与观战规则修复 |
-| 视频帖 | 播放、上传 | + 弹幕（样式 / 密度 / 区域）；播放器控件优化 |
-| 评论 | 楼中楼 | + 回复刷新、发图进度、回复点赞、表情卡片统一 |
-| 私信 | 文本 / 表情 | + 上传分页、左侧列表跳主页、表情 UI 统一 |
-| 个人中心 | 资料 / 收藏 | + 收藏夹分页与重命名、详情页返回定位钩子 |
-| 社交 | — | + 用户关注 / 粉丝列表 |
-| 登录 | 路由守卫 | + 未登录统一弹窗引导；验证码交互优化 |
-| 仓库 | 含 `forum-vue-admin` | 精简为用户端 + 后端 + AI + Nginx 四件套 |
-
-**社区与内容**
-
-- **楼中楼回复**：主评 / 子评回复后局部刷新，不再整页重载。
-- **评论互动**：回复点赞（空心 / 实心红心）；评论发图保留上传提示直至全部完成；表情包封面与标题同行展示。
-- **视频弹幕**：视频帖支持滚动 / 顶部 / 底部弹幕，可配置颜色、字号、模式、密度、显示区域与彩色过滤；发送与播放器控件分层布局。
-- **视频播放器**：音量改为喇叭图标（静音显示带斜线喇叭）；弹幕层底部高于控制栏，避免遮挡。
-- **用户关注**：关注 / 取关、粉丝与关注列表；个人主页展示关注关系。
-- **收藏夹与个人主页**：收藏夹分页（每页 10 条）、名称编辑（≤25 字）；从帖子详情返回时恢复收藏夹 / 个人主页原滚动位置；笔记与点赞列表分页（每页 12 条）。
-
-**私信与表情**
-
-- **私信**：左侧会话列表点击头像 / 昵称可跳转对方主页；我的上传表情支持分页，上传按钮与表情格同尺寸并排。
-- **表情卡片**：评论、私信、游戏房间复用统一「封面 + 标题」布局；移除表情后不再自动关闭弹层。
-
-**游戏中心（在 v1.3 基础上加固）**
-
-- **五子棋 / 井字棋**：修复双人在线匹配不到的问题；观战席禁止聊天与表情；终局卡片仅展示胜负与倒计时。
-- **俄罗斯方块**：单人 `canvas` 循环 + 后端成绩中心；PK 后端权威棋盘、垃圾行、观战只读；结算卡星空蓝主题；PK 观战禁输入。
-- **房间聊天**：表情包入口在输入框内侧，发送按钮统一星空蓝色调。
-
-**AI 与搜索**
-
-- **语义搜索**：AI 向量搜索时过滤无关用户结果。
-- **看板娘**：关闭对话面板不中断进行中的回复或生图；GPT 生图请求参数与帖子封面图生成对齐。
-- **Python 服务**：补齐 `oss2` 等依赖；内部鉴权与客户端模块拆分。
-
-**登录与安全体验**
-
-- **未登录引导**：首页搜索、创作中心、私信、设置、积分、签到、抽奖、看板娘等操作统一 `弹窗确认 → 去登录`，不直接硬跳转。
-- **会员中心**：未登录访问 `/vip` 弹窗引导，而非静默跳转登录页。
-- **行为验证码**：滑块 / 点击验证失败自动关闭弹窗；发码按钮展示 loading；验证码错误码静默避免重复 toast。
-
-**工程与仓库**
-
-- **Vue 规范**：持续推进「`.vue` 仅模板 + 外置 `.js` / `.scss`」；抽取 `VideoVolumeIcon`、`PurchasedEmojiPackPopover` 等公共组件。
-- **仓库精简**：移除独立 `forum-vue-admin` 目录，聚焦用户端交付；管理端能力保留在后端 API，界面待完善。
-- **部署**：仍遵循「本机 `make-package.ps1` 打整包 → 服务器 `bash up.sh`」，避免 `index.html` 与 `assets` 版本错位。
-
----
-
-## v1.3 历史摘要（保留）
-
-- **游戏中心 / 五子棋**：新增独立游戏大厅、五子棋匹配页和蓝黑主题对局页，支持真人匹配、观战、房间聊天 / 表情、棋谱回放、天梯榜和战绩统计。
-- **游戏中心 / 井字棋**：复用游戏中心通用表与结算链路，新增 3×3 井字棋匹配页与对局页；支持快速匹配、AI 对手、房间聊天 / 表情、棋谱回放、天梯榜和战绩统计（不开放观战）。
-- **游戏中心 / 俄罗斯方块**：新增 `canvas` 单人模式与双人 PK 模式；单人模式支持成绩结算、历史记录、排行榜与回放，PK 模式支持双人匹配、后端权威房间状态、垃圾行攻击、观战与终局结算。
-- **三层 WebSocket**：大厅在线、游戏在线、房间对局拆成独立连接，服务端主动推送在线状态、匹配结果、落子、终局胜线和观战席变化。
-- **论坛积分联动**：五子棋 / 井字棋胜负直接进入论坛积分流水，玩家段位、胜率、总局数和排行榜复用论坛账号体系。
-- **单人成绩型游戏接入**：俄罗斯方块单人模式采用“前端本地权威游戏循环 + 后端成绩中心”的方案，避免把单人玩法硬套成棋类房间模型。
-- **局时 / 步时**：五子棋支持 10 分钟局时、60 秒步时；井字棋支持 2 分钟局时、20 秒步时；超时、认输、成线 / 五连均走统一结算链路。
-- **AI 对手**：长时间无人匹配时自动进入 AI 房间；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`，DeepSeek 不可用时展示本地策略兜底（井字棋 AI 局积分变化更小）。
-- **局部责任链**：五子棋动作 / 匹配、私信发送、发帖提交审核、抽奖准入已抽成 Guard Chain；结算、扣分、库存、MQ、WebSocket 广播仍保留在 Service 主流程。
-- **多实例准备**：在线状态、匹配队列、房间快照、房间事件广播和对局结束事件已按 Redis / RabbitMQ 拆出扩展点。
-
----
 
 ## 项目概览
 
@@ -175,20 +116,18 @@ flowchart TB
 ## 整体架构
 
 ```mermaid
-flowchart TB
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}}}%%
+flowchart LR
   U[用户端 Web] --> N[Nginx]
-  N --> J[Java 后端 backend]
-  N --> F[FFmpeg 视频服务]
-
+  N --> J[Java 后端]
+  N --> F[FFmpeg]
   J --> M[(MySQL)]
   J --> R[(Redis)]
   J --> Q[(RabbitMQ)]
-  J --> F
-
-  J --> P[Python AI ai-server]
-  J --> G[Game WebSocket: 大厅 / 游戏 / 房间]
+  J --> P[Python AI]
+  J --> G[Game WS]
   P --> PG[(PostgreSQL)]
-  P --> OSS[(阿里云 OSS)]
+  P --> OSS[(OSS)]
 ```
 
 - 用户端 → **Nginx**（静态 `dist/` + 反代 API）
@@ -202,60 +141,33 @@ flowchart TB
 当前 AI 模块是 **Java 业务权威 + Python AI 服务中心** 的混合架构：Java 负责鉴权、配额、业务状态、消息落库与最终发布；Python 负责模型调用、LangGraph 审核、看板娘对话、RAG 检索和 MCP 工具调用。
 
 ```mermaid
-flowchart TB
-  FE[前端用户操作] --> BE[Java 后端]
-
-  subgraph JavaSide[Java 侧业务边界]
-    BE --> AUTH[鉴权 / 配额 / 积分 / 业务状态]
-    AUTH --> MASCOT_J[MascotService<br/>看板娘会话与计费]
-    AUTH --> AIHUB_J[AiHubService<br/>AI 写作 / 生图 / RAG 客户端]
-    AUTH --> SEARCH_J[SearchService<br/>DB 搜索 + AI 语义增强]
-    AUTH --> AUDIT_J[ArticleAuditService<br/>发帖审核状态流转]
-  end
-
-  subgraph PythonApi[Python ai-server API]
-    MASCOT_API[/mascot/chat<br/>/mascot/chat/stream/]
-    AI_API[/ai/write<br/>/ai/cover-hints<br/>/ai/image/]
-    RAG_API[/rag/index-*<br/>/rag/*-vector-search/]
-    VALIDATE_API[/validate-text<br/>/validate-image/]
-  end
-
-  MASCOT_J --> MASCOT_API
-  AIHUB_J --> AI_API
-  AIHUB_J --> RAG_API
-  SEARCH_J --> RAG_API
-
-  subgraph PythonCore[Python AI 核心能力]
-    MASCOT_API --> MASCOT_G[mascot_graph<br/>看板娘 StateGraph]
-    AI_API --> HUB_SVC[ai_hub_service<br/>写作 / 生图 / 棋类 AI]
-    RAG_API --> RAG[RAG<br/>文章 / 用户向量检索]
-    VALIDATE_API --> SYNC_AUDIT[同步短内容审核]
-    MASCOT_G --> MCP[MCP Registry<br/>Tavily / 时间 / 地图 / 天气]
-  end
-
-  subgraph AsyncAudit[异步帖子审核]
-    AUDIT_J --> MQ_TASK[(RabbitMQ<br/>forum.audit.article)]
-    MQ_TASK --> WORKER[audit_worker]
-    WORKER --> AUDIT_G[article_audit<br/>LangGraph]
-    AUDIT_G --> MQ_RESULT[(RabbitMQ<br/>forum.audit.result)]
-    MQ_RESULT --> AUDIT_J
-  end
-
-  subgraph Storage[存储与外部服务]
-    MYSQL[(MySQL<br/>业务数据 / 看板娘消息)]
-    REDIS[(Redis<br/>RAG 索引 / 缓存 / 幂等)]
-    PG[(PostgreSQL<br/>LangGraph checkpoint)]
-    MODEL[DeepSeek / DashScope / HuanAPI]
-    OSS[(OSS<br/>图片 / 视频 / 产物)]
-  end
-
-  BE --> MYSQL
-  RAG --> REDIS
-  AUDIT_G --> PG
-  MASCOT_G --> MODEL
-  HUB_SVC --> MODEL
-  SYNC_AUDIT --> MODEL
-  HUB_SVC --> OSS
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'curve':'basis', 'nodeSpacing': 30, 'rankSpacing': 40}}}%%
+flowchart LR
+  FE[前端] --> BE[Java后端]
+  BE --> AUTH[鉴权/配额]
+  AUTH --> MASCOT_J[MascotService]
+  AUTH --> AIHUB_J[AiHubService]
+  AUTH --> AUDIT_J[AuditService]
+  
+  MASCOT_J --> MASCOT_API[/mascot/chat/]
+  AIHUB_J --> AI_API[/ai/write/]
+  AIHUB_J --> RAG_API[/rag/search/]
+  
+  MASCOT_API --> MASCOT_G[看板娘Graph]
+  AI_API --> HUB_SVC[AI写作/生图]
+  RAG_API --> RAG[RAG检索]
+  
+  AUDIT_J --> MQ_TASK[(MQ审核队列)]
+  MQ_TASK --> WORKER[audit_worker]
+  WORKER --> AUDIT_G[审核Graph]
+  AUDIT_G --> MQ_RESULT[(MQ结果队列)]
+  MQ_RESULT --> AUDIT_J
+  
+  BE --> MYSQL[(MySQL)]
+  RAG --> REDIS[(Redis)]
+  AUDIT_G --> PG[(PostgreSQL)]
+  MASCOT_G --> MODEL[DeepSeek]
+  HUB_SVC --> OSS[(OSS)]
 ```
 
 现状要点：
@@ -272,31 +184,6 @@ flowchart TB
 
 ### 用户端
 
-- 发帖 / 评论 / 楼中楼（富文本 / Markdown）
-- **图文帖 / 视频帖**、封面、相册（最多 15 张）
-- **视频弹幕**（滚动 / 顶 / 底、颜色 / 字号 / 密度 / 区域可配）
-- **帖子标签**（版块内申请 / 绑定）
-- 发帖 **AI 异步审核**（通过才发布）
-- 图片压缩 + AI 审核 + OSS；视频 FFmpeg 处理后上传 OSS
-- 评论 / 楼中楼回复点赞、评论发图与表情包
-- 私信 WebSocket、积分 / 签到 / 商城 / 抽奖、热帖榜
-- **用户关注**、个人主页、收藏夹（分页 / 重命名 / 返回定位）
-- 智能搜索（DB 快搜 + AI 语义增强）
-- 看板娘：多模型、会话历史、站内帖子 RAG、联网与地图工具、GPT 生图
-- 未登录操作统一弹窗引导登录；会员中心 / 关键功能需登录
-- 游戏中心：五子棋实时匹配、观战、房间聊天 / 表情、棋谱回放、战绩统计、天梯榜、AI 对手
-- 游戏中心：井字棋快速匹配、房间聊天 / 表情、棋谱回放、战绩统计、天梯榜、AI 对手（平局不扣积分）
-- 游戏中心：俄罗斯方块单人模式（`canvas` 棋盘、成绩结算、历史记录、排行榜、回放）
-- 游戏中心：俄罗斯方块 PK 模式（双人匹配、后端权威状态、垃圾行攻击、观战、胜负结算）
-
----
-
-## 核心流程
-
-### 1) 游戏中心 / 五子棋（WebSocket 实时对战）
-
-游戏中心目前先接入 **五子棋**，实时链路分成三层 WebSocket：大厅连接用于展示大厅在线与玩家状态；游戏连接用于匹配页在线人数、房间总数和最近对局；房间连接用于落子、计时、观战、聊天和终局同步。HTTP 只负责历史记录、统计、天梯榜、回放等非实时数据查询。
-
 **五子棋能力**
 
 - 快速匹配：真人优先，长时间无人时自动创建 AI 房间
@@ -309,33 +196,24 @@ flowchart TB
 - 多实例准备：在线状态、匹配队列、房间快照与房间事件可走 Redis；对局结束事件可投递 RabbitMQ 做补偿与异步处理
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11, 'noteFontSize': 10}}}%%
 sequenceDiagram
   participant FE as 前端
-  participant Lobby as 大厅 WS
-  participant Game as 游戏 WS
-  participant Room as 房间 WS
-  participant J as Java 后端
-  participant P as Python AI
-  participant DB as MySQL
-  participant R as Redis
-  participant MQ as RabbitMQ
+  participant Game as 游戏WS
+  participant Room as 房间WS
+  participant J as Java
+  participant P as AI
+  participant DB as DB
 
-  FE->>Lobby: 进入游戏中心
-  Lobby->>J: 建立大厅在线连接
-  J->>R: 更新大厅在线、段位、胜率快照
-  FE->>Game: 进入五子棋匹配页
-  Game->>J: 开始匹配
+  FE->>Game: 开始匹配
   alt 匹配真人
     J->>Room: 创建真人房间
-  else 长时间无人
-    J->>Room: 创建 AI 房间
-    J->>P: 请求 DeepSeek 落子
+  else AI房间
+    J->>P: DeepSeek落子
   end
-  Room->>J: 玩家落子 / 认输 / 聊天
-  J->>J: 校验回合、坐标、计时、观战权限
-  J->>DB: 写落子、战绩、积分流水
-  J->>MQ: 投递对局结束事件
-  J-->>Room: 推送棋盘、胜线、结果与倒计时
+  Room->>J: 玩家落子
+  J->>DB: 写战绩
+  J-->>Room: 推送结果
 ```
 
 ### 1b) 游戏中心 / 井字棋（WebSocket 轻量对战）
@@ -355,33 +233,24 @@ sequenceDiagram
 - 多实例准备：在线状态、匹配队列、房间快照与结算事件复用 Redis / RabbitMQ 扩展点
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant FE as 前端
-  participant Lobby as 大厅 WS
-  participant Game as 游戏 WS
-  participant Room as 房间 WS
-  participant J as Java 后端
-  participant P as Python AI
-  participant DB as MySQL
-  participant R as Redis
-  participant MQ as RabbitMQ
+  participant Game as 游戏WS
+  participant Room as 房间WS
+  participant J as Java
+  participant P as AI
+  participant DB as DB
 
-  FE->>Lobby: 进入游戏中心
-  Lobby->>J: 建立大厅在线连接
-  J->>R: 更新大厅在线、战绩快照
-  FE->>Game: 进入井字棋匹配页
-  Game->>J: 开始匹配
-  alt 匹配真人
-    J->>Room: 创建真人房间
-  else 约 15 秒无人
-    J->>Room: 创建 AI 房间
-    J->>P: 请求 DeepSeek 落子
+  FE->>Game: 开始匹配
+  alt 真人
+    J->>Room: 创建房间
+  else AI(15s无人)
+    J->>P: DeepSeek落子
   end
-  Room->>J: 玩家落子 / 认输 / 聊天
-  J->>J: 校验回合、坐标、计时
-  J->>DB: 写落子、战绩、积分流水
-  J->>MQ: 投递对局结束事件
-  J-->>Room: 推送棋盘、胜线、平局或终局结果
+  Room->>J: 玩家落子
+  J->>DB: 写战绩
+  J-->>Room: 推送结果
 ```
 
 ### 1c) 游戏中心 / 俄罗斯方块（单人 + PK）
@@ -397,24 +266,23 @@ sequenceDiagram
 - 积分联动：单人模式按成绩档位发放论坛积分，PK 模式按胜负发放论坛积分
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant FE as 前端
-  participant Game as 游戏 WS
-  participant Room as 房间 WS
-  participant J as Java 后端
-  participant DB as MySQL
+  participant Game as 游戏WS
+  participant J as Java
+  participant DB as DB
 
-  alt 单人模式
-    FE->>FE: 本地运行游戏循环
-    FE->>J: 提交单局结算与回放
-    J->>DB: 写单局记录、资料、排行榜
-  else PK 模式
-    FE->>Game: 开始匹配
-    Game->>J: 创建 PK 房间
-    FE->>Room: 发送输入操作
-    J->>J: 推进双方棋盘、计算垃圾行
-    J->>DB: 写对局记录与结算
-    J-->>Room: 广播双方棋盘、垃圾行与终局结果
+  alt 单人
+    FE->>FE: 本地循环
+    FE->>J: 提交结算
+    J->>DB: 写记录
+  else PK
+    FE->>Game: 匹配
+    Game->>J: 创建房间
+    FE->>Game: 输入操作
+    J->>DB: 写结算
+    J-->>Game: 广播棋盘
   end
 ```
 
@@ -423,17 +291,18 @@ sequenceDiagram
 视频帖在播放器层叠加弹幕引擎：前端按视频时间轴渲染滚动 / 顶部 / 底部弹幕；用户可在播放条旁设置颜色、字号、模式与显示区域，发送时写入 `article_video_danmaku` 表。弹幕层高度受控，底部不低于播放器控制栏。
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant U as 用户
   participant FE as 播放器
-  participant J as Java 后端
-  participant DB as MySQL
+  participant J as Java
+  participant DB as DB
 
-  U->>FE: 编辑样式并发送弹幕
-  FE->>J: POST 弹幕（文章 ID / 时间点 / 样式）
-  J->>DB: 持久化弹幕
-  J-->>FE: 返回弹幕条目
-  FE->>FE: 按 currentTime 渲染到弹幕层
+  U->>FE: 发送弹幕
+  FE->>J: POST弹幕
+  J->>DB: 持久化
+  J-->>FE: 返回条目
+  FE->>FE: 渲染
 ```
 
 ### 2) 发帖审核（异步 + 幂等）
@@ -449,21 +318,20 @@ sequenceDiagram
 - ai-server 容器须配置与 Java 相同的 OSS 环境变量（见 `docker-compose.yaml`）
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant FE as 前端
   participant J as Java
-  participant MQ as RabbitMQ
-  participant P as ai-server
+  participant MQ as MQ
+  participant P as AI
   participant DS as DashScope
 
   FE->>J: 提交审核
-  J->>MQ: 审核任务(含 videoUrl)
-  MQ->>P: worker 消费
-  P->>P: 文本/图片审核
-  P->>P: OSS 签名 videoUrl
-  P->>DS: 视频审核(或抽帧兜底)
-  P->>MQ: 审核结果
-  MQ->>J: 更新帖子状态
+  J->>MQ: 任务
+  MQ->>P: 消费
+  P->>DS: 视频审核
+  P->>MQ: 结果
+  MQ->>J: 更新状态
 ```
 
 ### 3) 视频上传
@@ -475,21 +343,16 @@ sequenceDiagram
 - 绑定帖子：保存草稿 / 提交时调用 `setArticleVideo`（视频帖不调相册接口）
 
 ```mermaid
-flowchart TD
-  U[用户选择视频] --> FE[前端后台上传 + 进度条]
-  FE --> NG[Nginx /file/ 反代]
-  NG --> J[Java FileService]
-  J --> S{体积 ≤ 200MB?}
-  S -->|是| OSS1[直传 OSS]
-  S -->|否| FF[FFmpeg 服务]
-  FF --> M{H.264 + AAC?}
-  M -->|是| R[remux -c copy]
-  M -->|否| E[ultrafast 重编码]
-  R --> OSS2[上传 OSS]
-  E --> OSS2
-  OSS1 --> URL[返回 videoUrl]
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
+flowchart LR
+  U[选择视频] --> FE[上传]
+  FE --> J[Java]
+  J --> S{≤200MB?}
+  S -->|是| OSS1[直传OSS]
+  S -->|否| FF[FFmpeg]
+  FF --> OSS2[上传OSS]
+  OSS1 --> URL[返回URL]
   OSS2 --> URL
-  URL --> BIND[setArticleVideo 绑定帖子]
 ```
 
 ### 4) 行为验证码 + 一次性票据
@@ -497,20 +360,20 @@ flowchart TD
 短信 / 邮件有成本，注册与找回密码不能裸奔。滑块验证通过后签发 **Redis 短 TTL 票据**；后续发码 / 注册须携带票据，校验成功即 **删除**（一次性）。
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant FE as 前端
-  participant BE as Java 后端
-  participant Redis as Redis
+  participant BE as Java
+  participant R as Redis
 
-  FE->>BE: 1) 提交滑块验证结果
-  BE->>Redis: SET ticket(UUID, purpose, TTL≈2min)
-  BE-->>FE: 返回 ticket
-
-  FE->>BE: 2) 注册 / 发码（带 ticket）
-  BE->>Redis: GET + DEL ticket（用一次即失效）
-  alt 票据有效且未用过
-    BE-->>FE: 继续业务（发码 / 注册）
-  else 无效 / 已用 / 过期
+  FE->>BE: 滑块验证
+  BE->>R: SET ticket
+  BE-->>FE: 返回ticket
+  FE->>BE: 注册(带ticket)
+  BE->>R: GET+DEL
+  alt 有效
+    BE-->>FE: 继续
+  else 无效
     BE-->>FE: 拒绝
   end
 ```
@@ -525,22 +388,20 @@ sequenceDiagram
 - **软保底**：十连最后一抽兜底，保证至少一个稀有
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 20, 'rankSpacing': 30}}}%%
 flowchart TD
-  S[开始抽奖] --> L[事务: SELECT user FOR UPDATE]
-  L --> P[扣积分 UPDATE points>=cost]
-  P -->|0 行| F1[余额不足]
-  P -->|成功| D{单抽 / 十连}
-  D --> G{触发硬保底?}
-  G -->|是| POOL[保底奖池]
-  G -->|否| W[按权重抽奖品]
-  POOL --> K
-  W --> K[扣库存 UPDATE stock>0]
-  K -->|失败| R[换奖品重试]
-  K -->|成功| REC[写中奖记录 / 发奖]
+  S[开始] --> L[FOR UPDATE]
+  L --> P[扣积分]
+  P -->|失败| F1[余额不足]
+  P -->|成功| G{硬保底?}
+  G -->|是| POOL[保底池]
+  G -->|否| W[权重抽]
+  POOL --> K[扣库存]
+  W --> K
+  K -->|失败| R[重试]
+  K -->|成功| REC[发奖]
   R --> W
-  REC --> E[提交事务]
-  D --> SB[十连: 末抽软保底检查]
-  SB --> E
+  REC --> E[提交]
 ```
 
 ### 6) 私信跨实例推送
@@ -548,16 +409,16 @@ flowchart TD
 多实例时，接收方的 WebSocket 连接落在哪台机器不确定。写库后向 Redis **PubSub 广播**推送事件；**只有持有目标连接的那台实例**真正下发，其余实例忽略。
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25}}}%%
 flowchart LR
-  A[用户 A 发私信] --> J1[Java 实例 1]
-  B[用户 B 的 WS] --> J2[Java 实例 2]
-
-  J1 --> DB[(MySQL 持久化消息)]
-  J1 --> Pub[Redis PubSub 广播]
-  Pub --> J1
+  A[用户A] --> J1[实例1]
+  B[用户B的WS] --> J2[实例2]
+  J1 --> DB[(MySQL)]
+  J1 --> Pub[PubSub]
   Pub --> J2
-  J2 -->|本机有 B 的连接| WS[WebSocket 推送给 B]
-  J1 -->|无 B 连接| Skip[忽略]
+  J2 -->|有连接| WS[推送]
+  Pub --> J1
+  J1 -->|无连接| Skip[忽略]
 ```
 
 ### 7) 热帖榜（Redis ZSet 蓝绿切换）
@@ -565,17 +426,18 @@ flowchart LR
 热帖榜用 Redis **ZSet**：member 为帖子 ID，score 为热度。点赞 / 浏览 / 回复 / 收藏等行为通过 `ArticleHotRankingService.incrementScore` 更新；删帖、驳回、下线时在 **事务提交后** `ZREM` 并清理搜索/RAG。定时任务在**非活跃槽**重建完整榜单，再原子切换 `hot:articles:active` 指针，重算期间读侧始终命中旧槽，避免空榜。
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 20, 'rankSpacing': 30}}}%%
 flowchart TD
-  E[用户行为: 浏览 / 点赞 / 回复 / 收藏] --> S[ArticleHotRankingService]
-  S --> ZA[ZSet 槽位 A 或 B]
-  D[删帖 / 审核驳回 / 下线] --> AC[afterCommit]
-  AC --> R[ZREM + 搜索/RAG 下线]
-  T[定时重算 03:00] --> INAC[写入非活跃槽]
-  INAC --> SW[切换 active 指针]
+  E[用户行为] --> S[HotRankingService]
+  S --> ZA[ZSet槽A/B]
+  D[删帖] --> AC[afterCommit]
+  AC --> R[ZREM]
+  T[定时03:00] --> INAC[写非活跃槽]
+  INAC --> SW[切换指针]
   SW --> ZA
-  ZA --> API[首页 / 热榜 ZREVRANGE]
-  EMPTY{活跃槽为空?} --> API
-  EMPTY -->|是| DB[MySQL 兜底 TopN]
+  ZA --> API[ZREVRANGE]
+  EMPTY{槽空?} -->|是| DB[MySQL兜底]
+  EMPTY -->|否| API
 ```
 
 ### 8) 智能搜索（快搜 + 语义增强）
@@ -583,13 +445,14 @@ flowchart TD
 搜索分层：**先数据库** `LIKE` 快搜（低成本、稳定）；结果过少或相关性不足时，再调 **ai-server** 做语义排序 / RAG 召回，把更相关的帖子排到前面。
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-  Q[用户输入关键词] --> DB[MySQL 标题 LIKE 快搜]
-  DB --> C{结果数量 / 质量够用?}
-  C -->|是| R1[直接返回列表]
-  C -->|否| Cand[拉取候选: 标题 + 摘要 + 标签]
-  Cand --> AI[ai-server 语义排序 / RAG]
-  AI --> R2[返回重排后的结果]
+  Q[输入关键词] --> DB[MySQL LIKE]
+  DB --> C{结果够?}
+  C -->|是| R1[返回]
+  C -->|否| Cand[拉取候选]
+  Cand --> AI[语义排序]
+  AI --> R2[重排返回]
 ```
 
 ### 9) 局部责任链（Guard Chain）
@@ -615,14 +478,15 @@ flowchart TD
 - 文件上传：当前私有方法校验已足够集中，拆链收益不明显
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-  A[业务请求] --> C[构造 Context]
-  C --> G[Guard Chain 前置校验]
-  G -->|失败| F[返回业务错误 / WebSocket 友好提示]
-  G -->|通过| S[Service 主流程]
-  S --> DB[(MySQL / Redis)]
-  S --> MQ[RabbitMQ 事件]
-  S --> WS[WebSocket 推送]
+  A[业务请求] --> C[构造Context]
+  C --> G[Guard Chain]
+  G -->|失败| F[返回错误]
+  G -->|通过| S[Service主流程]
+  S --> DB[(MySQL/Redis)]
+  S --> MQ[RabbitMQ]
+  S --> WS[WebSocket]
 ```
 
 ### 10) 并发写一致性与幂等（v1.7）
@@ -630,13 +494,14 @@ flowchart TD
 核心原则：**MySQL 是唯一事实来源**；Redis、热帖榜、搜索/RAG、MQ 推送均为派生数据，且尽量在 **事务提交后** 更新。
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-  REQ[客户端请求] --> TX[Service 事务内写 DB]
-  TX -->|提交成功| HOOK[TransactionHooks.afterCommit]
-  TX -->|回滚| NOP[不更新 Redis / MQ / 索引]
-  HOOK --> R[Redis 热帖 / 点赞集]
-  HOOK --> MQ[MQ / Outbox 投递]
-  HOOK --> IDX[搜索 / RAG 下线]
+  REQ[客户端] --> TX[事务写DB]
+  TX -->|成功| HOOK[afterCommit]
+  TX -->|回滚| NOP[不更新派生数据]
+  HOOK --> R[Redis]
+  HOOK --> MQ[MQ/Outbox]
+  HOOK --> IDX[搜索/RAG]
 ```
 
 **典型幂等模式**
@@ -651,23 +516,23 @@ flowchart TD
 | 验证码 / 票据 | `RedisAtomicValueConsumer` Lua 原子删 |
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
   participant FE as 前端
   participant J as Java
-  participant DB as MySQL
+  participant DB as DB
   participant R as Redis
-  participant Q as RabbitMQ
+  participant Q as MQ
 
-  FE->>J: 写操作（可带 requestId）
-  J->>DB: 事务内 INSERT/UPDATE（条件/唯一约束）
-  alt 提交成功
-    J->>J: afterCommit 注册副作用
+  FE->>J: 写操作
+  J->>DB: 事务INSERT/UPDATE
+  alt 成功
+    J->>J: afterCommit
     J-->>DB: COMMIT
-    J->>R: 更新派生缓存 / 热帖分
-    J->>Q: Outbox 或 MQ 通知
+    J->>R: 更新缓存
+    J->>Q: MQ通知
   else 回滚
     J-->>DB: ROLLBACK
-    Note over J,R: 不发送 MQ、不推 WebSocket
   end
 ```
 
@@ -718,15 +583,16 @@ python main.py
 | FFmpeg | `localhost:8099` |
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
-  Dev[开发者] --> FE[forum-vue/front:5173]
-  FE --> BE[backend:10086]
-  BE --> M[(MySQL:33306)]
-  BE --> R[(Redis:63790)]
-  BE --> Q[(RabbitMQ:56690)]
-  BE --> AI[ai-server:5000]
-  BE --> FF[FFmpeg:8099]
-  AI --> PG[(PostgreSQL:54320)]
+  Dev[开发者] --> FE[Vue:5173]
+  FE --> BE[Java:10086]
+  BE --> M[(MySQL)]
+  BE --> R[(Redis)]
+  BE --> Q[(RabbitMQ)]
+  BE --> AI[AI:5000]
+  BE --> FF[FFmpeg]
+  AI --> PG[(PostgreSQL)]
 ```
 
 **IDEA 打开后端**：File → Open → 选 `backend` 文件夹或 `pom.xml`，Maven Reload，开启 Lombok Annotation Processors。
@@ -784,19 +650,19 @@ npm run build
 ### 发布模式对比
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TB
-  subgraph first[首次部署 / 空库重建]
-    F1[make-package.ps1] --> F2[上传 package/]
-    F2 --> F3[配置 .env + ssl]
-    F3 --> F4[bash start.sh]
-    F4 --> F5[可选 reset-db.sh 初始化表]
+  subgraph first[首次部署]
+    F1[make-package] --> F2[上传]
+    F2 --> F3[配置.env]
+    F3 --> F4[start.sh]
   end
 
-  subgraph incr[日常增量发布 — 推荐]
-    I1[make-package.ps1] --> I2[上传 package/ 覆盖]
-    I2 --> I3[执行增量 SQL]
-    I3 --> I4[bash up.sh]
-    I4 --> I5[healthz + verify-frontend-dist]
+  subgraph incr[增量发布]
+    I1[make-package] --> I2[上传覆盖]
+    I2 --> I3[增量SQL]
+    I3 --> I4[up.sh]
+    I4 --> I5[healthz]
   end
 ```
 
@@ -811,20 +677,19 @@ flowchart TB
 ### 增量发布流程（线上常规）
 
 ```mermaid
+%%{init: {'theme':'base', 'sequence': {'mirrorActors': false, 'actorFontSize': 11}}}%%
 sequenceDiagram
-  participant Dev as 本机开发
-  participant Pkg as nginx/package
+  participant Dev as 本机
+  participant Pkg as package
   participant Srv as 服务器
-  participant DB as MySQL/Postgres
-  participant Docker as 容器栈
+  participant DB as DB
+  participant Docker as 容器
 
-  Dev->>Pkg: make-package.ps1
-  Dev->>Srv: 上传整包覆盖 ~/package
-  Srv->>DB: incremental_concurrency.sql
-  Srv->>DB: incremental_postgres_ai_session.sql
-  Srv->>Docker: bash up.sh
-  Note over Docker: docker load + force-recreate
-  Srv->>Srv: healthz + verify-frontend-dist.sh
+  Dev->>Pkg: make-package
+  Dev->>Srv: 上传整包
+  Srv->>DB: 增量SQL
+  Srv->>Docker: up.sh
+  Srv->>Srv: healthz
 ```
 
 **本机**
@@ -854,14 +719,15 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
 ```
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart LR
-  Local[本地 make-package.ps1] --> Pack[nginx/package]
-  Pack --> Upload[上传整包]
-  Upload --> SQL[增量 SQL]
-  SQL --> Up[bash up.sh]
-  Up --> Load[docker load 镜像]
-  Load --> Recreate[compose up --force-recreate]
-  Recreate --> Check[healthz / 前端资源校验]
+  Local[本地打包] --> Pack[package]
+  Pack --> Upload[上传]
+  Upload --> SQL[增量SQL]
+  SQL --> Up[up.sh]
+  Up --> Load[docker load]
+  Load --> Recreate[force-recreate]
+  Recreate --> Check[healthz]
 ```
 
 ### 日常更新（无 schema 变更时）
@@ -886,12 +752,13 @@ bash start.sh
 ### 增量发布禁止事项
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-  OK[bash up.sh] --> Safe[保留 MySQL/Redis 数据卷]
-  BAD1[bash reset-db.sh] --> X1[DROP + CREATE 全库]
-  BAD2[docker compose down -v] --> X2[删除数据卷]
-  BAD3[仅上传 dist 不传 images] --> X3[index.html 与 assets 错位]
-  BAD4[线上执行 create.sql] --> X4[删库重建]
+  OK[up.sh] --> Safe[保留数据卷]
+  BAD1[reset-db.sh] --> X1[删库]
+  BAD2[down -v] --> X2[删数据卷]
+  BAD3[仅传dist] --> X3[版本错位]
+  BAD4[create.sql] --> X4[删库重建]
 ```
 
 | 禁止操作 | 后果 |
@@ -933,13 +800,14 @@ flowchart TD
 检查三层连接是否连对：大厅 `/ws/games/lobby`，游戏 `/ws/games/gobang`，房间 `/ws/games/gobang/rooms/{roomId}`。落子后不应该依赖 HTTP 刷新，前端应直接应用 `move_accepted` / `game_finished` 的 payload。
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-  A[棋盘没刷新] --> B{房间 WS 有消息?}
-  B -->|没有| C[检查 token、roomId、Nginx WS 代理]
-  B -->|有| D{消息类型正确?}
-  D -->|move_accepted| E[检查前端 applyMove]
-  D -->|game_finished| F[检查胜线和结束态渲染]
-  D -->|room_error| G[按后端提示修权限 / 状态]
+  A[棋盘没刷新] --> B{WS有消息?}
+  B -->|没有| C[检查token/Nginx]
+  B -->|有| D{类型对?}
+  D -->|move_accepted| E[检查applyMove]
+  D -->|game_finished| F[检查胜线渲染]
+  D -->|room_error| G[修权限/状态]
 ```
 
 ### 3) 井字棋 WebSocket 已连接但棋盘不刷新
