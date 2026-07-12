@@ -57,6 +57,19 @@
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed">
+      <section v-if="isRecommendationFeed" class="recommendation-intro" aria-label="为你推荐设置">
+        <div class="recommendation-intro-copy">
+          <span class="recommendation-intro-eyebrow">FOR YOU</span>
+          <h2>为你推荐</h2>
+          <p v-if="isPersonalizedRecommendation">由你的兴趣、关注和社区热度共同决定</p>
+          <p v-else-if="userStore.isLoggedIn">选几个感兴趣的板块，让内容更贴近你</p>
+          <p v-else>登录后可选择兴趣，获得更贴近你的内容</p>
+        </div>
+        <el-button class="recommendation-manage-btn" plain @click="openRecommendationPreferences">
+          {{ hasRecommendationInterests ? '管理兴趣' : '选择兴趣' }}
+        </el-button>
+      </section>
+
       <div v-if="showCheckinHomeStrip && !isHotFeed" class="checkin-home-strip animate-fade-up">
         <el-card
           class="checkin-home-card"
@@ -156,6 +169,9 @@
               </div>
               <div class="note-info">
                 <h3 class="note-title">{{ entry.article?.title }}</h3>
+                <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
+                  {{ entry.recommendReason }}
+                </div>
                 <div class="note-footer">
                   <div class="author">
                     <UserAvatarVip
@@ -171,6 +187,23 @@
                     <LikeCountIcon />
                     <span>{{ entry.article?.likeCount }}</span>
                   </div>
+                  <el-dropdown
+                    v-if="isRecommendationFeed && userStore.isLoggedIn"
+                    trigger="click"
+                    @command="hideRecommendedArticle(entry.article?.id)"
+                    @click.stop
+                  >
+                    <button type="button" class="recommendation-card-menu" aria-label="调整推荐内容" @click.stop>
+                      <el-icon><MoreFilled /></el-icon>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="not-interested" :disabled="recommendationSaving">
+                          不想看这篇
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
               </div>
             </el-card>
@@ -182,6 +215,18 @@
         <el-icon class="home-feed-loading-spin" :size="20"><Loading /></el-icon>
         <span>正在加载更多…</span>
       </div>
+
+      <el-result
+        v-if="!loading && feedError"
+        class="home-feed-error"
+        icon="error"
+        :title="feedForbidden ? '暂时无法访问这部分内容' : '内容加载失败'"
+        :sub-title="feedError"
+      >
+        <template #extra>
+          <el-button type="primary" @click="fetchArticles(pageNum)">重新加载</el-button>
+        </template>
+      </el-result>
 
       <div v-if="!isHotFeed && total > pageSize" class="pagination-wrap">
         <el-pagination
@@ -195,10 +240,45 @@
       </div>
 
       <el-empty
-        v-if="!loading && feedList.length === 0"
+        v-if="!loading && !feedError && feedList.length === 0"
         :description="isHotFeed ? '暂无热帖' : '这里还没有笔记哦'"
       />
     </main>
+
+    <el-dialog
+      v-model="recommendationDialogVisible"
+      class="recommendation-interest-dialog"
+      title="让推荐更懂你"
+      width="min(620px, calc(100vw - 32px))"
+      :close-on-click-modal="!recommendationSaving"
+      :close-on-press-escape="!recommendationSaving"
+    >
+      <p class="recommendation-dialog-tip">选择 3～8 个细分板块效果更好；也可以暂时跳过，之后随时回来调整。</p>
+      <div class="recommendation-dialog-switch">
+        <span>
+          <strong>个性化推荐</strong>
+          <small>关闭后将只展示公开最新与热帖</small>
+        </span>
+        <el-switch v-model="recommendationDraftEnabled" :disabled="recommendationSaving" />
+      </div>
+      <div class="recommendation-interest-groups" :class="{ 'is-disabled': !recommendationDraftEnabled }">
+        <section v-for="item in categoriesWithId" :key="item.category.id" class="recommendation-interest-group">
+          <h3>{{ item.category.name }}</h3>
+          <el-checkbox-group v-model="recommendationDraftBoardIds" :disabled="!recommendationDraftEnabled || recommendationSaving">
+            <el-checkbox v-for="board in item.boardList || []" :key="board.id" :value="Number(board.id)">
+              {{ board.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </section>
+      </div>
+      <template #footer>
+        <div class="recommendation-dialog-actions">
+          <el-button text :disabled="recommendationSaving" @click="skipRecommendationPreferences">暂时跳过</el-button>
+          <el-button text type="danger" :disabled="recommendationSaving" @click="resetRecommendationPreferences">清空设置</el-button>
+          <el-button type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存设置</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
   <router-view />
 </template>
@@ -208,7 +288,7 @@ defineOptions({ name: 'HomeFeed' })
 
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Loading } from '@element-plus/icons-vue'
+import { ArrowDown, Loading, MoreFilled } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -234,11 +314,17 @@ const {
   currentBoardId,
   defaultAvatar,
   dismissCheckinHomeStrip,
+  feedError,
+  feedForbidden,
   ensureHomeFeedLoaded,
   fetchArticles,
   getRandomPastel,
   hotFeedList,
+  hasRecommendationInterests,
+  hideRecommendedArticle,
   isHotFeed,
+  isPersonalizedRecommendation,
+  isRecommendationFeed,
   loading,
   pageNum,
   pageSize,
@@ -248,6 +334,15 @@ const {
   showCategoryNavigator,
   showCheckinHomeStrip,
   total,
+  openRecommendationPreferences,
+  recommendationDialogVisible,
+  recommendationDraftBoardIds,
+  recommendationDraftEnabled,
+  recommendationSaving,
+  resetRecommendationPreferences,
+  saveRecommendationPreferences,
+  skipRecommendationPreferences,
+  userStore,
 } = useHomeShellContext()
 
 const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleList.value))

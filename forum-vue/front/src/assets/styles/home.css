@@ -1370,6 +1370,217 @@
   box-sizing: border-box;
 }
 
+/* 为你推荐：用轻量“编辑页签”明确当前流的来源与可控性 */
+.recommendation-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1240px;
+  margin: 0 auto 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 36, 66, 0.14);
+  border-radius: 16px;
+  background:
+    linear-gradient(115deg, rgba(255, 36, 66, 0.09), rgba(255, 255, 255, 0.9) 52%),
+    #fff;
+}
+
+.recommendation-intro-copy {
+  min-width: 0;
+}
+
+.recommendation-intro-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary-red, #ff2442);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.recommendation-intro h2 {
+  margin: 0;
+  color: #252a33;
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.recommendation-intro p {
+  margin: 5px 0 0;
+  color: #727986;
+  font-size: 13px;
+}
+
+.recommendation-manage-btn {
+  flex-shrink: 0;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+.recommendation-reason {
+  width: fit-content;
+  max-width: 100%;
+  margin: -3px 0 10px;
+  overflow: hidden;
+  color: #8b6070;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-card-menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #9aa1ad;
+  cursor: pointer;
+}
+
+.recommendation-card-menu:hover {
+  background: #f2f3f5;
+  color: var(--primary-red, #ff2442);
+}
+
+.home-feed-error {
+  padding: 38px 0 10px;
+}
+
+.recommendation-interest-dialog .el-dialog__header {
+  margin-right: 0;
+  padding: 22px 24px 12px;
+}
+
+.recommendation-interest-dialog .el-dialog__body {
+  padding: 10px 24px 16px;
+}
+
+.recommendation-dialog-tip {
+  margin: 0 0 16px;
+  color: #737b88;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.recommendation-dialog-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #faf7f7;
+}
+
+.recommendation-dialog-switch strong,
+.recommendation-dialog-switch small {
+  display: block;
+}
+
+.recommendation-dialog-switch strong {
+  color: #323741;
+  font-size: 14px;
+}
+
+.recommendation-dialog-switch small {
+  margin-top: 3px;
+  color: #89909b;
+  font-size: 12px;
+}
+
+.recommendation-interest-groups {
+  display: grid;
+  gap: 12px;
+  max-height: min(42vh, 360px);
+  margin-top: 16px;
+  overflow: auto;
+}
+
+.recommendation-interest-groups.is-disabled {
+  opacity: 0.55;
+}
+
+.recommendation-interest-group {
+  padding: 12px 14px;
+  border: 1px solid #eceef2;
+  border-radius: 12px;
+}
+
+.recommendation-interest-group h3 {
+  margin: 0 0 8px;
+  color: #4d5561;
+  font-size: 13px;
+}
+
+.recommendation-interest-group .el-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 13px;
+}
+
+.recommendation-interest-group .el-checkbox {
+  margin-right: 0;
+}
+
+.recommendation-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+:root[data-theme='dark'] .recommendation-intro {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(115deg, rgba(125, 183, 255, 0.17), rgba(15, 23, 42, 0.9) 55%);
+}
+
+:root[data-theme='dark'] .recommendation-intro h2,
+:root[data-theme='dark'] .recommendation-dialog-switch strong,
+:root[data-theme='dark'] .recommendation-interest-group h3 {
+  color: #edf5ff;
+}
+
+:root[data-theme='dark'] .recommendation-intro p,
+:root[data-theme='dark'] .recommendation-dialog-tip,
+:root[data-theme='dark'] .recommendation-dialog-switch small {
+  color: #9fb0ca;
+}
+
+:root[data-theme='dark'] .recommendation-dialog-switch,
+:root[data-theme='dark'] .recommendation-interest-group {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.64);
+}
+
+@media (max-width: 640px) {
+  .recommendation-intro {
+    align-items: flex-start;
+    padding: 15px;
+  }
+
+  .recommendation-intro h2 {
+    font-size: 18px;
+  }
+
+  .recommendation-intro p {
+    max-width: 220px;
+  }
+
+  .recommendation-dialog-actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* 帖子区：flex 等宽多列瀑布流，列宽由 JS 计算后平分整行 */
 .home-masonry {
   display: flex;
