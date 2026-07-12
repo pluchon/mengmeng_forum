@@ -70,11 +70,6 @@
       </nav>
     </el-scrollbar>
 
-    <div v-if="!userStore.isLoggedIn" class="home-xhs-sidebar-foot">
-      <el-button type="primary" round class="home-sidebar-guest-btn" @click="$router.push('/sign-in')">
-        登录 / 注册
-      </el-button>
-    </div>
   </aside>
 </template>
 

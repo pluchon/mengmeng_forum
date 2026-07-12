@@ -56,19 +56,6 @@
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed" :class="{ 'home-xhs-main--with-hot': isHomeFeed }">
-      <section v-if="isRecommendationFeed && !showRecommendationInterestMask" class="recommendation-intro" aria-label="为你推荐设置">
-        <div class="recommendation-intro-copy">
-          <span class="recommendation-intro-eyebrow">FOR YOU</span>
-          <h2>为你推荐</h2>
-          <p v-if="isPersonalizedRecommendation">由你的兴趣、关注和社区热度共同决定</p>
-          <p v-else-if="userStore.isLoggedIn">选几个感兴趣的板块，让内容更贴近你</p>
-          <p v-else>登录后可选择兴趣，获得更贴近你的内容</p>
-        </div>
-        <el-button class="recommendation-manage-btn" plain @click="openRecommendationPreferences">
-          {{ hasRecommendationInterests ? '管理兴趣' : '选择兴趣' }}
-        </el-button>
-      </section>
-
       <div v-if="showCheckinHomeStrip" class="checkin-home-strip animate-fade-up">
         <el-card
           class="checkin-home-card"
@@ -366,7 +353,6 @@ const {
   fetchArticles,
   fetchHomeHotList,
   getRandomPastel,
-  hasRecommendationInterests,
   hideRecommendedArticle,
   homeHotList,
   homeHotTotal,
@@ -375,7 +361,6 @@ const {
   homeHotPage,
   homeHotPageSize,
   isHomeFeed,
-  isPersonalizedRecommendation,
   isRecommendationFeed,
   loading,
   pageNum,
