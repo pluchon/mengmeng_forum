@@ -39,6 +39,7 @@ public final class AuthApiPaths {
             "/board/topBoardList",
             "/board/selectBoardBy",
             "/board/selectBoardListByBoardIdWithPage",
+            "/recommend/feed",
             "/shop/list",
             "/shop/detail",
             "/favorite/folder/userList",
