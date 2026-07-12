@@ -16,6 +16,11 @@ export function getHotArticleList(topN = 10) {
   return request({ url: '/article/getHotArticleList', method: 'get', params: { topN } })
 }
 
+// 热帖榜后端分页（每页最多10条，总榜最多50条）
+export function getHotArticleListWithPage(params) {
+  return request({ url: '/article/getHotArticleListWithPage', method: 'get', params })
+}
+
 // 获取帖子详情
 export function getArticleDetail(articleId) {
   return request({ url: '/article/selectArticleDetailByArticleId', method: 'get', params: { articleId } })
@@ -186,4 +191,3 @@ export function getLatestLikers(articleId, count = 15) {
 export function updateArticleCoverByUrl(articleId, coverUrl) {
   return request({ url: '/article/updateCoverUrl', method: 'post', params: { articleId, coverUrl } })
 }
-

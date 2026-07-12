@@ -18,6 +18,7 @@ import org.example.forumdemo.entity.dto.article.ValidateTextRequest;
 import org.example.forumdemo.entity.vo.article.ArticleDetailResponse;
 import org.example.forumdemo.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.example.forumdemo.entity.vo.article.AuditStatusResponse;
+import org.example.forumdemo.entity.vo.article.HotArticleListItemVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.service.interfaces.article.ArticleGuideStreamService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
@@ -150,6 +151,18 @@ public class ArticleController {
     @GetMapping("/getHotArticleList")
     public Result<List<Long>> getHotArticleList(@RequestParam(defaultValue = "10") Integer topN) {
         return Result.success(articleService.getHotArticleList(topN));
+    }
+
+    /** 分页查询热帖榜，最多返回排名前 50 条。 */
+    @Operation(summary = "分页查询热帖榜", description = "后端按热度排名分页，每页最多10条，总榜最多50条")
+    @GetMapping("/getHotArticleListWithPage")
+    public Result<PageResult<HotArticleListItemVO>> getHotArticleListWithPage(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        Long loginUserId = loginUser == null ? null : loginUser.getId();
+        return Result.success(articleService.queryHotArticleListWithPage(pageNum, pageSize, loginUserId));
     }
 
     @Operation(summary = "回收站：查看自己已删除的帖子（分页）",

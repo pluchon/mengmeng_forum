@@ -24,12 +24,14 @@ import org.example.forumdemo.entity.vo.article.ArticleDetailResponse;
 import org.example.forumdemo.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.example.forumdemo.entity.vo.article.ArticleValidateTextVO;
 import org.example.forumdemo.entity.vo.article.AuditStatusResponse;
+import org.example.forumdemo.entity.vo.article.HotArticleListItemVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.mq.ArticleAuditResultMqVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleImageMapper;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
+import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleAuditService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleMediaService;
@@ -41,17 +43,21 @@ import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
 import org.example.forumdemo.service.interfaces.search.ArticleSearchIndexService;
 import org.example.forumdemo.service.interfaces.user.UserService;
+import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -62,7 +68,13 @@ public class ArticleServiceImpl implements ArticleService {
     private ArticleMapper articleMapper;
 
     @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
     private UserService userService;
+
+    @Autowired
+    private UserFollowService userFollowService;
 
     @Autowired
     private BoardService boardService;
@@ -454,6 +466,58 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     public List<Long> getHotArticleList(Integer topN) {
         return articleHotRankingService.getHotArticleList(topN);
+    }
+
+    @Override
+    public PageResult<HotArticleListItemVO> queryHotArticleListWithPage(Integer pageNum, Integer pageSize,
+            Long loginUserId) {
+        PageResult<Long> idPage = articleHotRankingService.getHotArticlePage(pageNum, pageSize);
+        if (idPage.getRecords() == null || idPage.getRecords().isEmpty()) {
+            return new PageResult<>(List.of(), idPage.getTotal(), idPage.getPageNum(), idPage.getPageSize(),
+                    idPage.getPages(), idPage.getHasNextPage());
+        }
+        List<Long> rankedIds = idPage.getRecords();
+        Map<Long, Article> articleMap = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                        .in(Article::getId, rankedIds)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                        .ne(Article::getDeleteState, DELETE_TRUE)
+                        .ne(Article::getState, STATE_FORBIDDEN))
+                .stream()
+                .collect(Collectors.toMap(Article::getId, article -> article));
+        Set<Long> authorIds = articleMap.values().stream()
+                .map(Article::getUserId)
+                .collect(Collectors.toSet());
+        Map<Long, User> userMap = authorIds.isEmpty()
+                ? Map.of()
+                : userMapper.selectList(new LambdaQueryWrapper<User>()
+                                .in(User::getId, authorIds)
+                                .ne(User::getDeleteState, DELETE_TRUE)
+                                .ne(User::getState, STATE_FORBIDDEN))
+                        .stream()
+                        .collect(Collectors.toMap(User::getId, user -> user));
+        Set<Long> followingIds = loginUserId != null && loginUserId > 0
+                ? userFollowService.listFollowingIds(loginUserId)
+                : Set.of();
+        long rankBase = (long) (idPage.getPageNum() - 1) * idPage.getPageSize();
+        List<HotArticleListItemVO> records = new ArrayList<>(rankedIds.size());
+        for (int index = 0; index < rankedIds.size(); index++) {
+            Article article = articleMap.get(rankedIds.get(index));
+            if (article == null) {
+                continue;
+            }
+            User author = userMap.get(article.getUserId());
+            if (author == null) {
+                continue;
+            }
+            HotArticleListItemVO item = new HotArticleListItemVO();
+            item.setRank(rankBase + index + 1);
+            item.setArticle(ArticleConverter.toBriefVO(article));
+            item.setUser(new UserBriefVO(author));
+            item.setFromFollowing(followingIds.contains(article.getUserId()));
+            records.add(item);
+        }
+        return new PageResult<>(records, idPage.getTotal(), idPage.getPageNum(), idPage.getPageSize(),
+                idPage.getPages(), idPage.getHasNextPage());
     }
 
     @Override
