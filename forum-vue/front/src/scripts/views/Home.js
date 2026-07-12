@@ -68,6 +68,9 @@ export function useHome() {
   const feedForbidden = ref(false)
   /** 左侧「热帖榜」专用瀑布流数据（含封面等） */
   const hotFeedList = ref([])
+  /** 首页右侧悬浮热帖榜数据（保留原热度排序，不再占用左侧导航） */
+  const homeHotList = ref([])
+  const homeHotLoading = ref(false)
   const recommendationPreferences = ref({ personalizedEnabled: true, boardIds: [] })
   const recommendationPreferenceLoaded = ref(false)
   const recommendationDialogVisible = ref(false)
@@ -293,13 +296,9 @@ export function useHome() {
     if (incomingUnreadTimer) clearTimeout(incomingUnreadTimer)
   })
 
-  async function fetchHotFeed() {
-    loading.value = true
-    hotFeedList.value = []
-    feedError.value = ''
-    feedForbidden.value = false
+  async function loadHotArticles(topN) {
+    let followingSet = new Set()
     try {
-      let followingSet = new Set()
       if (userStore.isLoggedIn) {
         try {
           const fidRes = await getMyFollowingIds()
@@ -310,8 +309,8 @@ export function useHome() {
           followingSet = new Set()
         }
       }
-      const idRes = await getHotArticleList(30)
-      if (idRes.code !== 0 || !idRes.data?.length) return
+      const idRes = await getHotArticleList(topN)
+      if (idRes.code !== 0 || !idRes.data?.length) return []
       const ids = idRes.data
       const promises = ids.map(id => getArticleDetail(id))
       const results = await Promise.allSettled(promises)
@@ -326,10 +325,28 @@ export function useHome() {
           items.push(row)
         }
       }
-      hotFeedList.value = items
-    } catch (e) {
-      feedError.value = e?.message || '热帖榜加载失败，请稍后重试'
-      feedForbidden.value = e?.response?.status === 403
+      return items
+    } catch {
+      return []
+    }
+  }
+
+  async function fetchHomeHotList() {
+    homeHotLoading.value = true
+    try {
+      homeHotList.value = await loadHotArticles(6)
+    } finally {
+      homeHotLoading.value = false
+    }
+  }
+
+  async function fetchHotFeed() {
+    loading.value = true
+    hotFeedList.value = []
+    feedError.value = ''
+    feedForbidden.value = false
+    try {
+      hotFeedList.value = await loadHotArticles(30)
     } finally {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       loading.value = false
@@ -342,6 +359,7 @@ export function useHome() {
     if (homeFeedInitialized.value) return
     homeFeedInitialized.value = true
     await fetchArticles(1)
+    void fetchHomeHotList()
     await fetchCheckinSummary()
     if (userStore.isLoggedIn) {
       await pointsWalletStore.refresh()
@@ -387,6 +405,7 @@ export function useHome() {
       currentBoardId.value = 0
       hotFeedList.value = []
       fetchArticles(1)
+      void fetchHomeHotList()
       return
     }
     if (index === 'hot') {
@@ -487,6 +506,7 @@ export function useHome() {
     currentBoardId.value = normalizedBoardId
     hotFeedList.value = []
     fetchArticles(1)
+    void fetchHomeHotList()
   }
 
   function toggleSearchTargetMode(ev) {
@@ -622,6 +642,7 @@ export function useHome() {
     fetchArticles,
     fetchCheckinSummary,
     fetchHotFeed,
+    fetchHomeHotList,
     getRandomPastel,
     goCheckin,
     goLottery,
@@ -632,6 +653,8 @@ export function useHome() {
     handleLogout,
     hasRecommendationInterests,
     hideRecommendedArticle,
+    homeHotList,
+    homeHotLoading,
     hotFeedList,
     isHomeFeed,
     isHotFeed,
