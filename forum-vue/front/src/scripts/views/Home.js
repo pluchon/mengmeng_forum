@@ -16,6 +16,13 @@ import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { useMessageStore } from '@/stores/message'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { getArticleList, getHotArticleList, getArticleDetail } from '@/api/article'
+import {
+  getRecommendationFeed,
+  getRecommendationInterests,
+  markRecommendationNotInterested,
+  resetRecommendationInterests,
+  saveRecommendationInterests,
+} from '@/api/recommendation'
 import { getMyFollowingIds } from '@/api/userFollow'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
@@ -27,6 +34,7 @@ import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { useMascotUiStore } from '@/stores/mascotUi'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
 import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
 import userSearchIconUrl from '@/assets/svg/用户.svg?url'
@@ -57,8 +65,16 @@ export function useHome() {
   const pageNum = ref(1)
   const pageSize = ref(20)
   const total = ref(0)
+  const feedError = ref('')
+  const feedForbidden = ref(false)
   /** 左侧「热帖榜」专用瀑布流数据（含封面等） */
   const hotFeedList = ref([])
+  const recommendationPreferences = ref({ personalizedEnabled: true, boardIds: [] })
+  const recommendationPreferenceLoaded = ref(false)
+  const recommendationDialogVisible = ref(false)
+  const recommendationDraftEnabled = ref(true)
+  const recommendationDraftBoardIds = ref([])
+  const recommendationSaving = ref(false)
 
   /** 0 = 首页全站流；正数 = 首页顶部导航中选中的分类。 */
   const activeCategoryId = ref(0)
@@ -90,6 +106,12 @@ export function useHome() {
   const isHotFeed = computed(() => menuActiveKey.value === 'hot')
   const isHomeFeed = computed(() => menuActiveKey.value === 'home')
   const isRecommendationFeed = computed(() => menuActiveKey.value === 'rec')
+  const hasRecommendationInterests = computed(() => recommendationPreferences.value.boardIds.length > 0)
+  const isPersonalizedRecommendation = computed(() =>
+    userStore.isLoggedIn
+      && recommendationPreferences.value.personalizedEnabled
+      && hasRecommendationInterests.value,
+  )
 
   const searchInputPlaceholder = computed(() =>
     aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
@@ -270,6 +292,8 @@ export function useHome() {
   async function fetchHotFeed() {
     loading.value = true
     hotFeedList.value = []
+    feedError.value = ''
+    feedForbidden.value = false
     try {
       let followingSet = new Set()
       if (userStore.isLoggedIn) {
@@ -300,7 +324,8 @@ export function useHome() {
       }
       hotFeedList.value = items
     } catch (e) {
-      console.warn('加载热帖榜失败:', e)
+      feedError.value = e?.message || '热帖榜加载失败，请稍后重试'
+      feedForbidden.value = e?.response?.status === 403
     } finally {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       loading.value = false
@@ -323,17 +348,22 @@ export function useHome() {
     const preserveScroll = opts?.preserveScroll === true
     pageNum.value = page
     loading.value = true
+    feedError.value = ''
+    feedForbidden.value = false
     try {
-      const params = {
-        boardId: currentBoardId.value || 0,
-        pageNum: pageNum.value,
-        pageSize: pageSize.value,
-      }
-      const res = await getArticleList(params)
+      const params = { pageNum: pageNum.value, pageSize: pageSize.value }
+      const res = isRecommendationFeed.value
+        ? await getRecommendationFeed(params)
+        : await getArticleList({ ...params, boardId: currentBoardId.value || 0 })
       if (res.code === 0) {
         articleList.value = res.data?.records || []
         total.value = res.data?.total || 0
       }
+    } catch (error) {
+      articleList.value = []
+      total.value = 0
+      feedError.value = error?.message || '内容加载失败，请稍后重试'
+      feedForbidden.value = error?.response?.status === 403
     } finally {
       if (!preserveScroll) {
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -367,8 +397,105 @@ export function useHome() {
       menuActiveKey.value = 'rec'
       currentBoardId.value = 0
       hotFeedList.value = []
+      await loadRecommendationPreferences()
       fetchArticles(1)
       return
+    }
+  }
+
+  async function loadRecommendationPreferences() {
+    if (!userStore.isLoggedIn) {
+      recommendationPreferences.value = { personalizedEnabled: false, boardIds: [] }
+      recommendationPreferenceLoaded.value = true
+      return
+    }
+    try {
+      const res = await getRecommendationInterests()
+      if (res.code === 0) {
+        recommendationPreferences.value = {
+          personalizedEnabled: res.data?.personalizedEnabled !== false,
+          boardIds: Array.isArray(res.data?.boardIds) ? res.data.boardIds.map(Number) : [],
+        }
+      }
+    } catch {
+      recommendationPreferences.value = { personalizedEnabled: true, boardIds: [] }
+    } finally {
+      recommendationPreferenceLoaded.value = true
+    }
+  }
+
+  async function openRecommendationPreferences() {
+    if (!(await ensureLoggedIn('管理推荐兴趣需要登录'))) return
+    if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
+    if (!recommendationPreferenceLoaded.value) await loadRecommendationPreferences()
+    recommendationDraftEnabled.value = recommendationPreferences.value.personalizedEnabled !== false
+    recommendationDraftBoardIds.value = [...recommendationPreferences.value.boardIds]
+    recommendationDialogVisible.value = true
+  }
+
+  async function saveRecommendationPreferences() {
+    if (recommendationDraftBoardIds.value.length > 8) {
+      ElMessage.warning('最多选择 8 个细分板块')
+      return
+    }
+    recommendationSaving.value = true
+    try {
+      await saveRecommendationInterests({
+        personalizedEnabled: recommendationDraftEnabled.value,
+        boardIds: recommendationDraftBoardIds.value,
+      })
+      recommendationPreferences.value = {
+        personalizedEnabled: recommendationDraftEnabled.value,
+        boardIds: [...recommendationDraftBoardIds.value],
+      }
+      recommendationPreferenceLoaded.value = true
+      recommendationDialogVisible.value = false
+      ElMessage.success('推荐兴趣已更新')
+      if (isRecommendationFeed.value) await fetchArticles(1)
+    } finally {
+      recommendationSaving.value = false
+    }
+  }
+
+  function skipRecommendationPreferences() {
+    recommendationDialogVisible.value = false
+  }
+
+  async function resetRecommendationPreferences() {
+    try {
+      await ElMessageBox.confirm('这会清空已选兴趣与“不想看”反馈，推荐将回到公共内容流。', '清空推荐设置', {
+        confirmButtonText: '确认清空',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+    recommendationSaving.value = true
+    try {
+      await resetRecommendationInterests()
+      recommendationPreferences.value = { personalizedEnabled: true, boardIds: [] }
+      recommendationDraftEnabled.value = true
+      recommendationDraftBoardIds.value = []
+      recommendationDialogVisible.value = false
+      ElMessage.success('推荐设置已清空')
+      if (isRecommendationFeed.value) await fetchArticles(1)
+    } finally {
+      recommendationSaving.value = false
+    }
+  }
+
+  async function hideRecommendedArticle(articleId) {
+    if (!articleId || !isRecommendationFeed.value || recommendationSaving.value) return
+    if (!(await ensureLoggedIn('调整推荐内容需要登录'))) return
+    recommendationSaving.value = true
+    try {
+      await markRecommendationNotInterested(articleId)
+      articleList.value = articleList.value.filter(item => Number(item.article?.id) !== Number(articleId))
+      total.value = Math.max(0, Number(total.value) - 1)
+      ElMessage.success('已减少此类推荐')
+    } finally {
+      recommendationSaving.value = false
     }
   }
 
@@ -515,6 +642,8 @@ export function useHome() {
     dismissCheckinHomeStrip,
     effectiveVipTier,
     ensureHomeFeedLoaded,
+    feedError,
+    feedForbidden,
     fetchArticles,
     fetchCheckinSummary,
     fetchHotFeed,
@@ -526,19 +655,30 @@ export function useHome() {
     goSettings,
     goToCreative,
     handleLogout,
+    hasRecommendationInterests,
+    hideRecommendedArticle,
     hotFeedList,
     isHomeFeed,
     isHotFeed,
+    isPersonalizedRecommendation,
     isRecommendationFeed,
     loading,
     mascotUi,
     menuActiveKey,
     msgUnread,
     openMessageCenter,
+    openRecommendationPreferences,
     pageNum,
     pageSize,
     placeholderMinHeight,
     pointsBalance,
+    recommendationDialogVisible,
+    recommendationDraftBoardIds,
+    recommendationDraftEnabled,
+    recommendationPreferenceLoaded,
+    recommendationSaving,
+    resetRecommendationPreferences,
+    saveRecommendationPreferences,
     searchInputPlaceholder,
     searchQuery,
     searchTargetMode,
@@ -548,6 +688,7 @@ export function useHome() {
     showCategoryNavigator,
     showAnnouncement,
     showCheckinHomeStrip,
+    skipRecommendationPreferences,
     submitSearch,
     toggleAiSearchMode,
     toggleMascotPassthrough,
