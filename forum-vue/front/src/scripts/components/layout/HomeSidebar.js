@@ -1,10 +1,8 @@
 import {
   Calendar,
-  ChatDotRound,
   Compass,
   EditPen,
-  Food,
-  Location,
+  HomeFilled,
   Medal,
   Notebook,
   Present,
@@ -16,14 +14,7 @@ import {
 
 import { useHomeShellContext } from '@/composables/useHomeShell'
 
-const CATEGORY_ICONS = [Location, Trophy, ShoppingBag, Food, Compass]
-
-function categoryIcon(idx) {
-  return CATEGORY_ICONS[idx % CATEGORY_ICONS.length]
-}
-
 const {
-  categoriesWithId,
   goCheckin,
   goLottery,
   goProfile,

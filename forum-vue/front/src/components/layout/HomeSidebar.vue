@@ -1,7 +1,16 @@
 <template>
   <aside class="home-xhs-sidebar home-sidebar-v2">
     <el-scrollbar class="home-xhs-sidebar-scroll">
-      <nav class="home-sidebar-nav" aria-label="内容分类">
+      <nav class="home-sidebar-nav" aria-label="内容发现">
+        <button
+          type="button"
+          class="home-sidebar-link"
+          :class="{ 'is-active': menuActiveKey === 'home' }"
+          @click="selectCategoryMenu('home')"
+        >
+          <el-icon><HomeFilled /></el-icon>
+          <span>首页</span>
+        </button>
         <button
           type="button"
           class="home-sidebar-link"
@@ -9,7 +18,7 @@
           @click="selectCategoryMenu('rec')"
         >
           <el-icon><Compass /></el-icon>
-          <span>推荐</span>
+          <span>为你推荐</span>
         </button>
         <button
           type="button"
@@ -19,17 +28,6 @@
         >
           <el-icon><TrendCharts /></el-icon>
           <span>热帖榜</span>
-        </button>
-        <button
-          v-for="(cat, idx) in categoriesWithId"
-          :key="cat.category.id"
-          type="button"
-          class="home-sidebar-link"
-          :class="{ 'is-active': menuActiveKey === `cat_${cat.category.id}` }"
-          @click="selectCategoryMenu(`cat_${cat.category.id}`)"
-        >
-          <el-icon><component :is="categoryIcon(idx)" /></el-icon>
-          <span>{{ cat.category.name }}</span>
         </button>
       </nav>
 

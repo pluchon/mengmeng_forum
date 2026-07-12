@@ -60,10 +60,10 @@ export function useHome() {
   /** 左侧「热帖榜」专用瀑布流数据（含封面等） */
   const hotFeedList = ref([])
 
-  /** 0 = 推荐；正数 = 分类 id；热帖榜单独用 menuActiveKey === 'hot' */
+  /** 0 = 首页全站流；正数 = 首页顶部导航中选中的分类。 */
   const activeCategoryId = ref(0)
-  const menuActiveKey = ref('rec')
-  /** 非首页路由时侧栏不高亮具体分类，避免 el-menu 误匹配 */
+  const menuActiveKey = ref('home')
+  /** 非首页路由时侧栏不高亮具体入口。 */
   const sidebarMenuActive = computed(() => (route.path === '/' ? menuActiveKey.value : undefined))
   const searchQuery = ref('')
   const aiSearchMode = ref(false)
@@ -88,15 +88,15 @@ export function useHome() {
   )
 
   const isHotFeed = computed(() => menuActiveKey.value === 'hot')
+  const isHomeFeed = computed(() => menuActiveKey.value === 'home')
+  const isRecommendationFeed = computed(() => menuActiveKey.value === 'rec')
 
   const searchInputPlaceholder = computed(() =>
     aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
   )
 
-  /** 推荐 / 热帖榜不展示板块选择行 */
-  const showBoardPillsRow = computed(
-    () => menuActiveKey.value !== 'rec' && menuActiveKey.value !== 'hot',
-  )
+  /** 首页承载分类导航；推荐与热帖榜保持内容流聚焦。 */
+  const showCategoryNavigator = computed(() => isHomeFeed.value)
 
   const effectiveVipTier = computed(() => {
     const t = Number(userStore.vipTier) || 0
@@ -109,7 +109,7 @@ export function useHome() {
   })
 
   const boardsInCategory = computed(() => {
-    if (menuActiveKey.value === 'hot') return []
+    if (!isHomeFeed.value) return []
     if (activeCategoryId.value === 0) return []
     const cat = boardStore.categoryList.find(
       x => x.category?.id === activeCategoryId.value,
@@ -347,6 +347,14 @@ export function useHome() {
       await router.push('/')
       await nextTick()
     }
+    if (index === 'home') {
+      activeCategoryId.value = 0
+      menuActiveKey.value = 'home'
+      currentBoardId.value = 0
+      hotFeedList.value = []
+      fetchArticles(1)
+      return
+    }
     if (index === 'hot') {
       menuActiveKey.value = 'hot'
       activeCategoryId.value = -1
@@ -362,25 +370,20 @@ export function useHome() {
       fetchArticles(1)
       return
     }
-    if (!String(index).startsWith('cat_')) return
-    const id = Number(String(index).slice(4))
-    if (!Number.isFinite(id)) return
-    activeCategoryId.value = id
-    menuActiveKey.value = `cat_${id}`
-    hotFeedList.value = []
-    const boards =
-      boardStore.categoryList.find(x => x.category?.id === id)?.boardList || []
-    if (boards.length) {
-      currentBoardId.value = boards[0].id
-    } else {
-      currentBoardId.value = 0
-    }
-    fetchArticles(1)
   }
 
-  function selectBoardPill(boardId) {
+  async function selectHomeBoard(categoryId, boardId) {
+    if (route.path !== '/') {
+      await router.push('/')
+      await nextTick()
+    }
+    const normalizedCategoryId = Number(categoryId)
+    const normalizedBoardId = Number(boardId)
+    if (!Number.isFinite(normalizedCategoryId) || !Number.isFinite(normalizedBoardId)) return
+    activeCategoryId.value = normalizedCategoryId
+    menuActiveKey.value = 'home'
+    currentBoardId.value = normalizedBoardId
     hotFeedList.value = []
-    currentBoardId.value = boardId
     fetchArticles(1)
   }
 
@@ -504,7 +507,6 @@ export function useHome() {
     announcementRef,
     articleList,
     boardStore,
-    boardsInCategory,
     categoriesWithId,
     checkinSummary,
     coverImageUrl,
@@ -525,7 +527,9 @@ export function useHome() {
     goToCreative,
     handleLogout,
     hotFeedList,
+    isHomeFeed,
     isHotFeed,
+    isRecommendationFeed,
     loading,
     mascotUi,
     menuActiveKey,
@@ -539,9 +543,9 @@ export function useHome() {
     searchQuery,
     searchTargetMode,
     sidebarMenuActive,
-    selectBoardPill,
     selectCategoryMenu,
-    showBoardPillsRow,
+    selectHomeBoard,
+    showCategoryNavigator,
     showAnnouncement,
     showCheckinHomeStrip,
     submitSearch,

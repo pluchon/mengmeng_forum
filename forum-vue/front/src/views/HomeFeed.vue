@@ -1,21 +1,59 @@
 <template>
   <div class="shell-main-stack shell-page-scroll">
-    <div v-if="showBoardPillsRow" class="home-board-section">
-      <div class="home-xhs-board-row home-xhs-board-row--card">
-        <template v-if="boardsInCategory.length">
+    <div v-if="showCategoryNavigator" class="home-discovery-section">
+      <nav class="home-discovery-nav" aria-label="首页板块导航">
+        <button
+          type="button"
+          class="home-discovery-all"
+          :class="{ 'is-active': currentBoardId === 0 }"
+          @click="selectCategoryMenu('home')"
+        >
+          全部
+        </button>
+
+        <div
+          v-for="item in categoriesWithId"
+          :key="item.category.id"
+          class="home-discovery-category"
+          @mouseenter="openCategory(item.category.id)"
+          @mouseleave="closeCategory"
+          @focusin="openCategory(item.category.id)"
+          @focusout="handleCategoryFocusOut"
+        >
           <button
-            v-for="b in boardsInCategory"
-            :key="b.id"
             type="button"
-            class="home-board-pill"
-            :class="{ 'is-active': currentBoardId === b.id }"
-            @click="selectBoardPill(b.id)"
+            class="home-discovery-category-trigger"
+            :class="{ 'is-active': activeCategoryId === item.category.id }"
+            :aria-expanded="openCategoryId === item.category.id"
+            aria-haspopup="menu"
+            @click="toggleCategory(item.category.id)"
           >
-            {{ b.name }}
+            <span>{{ item.category.name }}</span>
+            <el-icon><ArrowDown /></el-icon>
           </button>
-        </template>
-        <span v-else class="home-board-empty">该分类下暂无板块</span>
-      </div>
+
+          <div
+            v-if="openCategoryId === item.category.id"
+            class="home-discovery-board-menu"
+            role="menu"
+            :aria-label="`${item.category.name}细分板块`"
+          >
+            <div class="home-discovery-board-menu-head">{{ item.category.name }}</div>
+            <button
+              v-for="board in item.boardList || []"
+              :key="board.id"
+              type="button"
+              class="home-discovery-board-option"
+              :class="{ 'is-active': currentBoardId === board.id }"
+              role="menuitem"
+              @click="selectHomeBoard(item.category.id, board.id)"
+            >
+              {{ board.name }}
+            </button>
+            <span v-if="!(item.boardList || []).length" class="home-discovery-board-empty">暂无细分板块</span>
+          </div>
+        </div>
+      </nav>
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed">
@@ -168,9 +206,9 @@
 <script setup>
 defineOptions({ name: 'HomeFeed' })
 
-import { computed, onActivated, onMounted } from 'vue'
+import { computed, onActivated, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Loading } from '@element-plus/icons-vue'
+import { ArrowDown, Loading } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -189,7 +227,8 @@ const {
   CircleCheck,
   Close,
   articleList,
-  boardsInCategory,
+  activeCategoryId,
+  categoriesWithId,
   checkinSummary,
   coverImageUrl,
   currentBoardId,
@@ -204,13 +243,16 @@ const {
   pageNum,
   pageSize,
   placeholderMinHeight,
-  selectBoardPill,
-  showBoardPillsRow,
+  selectCategoryMenu,
+  selectHomeBoard,
+  showCategoryNavigator,
   showCheckinHomeStrip,
   total,
 } = useHomeShellContext()
 
 const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleList.value))
+
+const openCategoryId = ref(null)
 
 const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
   columnWidth: 220,
@@ -224,6 +266,23 @@ function openArticle(entry, event) {
   if (card) captureFeedCardOrigin(id, card)
   captureFeedOpenFrom(route.path)
   router.push(`/article/${id}`)
+}
+
+function openCategory(categoryId) {
+  openCategoryId.value = categoryId
+}
+
+function closeCategory() {
+  openCategoryId.value = null
+}
+
+function toggleCategory(categoryId) {
+  openCategoryId.value = openCategoryId.value === categoryId ? null : categoryId
+}
+
+function handleCategoryFocusOut(event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return
+  closeCategory()
 }
 
 onMounted(async () => {
