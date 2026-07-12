@@ -41,6 +41,7 @@ import org.example.forumdemo.service.interfaces.article.ArticleTagService;
 import org.example.forumdemo.service.interfaces.board.BoardService;
 import org.example.forumdemo.service.interfaces.common.IpRegionService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
+import org.example.forumdemo.service.interfaces.growth.GrowthService;
 import org.example.forumdemo.service.interfaces.search.ArticleSearchIndexService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.example.forumdemo.service.interfaces.user.UserFollowService;
@@ -75,6 +76,9 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Autowired
     private UserFollowService userFollowService;
+
+    @Autowired
+    private GrowthService growthService;
 
     @Autowired
     private BoardService boardService;
@@ -132,6 +136,7 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createDraft(PublishArticleRequest req, Long userId) {
+        growthService.requireFormalUser(userId);
         User user = userService.queryUserByUserId(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
@@ -159,6 +164,7 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishArticle(Long articleId, Long userId) {
+        growthService.requireFormalUser(userId);
         Article article = selectArticleByArticleId(articleId);
         if (!Objects.equals(article.getUserId(), userId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
