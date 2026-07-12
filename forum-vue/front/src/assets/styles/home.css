@@ -969,16 +969,12 @@
   gap: 6px;
   min-height: 46px;
   padding: 5px 8px;
-  overflow-x: auto;
+  overflow: visible;
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(229, 230, 235, 0.92);
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(31, 35, 41, 0.035);
   scrollbar-width: none;
-}
-
-.home-discovery-nav::-webkit-scrollbar {
-  display: none;
 }
 
 .home-discovery-all,
@@ -1036,7 +1032,7 @@
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  z-index: 40;
+  z-index: 120;
   display: grid;
   min-width: 180px;
   max-width: 260px;
@@ -1370,6 +1366,67 @@
   box-sizing: border-box;
 }
 
+.recommendation-feed-stage {
+  position: relative;
+  min-height: 360px;
+}
+
+.home-masonry--obscured {
+  filter: blur(7px);
+  pointer-events: none;
+  user-select: none;
+  transform: scale(1.008);
+}
+
+.recommendation-interest-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 18px;
+  background: rgba(249, 250, 252, 0.38);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.recommendation-interest-mask-card {
+  width: min(360px, 100%);
+  padding: 28px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 20px 60px rgba(31, 35, 41, 0.15);
+  text-align: center;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.recommendation-interest-mask-kicker {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--primary-red, #ff2442);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.recommendation-interest-mask-card h2 {
+  margin: 0 0 20px;
+  color: #2b3038;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.recommendation-interest-mask-card .el-button {
+  min-width: 120px;
+  font-weight: 750;
+}
+
 /* 为你推荐：用轻量“编辑页签”明确当前流的来源与可控性 */
 .recommendation-intro {
   display: flex;
@@ -1456,46 +1513,8 @@
   padding: 38px 0 10px;
 }
 
-.recommendation-interest-dialog .el-dialog__header {
-  margin-right: 0;
-  padding: 22px 24px 12px;
-}
-
 .recommendation-interest-dialog .el-dialog__body {
-  padding: 10px 24px 16px;
-}
-
-.recommendation-dialog-tip {
-  margin: 0 0 16px;
-  color: #737b88;
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.recommendation-dialog-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #faf7f7;
-}
-
-.recommendation-dialog-switch strong,
-.recommendation-dialog-switch small {
-  display: block;
-}
-
-.recommendation-dialog-switch strong {
-  color: #323741;
-  font-size: 14px;
-}
-
-.recommendation-dialog-switch small {
-  margin-top: 3px;
-  color: #89909b;
-  font-size: 12px;
+  padding: 6px 24px 18px;
 }
 
 .recommendation-interest-groups {
@@ -1504,10 +1523,6 @@
   max-height: min(42vh, 360px);
   margin-top: 16px;
   overflow: auto;
-}
-
-.recommendation-interest-groups.is-disabled {
-  opacity: 0.55;
 }
 
 .recommendation-interest-group {
@@ -1544,19 +1559,29 @@
   background: linear-gradient(115deg, rgba(125, 183, 255, 0.17), rgba(15, 23, 42, 0.9) 55%);
 }
 
+:root[data-theme='dark'] .recommendation-interest-mask {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(11, 16, 32, 0.38);
+}
+
+:root[data-theme='dark'] .recommendation-interest-mask-card {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.76);
+}
+
+:root[data-theme='dark'] .recommendation-interest-mask-card h2 {
+  color: #edf5ff;
+}
+
 :root[data-theme='dark'] .recommendation-intro h2,
-:root[data-theme='dark'] .recommendation-dialog-switch strong,
 :root[data-theme='dark'] .recommendation-interest-group h3 {
   color: #edf5ff;
 }
 
-:root[data-theme='dark'] .recommendation-intro p,
-:root[data-theme='dark'] .recommendation-dialog-tip,
-:root[data-theme='dark'] .recommendation-dialog-switch small {
+:root[data-theme='dark'] .recommendation-intro p {
   color: #9fb0ca;
 }
 
-:root[data-theme='dark'] .recommendation-dialog-switch,
 :root[data-theme='dark'] .recommendation-interest-group {
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.64);
@@ -1576,8 +1601,12 @@
     max-width: 220px;
   }
 
-  .recommendation-dialog-actions {
+  .home-discovery-nav {
     flex-wrap: wrap;
+  }
+
+  .recommendation-interest-mask-card {
+    padding: 24px 20px;
   }
 }
 

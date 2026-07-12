@@ -29,7 +29,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -156,10 +158,13 @@ public class BoardServiceImpl implements BoardService {
             wrapper.eq(Article::getBoardId, boardId);
         }
         Page<Article> result = articleMapper.selectPage(page, wrapper);
+        List<Article> articleRecords = boardId == 0
+                ? mixHomeFeedArticles(result.getRecords(), validPageSize)
+                : result.getRecords();
         Set<Long> followingIds = (loginUserId != null && loginUserId > 0)
                 ? userFollowService.listFollowingIds(loginUserId)
                 : Set.of();
-        List<ArticleListResponse> records = result.getRecords().stream().map(article -> {
+        List<ArticleListResponse> records = articleRecords.stream().map(article -> {
             User user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
@@ -169,6 +174,69 @@ public class BoardServiceImpl implements BoardService {
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
+    }
+
+    /** 首页全站流以新帖为主体，随机插入少量高互动帖子，避免每次只按时间倒序展示。 */
+    private List<Article> mixHomeFeedArticles(List<Article> newestArticles, int pageSize) {
+        if (newestArticles == null || newestArticles.isEmpty()) {
+            return List.of();
+        }
+        int hotCount = Math.min(Math.min(Math.max(2, pageSize / 5), 4), newestArticles.size());
+        List<Article> engagementCandidates = articleMapper.selectPage(
+                PageUtils.getPage(1, Math.max(pageSize * 3, 30)), new LambdaQueryWrapper<Article>()
+                        .ne(Article::getDeleteState, 1)
+                        .ne(Article::getState, 1)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                        .orderByDesc(Article::getLikeCount)
+                        .orderByDesc(Article::getFavoriteCount)
+                        .orderByDesc(Article::getReplyCount)
+                        .orderByDesc(Article::getSubReplyCount)
+                        .orderByDesc(Article::getVisitCount)
+                        .orderByDesc(Article::getCreateTime))
+                .getRecords();
+        if (engagementCandidates.isEmpty()) {
+            return newestArticles;
+        }
+        Collections.shuffle(engagementCandidates);
+        List<Article> mixed = new ArrayList<>(newestArticles);
+        Set<Long> insertedIds = mixed.stream().map(Article::getId).collect(Collectors.toSet());
+        int inserted = 0;
+        for (Article candidate : engagementCandidates) {
+            if (candidate == null || candidate.getId() == null) {
+                continue;
+            }
+            int existingIndex = findArticleIndex(mixed, candidate.getId());
+            if (existingIndex >= 0) {
+                mixed.remove(existingIndex);
+                int targetIndex = java.util.concurrent.ThreadLocalRandom.current().nextInt(mixed.size() + 1);
+                mixed.add(targetIndex, candidate);
+                inserted++;
+                if (inserted >= hotCount) {
+                    break;
+                }
+                continue;
+            }
+            if (insertedIds.contains(candidate.getId()) || mixed.isEmpty()) {
+                continue;
+            }
+            int replaceIndex = java.util.concurrent.ThreadLocalRandom.current().nextInt(mixed.size());
+            mixed.set(replaceIndex, candidate);
+            insertedIds.add(candidate.getId());
+            inserted++;
+            if (inserted >= hotCount) {
+                break;
+            }
+        }
+        return mixed;
+    }
+
+    private int findArticleIndex(List<Article> articles, Long articleId) {
+        for (int index = 0; index < articles.size(); index++) {
+            if (articleId.equals(articles.get(index).getId())) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     // ============================================================

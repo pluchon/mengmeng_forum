@@ -24,6 +24,18 @@
           <el-button class="edit-btn" :loading="loadingLogs" @click="openLoginLogs">查看详情</el-button>
         </div>
       </div>
+      <div class="setting-item">
+        <div class="setting-label setting-label--text">个性化推荐</div>
+        <div class="setting-content">
+          <span class="desc-text">关闭后，“为你推荐”只展示公开内容流</span>
+          <el-switch
+            v-model="personalizedEnabled"
+            :loading="savingPersonalization"
+            :disabled="loadingPersonalization || savingPersonalization"
+            @change="togglePersonalization"
+          />
+        </div>
+      </div>
     </div>
 
     <el-dialog
@@ -73,6 +85,10 @@ const {
   loginLogs,
   openLoginLogs,
   pagedLoginLogs,
+  loadingPersonalization,
+  personalizedEnabled,
+  savingPersonalization,
+  togglePersonalization,
 } = useAccountSecurity()
 </script>
 

@@ -57,7 +57,7 @@
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed">
-      <section v-if="isRecommendationFeed" class="recommendation-intro" aria-label="为你推荐设置">
+      <section v-if="isRecommendationFeed && !showRecommendationInterestMask" class="recommendation-intro" aria-label="为你推荐设置">
         <div class="recommendation-intro-copy">
           <span class="recommendation-intro-eyebrow">FOR YOU</span>
           <h2>为你推荐</h2>
@@ -125,90 +125,99 @@
         </div>
       </div>
 
-      <div
-        v-show="!loading && feedList.length"
-        ref="masonryRef"
-        class="home-masonry"
-      >
+      <div v-if="!loading && (feedList.length || showRecommendationInterestMask)" class="recommendation-feed-stage">
         <div
-          v-for="(col, colIdx) in masonryColumns"
-          :key="'m-col-' + colIdx"
-          class="home-masonry-column"
+          ref="masonryRef"
+          class="home-masonry"
+          :class="{ 'home-masonry--obscured': showRecommendationInterestMask }"
         >
           <div
-            v-for="entry in col"
-            :key="entry.article?.id"
-            class="home-masonry-item"
+            v-for="(col, colIdx) in masonryColumns"
+            :key="'m-col-' + colIdx"
+            class="home-masonry-column"
           >
-            <el-card
-              class="note-card note-card--masonry"
-              :body-style="{ padding: '0px' }"
-              shadow="hover"
-              @click="openArticle(entry, $event)"
+            <div
+              v-for="entry in col"
+              :key="entry.article?.id"
+              class="home-masonry-item"
             >
-              <div class="note-cover note-cover--fluid">
-                <img
-                  v-if="coverImageUrl(entry)"
-                  class="note-cover-img"
-                  :src="coverImageUrl(entry)"
-                  :alt="entry.article?.title || ''"
-                  loading="lazy"
-                />
-                <div
-                  v-else
-                  class="note-cover-placeholder"
-                  :class="{ 'note-cover-placeholder--video': Number(entry.article?.mediaType) === 1 }"
-                  :style="{
-                    background: getRandomPastel(),
-                    minHeight: placeholderMinHeight(entry.article?.id),
-                  }"
-                >
-                  <span class="cover-title">{{ (entry.article?.title || '').substring(0, 12) }}</span>
-                </div>
-                <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
-              </div>
-              <div class="note-info">
-                <h3 class="note-title">{{ entry.article?.title }}</h3>
-                <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
-                  {{ entry.recommendReason }}
-                </div>
-                <div class="note-footer">
-                  <div class="author">
-                    <UserAvatarVip
-                      :size="22"
-                      :src="entry.user?.avatarUrl || defaultAvatar"
-                      :vip-tier="Number(entry.user?.vipTier) || 0"
-                      :vip-expire-at="entry.user?.vipExpireAt"
-                    />
-                    <span class="nickname">{{ entry.user?.nickname }}</span>
-                    <FollowingBadge :from-following="!!entry.fromFollowing" />
-                  </div>
-                  <div class="likes">
-                    <LikeCountIcon />
-                    <span>{{ entry.article?.likeCount }}</span>
-                  </div>
-                  <el-dropdown
-                    v-if="isRecommendationFeed && userStore.isLoggedIn"
-                    trigger="click"
-                    @command="hideRecommendedArticle(entry.article?.id)"
-                    @click.stop
+              <el-card
+                class="note-card note-card--masonry"
+                :body-style="{ padding: '0px' }"
+                shadow="hover"
+                @click="openArticle(entry, $event)"
+              >
+                <div class="note-cover note-cover--fluid">
+                  <img
+                    v-if="coverImageUrl(entry)"
+                    class="note-cover-img"
+                    :src="coverImageUrl(entry)"
+                    :alt="entry.article?.title || ''"
+                    loading="lazy"
+                  />
+                  <div
+                    v-else
+                    class="note-cover-placeholder"
+                    :class="{ 'note-cover-placeholder--video': Number(entry.article?.mediaType) === 1 }"
+                    :style="{
+                      background: getRandomPastel(),
+                      minHeight: placeholderMinHeight(entry.article?.id),
+                    }"
                   >
-                    <button type="button" class="recommendation-card-menu" aria-label="调整推荐内容" @click.stop>
-                      <el-icon><MoreFilled /></el-icon>
-                    </button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="not-interested" :disabled="recommendationSaving">
-                          不想看这篇
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                    <span class="cover-title">{{ (entry.article?.title || '').substring(0, 12) }}</span>
+                  </div>
+                  <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
                 </div>
-              </div>
-            </el-card>
+                <div class="note-info">
+                  <h3 class="note-title">{{ entry.article?.title }}</h3>
+                  <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
+                    {{ entry.recommendReason }}
+                  </div>
+                  <div class="note-footer">
+                    <div class="author">
+                      <UserAvatarVip
+                        :size="22"
+                        :src="entry.user?.avatarUrl || defaultAvatar"
+                        :vip-tier="Number(entry.user?.vipTier) || 0"
+                        :vip-expire-at="entry.user?.vipExpireAt"
+                      />
+                      <span class="nickname">{{ entry.user?.nickname }}</span>
+                      <FollowingBadge :from-following="!!entry.fromFollowing" />
+                    </div>
+                    <div class="likes">
+                      <LikeCountIcon />
+                      <span>{{ entry.article?.likeCount }}</span>
+                    </div>
+                    <el-dropdown
+                      v-if="isRecommendationFeed && userStore.isLoggedIn"
+                      trigger="click"
+                      @command="hideRecommendedArticle(entry.article?.id)"
+                      @click.stop
+                    >
+                      <button type="button" class="recommendation-card-menu" aria-label="调整推荐内容" @click.stop>
+                        <el-icon><MoreFilled /></el-icon>
+                      </button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="not-interested" :disabled="recommendationSaving">
+                            不想看这篇
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+                </div>
+              </el-card>
+            </div>
           </div>
         </div>
+        <section v-if="showRecommendationInterestMask" class="recommendation-interest-mask" aria-label="选择推荐兴趣">
+          <div class="recommendation-interest-mask-card">
+            <span class="recommendation-interest-mask-kicker">PERSONALIZED FEED</span>
+            <h2>选择感兴趣的板块<br>为你精准推荐</h2>
+            <el-button type="primary" round @click="openRecommendationPreferences">选择兴趣</el-button>
+          </div>
+        </section>
       </div>
 
       <div v-if="loading && feedList.length" class="home-feed-loading-more" aria-live="polite">
@@ -240,7 +249,7 @@
       </div>
 
       <el-empty
-        v-if="!loading && !feedError && feedList.length === 0"
+        v-if="!loading && !feedError && !showRecommendationInterestMask && feedList.length === 0"
         :description="isHotFeed ? '暂无热帖' : '这里还没有笔记哦'"
       />
     </main>
@@ -248,23 +257,14 @@
     <el-dialog
       v-model="recommendationDialogVisible"
       class="recommendation-interest-dialog"
-      title="让推荐更懂你"
       width="min(620px, calc(100vw - 32px))"
       :close-on-click-modal="!recommendationSaving"
       :close-on-press-escape="!recommendationSaving"
     >
-      <p class="recommendation-dialog-tip">选择 3～8 个细分板块效果更好；也可以暂时跳过，之后随时回来调整。</p>
-      <div class="recommendation-dialog-switch">
-        <span>
-          <strong>个性化推荐</strong>
-          <small>关闭后将只展示公开最新与热帖</small>
-        </span>
-        <el-switch v-model="recommendationDraftEnabled" :disabled="recommendationSaving" />
-      </div>
-      <div class="recommendation-interest-groups" :class="{ 'is-disabled': !recommendationDraftEnabled }">
+      <div class="recommendation-interest-groups">
         <section v-for="item in categoriesWithId" :key="item.category.id" class="recommendation-interest-group">
           <h3>{{ item.category.name }}</h3>
-          <el-checkbox-group v-model="recommendationDraftBoardIds" :disabled="!recommendationDraftEnabled || recommendationSaving">
+          <el-checkbox-group v-model="recommendationDraftBoardIds" :disabled="recommendationSaving">
             <el-checkbox v-for="board in item.boardList || []" :key="board.id" :value="Number(board.id)">
               {{ board.name }}
             </el-checkbox>
@@ -273,9 +273,7 @@
       </div>
       <template #footer>
         <div class="recommendation-dialog-actions">
-          <el-button text :disabled="recommendationSaving" @click="skipRecommendationPreferences">暂时跳过</el-button>
-          <el-button text type="danger" :disabled="recommendationSaving" @click="resetRecommendationPreferences">清空设置</el-button>
-          <el-button type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存设置</el-button>
+          <el-button type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -337,11 +335,9 @@ const {
   openRecommendationPreferences,
   recommendationDialogVisible,
   recommendationDraftBoardIds,
-  recommendationDraftEnabled,
   recommendationSaving,
-  resetRecommendationPreferences,
   saveRecommendationPreferences,
-  skipRecommendationPreferences,
+  showRecommendationInterestMask,
   userStore,
 } = useHomeShellContext()
 

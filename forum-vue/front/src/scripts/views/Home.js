@@ -20,7 +20,6 @@ import {
   getRecommendationFeed,
   getRecommendationInterests,
   markRecommendationNotInterested,
-  resetRecommendationInterests,
   saveRecommendationInterests,
 } from '@/api/recommendation'
 import { getMyFollowingIds } from '@/api/userFollow'
@@ -34,7 +33,7 @@ import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { useMascotUiStore } from '@/stores/mascotUi'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
 import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
 import userSearchIconUrl from '@/assets/svg/用户.svg?url'
@@ -72,7 +71,6 @@ export function useHome() {
   const recommendationPreferences = ref({ personalizedEnabled: true, boardIds: [] })
   const recommendationPreferenceLoaded = ref(false)
   const recommendationDialogVisible = ref(false)
-  const recommendationDraftEnabled = ref(true)
   const recommendationDraftBoardIds = ref([])
   const recommendationSaving = ref(false)
 
@@ -111,6 +109,12 @@ export function useHome() {
     userStore.isLoggedIn
       && recommendationPreferences.value.personalizedEnabled
       && hasRecommendationInterests.value,
+  )
+  const showRecommendationInterestMask = computed(() =>
+    isRecommendationFeed.value
+      && userStore.isLoggedIn
+      && recommendationPreferenceLoaded.value
+      && !hasRecommendationInterests.value,
   )
 
   const searchInputPlaceholder = computed(() =>
@@ -428,7 +432,6 @@ export function useHome() {
     if (!(await ensureLoggedIn('管理推荐兴趣需要登录'))) return
     if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
     if (!recommendationPreferenceLoaded.value) await loadRecommendationPreferences()
-    recommendationDraftEnabled.value = recommendationPreferences.value.personalizedEnabled !== false
     recommendationDraftBoardIds.value = [...recommendationPreferences.value.boardIds]
     recommendationDialogVisible.value = true
   }
@@ -441,44 +444,16 @@ export function useHome() {
     recommendationSaving.value = true
     try {
       await saveRecommendationInterests({
-        personalizedEnabled: recommendationDraftEnabled.value,
+        personalizedEnabled: true,
         boardIds: recommendationDraftBoardIds.value,
       })
       recommendationPreferences.value = {
-        personalizedEnabled: recommendationDraftEnabled.value,
+        personalizedEnabled: true,
         boardIds: [...recommendationDraftBoardIds.value],
       }
       recommendationPreferenceLoaded.value = true
       recommendationDialogVisible.value = false
       ElMessage.success('推荐兴趣已更新')
-      if (isRecommendationFeed.value) await fetchArticles(1)
-    } finally {
-      recommendationSaving.value = false
-    }
-  }
-
-  function skipRecommendationPreferences() {
-    recommendationDialogVisible.value = false
-  }
-
-  async function resetRecommendationPreferences() {
-    try {
-      await ElMessageBox.confirm('这会清空已选兴趣与“不想看”反馈，推荐将回到公共内容流。', '清空推荐设置', {
-        confirmButtonText: '确认清空',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
-    recommendationSaving.value = true
-    try {
-      await resetRecommendationInterests()
-      recommendationPreferences.value = { personalizedEnabled: true, boardIds: [] }
-      recommendationDraftEnabled.value = true
-      recommendationDraftBoardIds.value = []
-      recommendationDialogVisible.value = false
-      ElMessage.success('推荐设置已清空')
       if (isRecommendationFeed.value) await fetchArticles(1)
     } finally {
       recommendationSaving.value = false
@@ -674,10 +649,8 @@ export function useHome() {
     pointsBalance,
     recommendationDialogVisible,
     recommendationDraftBoardIds,
-    recommendationDraftEnabled,
     recommendationPreferenceLoaded,
     recommendationSaving,
-    resetRecommendationPreferences,
     saveRecommendationPreferences,
     searchInputPlaceholder,
     searchQuery,
@@ -688,7 +661,7 @@ export function useHome() {
     showCategoryNavigator,
     showAnnouncement,
     showCheckinHomeStrip,
-    skipRecommendationPreferences,
+    showRecommendationInterestMask,
     submitSearch,
     toggleAiSearchMode,
     toggleMascotPassthrough,
