@@ -142,6 +142,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'growth-center',
+          name: 'growthCenter',
+          component: () => import('../views/GrowthCenter.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
           path: 'games',
           name: 'gameCenter',
           component: () => import('../views/GameCenter.vue'),
