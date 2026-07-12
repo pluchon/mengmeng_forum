@@ -38,7 +38,6 @@
             role="menu"
             :aria-label="`${item.category.name}细分板块`"
           >
-            <div class="home-discovery-board-menu-head">{{ item.category.name }}</div>
             <button
               v-for="board in item.boardList || []"
               :key="board.id"
@@ -219,26 +218,29 @@
         </section>
       </div>
 
-      <aside v-if="isHomeFeed" class="home-hot-floating" aria-label="热帖榜">
+      <transition name="home-hot-collapse" mode="out-in">
+        <aside v-if="isHomeFeed && !homeHotCollapsed" class="home-hot-floating" aria-label="热帖榜">
         <div class="home-hot-floating-head">
           <div class="home-hot-floating-title">
             <el-icon><TrendCharts /></el-icon>
             <span>热帖榜</span>
           </div>
-          <span>实时热度</span>
+          <button type="button" class="home-hot-collapse-action" @click="toggleHomeHotCollapsed">点击收起</button>
         </div>
         <div v-if="homeHotLoading" class="home-hot-floating-loading">
           <el-skeleton v-for="item in 4" :key="item" animated :rows="1" />
         </div>
         <div v-else-if="homeHotList.length" class="home-hot-floating-list">
           <button
-            v-for="(entry, index) in homeHotList"
+            v-for="(entry, index) in homeHotPagedList"
             :key="entry.article?.id"
             type="button"
             class="home-hot-floating-item"
             @click="openArticle(entry, $event)"
           >
-            <span class="home-hot-floating-rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</span>
+            <span class="home-hot-floating-rank" :class="{ 'is-top': (homeHotPage - 1) * homeHotPageSize + index < 3 }">
+              {{ (homeHotPage - 1) * homeHotPageSize + index + 1 }}
+            </span>
             <img v-if="coverImageUrl(entry)" :src="coverImageUrl(entry)" :alt="entry.article?.title || ''" class="home-hot-floating-cover" />
             <span v-else class="home-hot-floating-cover home-hot-floating-cover--placeholder">热</span>
             <span class="home-hot-floating-copy">
@@ -248,7 +250,21 @@
           </button>
         </div>
         <el-empty v-else :image-size="42" description="暂无热帖" />
-      </aside>
+        <el-pagination
+          v-if="homeHotList.length > homeHotPageSize"
+          v-model:current-page="homeHotPage"
+          class="home-hot-floating-pager"
+          :total="homeHotList.length"
+          :page-size="homeHotPageSize"
+          layout="prev, pager, next"
+          small
+          background
+        />
+        </aside>
+        <button v-else-if="isHomeFeed" type="button" class="home-hot-collapsed-button" aria-label="展开热帖榜" @click="toggleHomeHotCollapsed">
+          <el-icon><TrendCharts /></el-icon>
+        </button>
+      </transition>
 
       <div v-if="loading && feedList.length" class="home-feed-loading-more" aria-live="polite">
         <el-icon class="home-feed-loading-spin" :size="20"><Loading /></el-icon>
@@ -304,7 +320,7 @@
       </div>
       <template #footer>
         <div class="recommendation-dialog-actions">
-          <el-button type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存</el-button>
+          <el-button class="recommendation-save-button" type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -353,6 +369,10 @@ const {
   hideRecommendedArticle,
   homeHotList,
   homeHotLoading,
+  homeHotCollapsed,
+  homeHotPage,
+  homeHotPageSize,
+  homeHotPagedList,
   isHomeFeed,
   isHotFeed,
   isPersonalizedRecommendation,
@@ -366,6 +386,7 @@ const {
   showCategoryNavigator,
   showCheckinHomeStrip,
   total,
+  toggleHomeHotCollapsed,
   openRecommendationPreferences,
   recommendationDialogVisible,
   recommendationDraftBoardIds,

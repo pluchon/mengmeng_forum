@@ -71,6 +71,9 @@ export function useHome() {
   /** 首页右侧悬浮热帖榜数据（保留原热度排序，不再占用左侧导航） */
   const homeHotList = ref([])
   const homeHotLoading = ref(false)
+  const homeHotCollapsed = ref(false)
+  const homeHotPage = ref(1)
+  const homeHotPageSize = 10
   const recommendationPreferences = ref({ personalizedEnabled: true, boardIds: [] })
   const recommendationPreferenceLoaded = ref(false)
   const recommendationDialogVisible = ref(false)
@@ -119,6 +122,10 @@ export function useHome() {
       && recommendationPreferenceLoaded.value
       && !hasRecommendationInterests.value,
   )
+  const homeHotPagedList = computed(() => {
+    const start = (homeHotPage.value - 1) * homeHotPageSize
+    return homeHotList.value.slice(start, start + homeHotPageSize)
+  })
 
   const searchInputPlaceholder = computed(() =>
     aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
@@ -334,10 +341,15 @@ export function useHome() {
   async function fetchHomeHotList() {
     homeHotLoading.value = true
     try {
-      homeHotList.value = await loadHotArticles(6)
+      homeHotList.value = await loadHotArticles(50)
+      homeHotPage.value = 1
     } finally {
       homeHotLoading.value = false
     }
+  }
+
+  function toggleHomeHotCollapsed() {
+    homeHotCollapsed.value = !homeHotCollapsed.value
   }
 
   async function fetchHotFeed() {
@@ -655,6 +667,10 @@ export function useHome() {
     hideRecommendedArticle,
     homeHotList,
     homeHotLoading,
+    homeHotCollapsed,
+    homeHotPage,
+    homeHotPageSize,
+    homeHotPagedList,
     hotFeedList,
     isHomeFeed,
     isHotFeed,
@@ -690,6 +706,7 @@ export function useHome() {
     toggleMascotPassthrough,
     toggleSearchTargetMode,
     total,
+    toggleHomeHotCollapsed,
     userSearchIconUrl,
     userStore,
   }

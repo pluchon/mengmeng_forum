@@ -1053,13 +1053,6 @@
   box-shadow: 0 18px 38px rgba(31, 35, 41, 0.14);
 }
 
-.home-discovery-board-menu-head {
-  padding: 4px 7px 7px;
-  color: #9aa1ad;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .home-discovery-board-option {
   border: none;
   border-radius: 8px;
@@ -1119,7 +1112,6 @@
   color: #dbeafe;
 }
 
-:root[data-theme='dark'] .home-discovery-board-menu-head,
 :root[data-theme='dark'] .home-discovery-board-empty {
   color: #8da0bd;
 }
@@ -1518,6 +1510,18 @@
   padding: 6px 24px 18px;
 }
 
+.recommendation-interest-dialog .el-dialog__header {
+  margin-right: 0;
+  padding: 22px 56px 14px;
+  text-align: center;
+}
+
+.recommendation-interest-dialog .el-dialog__title {
+  color: #242a33;
+  font-size: 21px;
+  font-weight: 850;
+}
+
 .recommendation-interest-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1554,10 +1558,19 @@
   gap: 4px;
 }
 
+.recommendation-save-button {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 0 28px !important;
+  border-radius: 999px !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+
 /* 首页右侧热帖榜：沿用收藏夹的行式信息密度，不再占用左侧导航。 */
 .home-hot-floating {
   position: fixed;
-  top: calc(var(--home-top-row-h, 56px) + 22px);
+  top: calc(var(--home-top-row-h, 56px) + 104px);
   right: 22px;
   z-index: 45;
   width: 286px;
@@ -1581,6 +1594,22 @@
   padding: 3px 4px 10px;
   color: #9aa1ad;
   font-size: 11px;
+}
+
+.home-hot-collapse-action {
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: transparent;
+  color: #9098a5;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.home-hot-collapse-action:hover {
+  background: #f5f6f8;
+  color: #ff5b41;
 }
 
 .home-hot-floating-title {
@@ -1677,6 +1706,52 @@
   padding: 6px 4px;
 }
 
+.home-hot-floating-pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.home-hot-collapsed-button {
+  position: fixed;
+  top: calc(var(--home-top-row-h, 56px) + 104px);
+  right: 22px;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid #eceef2;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(31, 35, 41, 0.13);
+  color: #ff5b41;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.home-hot-collapsed-button:hover {
+  background: #fff5f4;
+  transform: scale(1.06);
+}
+
+.home-hot-collapsed-button .el-icon {
+  font-size: 26px;
+}
+
+.home-hot-collapse-enter-active,
+.home-hot-collapse-leave-active {
+  transition: opacity 0.2s ease, transform 0.24s ease;
+}
+
+.home-hot-collapse-enter-from,
+.home-hot-collapse-leave-to {
+  opacity: 0;
+  transform: translateX(18px) scale(0.88);
+}
+
 :root[data-theme='dark'] .recommendation-intro {
   border-color: rgba(255, 255, 255, 0.1);
   background: linear-gradient(115deg, rgba(125, 183, 255, 0.17), rgba(15, 23, 42, 0.9) 55%);
@@ -1713,6 +1788,16 @@
   background: rgba(15, 23, 42, 0.88);
 }
 
+:root[data-theme='dark'] .home-hot-collapsed-button {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.88);
+}
+
+:root[data-theme='dark'] .home-hot-collapse-action:hover {
+  background: rgba(125, 183, 255, 0.12);
+  color: #dbeafe;
+}
+
 :root[data-theme='dark'] .home-hot-floating-title,
 :root[data-theme='dark'] .home-hot-floating-copy strong {
   color: #e8f0ff;
@@ -1742,6 +1827,10 @@
 
   .recommendation-interest-mask {
     left: 72px;
+  }
+
+  .home-hot-collapsed-button {
+    top: calc(var(--home-top-row-h, 56px) + 88px);
   }
 }
 
