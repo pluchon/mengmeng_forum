@@ -43,9 +43,9 @@
           </el-icon>
           <span>漂流瓶</span>
         </button>
-        <button type="button" class="home-sidebar-link" @click="$router.push('/exam-question-bank')">
+        <button type="button" class="home-sidebar-link" @click="$router.push('/growth-center')">
           <el-icon><Notebook /></el-icon>
-          <span>考试题库</span>
+          <span>成长中心</span>
         </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/emoji-shop')">
           <el-icon><ShoppingBag /></el-icon>
