@@ -14,6 +14,7 @@ import org.example.forumdemo.entity.db.GrowthChallengeAttempt;
 import org.example.forumdemo.entity.db.GrowthExperienceLog;
 import org.example.forumdemo.entity.db.GrowthRewardRecord;
 import org.example.forumdemo.entity.db.UserGrowthProfile;
+import org.example.forumdemo.entity.db.VipTrialEntitlement;
 import org.example.forumdemo.entity.dto.growth.GrowthChallengeSubmitRequest;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeDetailVO;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeVO;
@@ -26,7 +27,9 @@ import org.example.forumdemo.mapper.GrowthChallengeMapper;
 import org.example.forumdemo.mapper.GrowthExperienceLogMapper;
 import org.example.forumdemo.mapper.GrowthRewardRecordMapper;
 import org.example.forumdemo.mapper.UserGrowthProfileMapper;
+import org.example.forumdemo.mapper.VipTrialEntitlementMapper;
 import org.example.forumdemo.service.interfaces.growth.GrowthService;
+import org.example.forumdemo.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +50,8 @@ public class GrowthServiceImpl implements GrowthService {
     @Autowired private GrowthRewardRecordMapper rewardRecordMapper;
     @Autowired private ExamQuestionMapper questionMapper;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private VipTrialEntitlementMapper vipTrialEntitlementMapper;
+    @Autowired private VipSubscribeService vipSubscribeService;
 
     @Override
     public GrowthOverviewVO overview(Long userId) {
@@ -124,6 +129,10 @@ public class GrowthServiceImpl implements GrowthService {
         String rewardType = GrowthChallengeType.FORMAL_USER.name().equals(challenge.getChallengeType()) ? "FORMAL_USER" : "VIP_TRIAL_900";
         if (rewardRecordMapper.selectCount(new LambdaQueryWrapper<GrowthRewardRecord>().eq(GrowthRewardRecord::getUserId, userId).eq(GrowthRewardRecord::getChallengeId, challenge.getId()).eq(GrowthRewardRecord::getRewardType, rewardType)) > 0) return;
         GrowthRewardRecord reward = new GrowthRewardRecord(); reward.setUserId(userId); reward.setChallengeId(challenge.getId()); reward.setRewardType(rewardType); reward.setRewardValue("GRANTED"); reward.setDeleteState((byte) 0); rewardRecordMapper.insert(reward);
+        if ("VIP_TRIAL_900".equals(rewardType)) {
+            VipTrialEntitlement entitlement = new VipTrialEntitlement(); entitlement.setUserId(userId); entitlement.setTrialCode("TRIAL_900"); entitlement.setStatus("ACTIVE"); entitlement.setExpireAt(new Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)); entitlement.setDeleteState((byte) 0); vipTrialEntitlementMapper.insert(entitlement);
+            vipSubscribeService.grantTrialVipDays(userId, 7);
+        }
         UserGrowthProfile profile = getOrCreateProfile(userId, true); if ("FORMAL_USER".equals(rewardType)) profile.setFormalState((byte) 1);
         int exp = challenge.getExperienceReward() == null ? 0 : challenge.getExperienceReward(); profile.setExperience((profile.getExperience() == null ? 0 : profile.getExperience()) + exp); profile.setGrowthLevel(Math.max(1, profile.getExperience() / 100 + 1)); profileMapper.updateById(profile);
         GrowthExperienceLog log = new GrowthExperienceLog(); log.setUserId(userId); log.setSourceType("CHALLENGE"); log.setSourceBusinessId(attempt.getId()); log.setExperienceDelta(exp); log.setRemark(challenge.getTitle()); log.setDeleteState((byte) 0); experienceLogMapper.insert(log); attempt.setStatus(GrowthAttemptStatus.REWARDED.name()); attemptMapper.updateById(attempt);
