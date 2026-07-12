@@ -4,7 +4,7 @@ import {
   EditPen,
   HomeFilled,
   Medal,
-  Notebook,
+  Opportunity,
   Present,
   ShoppingBag,
   Trophy,

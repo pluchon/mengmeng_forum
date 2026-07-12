@@ -44,7 +44,7 @@
           <span>漂流瓶</span>
         </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/growth-center')">
-          <el-icon><Notebook /></el-icon>
+          <el-icon><Opportunity /></el-icon>
           <span>成长中心</span>
         </button>
         <button type="button" class="home-sidebar-link" @click="$router.push('/emoji-shop')">
