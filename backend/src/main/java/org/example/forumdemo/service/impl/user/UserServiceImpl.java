@@ -21,6 +21,7 @@ import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
+import org.example.forumdemo.service.interfaces.growth.GrowthService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
@@ -75,6 +76,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
 
+    @Autowired
+    private GrowthService growthService;
+
     // ============================================================
     // 注册，使用事务保证原子性
     // ============================================================
@@ -120,6 +124,7 @@ public class UserServiceImpl implements UserService {
             register.setEmailHash(PiiUtils.hmac(req.getEmail()));
         }
         userMapper.insert(register);
+        growthService.createNewUserProfile(register.getId());
         // 注册的新用户默认都给指定的初始积分
         pointsService.addPoints(register.getId(), Constant.POINTS_REGISTER_BONUS_AMOUNT,
                 Constant.POINTS_SOURCE_REGISTER_BONUS, register.getId(), "新用户注册赠送积分",
