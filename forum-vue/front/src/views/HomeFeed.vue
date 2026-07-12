@@ -16,7 +16,7 @@
           :key="item.category.id"
           class="home-discovery-category"
           @mouseenter="openCategory(item.category.id)"
-          @mouseleave="closeCategory"
+          @mouseleave="scheduleCloseCategory"
           @focusin="openCategory(item.category.id)"
           @focusout="handleCategoryFocusOut"
         >
@@ -56,7 +56,7 @@
       </nav>
     </div>
 
-    <main class="home-xhs-main home-xhs-main--feed">
+    <main class="home-xhs-main home-xhs-main--feed" :class="{ 'home-xhs-main--with-hot': isHomeFeed }">
       <section v-if="isRecommendationFeed && !showRecommendationInterestMask" class="recommendation-intro" aria-label="为你推荐设置">
         <div class="recommendation-intro-copy">
           <span class="recommendation-intro-eyebrow">FOR YOU</span>
@@ -213,12 +213,42 @@
         </div>
         <section v-if="showRecommendationInterestMask" class="recommendation-interest-mask" aria-label="选择推荐兴趣">
           <div class="recommendation-interest-mask-card">
-            <span class="recommendation-interest-mask-kicker">PERSONALIZED FEED</span>
-            <h2>选择感兴趣的板块<br>为你精准推荐</h2>
+            <h2>选择感兴趣的板块</h2>
             <el-button type="primary" round @click="openRecommendationPreferences">选择兴趣</el-button>
           </div>
         </section>
       </div>
+
+      <aside v-if="isHomeFeed" class="home-hot-floating" aria-label="热帖榜">
+        <div class="home-hot-floating-head">
+          <div class="home-hot-floating-title">
+            <el-icon><TrendCharts /></el-icon>
+            <span>热帖榜</span>
+          </div>
+          <span>实时热度</span>
+        </div>
+        <div v-if="homeHotLoading" class="home-hot-floating-loading">
+          <el-skeleton v-for="item in 4" :key="item" animated :rows="1" />
+        </div>
+        <div v-else-if="homeHotList.length" class="home-hot-floating-list">
+          <button
+            v-for="(entry, index) in homeHotList"
+            :key="entry.article?.id"
+            type="button"
+            class="home-hot-floating-item"
+            @click="openArticle(entry, $event)"
+          >
+            <span class="home-hot-floating-rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</span>
+            <img v-if="coverImageUrl(entry)" :src="coverImageUrl(entry)" :alt="entry.article?.title || ''" class="home-hot-floating-cover" />
+            <span v-else class="home-hot-floating-cover home-hot-floating-cover--placeholder">热</span>
+            <span class="home-hot-floating-copy">
+              <strong>{{ entry.article?.title }}</strong>
+              <small>{{ entry.article?.likeCount || 0 }} 赞 · {{ entry.article?.replyCount || 0 }} 评</small>
+            </span>
+          </button>
+        </div>
+        <el-empty v-else :image-size="42" description="暂无热帖" />
+      </aside>
 
       <div v-if="loading && feedList.length" class="home-feed-loading-more" aria-live="polite">
         <el-icon class="home-feed-loading-spin" :size="20"><Loading /></el-icon>
@@ -257,6 +287,7 @@
     <el-dialog
       v-model="recommendationDialogVisible"
       class="recommendation-interest-dialog"
+      title="兴趣卡片"
       width="min(620px, calc(100vw - 32px))"
       :close-on-click-modal="!recommendationSaving"
       :close-on-press-escape="!recommendationSaving"
@@ -284,9 +315,9 @@
 <script setup>
 defineOptions({ name: 'HomeFeed' })
 
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Loading, MoreFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -320,6 +351,9 @@ const {
   hotFeedList,
   hasRecommendationInterests,
   hideRecommendedArticle,
+  homeHotList,
+  homeHotLoading,
+  isHomeFeed,
   isHotFeed,
   isPersonalizedRecommendation,
   isRecommendationFeed,
@@ -344,6 +378,7 @@ const {
 const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleList.value))
 
 const openCategoryId = ref(null)
+let categoryCloseTimer = null
 
 const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
   columnWidth: 220,
@@ -360,11 +395,15 @@ function openArticle(entry, event) {
 }
 
 function openCategory(categoryId) {
+  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
   openCategoryId.value = categoryId
 }
 
-function closeCategory() {
-  openCategoryId.value = null
+function scheduleCloseCategory() {
+  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
+  categoryCloseTimer = window.setTimeout(() => {
+    openCategoryId.value = null
+  }, 180)
 }
 
 function toggleCategory(categoryId) {
@@ -373,7 +412,7 @@ function toggleCategory(categoryId) {
 
 function handleCategoryFocusOut(event) {
   if (event.currentTarget.contains(event.relatedTarget)) return
-  closeCategory()
+  scheduleCloseCategory()
 }
 
 onMounted(async () => {
@@ -383,6 +422,10 @@ onMounted(async () => {
 
 onActivated(() => {
   restoreFeedScroll()
+})
+
+onUnmounted(() => {
+  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
 })
 </script>
 

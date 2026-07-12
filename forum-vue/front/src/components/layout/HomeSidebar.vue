@@ -20,15 +20,6 @@
           <el-icon><Compass /></el-icon>
           <span>为你推荐</span>
         </button>
-        <button
-          type="button"
-          class="home-sidebar-link"
-          :class="{ 'is-active': menuActiveKey === 'hot' }"
-          @click="selectCategoryMenu('hot')"
-        >
-          <el-icon><TrendCharts /></el-icon>
-          <span>热帖榜</span>
-        </button>
       </nav>
 
       <div class="home-sidebar-divider">

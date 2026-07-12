@@ -7,7 +7,6 @@ import {
   Notebook,
   Present,
   ShoppingBag,
-  TrendCharts,
   Trophy,
   User,
 } from '@element-plus/icons-vue'
