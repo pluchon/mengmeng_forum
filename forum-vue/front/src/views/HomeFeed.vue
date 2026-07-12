@@ -69,7 +69,7 @@
         </el-button>
       </section>
 
-      <div v-if="showCheckinHomeStrip && !isHotFeed" class="checkin-home-strip animate-fade-up">
+      <div v-if="showCheckinHomeStrip" class="checkin-home-strip animate-fade-up">
         <el-card
           class="checkin-home-card"
           :class="{ 'checkin-home-done': checkinSummary.todaySigned }"
@@ -232,14 +232,14 @@
         </div>
         <div v-else-if="homeHotList.length" class="home-hot-floating-list">
           <button
-            v-for="(entry, index) in homeHotPagedList"
+            v-for="entry in homeHotList"
             :key="entry.article?.id"
             type="button"
             class="home-hot-floating-item"
             @click="openArticle(entry, $event)"
           >
-            <span class="home-hot-floating-rank" :class="{ 'is-top': (homeHotPage - 1) * homeHotPageSize + index < 3 }">
-              {{ (homeHotPage - 1) * homeHotPageSize + index + 1 }}
+            <span class="home-hot-floating-rank" :class="{ 'is-top': Number(entry.rank) <= 3 }">
+              {{ entry.rank }}
             </span>
             <img v-if="coverImageUrl(entry)" :src="coverImageUrl(entry)" :alt="entry.article?.title || ''" class="home-hot-floating-cover" />
             <span v-else class="home-hot-floating-cover home-hot-floating-cover--placeholder">热</span>
@@ -251,14 +251,15 @@
         </div>
         <el-empty v-else :image-size="42" description="暂无热帖" />
         <el-pagination
-          v-if="homeHotList.length > homeHotPageSize"
+          v-if="homeHotTotal > homeHotPageSize"
           v-model:current-page="homeHotPage"
           class="home-hot-floating-pager"
-          :total="homeHotList.length"
+          :total="homeHotTotal"
           :page-size="homeHotPageSize"
           layout="prev, pager, next"
           small
           background
+          @current-change="fetchHomeHotList"
         />
         </aside>
         <button v-else-if="isHomeFeed" type="button" class="home-hot-collapsed-button" aria-label="展开热帖榜" @click="toggleHomeHotCollapsed">
@@ -283,7 +284,7 @@
         </template>
       </el-result>
 
-      <div v-if="!isHotFeed && total > pageSize" class="pagination-wrap">
+      <div v-if="total > pageSize" class="pagination-wrap">
         <el-pagination
           v-model:current-page="pageNum"
           :total="total"
@@ -296,7 +297,7 @@
 
       <el-empty
         v-if="!loading && !feedError && !showRecommendationInterestMask && feedList.length === 0"
-        :description="isHotFeed ? '暂无热帖' : '这里还没有笔记哦'"
+        description="这里还没有笔记哦"
       />
     </main>
 
@@ -363,18 +364,17 @@ const {
   feedForbidden,
   ensureHomeFeedLoaded,
   fetchArticles,
+  fetchHomeHotList,
   getRandomPastel,
-  hotFeedList,
   hasRecommendationInterests,
   hideRecommendedArticle,
   homeHotList,
+  homeHotTotal,
   homeHotLoading,
   homeHotCollapsed,
   homeHotPage,
   homeHotPageSize,
-  homeHotPagedList,
   isHomeFeed,
-  isHotFeed,
   isPersonalizedRecommendation,
   isRecommendationFeed,
   loading,
@@ -396,7 +396,7 @@ const {
   userStore,
 } = useHomeShellContext()
 
-const feedList = computed(() => (isHotFeed.value ? hotFeedList.value : articleList.value))
+const feedList = computed(() => articleList.value)
 
 const openCategoryId = ref(null)
 let categoryCloseTimer = null

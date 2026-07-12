@@ -1,6 +1,7 @@
 package org.example.forumdemo.service.interfaces.article;
 
 import org.example.forumdemo.entity.db.Article;
+import org.example.forumdemo.entity.vo.common.PageResult;
 
 import java.util.List;
 
@@ -8,6 +9,8 @@ import java.util.List;
 public interface ArticleHotRankingService {
 
     List<Long> getHotArticleList(Integer topN);
+
+    PageResult<Long> getHotArticlePage(Integer pageNum, Integer pageSize);
 
     void rebuildHotArticleRanking();
 

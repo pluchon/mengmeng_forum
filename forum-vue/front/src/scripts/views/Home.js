@@ -15,14 +15,13 @@ import { useUserStore } from '@/stores/user'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { useMessageStore } from '@/stores/message'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
-import { getArticleList, getHotArticleList, getArticleDetail } from '@/api/article'
+import { getArticleList, getHotArticleListWithPage } from '@/api/article'
 import {
   getRecommendationFeed,
   getRecommendationInterests,
   markRecommendationNotInterested,
   saveRecommendationInterests,
 } from '@/api/recommendation'
-import { getMyFollowingIds } from '@/api/userFollow'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -31,7 +30,6 @@ import { blockIfMuted } from '@/utils/userMute'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { useMascotUiStore } from '@/stores/mascotUi'
-import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { ElMessage } from 'element-plus'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
@@ -66,10 +64,9 @@ export function useHome() {
   const total = ref(0)
   const feedError = ref('')
   const feedForbidden = ref(false)
-  /** 左侧「热帖榜」专用瀑布流数据（含封面等） */
-  const hotFeedList = ref([])
   /** 首页右侧悬浮热帖榜数据（保留原热度排序，不再占用左侧导航） */
   const homeHotList = ref([])
+  const homeHotTotal = ref(0)
   const homeHotLoading = ref(false)
   const homeHotCollapsed = ref(false)
   const homeHotPage = ref(1)
@@ -107,7 +104,6 @@ export function useHome() {
     () => (Number(messageStore.unreadCount) || 0) + (Number(messageStore.systemUnreadCount) || 0),
   )
 
-  const isHotFeed = computed(() => menuActiveKey.value === 'hot')
   const isHomeFeed = computed(() => menuActiveKey.value === 'home')
   const isRecommendationFeed = computed(() => menuActiveKey.value === 'rec')
   const hasRecommendationInterests = computed(() => recommendationPreferences.value.boardIds.length > 0)
@@ -122,10 +118,6 @@ export function useHome() {
       && recommendationPreferenceLoaded.value
       && !hasRecommendationInterests.value,
   )
-  const homeHotPagedList = computed(() => {
-    const start = (homeHotPage.value - 1) * homeHotPageSize
-    return homeHotList.value.slice(start, start + homeHotPageSize)
-  })
 
   const searchInputPlaceholder = computed(() =>
     aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
@@ -303,46 +295,21 @@ export function useHome() {
     if (incomingUnreadTimer) clearTimeout(incomingUnreadTimer)
   })
 
-  async function loadHotArticles(topN) {
-    let followingSet = new Set()
-    try {
-      if (userStore.isLoggedIn) {
-        try {
-          const fidRes = await getMyFollowingIds()
-          if (fidRes.code === 0 && Array.isArray(fidRes.data)) {
-            followingSet = new Set(fidRes.data.map((id) => Number(id)))
-          }
-        } catch {
-          followingSet = new Set()
-        }
-      }
-      const idRes = await getHotArticleList(topN)
-      if (idRes.code !== 0 || !idRes.data?.length) return []
-      const ids = idRes.data
-      const promises = ids.map(id => getArticleDetail(id))
-      const results = await Promise.allSettled(promises)
-      const items = []
-      for (const r of results) {
-        if (r.status !== 'fulfilled' || r.value.code !== 0 || !r.value.data) continue
-        const st = Number(r.value.data.article?.status)
-        if (st === ARTICLE_STATUS.PUBLISHED) {
-          const row = r.value.data
-          const authorId = Number(row.user?.id ?? row.article?.userId)
-          row.fromFollowing = followingSet.has(authorId)
-          items.push(row)
-        }
-      }
-      return items
-    } catch {
-      return []
-    }
-  }
-
-  async function fetchHomeHotList() {
+  async function fetchHomeHotList(page = homeHotPage.value) {
     homeHotLoading.value = true
     try {
-      homeHotList.value = await loadHotArticles(50)
-      homeHotPage.value = 1
+      const res = await getHotArticleListWithPage({
+        pageNum: page,
+        pageSize: homeHotPageSize,
+      })
+      if (res.code === 0) {
+        homeHotList.value = res.data?.records || []
+        homeHotTotal.value = Number(res.data?.total) || 0
+        homeHotPage.value = Number(res.data?.pageNum) || 1
+      }
+    } catch {
+      homeHotList.value = []
+      homeHotTotal.value = 0
     } finally {
       homeHotLoading.value = false
     }
@@ -350,19 +317,6 @@ export function useHome() {
 
   function toggleHomeHotCollapsed() {
     homeHotCollapsed.value = !homeHotCollapsed.value
-  }
-
-  async function fetchHotFeed() {
-    loading.value = true
-    hotFeedList.value = []
-    feedError.value = ''
-    feedForbidden.value = false
-    try {
-      hotFeedList.value = await loadHotArticles(30)
-    } finally {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      loading.value = false
-    }
   }
 
   const homeFeedInitialized = ref(false)
@@ -415,23 +369,14 @@ export function useHome() {
       activeCategoryId.value = 0
       menuActiveKey.value = 'home'
       currentBoardId.value = 0
-      hotFeedList.value = []
       fetchArticles(1)
       void fetchHomeHotList()
-      return
-    }
-    if (index === 'hot') {
-      menuActiveKey.value = 'hot'
-      activeCategoryId.value = -1
-      currentBoardId.value = 0
-      fetchHotFeed()
       return
     }
     if (index === 'rec') {
       activeCategoryId.value = 0
       menuActiveKey.value = 'rec'
       currentBoardId.value = 0
-      hotFeedList.value = []
       await loadRecommendationPreferences()
       fetchArticles(1)
       return
@@ -516,7 +461,6 @@ export function useHome() {
     activeCategoryId.value = normalizedCategoryId
     menuActiveKey.value = 'home'
     currentBoardId.value = normalizedBoardId
-    hotFeedList.value = []
     fetchArticles(1)
     void fetchHomeHotList()
   }
@@ -653,7 +597,6 @@ export function useHome() {
     feedForbidden,
     fetchArticles,
     fetchCheckinSummary,
-    fetchHotFeed,
     fetchHomeHotList,
     getRandomPastel,
     goCheckin,
@@ -666,14 +609,12 @@ export function useHome() {
     hasRecommendationInterests,
     hideRecommendedArticle,
     homeHotList,
+    homeHotTotal,
     homeHotLoading,
     homeHotCollapsed,
     homeHotPage,
     homeHotPageSize,
-    homeHotPagedList,
-    hotFeedList,
     isHomeFeed,
-    isHotFeed,
     isPersonalizedRecommendation,
     isRecommendationFeed,
     loading,

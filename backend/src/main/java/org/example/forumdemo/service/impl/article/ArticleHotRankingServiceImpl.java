@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.constant.ForumBusinessConstants;
 import org.example.forumdemo.common.enums.ArticleStatus;
+import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Article;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +48,19 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
             return filterPublishedHotIdsOrderPreserving(set, n);
         }
         return loadTopHotFromDb(n);
+    }
+
+    @Override
+    public PageResult<Long> getHotArticlePage(Integer pageNum, Integer pageSize) {
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = Math.min(PageUtils.getValidPageSize(pageSize), 10);
+        List<Long> validTopIds = getHotArticleList(50);
+        int fromIndex = Math.min((validPageNum - 1) * validPageSize, validTopIds.size());
+        int toIndex = Math.min(fromIndex + validPageSize, validTopIds.size());
+        List<Long> records = new ArrayList<>(validTopIds.subList(fromIndex, toIndex));
+        long total = validTopIds.size();
+        long pages = total == 0 ? 0 : (total + validPageSize - 1) / validPageSize;
+        return new PageResult<>(records, total, validPageNum, validPageSize, pages, validPageNum < pages);
     }
 
     private List<Long> filterPublishedHotIdsOrderPreserving(Set<String> memberStrings, int topN) {

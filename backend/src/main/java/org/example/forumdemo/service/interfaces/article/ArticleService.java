@@ -9,6 +9,7 @@ import org.example.forumdemo.entity.vo.article.ArticleDetailResponse;
 import org.example.forumdemo.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.example.forumdemo.entity.vo.article.ArticleValidateTextVO;
 import org.example.forumdemo.entity.vo.article.AuditStatusResponse;
+import org.example.forumdemo.entity.vo.article.HotArticleListItemVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.mq.ArticleAuditResultMqVO;
 
@@ -47,6 +48,9 @@ public interface ArticleService {
 
     // 热帖榜单 TopN（Redis ZSet，冷启动时从 DB 回源）
     List<Long> getHotArticleList(Integer topN);
+
+    // 热帖榜分页，后端最多提供前 50 条，每页最多 10 条
+    PageResult<HotArticleListItemVO> queryHotArticleListWithPage(Integer pageNum, Integer pageSize, Long loginUserId);
 
     // 帖子摘要（带 Redis 缓存）
     String getArticleSummary(Long articleId);
