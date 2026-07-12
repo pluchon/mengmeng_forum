@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowRight, CircleCheck, Medal, Opportunity, Trophy } from '@element-plus/icons-vue'
 import { getGrowthOverview, startGrowthChallenge, submitGrowthChallenge } from '@/api/growth'
 
 export function useGrowthCenter() {
@@ -28,7 +29,7 @@ export function useGrowthCenter() {
     try { const res = await submitGrowthChallenge(active.value.challengeCode, { attemptId: active.value.attemptId, answers: questions.map(q => ({ questionId: q.id, answer: answers.value[q.id] })) }); if (res.code !== 0) return ElMessage.error(res.message || '提交失败'); ElMessage.success(res.data.message); active.value = null; await load() } catch { ElMessage.error('提交失败，请稍后重试') } finally { submitting.value = false }
   }
   onMounted(load)
-  return { active, answers, error, load, loading, overview, progress, start, submit, submitting }
+  return { active, answers, error, load, loading, overview, progress, start, submit, submitting, ArrowRight, CircleCheck, Medal, Opportunity, Trophy }
 }
 
 export default {
