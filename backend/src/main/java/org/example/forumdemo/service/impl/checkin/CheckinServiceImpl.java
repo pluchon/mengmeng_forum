@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
+import org.example.forumdemo.common.enums.GrowthExperienceSourceType;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -29,6 +30,7 @@ import org.example.forumdemo.mapper.CheckinRuleMapper;
 import org.example.forumdemo.mapper.CheckinStreakRewardMapper;
 import org.example.forumdemo.mapper.UserCheckinInfoMapper;
 import org.example.forumdemo.service.interfaces.checkin.CheckinService;
+import org.example.forumdemo.service.interfaces.growth.GrowthExperienceService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -58,6 +60,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class CheckinServiceImpl implements CheckinService {
 
+    private static final int CHECKIN_GROWTH_EXPERIENCE = 5;
+
     //明确时区
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
@@ -84,6 +88,9 @@ public class CheckinServiceImpl implements CheckinService {
 
     @Autowired
     private PointsService pointsService;
+
+    @Autowired
+    private GrowthExperienceService growthExperienceService;
 
     /** 月份 -> (日 -> 积分). key=0 表示通用兜底规则; 服务启动时一次性装入, 供 doCheckin 热路径零延迟查 */
     private volatile Map<Integer, Map<Integer, Integer>> ruleCache = Collections.emptyMap();
@@ -185,6 +192,12 @@ public class CheckinServiceImpl implements CheckinService {
                     logRow.getId(), "连续 " + newStreak + " 天奖励 +" + bonusPoints,
                     "checkin_bonus:" + userId + ":" + today);
         }
+        growthExperienceService.grantExperience(
+                userId,
+                GrowthExperienceSourceType.CHECKIN,
+                logRow.getId(),
+                CHECKIN_GROWTH_EXPERIENCE,
+                "每日签到");
         // 主动失效 status 缓存, 下一次 /info 调用会重新从 DB 拉取并回填
         invalidateStatusCache(userId);
         return new CheckinResultResponse(pointsToday, bonusPoints, bonusDescription, afterCheckin.getStreakDays(),
