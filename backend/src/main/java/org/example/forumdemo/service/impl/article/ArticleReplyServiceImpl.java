@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.enums.ResultCode;
+import org.example.forumdemo.common.enums.ArticleType;
+import org.example.forumdemo.common.enums.QuestionStatus;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
@@ -24,9 +26,11 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleReplyLikeMapper;
 import org.example.forumdemo.mapper.ArticleReplyMapper;
 import org.example.forumdemo.mapper.ArticleSubReplyMapper;
+import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.common.utils.UserMuteGuard;
 import org.example.forumdemo.common.utils.RequestIpUtils;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyMediaService;
+import org.example.forumdemo.service.interfaces.article.ArticleQuestionService;
 import org.example.forumdemo.service.interfaces.article.ArticleReplyService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.common.IpRegionService;
@@ -40,6 +44,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -49,6 +54,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     @Autowired
     private ArticleReplyMapper articleReplyMapper;
+
+    @Autowired
+    private ArticleMapper articleMapper;
 
     @Autowired
     private ArticleSubReplyMapper articleSubReplyMapper;
@@ -70,6 +78,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     @Autowired
     private ArticleReplyMediaService articleReplyMediaService;
+
+    @Autowired
+    private ArticleQuestionService articleQuestionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -98,7 +109,14 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
         }
         // 校验帖子并复用 article 信息（写消息队列时还需要楼主 ID）
-        Article article = articleService.selectArticleByArticleId(articleId);
+        Article article = articleMapper.selectByIdForUpdate(articleId);
+        if (article == null || Objects.equals(article.getState(), (byte) 1)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        if (ArticleType.isQuestion(article.getArticleType())
+                && Objects.equals(article.getQuestionStatus(), QuestionStatus.CLOSED.getCode())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_QUESTION_STATUS_INVALID));
+        }
         ArticleReply newReply = new ArticleReply();
         newReply.setArticleId(articleId);
         newReply.setPostUserId(loginUserId);
@@ -196,7 +214,10 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteReply(Long replyId, Long loginUserId) {
-        ArticleReply reply = articleReplyMapper.selectById(replyId);
+        ArticleReply reply = articleReplyMapper.selectOne(new LambdaQueryWrapper<ArticleReply>()
+                .eq(ArticleReply::getId, replyId)
+                .eq(ArticleReply::getDeleteState, (byte) 0)
+                .last("FOR UPDATE"));
         if (reply == null || (reply.getState() != null && reply.getState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
@@ -218,6 +239,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             }
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
+        articleQuestionService.handleDeletedReply(reply.getArticleId(), replyId);
         articleService.deleteReply(reply.getArticleId());
     }
 }

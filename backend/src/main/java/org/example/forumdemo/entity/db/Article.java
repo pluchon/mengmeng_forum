@@ -54,6 +54,18 @@ public class Article {
     @Schema(description = "内容类型: 0富文本 1Markdown", example = "0")
     private Byte contentType;
 
+    // 帖子业务类型：0 普通帖，1 问答帖
+    @Schema(description = "帖子业务类型: 0普通帖 1问答帖", example = "0")
+    private Byte articleType;
+
+    // 问答状态：0 待解决，1 已解决，2 已关闭；普通帖为空
+    @Schema(description = "问答状态: 0待解决 1已解决 2已关闭")
+    private Byte questionStatus;
+
+    // 当前最佳答案对应的一级回答 ID
+    @Schema(description = "最佳答案一级回答ID")
+    private Long acceptedReplyId;
+
     @Schema(description = "收藏数", example = "0")
     private Integer favoriteCount;
 

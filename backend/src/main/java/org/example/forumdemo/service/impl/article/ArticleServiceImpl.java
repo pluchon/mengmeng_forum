@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ArticleStatus;
+import org.example.forumdemo.common.enums.ArticleType;
+import org.example.forumdemo.common.enums.QuestionStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -137,6 +139,10 @@ public class ArticleServiceImpl implements ArticleService {
     @Transactional(rollbackFor = Exception.class)
     public Long createDraft(PublishArticleRequest req, Long userId) {
         growthService.requireFormalUser(userId);
+        ArticleType articleType = ArticleType.fromCode(req.getArticleType());
+        if (articleType == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
+        }
         User user = userService.queryUserByUserId(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
@@ -148,6 +154,10 @@ public class ArticleServiceImpl implements ArticleService {
         add.setContent(req.getContent());
         add.setBoardId(req.getBoardId());
         add.setContentType(req.getContentType());
+        add.setArticleType(articleType.getCode());
+        if (articleType == ArticleType.QUESTION) {
+            add.setQuestionStatus(QuestionStatus.WAITING.getCode());
+        }
         add.setStatus(ArticleStatus.DRAFT.getCode());
         if (articleMapper.insert(add) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));

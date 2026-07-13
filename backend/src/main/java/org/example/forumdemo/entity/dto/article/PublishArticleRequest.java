@@ -27,6 +27,9 @@ public class PublishArticleRequest {
     // 内容类型: 0富文本 1Markdown，默认0
     private Byte contentType = 0;
 
+    // 帖子业务类型：0 普通帖，1 问答帖
+    private Byte articleType = 0;
+
     // 帖子标签 ID，最多 5 个
     private List<Long> tagIds;
 }

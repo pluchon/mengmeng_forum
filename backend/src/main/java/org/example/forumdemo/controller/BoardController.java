@@ -59,9 +59,17 @@ public class BoardController {
     @GetMapping("/selectBoardListByBoardIdWithPage")
     public Result<PageResult<ArticleListResponse>> selectBoardListByBoardIdWithPage(Long boardId,
             @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) Byte articleType,
+            @RequestParam(required = false) Byte questionStatus,
             HttpServletRequest httpServletRequest) {
         User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser != null ? loginUser.getId() : null;
-        return Result.success(boardService.selectBoardListWithPage(boardId, pageNum, pageSize, loginUserId));
+        return Result.success(boardService.selectBoardListWithPage(
+                boardId,
+                pageNum,
+                pageSize,
+                articleType,
+                questionStatus,
+                loginUserId));
     }
 }

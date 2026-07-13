@@ -31,6 +31,9 @@ public final class ArticleConverter {
         vo.setMediaType(article.getMediaType());
         vo.setVideoUrl(article.getVideoUrl());
         vo.setFavoriteCount(article.getFavoriteCount());
+        vo.setArticleType(article.getArticleType());
+        vo.setQuestionStatus(article.getQuestionStatus());
+        vo.setAcceptedReplyId(article.getAcceptedReplyId());
         vo.setStatus(article.getStatus());
         vo.setState(article.getState());
         vo.setCreateTime(article.getCreateTime());
