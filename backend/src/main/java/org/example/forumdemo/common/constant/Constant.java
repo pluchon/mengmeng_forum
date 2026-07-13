@@ -46,9 +46,7 @@ public final class Constant {
     public static final long REDIS_TTL_USER_NAME = ForumRedisKeys.TTL_USER_NAME;
     public static final long REDIS_TTL_EMPTY_MARK = ForumRedisKeys.TTL_EMPTY_MARK;
     public static final long REDIS_TTL_USER_LIKES = ForumRedisKeys.TTL_USER_LIKES;
-    public static final String REDIS_KEY_ARTICLE_LIKERS = ForumRedisKeys.ARTICLE_LIKERS;
     public static final String REDIS_KEY_HOT_ARTICLES = ForumRedisKeys.HOT_ARTICLES;
-    public static final long REDIS_TTL_ARTICLE_LIKERS = ForumRedisKeys.TTL_ARTICLE_LIKERS;
     public static final String REDIS_KEY_SMS_VERIFY = ForumRedisKeys.SMS_VERIFY;
     public static final String REDIS_KEY_SMS_VERIFY_RESET = ForumRedisKeys.SMS_VERIFY_RESET;
     public static final String REDIS_KEY_SMS_COOLDOWN = ForumRedisKeys.SMS_COOLDOWN;

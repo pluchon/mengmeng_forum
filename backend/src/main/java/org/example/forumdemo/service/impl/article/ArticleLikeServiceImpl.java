@@ -28,9 +28,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -73,7 +71,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
         updateLikeCount(articleId, 1);
         TransactionHooks.afterCommit(() -> {
-            syncLikeCacheOnLike(articleId, userId);
+            syncUserLikeCacheOnLike(articleId, userId);
             articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_LIKE);
         });
         log.info("用户 {} 点赞帖子 {}", userId, articleId);
@@ -93,7 +91,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
         updateLikeCount(articleId, -1);
         TransactionHooks.afterCommit(() -> {
-            syncLikeCacheOnUnlike(articleId, userId);
+            syncUserLikeCacheOnUnlike(articleId, userId);
             articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_LIKE);
         });
         log.info("用户 {} 取消点赞帖子 {}", userId, articleId);
@@ -112,18 +110,14 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
     }
 
-    private void syncLikeCacheOnLike(Long articleId, Long userId) {
+    private void syncUserLikeCacheOnLike(Long articleId, Long userId) {
         String userLikesKey = Constant.REDIS_KEY_USER_LIKES + userId;
         stringRedisTemplate.opsForSet().add(userLikesKey, String.valueOf(articleId));
         stringRedisTemplate.expire(userLikesKey, Constant.REDIS_TTL_USER_LIKES, TimeUnit.SECONDS);
-        String articleLikersKey = Constant.REDIS_KEY_ARTICLE_LIKERS + articleId;
-        stringRedisTemplate.opsForSet().add(articleLikersKey, String.valueOf(userId));
-        stringRedisTemplate.expire(articleLikersKey, Constant.REDIS_TTL_ARTICLE_LIKERS, TimeUnit.SECONDS);
     }
 
-    private void syncLikeCacheOnUnlike(Long articleId, Long userId) {
+    private void syncUserLikeCacheOnUnlike(Long articleId, Long userId) {
         stringRedisTemplate.opsForSet().remove(Constant.REDIS_KEY_USER_LIKES + userId, String.valueOf(articleId));
-        stringRedisTemplate.opsForSet().remove(Constant.REDIS_KEY_ARTICLE_LIKERS + articleId, String.valueOf(userId));
     }
 
     @Override
@@ -156,67 +150,4 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         }
     }
 
-    @Override
-    public List<User> queryWhoLikedArticle(Long articleId, Long loginUserId) {
-        Article article = articleService.selectArticleByArticleId(articleId);
-        if (!article.getUserId().equals(loginUserId)) {
-            log.warn("用户 {} 尝试查看非自己的帖子 {} 的点赞用户列表，已拒绝", loginUserId, articleId);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
-        }
-        String cacheKey = Constant.REDIS_KEY_ARTICLE_LIKERS + articleId;
-        Set<String> cachedIds = stringRedisTemplate.opsForSet().members(cacheKey);
-        if (cachedIds != null && !cachedIds.isEmpty()) {
-            return loadUsersByIdStrings(cachedIds, cacheKey);
-        }
-        List<ArticleLike> likes = articleLikeMapper.selectList(new LambdaQueryWrapper<ArticleLike>()
-                .eq(ArticleLike::getArticleId, articleId));
-        if (likes.isEmpty()) {
-            return new ArrayList<>();
-        }
-        List<User> result = new ArrayList<>();
-        for (ArticleLike like : likes) {
-            stringRedisTemplate.opsForSet().add(cacheKey, String.valueOf(like.getUserId()));
-            try {
-                result.add(userService.queryUserByUserId(like.getUserId()));
-            } catch (ApplicationException e) {
-                log.warn("DB 点赞记录中用户 {} 已不存在，跳过", like.getUserId());
-            }
-        }
-        stringRedisTemplate.expire(cacheKey, Constant.REDIS_TTL_ARTICLE_LIKERS, TimeUnit.SECONDS);
-        return result;
-    }
-
-    private List<User> loadUsersByIdStrings(Set<String> userIdStrings, String cacheKey) {
-        List<User> result = new ArrayList<>();
-        for (String idStr : userIdStrings) {
-            try {
-                result.add(userService.queryUserByUserId(Long.valueOf(idStr)));
-            } catch (ApplicationException e) {
-                log.warn("缓存点赞记录中用户 {} 已不存在，从缓存移除", idStr);
-                stringRedisTemplate.opsForSet().remove(cacheKey, idStr);
-            }
-        }
-        return result;
-    }
-
-    @Override
-    public List<User> getLatestLikerUsers(Long articleId, Long loginUserId, Integer count) {
-        Article article = articleService.selectArticleByArticleId(articleId);
-        if (!article.getUserId().equals(loginUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
-        }
-        List<ArticleLike> latest = articleLikeMapper.selectPage(new Page<>(1, count, false),
-                new LambdaQueryWrapper<ArticleLike>()
-                        .eq(ArticleLike::getArticleId, articleId)
-                        .orderByDesc(ArticleLike::getCreateTime)).getRecords();
-        List<User> users = new ArrayList<>();
-        for (ArticleLike like : latest) {
-            try {
-                users.add(userService.queryUserByUserId(like.getUserId()));
-            } catch (ApplicationException e) {
-                log.warn("DB 点赞记录中用户 {} 已不存在，跳过", like.getUserId());
-            }
-        }
-        return users;
-    }
 }

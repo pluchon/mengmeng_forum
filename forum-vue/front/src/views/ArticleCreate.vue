@@ -34,8 +34,7 @@
         <div class="editor-field-card editor-meta-card">
           <div class="editor-type-selector" :class="{ 'is-locked': isEdit }">
             <div class="editor-type-selector__copy">
-              <span class="editor-type-selector__eyebrow">发布类型</span>
-              <strong>{{ form.articleType === ARTICLE_TYPE.QUESTION ? '把问题交给社区' : '分享正在发生的事' }}</strong>
+              <strong>帖子类型</strong>
             </div>
             <div class="editor-type-selector__options" role="radiogroup" aria-label="帖子类型">
               <button
@@ -47,8 +46,7 @@
                 :disabled="isEdit"
                 @click="form.articleType = ARTICLE_TYPE.NORMAL"
               >
-                <span class="editor-type-option__mark">帖</span>
-                <span><b>普通帖子</b><small>分享见闻与灵感</small></span>
+                普通帖子
               </button>
               <button
                 type="button"
@@ -59,8 +57,7 @@
                 :disabled="isEdit"
                 @click="form.articleType = ARTICLE_TYPE.QUESTION"
               >
-                <span class="editor-type-option__mark">问</span>
-                <span><b>问答帖子</b><small>等待一条最佳答案</small></span>
+                问答帖子
               </button>
             </div>
           </div>
