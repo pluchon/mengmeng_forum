@@ -13,6 +13,7 @@ import org.example.forumdemo.entity.dto.growth.GrowthChallengeSubmitRequest;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeDetailVO;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeVO;
+import org.example.forumdemo.entity.vo.growth.GrowthExperienceRecordVO;
 import org.example.forumdemo.entity.vo.growth.GrowthOverviewVO;
 import org.example.forumdemo.entity.vo.growth.GrowthSubmitResultVO;
 import org.example.forumdemo.service.interfaces.growth.GrowthService;
@@ -48,6 +49,16 @@ public class GrowthController {
             @RequestParam(defaultValue = "4") Integer pageSize,
             HttpServletRequest request) {
         return Result.success(growthService.challengePage(userId(request), pageNum, pageSize));
+    }
+
+    /** 分页查询成长经验记录。 */
+    @Operation(summary = "分页查询成长经验记录")
+    @GetMapping("/records")
+    public Result<PageResult<GrowthExperienceRecordVO>> records(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "5") Integer pageSize,
+            HttpServletRequest request) {
+        return Result.success(growthService.experienceRecordPage(userId(request), pageNum, pageSize));
     }
 
     /** 开始指定挑战。 */

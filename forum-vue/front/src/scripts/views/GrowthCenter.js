@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   CircleCheck,
+  Clock,
   Medal,
   Opportunity,
   QuestionFilled,
@@ -13,13 +14,23 @@ import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import {
   getGrowthChallenges,
   getGrowthOverview,
+  getGrowthRecords,
   startGrowthChallenge,
   submitGrowthChallenge,
 } from '@/api/growth'
 import { useUserStore } from '@/stores/user'
 
 const CHALLENGE_PAGE_SIZE = 4
+const RECORD_PAGE_SIZE = 5
 const QUESTION_MAP_PAGE_SIZE = 10
+const LEVEL_DEFINITIONS = [
+  { level: 1, name: '萌芽', threshold: 0, description: '初次进入社区' },
+  { level: 2, name: '初识', threshold: 100, description: '通常已完成新人试炼' },
+  { level: 3, name: '同行', threshold: 250, description: '稳定使用社区功能' },
+  { level: 4, name: '成长', threshold: 500, description: '持续参与社区互动' },
+  { level: 5, name: '共创', threshold: 900, description: '长期活跃并参与共创' },
+  { level: 6, name: '守望', threshold: 1500, description: '陪伴社区成长的长期成员' },
+]
 
 export function useGrowthCenter() {
   const userStore = useUserStore()
@@ -32,6 +43,14 @@ export function useGrowthCenter() {
   const challengePage = ref(1)
   const challengePages = ref(0)
   const challengeTotal = ref(0)
+  const records = ref([])
+  const recordLoading = ref(false)
+  const recordError = ref('')
+  const recordForbidden = ref(false)
+  const recordPage = ref(1)
+  const recordPages = ref(0)
+  const recordTotal = ref(0)
+  const recordsExpanded = ref(false)
   const active = ref(null)
   const answers = ref({})
   const activeQuestionIndex = ref(0)
@@ -41,19 +60,20 @@ export function useGrowthCenter() {
 
   const progress = computed(() => {
     const exp = Number(overview.value?.experience) || 0
+    const current = Number(overview.value?.currentLevelExperience) || 0
     const next = Number(overview.value?.nextLevelExperience) || 100
-    return Math.min(100, Math.round(exp * 100 / next))
+    if (next <= current) return 100
+    return Math.min(100, Math.max(0, Math.round((exp - current) * 100 / (next - current))))
   })
   const userTypeLabel = computed(() => overview.value?.formalUser ? '正式用户' : '非正式用户')
   const milestoneLevels = computed(() => {
     const currentLevel = Math.min(6, Math.max(1, Number(overview.value?.growthLevel) || 1))
-    return Array.from({ length: 6 }, (_, index) => {
-      const level = index + 1
+    return LEVEL_DEFINITIONS.map(item => {
+      const level = item.level
       return {
-        level,
-        title: `Lv.${level}`,
-        requirement: level === 1 ? '成长起点' : `累计 ${index * 100} XP`,
-        ability: '等级能力与专属权益待规划',
+        ...item,
+        title: `Lv.${level} · ${item.name}`,
+        requirement: level === 1 ? '成长起点' : `累计 ${item.threshold} XP`,
         status: level === currentLevel ? 'current' : level < currentLevel ? 'complete' : 'upcoming',
       }
     })
@@ -106,6 +126,26 @@ export function useGrowthCenter() {
     }
   }
 
+  async function loadRecordPage(pageNum = 1) {
+    recordLoading.value = true
+    recordError.value = ''
+    recordForbidden.value = false
+    try {
+      const res = await getGrowthRecords(pageNum, RECORD_PAGE_SIZE)
+      records.value = res.data?.records || []
+      recordPage.value = Number(res.data?.pageNum) || 1
+      recordPages.value = Number(res.data?.pages) || 0
+      recordTotal.value = Number(res.data?.total) || 0
+    } catch (requestError) {
+      recordForbidden.value = requestError?.response?.status === 403
+      if (!recordForbidden.value) {
+        recordError.value = requestError?.message || '成长记录加载失败，请稍后重试'
+      }
+    } finally {
+      recordLoading.value = false
+    }
+  }
+
   async function load() {
     loading.value = true
     error.value = ''
@@ -113,7 +153,7 @@ export function useGrowthCenter() {
       const res = await getGrowthOverview()
       if (res.code === 0) {
         overview.value = res.data
-        await loadChallengePage(1)
+        await Promise.all([loadChallengePage(1), loadRecordPage(1)])
       } else {
         error.value = res.message || '成长中心加载失败'
       }
@@ -122,6 +162,26 @@ export function useGrowthCenter() {
     } finally {
       loading.value = false
     }
+  }
+
+  async function toggleRecords() {
+    recordsExpanded.value = !recordsExpanded.value
+    if (!recordsExpanded.value && recordPage.value !== 1) {
+      await loadRecordPage(1)
+    }
+  }
+
+  function formatRecordTime(value) {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    return new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date)
   }
 
   async function start(item) {
@@ -250,12 +310,24 @@ export function useGrowthCenter() {
     start,
     submit,
     submitting,
+    records,
+    recordError,
+    recordForbidden,
+    recordLoading,
+    recordPage,
+    recordPages,
+    recordTotal,
+    recordsExpanded,
+    formatRecordTime,
+    loadRecordPage,
+    toggleRecords,
     userStore,
     userTypeLabel,
     ArrowLeft,
     ArrowRight,
     Check,
     CircleCheck,
+    Clock,
     Medal,
     Opportunity,
     QuestionFilled,

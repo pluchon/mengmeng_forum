@@ -6,5 +6,10 @@ export const getGrowthChallenges = (pageNum = 1, pageSize = 4) => request({
   method: 'get',
   params: { pageNum, pageSize },
 })
+export const getGrowthRecords = (pageNum = 1, pageSize = 5) => request({
+  url: '/growth/records',
+  method: 'get',
+  params: { pageNum, pageSize },
+})
 export const startGrowthChallenge = challengeCode => request({ url: `/growth/challenges/${challengeCode}/start`, method: 'post' })
 export const submitGrowthChallenge = (challengeCode, data) => request({ url: `/growth/challenges/${challengeCode}/submit`, method: 'post', data })

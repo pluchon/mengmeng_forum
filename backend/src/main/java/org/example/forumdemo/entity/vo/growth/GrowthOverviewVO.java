@@ -8,5 +8,6 @@ public class GrowthOverviewVO {
     private Boolean formalUser;
     private Integer experience;
     private Integer growthLevel;
+    private Integer currentLevelExperience;
     private Integer nextLevelExperience;
 }
