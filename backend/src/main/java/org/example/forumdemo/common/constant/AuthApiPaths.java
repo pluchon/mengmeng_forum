@@ -29,6 +29,7 @@ public final class AuthApiPaths {
     public static final List<String> OPTIONAL_AUTH_PREFIXES = List.of(
             "/article/selectArticleDetailByArticleId",
             "/article/getHotArticleList",
+            "/articleQuestion/acceptedAnswer",
             "/user/findPasswordByMail",
             "/user/findPasswordBySms",
             "/reply/select",

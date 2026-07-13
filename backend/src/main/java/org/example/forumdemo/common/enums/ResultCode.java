@@ -105,6 +105,11 @@ public enum ResultCode {
     FAILED_DANMAKU_ALREADY_HIDDEN(1190, "弹幕已隐藏"),
     FAILED_TETRIS_SETTLE_INVALID(1191, "俄罗斯方块成绩校验失败"),
     FAILED_TETRIS_SETTLE_RATE_LIMIT(1192, "俄罗斯方块提交过于频繁，请稍后再试"),
+    FAILED_ARTICLE_TYPE_INVALID(1193, "帖子类型无效"),
+    FAILED_NOT_QUESTION_ARTICLE(1194, "当前帖子不是问答帖"),
+    FAILED_QUESTION_STATUS_INVALID(1195, "当前问题状态不允许此操作"),
+    FAILED_QUESTION_ANSWER_INVALID(1196, "该回答不存在或不可采纳"),
+    FAILED_QUESTION_ACCEPT_CONFLICT(1197, "问题已被处理，请刷新后重试"),
     ERROR_SERVICES(2000, "服务器内部错误"),
     ERROR_IS_NULL(2001, "IS NULL."),// 特殊错误
     ;

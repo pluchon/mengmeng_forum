@@ -20,7 +20,13 @@ public interface BoardService {
     Map<Long, Long> selectBoardNotById();
 
     // 板块帖子列表（分页）；boardId=0 表示首页全量
-    PageResult<ArticleListResponse> selectBoardListWithPage(Long boardId, Integer pageNum, Integer pageSize, Long loginUserId);
+    PageResult<ArticleListResponse> selectBoardListWithPage(
+            Long boardId,
+            Integer pageNum,
+            Integer pageSize,
+            Byte articleType,
+            Byte questionStatus,
+            Long loginUserId);
 
     // 单板块详情
     BoardPublicVO queryBoardByBoardId(Long boardId);
