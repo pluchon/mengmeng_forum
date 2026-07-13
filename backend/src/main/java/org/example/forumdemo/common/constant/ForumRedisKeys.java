@@ -17,7 +17,6 @@ public final class ForumRedisKeys {
     public static final long TTL_EMPTY_MARK = 30L;
     public static final long TTL_USER_LIKES = 600L;
 
-    public static final String ARTICLE_LIKERS = "article_likers:";
     public static final String HOT_ARTICLES = "hot:articles";
     public static final String HOT_ARTICLES_ACTIVE = "hot:articles:active";
     public static final String HOT_ARTICLES_SLOT_A = "hot:articles:a";
@@ -25,8 +24,6 @@ public final class ForumRedisKeys {
     public static final String MQ_EVENT_DEDUP = "forum:mq:dedup:";
     public static final long TTL_MQ_EVENT_DEDUP = 86400L;
     public static final String GAME_MATCH_ROOM = "forum:game:match:";
-    public static final long TTL_ARTICLE_LIKERS = 1800L;
-
     public static final String SMS_VERIFY = "v-bind-";
     public static final String SMS_VERIFY_RESET = "v-reset-";
     public static final String SMS_COOLDOWN = "sms_cd:";

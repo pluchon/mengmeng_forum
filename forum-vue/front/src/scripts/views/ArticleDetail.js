@@ -4,11 +4,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick, Picture, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
-import { getArticleDetail, streamArticleGuide, getAuditStatus, getLatestLikers } from '@/api/article'
+import { getArticleDetail, streamArticleGuide, getAuditStatus } from '@/api/article'
 import {
   acceptQuestionAnswer,
   closeQuestion,
-  getAcceptedQuestionAnswer,
 } from '@/api/articleQuestion'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
 import {
@@ -42,7 +41,6 @@ import { validateLocalImageFile, openImageUploadLoading, getBatchImageUploadLoad
 import { validateChatImageMime } from '@/utils/chatMedia'
 import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
 import sendIconUrl from '@/assets/svg/发送.svg?url'
-import likersMenuListIconUrl from '@/assets/svg/列表.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
 import '@/assets/styles/article.css'
 
@@ -59,8 +57,6 @@ export function useArticleDetail() {
   const isLiked = ref(false)
   const isOwner = ref(false)
   const isFavorited = ref(false)
-  const acceptedAnswer = ref(null)
-  const acceptedAnswerLoading = ref(false)
   const questionActionSaving = ref(false)
   const aiSummary = ref('')
   const aiSummaryIsHint = ref(false)
@@ -287,10 +283,6 @@ export function useArticleDetail() {
 
   const shareCopied = ref(false)
   let shareCopiedTimer = null
-
-  const showLikersDialog = ref(false)
-  const loadingLikers = ref(false)
-  const latestLikers = ref([])
 
   const favoriteDialogVisible = ref(false)
   const favoriteFoldersLoading = ref(false)
@@ -521,7 +513,6 @@ export function useArticleDetail() {
     aiSummaryIsHint.value = false
     articleGalleryUrls.value = []
     articleTags.value = []
-    acceptedAnswer.value = null
     activeGalleryIndex.value = 0
     try {
       const res = await getArticleDetail(articleId)
@@ -535,7 +526,6 @@ export function useArticleDetail() {
         isFavorited.value = res.data.isFavorited || false
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         await loadAuthorFollowState()
-        await loadAcceptedAnswer(articleId)
         await syncOwnerArticleStatus(articleId)
         await nextTick()
         updateGalleryStripState()
@@ -690,22 +680,6 @@ export function useArticleDetail() {
     }
   }
 
-  async function loadAcceptedAnswer(articleId = article.value?.id) {
-    acceptedAnswer.value = null
-    if (!articleId || !isQuestion.value) return
-    acceptedAnswerLoading.value = true
-    try {
-      const res = await getAcceptedQuestionAnswer(articleId)
-      if (res.code === 0) {
-        acceptedAnswer.value = res.data || null
-      }
-    } catch {
-      acceptedAnswer.value = null
-    } finally {
-      acceptedAnswerLoading.value = false
-    }
-  }
-
   function isAcceptedReply(item) {
     return Number(item?.articleReply?.id) === Number(article.value?.acceptedReplyId)
   }
@@ -736,7 +710,7 @@ export function useArticleDetail() {
       if (res.code === 0) {
         article.value.questionStatus = QUESTION_STATUS.RESOLVED
         article.value.acceptedReplyId = replyId
-        await Promise.all([loadAcceptedAnswer(), loadReplies()])
+        await loadReplies()
         ElMessage.success('已采纳为最佳答案')
       }
     } catch {
@@ -1088,18 +1062,6 @@ export function useArticleDetail() {
     return Date.now() <= ms
   })
 
-  async function fetchLikers() {
-    loadingLikers.value = true
-    try {
-      const res = await getLatestLikers(article.value.id)
-      if (res.code === 0) {
-        latestLikers.value = res.data || []
-      }
-    } finally {
-      loadingLikers.value = false
-    }
-  }
-
   return {
     ArrowLeft,
     ArrowRight,
@@ -1119,8 +1081,6 @@ export function useArticleDetail() {
     activeGalleryIndex,
     activeGalleryUrl,
     acceptAnswer,
-    acceptedAnswer,
-    acceptedAnswerLoading,
     mainDisplayImageUrl,
     imagePreviewList,
     article,
@@ -1149,7 +1109,6 @@ export function useArticleDetail() {
     isQuestionClosed,
     isAcceptedReply,
     toggleFollowAuthor,
-    fetchLikers,
     galleryStripFadeLeft,
     galleryStripFadeRight,
     galleryStripOverflow,
@@ -1169,14 +1128,11 @@ export function useArticleDetail() {
     isOwner,
     isFavorited,
     isVipGold,
-    latestLikers,
-    likersMenuListIconUrl,
     emptyCommentIconUrl,
     emojiPackIconUrl,
     emojiShopStore,
     loadAiSummary,
     loading,
-    loadingLikers,
     loadFavoriteFolders,
     onGalleryStripScroll,
     onReplyEmojiPopoverShow,
@@ -1211,7 +1167,6 @@ export function useArticleDetail() {
     selectReplyPack,
     selectedFolderId,
     setActiveGalleryIndex,
-    showLikersDialog,
     startReplyToFloor,
     startReplyToSub,
     subReplyRefreshTokens,

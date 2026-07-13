@@ -182,11 +182,6 @@ export function clearArticleVideo(articleId) {
   return request({ url: '/article/clearArticleVideo', method: 'post', params: { articleId } })
 }
 
-// 获取最新点赞用户
-export function getLatestLikers(articleId, count = 15) {
-  return request({ url: '/like/getLatestLikerUsers', method: 'get', params: { articleId, count } })
-}
-
 // 通过 URL 直接更新帖子封面（避免 CORS 重下载）
 export function updateArticleCoverByUrl(articleId, coverUrl) {
   return request({ url: '/article/updateCoverUrl', method: 'post', params: { articleId, coverUrl } })

@@ -416,8 +416,7 @@
   .sub-reply-content,
   .comment-user,
   .sub-nick,
-  .nickname,
-  .liker-name
+  .nickname
 ) {
   color: var(--dark-text) !important;
 }
@@ -425,7 +424,6 @@
 :root[data-theme='dark'] .red-detail-page :where(
   .content-meta,
   .content-meta__time,
-  .media-gallery-label,
   .media-empty-hint,
   .comment-footer,
   .sub-time,

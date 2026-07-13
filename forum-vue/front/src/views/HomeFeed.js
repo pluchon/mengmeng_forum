@@ -1,6 +1,6 @@
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, ChatDotRound, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
+import { ArrowDown, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -69,7 +69,7 @@ const openCategoryId = ref(null)
 let categoryCloseTimer = null
 
 const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
-  columnWidth: 220,
+  columnWidth: 200,
   gap: 16,
 })
 
@@ -80,6 +80,12 @@ function openArticle(entry, event) {
   if (card) captureFeedCardOrigin(id, card)
   captureFeedOpenFrom(route.path)
   router.push(`/article/${id}`)
+}
+
+function formatCardNickname(nickname) {
+  const characters = Array.from(String(nickname || ''))
+  if (characters.length <= 5) return characters.join('')
+  return `${characters.slice(0, 5).join('')}…`
 }
 
 function openCategory(categoryId) {

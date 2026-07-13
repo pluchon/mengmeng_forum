@@ -43,7 +43,6 @@
               </div>
             </div>
             <div v-if="articleGalleryUrls.length" class="media-gallery-panel">
-              <div class="media-gallery-label">笔记相册</div>
               <div
                 class="media-gallery-track"
                 :class="{
@@ -108,14 +107,22 @@
                 </button>
               </div>
               <div class="author-header-right">
-                <button
-                  v-if="isOwner"
-                  type="button"
-                  class="likers-list-icon-btn"
-                  aria-label="查看点赞用户"
-                  @click="showLikersDialog = true"
+                <span
+                  v-if="isQuestion"
+                  class="question-detail-status"
+                  :class="questionStatusClass(article.questionStatus)"
                 >
-                  <img :src="likersMenuListIconUrl" alt="" class="likers-list-icon-img" />
+                  <span class="question-detail-status__dot" />
+                  {{ questionStatusLabel(article.questionStatus) }}
+                </span>
+                <button
+                  v-if="canCloseQuestion"
+                  type="button"
+                  class="question-close-action"
+                  :disabled="questionActionSaving"
+                  @click="closeCurrentQuestion"
+                >
+                  关闭问题
                 </button>
                 <el-tag v-if="isOwner" size="small" type="danger" effect="dark">
                   你自己
@@ -150,30 +157,6 @@
 
             <el-scrollbar class="article-content-scroll article-content-scroll--hidden-bar">
               <div class="article-body">
-                <div v-if="isQuestion" class="question-detail-heading">
-                  <div class="question-detail-classification">
-                    <span class="question-detail-kind">
-                      <el-icon><ChatDotRound /></el-icon>
-                      社区问答
-                    </span>
-                    <span
-                      class="question-detail-status"
-                      :class="questionStatusClass(article.questionStatus)"
-                    >
-                      <span class="question-detail-status__dot" />
-                      {{ questionStatusLabel(article.questionStatus) }}
-                    </span>
-                  </div>
-                  <button
-                    v-if="canCloseQuestion"
-                    type="button"
-                    class="question-close-action"
-                    :disabled="questionActionSaving"
-                    @click="closeCurrentQuestion"
-                  >
-                    关闭问题
-                  </button>
-                </div>
                 <h1 class="content-title">{{ article.title }}</h1>
                 <div
                   class="content-text-wrap"
@@ -230,37 +213,6 @@
                 </div>
               </div>
 
-              <section v-if="isQuestion && (acceptedAnswerLoading || acceptedAnswer)" class="accepted-answer-card">
-                <div class="accepted-answer-ribbon">
-                  <span class="accepted-answer-ribbon__mark">✓</span>
-                  最佳答案
-                </div>
-                <el-skeleton v-if="acceptedAnswerLoading" animated :rows="3" />
-                <template v-else-if="acceptedAnswer">
-                  <div class="accepted-answer-author">
-                    <UserAvatarVip
-                      :size="34"
-                      :src="acceptedAnswer.user?.avatarUrl || defaultAvatar"
-                      :vip-tier="Number(acceptedAnswer.user?.vipTier) || 0"
-                      :vip-expire-at="acceptedAnswer.user?.vipExpireAt"
-                    />
-                    <div>
-                      <strong>{{ acceptedAnswer.user?.nickname || '已注销用户' }}</strong>
-                      <span>{{ formatForumDateTimeShanghai(acceptedAnswer.createTime) }}</span>
-                    </div>
-                  </div>
-                  <div class="accepted-answer-content" v-html="renderCommentHtml(acceptedAnswer.content)" />
-                  <CommentReplyMediaDisplay
-                    :media-list="acceptedAnswer.mediaList"
-                    @open-shop="openCommentShopDetail"
-                  />
-                  <div class="accepted-answer-meta">
-                    <span>{{ acceptedAnswer.likeCount || 0 }} 人觉得有帮助</span>
-                    <IpRegionLabel :region="acceptedAnswer.ipRegion" />
-                  </div>
-                </template>
-              </section>
-
               <el-divider content-position="left">
                 共 {{ replyCountDisplay }} 条{{ isQuestion ? '回答' : '评论' }}
               </el-divider>
@@ -270,32 +222,35 @@
                   v-for="item in replies"
                   :key="item.articleReply.id"
                   class="comment-item"
-                  :class="{ 'comment-item--accepted': isAcceptedReply(item) }"
                 >
                   <div
-                    v-if="item.user?.id"
-                    class="comment-avatar-link"
-                    role="link"
-                    tabindex="0"
-                    @click="goUserProfile(item.user.id)"
-                    @keydown.enter.prevent="goUserProfile(item.user.id)"
+                    class="comment-floor"
+                    :class="{ 'comment-floor--accepted': isAcceptedReply(item) }"
                   >
+                    <div
+                      v-if="item.user?.id"
+                      class="comment-avatar-link"
+                      role="link"
+                      tabindex="0"
+                      @click="goUserProfile(item.user.id)"
+                      @keydown.enter.prevent="goUserProfile(item.user.id)"
+                    >
+                      <UserAvatarVip
+                        :size="32"
+                        :src="item.user?.avatarUrl || defaultAvatar"
+                        :vip-tier="Number(item.user?.vipTier) || 0"
+                        :vip-expire-at="item.user?.vipExpireAt"
+                      />
+                    </div>
                     <UserAvatarVip
+                      v-else
                       :size="32"
                       :src="item.user?.avatarUrl || defaultAvatar"
                       :vip-tier="Number(item.user?.vipTier) || 0"
                       :vip-expire-at="item.user?.vipExpireAt"
                     />
-                  </div>
-                  <UserAvatarVip
-                    v-else
-                    :size="32"
-                    :src="item.user?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(item.user?.vipTier) || 0"
-                    :vip-expire-at="item.user?.vipExpireAt"
-                  />
-                  <div class="comment-main">
-                    <div class="comment-user comment-user-row">
+                    <div class="comment-main">
+                      <div class="comment-user comment-user-row">
                       <span
                         v-if="item.user?.id"
                         class="comment-user-name comment-user-name--link"
@@ -315,18 +270,18 @@
                         UP
                       </el-tag>
                       <span v-if="isAcceptedReply(item)" class="comment-accepted-tag">最佳答案</span>
-                    </div>
-                    <div class="comment-text" v-html="renderCommentHtml(item.articleReply.content)"></div>
-                    <CommentReplyMediaDisplay
-                      :media-list="item.mediaList"
-                      @open-shop="openCommentShopDetail"
-                    />
-                    <div class="comment-footer">
-                      <div class="comment-footer-left">
-                        <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
-                        <IpRegionLabel :region="item.articleReply?.ipRegion" />
                       </div>
-                      <div class="comment-footer-actions">
+                      <div class="comment-text" v-html="renderCommentHtml(item.articleReply.content)"></div>
+                      <CommentReplyMediaDisplay
+                        :media-list="item.mediaList"
+                        @open-shop="openCommentShopDetail"
+                      />
+                      <div class="comment-footer">
+                        <div class="comment-footer-left">
+                          <span class="time">{{ formatForumDateTimeShanghai(item.articleReply.createTime) }}</span>
+                          <IpRegionLabel :region="item.articleReply?.ipRegion" />
+                        </div>
+                        <div class="comment-footer-actions">
                         <button
                           v-if="canAcceptAnswer && !isAcceptedReply(item)"
                           type="button"
@@ -344,8 +299,11 @@
                           <el-icon><ChatDotRound /></el-icon>
                           <span>回复 {{ item.subReplyCount || 0 }}</span>
                         </button>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                  <div class="comment-sub-replies">
                     <SubReplyArea
                       :reply-id="item.articleReply.id"
                       :article-id="article.id"
@@ -572,32 +530,6 @@
         <div v-else class="loading-state">
           <el-skeleton :rows="10" animated />
         </div>
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      v-model="showLikersDialog"
-      title="最新点赞"
-      width="350px"
-      append-to-body
-      :z-index="4000"
-      :show-close="false"
-      class="red-dialog"
-      @open="fetchLikers"
-    >
-      <div v-loading="loadingLikers" class="likers-list">
-        <div v-for="user in latestLikers" :key="user.id" class="liker-item">
-          <router-link :to="`/profile/${user.id}`" class="liker-link" @click="showLikersDialog = false">
-            <UserAvatarVip
-              :size="40"
-              :src="user.avatarUrl || defaultAvatar"
-              :vip-tier="Number(user.vipTier) || 0"
-              :vip-expire-at="user.vipExpireAt"
-            />
-            <span class="liker-name">{{ user.nickname }}</span>
-          </router-link>
-        </div>
-        <el-empty v-if="!loadingLikers && latestLikers.length === 0" description="暂无点赞" />
       </div>
     </el-dialog>
 

@@ -9,41 +9,36 @@
 }
 
 .editor-type-selector__copy {
-  display: grid;
-  min-width: 190px;
-  gap: 4px;
-}
-
-.editor-type-selector__eyebrow {
-  color: #b94a62;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.18em;
+  min-width: 120px;
 }
 
 .editor-type-selector__copy strong {
   color: #252128;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 800;
   letter-spacing: -0.02em;
 }
 
 .editor-type-selector__options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(174px, 1fr));
+  grid-template-columns: repeat(2, minmax(116px, 1fr));
   gap: 10px;
 }
 
 .editor-type-option {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 58px;
+  justify-content: center;
+  min-height: 42px;
   border: 1px solid #e5e0e2;
-  border-radius: 13px;
-  padding: 9px 12px;
+  border-radius: 11px;
+  padding: 0 20px;
   background: #fff;
-  color: #5f5960;
-  text-align: left;
+  color: #3a343b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
@@ -61,35 +56,6 @@
 
 .editor-type-option:disabled {
   cursor: default;
-}
-
-.editor-type-option__mark {
-  display: grid;
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 10px;
-  color: #a64257;
-  background: #f7e9ec;
-  font-family: Georgia, 'Noto Serif SC', serif;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.editor-type-option > span:last-child {
-  display: grid;
-  gap: 2px;
-}
-
-.editor-type-option b {
-  color: #2f2930;
-  font-size: 13px;
-}
-
-.editor-type-option small {
-  color: #999097;
-  font-size: 11px;
 }
 
 .editor-media-toggle {
@@ -189,13 +155,8 @@
   border-color: rgba(148, 163, 184, 0.16);
 }
 
-:root[data-theme='dark'] .editor-type-selector__copy strong,
-:root[data-theme='dark'] .editor-type-option b {
+:root[data-theme='dark'] .editor-type-selector__copy strong {
   color: #edf3ff;
-}
-
-:root[data-theme='dark'] .editor-type-selector__eyebrow {
-  color: #f4a5b5;
 }
 
 :root[data-theme='dark'] .editor-type-option {
@@ -215,14 +176,6 @@
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
 }
 
-:root[data-theme='dark'] .editor-type-option__mark {
-  color: #ffc2cd;
-  background: rgba(244, 63, 94, 0.14);
-}
-
-:root[data-theme='dark'] .editor-type-option small {
-  color: #91a0b7;
-}
 
 :root[data-theme='dark'] .editor-media-toggle,
 :root[data-theme='dark'] .editor-mode-seg {

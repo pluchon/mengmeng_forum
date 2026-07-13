@@ -14,7 +14,7 @@ export function useHomeMasonry(itemsSource, options = {}) {
     const el = unref(containerRef)
     if (!el) return 0
     const outlet = el.closest?.('.shell-main-outlet') || el.closest?.('.home-xhs-main')
-    const w = outlet?.clientWidth || el.clientWidth || 0
+    const w = el.clientWidth || outlet?.clientWidth || 0
     return w > 0 ? w : 0
   }
 

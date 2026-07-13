@@ -155,15 +155,14 @@
                   </div>
                   <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
                 </div>
-                <div class="note-info">
+                <div
+                  class="note-info"
+                  :class="{ 'note-info--question': isQuestionArticle(entry.article) }"
+                >
                   <div
                     v-if="isQuestionArticle(entry.article)"
                     class="question-card-meta"
                   >
-                    <span class="question-card-kind">
-                      <el-icon><ChatDotRound /></el-icon>
-                      问答
-                    </span>
                     <span
                       class="question-card-status"
                       :class="questionStatusClass(entry.article?.questionStatus)"
@@ -184,12 +183,11 @@
                         :vip-tier="Number(entry.user?.vipTier) || 0"
                         :vip-expire-at="entry.user?.vipExpireAt"
                       />
-                      <span class="nickname">{{ entry.user?.nickname }}</span>
+                      <span class="nickname" :title="entry.user?.nickname">{{ formatCardNickname(entry.user?.nickname) }}</span>
                       <FollowingBadge :from-following="!!entry.fromFollowing" />
                     </div>
                     <div v-if="isQuestionArticle(entry.article)" class="question-answer-count">
-                      <el-icon><ChatDotRound /></el-icon>
-                      <span>{{ entry.article?.replyCount || 0 }} 回答</span>
+                      <span>{{ entry.article?.replyCount || 0 }}回答</span>
                     </div>
                     <div v-else class="likes">
                       <LikeCountIcon />
@@ -249,8 +247,6 @@
             <span class="home-hot-floating-rank" :class="{ 'is-top': Number(entry.rank) <= 3 }">
               {{ entry.rank }}
             </span>
-            <img v-if="coverImageUrl(entry)" :src="coverImageUrl(entry)" :alt="entry.article?.title || ''" class="home-hot-floating-cover" />
-            <span v-else class="home-hot-floating-cover home-hot-floating-cover--placeholder">热</span>
             <span class="home-hot-floating-copy">
               <strong>{{ entry.article?.title }}</strong>
               <small>{{ entry.article?.likeCount || 0 }} 赞 · {{ entry.article?.replyCount || 0 }} 评</small>

@@ -209,34 +209,6 @@
     0 0 12px rgba(212, 175, 55, 0.2) !important;
 }
 
-.article-detail-modal .likers-list-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 6px;
-  padding: 4px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  line-height: 0;
-}
-
-.article-detail-modal .likers-list-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.article-detail-modal .likers-list-icon-img {
-  width: 20px;
-  height: 20px;
-  display: block;
-  opacity: 0.72;
-}
-
-.article-detail-modal .likers-list-icon-btn:hover .likers-list-icon-img {
-  opacity: 1;
-}
-
 @media (max-width: 900px) {
   .article-detail-modal .red-detail-container {
     flex-direction: column;

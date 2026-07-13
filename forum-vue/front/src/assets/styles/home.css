@@ -1583,7 +1583,7 @@
 
 .home-hot-floating-item {
   display: grid;
-  grid-template-columns: 22px 46px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -1610,22 +1610,6 @@
 
 .home-hot-floating-rank.is-top {
   color: #ff5b41;
-}
-
-.home-hot-floating-cover {
-  width: 46px;
-  height: 46px;
-  border-radius: 9px;
-  object-fit: cover;
-}
-
-.home-hot-floating-cover--placeholder {
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #ffdfd4, #ffe9b9);
-  color: #e66945;
-  font-size: 17px;
-  font-weight: 900;
 }
 
 .home-hot-floating-copy {
@@ -1917,35 +1901,43 @@
 }
 
 .note-info {
+  position: relative;
   padding: 12px;
+}
+
+.note-info--question {
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(145deg, #fff8f9 0%, #fff 72%);
+}
+
+.note-info--question::after {
+  content: '?';
+  position: absolute;
+  right: 8px;
+  bottom: -25px;
+  z-index: -1;
+  color: rgba(177, 43, 71, 0.055);
+  font-family: Georgia, 'Noto Serif SC', serif;
+  font-size: 86px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .question-card-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 800;
 }
 
-.question-card-kind,
 .question-card-status {
   display: inline-flex;
   align-items: center;
-}
-
-.question-card-kind {
-  gap: 4px;
-  border-radius: 7px;
-  padding: 4px 7px;
-  color: #a52a45;
-  background: #fff0f3;
-}
-
-.question-card-kind .el-icon {
-  font-size: 12px;
 }
 
 .question-card-status {
@@ -1973,14 +1965,17 @@
   background: rgba(17, 24, 39, 0.92);
 }
 
+:root[data-theme='dark'] .note-info--question {
+  background: linear-gradient(145deg, rgba(43, 26, 38, 0.96), rgba(17, 24, 39, 0.94) 74%);
+}
+
+:root[data-theme='dark'] .note-info--question::after {
+  color: rgba(255, 170, 187, 0.07);
+}
+
 :root[data-theme='dark'] .note-card--question {
   border-color: rgba(251, 113, 133, 0.26) !important;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
-}
-
-:root[data-theme='dark'] .question-card-kind {
-  color: #ffc0cb;
-  background: rgba(244, 63, 94, 0.14);
 }
 
 :root[data-theme='dark'] .question-card-status {
@@ -2025,7 +2020,9 @@
 .author .nickname {
   font-size: 12px;
   color: #666;
-  max-width: 56px;
+  width: 6em;
+  max-width: 6em;
+  flex: 0 0 6em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2042,7 +2039,6 @@
 .question-answer-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   flex-shrink: 0;
   color: #9f3b52;
   font-size: 11px;
