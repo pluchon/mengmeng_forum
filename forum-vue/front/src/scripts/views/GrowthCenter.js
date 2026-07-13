@@ -1,6 +1,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, Check, CircleCheck, Medal, Opportunity } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CircleCheck,
+  Medal,
+  Opportunity,
+  QuestionFilled,
+} from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import {
   getGrowthChallenges,
@@ -29,6 +37,7 @@ export function useGrowthCenter() {
   const activeQuestionIndex = ref(0)
   const mapPage = ref(1)
   const submitting = ref(false)
+  const levelDialogVisible = ref(false)
 
   const progress = computed(() => {
     const exp = Number(overview.value?.experience) || 0
@@ -36,6 +45,19 @@ export function useGrowthCenter() {
     return Math.min(100, Math.round(exp * 100 / next))
   })
   const userTypeLabel = computed(() => overview.value?.formalUser ? '正式用户' : '非正式用户')
+  const milestoneLevels = computed(() => {
+    const currentLevel = Math.min(6, Math.max(1, Number(overview.value?.growthLevel) || 1))
+    return Array.from({ length: 6 }, (_, index) => {
+      const level = index + 1
+      return {
+        level,
+        title: `Lv.${level}`,
+        requirement: level === 1 ? '成长起点' : `累计 ${index * 100} XP`,
+        ability: '等级能力与专属权益待规划',
+        status: level === currentLevel ? 'current' : level < currentLevel ? 'complete' : 'upcoming',
+      }
+    })
+  })
   const activeQuestion = computed(() => active.value?.questions?.[activeQuestionIndex.value] || null)
   const activeQuestionNo = computed(() => activeQuestionIndex.value + 1)
   const activeQuestionTotal = computed(() => active.value?.questions?.length || 0)
@@ -212,8 +234,10 @@ export function useGrowthCenter() {
     load,
     loadChallengePage,
     loading,
+    levelDialogVisible,
     mapPage,
     mapPageCount,
+    milestoneLevels,
     nextMapPage,
     nextQuestion,
     overview,
@@ -234,6 +258,7 @@ export function useGrowthCenter() {
     CircleCheck,
     Medal,
     Opportunity,
+    QuestionFilled,
   }
 }
 
