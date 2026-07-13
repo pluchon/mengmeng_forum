@@ -38,6 +38,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.stream.Collectors;
 
 // 成长挑战判卷、资格与经验结算
@@ -82,16 +84,21 @@ public class GrowthServiceImpl implements GrowthService {
     public GrowthChallengeDetailVO start(Long userId, String challengeCode) {
         GrowthChallenge challenge = requireChallenge(challengeCode);
         if ("REWARDED".equals(resolveStatus(userId, challenge))) throw failed("该挑战奖励已领取");
+        Date todayStart = Date.from(LocalDate.now(ZoneId.of("Asia/Shanghai"))
+                .atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant());
         long todayCount = attemptMapper.selectCount(new LambdaQueryWrapper<GrowthChallengeAttempt>()
                 .eq(GrowthChallengeAttempt::getUserId, userId).eq(GrowthChallengeAttempt::getChallengeId, challenge.getId())
-                .eq(GrowthChallengeAttempt::getDeleteState, (byte) 0));
+                .eq(GrowthChallengeAttempt::getDeleteState, (byte) 0)
+                .ge(GrowthChallengeAttempt::getCreateTime, todayStart));
         if (todayCount >= challenge.getMaxAttemptsPerDay()) throw failed("今日挑战次数已用完");
+        long allCount = attemptMapper.selectCount(new LambdaQueryWrapper<GrowthChallengeAttempt>()
+                .eq(GrowthChallengeAttempt::getUserId, userId).eq(GrowthChallengeAttempt::getChallengeId, challenge.getId()));
         List<ExamQuestion> questions = questionMapper.selectList(new LambdaQueryWrapper<ExamQuestion>()
                 .eq(ExamQuestion::getBankId, challenge.getBankId()).eq(ExamQuestion::getDeleteState, (byte) 0)
                 .orderByAsc(ExamQuestion::getQuestionOrder).last("LIMIT " + challenge.getQuestionCount()));
         if (questions.size() < challenge.getQuestionCount()) throw failed("挑战题库配置不足");
         GrowthChallengeAttempt attempt = new GrowthChallengeAttempt();
-        attempt.setUserId(userId); attempt.setChallengeId(challenge.getId()); attempt.setAttemptNo((int) todayCount + 1);
+        attempt.setUserId(userId); attempt.setChallengeId(challenge.getId()); attempt.setAttemptNo((int) allCount + 1);
         attempt.setStatus(GrowthAttemptStatus.IN_PROGRESS.name()); attempt.setQuestionIdsJson(write(questions.stream().map(ExamQuestion::getId).toList()));
         attempt.setStartedAt(new Date()); attempt.setDeleteState((byte) 0); attemptMapper.insert(attempt);
         GrowthChallengeDetailVO vo = new GrowthChallengeDetailVO(); vo.setAttemptId(attempt.getId()); vo.setChallengeCode(challenge.getChallengeCode()); vo.setTitle(challenge.getTitle()); vo.setPassingScore(challenge.getPassingScore());
