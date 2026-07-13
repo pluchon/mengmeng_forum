@@ -1,6 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, CircleCheck, Medal, Opportunity, Trophy } from '@element-plus/icons-vue'
+import { ArrowRight, CircleCheck, Opportunity } from '@element-plus/icons-vue'
 import { getGrowthOverview, startGrowthChallenge, submitGrowthChallenge } from '@/api/growth'
 
 export function useGrowthCenter() {
@@ -36,7 +36,7 @@ export function useGrowthCenter() {
   function selectQuestion(index) { activeQuestionIndex.value = index }
   function prevQuestion() { if (activeQuestionIndex.value > 0) activeQuestionIndex.value-- }
   function nextQuestion() { if (activeQuestionIndex.value < activeQuestionTotal.value - 1) activeQuestionIndex.value++ }
-  return { active, activeQuestion, activeQuestionIndex, activeQuestionNo, activeQuestionTotal, answers, error, load, loading, nextQuestion, overview, prevQuestion, progress, selectQuestion, start, submit, submitting, ArrowRight, CircleCheck, Medal, Opportunity, Trophy }
+  return { active, activeQuestion, activeQuestionIndex, activeQuestionNo, activeQuestionTotal, answers, error, load, loading, nextQuestion, overview, prevQuestion, progress, selectQuestion, start, submit, submitting, ArrowRight, CircleCheck, Opportunity }
 }
 
 export default {
