@@ -157,7 +157,10 @@
                 </div>
                 <div
                   class="note-info"
-                  :class="{ 'note-info--question': isQuestionArticle(entry.article) }"
+                  :class="{
+                    'note-info--question': isQuestionArticle(entry.article),
+                    'note-info--resolved': isQuestionArticle(entry.article) && Number(entry.article?.questionStatus) === 1,
+                  }"
                 >
                   <div
                     v-if="isQuestionArticle(entry.article)"

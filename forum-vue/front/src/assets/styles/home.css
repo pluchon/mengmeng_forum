@@ -1925,14 +1925,39 @@
   pointer-events: none;
 }
 
+.note-info--question.note-info--resolved {
+  background: linear-gradient(145deg, #f1fbf5 0%, #fff 72%);
+}
+
+.note-info--question.note-info--resolved::after {
+  content: '✓';
+  color: rgba(25, 114, 70, 0.09);
+}
+
 .question-card-meta {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-bottom: 8px;
+  margin: 0;
   font-size: 11px;
   font-weight: 800;
+}
+
+.note-card--masonry .note-info--question .note-title {
+  display: block;
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding-right: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .question-card-status {
@@ -1971,6 +1996,14 @@
 
 :root[data-theme='dark'] .note-info--question::after {
   color: rgba(255, 170, 187, 0.07);
+}
+
+:root[data-theme='dark'] .note-info--question.note-info--resolved {
+  background: linear-gradient(145deg, rgba(17, 56, 39, 0.92), rgba(17, 24, 39, 0.94) 74%);
+}
+
+:root[data-theme='dark'] .note-info--question.note-info--resolved::after {
+  color: rgba(107, 221, 157, 0.1);
 }
 
 :root[data-theme='dark'] .note-card--question {
