@@ -206,7 +206,7 @@
       </div>
 
       <transition name="home-hot-collapse" mode="out-in">
-        <aside v-if="isHomeFeed && !homeHotCollapsed" class="home-hot-floating" aria-label="热帖榜">
+        <aside v-if="isHomeFeed && !homeHotCollapsed" class="home-hot-floating" :class="{ 'is-checkin-visible': showCheckinHomeStrip }" aria-label="热帖榜">
         <div class="home-hot-floating-head">
           <div class="home-hot-floating-title">
             <el-icon><TrendCharts /></el-icon>
