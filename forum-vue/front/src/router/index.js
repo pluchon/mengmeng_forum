@@ -136,12 +136,6 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
-          path: 'exam-question-bank',
-          name: 'examQuestionBank',
-          component: () => import('../views/ExamQuestionBank.vue'),
-          meta: { requiresAuth: true },
-        },
-        {
           path: 'growth-center',
           name: 'growthCenter',
           component: () => import('../views/GrowthCenter.vue'),
