@@ -1,6 +1,7 @@
 package org.example.forumdemo.service.impl.growth;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.forumdemo.common.enums.GrowthAttemptStatus;
@@ -8,6 +9,7 @@ import org.example.forumdemo.common.enums.GrowthChallengeType;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.converter.growth.GrowthChallengeConverter;
 import org.example.forumdemo.entity.db.ExamQuestion;
 import org.example.forumdemo.entity.db.GrowthChallenge;
 import org.example.forumdemo.entity.db.GrowthChallengeAttempt;
@@ -16,6 +18,7 @@ import org.example.forumdemo.entity.db.GrowthRewardRecord;
 import org.example.forumdemo.entity.db.UserGrowthProfile;
 import org.example.forumdemo.entity.db.VipTrialEntitlement;
 import org.example.forumdemo.entity.dto.growth.GrowthChallengeSubmitRequest;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeDetailVO;
 import org.example.forumdemo.entity.vo.growth.GrowthChallengeVO;
 import org.example.forumdemo.entity.vo.growth.GrowthOverviewVO;
@@ -34,7 +37,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -63,20 +65,31 @@ public class GrowthServiceImpl implements GrowthService {
         vo.setExperience(profile.getExperience() == null ? 0 : profile.getExperience());
         vo.setGrowthLevel(profile.getGrowthLevel() == null ? 1 : profile.getGrowthLevel());
         vo.setNextLevelExperience(vo.getGrowthLevel() * 100);
-        List<GrowthChallengeVO> challenges = new ArrayList<>();
-        for (GrowthChallenge challenge : activeChallenges()) {
-            GrowthChallengeVO item = new GrowthChallengeVO();
-            item.setChallengeCode(challenge.getChallengeCode());
-            item.setTitle(challenge.getTitle());
-            item.setDescription(challenge.getDescription());
-            item.setQuestionCount(challenge.getQuestionCount());
-            item.setPassingScore(challenge.getPassingScore());
-            item.setExperienceReward(challenge.getExperienceReward());
-            item.setStatus(resolveStatus(userId, challenge));
-            challenges.add(item);
-        }
-        vo.setChallenges(challenges);
         return vo;
+    }
+
+    @Override
+    public PageResult<GrowthChallengeVO> challengePage(Long userId, Integer pageNum, Integer pageSize) {
+        int validPageNum = pageNum == null || pageNum < 1 ? 1 : pageNum;
+        int validPageSize = pageSize == null ? 4 : Math.min(4, Math.max(1, pageSize));
+        Page<GrowthChallenge> page = new Page<>(validPageNum, validPageSize);
+        Page<GrowthChallenge> result = challengeMapper.selectPage(page,
+                new LambdaQueryWrapper<GrowthChallenge>()
+                        .eq(GrowthChallenge::getEnabled, (byte) 1)
+                        .eq(GrowthChallenge::getDeleteState, (byte) 0)
+                        .orderByAsc(GrowthChallenge::getId));
+        List<GrowthChallengeVO> records = result.getRecords().stream()
+                .map(challenge -> GrowthChallengeConverter.toVO(
+                        challenge,
+                        resolveStatus(userId, challenge)))
+                .toList();
+        return new PageResult<>(
+                records,
+                result.getTotal(),
+                validPageNum,
+                validPageSize,
+                result.getPages(),
+                result.hasNext());
     }
 
     @Override
@@ -145,7 +158,6 @@ public class GrowthServiceImpl implements GrowthService {
         GrowthExperienceLog log = new GrowthExperienceLog(); log.setUserId(userId); log.setSourceType("CHALLENGE"); log.setSourceBusinessId(attempt.getId()); log.setExperienceDelta(exp); log.setRemark(challenge.getTitle()); log.setDeleteState((byte) 0); experienceLogMapper.insert(log); attempt.setStatus(GrowthAttemptStatus.REWARDED.name()); attemptMapper.updateById(attempt);
     }
     private String resolveStatus(Long userId, GrowthChallenge c) { return rewardRecordMapper.selectCount(new LambdaQueryWrapper<GrowthRewardRecord>().eq(GrowthRewardRecord::getUserId,userId).eq(GrowthRewardRecord::getChallengeId,c.getId()).eq(GrowthRewardRecord::getDeleteState,(byte)0)) > 0 ? "REWARDED" : "NOT_STARTED"; }
-    private List<GrowthChallenge> activeChallenges() { return challengeMapper.selectList(new LambdaQueryWrapper<GrowthChallenge>().eq(GrowthChallenge::getEnabled,(byte)1).eq(GrowthChallenge::getDeleteState,(byte)0).orderByAsc(GrowthChallenge::getId)); }
     private GrowthChallenge requireChallenge(String code) { GrowthChallenge c = challengeMapper.selectOne(new LambdaQueryWrapper<GrowthChallenge>().eq(GrowthChallenge::getChallengeCode,code).eq(GrowthChallenge::getEnabled,(byte)1).eq(GrowthChallenge::getDeleteState,(byte)0)); if(c==null) throw failed("挑战不存在"); return c; }
     private UserGrowthProfile getOrCreateProfile(Long userId, boolean formal) { UserGrowthProfile p=profileMapper.selectOne(new LambdaQueryWrapper<UserGrowthProfile>().eq(UserGrowthProfile::getUserId,userId).eq(UserGrowthProfile::getDeleteState,(byte)0)); if(p!=null)return p; p=new UserGrowthProfile();p.setUserId(userId);p.setFormalState((byte)(formal?1:0));p.setExperience(0);p.setGrowthLevel(1);p.setDeleteState((byte)0);profileMapper.insert(p);return p; }
     private GrowthQuestionVO toQuestion(ExamQuestion q){GrowthQuestionVO vo=new GrowthQuestionVO();vo.setId(q.getId());vo.setQuestionOrder(q.getQuestionOrder());vo.setQuestionType(q.getQuestionType());vo.setStem(q.getStem());vo.setOptionsJson(q.getOptionsJson());return vo;}
