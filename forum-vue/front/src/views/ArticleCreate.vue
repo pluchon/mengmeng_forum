@@ -5,7 +5,9 @@
       <div class="editor-action-bar">
         <div class="editor-action-title-wrap">
           <span class="editor-action-accent" aria-hidden="true" />
-          <h2 class="editor-action-title">{{ isEdit ? '编辑帖子' : '创作笔记' }}</h2>
+          <h2 class="editor-action-title">
+            {{ isEdit ? (form.articleType === ARTICLE_TYPE.QUESTION ? '编辑问题' : '编辑帖子') : (form.articleType === ARTICLE_TYPE.QUESTION ? '发起提问' : '创作笔记') }}
+          </h2>
         </div>
         <div class="editor-action-btns">
           <el-button class="editor-btn-ghost" @click="handleCancel">取消</el-button>
@@ -30,6 +32,38 @@
 
       <el-form :model="form" label-position="top" class="editor-form">
         <div class="editor-field-card editor-meta-card">
+          <div class="editor-type-selector" :class="{ 'is-locked': isEdit }">
+            <div class="editor-type-selector__copy">
+              <span class="editor-type-selector__eyebrow">发布类型</span>
+              <strong>{{ form.articleType === ARTICLE_TYPE.QUESTION ? '把问题交给社区' : '分享正在发生的事' }}</strong>
+            </div>
+            <div class="editor-type-selector__options" role="radiogroup" aria-label="帖子类型">
+              <button
+                type="button"
+                role="radio"
+                class="editor-type-option"
+                :class="{ 'is-active': form.articleType === ARTICLE_TYPE.NORMAL }"
+                :aria-checked="form.articleType === ARTICLE_TYPE.NORMAL"
+                :disabled="isEdit"
+                @click="form.articleType = ARTICLE_TYPE.NORMAL"
+              >
+                <span class="editor-type-option__mark">帖</span>
+                <span><b>普通帖子</b><small>分享见闻与灵感</small></span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                class="editor-type-option"
+                :class="{ 'is-active': form.articleType === ARTICLE_TYPE.QUESTION }"
+                :aria-checked="form.articleType === ARTICLE_TYPE.QUESTION"
+                :disabled="isEdit"
+                @click="form.articleType = ARTICLE_TYPE.QUESTION"
+              >
+                <span class="editor-type-option__mark">问</span>
+                <span><b>问答帖子</b><small>等待一条最佳答案</small></span>
+              </button>
+            </div>
+          </div>
           <div class="editor-meta-row">
             <div class="editor-meta-col">
               <div class="editor-field-label">
@@ -37,7 +71,7 @@
               </div>
               <el-input
                 v-model="form.title"
-                placeholder="填写标题会有更多赞哦"
+                :placeholder="form.articleType === ARTICLE_TYPE.QUESTION ? '用一句话说清楚你想解决的问题' : '填写标题会有更多赞哦'"
                 maxlength="50"
                 show-word-limit
                 class="editor-title-input"
@@ -62,7 +96,7 @@
         <div class="editor-content-card">
           <div class="editor-content-head">
             <div class="editor-field-label editor-field-label--inline">
-              <span class="editor-req">*</span> 内容
+              <span class="editor-req">*</span> {{ form.articleType === ARTICLE_TYPE.QUESTION ? '问题描述' : '内容' }}
             </div>
             <div class="editor-content-head-tools">
             <div class="editor-media-toggle">
@@ -148,7 +182,7 @@
                   v-model="form.content"
                   type="textarea"
                   :rows="16"
-                  placeholder="分享你的故事吧…"
+                  :placeholder="form.articleType === ARTICLE_TYPE.QUESTION ? '补充背景、已经尝试过的方法，以及你期待的答案…' : '分享你的故事吧…'"
                   class="md-input"
                   @keydown="onMdKeydown"
                 />
@@ -164,7 +198,7 @@
             :board-id="form.boardId"
             :title="form.title"
             :content="form.content"
-            :label="mediaMode === 'video' ? '视频标签' : '帖子标签'"
+            :label="form.articleType === ARTICLE_TYPE.QUESTION ? '问题标签' : (mediaMode === 'video' ? '视频标签' : '帖子标签')"
           />
         </div>
 
@@ -224,153 +258,7 @@
   </div>
 </template>
 
-<script setup>
-import { InfoFilled, Picture, VideoCamera } from '@element-plus/icons-vue'
-import ArticleCreateGallerySection from '@/components/article/ArticleCreateGallerySection.vue'
-import ArticleCreateVideoSection from '@/components/article/ArticleCreateVideoSection.vue'
-import ArticleAiWriteAssist from '@/components/article/ArticleAiWriteAssist.vue'
-import ArticleTagEditor from '@/components/article/ArticleTagEditor.vue'
-import { useArticleCreate } from '@scripts/views/ArticleCreate'
-
-const {
-  WangEditor,
-  applyAiContent,
-  bindGalleryItemsRef,
-  canAddGallery,
-  cascaderOptions,
-  editorMode,
-  form,
-  galleryInputRef,
-  galleryMaxCount,
-  galleryStripFadeLeft,
-  galleryStripOverflow,
-  galleryUrls,
-  mediaMode,
-  videoUrl,
-  videoUploading,
-  videoUploadProgress,
-  videoUploadError,
-  galleryUploading,
-  videoInputRef,
-  handleBoardChange,
-  handleCancel,
-  handleMdFileSelected,
-  handleMdInsertImage,
-  handlePublish,
-  handleSaveDraft,
-  isEdit,
-  mdFileInput,
-  mdTextareaRef,
-  mdWrap,
-  onGalleryFilesSelected,
-  openGalleryPicker,
-  openVideoPicker,
-  removeVideo,
-  onVideoFileSelected,
-  removeGalleryAt,
-  renderedPreview,
-  selectedBoard,
-  setEditorMode,
-  setMediaMode,
-  onMdKeydown,
-  submitting,
-  tagIds,
-  updateGalleryStripState,
-} = useArticleCreate()
-</script>
+<script setup src="./ArticleCreate.js"></script>
 
 <style scoped src="@/assets/styles/editor.css"></style>
-<style scoped>
-.editor-media-toggle {
-  position: relative;
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 4px;
-  border-radius: 10px;
-  background: rgba(29, 33, 41, 0.06);
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  overflow: hidden;
-}
-.editor-media-toggle__item {
-  position: relative;
-  z-index: 2;
-  height: 30px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  color: #4a4a4a;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.editor-media-toggle__item.is-active {
-  color: #1d2129;
-}
-.editor-media-toggle__thumb {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  height: 30px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 10px 20px rgba(29, 33, 41, 0.12);
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
-}
-.editor-media-toggle__thumb.is-right {
-  transform: translateX(100%);
-}
-
-.editor-mode-seg {
-  position: relative;
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  padding: 3px;
-  border-radius: 20px;
-  overflow: hidden;
-  border: 0.5px solid var(--color-border-tertiary, #e5e6eb);
-  background: rgba(29, 33, 41, 0.04);
-}
-
-.editor-mode-seg-btn {
-  position: relative;
-  z-index: 2;
-  border-radius: 18px !important;
-  background: transparent !important;
-  color: var(--color-text-secondary, #86909c) !important;
-}
-
-.editor-mode-seg-btn.is-active {
-  color: #1d2129 !important;
-  background: transparent !important;
-}
-
-.editor-mode-seg__thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
-  height: calc(100% - 6px);
-  border-radius: 18px;
-  background: #d4537e;
-  box-shadow: 0 6px 16px rgba(212, 83, 126, 0.28);
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
-  pointer-events: none;
-}
-
-.editor-mode-seg__thumb.is-right {
-  transform: translateX(100%);
-}
-
-.editor-mode-seg-btn.is-active {
-  color: #fff !important;
-}
-</style>
+<style scoped lang="scss" src="./ArticleCreate.scss"></style>

@@ -53,6 +53,19 @@
           </div>
         </div>
       </nav>
+      <nav v-if="showQuestionFilters" class="home-question-filter" aria-label="问答内容筛选">
+        <span class="home-question-filter__label">内容</span>
+        <button
+          v-for="option in questionFilterOptions"
+          :key="option.value"
+          type="button"
+          class="home-question-filter__item"
+          :class="{ 'is-active': questionFilter === option.value }"
+          @click="selectQuestionFilter(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </nav>
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed" :class="{ 'home-xhs-main--with-hot': isHomeFeed }">
@@ -155,6 +168,14 @@
                   <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
                 </div>
                 <div class="note-info">
+                  <div
+                    v-if="isQuestionArticle(entry.article)"
+                    class="question-card-stamp"
+                    :class="questionStatusClass(entry.article?.questionStatus)"
+                  >
+                    <span class="question-card-stamp__dot" />
+                    {{ questionStatusLabel(entry.article?.questionStatus) }}
+                  </div>
                   <h3 class="note-title">{{ entry.article?.title }}</h3>
                   <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
                     {{ entry.recommendReason }}
@@ -284,7 +305,7 @@
 
       <el-empty
         v-if="!loading && !feedError && !showRecommendationInterestMask && feedList.length === 0"
-        description="这里还没有笔记哦"
+        :description="questionFilter === QUESTION_FILTER.ALL ? '这里还没有笔记哦' : '暂时没有符合条件的问答'"
       />
     </main>
 
@@ -316,130 +337,5 @@
   <router-view />
 </template>
 
-<script setup>
-defineOptions({ name: 'HomeFeed' })
-
-import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
-import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
-import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
-import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import FollowingBadge from '@/components/common/FollowingBadge.vue'
-import { useBoardStore } from '@/stores/board'
-import { useHomeShellContext } from '@/composables/useHomeShell'
-import { useHomeMasonry } from '@/composables/useHomeMasonry'
-import { restoreFeedScroll } from '@/utils/feedScrollRestore'
-import { captureFeedCardOrigin, captureFeedOpenFrom } from '@/utils/feedNavigation'
-
-const route = useRoute()
-const router = useRouter()
-const boardStore = useBoardStore()
-
-const {
-  CircleCheck,
-  Close,
-  articleList,
-  activeCategoryId,
-  categoriesWithId,
-  checkinSummary,
-  coverImageUrl,
-  currentBoardId,
-  defaultAvatar,
-  dismissCheckinHomeStrip,
-  feedError,
-  feedForbidden,
-  ensureHomeFeedLoaded,
-  fetchArticles,
-  fetchHomeHotList,
-  getRandomPastel,
-  hideRecommendedArticle,
-  homeHotList,
-  homeHotTotal,
-  homeHotLoading,
-  homeHotCollapsed,
-  homeHotPage,
-  homeHotPageSize,
-  isHomeFeed,
-  isRecommendationFeed,
-  loading,
-  pageNum,
-  pageSize,
-  placeholderMinHeight,
-  selectCategoryMenu,
-  selectHomeBoard,
-  showCategoryNavigator,
-  showCheckinHomeStrip,
-  total,
-  toggleHomeHotCollapsed,
-  openRecommendationPreferences,
-  recommendationDialogVisible,
-  recommendationDraftBoardIds,
-  recommendationSaving,
-  saveRecommendationPreferences,
-  showRecommendationInterestMask,
-  userStore,
-} = useHomeShellContext()
-
-const feedList = computed(() => articleList.value)
-
-const openCategoryId = ref(null)
-let categoryCloseTimer = null
-
-const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
-  columnWidth: 220,
-  gap: 16,
-})
-
-function openArticle(entry, event) {
-  const id = entry?.article?.id
-  if (!id) return
-  const card = event?.currentTarget?.closest?.('.home-masonry-item') || event?.currentTarget
-  if (card) captureFeedCardOrigin(id, card)
-  captureFeedOpenFrom(route.path)
-  router.push(`/article/${id}`)
-}
-
-function openCategory(categoryId) {
-  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
-  openCategoryId.value = categoryId
-}
-
-function scheduleCloseCategory() {
-  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
-  categoryCloseTimer = window.setTimeout(() => {
-    openCategoryId.value = null
-  }, 180)
-}
-
-function toggleCategory(categoryId) {
-  openCategoryId.value = openCategoryId.value === categoryId ? null : categoryId
-}
-
-function handleCategoryFocusOut(event) {
-  if (event.currentTarget.contains(event.relatedTarget)) return
-  scheduleCloseCategory()
-}
-
-onMounted(async () => {
-  if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
-  await ensureHomeFeedLoaded()
-})
-
-onActivated(() => {
-  restoreFeedScroll()
-})
-
-onUnmounted(() => {
-  if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
-})
-</script>
-
-<style scoped>
-.shell-main-stack {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-</style>
+<script setup src="./HomeFeed.js"></script>
+<style scoped lang="scss" src="./HomeFeed.scss"></style>
