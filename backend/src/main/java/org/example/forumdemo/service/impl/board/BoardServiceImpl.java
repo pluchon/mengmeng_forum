@@ -9,8 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.converter.BoardConverter;
 import org.example.forumdemo.common.enums.ArticleStatus;
-import org.example.forumdemo.common.enums.ArticleType;
-import org.example.forumdemo.common.enums.QuestionStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -148,31 +146,24 @@ public class BoardServiceImpl implements BoardService {
             Long boardId,
             Integer pageNum,
             Integer pageSize,
-            Byte articleType,
-            Byte questionStatus,
             Long loginUserId) {
         if (boardId == null || boardId < 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        ArticleType type = validateArticleType(articleType);
-        QuestionStatus status = validateQuestionStatus(questionStatus);
-        if (status != null && type != null && type != ArticleType.QUESTION) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        if (status != null && type == null) {
-            type = ArticleType.QUESTION;
-        }
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = PageUtils.getPage(validPageNum, validPageSize);
-        LambdaQueryWrapper<Article> wrapper = buildPublishedArticleWrapper(type, status)
+        LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<Article>()
+                .ne(Article::getDeleteState, 1)
+                .ne(Article::getState, 1)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .orderByDesc(Article::getUpdateTime);
         if (boardId > 0) {
             wrapper.eq(Article::getBoardId, boardId);
         }
         Page<Article> result = articleMapper.selectPage(page, wrapper);
         List<Article> articleRecords = boardId == 0
-                ? mixHomeFeedArticles(result.getRecords(), validPageSize, type, status)
+                ? mixHomeFeedArticles(result.getRecords(), validPageSize)
                 : result.getRecords();
         Set<Long> followingIds = (loginUserId != null && loginUserId > 0)
                 ? userFollowService.listFollowingIds(loginUserId)
@@ -190,18 +181,17 @@ public class BoardServiceImpl implements BoardService {
     }
 
     /** 首页全站流以新帖为主体，随机插入少量高互动帖子，避免每次只按时间倒序展示。 */
-    private List<Article> mixHomeFeedArticles(
-            List<Article> newestArticles,
-            int pageSize,
-            ArticleType articleType,
-            QuestionStatus questionStatus) {
+    private List<Article> mixHomeFeedArticles(List<Article> newestArticles, int pageSize) {
         if (newestArticles == null || newestArticles.isEmpty()) {
             return List.of();
         }
         int hotCount = Math.min(Math.min(Math.max(2, pageSize / 5), 4), newestArticles.size());
         List<Article> engagementCandidates = articleMapper.selectPage(
                 PageUtils.getPage(1, Math.max(pageSize * 3, 30)),
-                buildPublishedArticleWrapper(articleType, questionStatus)
+                new LambdaQueryWrapper<Article>()
+                        .ne(Article::getDeleteState, 1)
+                        .ne(Article::getState, 1)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                         .orderByDesc(Article::getLikeCount)
                         .orderByDesc(Article::getFavoriteCount)
                         .orderByDesc(Article::getReplyCount)
@@ -243,44 +233,6 @@ public class BoardServiceImpl implements BoardService {
             }
         }
         return mixed;
-    }
-
-    private LambdaQueryWrapper<Article> buildPublishedArticleWrapper(
-            ArticleType articleType,
-            QuestionStatus questionStatus) {
-        LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<Article>()
-                .ne(Article::getDeleteState, 1)
-                .ne(Article::getState, 1)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode());
-        if (articleType != null) {
-            wrapper.eq(Article::getArticleType, articleType.getCode());
-        }
-        if (questionStatus != null) {
-            wrapper.eq(Article::getQuestionStatus, questionStatus.getCode());
-        }
-        return wrapper;
-    }
-
-    private ArticleType validateArticleType(Byte articleType) {
-        if (articleType == null) {
-            return null;
-        }
-        ArticleType type = ArticleType.fromCode(articleType);
-        if (type == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
-        }
-        return type;
-    }
-
-    private QuestionStatus validateQuestionStatus(Byte questionStatus) {
-        if (questionStatus == null) {
-            return null;
-        }
-        QuestionStatus status = QuestionStatus.fromCode(questionStatus);
-        if (status == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        return status;
     }
 
     private int findArticleIndex(List<Article> articles, Long articleId) {
