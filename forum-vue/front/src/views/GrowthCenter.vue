@@ -25,7 +25,7 @@
                 :vip-expire-at="userStore.vipExpireAt"
               />
               <div class="growth-profile-copy">
-                <h1>成长中心</h1>
+                <h1>{{ userStore.nickname || '社区用户' }}</h1>
                 <p>当前等级：{{ userTypeLabel }}</p>
               </div>
             </div>
@@ -92,7 +92,7 @@
 
               <div v-else class="growth-challenge-state">暂无可参与的成长挑战</div>
 
-              <nav v-if="challengePages > 1" class="growth-challenge-pagination" aria-label="成长挑战分页">
+              <nav v-if="challengeTotal > 0" class="growth-challenge-pagination" aria-label="成长挑战分页">
                 <button
                   type="button"
                   :disabled="challengePage <= 1 || challengeLoading"
@@ -115,27 +115,48 @@
 
             <aside class="growth-milestone-card">
               <div class="growth-milestone-title">
-                <el-icon><Medal /></el-icon>
-                <h2>成长里程</h2>
+                <div>
+                  <el-icon><Medal /></el-icon>
+                  <h2>成长里程</h2>
+                </div>
+                <button type="button" aria-label="查看等级说明" @click="levelDialogVisible = true">
+                  <el-icon><QuestionFilled /></el-icon>
+                </button>
               </div>
               <div class="growth-milestone-list">
-                <div class="growth-milestone-node is-current">
+                <div
+                  v-for="item in milestoneLevels"
+                  :key="item.level"
+                  class="growth-milestone-node"
+                  :class="`is-${item.status}`"
+                >
                   <i></i>
                   <div>
-                    <strong>Lv.{{ overview.growthLevel }}</strong>
-                    <span>当前成长等级</span>
-                  </div>
-                </div>
-                <div class="growth-milestone-node">
-                  <i></i>
-                  <div>
-                    <strong>Lv.{{ overview.growthLevel + 1 }}</strong>
-                    <span>再积累 {{ Math.max(0, overview.nextLevelExperience - overview.experience) }} XP</span>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.status === 'current' ? '当前成长等级' : item.requirement }}</span>
                   </div>
                 </div>
               </div>
             </aside>
           </main>
+
+          <el-dialog
+            v-model="levelDialogVisible"
+            class="growth-level-dialog"
+            title="成长等级说明"
+            width="min(560px, calc(100vw - 32px))"
+          >
+            <div class="growth-level-dialog-list">
+              <article v-for="item in milestoneLevels" :key="item.level">
+                <strong>{{ item.title }}</strong>
+                <div>
+                  <span>{{ item.requirement }}</span>
+                  <p>{{ item.ability }}</p>
+                </div>
+              </article>
+            </div>
+            <p class="growth-level-dialog-todo">TODO：各等级能力与专属权益将在后续成长体系中补充。</p>
+          </el-dialog>
         </template>
 
         <section v-else class="growth-exam">
