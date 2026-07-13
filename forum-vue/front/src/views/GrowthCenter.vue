@@ -18,57 +18,66 @@
         <template v-if="!active">
           <header class="growth-profile-card">
             <div class="growth-profile-main">
-              <span class="growth-seed-icon">
-                <el-icon><Opportunity /></el-icon>
-              </span>
+              <UserAvatarVip
+                :size="62"
+                :src="userStore.avatarUrl"
+                :vip-tier="Number(userStore.vipTier) || 0"
+                :vip-expire-at="userStore.vipExpireAt"
+              />
               <div class="growth-profile-copy">
-                <span class="growth-eyebrow">GROWTH CENTER</span>
                 <h1>成长中心</h1>
-                <p>{{ overview.formalUser ? '正式用户 · 社区创作权限已开启' : '完成新人试炼，开启社区创作' }}</p>
+                <p>当前等级：{{ userTypeLabel }}</p>
               </div>
             </div>
 
             <div class="growth-level-card">
               <div class="growth-level-head">
-                <span>当前等级</span>
                 <strong>Lv.{{ overview.growthLevel }}</strong>
+                <span>{{ overview.experience }} / {{ overview.nextLevelExperience }} XP</span>
               </div>
               <div class="growth-level-progress">
                 <i :style="{ width: progress + '%' }"></i>
-              </div>
-              <div class="growth-level-foot">
-                <span>{{ overview.experience }} / {{ overview.nextLevelExperience }} XP</span>
-                <b>还差 {{ Math.max(0, overview.nextLevelExperience - overview.experience) }} XP</b>
               </div>
             </div>
           </header>
 
           <main class="growth-dashboard">
-            <section class="growth-challenge-section">
-              <div class="growth-section-heading">
-                <el-icon><CircleCheck /></el-icon>
-                <h2>成长挑战</h2>
+            <section
+              v-loading="challengeLoading"
+              class="growth-challenge-section"
+            >
+              <div v-if="challengeError" class="growth-challenge-state is-error">
+                <span>{{ challengeError }}</span>
+                <button type="button" @click="loadChallengePage(challengePage)">重新加载</button>
               </div>
 
-              <div v-if="overview.challenges?.length" class="growth-challenge-grid">
+              <div v-else-if="challenges.length" class="growth-challenge-grid">
                 <article
-                  v-for="item in overview.challenges"
+                  v-for="item in challenges"
                   :key="item.challengeCode"
                   class="growth-challenge-card"
                   :class="{ 'is-done': item.status === 'REWARDED' }"
                 >
                   <div class="growth-card-topline">
                     <span class="growth-card-icon">
-                      <el-icon><CircleCheck v-if="item.status === 'REWARDED'" /><Opportunity v-else /></el-icon>
+                      <el-icon>
+                        <CircleCheck v-if="item.status === 'REWARDED'" />
+                        <Opportunity v-else />
+                      </el-icon>
                     </span>
                     <em>+{{ item.experienceReward }} XP</em>
                   </div>
+
                   <div class="growth-card-copy">
                     <h3>{{ item.title }}</h3>
-                    <p>{{ item.questionCount }} 题 · {{ item.passingScore }} 分通过</p>
+                    <div class="growth-card-requirement">
+                      <span><b>{{ item.questionCount }}</b> 题</span>
+                      <i></i>
+                      <span><b>{{ item.passingScore }}</b> 分通过</span>
+                    </div>
                   </div>
+
                   <div class="growth-card-footer">
-                    <span>{{ item.status === 'REWARDED' ? '挑战已完成' : '完成后获得成长经验' }}</span>
                     <button
                       type="button"
                       :disabled="item.status === 'REWARDED'"
@@ -81,7 +90,27 @@
                 </article>
               </div>
 
-              <div v-else class="growth-empty-state">暂无可参与的成长挑战</div>
+              <div v-else class="growth-challenge-state">暂无可参与的成长挑战</div>
+
+              <nav v-if="challengePages > 1" class="growth-challenge-pagination" aria-label="成长挑战分页">
+                <button
+                  type="button"
+                  :disabled="challengePage <= 1 || challengeLoading"
+                  @click="loadChallengePage(challengePage - 1)"
+                >
+                  <el-icon><ArrowLeft /></el-icon>
+                  上一页
+                </button>
+                <span>第 {{ challengePage }} / {{ challengePages }} 页 · 共 {{ challengeTotal }} 项</span>
+                <button
+                  type="button"
+                  :disabled="challengePage >= challengePages || challengeLoading"
+                  @click="loadChallengePage(challengePage + 1)"
+                >
+                  下一页
+                  <el-icon><ArrowRight /></el-icon>
+                </button>
+              </nav>
             </section>
 
             <aside class="growth-milestone-card">
@@ -105,10 +134,6 @@
                   </div>
                 </div>
               </div>
-              <div class="growth-milestone-note">
-                <el-icon><Opportunity /></el-icon>
-                <span>成长等级当前用于展示，后续会逐步加入更多成长玩法。</span>
-              </div>
             </aside>
           </main>
         </template>
@@ -117,10 +142,9 @@
           <header class="growth-exam-header">
             <button type="button" class="growth-back-button" @click="exitChallenge">
               <el-icon><ArrowLeft /></el-icon>
-              退出挑战
+              <span>退出挑战</span>
             </button>
             <div class="growth-exam-title">
-              <span>成长挑战</span>
               <h1>{{ active.title }}</h1>
             </div>
             <strong>第 {{ activeQuestionNo }} / {{ activeQuestionTotal }} 题</strong>
@@ -186,28 +210,36 @@
             </article>
 
             <aside class="growth-question-map">
-              <div class="growth-map-heading">
-                <strong>题目导航</strong>
-                <span>{{ answeredCount }}/{{ activeQuestionTotal }} 已答</span>
+              <div>
+                <div class="growth-map-heading">
+                  <strong>题目导航</strong>
+                  <span>{{ answeredCount }}/{{ activeQuestionTotal }} 已答</span>
+                </div>
+                <div class="growth-map-legend">
+                  <span><i class="is-current"></i>当前</span>
+                  <span><i class="is-answered"></i>已答</span>
+                  <span><i></i>未答</span>
+                </div>
+                <div class="growth-map-grid">
+                  <button
+                    v-for="item in pagedQuestions"
+                    :key="item.question.id"
+                    type="button"
+                    :class="{
+                      'is-active': item.index === activeQuestionIndex,
+                      'is-answered': answers[item.question.id],
+                    }"
+                    @click="selectQuestion(item.index)"
+                  >
+                    {{ item.index + 1 }}
+                  </button>
+                </div>
               </div>
-              <div class="growth-map-legend">
-                <span><i class="is-current"></i>当前</span>
-                <span><i class="is-answered"></i>已答</span>
-                <span><i></i>未答</span>
-              </div>
-              <div class="growth-map-grid">
-                <button
-                  v-for="(question, index) in active.questions"
-                  :key="question.id"
-                  type="button"
-                  :class="{
-                    'is-active': index === activeQuestionIndex,
-                    'is-answered': answers[question.id],
-                  }"
-                  @click="selectQuestion(index)"
-                >
-                  {{ index + 1 }}
-                </button>
+
+              <div v-if="mapPageCount > 1" class="growth-map-pagination">
+                <button type="button" :disabled="mapPage <= 1" @click="prevMapPage">上一页</button>
+                <span>{{ mapPage }} / {{ mapPageCount }}</span>
+                <button type="button" :disabled="mapPage >= mapPageCount" @click="nextMapPage">下一页</button>
               </div>
             </aside>
           </div>
