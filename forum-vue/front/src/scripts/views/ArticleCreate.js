@@ -23,6 +23,7 @@ import { isArticleEditingLocked } from '@/utils/articleStatus'
 import WangEditor from '@/components/common/WangEditor.vue'
 import { marked } from 'marked'
 import { stripSingleOuterParagraph } from '@/utils/htmlNormalize'
+import { ARTICLE_TYPE } from '@/utils/articleQuestion'
 import {
   openImageUploadLoading,
   validateLocalImageFile,
@@ -49,6 +50,7 @@ export function useArticleCreate() {
     title: '',
     content: '',
     contentType: 0,
+    articleType: ARTICLE_TYPE.NORMAL,
     coverImg: ''
   })
 
@@ -123,6 +125,9 @@ export function useArticleCreate() {
       title: form.title,
       content,
       contentType: Number(form.contentType) || 0,
+      articleType: Number(form.articleType) === ARTICLE_TYPE.QUESTION
+        ? ARTICLE_TYPE.QUESTION
+        : ARTICLE_TYPE.NORMAL,
       coverImg: form.coverImg,
       tagIds: [...tagIds.value],
     }
@@ -207,6 +212,9 @@ export function useArticleCreate() {
           title: a.title,
           content: a.content,
           contentType: ct,
+          articleType: Number(a.articleType) === ARTICLE_TYPE.QUESTION
+            ? ARTICLE_TYPE.QUESTION
+            : ARTICLE_TYPE.NORMAL,
           coverImg: a.coverImg || ''
         })
         editorMode.value = ct === 1 ? 'markdown' : 'rich'

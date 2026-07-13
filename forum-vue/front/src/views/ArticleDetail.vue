@@ -150,6 +150,24 @@
 
             <el-scrollbar class="article-content-scroll article-content-scroll--hidden-bar">
               <div class="article-body">
+                <div v-if="isQuestion" class="question-detail-heading">
+                  <span
+                    class="question-detail-status"
+                    :class="questionStatusClass(article.questionStatus)"
+                  >
+                    <span class="question-detail-status__dot" />
+                    {{ questionStatusLabel(article.questionStatus) }}
+                  </span>
+                  <button
+                    v-if="canCloseQuestion"
+                    type="button"
+                    class="question-close-action"
+                    :disabled="questionActionSaving"
+                    @click="closeCurrentQuestion"
+                  >
+                    关闭问题
+                  </button>
+                </div>
                 <h1 class="content-title">{{ article.title }}</h1>
                 <div
                   class="content-text-wrap"
@@ -206,10 +224,48 @@
                 </div>
               </div>
 
-              <el-divider content-position="left">共 {{ replyCountDisplay }} 条评论</el-divider>
+              <section v-if="isQuestion && (acceptedAnswerLoading || acceptedAnswer)" class="accepted-answer-card">
+                <div class="accepted-answer-ribbon">
+                  <span class="accepted-answer-ribbon__mark">✓</span>
+                  最佳答案
+                </div>
+                <el-skeleton v-if="acceptedAnswerLoading" animated :rows="3" />
+                <template v-else-if="acceptedAnswer">
+                  <div class="accepted-answer-author">
+                    <UserAvatarVip
+                      :size="34"
+                      :src="acceptedAnswer.user?.avatarUrl || defaultAvatar"
+                      :vip-tier="Number(acceptedAnswer.user?.vipTier) || 0"
+                      :vip-expire-at="acceptedAnswer.user?.vipExpireAt"
+                    />
+                    <div>
+                      <strong>{{ acceptedAnswer.user?.nickname || '已注销用户' }}</strong>
+                      <span>{{ formatForumDateTimeShanghai(acceptedAnswer.createTime) }}</span>
+                    </div>
+                  </div>
+                  <div class="accepted-answer-content" v-html="renderCommentHtml(acceptedAnswer.content)" />
+                  <CommentReplyMediaDisplay
+                    :media-list="acceptedAnswer.mediaList"
+                    @open-shop="openCommentShopDetail"
+                  />
+                  <div class="accepted-answer-meta">
+                    <span>{{ acceptedAnswer.likeCount || 0 }} 人觉得有帮助</span>
+                    <IpRegionLabel :region="acceptedAnswer.ipRegion" />
+                  </div>
+                </template>
+              </section>
+
+              <el-divider content-position="left">
+                共 {{ replyCountDisplay }} 条{{ isQuestion ? '回答' : '评论' }}
+              </el-divider>
 
               <div class="comments-list">
-                <div v-for="item in replies" :key="item.articleReply.id" class="comment-item">
+                <div
+                  v-for="item in replies"
+                  :key="item.articleReply.id"
+                  class="comment-item"
+                  :class="{ 'comment-item--accepted': isAcceptedReply(item) }"
+                >
                   <div
                     v-if="item.user?.id"
                     class="comment-avatar-link"
@@ -252,6 +308,7 @@
                       >
                         UP
                       </el-tag>
+                      <span v-if="isAcceptedReply(item)" class="comment-accepted-tag">最佳答案</span>
                     </div>
                     <div class="comment-text" v-html="renderCommentHtml(item.articleReply.content)"></div>
                     <CommentReplyMediaDisplay
@@ -264,6 +321,15 @@
                         <IpRegionLabel :region="item.articleReply?.ipRegion" />
                       </div>
                       <div class="comment-footer-actions">
+                        <button
+                          v-if="canAcceptAnswer && !isAcceptedReply(item)"
+                          type="button"
+                          class="comment-action-btn comment-action-btn--accept"
+                          :disabled="questionActionSaving"
+                          @click="acceptAnswer(item)"
+                        >
+                          采纳
+                        </button>
                         <button type="button" class="comment-action-btn" @click="toggleReplyLike(item)">
                           <LikeCountIcon class="comment-like-icon" :filled="item.liked" />
                           <span :class="{ 'is-liked': item.liked }">{{ item.articleReply.likeCount || 0 }}</span>
@@ -287,7 +353,7 @@
                 </div>
                 <el-empty
                   v-if="replies.length === 0"
-                  description="期待你的精彩评论"
+                  :description="isQuestion ? '等待第一条认真回答' : '期待你的精彩评论'"
                   :image="emptyCommentIconUrl"
                   :image-size="120"
                 />
@@ -295,6 +361,11 @@
             </el-scrollbar>
 
             <div class="interaction-footer interaction-footer-stacked">
+              <div v-if="isQuestionClosed" class="question-closed-notice">
+                <span>问题已关闭</span>
+                <small>仍可点赞、收藏和查看已有回答</small>
+              </div>
+              <template v-else>
               <div v-if="replyTarget" class="reply-target-bar">
                 <div class="reply-target-text">
                   <span class="reply-target-label">回复给 @{{ replyTarget.nickname }}</span>
@@ -462,6 +533,7 @@
                 class="sr-only"
                 @change="onReplyImageFileChange"
               >
+              </template>
               <div class="action-btns action-btns-row">
                 <el-button class="action-item" :class="{ active: isLiked }" @click="handleLike">
                   <el-icon :size="24">
@@ -564,126 +636,10 @@
   </div>
 </template>
 
-<script setup>
-defineOptions({ name: 'ArticleDetail' })
-
-import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
-import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
-import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
-import { useArticleDetail } from '@scripts/views/ArticleDetail'
-
-const {
-  ArrowLeft,
-  ArrowRight,
-  ChatDotRound,
-  Close,
-  CollectionTag,
-  Picture,
-  PictureFilled,
-  Share,
-  ArticleDetailVideo,
-  SubReplyArea,
-  MagicStick,
-  aiLoading,
-  aiSummary,
-  aiSummaryAreaRef,
-  aiSummaryIsHint,
-  article,
-  articleTags,
-  activeGalleryIndex,
-  mainDisplayImageUrl,
-  imagePreviewList,
-  articleGalleryUrls,
-  articleVideoUrl,
-  detailVideoRef,
-  isVideoArticle,
-  replayDetailVideo,
-  author,
-  addReplyShopEmoji,
-  canSubmitReply,
-  clearReplyTarget,
-  closeDetailDialog,
-  confirmFavorite,
-  contentExpanded,
-  shouldCollapseContent,
-  defaultAvatar,
-  dialogOpen,
-  followSaving,
-  isFollowingAuthor,
-  toggleFollowAuthor,
-  emptyCommentIconUrl,
-  emojiPackIconUrl,
-  emojiShopStore,
-  fetchLikers,
-  galleryStripFadeLeft,
-  galleryStripFadeRight,
-  galleryStripOverflow,
-  galleryStripRef,
-  goAuthorProfile,
-  goUserProfile,
-  handleBeforeClose,
-  handleDialogClosed,
-  favoriteDialogVisible,
-  favoriteFolders,
-  favoriteFoldersLoading,
-  favoriteSaving,
-  handleLike,
-  handleShare,
-  shareCopied,
-  isLiked,
-  isOwner,
-  isFavorited,
-  isVipGold,
-  latestLikers,
-  likersMenuListIconUrl,
-  loadAiSummary,
-  loading,
-  loadingLikers,
-  loadFavoriteFolders,
-  onGalleryStripScroll,
-  onReplyEmojiPopoverShow,
-  onReplyImageFileChange,
-  onReplyPackBarScroll,
-  openCommentShopDetail,
-  ownerAuditNotice,
-  renderedContent,
-  renderCommentHtml,
-  replies,
-  sendIconUrl,
-  replyContent,
-  replyCountDisplay,
-  replyEmojiPanelOpen,
-  replyImageInput,
-  replyPackBarCanScrollLeft,
-  replyPackBarCanScrollRight,
-  replyPackBarRef,
-  replyPendingEmojis,
-  replyPendingImages,
-  replyPlaceholder,
-  replySelectedPack,
-  replyTarget,
-  replyVisiblePacks,
-  removePendingEmoji,
-  removePendingImage,
-  scrollReplyPackBarLeft,
-  scrollReplyPackBarRight,
-  selectReplyPack,
-  selectedFolderId,
-  setActiveGalleryIndex,
-  showLikersDialog,
-  startReplyToFloor,
-  startReplyToSub,
-  subReplyRefreshTokens,
-  submitReply,
-  toggleReplyLike,
-  toggleFavorite,
-  triggerReplyImagePick,
-  formatForumDateTimeShanghai,
-} = useArticleDetail()
-</script>
+<script setup src="./ArticleDetail.js"></script>
 
 <style scoped src="@/assets/styles/article.css"></style>
 <style scoped src="@/assets/styles/article-detail-owner.css"></style>
+<style lang="scss" src="./ArticleDetail.scss"></style>
 <style src="@/assets/styles/article-detail-modal-global.css"></style>
 <style src="@/assets/styles/favorite-folder-select.css"></style>

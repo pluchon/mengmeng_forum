@@ -1,10 +1,15 @@
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick, Picture, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
 import { getArticleDetail, streamArticleGuide, getAuditStatus, getLatestLikers } from '@/api/article'
+import {
+  acceptQuestionAnswer,
+  closeQuestion,
+  getAcceptedQuestionAnswer,
+} from '@/api/articleQuestion'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
 import {
   animateDetailDialogToCard,
@@ -23,6 +28,12 @@ import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
+import {
+  QUESTION_STATUS,
+  isQuestionArticle,
+  questionStatusClass,
+  questionStatusLabel,
+} from '@/utils/articleQuestion'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
 import { uploadChatImage } from '@/api/message'
@@ -48,6 +59,9 @@ export function useArticleDetail() {
   const isLiked = ref(false)
   const isOwner = ref(false)
   const isFavorited = ref(false)
+  const acceptedAnswer = ref(null)
+  const acceptedAnswerLoading = ref(false)
+  const questionActionSaving = ref(false)
   const aiSummary = ref('')
   const aiSummaryIsHint = ref(false)
   const aiLoading = ref(false)
@@ -98,7 +112,19 @@ export function useArticleDetail() {
   const REPLY_IMAGE_MAX = 6
   const REPLY_EMOJI_MAX = 5
 
+  const isQuestion = computed(() => isQuestionArticle(article.value))
+  const isQuestionClosed = computed(() =>
+    isQuestion.value && Number(article.value?.questionStatus) === QUESTION_STATUS.CLOSED,
+  )
+  const canCloseQuestion = computed(() =>
+    isQuestion.value
+      && isOwner.value
+      && Number(article.value?.questionStatus) === QUESTION_STATUS.WAITING,
+  )
+  const canAcceptAnswer = computed(() => canCloseQuestion.value)
+
   const canSubmitReply = computed(() => {
+    if (isQuestionClosed.value) return false
     const text = replyContent.value.trim()
     return !!text || replyPendingImages.value.length > 0 || replyPendingEmojis.value.length > 0
   })
@@ -410,7 +436,11 @@ export function useArticleDetail() {
 
   const shouldCollapseContent = computed(() => plainContentLength.value > 280)
 
-  const replyPlaceholder = computed(() => (replyTarget.value ? '' : '说点什么…'))
+  const replyPlaceholder = computed(() => {
+    if (isQuestionClosed.value) return '问题已关闭，暂不接受新回答'
+    if (replyTarget.value) return ''
+    return isQuestion.value ? '写下你的回答…' : '说点什么…'
+  })
 
   function stripReplyPlainText(html) {
     return String(html || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
@@ -491,6 +521,7 @@ export function useArticleDetail() {
     aiSummaryIsHint.value = false
     articleGalleryUrls.value = []
     articleTags.value = []
+    acceptedAnswer.value = null
     activeGalleryIndex.value = 0
     try {
       const res = await getArticleDetail(articleId)
@@ -504,6 +535,7 @@ export function useArticleDetail() {
         isFavorited.value = res.data.isFavorited || false
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         await loadAuthorFollowState()
+        await loadAcceptedAnswer(articleId)
         await syncOwnerArticleStatus(articleId)
         await nextTick()
         updateGalleryStripState()
@@ -655,6 +687,92 @@ export function useArticleDetail() {
       if (article.value) {
         article.value.replyCount = Math.max(Number(article.value.replyCount) || 0, replies.value.length)
       }
+    }
+  }
+
+  async function loadAcceptedAnswer(articleId = article.value?.id) {
+    acceptedAnswer.value = null
+    if (!articleId || !isQuestion.value) return
+    acceptedAnswerLoading.value = true
+    try {
+      const res = await getAcceptedQuestionAnswer(articleId)
+      if (res.code === 0) {
+        acceptedAnswer.value = res.data || null
+      }
+    } catch {
+      acceptedAnswer.value = null
+    } finally {
+      acceptedAnswerLoading.value = false
+    }
+  }
+
+  function isAcceptedReply(item) {
+    return Number(item?.articleReply?.id) === Number(article.value?.acceptedReplyId)
+  }
+
+  async function acceptAnswer(item) {
+    if (!canAcceptAnswer.value || questionActionSaving.value) return
+    const replyId = item?.articleReply?.id
+    if (!replyId || !article.value?.id) return
+    try {
+      await ElMessageBox.confirm(
+        '采纳后问题将标记为已解决，P0 暂不支持改选其他回答。',
+        '采纳为最佳答案',
+        {
+          type: 'warning',
+          confirmButtonText: '确认采纳',
+          cancelButtonText: '再看看',
+        },
+      )
+    } catch {
+      return
+    }
+    questionActionSaving.value = true
+    try {
+      const res = await acceptQuestionAnswer({
+        articleId: article.value.id,
+        replyId,
+      })
+      if (res.code === 0) {
+        article.value.questionStatus = QUESTION_STATUS.RESOLVED
+        article.value.acceptedReplyId = replyId
+        await Promise.all([loadAcceptedAnswer(), loadReplies()])
+        ElMessage.success('已采纳为最佳答案')
+      }
+    } catch {
+      // 请求层已统一展示错误，这里只阻止事件异常继续冒泡。
+    } finally {
+      questionActionSaving.value = false
+    }
+  }
+
+  async function closeCurrentQuestion() {
+    if (!canCloseQuestion.value || questionActionSaving.value || !article.value?.id) return
+    try {
+      await ElMessageBox.confirm(
+        '关闭后将不再接受新回答，P0 暂不支持重新打开。',
+        '关闭这个问题',
+        {
+          type: 'warning',
+          confirmButtonText: '确认关闭',
+          cancelButtonText: '取消',
+        },
+      )
+    } catch {
+      return
+    }
+    questionActionSaving.value = true
+    try {
+      const res = await closeQuestion({ articleId: article.value.id })
+      if (res.code === 0) {
+        article.value.questionStatus = QUESTION_STATUS.CLOSED
+        clearReplyTarget()
+        ElMessage.success('问题已关闭')
+      }
+    } catch {
+      // 请求层已统一展示错误，这里只阻止事件异常继续冒泡。
+    } finally {
+      questionActionSaving.value = false
     }
   }
 
@@ -1000,6 +1118,9 @@ export function useArticleDetail() {
     aiSummaryIsHint,
     activeGalleryIndex,
     activeGalleryUrl,
+    acceptAnswer,
+    acceptedAnswer,
+    acceptedAnswerLoading,
     mainDisplayImageUrl,
     imagePreviewList,
     article,
@@ -1012,15 +1133,21 @@ export function useArticleDetail() {
     author,
     addReplyShopEmoji,
     canSubmitReply,
+    canAcceptAnswer,
+    canCloseQuestion,
     clearReplyTarget,
     confirmFavorite,
     contentExpanded,
     shouldCollapseContent,
     closeDetailDialog,
+    closeCurrentQuestion,
     defaultAvatar,
     dialogOpen,
     followSaving,
     isFollowingAuthor,
+    isQuestion,
+    isQuestionClosed,
+    isAcceptedReply,
     toggleFollowAuthor,
     fetchLikers,
     galleryStripFadeLeft,
@@ -1057,6 +1184,9 @@ export function useArticleDetail() {
     onReplyPackBarScroll,
     openCommentShopDetail,
     ownerAuditNotice,
+    questionActionSaving,
+    questionStatusClass,
+    questionStatusLabel,
     renderedContent,
     renderCommentHtml,
     replies,
