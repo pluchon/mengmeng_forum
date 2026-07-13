@@ -67,7 +67,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         // 匹配 API 请求代理到后端（排除 SPA 路由导航）
-        '^/(user|board|article|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|game|vip|growth|profile|recommend|ai|notice|captcha|drift-bottle|group-chat)/': {
+        '^/(user|board|article|articleQuestion|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|game|vip|growth|profile|recommend|ai|notice|captcha|drift-bottle|group-chat)/': {
           target: env.VITE_API_BASE_URL || 'http://localhost:10086',
           changeOrigin: true,
           // 如果请求 Accepts HTML，说明是浏览器导航而非 API 调用，返回 index.html
