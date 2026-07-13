@@ -185,37 +185,62 @@
   background: transparent !important;
 }
 
-:global(:root[data-theme='dark']) .editor-type-selector {
+:root[data-theme='dark'] .editor-type-selector {
   border-color: rgba(148, 163, 184, 0.16);
 }
 
-:global(:root[data-theme='dark']) .editor-type-selector__copy strong,
-:global(:root[data-theme='dark']) .editor-type-option b {
+:root[data-theme='dark'] .editor-type-selector__copy strong,
+:root[data-theme='dark'] .editor-type-option b {
   color: #edf3ff;
 }
 
-:global(:root[data-theme='dark']) .editor-type-selector__eyebrow {
+:root[data-theme='dark'] .editor-type-selector__eyebrow {
   color: #f4a5b5;
 }
 
-:global(:root[data-theme='dark']) .editor-type-option {
+:root[data-theme='dark'] .editor-type-option {
   border-color: rgba(148, 163, 184, 0.2);
   color: #b8c3d6;
   background: rgba(17, 27, 46, 0.86);
 }
 
-:global(:root[data-theme='dark']) .editor-type-option.is-active {
-  border-color: rgba(251, 113, 133, 0.36);
-  background: rgba(159, 42, 65, 0.18);
+:root[data-theme='dark'] .editor-type-option:hover:not(:disabled) {
+  border-color: rgba(251, 113, 133, 0.32);
+  background: rgba(30, 42, 63, 0.94);
 }
 
-:global(:root[data-theme='dark']) .editor-type-option__mark {
+:root[data-theme='dark'] .editor-type-option.is-active {
+  border-color: rgba(251, 113, 133, 0.36);
+  background: rgba(159, 42, 65, 0.18);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .editor-type-option__mark {
   color: #ffc2cd;
   background: rgba(244, 63, 94, 0.14);
 }
 
-:global(:root[data-theme='dark']) .editor-type-option small {
+:root[data-theme='dark'] .editor-type-option small {
   color: #91a0b7;
+}
+
+:root[data-theme='dark'] .editor-media-toggle,
+:root[data-theme='dark'] .editor-mode-seg {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+:root[data-theme='dark'] .editor-media-toggle__item {
+  color: #aebbd0;
+}
+
+:root[data-theme='dark'] .editor-media-toggle__item.is-active {
+  color: #eef4ff;
+}
+
+:root[data-theme='dark'] .editor-media-toggle__thumb {
+  background: rgba(51, 65, 85, 0.92);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
 }
 
 @media (max-width: 820px) {

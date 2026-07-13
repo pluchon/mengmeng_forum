@@ -24,8 +24,6 @@ public interface BoardService {
             Long boardId,
             Integer pageNum,
             Integer pageSize,
-            Byte articleType,
-            Byte questionStatus,
             Long loginUserId);
 
     // 单板块详情

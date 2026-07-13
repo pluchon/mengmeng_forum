@@ -1,6 +1,6 @@
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
+import { ArrowDown, ChatDotRound, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -10,12 +10,7 @@ import { useHomeShellContext } from '@/composables/useHomeShell'
 import { useHomeMasonry } from '@/composables/useHomeMasonry'
 import { restoreFeedScroll } from '@/utils/feedScrollRestore'
 import { captureFeedCardOrigin, captureFeedOpenFrom } from '@/utils/feedNavigation'
-import {
-  QUESTION_FILTER,
-  isQuestionArticle,
-  questionStatusClass,
-  questionStatusLabel,
-} from '@/utils/articleQuestion'
+import { isQuestionArticle, questionStatusClass, questionStatusLabel } from '@/utils/articleQuestion'
 
 defineOptions({ name: 'HomeFeed' })
 
@@ -53,13 +48,10 @@ const {
   pageNum,
   pageSize,
   placeholderMinHeight,
-  questionFilter,
   selectCategoryMenu,
   selectHomeBoard,
-  selectQuestionFilter,
   showCategoryNavigator,
   showCheckinHomeStrip,
-  showQuestionFilters,
   total,
   toggleHomeHotCollapsed,
   openRecommendationPreferences,
@@ -70,13 +62,6 @@ const {
   showRecommendationInterestMask,
   userStore,
 } = useHomeShellContext()
-
-const questionFilterOptions = [
-  { value: QUESTION_FILTER.ALL, label: '全部内容' },
-  { value: QUESTION_FILTER.QUESTION, label: '问答' },
-  { value: QUESTION_FILTER.WAITING, label: '待解决' },
-  { value: QUESTION_FILTER.RESOLVED, label: '已解决' },
-]
 
 const feedList = computed(() => articleList.value)
 

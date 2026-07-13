@@ -151,13 +151,19 @@
             <el-scrollbar class="article-content-scroll article-content-scroll--hidden-bar">
               <div class="article-body">
                 <div v-if="isQuestion" class="question-detail-heading">
-                  <span
-                    class="question-detail-status"
-                    :class="questionStatusClass(article.questionStatus)"
-                  >
-                    <span class="question-detail-status__dot" />
-                    {{ questionStatusLabel(article.questionStatus) }}
-                  </span>
+                  <div class="question-detail-classification">
+                    <span class="question-detail-kind">
+                      <el-icon><ChatDotRound /></el-icon>
+                      社区问答
+                    </span>
+                    <span
+                      class="question-detail-status"
+                      :class="questionStatusClass(article.questionStatus)"
+                    >
+                      <span class="question-detail-status__dot" />
+                      {{ questionStatusLabel(article.questionStatus) }}
+                    </span>
+                  </div>
                   <button
                     v-if="canCloseQuestion"
                     type="button"

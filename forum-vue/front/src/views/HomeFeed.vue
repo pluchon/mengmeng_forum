@@ -53,19 +53,6 @@
           </div>
         </div>
       </nav>
-      <nav v-if="showQuestionFilters" class="home-question-filter" aria-label="问答内容筛选">
-        <span class="home-question-filter__label">内容</span>
-        <button
-          v-for="option in questionFilterOptions"
-          :key="option.value"
-          type="button"
-          class="home-question-filter__item"
-          :class="{ 'is-active': questionFilter === option.value }"
-          @click="selectQuestionFilter(option.value)"
-        >
-          {{ option.label }}
-        </button>
-      </nav>
     </div>
 
     <main class="home-xhs-main home-xhs-main--feed" :class="{ 'home-xhs-main--with-hot': isHomeFeed }">
@@ -142,6 +129,7 @@
             >
               <el-card
                 class="note-card note-card--masonry"
+                :class="{ 'note-card--question': isQuestionArticle(entry.article) }"
                 :body-style="{ padding: '0px' }"
                 shadow="hover"
                 @click="openArticle(entry, $event)"
@@ -170,11 +158,19 @@
                 <div class="note-info">
                   <div
                     v-if="isQuestionArticle(entry.article)"
-                    class="question-card-stamp"
-                    :class="questionStatusClass(entry.article?.questionStatus)"
+                    class="question-card-meta"
                   >
-                    <span class="question-card-stamp__dot" />
-                    {{ questionStatusLabel(entry.article?.questionStatus) }}
+                    <span class="question-card-kind">
+                      <el-icon><ChatDotRound /></el-icon>
+                      问答
+                    </span>
+                    <span
+                      class="question-card-status"
+                      :class="questionStatusClass(entry.article?.questionStatus)"
+                    >
+                      <span class="question-card-status__dot" />
+                      {{ questionStatusLabel(entry.article?.questionStatus) }}
+                    </span>
                   </div>
                   <h3 class="note-title">{{ entry.article?.title }}</h3>
                   <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
@@ -191,7 +187,11 @@
                       <span class="nickname">{{ entry.user?.nickname }}</span>
                       <FollowingBadge :from-following="!!entry.fromFollowing" />
                     </div>
-                    <div class="likes">
+                    <div v-if="isQuestionArticle(entry.article)" class="question-answer-count">
+                      <el-icon><ChatDotRound /></el-icon>
+                      <span>{{ entry.article?.replyCount || 0 }} 回答</span>
+                    </div>
+                    <div v-else class="likes">
                       <LikeCountIcon />
                       <span>{{ entry.article?.likeCount }}</span>
                     </div>
@@ -305,7 +305,7 @@
 
       <el-empty
         v-if="!loading && !feedError && !showRecommendationInterestMask && feedList.length === 0"
-        :description="questionFilter === QUESTION_FILTER.ALL ? '这里还没有笔记哦' : '暂时没有符合条件的问答'"
+        description="这里还没有帖子哦"
       />
     </main>
 

@@ -9,13 +9,6 @@ export const QUESTION_STATUS = Object.freeze({
   CLOSED: 2,
 })
 
-export const QUESTION_FILTER = Object.freeze({
-  ALL: 'all',
-  QUESTION: 'question',
-  WAITING: 'waiting',
-  RESOLVED: 'resolved',
-})
-
 export function isQuestionArticle(article) {
   return Number(article?.articleType) === ARTICLE_TYPE.QUESTION
 }
@@ -32,23 +25,4 @@ export function questionStatusClass(status) {
   if (value === QUESTION_STATUS.RESOLVED) return 'is-resolved'
   if (value === QUESTION_STATUS.CLOSED) return 'is-closed'
   return 'is-waiting'
-}
-
-export function questionFilterParams(filter) {
-  if (filter === QUESTION_FILTER.QUESTION) {
-    return { articleType: ARTICLE_TYPE.QUESTION }
-  }
-  if (filter === QUESTION_FILTER.WAITING) {
-    return {
-      articleType: ARTICLE_TYPE.QUESTION,
-      questionStatus: QUESTION_STATUS.WAITING,
-    }
-  }
-  if (filter === QUESTION_FILTER.RESOLVED) {
-    return {
-      articleType: ARTICLE_TYPE.QUESTION,
-      questionStatus: QUESTION_STATUS.RESOLVED,
-    }
-  }
-  return {}
 }

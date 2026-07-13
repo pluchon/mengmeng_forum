@@ -261,4 +261,4 @@
 <script setup src="./ArticleCreate.js"></script>
 
 <style scoped src="@/assets/styles/editor.css"></style>
-<style scoped lang="scss" src="./ArticleCreate.scss"></style>
+<style lang="scss" src="./ArticleCreate.scss"></style>

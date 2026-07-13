@@ -31,10 +31,6 @@ import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { useMascotUiStore } from '@/stores/mascotUi'
 import { DEFAULT_AVATAR } from '@/utils/constants'
-import {
-  QUESTION_FILTER,
-  questionFilterParams,
-} from '@/utils/articleQuestion'
 import { ElMessage } from 'element-plus'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
 import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
@@ -69,7 +65,6 @@ export function useHome() {
   const total = ref(0)
   const feedError = ref('')
   const feedForbidden = ref(false)
-  const questionFilter = ref(QUESTION_FILTER.ALL)
   /** 首页右侧悬浮热帖榜数据（保留原热度排序，不再占用左侧导航） */
   const homeHotList = ref([])
   const homeHotTotal = ref(0)
@@ -138,7 +133,6 @@ export function useHome() {
 
   /** 首页承载分类导航；推荐与热帖榜保持内容流聚焦。 */
   const showCategoryNavigator = computed(() => isHomeFeed.value)
-  const showQuestionFilters = computed(() => isHomeFeed.value)
 
   const effectiveVipTier = computed(() => {
     const t = Number(userStore.vipTier) || 0
@@ -358,13 +352,9 @@ export function useHome() {
     feedError.value = ''
     feedForbidden.value = false
     try {
-      const params = {
-        pageNum: pageNum.value,
-        pageSize: pageSize.value,
-        ...questionFilterParams(questionFilter.value),
-      }
+      const params = { pageNum: pageNum.value, pageSize: pageSize.value }
       const res = isRecommendationFeed.value
-        ? await getRecommendationFeed({ pageNum: params.pageNum, pageSize: params.pageSize })
+        ? await getRecommendationFeed(params)
         : await getArticleList({ ...params, boardId: currentBoardId.value || 0 })
       if (res.code === 0) {
         articleList.value = res.data?.records || []
@@ -488,13 +478,6 @@ export function useHome() {
     currentBoardId.value = normalizedBoardId
     fetchArticles(1)
     void fetchHomeHotList()
-  }
-
-  function selectQuestionFilter(filter) {
-    if (!Object.values(QUESTION_FILTER).includes(filter)) return
-    if (questionFilter.value === filter) return
-    questionFilter.value = filter
-    fetchArticles(1)
   }
 
   function toggleSearchTargetMode(ev) {
@@ -659,7 +642,6 @@ export function useHome() {
     pageSize,
     placeholderMinHeight,
     pointsBalance,
-    questionFilter,
     recommendationDialogVisible,
     recommendationDraftBoardIds,
     recommendationPreferenceLoaded,
@@ -671,9 +653,7 @@ export function useHome() {
     sidebarMenuActive,
     selectCategoryMenu,
     selectHomeBoard,
-    selectQuestionFilter,
     showCategoryNavigator,
-    showQuestionFilters,
     showAnnouncement,
     showCheckinHomeStrip,
     showRecommendationInterestMask,

@@ -977,45 +977,6 @@
   scrollbar-width: none;
 }
 
-.home-question-filter {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 38px;
-  padding: 5px 10px 0;
-}
-
-.home-question-filter__label {
-  margin-right: 4px;
-  color: #9a6d73;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-}
-
-.home-question-filter__item {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 6px 11px;
-  background: transparent;
-  color: #737985;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
-}
-
-.home-question-filter__item:hover {
-  color: #d13d58;
-  background: rgba(255, 76, 105, 0.07);
-}
-
-.home-question-filter__item.is-active {
-  color: #b72543;
-  background: #fff4f5;
-  border-color: rgba(218, 65, 91, 0.16);
-}
-
 .home-discovery-all,
 .home-discovery-category-trigger {
   border: none;
@@ -1153,21 +1114,6 @@
 
 :root[data-theme='dark'] .home-discovery-board-empty {
   color: #8da0bd;
-}
-
-:root[data-theme='dark'] .home-question-filter__label {
-  color: #aebbd0;
-}
-
-:root[data-theme='dark'] .home-question-filter__item {
-  color: #9cacc5;
-}
-
-:root[data-theme='dark'] .home-question-filter__item:hover,
-:root[data-theme='dark'] .home-question-filter__item.is-active {
-  color: #ffd9df;
-  background: rgba(248, 113, 135, 0.12);
-  border-color: rgba(248, 113, 135, 0.2);
 }
 
 @media (max-width: 640px) {
@@ -1918,6 +1864,11 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
 }
 
+.note-card--question {
+  border: 1px solid rgba(212, 61, 91, 0.18) !important;
+  box-shadow: 0 8px 24px rgba(117, 39, 56, 0.07);
+}
+
 .note-cover {
   width: 100%;
   aspect-ratio: 3/4;
@@ -1969,56 +1920,79 @@
   padding: 12px;
 }
 
-.question-card-stamp {
-  display: inline-flex;
+.question-card-meta {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  width: fit-content;
-  margin-bottom: 7px;
-  border-radius: 999px;
-  padding: 4px 8px;
-  color: #b42342;
-  background: #fff0f2;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
 }
 
-.question-card-stamp__dot {
+.question-card-kind,
+.question-card-status {
+  display: inline-flex;
+  align-items: center;
+}
+
+.question-card-kind {
+  gap: 4px;
+  border-radius: 7px;
+  padding: 4px 7px;
+  color: #a52a45;
+  background: #fff0f3;
+}
+
+.question-card-kind .el-icon {
+  font-size: 12px;
+}
+
+.question-card-status {
+  gap: 5px;
+  color: #b45309;
+}
+
+.question-card-status__dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 3px rgba(218, 65, 91, 0.1);
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.09);
 }
 
-.question-card-stamp.is-resolved {
+.question-card-status.is-resolved {
   color: #197246;
-  background: #ecf8f1;
 }
 
-.question-card-stamp.is-closed {
+.question-card-status.is-closed {
   color: #687080;
-  background: #f0f2f5;
 }
 
 :root[data-theme='dark'] .note-info {
   background: rgba(17, 24, 39, 0.92);
 }
 
-:root[data-theme='dark'] .question-card-stamp {
-  color: #ffb3bf;
+:root[data-theme='dark'] .note-card--question {
+  border-color: rgba(251, 113, 133, 0.26) !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme='dark'] .question-card-kind {
+  color: #ffc0cb;
   background: rgba(244, 63, 94, 0.14);
 }
 
-:root[data-theme='dark'] .question-card-stamp.is-resolved {
-  color: #8ce0b2;
-  background: rgba(34, 197, 94, 0.12);
+:root[data-theme='dark'] .question-card-status {
+  color: #f8c07a;
 }
 
-:root[data-theme='dark'] .question-card-stamp.is-closed {
+:root[data-theme='dark'] .question-card-status.is-resolved {
+  color: #8ce0b2;
+}
+
+:root[data-theme='dark'] .question-card-status.is-closed {
   color: #aeb8c8;
-  background: rgba(148, 163, 184, 0.12);
 }
 
 .note-title {
@@ -2063,6 +2037,21 @@
   gap: 4px;
   font-size: 12px;
   color: #999;
+}
+
+.question-answer-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: #9f3b52;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+:root[data-theme='dark'] .question-answer-count {
+  color: #f3a9b8;
 }
 
 /* 瀑布流封面：须放在 .note-cover 之后，避免 aspect-ratio:3/4 再次锁死高度 */
