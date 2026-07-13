@@ -37,6 +37,7 @@ import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
 import userSearchIconUrl from '@/assets/svg/用户.svg?url'
 
 const CHECKIN_STRIP_DISMISS_LS = 'luntan_checkin_home_strip_dismissed'
+const HOME_HOT_COLLAPSED_LS = 'luntan_home_hot_collapsed'
 const AI_SEARCH_LS = 'luntan_home_ai_search'
 const SEARCH_TARGET_LS = 'luntan_search_target'
 
@@ -76,6 +77,13 @@ export function useHome() {
   const recommendationDialogVisible = ref(false)
   const recommendationDraftBoardIds = ref([])
   const recommendationSaving = ref(false)
+
+  try {
+    homeHotCollapsed.value = typeof localStorage !== 'undefined'
+      && localStorage.getItem(HOME_HOT_COLLAPSED_LS) === '1'
+  } catch {
+    homeHotCollapsed.value = false
+  }
 
   /** 0 = 首页全站流；正数 = 首页顶部导航中选中的分类。 */
   const activeCategoryId = ref(0)
@@ -317,6 +325,11 @@ export function useHome() {
 
   function toggleHomeHotCollapsed() {
     homeHotCollapsed.value = !homeHotCollapsed.value
+    try {
+      localStorage.setItem(HOME_HOT_COLLAPSED_LS, homeHotCollapsed.value ? '1' : '0')
+    } catch {
+      /* 浏览器禁用本地存储时仅保留当前页面状态 */
+    }
   }
 
   const homeFeedInitialized = ref(false)
@@ -431,6 +444,8 @@ export function useHome() {
       recommendationDialogVisible.value = false
       ElMessage.success('推荐兴趣已更新')
       if (isRecommendationFeed.value) await fetchArticles(1)
+    } catch {
+      /* 请求层已经统一展示错误提示，避免未处理的 Promise 继续冒泡 */
     } finally {
       recommendationSaving.value = false
     }
