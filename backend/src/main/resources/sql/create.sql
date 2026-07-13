@@ -143,6 +143,9 @@ CREATE TABLE `article` (
                            `media_type` tinyint NOT NULL DEFAULT 0 COMMENT '帖子媒体类型: 0图片相册 1视频(单个)',
                            `video_url` varchar(500) DEFAULT NULL COMMENT '视频URL(仅 media_type=1 时有效, OSS: forum_vedio/article_vedio/)',
                            `content_type` tinyint NOT NULL DEFAULT 0 COMMENT '内容类型: 0富文本 1Markdown',
+                           `article_type` tinyint NOT NULL DEFAULT 0 COMMENT '帖子业务类型: 0普通帖 1问答帖',
+                           `question_status` tinyint DEFAULT NULL COMMENT '问答状态: 0待解决 1已解决 2已关闭; 普通帖为空',
+                           `accepted_reply_id` bigint DEFAULT NULL COMMENT '最佳答案对应的一级回答ID',
                            `favorite_count` int NOT NULL DEFAULT 0 COMMENT '收藏数(被加入收藏夹的总次数, 跨用户去重为 1)',
                            `sub_reply_count` int NOT NULL DEFAULT 0 COMMENT '楼中楼回复数(独立于 reply_count, 楼层数仍只算一级回复)',
                            `state` tinyint NOT NULL DEFAULT 0 COMMENT '审核状态: 0正常, 1禁用',
@@ -158,7 +161,8 @@ CREATE TABLE `article` (
                            `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                            `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                            PRIMARY KEY (`id`),
-                           INDEX `idx_audit_pending` (`status`, `audit_submitted_at`)
+                           INDEX `idx_audit_pending` (`status`, `audit_submitted_at`),
+                           INDEX `idx_article_question_filter` (`article_type`, `question_status`, `status`, `delete_state`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='帖子表';
 
 -- ----------------------------
