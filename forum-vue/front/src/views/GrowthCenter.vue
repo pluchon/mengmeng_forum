@@ -70,14 +70,14 @@
 
                   <div class="growth-card-copy">
                     <h3>{{ item.title }}</h3>
+                  </div>
+
+                  <div class="growth-card-footer">
                     <div class="growth-card-requirement">
                       <span><b>{{ item.questionCount }}</b> 题</span>
                       <i></i>
                       <span><b>{{ item.passingScore }}</b> 分通过</span>
                     </div>
-                  </div>
-
-                  <div class="growth-card-footer">
                     <button
                       type="button"
                       :disabled="item.status === 'REWARDED'"
