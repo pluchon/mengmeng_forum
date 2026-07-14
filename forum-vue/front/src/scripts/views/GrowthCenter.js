@@ -75,6 +75,7 @@ export function useGrowthCenter() {
         title: `Lv.${level} · ${item.name}`,
         requirement: level === 1 ? '成长起点' : `累计 ${item.threshold} XP`,
         status: level === currentLevel ? 'current' : level < currentLevel ? 'complete' : 'upcoming',
+        achieved: level <= currentLevel,
       }
     })
   })

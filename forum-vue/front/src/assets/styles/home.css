@@ -1668,6 +1668,10 @@
   transition: transform 0.18s ease, background 0.18s ease;
 }
 
+.home-hot-collapsed-button.is-checkin-visible {
+  top: calc(var(--home-top-row-h, 56px) + 212px);
+}
+
 .home-hot-collapsed-button:hover {
   background: #fff5f4;
   transform: scale(1.06);
@@ -1748,6 +1752,10 @@
 
   .home-hot-collapsed-button {
     top: calc(var(--home-top-row-h, 56px) + 88px);
+  }
+
+  .home-hot-collapsed-button.is-checkin-visible {
+    top: calc(var(--home-top-row-h, 56px) + 196px);
   }
 }
 
