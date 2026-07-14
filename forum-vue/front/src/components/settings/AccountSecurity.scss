@@ -1,0 +1,46 @@
+.personalization-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.interest-edit-button {
+  width: 34px;
+  height: 34px;
+  border-color: #eceef2;
+  background: #f7f8fa;
+  color: #6b7280;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+
+.interest-edit-button:hover,
+.interest-edit-button:focus-visible {
+  border-color: rgba(255, 36, 66, .35);
+  background: #fff1f3;
+  color: #ff2442;
+  transform: translateY(-1px);
+}
+
+.settings-interest-editor {
+  min-height: 180px;
+}
+
+:global(:root[data-theme='dark']) .interest-edit-button {
+  border-color: rgba(148, 163, 184, .2);
+  background: rgba(30, 41, 59, .72);
+  color: #c8d3e3;
+}
+
+:global(:root[data-theme='dark']) .interest-edit-button:hover,
+:global(:root[data-theme='dark']) .interest-edit-button:focus-visible {
+  border-color: rgba(255, 111, 134, .35);
+  background: rgba(255, 111, 134, .12);
+  color: #ff9aaa;
+}
+
+@media (max-width: 640px) {
+  .personalization-control {
+    gap: 8px;
+  }
+}

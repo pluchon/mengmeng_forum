@@ -269,7 +269,14 @@
           @current-change="fetchHomeHotList"
         />
         </aside>
-        <button v-else-if="isHomeFeed" type="button" class="home-hot-collapsed-button" aria-label="展开热帖榜" @click="toggleHomeHotCollapsed">
+        <button
+          v-else-if="isHomeFeed"
+          type="button"
+          class="home-hot-collapsed-button"
+          :class="{ 'is-checkin-visible': showCheckinHomeStrip }"
+          aria-label="展开热帖榜"
+          @click="toggleHomeHotCollapsed"
+        >
           <el-icon><TrendCharts /></el-icon>
         </button>
       </transition>

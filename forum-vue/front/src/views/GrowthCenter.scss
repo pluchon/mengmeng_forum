@@ -113,7 +113,7 @@
   grid-template-columns: minmax(0, 1fr) 310px;
   align-items: stretch;
   gap: 24px;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 
 .growth-challenge-section {
@@ -740,7 +740,7 @@
 }
 
 .growth-record-card {
-  margin-top: 22px;
+  margin-top: 16px;
   padding: 20px 22px;
   border: 1px solid var(--growth-line);
   border-radius: 18px;
@@ -900,34 +900,95 @@
 
 .growth-level-dialog-list {
   display: grid;
-  gap: 9px;
+  gap: 10px;
+}
+
+.growth-level-dialog-title {
+  margin: 0;
+  color: var(--growth-ink);
+  font-size: 21px;
+  font-weight: 850;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .growth-level-dialog-list article {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
-  gap: 14px;
-  padding: 12px 14px;
+  grid-template-columns: 76px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 16px;
+  min-height: 78px;
+  padding: 13px 16px;
   border: 1px solid #eee2e3;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #fffafa, #fcf8f8);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.growth-level-dialog-list article.is-achieved {
+  border-color: #c9e8ce;
+  background: linear-gradient(110deg, #effaf1, #f8fcf8);
+}
+
+.growth-level-dialog-badge {
+  display: grid;
+  min-height: 38px;
+  padding: 0 10px;
+  place-items: center;
+  border: 1px solid rgba(187, 0, 40, .12);
   border-radius: 12px;
-  background: #fcf9f9;
-}
-
-.growth-level-dialog-list strong {
+  background: var(--growth-primary-soft);
   color: var(--growth-primary-dark);
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: .02em;
 }
 
-.growth-level-dialog-list span {
+.growth-level-dialog-list article.is-achieved .growth-level-dialog-badge {
+  border-color: rgba(27, 109, 36, .14);
+  background: #dff3e2;
+  color: var(--growth-green);
+}
+
+.growth-level-dialog-copy {
+  min-width: 0;
+}
+
+.growth-level-dialog-copy strong,
+.growth-level-dialog-copy span,
+.growth-level-dialog-copy p {
+  display: block;
+}
+
+.growth-level-dialog-copy strong {
   color: var(--growth-ink);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.growth-level-dialog-copy span {
+  margin-top: 3px;
+  color: var(--growth-primary-dark);
   font-size: 13px;
   font-weight: 700;
 }
 
-.growth-level-dialog-list p {
+.growth-level-dialog-copy p {
   margin: 4px 0 0;
   color: var(--growth-muted);
   font-size: 12px;
+}
+
+.growth-level-dialog-achieved {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d8f2dd;
+  color: var(--growth-green);
+  font-size: 18px;
+  font-weight: 900;
 }
 
 :root[data-theme='dark'] .growth-center {
@@ -1081,8 +1142,20 @@
   background: #172338;
 }
 
-:root[data-theme='dark'] .growth-level-dialog-list span {
+:root[data-theme='dark'] .growth-level-dialog-list article.is-achieved {
+  border-color: rgba(117, 212, 134, .28);
+  background: linear-gradient(110deg, rgba(35, 82, 55, .72), rgba(20, 50, 42, .72));
+}
+
+:root[data-theme='dark'] .growth-level-dialog-copy strong {
   color: #edf3ff;
+}
+
+:root[data-theme='dark'] .growth-level-dialog-list article.is-achieved .growth-level-dialog-badge,
+:root[data-theme='dark'] .growth-level-dialog-achieved {
+  border-color: rgba(117, 212, 134, .22);
+  background: rgba(117, 212, 134, .16);
+  color: #8ce19a;
 }
 
 @media (max-width: 980px) {
