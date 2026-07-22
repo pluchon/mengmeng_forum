@@ -45,34 +45,32 @@
 ## 当前社区能力
 
 ```mermaid
-flowchart TB
+flowchart TD
   U[用户] --> C[内容社区]
-  U --> S[社交互动]
-  U --> G[成长与权益]
-  U --> A[智能服务]
-  U --> P[游戏中心]
-
   C --> C1[图文与视频发帖]
-  C --> C2[标签、评论楼中楼、问答采纳、弹幕]
-  C --> C3[热帖榜与个性化推荐]
+  C1 --> C2[标签、评论楼中楼、问答采纳、弹幕]
+  C2 --> C3[热帖榜与个性化推荐]
 
+  C3 --> S[社交互动]
   S --> S1[私信、群聊、群语音]
-  S --> S2[关注、收藏夹、表情包商城]
-  S --> S3[匿名漂流瓶与举报]
+  S1 --> S2[关注、收藏夹、表情包商城]
+  S2 --> S3[匿名漂流瓶与举报]
 
+  S3 --> G[成长与权益]
   G --> G1[每日签到与积分钱包]
-  G --> G2[积分抽奖与奖池保底]
-  G --> G3[成长中心、挑战、会员权益]
+  G1 --> G2[积分抽奖与奖池保底]
+  G2 --> G3[成长中心、挑战、会员权益]
 
+  G3 --> A[智能服务]
   A --> A1[AI 审核与写作]
-  A --> A2[AI 搜索与语义检索]
-  A --> A3[看板娘对话与会话管理]
+  A1 --> A2[AI 搜索与语义检索]
+  A2 --> A3[看板娘对话与会话管理]
 
+  A3 --> P[游戏中心]
   P --> P1[五子棋]
-  P --> P2[井字棋]
-  P --> P3[俄罗斯方块]
+  P1 --> P2[井字棋]
+  P2 --> P3[俄罗斯方块]
 ```
-
 | 模块 | 已提供能力 | 关键体验 |
 | --- | --- | --- |
 | 内容 | 图文/视频发帖、标签、评论、楼中楼、问答采纳、视频弹幕 | 内容审核后发布，支持互动与二次创作 |
@@ -101,7 +99,7 @@ flowchart TB
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}}}%%
-flowchart LR
+flowchart TD
   U[用户端 Web] --> N[Nginx]
   N --> J[Java 后端]
   N --> F[FFmpeg]
@@ -126,7 +124,7 @@ flowchart LR
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'curve':'basis', 'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
+flowchart TD
   FE[前端] --> BE[Java后端]
   BE --> AUTH[鉴权/配额]
   AUTH --> MASCOT_J[MascotService]
@@ -328,7 +326,7 @@ sequenceDiagram
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
-flowchart LR
+flowchart TD
   U[选择视频] --> FE[上传]
   FE --> J[Java]
   J --> S{≤200MB?}
@@ -394,7 +392,7 @@ flowchart TD
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25}}}%%
-flowchart LR
+flowchart TD
   A[用户A] --> J1[实例1]
   B[用户B的WS] --> J2[实例2]
   J1 --> DB[(MySQL)]
@@ -568,7 +566,7 @@ python main.py
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}, 'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
+flowchart TD
   Dev[开发者] --> FE[Vue:5173]
   FE --> BE[Java:10086]
   BE --> M[(MySQL)]
@@ -704,7 +702,7 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'11px'}, 'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
-flowchart LR
+flowchart TD
   Local[本地打包] --> Pack[package]
   Pack --> Upload[上传]
   Upload --> SQL[增量SQL]
@@ -864,5 +862,3 @@ luntan/
     load-dev-env.ps1       # 本地加载密钥到当前 PowerShell 会话
   luntan.code-workspace    # 多根工作区（可选）
 ```
-
-**Git 忽略要点**：`.env`、`.codex/`、`nginx/package/`、`nginx/dist/`、`target/`、`node_modules/`、`ssl/*.pem`、`scripts/dev-secrets.ps1`、本地 `ai-server/config.local.yaml` 等，见根目录 `.gitignore`。
