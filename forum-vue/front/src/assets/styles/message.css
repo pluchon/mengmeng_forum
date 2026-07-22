@@ -1134,7 +1134,8 @@
 }
 
 .mc-ncard--audit .mc-ncard-head {
-  display: contents;
+  display: contents !important;
+  margin: 0;
 }
 
 .mc-ncard--audit .mc-tag {
@@ -1144,6 +1145,9 @@
 
 .mc-ncard--audit .mc-ncard-body {
   grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin: 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1152,6 +1156,7 @@
 
 .mc-ncard--audit .mc-ncard-time {
   grid-column: 3;
+  grid-row: 1;
 }
 
 .mc-article-link {
