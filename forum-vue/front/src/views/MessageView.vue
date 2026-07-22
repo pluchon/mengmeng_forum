@@ -134,8 +134,8 @@
               </div>
             </div>
           </button>
-          <div v-if="activeTab === 'group' && groupListLoading" class="mc-list-empty">
-            <el-icon :size="40" color="#dcdfe6"><UserFilled /></el-icon>
+          <div v-if="activeTab === 'group' && groupListLoading" class="mc-list-empty mc-list-loading">
+            正在加载群聊
           </div>
           <div v-else-if="activeTab === 'group' && groupListError" class="mc-list-empty">
             <el-icon :size="40" color="#dcdfe6"><Warning /></el-icon>
@@ -748,6 +748,7 @@
                 v-for="msg in activeSystemMessages"
                 :key="msg.id"
                 class="mc-ncard"
+                :class="{ 'mc-ncard--audit': [1, 2, 3].includes(Number(msg.type)) }"
               >
                 <div class="mc-ncard-head">
                   <span :class="sysTagClass(msg.type)" class="mc-tag">{{ sysTagLabel(msg.type) }}</span>

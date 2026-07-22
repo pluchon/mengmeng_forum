@@ -1,5 +1,5 @@
 <template>
-  <div ref="pageRef" class="privacy-page shell-page-scroll">
+  <div ref="pageRef" class="privacy-page policy-page--light shell-page-scroll">
     <ParticleSea />
     <div class="privacy-container animate-fade-up">
       <main class="privacy-content">

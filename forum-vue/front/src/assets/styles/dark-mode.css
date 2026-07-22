@@ -2539,3 +2539,234 @@
   color: #9aa8bd !important;
   -webkit-text-fill-color: #9aa8bd !important;
 }
+
+/* 深色模式补齐：设置悬停、积分操作与公告中心。 */
+:root[data-theme='dark'] .red-settings-page .settings-nav .el-menu-item:hover {
+  background: #253249 !important;
+  color: #f8fbff !important;
+}
+
+:root[data-theme='dark'] .red-settings-page {
+  --settings-nav-hover-bg: #253249;
+  --settings-nav-hover-color: #f8fbff;
+}
+
+:root[data-theme='dark'] .points-wallet-page {
+  --points-control-bg: #1b2435;
+  --points-tabs-bg: #1b2435;
+  --points-control-border: rgba(148, 163, 184, 0.3);
+  --points-control-text: #c9d7eb;
+  --points-control-hover-bg: #263653;
+  --points-control-hover-border: #6084bb;
+  --points-control-hover-text: #f3f7ff;
+  --points-tab-active-bg: #355789;
+  --points-tab-active-text: #f8fbff;
+  --points-tab-active-shadow: none;
+  --points-month-nav-filter: brightness(0) invert(0.86);
+}
+
+:root[data-theme='dark'] .points-wallet-page :where(
+  .points-month-nav-btn,
+  .points-chart-type-tabs,
+  .points-chart-type-tab,
+  .points-log-more-btn
+) {
+  background: #1b2435 !important;
+  border-color: var(--dark-border-strong) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .points-wallet-page :where(
+  .points-month-nav-btn:hover,
+  .points-chart-type-tab:hover,
+  .points-log-more-btn:hover:not(:disabled)
+) {
+  background: #263653 !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .points-wallet-page .points-chart-type-tab.is-active {
+  background: #355789 !important;
+  color: #f8fbff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme='dark'] .points-wallet-page .points-month-nav-icon {
+  filter: brightness(0) invert(0.86) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog.el-dialog,
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .el-dialog__body,
+  .activity-center-header,
+  .activity-center-content
+) {
+  background: #121a2b !important;
+  color: var(--dark-text) !important;
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-list-scroll,
+  .activity-center-list-item
+) {
+  background: #182235 !important;
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-list-item:hover,
+  .activity-center-list-item.is-active
+) {
+  background: #24334e !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-title,
+  .activity-list-title,
+  .view-title,
+  .feature-desc,
+  .announcement-md
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-list-updated,
+  .view-subtitle,
+  .view-updated,
+  .activity-center-content--empty,
+  .announcement-loading,
+  .announcement-empty
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog .activity-center-close {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+/* 消息中心：语音、群聊弹窗、表情翻页和双方消息气泡。 */
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-voice-entry,
+  .mc-voice-answer,
+  .mc-voice-answer button,
+  .mc-dialog-action,
+  .mc-emoji-fav-pager-btn,
+  .mc-emoji-fav-pager-input,
+  .mc-emoji-pack-more
+) {
+  background: #1b2435 !important;
+  border-color: var(--dark-border-strong) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-voice-entry:hover,
+  .mc-dialog-action:hover:not(:disabled),
+  .mc-emoji-fav-pager-btn:hover:not(:disabled),
+  .mc-emoji-pack-more:hover
+) {
+  background: #263653 !important;
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-dialog-action--primary,
+:root[data-theme='dark'] .mc-dialog .mc-voice-entry.is-active {
+  background: #d4537e !important;
+  border-color: #d4537e !important;
+  color: #fff !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-voice-entry.is-waiting {
+  background: #3a2c1c !important;
+  border-color: #8d6a2e !important;
+  color: #ffe2a7 !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-bbl:not(.is-me):not(.is-recalled):not(.is-media),
+  .mc-bbl.is-me
+) {
+  color: #f3f7ff !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-bbl:not(.is-me):not(.is-recalled):not(.is-media) {
+  background: #253249 !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-bbl.is-me {
+  background: #54243a !important;
+  border-color: #9c496c !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-sender-name,
+  .mc-reply-quote,
+  .mc-group-system-tip,
+  .mc-ncard-body
+) {
+  color: var(--dark-text-muted) !important;
+}
+
+/* 漂流瓶路人回复和看板娘对话气泡。 */
+:root[data-theme='dark'] .drift-page :where(
+  .drift-bottle-content,
+  .drift-comment-content,
+  .drift-comment-author
+) {
+  color: #edf4ff !important;
+}
+
+:root[data-theme='dark'] .mascot-fs-dialog :where(
+  .mascot-bubble--ai,
+  .mascot-bubble--user
+) {
+  color: #f3f7ff !important;
+}
+
+:root[data-theme='dark'] .mascot-fs-dialog .mascot-bubble--ai {
+  background: #253249 !important;
+  border-color: #3b4b66 !important;
+}
+
+:root[data-theme='dark'] .mascot-fs-dialog .mascot-bubble--user {
+  background: #54243a !important;
+  border-color: #9c496c !important;
+}
+
+/* 法务页面固定采用浅色设计，不跟随全局主题变量。 */
+:root[data-theme='dark'] .policy-page--light {
+  color-scheme: light;
+  --primary-red: #ff2442;
+  background: #fff7f9 !important;
+  color: #1d2129 !important;
+}
+
+:root[data-theme='dark'] .policy-page--light .particle-hero {
+  background: radial-gradient(circle at 50% 40%, #fff5f8 0%, #ffeef2 55%, #fff7f9 100%) !important;
+}
+
+:root[data-theme='dark'] .policy-page--light :where(
+  .privacy-container,
+  .privacy-content,
+  .hero-section h1,
+  .section-title,
+  .section-body,
+  .section-body strong
+) {
+  color: #1d2129 !important;
+}
+
+:root[data-theme='dark'] .policy-page--light :where(
+  .hero-section p,
+  .section-body
+) {
+  color: #4e5969 !important;
+}
+
+:root[data-theme='dark'] .policy-page--light .policy-card {
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #1d2129 !important;
+}
