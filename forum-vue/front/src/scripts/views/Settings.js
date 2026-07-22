@@ -1,10 +1,11 @@
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Message, Phone, ArrowLeft } from '@element-plus/icons-vue'
+import { User, Lock, Message, Phone, ArrowLeft, Cpu } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { sendUpdatePwdCode, sendMailCode, sendSmsCode, updatePasswordByMail, updatePasswordBySms, verifyAndBindEmail, verifyAndBindPhone } from '@/api/settings'
 import BasicInfo from '@/components/settings/BasicInfo.vue'
 import AccountSecurity from '@/components/settings/AccountSecurity.vue'
+import MascotSettings from '@/components/settings/MascotSettings.vue'
 
 export function useSettings(captchaDialogRef) {
   const userStore = useUserStore()
@@ -176,8 +177,10 @@ export function useSettings(captchaDialogRef) {
     AccountSecurity,
     ArrowLeft,
     BasicInfo,
+    Cpu,
     ElMessage,
     Lock,
+    MascotSettings,
   Message,
   Phone,
   User,

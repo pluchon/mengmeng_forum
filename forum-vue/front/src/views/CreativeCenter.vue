@@ -2,10 +2,7 @@
   <div class="creative-center-page shell-page-scroll animate-fade-in" v-loading="loading">
     <div class="creative-center-inner">
       <header class="creative-center-header">
-        <div>
-          <h1 class="creative-center-title">创作中心</h1>
-          <p class="creative-center-desc">管理你的灵感与创作</p>
-        </div>
+        <h1 class="creative-center-title">创作中心</h1>
         <button type="button" class="creative-center-create-btn" @click="goCreatePost">
           <el-icon :size="14"><Plus /></el-icon>
           发表新帖
@@ -18,32 +15,40 @@
             <span class="creative-stat-label">总发帖数</span>
             <el-icon class="creative-stat-icon"><Document /></el-icon>
           </div>
-          <div class="creative-stat-value">{{ totalPosts }}</div>
-          <div class="creative-stat-sub">本月 +{{ monthNewPosts }}</div>
+          <div class="creative-stat-value-row">
+            <div class="creative-stat-value">{{ totalPosts }}</div>
+            <div class="creative-stat-sub">本月 +{{ monthNewPosts }}</div>
+          </div>
         </div>
         <div class="creative-stat-card">
           <div class="creative-stat-head">
             <span class="creative-stat-label">总点赞数</span>
             <el-icon class="creative-stat-icon"><Star /></el-icon>
           </div>
-          <div class="creative-stat-value creative-stat-value--pink">{{ totalLikes }}</div>
-          <div class="creative-stat-sub">本月 +{{ monthNewLikes }}</div>
+          <div class="creative-stat-value-row">
+            <div class="creative-stat-value creative-stat-value--pink">{{ totalLikes }}</div>
+            <div class="creative-stat-sub">本月 +{{ monthNewLikes }}</div>
+          </div>
         </div>
         <div class="creative-stat-card">
           <div class="creative-stat-head">
             <span class="creative-stat-label">总阅读数</span>
             <el-icon class="creative-stat-icon"><View /></el-icon>
           </div>
-          <div class="creative-stat-value creative-stat-value--blue">{{ totalReads }}</div>
-          <div class="creative-stat-sub">本月 +{{ monthNewReads }}</div>
+          <div class="creative-stat-value-row">
+            <div class="creative-stat-value creative-stat-value--blue">{{ totalReads }}</div>
+            <div class="creative-stat-sub">本月 +{{ monthNewReads }}</div>
+          </div>
         </div>
         <div class="creative-stat-card">
           <div class="creative-stat-head">
             <span class="creative-stat-label">粉丝数</span>
             <el-icon class="creative-stat-icon"><User /></el-icon>
           </div>
-          <div class="creative-stat-value">0</div>
-          <div class="creative-stat-sub">暂无新增</div>
+          <div class="creative-stat-value-row">
+            <div class="creative-stat-value">0</div>
+            <div class="creative-stat-sub">暂无新增</div>
+          </div>
         </div>
       </div>
 
@@ -98,13 +103,12 @@
 
         <template v-if="pagedArticles.length">
           <div v-for="row in pagedArticles" :key="row.article.id" class="creative-post-row">
-            <router-link
-              :to="postLink(row)"
+            <div
               class="creative-post-title"
               :class="postTitleClass(row)"
             >
               {{ postTitle(row) }}
-            </router-link>
+            </div>
             <div class="creative-post-status">
               <el-tooltip v-if="row.article.state === 1" content="已下架" placement="top">
                 <img
@@ -207,7 +211,6 @@ const {
   monthNewReads,
   pageNum,
   pagedArticles,
-  postLink,
   postTitle,
   postTitleClass,
   statusFilter,

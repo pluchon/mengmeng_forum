@@ -13,6 +13,7 @@ import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
+import org.example.forumdemo.entity.vo.game.TetrisPkLeaderboardVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkRecordVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkReplayVO;
 import org.example.forumdemo.mapper.GameTetrisPkMatchRecordMapper;
@@ -24,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,25 +88,41 @@ public class TetrisPkServiceImpl implements TetrisPkService {
     }
 
     @Override
-    public List<GameUserProfileVO> listLeaderboard(Integer pageSize) {
+    public PageResult<TetrisPkLeaderboardVO> listLeaderboard(Integer pageNum, Integer pageSize) {
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize == null ? 20 : pageSize);
-        Page<GameUserProfile> page = new Page<>(1, validPageSize);
-        LambdaQueryWrapper<GameUserProfile> wrapper = new LambdaQueryWrapper<GameUserProfile>()
+        List<GameUserProfile> profiles = gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
-                .orderByDesc(GameUserProfile::getScore)
-                .orderByDesc(GameUserProfile::getWinCount);
-        Page<GameUserProfile> result = gameUserProfileMapper.selectPage(page, wrapper);
-        List<Long> userIds = result.getRecords().stream().map(GameUserProfile::getUserId).toList();
+                .eq(GameUserProfile::getDeleteState, (byte) 0));
+        Map<Long, Integer> bestScores = loadBestScores();
+        profiles.sort(Comparator
+                .comparingInt(this::profileWinRate).reversed()
+                .thenComparing(
+                        profile -> bestScores.getOrDefault(profile.getUserId(), 0),
+                        Comparator.reverseOrder()
+                )
+                .thenComparing(GameUserProfile::getUserId));
+
+        int total = profiles.size();
+        long offset = (long) (validPageNum - 1) * validPageSize;
+        int fromIndex = offset >= total ? total : (int) offset;
+        int toIndex = Math.min(fromIndex + validPageSize, total);
+        List<GameUserProfile> pageProfiles = profiles.subList(fromIndex, toIndex);
+        List<Long> userIds = pageProfiles.stream().map(GameUserProfile::getUserId).toList();
         Map<Long, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
             userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
-        List<GameUserProfileVO> rows = new ArrayList<>(result.getRecords().size());
-        for (GameUserProfile profile : result.getRecords()) {
-            rows.add(GameConverter.toProfileVO(profile, userMap.get(profile.getUserId())));
+        List<TetrisPkLeaderboardVO> rows = new ArrayList<>(pageProfiles.size());
+        for (GameUserProfile profile : pageProfiles) {
+            rows.add(TetrisPkConverter.toLeaderboardVO(
+                    profile,
+                    userMap.get(profile.getUserId()),
+                    bestScores.getOrDefault(profile.getUserId(), 0)
+            ));
         }
-        return rows;
+        long pages = total == 0 ? 0 : (total + validPageSize - 1L) / validPageSize;
+        return new PageResult<>(rows, (long) total, validPageNum, validPageSize, pages, toIndex < total);
     }
 
     @Override
@@ -143,5 +161,37 @@ public class TetrisPkServiceImpl implements TetrisPkService {
             userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
         return userMap;
+    }
+
+    private Map<Long, Integer> loadBestScores() {
+        List<GameTetrisPkMatchRecord> records = gameTetrisPkMatchRecordMapper.selectList(
+                new LambdaQueryWrapper<GameTetrisPkMatchRecord>()
+                        .eq(GameTetrisPkMatchRecord::getDeleteState, (byte) 0)
+                        .select(
+                                GameTetrisPkMatchRecord::getPlayer1UserId,
+                                GameTetrisPkMatchRecord::getPlayer2UserId,
+                                GameTetrisPkMatchRecord::getPlayer1Score,
+                                GameTetrisPkMatchRecord::getPlayer2Score
+                        )
+        );
+        Map<Long, Integer> bestScores = new HashMap<>();
+        for (GameTetrisPkMatchRecord record : records) {
+            mergeBestScore(bestScores, record.getPlayer1UserId(), record.getPlayer1Score());
+            mergeBestScore(bestScores, record.getPlayer2UserId(), record.getPlayer2Score());
+        }
+        return bestScores;
+    }
+
+    private void mergeBestScore(Map<Long, Integer> bestScores, Long userId, Integer score) {
+        if (userId == null) {
+            return;
+        }
+        bestScores.merge(userId, score == null ? 0 : score, Math::max);
+    }
+
+    private int profileWinRate(GameUserProfile profile) {
+        int totalCount = profile.getTotalCount() == null ? 0 : profile.getTotalCount();
+        int winCount = profile.getWinCount() == null ? 0 : profile.getWinCount();
+        return totalCount <= 0 ? 0 : (int) Math.round(winCount * 100.0 / totalCount);
     }
 }

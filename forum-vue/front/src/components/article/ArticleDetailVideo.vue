@@ -32,7 +32,7 @@
     <div class="detail-video-player__controls">
       <button
         type="button"
-        class="detail-video-player__btn detail-video-player__btn--icon"
+        class="detail-video-player__btn detail-video-player__btn--icon detail-video-player__btn--play"
         aria-label="播放或暂停"
         @click="togglePlay"
       >

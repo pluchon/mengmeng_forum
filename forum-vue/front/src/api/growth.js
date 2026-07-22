@@ -6,7 +6,7 @@ export const getGrowthChallenges = (pageNum = 1, pageSize = 4) => request({
   method: 'get',
   params: { pageNum, pageSize },
 })
-export const getGrowthRecords = (pageNum = 1, pageSize = 5) => request({
+export const getGrowthRecords = (pageNum = 1, pageSize = 10) => request({
   url: '/growth/records',
   method: 'get',
   params: { pageNum, pageSize },

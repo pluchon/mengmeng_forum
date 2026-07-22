@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { isEmojiShopMediaUrl } from '@/utils/chatMedia'
-import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
+import CommentShopEmojiPopover from '@/components/article/CommentShopEmojiPopover.vue'
 
 const REPLY_MEDIA_TYPE_IMAGE = 1
 const REPLY_MEDIA_TYPE_SHOP_EMOJI = 2
@@ -33,20 +33,8 @@ function isImageItem(item) {
   return Number(item?.mediaType) === REPLY_MEDIA_TYPE_IMAGE && !isEmojiShopMediaUrl(item?.mediaUrl)
 }
 
-function isShopEmoji(item) {
-  return Number(item?.mediaType) === REPLY_MEDIA_TYPE_SHOP_EMOJI || isEmojiShopMediaUrl(item?.mediaUrl)
-}
-
-function onEmojiClick(item) {
-  if (isShopEmoji(item) && item?.shopId) {
-    emit('open-shop', Number(item.shopId))
-  }
-}
-
 defineExpose({
-  emojiPackIconUrl,
   imageIndexMap,
   imagePreviewUrls,
   isImageItem,
-  onEmojiClick,
 })

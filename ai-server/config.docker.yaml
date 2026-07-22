@@ -122,13 +122,8 @@ deepseek:
 
 huanapi:
   base_url: "https://www.huanapi.com"
-  gemini_key: ""
   image_key: ""
-  claude_key: ""
-  model_gemini_deep: "gemini-3.1-pro"
   model_image_premium: "gpt-image-2"
-  model_claude_haiku: "claude-haiku-4-5"
-  model_claude_sonnet: "claude-sonnet-4-6"
 
 tavily:
   enabled: true

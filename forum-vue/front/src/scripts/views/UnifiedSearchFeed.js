@@ -2,15 +2,17 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { searchArticles, searchUsers } from '@/api/search'
+import { followUser, unfollowUser } from '@/api/userFollow'
+import SearchArticleCard from '@/components/search/SearchArticleCard.vue'
+import SearchUserRow from '@/components/search/SearchUserRow.vue'
 import { useHomeShellContext } from '@/composables/useHomeShell'
 import { useHomeMasonry } from '@/composables/useHomeMasonry'
-import { DEFAULT_AVATAR } from '@/utils/constants'
+import { ensureLoggedIn } from '@/utils/loginPrompt'
 
-export function useUnifiedSearchFeed() {
+function useUnifiedSearchFeed() {
   const route = useRoute()
   const router = useRouter()
   const shell = useHomeShellContext()
-  const defaultAvatar = DEFAULT_AVATAR
 
   const searchTab = ref('article') // article | user
   const loading = ref(false)
@@ -21,6 +23,7 @@ export function useUnifiedSearchFeed() {
   const pageNum = ref(1)
   const pageSize = ref(12)
   const total = ref(0)
+  const followSavingIds = ref(new Set())
 
   const preferAiRag = computed(() => shell.aiSearchMode.value)
 
@@ -29,22 +32,6 @@ export function useUnifiedSearchFeed() {
   const feedList = computed(() =>
     searchTab.value === 'article' ? articleRecords.value : [],
   )
-
-  const bannerText = computed(() => {
-    if (!hasSearched.value || !keyword.value) return ''
-    const mode = preferAiRag.value ? 'AI 语义' : '普通'
-    if (searchTab.value === 'user') {
-      if (source.value === 'empty') return `「${keyword.value}」· 未检索到对应的用户`
-      if (source.value === 'rag') return `「${keyword.value}」· ${mode} · 用户`
-      if (source.value === 'db') return `「${keyword.value}」· 昵称/用户名匹配`
-      return `「${keyword.value}」· ${mode} · 用户`
-    }
-    if (source.value === 'rag') return `「${keyword.value}」· ${mode} · 帖子`
-    if (source.value === 'db') return `「${keyword.value}」· 标题/正文匹配`
-      if (source.value === 'inv') return `「${keyword.value}」· 倒排召回`
-    if (source.value === 'empty') return `「${keyword.value}」· 未检索到对应的帖子`
-    return ''
-  })
 
   const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
     columnWidth: 220,
@@ -108,18 +95,49 @@ export function useUnifiedSearchFeed() {
     if (keyword.value) runSearch(1)
   }
 
-  function coverImageUrl(item) {
-    return item.article?.coverImg || ''
+  function openArticle(entry) {
+    const articleId = entry?.article?.id
+    if (!articleId) return
+    router.push(`/article/${articleId}`)
   }
 
-  function placeholderMinHeight(seed) {
-    const n = Number(seed) || 0
-    return `${160 + (n % 5) * 36}px`
+  function openUser(user) {
+    if (!user?.id) return
+    router.push(`/profile/${user.id}`)
   }
 
-  function getRandomPastel() {
-    const hues = [0, 200, 330, 260, 160]
-    return `hsl(${hues[Math.floor(Math.random() * hues.length)]}, 70%, 92%)`
+  function isFollowSaving(userId) {
+    return followSavingIds.value.has(Number(userId))
+  }
+
+  function setFollowSaving(userId, saving) {
+    const next = new Set(followSavingIds.value)
+    const normalizedId = Number(userId)
+    if (saving) next.add(normalizedId)
+    else next.delete(normalizedId)
+    followSavingIds.value = next
+  }
+
+  async function toggleUserFollow(user) {
+    if (!user?.id || isFollowSaving(user.id)) return
+    if (!(await ensureLoggedIn('关注用户需要登录'))) return
+    if (Number(user.id) === Number(shell.userStore.id)) return
+
+    const wasFollowing = Boolean(user.isFollowing)
+    setFollowSaving(user.id, true)
+    try {
+      const res = await (wasFollowing ? unfollowUser(user.id) : followUser(user.id))
+      if (res.code !== 0) {
+        ElMessage.error(res.message || '操作失败')
+        return
+      }
+      user.isFollowing = !wasFollowing
+      const currentFollowers = Number(user.followerCount) || 0
+      user.followerCount = Math.max(0, currentFollowers + (wasFollowing ? -1 : 1))
+      ElMessage.success(wasFollowing ? '已取消关注' : '关注成功')
+    } finally {
+      setFollowSaving(user.id, false)
+    }
   }
 
   watch(
@@ -156,25 +174,46 @@ export function useUnifiedSearchFeed() {
   })
 
   return {
-    bannerText,
-    defaultAvatar,
     feedList,
-    getRandomPastel,
-    coverImageUrl,
     hasSearched,
+    isFollowSaving,
     keyword,
     loading,
     masonryColumns,
     masonryRef,
+    openArticle,
+    openUser,
     pageNum,
     pageSize,
-    placeholderMinHeight,
     preferAiRag,
     runSearch,
     searchTab,
     setSearchTab,
     source,
     total,
+    toggleUserFollow,
+    userStore: shell.userStore,
     userRecords,
   }
 }
+
+const {
+  feedList,
+  hasSearched,
+  isFollowSaving,
+  keyword,
+  loading,
+  masonryColumns,
+  masonryRef,
+  openArticle,
+  openUser,
+  pageNum,
+  pageSize,
+  runSearch,
+  searchTab,
+  setSearchTab,
+  total,
+  toggleUserFollow,
+  userRecords,
+  userStore,
+} = useUnifiedSearchFeed()

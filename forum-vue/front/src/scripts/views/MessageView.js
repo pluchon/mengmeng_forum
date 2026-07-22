@@ -1844,13 +1844,25 @@ const GROUP_NOTIFY_OPTIONS = [
     const gid = currentGroupSession.value?.groupId
     const mid = coerceMessageId(msgRow?.message?.id)
     if (!gid || !Number.isFinite(mid) || mid <= 0 || msgRow?.isOwner) return
-    const { value } = await ElMessageBox.prompt('请填写举报原因', '举报群消息', {
-      confirmButtonText: '提交',
-      cancelButtonText: '取消',
-      inputType: 'textarea',
-      inputPattern: /\S+/,
-      inputErrorMessage: '举报原因不能为空',
-    })
+    let value
+    try {
+      const result = await ElMessageBox.prompt('', '举报群消息', {
+        confirmButtonText: '提交',
+        cancelButtonText: '取消',
+        customClass: 'group-message-report-box',
+        inputType: 'textarea',
+        inputPlaceholder: '举报原因',
+        inputValidator: (input) => {
+          const reason = String(input || '').trim()
+          if (!reason) return '举报原因不能为空'
+          if (reason.length > 200) return '举报原因不能超过 200 个字'
+          return true
+        },
+      })
+      value = result.value
+    } catch {
+      return
+    }
     await reportGroupChatMessage(gid, {
       messageId: mid,
       reason: String(value || '').trim(),

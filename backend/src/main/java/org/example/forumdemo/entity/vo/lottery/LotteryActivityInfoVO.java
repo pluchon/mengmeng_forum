@@ -31,12 +31,6 @@ public class LotteryActivityInfoVO {
     /** 硬保底阈值（与 lottery_probability_explainer 一致：累计达到此次数则下一次必出神秘大奖档） */
     private Integer hardPityThreshold;
 
-    /** 近期中奖热度（全站当前活动维度） */
-    private List<LotteryPrizeHeatVO> prizeWinHeat;
-
     /** 当前用户近期抽奖摘要（横向滚动展示） */
     private List<LotteryRecentDrawVO> recentDraws;
-
-    /** 抽奖页彩蛋「点我看看」是否已领取过积分 */
-    private Boolean lotterySurpriseClaimed;
 }

@@ -36,8 +36,3 @@ export function lotteryDraw(times, activityId, requestId) {
   }
   return request({ url: '/lottery/draw', method: 'post', data })
 }
-
-/** 抽奖页「点我看看」彩蛋积分（服务端幂等） */
-export function claimLotterySurpriseBonus() {
-  return request({ url: '/lottery/surprise-bonus', method: 'post' })
-}

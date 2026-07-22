@@ -14,12 +14,12 @@ export function deleteFavoriteFolder(folderId) {
   return request({ url: `/favorite/folder/${folderId}`, method: 'delete' })
 }
 
-export function getMyFavoriteFolders() {
-  return request({ url: '/favorite/folder/myList', method: 'get' })
+export function getMyFavoriteFolders(params = {}) {
+  return request({ url: '/favorite/folder/myList', method: 'get', params })
 }
 
-export function getUserFavoriteFolders(userId) {
-  return request({ url: '/favorite/folder/userList', method: 'get', params: { userId } })
+export function getUserFavoriteFolders(userId, params = {}) {
+  return request({ url: '/favorite/folder/userList', method: 'get', params: { userId, ...params } })
 }
 
 export function getFavoriteFolderArticles(folderId, params) {
@@ -39,4 +39,3 @@ export function cancelArticleFavorite(articleId) {
 export function moveArticleFavorite(data) {
   return request({ url: '/favorite/article/move', method: 'put', data })
 }
-

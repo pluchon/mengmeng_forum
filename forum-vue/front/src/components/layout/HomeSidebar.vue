@@ -27,6 +27,16 @@
       </div>
 
       <nav class="home-sidebar-nav home-sidebar-nav--quick" aria-label="快速入口">
+        <button type="button" class="home-sidebar-link" @click="showAnnouncement">
+          <el-icon><Bell /></el-icon>
+          <span>公告与活动</span>
+        </button>
+        <button type="button" class="home-sidebar-link" @click="openMessageCenter">
+          <el-badge :value="msgUnread" :hidden="msgUnread === 0" class="home-sidebar-message-badge">
+            <el-icon><Message /></el-icon>
+          </el-badge>
+          <span>消息中心</span>
+        </button>
         <button type="button" class="home-sidebar-link" @click="goProfile">
           <el-icon><User /></el-icon>
           <span>个人主页</span>
@@ -69,7 +79,10 @@
         </button>
       </nav>
     </el-scrollbar>
-
+    <div class="home-sidebar-theme">
+      <span>主题模式</span>
+      <ThemeModeSwitch></ThemeModeSwitch>
+    </div>
   </aside>
 </template>
 

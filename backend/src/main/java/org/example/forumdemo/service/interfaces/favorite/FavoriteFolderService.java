@@ -3,9 +3,8 @@ package org.example.forumdemo.service.interfaces.favorite;
 import org.example.forumdemo.entity.db.UserFavoriteFolder;
 import org.example.forumdemo.entity.dto.favorite.CreateFolderRequest;
 import org.example.forumdemo.entity.dto.favorite.UpdateFolderRequest;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.favorite.FolderVO;
-
-import java.util.List;
 
 /**
  * 收藏夹: 增删改查 + 默认夹懒加载.
@@ -27,11 +26,12 @@ public interface FavoriteFolderService {
      */
     void deleteFolder(Long folderId, Long loginUserId);
 
-    /** 我的所有夹(含默认夹), 按 sortOrder, createTime 升序. */
-    List<FolderVO> queryMyFolders(Long loginUserId);
+    /** 分页查询我的收藏夹(含默认夹), 按 sortOrder, createTime 升序. */
+    PageResult<FolderVO> queryMyFolders(Long loginUserId, Integer pageNum, Integer pageSize);
 
-    /** 看他人公开夹列表; userId == loginUserId 时与 queryMyFolders 等价. */
-    List<FolderVO> queryUserPublicFolders(Long userId, Long loginUserId);
+    /** 分页查看他人公开夹列表; userId == loginUserId 时包含私密夹. */
+    PageResult<FolderVO> queryUserPublicFolders(Long userId, Long loginUserId,
+                                                Integer pageNum, Integer pageSize);
 
     /**
      * 保证当前用户有一个 is_default=1 的夹. 注册流程调用一次;

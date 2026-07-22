@@ -406,7 +406,7 @@
 
 .profile-fav-item-row {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr) minmax(150px, auto) minmax(190px, auto);
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -442,10 +442,10 @@
 }
 
 .profile-fav-item-stats {
-  margin-top: 6px;
   display: flex;
-  gap: 12px;
-  font-size: 12px;
+  justify-content: center;
+  gap: 16px;
+  font-size: 13px;
   color: #86909c;
 }
 
@@ -453,6 +453,64 @@
   margin-top: 6px;
   font-size: 13px;
   color: #4e5969;
+}
+
+.profile-fav-item-side {
+  min-width: 180px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.profile-fav-item-author {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.profile-fav-rename-save {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #b7ebc6;
+  border-radius: 8px;
+  background: #e8f8ed;
+  color: #16a34a;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.profile-fav-rename-save:hover:not(:disabled) {
+  border-color: #86d99d;
+  background: #d9f4e1;
+}
+
+.profile-fav-rename-save:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 720px) {
+  .profile-fav-item-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .profile-fav-item-stats {
+    grid-column: 1 / -1;
+  }
+
+  .profile-fav-item-side {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
 }
 
 .note-cover {
@@ -591,18 +649,19 @@
 }
 
 .hero-section {
-  text-align: center;
   margin-bottom: 50px;
+  text-align: center;
 }
 
 .hero-section h1 {
+  margin: 0 0 12px;
   font-size: 32px;
   font-weight: 900;
   color: #1d2129;
-  margin-bottom: 12px;
 }
 
 .hero-section p {
+  margin: 0;
   color: #86909c;
   font-size: 16px;
 }
@@ -629,6 +688,10 @@
 
 .policy-section {
   margin-bottom: 40px;
+}
+
+.policy-section:last-child {
+  margin-bottom: 0;
 }
 
 .section-title {
@@ -767,26 +830,6 @@
   min-width: 160px;
   height: 50px;
   font-weight: 700;
-}
-
-.privacy-footer {
-  min-height: 80px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px 16px;
-  color: #86909c;
-  font-size: 14px;
-}
-
-.privacy-icp {
-  color: #86909c;
-  text-decoration: none;
-}
-
-.privacy-icp:hover {
-  color: var(--primary-red, #ff2442);
 }
 
 @media (max-width: 640px) {

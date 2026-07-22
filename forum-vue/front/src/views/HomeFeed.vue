@@ -28,7 +28,7 @@
             aria-haspopup="menu"
             @click="toggleCategory(item.category.id)"
           >
-            <span>{{ item.category.name }}</span>
+            <span>{{ categoryTriggerLabel(item) }}</span>
             <el-icon><ArrowDown /></el-icon>
           </button>
 
@@ -61,46 +61,34 @@
           class="checkin-home-card"
           :class="{ 'checkin-home-done': checkinSummary.todaySigned }"
           shadow="hover"
-          :body-style="{ padding: '14px 18px', cursor: 'pointer', position: 'relative' }"
+          :body-style="{ padding: '12px 18px', cursor: 'pointer' }"
           @click="$router.push('/checkin')"
         >
-          <el-button
-            v-if="checkinSummary.todaySigned"
-            class="checkin-home-close"
-            type="info"
-            text
-            circle
-            size="small"
-            :icon="Close"
-            aria-label="收起签到提示"
-            @click.stop="dismissCheckinHomeStrip"
-          />
           <div class="checkin-home-inner">
-            <PawCoinIcon class="checkin-home-paw" />
-            <div class="checkin-home-text">
-              <div class="checkin-home-title">每日签到 · 萌币</div>
-              <div class="checkin-home-meta">
-                已攒 <strong>{{ checkinSummary.totalPoints ?? 0 }}</strong> 萌币
-                · 连续 <strong>{{ checkinSummary.streakDays ?? 0 }}</strong> 天
-                <el-tag v-if="checkinSummary.todaySigned" size="small" type="success" round class="checkin-home-tag">
-                  今日已签
-                </el-tag>
-                <el-tag v-else size="small" type="warning" effect="plain" round class="checkin-home-tag">待签到</el-tag>
-              </div>
-            </div>
+            <strong class="checkin-home-title">每日签到</strong>
+            <span class="checkin-home-status" :class="{ 'is-done': checkinSummary.todaySigned }">
+              {{ checkinSummary.todaySigned ? '已签到' : '待签到' }}
+            </span>
+            <span class="checkin-home-streak">
+              连续 <strong>{{ checkinSummary.streakDays ?? 0 }}</strong> 天
+            </span>
             <el-button
-              v-if="!checkinSummary.todaySigned"
-              type="primary"
+              class="checkin-home-action"
               round
               size="small"
+              :disabled="checkinSummary.todaySigned"
               @click.stop="$router.push('/checkin')"
             >
-              去签到
+              {{ checkinSummary.todaySigned ? '已完成' : '去签到' }}
             </el-button>
-            <el-button v-else type="success" round size="small" disabled>
-              <el-icon class="checkin-home-check"><CircleCheck /></el-icon>
-              今日已签
-            </el-button>
+            <button
+              type="button"
+              class="checkin-home-close"
+              aria-label="关闭签到提醒"
+              @click.stop.prevent="handleDismissCheckin"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
           </div>
         </el-card>
       </div>
@@ -187,7 +175,6 @@
                         :vip-expire-at="entry.user?.vipExpireAt"
                       />
                       <span class="nickname" :title="entry.user?.nickname">{{ formatCardNickname(entry.user?.nickname) }}</span>
-                      <FollowingBadge :from-following="!!entry.fromFollowing" />
                     </div>
                     <div v-if="isQuestionArticle(entry.article)" class="question-answer-count">
                       <span>{{ entry.article?.replyCount || 0 }}回答</span>
@@ -254,6 +241,12 @@
               <strong>{{ entry.article?.title }}</strong>
               <small>{{ entry.article?.likeCount || 0 }} 赞 · {{ entry.article?.replyCount || 0 }} 评</small>
             </span>
+            <span
+              v-if="entry.trendDirection === 'UP'"
+              class="home-hot-trend is-up"
+              aria-label="热度上升"
+              title="热度上升"
+            >↑</span>
           </button>
         </div>
         <el-empty v-else :image-size="42" description="暂无热帖" />

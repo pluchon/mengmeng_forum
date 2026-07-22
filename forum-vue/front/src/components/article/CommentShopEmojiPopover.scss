@@ -1,0 +1,75 @@
+.comment-media-item {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.comment-media-item--emoji {
+  cursor: pointer;
+}
+
+.comment-media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.comment-shop-emoji-popover {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.comment-shop-emoji-popover__preview {
+  width: 128px;
+  height: 128px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.comment-shop-emoji-popover__pack {
+  width: 100%;
+  padding: 9px;
+  border: 0;
+  border-radius: 12px;
+  background: #f7f8fa;
+  color: #1d2129;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.comment-shop-emoji-popover__pack:hover {
+  background: #fff0f2;
+  color: #ff2442;
+}
+
+.comment-shop-emoji-popover__cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.comment-shop-emoji-popover__state {
+  padding: 10px 0;
+  color: #86909c;
+  font-size: 13px;
+  text-align: center;
+}
+
+.comment-shop-emoji-popover__state.is-error {
+  color: #f53f3f;
+}

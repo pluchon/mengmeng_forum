@@ -114,6 +114,50 @@ public class UserFollowServiceImpl implements UserFollowService {
     }
 
     @Override
+    public Map<Long, UserFollowStatsVO> getBatchStats(Collection<Long> userIds, Long viewerId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = userIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Long> followingCounts = new HashMap<>();
+        List<UserFollow> outgoing = userFollowMapper.selectList(new LambdaQueryWrapper<UserFollow>()
+                .in(UserFollow::getFollowerId, ids)
+                .select(UserFollow::getFollowerId));
+        for (UserFollow row : outgoing) {
+            followingCounts.merge(row.getFollowerId(), 1L, Long::sum);
+        }
+
+        Map<Long, Long> followerCounts = new HashMap<>();
+        List<UserFollow> incoming = userFollowMapper.selectList(new LambdaQueryWrapper<UserFollow>()
+                .in(UserFollow::getFolloweeId, ids)
+                .select(UserFollow::getFolloweeId));
+        for (UserFollow row : incoming) {
+            followerCounts.merge(row.getFolloweeId(), 1L, Long::sum);
+        }
+
+        Set<Long> viewerFollowing = viewerId != null && viewerId > 0
+                ? batchFollowingTargets(viewerId, ids)
+                : Set.of();
+        Map<Long, UserFollowStatsVO> result = new HashMap<>();
+        for (Long userId : ids) {
+            result.put(userId, new UserFollowStatsVO(
+                    userId,
+                    followingCounts.getOrDefault(userId, 0L),
+                    followerCounts.getOrDefault(userId, 0L),
+                    viewerFollowing.contains(userId)
+            ));
+        }
+        return result;
+    }
+
+    @Override
     public Set<Long> listFollowingIds(Long followerId) {
         if (followerId == null || followerId <= 0) {
             return Set.of();

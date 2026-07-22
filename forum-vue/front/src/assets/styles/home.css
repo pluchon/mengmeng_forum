@@ -237,6 +237,43 @@
   color: var(--primary-red, #ff2442);
 }
 
+html:has(.home-xhs-root),
+body:has(.home-xhs-root) {
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html:has(.home-xhs-root)::-webkit-scrollbar,
+body:has(.home-xhs-root)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.home-shell-auth-entry {
+  height: 38px;
+  padding: 0 19px !important;
+  border: 1px solid rgba(255, 36, 66, 0.2) !important;
+  background: #fff1f3 !important;
+  color: var(--primary-red, #ff2442) !important;
+  font-size: 14px;
+  font-weight: 750;
+  box-shadow: 0 6px 16px rgba(255, 36, 66, 0.1);
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.home-shell-auth-entry:hover {
+  border-color: rgba(255, 36, 66, 0.36) !important;
+  background: #ffe5e9 !important;
+  transform: translateY(-1px);
+}
+
+.home-sidebar-message-badge {
+  display: inline-flex;
+  line-height: 1;
+}
+
 .home-shell-avatar-btn {
   display: inline-flex;
   border: none;
@@ -510,56 +547,16 @@
   min-width: 0;
 }
 
-/* AI 增强搜索：黑金渐变描边（伪元素均匀环绕，避免右侧断裂） */
+/* AI 增强搜索：静态金色镶边 */
 .home-search-inner--ai-rag {
   position: relative;
+  border: 2px solid #bd941f;
   border-radius: 999px;
   padding: 0;
-  background: transparent;
+  background: #fff;
   box-sizing: border-box;
   isolation: isolate;
-}
-
-.home-search-inner--ai-rag::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 2px;
-  background: linear-gradient(
-    120deg,
-    #141414 0%,
-    #2a2418 18%,
-    #c9a227 42%,
-    #fff3c4 52%,
-    #c9a227 62%,
-    #2a2418 82%,
-    #141414 100%
-  );
-  background-size: 200% 100%;
-  animation: home-search-ai-gold-flow 6s ease-in-out infinite;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  z-index: 2;
-}
-
-@keyframes home-search-ai-gold-flow {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  overflow: hidden;
 }
 
 .home-search-inner--ai-rag .home-search-bar {
@@ -567,7 +564,7 @@
   z-index: 1;
   background: #fff;
   border-radius: 999px;
-  padding: 2px 8px 2px 4px;
+  padding: 0 6px 0 2px;
   gap: 6px;
 }
 
@@ -1264,21 +1261,28 @@
 }
 
 .shell-page-scroll::-webkit-scrollbar {
+  display: none;
   width: 0;
   height: 0;
 }
 
-/* 首页签到入口（与签到页一致的磨砂感） */
-.checkin-home-close {
-  position: absolute !important;
-  top: 6px;
-  right: 6px;
-  z-index: 2;
-  color: #86909c !important;
+.home-sidebar-theme {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px;
+  padding: 14px 2px 16px;
+  border-top: 1px solid #f0f1f3;
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.checkin-home-close:hover {
-  color: #1d2129 !important;
+:root[data-theme='dark'] .home-sidebar-theme {
+  border-top-color: rgba(148, 163, 184, 0.16);
+  color: #dbe4f3;
 }
 
 .checkin-home-card {
@@ -1293,42 +1297,77 @@
 .checkin-home-inner {
   display: flex;
   align-items: center;
-  gap: 14px;
-}
-
-.checkin-home-paw {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  color: var(--el-color-primary);
-}
-
-.checkin-home-text {
-  flex: 1;
-  min-width: 0;
+  gap: 12px;
+  min-height: 34px;
 }
 
 .checkin-home-title {
   font-size: 15px;
   font-weight: 800;
   color: #1d2129;
-  margin-bottom: 4px;
+  white-space: nowrap;
 }
 
-.checkin-home-meta {
+.checkin-home-streak {
   font-size: 13px;
   color: #606266;
-  line-height: 1.5;
+  white-space: nowrap;
 }
 
-.checkin-home-meta strong {
+.checkin-home-streak strong {
   color: var(--el-color-primary);
   font-weight: 800;
 }
 
-.checkin-home-tag {
-  margin-left: 8px;
-  vertical-align: middle;
+.checkin-home-status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #fff2e2;
+  color: #c97816;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.checkin-home-status.is-done {
+  background: #edf8ef;
+  color: #3d8f4c;
+}
+
+.checkin-home-action {
+  margin-left: auto !important;
+  border-color: transparent !important;
+  background: #f1f2f4 !important;
+  color: #4e5969 !important;
+  font-weight: 700;
+}
+
+.checkin-home-action:not(.is-disabled):hover {
+  background: #e7e9ed !important;
+  color: #1d2129 !important;
+}
+
+.checkin-home-close {
+  display: inline-grid;
+  flex: 0 0 30px;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.checkin-home-close:hover {
+  background: #f1f2f4;
+  color: #1d2129;
 }
 
 .checkin-home-card.checkin-home-done {
@@ -1339,11 +1378,6 @@
 
 .checkin-home-card.checkin-home-done .checkin-home-title {
   color: #389e0d;
-}
-
-.checkin-home-check {
-  margin-right: 4px;
-  vertical-align: middle;
 }
 
 .home-xhs-main {
@@ -1583,7 +1617,7 @@
 
 .home-hot-floating-item {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) 14px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -1594,6 +1628,17 @@
   cursor: pointer;
   text-align: left;
   transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.home-hot-trend {
+  display: inline-block;
+  justify-self: end;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.home-hot-trend.is-up {
+  color: #e5484d;
 }
 
 .home-hot-floating-item:hover {

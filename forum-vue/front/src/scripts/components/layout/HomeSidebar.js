@@ -1,9 +1,11 @@
 import {
+  Bell,
   Calendar,
   Compass,
   EditPen,
   HomeFilled,
   Medal,
+  Message,
   Opportunity,
   Present,
   ShoppingBag,
@@ -11,6 +13,7 @@ import {
   User,
 } from '@element-plus/icons-vue'
 
+import ThemeModeSwitch from '@/components/layout/ThemeModeSwitch.vue'
 import { useHomeShellContext } from '@/composables/useHomeShell'
 
 const {
@@ -19,6 +22,8 @@ const {
   goProfile,
   goToCreative,
   menuActiveKey,
+  msgUnread,
+  openMessageCenter,
   selectCategoryMenu,
-  userStore,
+  showAnnouncement,
 } = useHomeShellContext()

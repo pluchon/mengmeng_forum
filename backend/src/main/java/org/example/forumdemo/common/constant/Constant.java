@@ -153,7 +153,6 @@ public final class Constant {
     public static final Byte POINTS_SOURCE_LOTTERY_WIN = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_WIN;
     public static final Byte POINTS_SOURCE_REGISTER_BONUS = ForumBusinessConstants.POINTS_SOURCE_REGISTER_BONUS;
     public static final Byte POINTS_SOURCE_VIP_SUBSCRIBE = ForumBusinessConstants.POINTS_SOURCE_VIP_SUBSCRIBE;
-    public static final Byte POINTS_SOURCE_LOTTERY_PAGE_SURPRISE = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_PAGE_SURPRISE;
     public static final Byte POINTS_SOURCE_AI_COMPANION = ForumBusinessConstants.POINTS_SOURCE_AI_COMPANION;
     public static final Byte POINTS_SOURCE_AI_IMAGE = ForumBusinessConstants.POINTS_SOURCE_AI_IMAGE;
     public static final Byte POINTS_SOURCE_GAME_WIN = ForumBusinessConstants.POINTS_SOURCE_GAME_WIN;
@@ -165,10 +164,6 @@ public final class Constant {
     public static final String AI_MODEL_IMAGE_NORMAL = ForumBusinessConstants.AI_MODEL_IMAGE_NORMAL;
     public static final String AI_MODEL_IMAGE_PREMIUM = ForumBusinessConstants.AI_MODEL_IMAGE_PREMIUM;
     public static final String AI_MODEL_QWEN_DEEP = ForumBusinessConstants.AI_MODEL_QWEN_DEEP;
-    public static final String AI_MODEL_GEMINI_DEEP = ForumBusinessConstants.AI_MODEL_GEMINI_DEEP;
-    public static final String AI_MODEL_CLAUDE_HAIKU = ForumBusinessConstants.AI_MODEL_CLAUDE_HAIKU;
-    public static final String AI_MODEL_CLAUDE_SONNET = ForumBusinessConstants.AI_MODEL_CLAUDE_SONNET;
-    public static final int POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT = ForumBusinessConstants.POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT;
     public static final int POINTS_REGISTER_BONUS_AMOUNT = ForumBusinessConstants.POINTS_REGISTER_BONUS_AMOUNT;
     public static final int VIP_PRICE_PRO_MONTH = ForumBusinessConstants.VIP_PRICE_PRO_MONTH;
     public static final int VIP_PRICE_MAX_MONTH = ForumBusinessConstants.VIP_PRICE_MAX_MONTH;

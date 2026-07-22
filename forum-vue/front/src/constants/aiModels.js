@@ -3,8 +3,6 @@
  */
 import iconQwen from '@/assets/svg/qwen-color.svg'
 import iconDeepseek from '@/assets/svg/deepseek-color.svg'
-import iconGemini from '@/assets/svg/gemini-color.svg'
-import iconClaude from '@/assets/svg/claude-color.svg'
 import iconOpenai from '@/assets/svg/openai.svg'
 
 /** 按 provider 字段（会员配额 icon_provider） */
@@ -12,8 +10,6 @@ export const AI_PROVIDER_ICONS = {
   qwen: iconQwen,
   dashscope: iconQwen,
   deepseek: iconDeepseek,
-  gemini: iconGemini,
-  claude: iconClaude,
   openai: iconOpenai,
   huanapi: iconOpenai,
 }
@@ -24,9 +20,6 @@ export const AI_MODEL_ICONS_BY_CODE = {
   'qwen3.7-max': iconQwen,
   'deepseek-v4-flash': iconDeepseek,
   'deepseek-v4-pro': iconDeepseek,
-  'gemini-3.1-pro': iconGemini,
-  'claude-haiku-4-5': iconClaude,
-  'claude-sonnet-4-6': iconClaude,
   'z-image-turbo': iconQwen,
   'gpt-image-2': iconOpenai,
   'wanx2.1-t2i-plus': iconQwen,
@@ -38,8 +31,6 @@ export const MASCOT_TEXT_LLM_OPTIONS = [
   { id: 'deepseek-flash', label: 'DeepSeek', hint: 'deepseek-v4-flash', icon: iconDeepseek, kind: 'text', vipOnly: false },
   { id: 'qwen-deep', label: '通义千问 · 深度', hint: 'qwen3.7-max', icon: iconQwen, kind: 'text', vipOnly: true },
   { id: 'deepseek-deep', label: 'DeepSeek · 深度', hint: 'deepseek-v4-pro', icon: iconDeepseek, kind: 'text', vipOnly: true },
-  { id: 'gemini-deep', label: 'Gemini · 深度', hint: 'gemini-3.1-pro', icon: iconGemini, kind: 'text', vipOnly: true },
-  { id: 'claude-sonnet', label: 'Claude · 深度', hint: 'claude-sonnet-4-6', icon: iconClaude, kind: 'text', vipOnly: true, maxOnly: true },
 ]
 
 /** 看板娘 · 画图模式（仅生图模型） */
@@ -79,8 +70,6 @@ export function llmRouteToWriteKind(routeId) {
     'qwen-deep': 'qwen_pro',
     'deepseek-flash': 'deepseek_flash',
     'deepseek-deep': 'deepseek_pro',
-    'gemini-deep': 'gemini_pro',
-    'claude-sonnet': 'claude_sonnet',
   }
   return map[routeId] || null
 }

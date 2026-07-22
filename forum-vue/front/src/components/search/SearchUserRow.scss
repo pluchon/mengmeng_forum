@@ -1,0 +1,80 @@
+.search-user-row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 64px minmax(180px, 1fr) minmax(260px, 0.9fr) 112px;
+  align-items: center;
+  min-height: 92px;
+  padding: 14px 18px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(29, 33, 41, 0.045);
+  cursor: pointer;
+}
+
+.search-user-row__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 60px;
+  min-width: 60px;
+}
+
+.search-user-row__name {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 15px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-user-row__stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 28px;
+  color: #86909c;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.search-user-row__follow {
+  justify-self: end;
+  width: 128px;
+  min-height: 38px;
+  border-color: #e5e6eb !important;
+  background: #f2f3f5 !important;
+  color: #4e5969 !important;
+  font-weight: 750;
+}
+
+.search-user-row__follow:not(.is-following):hover {
+  border-color: #dcdfe5 !important;
+  background: #e8eaed !important;
+  color: #1d2129 !important;
+}
+
+.search-user-row__follow.is-following {
+  border-color: #cdebd4 !important;
+  background: #edf8ef !important;
+  color: #3f8f50 !important;
+}
+
+.search-user-row__self {
+  justify-self: end;
+  width: 128px;
+  color: #86909c;
+  font-size: 13px;
+  text-align: center;
+}
+
+:root[data-theme='dark'] .search-user-row {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(17, 24, 39, 0.78);
+}
+
+:root[data-theme='dark'] .search-user-row__name {
+  color: #eef4ff;
+}

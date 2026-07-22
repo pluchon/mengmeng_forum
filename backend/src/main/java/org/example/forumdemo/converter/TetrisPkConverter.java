@@ -1,6 +1,9 @@
 package org.example.forumdemo.converter;
 
 import org.example.forumdemo.entity.db.GameTetrisPkMatchRecord;
+import org.example.forumdemo.entity.db.GameUserProfile;
+import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.vo.game.TetrisPkLeaderboardVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkRecordVO;
 
 // 俄罗斯方块 PK 实体转换器
@@ -33,6 +36,26 @@ public class TetrisPkConverter {
                 record.getEndReason(),
                 record.getStartedAt(),
                 record.getEndedAt()
+        );
+    }
+
+    public static TetrisPkLeaderboardVO toLeaderboardVO(
+            GameUserProfile profile,
+            User user,
+            Integer bestScore
+    ) {
+        int totalCount = value(profile.getTotalCount());
+        int winCount = value(profile.getWinCount());
+        int winRate = totalCount <= 0 ? 0 : (int) Math.round(winCount * 100.0 / totalCount);
+        return new TetrisPkLeaderboardVO(
+                profile.getUserId(),
+                user == null ? null : user.getUsername(),
+                user == null ? null : user.getNickname(),
+                user == null ? null : user.getAvatarUrl(),
+                winRate,
+                value(bestScore),
+                totalCount,
+                winCount
         );
     }
 

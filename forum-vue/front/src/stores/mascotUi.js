@@ -1,35 +1,34 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-const PASS_THROUGH_KEY = 'mascot_pointer_pass_through_v1'
+const VISIBLE_KEY = 'mascot_visible_v1'
 
 export const useMascotUiStore = defineStore('mascotUi', () => {
-  const pointerPassThrough = ref(false)
+  const visible = ref(true)
 
   try {
-    const raw = localStorage.getItem(PASS_THROUGH_KEY)
-    if (raw === '1')
-      pointerPassThrough.value = true
+    const raw = localStorage.getItem(VISIBLE_KEY)
+    if (raw === '0') visible.value = false
   }
   catch {
     /* ignore */
   }
 
-  watch(pointerPassThrough, (v) => {
+  watch(visible, (value) => {
     try {
-      localStorage.setItem(PASS_THROUGH_KEY, v ? '1' : '0')
+      localStorage.setItem(VISIBLE_KEY, value ? '1' : '0')
     }
     catch {
       /* ignore */
     }
   })
 
-  function togglePointerPassThrough() {
-    pointerPassThrough.value = !pointerPassThrough.value
+  function setVisible(value) {
+    visible.value = Boolean(value)
   }
 
   return {
-    pointerPassThrough,
-    togglePointerPassThrough,
+    setVisible,
+    visible,
   }
 })

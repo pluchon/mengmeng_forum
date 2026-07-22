@@ -127,9 +127,6 @@
   .points-summary-side-label,
   .points-record-time,
   .points-record-desc,
-  .lottery-info-label,
-  .lottery-info-sub,
-  .lottery-progress-hint,
   .vip-desc,
   .vip-plan-sub,
   .vip-plan-price,
@@ -451,6 +448,55 @@
   color: var(--dark-text-muted) !important;
 }
 
+:root[data-theme='dark'] .article-detail-modal :where(
+  .ai-guide-title,
+  .reply-target-label,
+  .sub-msg-body .el-text--primary
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .favorite-dialog :where(
+  .el-dialog__title,
+  .el-form-item__label
+) {
+  color: var(--dark-text) !important;
+}
+
+:root[data-theme='dark'] .article-detail-modal :where(
+  .sub-nested-panel,
+  .comment-upload-btn,
+  .comment-emoji-popper .mc-emoji-pack-more
+) {
+  background: #1b2435 !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme='dark'] .article-detail-modal :where(
+  .sub-expand-inline,
+  .sub-msg-body .el-text--info,
+  .sub-item-meta .el-text--info,
+  .article-tags-toggle
+) {
+  color: var(--dark-text-faint) !important;
+}
+
+:root[data-theme='dark'] .article-detail-modal :where(
+  .comment-upload-btn:hover,
+  .comment-emoji-popper .mc-emoji-pack-more:hover,
+  .article-tags-toggle:hover
+) {
+  color: #ff91b8 !important;
+  background: rgba(255, 145, 184, 0.12) !important;
+}
+
+:root[data-theme='dark'] .article-detail-modal .article-image-error,
+:root[data-theme='dark'] .article-detail-modal .el-image__error {
+  background: #1b2435 !important;
+  color: var(--dark-text-faint) !important;
+}
+
 :root[data-theme='dark'] .wang-editor-wrapper,
 :root[data-theme='dark'] .editor-container,
 :root[data-theme='dark'] .md-container,
@@ -759,13 +805,10 @@
 }
 
 :root[data-theme='dark'] .app-root.is-theme-adapted :where(
-  .lottery-demo-banner,
   .lottery-play-card,
   .lottery-pool-chip,
   .lottery-chart-inner,
-  .lottery-activity-pick-card,
-  .lottery-surprise-row,
-  .lottery-surprise-preview
+  .lottery-activity-pick-card
 ) {
   background: rgba(255, 255, 255, 0.06) !important;
   border-color: var(--dark-border) !important;
@@ -773,10 +816,10 @@
 }
 
 :root[data-theme='dark'] .app-root.is-theme-adapted :where(
-  .lottery-demo-banner__title,
   .lottery-draw-strategy-title,
   .lottery-play-card .play-label,
   .lottery-cost-head,
+  .lottery-core-rule strong,
   .lottery-section-title,
   .lottery-pool-chip .chip-name,
   .lottery-chart-head
@@ -785,10 +828,8 @@
 }
 
 :root[data-theme='dark'] .app-root.is-theme-adapted :where(
-  .lottery-demo-banner__text,
-  .lottery-cost-name,
-  .lottery-cost-rules,
-  .lottery-pool-chip .chip-weight,
+  .lottery-play-card .play-cost,
+  .lottery-core-rule span,
   .lottery-pool-chip .chip-meta,
   .lottery-chart-hint
 ) {
@@ -859,10 +900,6 @@
 
 :root[data-theme='dark'] .app-root.is-theme-adapted .checkin-cell-day {
   color: var(--dark-text) !important;
-}
-
-:root[data-theme='dark'] .app-root.is-theme-adapted .checkin-stat-mini-mask {
-  background: rgba(11, 16, 32, 0.62) !important;
 }
 
 :root[data-theme='dark'] .drift-page :where(
@@ -1644,6 +1681,7 @@
   .lottery-draw-result-name,
   .lottery-ten-result-chip__name,
   .lottery-activity-pick-card__title,
+  .lottery-info-heading,
   .lottery-cost-val
 ) {
   color: var(--dark-text) !important;
@@ -1658,7 +1696,7 @@
 
 :root[data-theme='dark'] .lottery-dialog.el-dialog,
 :root[data-theme='dark'] .lottery-dialog :where(.el-dialog__header, .el-dialog__body, .el-dialog__footer),
-:root[data-theme='dark'] .lottery-dialog :where(.lottery-activity-item, .lottery-surprise-reward-photo) {
+:root[data-theme='dark'] .lottery-dialog .lottery-activity-item {
   background: var(--dark-panel-strong) !important;
   border-color: var(--dark-border) !important;
   color: var(--dark-text-muted) !important;
@@ -1666,7 +1704,6 @@
 
 :root[data-theme='dark'] .lottery-dialog :where(
   .el-dialog__title,
-  .lottery-surprise-dialog-text,
   .lottery-history-empty p,
   .lottery-activity-item__title
 ) {

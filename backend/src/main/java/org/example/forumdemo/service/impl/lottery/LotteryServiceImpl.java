@@ -1,6 +1,7 @@
 package org.example.forumdemo.service.impl.lottery;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
@@ -21,11 +22,9 @@ import org.example.forumdemo.entity.vo.lottery.LotteryActivityListItemVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawItemVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawRecordVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawResultVO;
-import org.example.forumdemo.entity.vo.lottery.LotteryPrizeHeatVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryPrizeLineVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryPrizePoolRow;
 import org.example.forumdemo.entity.vo.lottery.LotteryRecentDrawVO;
-import org.example.forumdemo.entity.vo.lottery.LotterySurpriseClaimVO;
 import org.example.forumdemo.entity.vo.points.PointsWalletVO;
 import org.example.forumdemo.mapper.LotteryActivityMapper;
 import org.example.forumdemo.mapper.LotteryActivityPrizeMapper;
@@ -140,9 +139,6 @@ public class LotteryServiceImpl implements LotteryService {
 
         List<LotteryRecentDrawVO> recent =
                 lotteryDrawRecordMapper.selectRecentForUser(userId, activity.getId(), 12);
-        List<LotteryPrizeHeatVO> heat =
-                lotteryDrawRecordMapper.selectHeatByActivity(activity.getId(), 14);
-
         LotteryActivityInfoVO vo = new LotteryActivityInfoVO();
         vo.setActivityId(activity.getId());
         vo.setTitle(activity.getTitle());
@@ -155,9 +151,6 @@ public class LotteryServiceImpl implements LotteryService {
                 : 0);
         vo.setHardPityThreshold(Constant.LOTTERY_HARD_PITY_AFTER_MISSES);
         vo.setRecentDraws(recent != null ? recent : List.of());
-        vo.setPrizeWinHeat(heat != null ? heat : List.of());
-        vo.setLotterySurpriseClaimed(userRow != null && userRow.getLotterySurpriseClaimed() != null
-                && userRow.getLotterySurpriseClaimed() == 1);
         return vo;
     }
 
@@ -181,39 +174,6 @@ public class LotteryServiceImpl implements LotteryService {
         List<LotteryDrawRecordVO> records = buildDrawRecordRows(userId, result.getRecords());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public LotterySurpriseClaimVO claimPageSurpriseBonus(Long userId) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        User locked = userMapper.selectByIdForUpdate(userId);
-        if (locked == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        Byte claimed = locked.getLotterySurpriseClaimed();
-        if (claimed != null && claimed == 1) {
-            LotterySurpriseClaimVO out = new LotterySurpriseClaimVO();
-            out.setAlreadyClaimed(true);
-            out.setGranted(false);
-            out.setBalanceAfter(pointsService.getWallet(userId).getBalance());
-            return out;
-        }
-        int amt = Constant.POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT;
-        int balanceAfter = pointsService.addPoints(userId, amt, Constant.POINTS_SOURCE_LOTTERY_PAGE_SURPRISE,
-                null, "抽奖页彩蛋·点我看看", "lottery_surprise:" + userId);
-        int rows = userMapper.markLotterySurpriseClaimed(userId);
-        if (rows != 1) {
-            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
-        }
-        LotterySurpriseClaimVO out = new LotterySurpriseClaimVO();
-        out.setGranted(true);
-        out.setAlreadyClaimed(false);
-        out.setGrantPoints(amt);
-        out.setBalanceAfter(balanceAfter);
-        return out;
     }
 
     /**
@@ -280,8 +240,10 @@ public class LotteryServiceImpl implements LotteryService {
                 pity = 0;
                 userMapper.resetLotteryPityDraws(userId);
             } else {
-                pity++;
-                userMapper.incrementLotteryPityDraws(userId);
+                pity = nextPityAfterMiss(pity);
+                userMapper.update(null, new LambdaUpdateWrapper<User>()
+                        .eq(User::getId, userId)
+                        .set(User::getLotteryPityDraws, pity));
             }
             if (isSoftPityRareOutcome(item)) {
                 tenHasRare = true;
@@ -293,6 +255,10 @@ public class LotteryServiceImpl implements LotteryService {
 
         int balanceAfter = pointsService.getWallet(userId).getBalance();
         return new LotteryDrawResultVO(balanceAfter, batchKey, results, pity);
+    }
+
+    static int nextPityAfterMiss(int currentPity) {
+        return Math.min(Constant.LOTTERY_HARD_PITY_AFTER_MISSES, Math.max(0, currentPity) + 1);
     }
 
     private LotteryDrawRequest findDrawRequest(Long userId, String requestId) {

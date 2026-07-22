@@ -5,7 +5,6 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.example.forumdemo.entity.db.LotteryDrawRecord;
-import org.example.forumdemo.entity.vo.lottery.LotteryPrizeHeatVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryRecentDrawVO;
 
 import java.util.List;
@@ -20,15 +19,6 @@ public interface LotteryDrawRecordMapper extends BaseMapper<LotteryDrawRecord> {
             + "ORDER BY id DESC LIMIT #{limit}")
     List<LotteryRecentDrawVO> selectRecentForUser(@Param("userId") Long userId,
                                                   @Param("activityId") Long activityId,
-                                                  @Param("limit") int limit);
-
-    @Select("SELECT prize_name AS prizeName, COUNT(*) AS winCount "
-            + "FROM lottery_draw_record "
-            + "WHERE activity_id = #{activityId} AND delete_state = 0 "
-            + "GROUP BY prize_id, prize_name "
-            + "ORDER BY winCount DESC "
-            + "LIMIT #{limit}")
-    List<LotteryPrizeHeatVO> selectHeatByActivity(@Param("activityId") Long activityId,
                                                   @Param("limit") int limit);
 
     @Select("SELECT COUNT(DISTINCT user_id) FROM lottery_draw_record "

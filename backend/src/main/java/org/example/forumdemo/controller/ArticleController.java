@@ -72,7 +72,7 @@ public class ArticleController {
 
     @Operation(summary = "提交帖子进入异步审核流程",
             description = "前置: 内容/封面/相册图均已落库. 后端会扭转状态到 PENDING_AUDIT, 投递 MQ 给 LangGraph. " +
-                    "前端展示\"审核中\"页面. notifyEmail=true 时审核结果会额外推送邮件(站内信无论如何都发).")
+                    "前端展示\"审核中\"页面，审核结果统一通过站内信推送.")
     @PostMapping("/submitForAudit")
     public Result<String> submitForAudit(@Valid @RequestBody SubmitForAuditRequest req,
                                          HttpServletRequest httpServletRequest) {
@@ -80,7 +80,7 @@ public class ArticleController {
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
-        String taskId = articleService.submitForAudit(req.getArticleId(), loginUser.getId(), req.getNotifyEmail());
+        String taskId = articleService.submitForAudit(req.getArticleId(), loginUser.getId());
         return Result.success(taskId);
     }
 

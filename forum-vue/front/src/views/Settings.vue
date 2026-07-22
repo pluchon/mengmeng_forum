@@ -14,6 +14,10 @@
               <el-icon><Lock /></el-icon>
               <span>账号与安全</span>
             </el-menu-item>
+            <el-menu-item index="mascot">
+              <el-icon><Cpu /></el-icon>
+              <span>看板娘设置</span>
+            </el-menu-item>
           </el-menu>
         </aside>
 
@@ -25,6 +29,7 @@
           />
 
           <AccountSecurity v-if="activeMenu === 'account'" @open-password="pwdDialogVisible = true" />
+          <MascotSettings v-if="activeMenu === 'mascot'" />
         </div>
       </div>
     </div>
@@ -190,49 +195,6 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue'
-import { useSettings } from '@scripts/views/Settings'
-import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
-
-const captchaDialogRef = ref()
-
-const {
-  AccountSecurity,
-  ArrowLeft,
-  BasicInfo,
-  ElMessage,
-  Lock,
-  Message,
-  Phone,
-  User,
-  activeMenu,
-  emailCodeBtnDisabled,
-  emailCodeBtnDisabledPwd,
-  emailCodeBtnText,
-  emailCodeBtnTextPwd,
-  emailDialogVisible,
-  emailForm,
-  maskContact,
-  phoneCodeBtnDisabled,
-  phoneCodeBtnDisabledPwd,
-  phoneCodeBtnText,
-  phoneCodeBtnTextPwd,
-  phoneDialogVisible,
-  phoneForm,
-  pwdDialogVisible,
-  pwdForm,
-  pwdMethodSelected,
-  pwdStepMethod,
-  sendCode,
-  sendPwdCode,
-  sendingEmailCode,
-  sendingPhoneCode,
-  submitBindEmail,
-  submitBindPhone,
-  submitPwd,
-  userStore,
-} = useSettings(captchaDialogRef)
-</script>
+<script setup src="@/views/Settings.js"></script>
 
 <style scoped src="@/assets/styles/settings.css"></style>

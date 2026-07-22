@@ -6,7 +6,6 @@ import org.example.forumdemo.entity.vo.lottery.LotteryActivityInfoVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityListItemVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawRecordVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawResultVO;
-import org.example.forumdemo.entity.vo.lottery.LotterySurpriseClaimVO;
 
 import java.util.List;
 
@@ -20,6 +19,4 @@ public interface LotteryService {
 
     LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto);
 
-    /** 抽奖页彩蛋一次性积分（幂等） */
-    LotterySurpriseClaimVO claimPageSurpriseBonus(Long userId);
 }

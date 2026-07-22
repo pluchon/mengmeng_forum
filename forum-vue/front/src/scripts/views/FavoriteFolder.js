@@ -25,8 +25,8 @@ export function useFavoriteFolder() {
   async function loadMyFolders() {
     foldersLoading.value = true
     try {
-      const res = await getMyFavoriteFolders()
-      if (res.code === 0) myFolders.value = res.data || []
+      const res = await getMyFavoriteFolders({ pageNum: 1, pageSize: 100 })
+      if (res.code === 0) myFolders.value = res.data?.records || []
     } finally {
       foldersLoading.value = false
     }

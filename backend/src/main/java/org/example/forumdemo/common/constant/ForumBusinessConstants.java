@@ -86,7 +86,6 @@ public final class ForumBusinessConstants {
     public static final Byte POINTS_SOURCE_LOTTERY_WIN = 5;
     public static final Byte POINTS_SOURCE_REGISTER_BONUS = 6;
     public static final Byte POINTS_SOURCE_VIP_SUBSCRIBE = 7;
-    public static final Byte POINTS_SOURCE_LOTTERY_PAGE_SURPRISE = 8;
     public static final Byte POINTS_SOURCE_AI_COMPANION = 9;
     public static final Byte POINTS_SOURCE_AI_IMAGE = 10;
     public static final Byte POINTS_SOURCE_GAME_WIN = 11;
@@ -100,11 +99,7 @@ public final class ForumBusinessConstants {
     public static final String AI_MODEL_IMAGE_NORMAL = "z-image-turbo";
     public static final String AI_MODEL_IMAGE_PREMIUM = "gpt-image-2";
     public static final String AI_MODEL_QWEN_DEEP = "qwen3.7-max";
-    public static final String AI_MODEL_GEMINI_DEEP = "gemini-3.1-pro";
-    public static final String AI_MODEL_CLAUDE_HAIKU = "claude-haiku-4-5";
-    public static final String AI_MODEL_CLAUDE_SONNET = "claude-sonnet-4-6";
 
-    public static final int POINTS_LOTTERY_PAGE_SURPRISE_AMOUNT = 200;
     public static final int POINTS_REGISTER_BONUS_AMOUNT = 1000;
     public static final int VIP_PRICE_PRO_MONTH = 900;
     public static final int VIP_PRICE_MAX_MONTH = 2000;

@@ -6,8 +6,6 @@ import org.example.forumdemo.entity.vo.game.GameMatchRecordVO;
 import org.example.forumdemo.entity.vo.game.GameUserProfileVO;
 import org.example.forumdemo.entity.vo.game.GobangReplayVO;
 
-import java.util.List;
-
 // 游戏用户资料业务接口
 public interface GameUserProfileService {
 
@@ -18,8 +16,6 @@ public interface GameUserProfileService {
     PageResult<GameMatchRecordVO> listGobangRecords(Long userId, Integer pageNum, Integer pageSize);
 
     PageResult<GameMatchRecordVO> listJinziRecords(Long userId, Integer pageNum, Integer pageSize);
-
-    List<GameUserProfileVO> listLeaderboard(String gameCode, Integer pageSize);
 
     GobangReplayVO getGobangReplay(Long userId, Long recordId);
 

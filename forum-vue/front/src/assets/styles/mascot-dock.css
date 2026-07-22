@@ -275,28 +275,6 @@
   box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.25);
 }
 
-.mascot-dlg-head__right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.mascot-dlg-head__nickname {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--el-text-color-regular);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mascot-dlg-head__guest {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
 .mascot-picker-empty {
   font-size: 13px;
   color: rgba(220, 230, 255, 0.85);
@@ -733,13 +711,25 @@
   border: 1px solid var(--el-border-color-lighter, rgba(255, 255, 255, 0.1));
   background: var(--el-fill-color-light, rgba(0, 0, 0, 0.12));
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mascot-fs-sidebar__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 6px;
+  background: var(--el-fill-color-light, #f5f7fa);
 }
 
 .mascot-fs-sidebar__title {
   font-size: 12px;
   font-weight: 600;
   color: var(--el-text-color-secondary);
-  padding: 0 4px 6px;
 }
 
 .mascot-fs-sidebar__empty {
@@ -751,10 +741,11 @@
 }
 
 .mascot-fs-session-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   padding: 8px 10px;
   border: 1px solid transparent;
@@ -762,6 +753,16 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
+}
+
+.mascot-fs-session-item__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .mascot-fs-session-item:hover {
@@ -787,14 +788,47 @@
   color: var(--el-text-color-placeholder);
 }
 
+.mascot-fs-session-item__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--el-text-color-placeholder);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateX(3px);
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.mascot-fs-session-item:hover .mascot-fs-session-item__delete,
+.mascot-fs-session-item:focus-within .mascot-fs-session-item__delete {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.mascot-fs-session-item__delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #e5484d;
+}
+
+.mascot-fs-session-item__delete:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
 .mascot-new-session-icon {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid var(--el-border-color-lighter, rgba(255, 255, 255, 0.14));
-  border-radius: 10px;
-  background: var(--el-fill-color-light, rgba(255, 255, 255, 0.08));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--el-text-color-regular);
   cursor: pointer;
   display: flex;
@@ -803,9 +837,8 @@
 }
 
 .mascot-new-session-icon:hover {
-  border-color: #ed93b1;
   color: #72243e;
-  background: #fbeaf0;
+  background: transparent;
 }
 
 .mascot-bubble-wrap {
@@ -1082,17 +1115,4 @@
 .mascot-appearance__apply:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-.mascot-root--pass-through .mascot-stage-host {
-  pointer-events: none;
-}
-
-.mascot-root--pass-through .mascot-stage-wrap :deep(#oml2d-canvas),
-.mascot-root--pass-through .mascot-stage-wrap :deep(#oml2d-stage) {
-  pointer-events: none !important;
-}
-
-.mascot-root--pass-through .mascot-scale-btn {
-  pointer-events: auto;
 }

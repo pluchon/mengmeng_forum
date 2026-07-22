@@ -6,7 +6,7 @@ const PREFIX = RAW_PREFIX ? (RAW_PREFIX.endsWith('/') ? RAW_PREFIX : `${RAW_PREF
 /** 认证页左侧宽屏插画（OSS 完整路径） */
 export const LOGIN_WEBP_URL = `${CLIENT_OSS_BASE}/forum_images/client/webp/login.webp`
 export const REGISTER_WEBP_URL = `${CLIENT_OSS_BASE}/forum_images/client/webp/register.webp`
-export const FIND_WEBP_URL = `${CLIENT_OSS_BASE}/forum_images/client/webp/find.webp`
+export const FIND_WEBP_URL = `${CLIENT_OSS_BASE}/forum_images/client/webp/forget.webp`
 
 export function clientOssUrl(filename, fallbackUrl = '') {
   if (!filename) return fallbackUrl || ''
@@ -20,4 +20,3 @@ export function clientOssUrl(filename, fallbackUrl = '') {
   const leaf = name.replace(/^\//, '')
   return `${base}${leaf}`
 }
-

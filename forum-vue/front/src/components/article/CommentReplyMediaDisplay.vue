@@ -10,17 +10,15 @@
         fit="contain"
         class="comment-media-item comment-media-item--image"
       />
-      <div
+      <CommentShopEmojiPopover
         v-else
-        class="comment-media-item comment-media-item--emoji"
-        @click="onEmojiClick(item)"
-      >
-        <img :src="item.mediaUrl" alt="" class="comment-media-img">
-        <img :src="emojiPackIconUrl" alt="" class="comment-media-emoji-badge" aria-hidden="true">
-      </div>
+        :media-url="item.mediaUrl"
+        :shop-id="item.shopId"
+        @open-shop="(id) => emit('open-shop', id)"
+      />
     </template>
   </div>
 </template>
 
 <script setup src="@scripts/components/article/CommentReplyMediaDisplay.js"></script>
-<style scoped src="./CommentReplyMediaDisplay.css"></style>
+<style scoped lang="scss" src="./CommentReplyMediaDisplay.scss"></style>

@@ -33,7 +33,7 @@
         <div class="game-dashboard-stack">
           <article class="game-metric-card">
             <span>胜率</span>
-            <strong>{{ winRateText }}</strong>
+            <strong>{{ homeWinRateText }}</strong>
           </article>
           <article class="game-metric-card">
             <span>大厅在线</span>
@@ -48,7 +48,7 @@
             <h2>推荐对局</h2>
             <div>
               <el-button :icon="DataLine" @click="openStats('gobang')">对局统计</el-button>
-              <el-button :icon="Trophy" @click="openLeaderboard('gobang')">天梯榜</el-button>
+              <el-button :icon="Trophy" @click="openLeaderboard('tetris')">天梯榜</el-button>
             </div>
           </div>
 
@@ -145,11 +145,11 @@
             <el-input
               v-model="watchKeyword"
               clearable
-              placeholder="搜索昵称或房间"
+              placeholder="搜索昵称"
               @clear="searchWatchRooms"
               @keyup="handleWatchSearchKeyup"
             />
-            <el-button type="primary" @click="searchWatchRooms">搜索</el-button>
+            <el-button class="game-watch-search-button" @click="searchWatchRooms">搜索</el-button>
           </div>
 
           <div class="game-watch-group">
@@ -164,9 +164,8 @@
                 >
                   <span>
                     <strong>{{ watchRoomTitle(roomRow) }}</strong>
-                    <em>{{ watchRoomMeta(roomRow) }}</em>
                   </span>
-                  <i>观战</i>
+                  <i class="game-room-row__watch">观战</i>
                 </button>
               </div>
               <div v-if="watchTotal > watchPageSize" class="game-watch-pager">
@@ -191,22 +190,24 @@
 
     <el-dialog v-model="leaderboardVisible" class="game-center-dialog" width="680px" destroy-on-close>
       <template #header>
-        <span>天梯榜</span>
+        <div class="game-dialog-title">天梯榜</div>
       </template>
-      <el-tabs v-model="activeGameCode" @tab-change="onLeaderboardGameChange">
-        <el-tab-pane label="五子棋" name="gobang" />
-        <el-tab-pane label="井字棋" name="jinzi" />
+      <el-tabs v-model="leaderboardGameCode" @tab-change="onLeaderboardGameChange">
         <el-tab-pane label="俄罗斯方块" name="tetris" />
-        <el-tab-pane label="方块 PK" name="tetris_pk" />
+        <el-tab-pane label="俄罗斯方块PK" name="tetris_pk" />
       </el-tabs>
-      <ol v-if="leaderboardRows.length" class="game-rank-list">
+      <ol v-if="leaderboardRows.length" class="game-rank-list" :class="`is-${leaderboardGameCode}`">
         <li v-for="(row, index) in leaderboardRows" :key="row.userId">
-          <span>{{ (leaderboardPage - 1) * leaderboardPageSize + index + 1 }}</span>
-          <div>
-            <strong>{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
-            <em>{{ row.rankName || '青铜 III' }} · {{ row.totalCount ?? 0 }} 局 · 胜率 {{ row.winRate ?? 0 }}%</em>
-          </div>
-          <b>{{ row.score ?? row.bestScore ?? 0 }}</b>
+          <span class="game-rank-list__position">{{ (leaderboardPage - 1) * leaderboardPageSize + index + 1 }}</span>
+          <img
+            :src="row.avatarUrl || defaultAvatar"
+            alt=""
+            class="game-rank-list__avatar"
+            @error="onLeaderboardAvatarError"
+          >
+          <strong class="game-rank-list__name">{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
+          <em v-if="leaderboardGameCode === 'tetris_pk'" class="game-rank-list__rate">胜率 {{ row.winRate ?? 0 }}%</em>
+          <b class="game-rank-list__score">最高得分：{{ row.bestScore ?? 0 }}</b>
         </li>
       </ol>
       <p v-else class="game-stats-empty">还没有玩家上榜。</p>
@@ -224,36 +225,40 @@
 
     <el-dialog v-model="statsVisible" class="game-center-dialog" width="680px" destroy-on-close>
       <template #header>
-        <span>对局统计</span>
+        <div class="game-dialog-title">对局统计</div>
       </template>
-      <el-tabs v-model="activeGameCode" @tab-change="onStatsGameChange">
+      <el-tabs v-model="statsGameCode" @tab-change="onStatsGameChange">
         <el-tab-pane label="五子棋" name="gobang" />
         <el-tab-pane label="井字棋" name="jinzi" />
         <el-tab-pane label="俄罗斯方块" name="tetris" />
-        <el-tab-pane label="方块 PK" name="tetris_pk" />
+        <el-tab-pane label="俄罗斯方块PK" name="tetris_pk" />
       </el-tabs>
-      <div class="game-stats-summary">
-        <div>
+      <div class="game-stats-summary" :class="{ 'is-tetris': statsGameCode === 'tetris' }">
+        <div v-if="statsGameCode !== 'tetris'">
           <span>胜 / 负</span>
-          <strong>{{ profile.winCount ?? 0 }} / {{ profile.loseCount ?? 0 }}</strong>
+          <strong>{{ statsProfile.winCount ?? 0 }} / {{ statsProfile.loseCount ?? 0 }}</strong>
         </div>
         <div>
           <span>总局数</span>
-          <strong>{{ totalCount }}</strong>
+          <strong>{{ statsTotalCount }}</strong>
         </div>
         <div>
-          <span>胜率</span>
-          <strong>{{ activeGameCode === 'tetris' ? tetrisWinRateText : winRateText }}</strong>
+          <span>{{ statsGameCode === 'tetris' ? '最高得分' : '胜率' }}</span>
+          <strong>{{ statsGameCode === 'tetris' ? (tetrisProfile.bestScore ?? 0) : statsWinRateText }}</strong>
         </div>
       </div>
 
-      <div class="game-stats-record-head">我的对战记录</div>
+      <div class="game-stats-record-columns" aria-hidden="true">
+        <span>游戏判决结果</span>
+        <span>游戏结束原因</span>
+        <span>时间</span>
+        <span>积分加减情况</span>
+      </div>
       <ul v-if="statRecords.length" class="game-stats-record-list">
         <li v-for="row in statRecords" :key="row.id" class="game-stats-record-item">
-          <div>
-            <strong>{{ recordResultText(row) }}</strong>
-            <span>{{ endReasonText(row.endReason) }} · {{ formatRecordTime(row.endedAt) }}</span>
-          </div>
+          <strong>{{ recordResultText(row) }}</strong>
+          <span>{{ recordEndReasonText(row) }}</span>
+          <span>{{ formatRecordTime(row.endedAt) }}</span>
           <em :class="{ 'is-win': recordScoreDelta(row) > 0 }">
             {{ formatScoreDelta(row) }}
           </em>

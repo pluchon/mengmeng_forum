@@ -197,6 +197,17 @@
   color: #fff;
 }
 
+.detail-video-player__btn--play {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.detail-video-player__btn--play:hover,
+.detail-video-player__btn--play:focus-visible {
+  background: transparent;
+}
+
 .detail-video-player__time {
   color: rgba(255, 255, 255, 0.88);
   font-size: 12px;

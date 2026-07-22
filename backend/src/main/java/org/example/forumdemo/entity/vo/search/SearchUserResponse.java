@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.example.forumdemo.entity.vo.common.PageResult;
-import org.example.forumdemo.entity.vo.user.UserBriefVO;
 
 /**
  * 用户搜索响应. source:
@@ -26,5 +25,5 @@ public class SearchUserResponse {
     private String keyword;
 
     @Schema(description = "分页结果")
-    private PageResult<UserBriefVO> page;
+    private PageResult<SearchUserItemVO> page;
 }

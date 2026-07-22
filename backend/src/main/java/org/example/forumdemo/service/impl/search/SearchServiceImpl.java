@@ -11,13 +11,16 @@ import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forumdemo.converter.SearchUserConverter;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.article.ArticleListResponse;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.search.SearchArticleResponse;
+import org.example.forumdemo.entity.vo.search.SearchUserItemVO;
 import org.example.forumdemo.entity.vo.search.SearchUserResponse;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
+import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
@@ -25,6 +28,7 @@ import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.search.ArticleSearchIndexService;
 import org.example.forumdemo.service.interfaces.search.SearchService;
+import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -80,6 +84,9 @@ public class SearchServiceImpl implements SearchService {
 
     @Autowired
     private ArticleSearchIndexService articleSearchIndexService;
+
+    @Autowired
+    private UserFollowService userFollowService;
 
     @Override
     public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
@@ -162,7 +169,8 @@ public class SearchServiceImpl implements SearchService {
     }
 
     @Override
-    public SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
+    public SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize,
+                                          boolean preferAiRag, Long viewerId) {
         String kw = normalizeSearchKeyword(keyword);
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
@@ -171,16 +179,20 @@ public class SearchServiceImpl implements SearchService {
             Page<User> page = PageUtils.getPage(p, s);
             Page<User> dbResult = userMapper.selectPage(page, buildDbFuzzyUserQuery(kw));
             if (dbResult.getRecords() != null && !dbResult.getRecords().isEmpty()) {
-                return new SearchUserResponse(Constant.SEARCH_SOURCE_DB, kw, wrapUsers(dbResult, p, s, kw));
+                return new SearchUserResponse(
+                        Constant.SEARCH_SOURCE_DB,
+                        kw,
+                        wrapUsers(dbResult, p, s, kw, viewerId)
+                );
             }
             return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
         }
 
-        return searchUsersByAiRag(kw, p, s);
+        return searchUsersByAiRag(kw, p, s, viewerId);
     }
 
     /** AI 用户搜索：字面候选 + hybrid_rank 打分；低分丢弃；无候选再走向量兜底。 */
-    private SearchUserResponse searchUsersByAiRag(String kw, int p, int s) {
+    private SearchUserResponse searchUsersByAiRag(String kw, int p, int s, Long viewerId) {
         List<Long> rankedIds = new ArrayList<>();
 
         List<User> candidates = userMapper.selectPage(
@@ -213,9 +225,9 @@ public class SearchServiceImpl implements SearchService {
         int toIdx = Math.min(fromIdx + s, rankedIds.size());
         List<Long> pageSlice = fromIdx >= rankedIds.size() ? Collections.emptyList()
                 : rankedIds.subList(fromIdx, toIdx);
-        List<UserBriefVO> records = buildUserBriefListForRag(pageSlice);
+        List<SearchUserItemVO> records = buildSearchUserListForRag(pageSlice, viewerId);
         long pages = (total + s - 1) / s;
-        PageResult<UserBriefVO> pageResult = new PageResult<>(
+        PageResult<SearchUserItemVO> pageResult = new PageResult<>(
                 records, total, p, s, pages, toIdx < rankedIds.size());
         return new SearchUserResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
     }
@@ -521,15 +533,13 @@ public class SearchServiceImpl implements SearchService {
         return vo;
     }
 
-    private PageResult<UserBriefVO> wrapUsers(Page<User> page, int p, int s, String kw) {
+    private PageResult<SearchUserItemVO> wrapUsers(Page<User> page, int p, int s, String kw, Long viewerId) {
         List<String> terms = keywordTerms(kw);
         List<User> sorted = new ArrayList<>(page.getRecords());
         sorted.sort((a, b) -> Integer.compare(
                 userLiteralScore(b, terms),
                 userLiteralScore(a, terms)));
-        List<UserBriefVO> records = sorted.stream()
-                .map(UserBriefVO::new)
-                .collect(Collectors.toList());
+        List<SearchUserItemVO> records = buildSearchUserItems(sorted, viewerId);
         return new PageResult<>(records, page.getTotal(), p, s, page.getPages(), page.hasNext());
     }
 
@@ -539,11 +549,11 @@ public class SearchServiceImpl implements SearchService {
         return SearchKeywordHelper.literalRelevanceScore(nickname, username, terms);
     }
 
-    private PageResult<UserBriefVO> emptyUserPage(int p, int s) {
+    private PageResult<SearchUserItemVO> emptyUserPage(int p, int s) {
         return new PageResult<>(Collections.emptyList(), 0L, p, s, 0L, false);
     }
 
-    private List<UserBriefVO> buildUserBriefListForRag(List<Long> ids) {
+    private List<SearchUserItemVO> buildSearchUserListForRag(List<Long> ids, Long viewerId) {
         if (ids.isEmpty()) {
             return Collections.emptyList();
         }
@@ -555,13 +565,26 @@ public class SearchServiceImpl implements SearchService {
         for (User u : rows) {
             byId.put(u.getId(), u);
         }
-        List<UserBriefVO> out = new ArrayList<>(ids.size());
+        List<User> orderedUsers = new ArrayList<>(ids.size());
         for (Long id : ids) {
             User u = byId.get(id);
             if (u == null) {
                 continue;
             }
-            out.add(new UserBriefVO(u));
+            orderedUsers.add(u);
+        }
+        return buildSearchUserItems(orderedUsers, viewerId);
+    }
+
+    private List<SearchUserItemVO> buildSearchUserItems(List<User> users, Long viewerId) {
+        if (users == null || users.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> userIds = users.stream().map(User::getId).toList();
+        Map<Long, UserFollowStatsVO> stats = userFollowService.getBatchStats(userIds, viewerId);
+        List<SearchUserItemVO> out = new ArrayList<>(users.size());
+        for (User user : users) {
+            out.add(SearchUserConverter.toItem(user, stats.get(user.getId())));
         }
         return out;
     }

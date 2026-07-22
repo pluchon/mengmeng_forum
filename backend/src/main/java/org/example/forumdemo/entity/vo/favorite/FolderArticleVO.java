@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.example.forumdemo.entity.db.Article;
+import org.example.forumdemo.entity.vo.article.ArticleBriefVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 
 import java.util.Date;
@@ -20,7 +20,7 @@ import java.util.Date;
 public class FolderArticleVO {
 
     @Schema(description = "帖子基础信息")
-    private Article article;
+    private ArticleBriefVO article;
 
     @Schema(description = "作者简介")
     private UserBriefVO author;

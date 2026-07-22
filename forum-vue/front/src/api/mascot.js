@@ -169,3 +169,11 @@ export function getCompanionMessages(sessionId) {
     method: 'get',
   })
 }
+
+/** 陪伴助手：删除指定会话 */
+export function deleteCompanionSession(sessionId) {
+  return request({
+    url: `/mascot/companion/sessions/${sessionId}`,
+    method: 'delete',
+  })
+}

@@ -8,11 +8,13 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleFavorite;
 import org.example.forumdemo.entity.db.UserFavoriteFolder;
 import org.example.forumdemo.entity.dto.favorite.CreateFolderRequest;
 import org.example.forumdemo.entity.dto.favorite.UpdateFolderRequest;
+import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.favorite.FolderVO;
 import org.example.forumdemo.mapper.ArticleFavoriteMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
@@ -159,21 +161,21 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     // 查询
     // ============================================================
     @Override
-    public List<FolderVO> queryMyFolders(Long loginUserId) {
+    public PageResult<FolderVO> queryMyFolders(Long loginUserId, Integer pageNum, Integer pageSize) {
         if (loginUserId == null || loginUserId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }
         ensureDefaultFolder(loginUserId);
-        List<UserFavoriteFolder> rows = folderMapper.selectList(new LambdaQueryWrapper<UserFavoriteFolder>()
+        return queryFolderPage(new LambdaQueryWrapper<UserFavoriteFolder>()
                 .eq(UserFavoriteFolder::getUserId, loginUserId)
                 .ne(UserFavoriteFolder::getDeleteState, DELETE_YES)
                 .orderByAsc(UserFavoriteFolder::getSortOrder)
-                .orderByAsc(UserFavoriteFolder::getCreateTime));
-        return rows.stream().map(f -> new FolderVO(f, true)).collect(Collectors.toList());
+                .orderByAsc(UserFavoriteFolder::getCreateTime), true, pageNum, pageSize);
     }
 
     @Override
-    public List<FolderVO> queryUserPublicFolders(Long userId, Long loginUserId) {
+    public PageResult<FolderVO> queryUserPublicFolders(Long userId, Long loginUserId,
+                                                       Integer pageNum, Integer pageSize) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -186,8 +188,20 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (!owner) {
             q.eq(UserFavoriteFolder::getIsPublic, PUBLIC_YES);
         }
-        List<UserFavoriteFolder> rows = folderMapper.selectList(q);
-        return rows.stream().map(f -> new FolderVO(f, owner)).collect(Collectors.toList());
+        return queryFolderPage(q, owner, pageNum, pageSize);
+    }
+
+    private PageResult<FolderVO> queryFolderPage(LambdaQueryWrapper<UserFavoriteFolder> query,
+                                                  boolean owner,
+                                                  Integer pageNum,
+                                                  Integer pageSize) {
+        int p = PageUtils.getValidPageNum(pageNum);
+        int s = PageUtils.getValidPageSize(pageSize);
+        Page<UserFavoriteFolder> result = folderMapper.selectPage(PageUtils.getPage(p, s), query);
+        List<FolderVO> records = result.getRecords().stream()
+                .map(folder -> new FolderVO(folder, owner))
+                .collect(Collectors.toList());
+        return new PageResult<>(records, result.getTotal(), p, s, result.getPages(), result.hasNext());
     }
 
     // ============================================================

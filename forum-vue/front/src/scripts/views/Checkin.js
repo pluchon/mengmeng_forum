@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, watch, shallowRef } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { doCheckin, getCheckinInfo, getCheckinLog, getCheckinRule } from '@/api/checkin'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
@@ -6,9 +6,7 @@ import { unwrapPageRecords } from '@/utils/apiData'
 import { clientOssUrl } from '@/utils/clientOss'
 import iconPrevUrl from '@/assets/svg/后退.svg?url'
 import iconNextUrl from '@/assets/svg/前进.svg?url'
-import iconTodayUrl from '@/assets/svg/今天.svg?url'
 import iconLogUrl from '@/assets/svg/查看签到.svg?url'
-import iconTrendUrl from '@/assets/svg/查看签到趋势.svg?url'
 import signedTodayIconUrl from '@/assets/svg/日历中的已签到.svg?url'
 
 const REWARD_TIP_DISMISS_KEY = 'checkin_reward_tip_dismissed'
@@ -16,7 +14,6 @@ const REWARD_TIP_DISMISS_KEY = 'checkin_reward_tip_dismissed'
 export function useCheckin() {
   const checkinSnapshotStore = useCheckinSnapshotStore()
   const heroImageUrl = clientOssUrl('checkin.webp')
-  const statCardBgUrl = clientOssUrl('签到页小卡片背景.webp')
 
   const loading = ref(true)
   const submitting = ref(false)
@@ -119,10 +116,6 @@ export function useCheckin() {
   function nextMonth() {
     const cur = calendarDate.value
     calendarDate.value = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)
-  }
-
-  function goTodayCalendar() {
-    calendarDate.value = new Date()
   }
 
   function cellPointsForDay(dayStr) {
@@ -234,145 +227,16 @@ export function useCheckin() {
     return `再连续签到 ${s.nextThresholdLeft} 天可领 ${s.nextThresholdBonus ?? 0} 萌币（${s.nextThreshold} 天档）`
   })
 
-  const trendOverlayVisible = ref(false)
-  const trendLoading = ref(false)
-  const trendChartOption = shallowRef(null)
-
-  async function fetchAllCheckinLogRows() {
-    const all = []
-    let page = 1
-    const pageSize = 100
-    for (;;) {
-      const res = await getCheckinLog({ pageNum: page, pageSize })
-      if (res.code !== 0) break
-      const data = res.data
-      const rows = unwrapPageRecords(data)
-      all.push(...rows)
-      if (!data?.hasNextPage || rows.length === 0) break
-      page += 1
-      if (page > 50) break
-    }
-    return all
-  }
-
-  function buildCheckinCumulativeSeries(rows) {
-    const byDay = new Map()
-    for (const r of rows) {
-      const day = (r.checkinDate || '').slice(0, 10)
-      if (!day || day.length < 10) continue
-      const gain = (Number(r.points) || 0) + (Number(r.bonusPoints) || 0)
-      byDay.set(day, (byDay.get(day) || 0) + gain)
-    }
-    const sortedDays = [...byDay.keys()].sort()
-    let cum = 0
-    const dates = []
-    const cumulative = []
-    const dailyGain = []
-    for (const d of sortedDays) {
-      const g = byDay.get(d) || 0
-      cum += g
-      dates.push(d)
-      cumulative.push(cum)
-      dailyGain.push(g)
-    }
-    return { dates, cumulative, dailyGain }
-  }
-
-  function buildTrendChartOption(series) {
-    const { dates, cumulative, dailyGain } = series
-    if (!dates.length) {
-      return {
-        title: {
-          text: '暂无签到流水，无法绘制趋势',
-          left: 'center',
-          top: 'center',
-          textStyle: { color: '#86909c', fontSize: 15, fontWeight: 600 },
-        },
-        xAxis: { type: 'category', show: false },
-        yAxis: { type: 'value', show: false },
-        series: [],
-      }
-    }
-    return {
-      animation: true,
-      animationDuration: 900,
-      animationEasing: 'cubicOut',
-      grid: { left: 52, right: 20, top: 44, bottom: dates.length > 14 ? 88 : 52 },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } },
-        formatter(params) {
-          const p = params[0]
-          const i = p.dataIndex
-          return `${dates[i]}<br/><span style="font-weight:700">当日获得</span> +${dailyGain[i]} 萌币<br/><span style="font-weight:700">截止当日累计（仅签到）</span> ${cumulative[i]} 萌币`
-        },
-      },
-      xAxis: {
-        type: 'category',
-        boundaryGap: false,
-        data: dates,
-        axisLabel: { rotate: dates.length > 12 ? 38 : 0, fontWeight: 700, fontSize: 11 },
-      },
-      yAxis: {
-        type: 'value',
-        name: '萌币',
-        nameTextStyle: { fontWeight: 800, fontSize: 12 },
-        axisLabel: { fontWeight: 600 },
-        splitLine: { lineStyle: { opacity: 0.35 } },
-      },
-      dataZoom:
-        dates.length > 14
-          ? [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, height: 22, bottom: 14 }]
-          : [{ type: 'inside', xAxisIndex: 0 }],
-      series: [
-        {
-          name: '累计萌币',
-          type: 'line',
-          smooth: 0.35,
-          symbol: 'circle',
-          symbolSize: 7,
-          lineStyle: { width: 3, color: '#f54568' },
-          itemStyle: { color: '#f54568' },
-          areaStyle: { color: 'rgba(245, 69, 104, 0.12)' },
-          emphasis: { focus: 'series' },
-          data: cumulative,
-        },
-      ],
-    }
-  }
-
-  async function openTrendOverlay() {
-    trendOverlayVisible.value = true
-    trendLoading.value = true
-    trendChartOption.value = null
-    try {
-      const rows = await fetchAllCheckinLogRows()
-      trendChartOption.value = buildTrendChartOption(buildCheckinCumulativeSeries(rows))
-    } catch {
-      trendChartOption.value = buildTrendChartOption({ dates: [], cumulative: [], dailyGain: [] })
-    } finally {
-      trendLoading.value = false
-    }
-  }
-
-  function closeTrendOverlay() {
-    trendOverlayVisible.value = false
-  }
-
   return {
     calendarDate,
     calendarTitle,
     cellPointsForDay,
-    closeTrendOverlay,
     dismissRewardTip,
-    goTodayCalendar,
     handleCheckin,
     heroImageUrl,
     iconLogUrl,
     iconNextUrl,
     iconPrevUrl,
-    iconTodayUrl,
-    iconTrendUrl,
     isSignedDay,
     isTodayCell,
     loading,
@@ -386,16 +250,11 @@ export function useCheckin() {
     nextRewardText,
     onLogPageChange,
     openLogDrawer,
-    openTrendOverlay,
     prevMonth,
     rewardTipVisible,
     showSignedOverlay,
     signedTodayIconUrl,
-    statCardBgUrl,
     status,
     submitting,
-    trendChartOption,
-    trendLoading,
-    trendOverlayVisible,
   }
 }

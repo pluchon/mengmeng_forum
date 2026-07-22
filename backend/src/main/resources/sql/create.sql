@@ -39,7 +39,6 @@ CREATE TABLE `user` (
                         `state` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0正常, 1禁言',
                         `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '是否删除: 0否 1是',
                         `lottery_pity_draws` int NOT NULL DEFAULT 0 COMMENT '抽奖硬保底计数：连续未中神秘大奖(is_jackpot)父档的次数，命中后归零',
-                        `lottery_surprise_claimed` tinyint NOT NULL DEFAULT 0 COMMENT '抽奖页彩蛋积分是否已领取 0否 1是',
                         `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                         `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                         PRIMARY KEY (`id`),
@@ -887,13 +886,7 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 ('deepseek-v4-pro', 'deepseek', 'per_1m_output', 6.000000, 1, 1, '缓存未命中'),
 ('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 1, 'prompt_extend=false'),
 ('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)'),
-('gpt-image-2', 'huanapi', 'per_image', 0.200000, 1, 1, 'GPT Image 进阶生图'),
-('gemini-3.1-pro', 'huanapi', 'per_1m_input', 2.000000, 1, 1, 'Gemini Pro'),
-('gemini-3.1-pro', 'huanapi', 'per_1m_output', 8.000000, 1, 1, 'Gemini Pro'),
-('claude-haiku-4-5', 'huanapi', 'per_1m_input', 1.000000, 1, 1, 'Claude Haiku PRO+'),
-('claude-haiku-4-5', 'huanapi', 'per_1m_output', 4.000000, 1, 1, 'Claude Haiku PRO+'),
-('claude-sonnet-4-6', 'huanapi', 'per_1m_input', 3.000000, 1, 1, 'Claude Sonnet MAX+'),
-('claude-sonnet-4-6', 'huanapi', 'per_1m_output', 12.000000, 1, 1, 'Claude Sonnet MAX+');
+('gpt-image-2', 'huanapi', 'per_image', 0.200000, 1, 1, 'GPT Image 进阶生图');
 
 -- ----------------------------
 -- 19.3 AI 调用明细 (forum_ai_usage_log)
@@ -1492,7 +1485,7 @@ CREATE TABLE `forum_vip_quota_config` (
     `quota_type` varchar(32) NOT NULL COMMENT 'unlimited|daily_count|token_period',
     `daily_bucket` varchar(32) DEFAULT NULL COMMENT '日配额桶',
     `model_code` varchar(64) DEFAULT NULL COMMENT 'token_period 时按模型汇总 forum_ai_usage_log',
-    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|gemini|claude|openai|huanapi',
+    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|openai|huanapi',
     `daily_limit` int DEFAULT NULL COMMENT '日次数上限',
     `token_limit` bigint DEFAULT NULL COMMENT '周期 Token 上限',
     `tier_tag` varchar(16) DEFAULT NULL COMMENT 'PRO|MAX|免费 角标',
@@ -1509,14 +1502,11 @@ INSERT INTO `forum_vip_quota_config`
 (1, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 10, NULL, 'PRO', 40),
 (1, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 500000, 'PRO', 50),
 (1, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 450000, 'PRO', 60),
-(1, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 300000, 'PRO', 70),
 (2, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
 (2, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 50, NULL, 'MAX', 30),
 (2, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 50, NULL, 'MAX', 40),
 (2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50),
-(2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60),
-(2, 'token_gemini_deep', '本期 Token 配额 · 文本', 'Gemini · 深度', 'token_period', NULL, 'gemini-3.1-pro', 'gemini', NULL, 800000, 'MAX', 70),
-(2, 'token_claude_sonnet', '本期 Token 配额 · 文本', 'Claude Sonnet', 'token_period', NULL, 'claude-sonnet-4-6', 'claude', NULL, 400000, 'MAX', 90);
+(2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60);
 
 -- ----------------------------
 -- 25. 群聊模块

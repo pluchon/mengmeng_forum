@@ -12,10 +12,6 @@ export function getGobangRecords(params) {
   return request({ url: '/game/gobang/records', method: 'get', params })
 }
 
-export function getGobangLeaderboard(params) {
-  return request({ url: '/game/gobang/leaderboard', method: 'get', params })
-}
-
 export function getGobangActiveRooms() {
   return request({ url: '/game/gobang/rooms/active', method: 'get' })
 }
@@ -38,10 +34,6 @@ export function getJinziProfile() {
 
 export function getJinziRecords(params) {
   return request({ url: '/game/jinzi/records', method: 'get', params })
-}
-
-export function getJinziLeaderboard(params) {
-  return request({ url: '/game/jinzi/leaderboard', method: 'get', params })
 }
 
 export function getJinziReplay(recordId) {

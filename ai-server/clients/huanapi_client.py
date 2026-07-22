@@ -1,4 +1,4 @@
-"""HuanAPI：Gemini 风格 /messages 与 OpenAI 风格 /images/generations（按上游实际字段解析）."""
+"""HuanAPI 图片生成客户端。"""
 
 from __future__ import annotations
 
@@ -76,63 +76,6 @@ def _post_json(
             time.sleep(wait)
     assert last_exc is not None
     raise last_exc
-
-
-def _extract_text(data: Any) -> str:
-    if data is None:
-        return ""
-    if isinstance(data, str):
-        return data.strip()
-    if not isinstance(data, dict):
-        return str(data)
-    choices = data.get("choices")
-    if isinstance(choices, list) and choices:
-        ch0 = choices[0]
-        if isinstance(ch0, dict):
-            msg = ch0.get("message") or {}
-            if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-                return msg["content"].strip()
-    out = data.get("output_text") or data.get("text")
-    if isinstance(out, str) and out.strip():
-        return out.strip()
-    content = data.get("content")
-    if isinstance(content, list):
-        parts = []
-        for block in content:
-            if isinstance(block, dict) and isinstance(block.get("text"), str):
-                parts.append(block["text"])
-        if parts:
-            return "\n".join(parts).strip()
-    if isinstance(content, str):
-        return content.strip()
-    raise ValueError(f"HuanAPI messages 响应无法解析文本: {str(data)[:400]}")
-
-
-def huanapi_messages(
-    base_url: str,
-    api_key: str,
-    model: str,
-    messages: list[dict[str, Any]],
-    *,
-    timeout: int = 120,
-) -> tuple[str, dict[str, Any]]:
-    if not api_key:
-        raise ValueError("huanapi gemini_key 未配置（HUANAPI_GEMINI_KEY）")
-    url = normalize_huanapi_v1_base(base_url) + "/messages"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload: dict[str, Any] = {"model": model, "messages": messages}
-    r = _post_json(url, headers=headers, payload=payload, timeout=timeout)
-    if not r.ok:
-        logger.warning("HuanAPI messages HTTP %s: %s", r.status_code, r.text[:500])
-    r.raise_for_status()
-    data = r.json()
-    from clients.usage_util import usage_from_openai_style
-
-    text = _extract_text(data)
-    usage = usage_from_openai_style(data if isinstance(data, dict) else {}, model)
-    if usage.get("input_tokens", 0) == 0 and usage.get("output_tokens", 0) == 0:
-        usage["estimated"] = True
-    return text, usage
 
 
 def _extract_image_url(data: Any) -> str:

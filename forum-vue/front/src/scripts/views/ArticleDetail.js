@@ -40,7 +40,6 @@ import { useEmojiShopStore } from '@/stores/emojiShop'
 import { validateLocalImageFile, openImageUploadLoading, getBatchImageUploadLoadingText } from '@/utils/imageUploadFeedback'
 import { validateChatImageMime } from '@/utils/chatMedia'
 import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
-import sendIconUrl from '@/assets/svg/发送.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
 import '@/assets/styles/article.css'
 
@@ -296,6 +295,21 @@ export function useArticleDetail() {
 
   /** 笔记相册 URL（与 article 正文独立） */
   const articleTags = ref([])
+  const tagsExpanded = ref(false)
+  const visibleArticleTags = computed(() => (
+    tagsExpanded.value ? articleTags.value : articleTags.value.slice(0, 2)
+  ))
+  const hiddenArticleTagCount = computed(() => Math.max(0, articleTags.value.length - 2))
+
+  function toggleArticleTags() {
+    tagsExpanded.value = !tagsExpanded.value
+  }
+
+  const replyTargetLabel = computed(() => {
+    if (!replyTarget.value) return ''
+    const nickname = replyTarget.value.nickname || '用户'
+    return replyTarget.value.showMention ? `回复给 @${nickname}` : `回复给 ${nickname}`
+  })
 
   const articleGalleryUrls = ref([])
   const activeGalleryIndex = ref(0)
@@ -513,6 +527,7 @@ export function useArticleDetail() {
     aiSummaryIsHint.value = false
     articleGalleryUrls.value = []
     articleTags.value = []
+    tagsExpanded.value = false
     activeGalleryIndex.value = 0
     try {
       const res = await getArticleDetail(articleId)
@@ -759,7 +774,8 @@ export function useArticleDetail() {
     replyTarget.value = {
       mode: 'sub',
       replyId: item.articleReply.id,
-      replyUserId: item.user?.id || null,
+      replyUserId: null,
+      showMention: false,
       nickname: item.user?.nickname || '用户',
       contentPreview: buildReplyContentPreview(item.articleReply.content),
     }
@@ -771,6 +787,7 @@ export function useArticleDetail() {
       mode: 'sub',
       replyId: payload.replyId,
       replyUserId: payload.replyUserId || null,
+      showMention: true,
       nickname: payload.nickname || '用户',
       contentPreview: buildReplyContentPreview(payload.content),
     }
@@ -903,7 +920,7 @@ export function useArticleDetail() {
   async function loadFavoriteFolders() {
     favoriteFoldersLoading.value = true
     try {
-      const res = await getMyFavoriteFolders()
+      const res = await getMyFavoriteFolders({ pageNum: 1, pageSize: 100 })
       if (res.code === 0) {
         const raw = res.data
         const rows = Array.isArray(raw)
@@ -1016,6 +1033,17 @@ export function useArticleDetail() {
 
   async function loadAiSummary() {
     if (!article.value?.id) return
+    const plainContent = String(article.value?.content || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (plainContent.length < 30) {
+      aiSummary.value = '内容过少，无法生成摘要'
+      aiSummaryIsHint.value = true
+      await nextTick()
+      resizeAiSummaryArea()
+      return
+    }
     if (guideStreamAbort) {
       guideStreamAbort()
       guideStreamAbort = null
@@ -1033,8 +1061,11 @@ export function useArticleDetail() {
           nextTick(resizeAiSummaryArea)
         },
         onDone: () => {
-          if (isSummaryLikelyArticleBody(aiSummary.value, article.value?.content)) {
-            aiSummary.value = 'AI 返回内容与正文过于相似，请充实正文后再尝试智能导读。'
+          if (
+            isAiSummaryHintMessage(aiSummary.value)
+            || isSummaryLikelyArticleBody(aiSummary.value, article.value?.content)
+          ) {
+            aiSummary.value = '内容过少，无法生成摘要'
             aiSummaryIsHint.value = true
           }
           nextTick(resizeAiSummaryArea)
@@ -1085,6 +1116,10 @@ export function useArticleDetail() {
     imagePreviewList,
     article,
     articleTags,
+    hiddenArticleTagCount,
+    tagsExpanded,
+    toggleArticleTags,
+    visibleArticleTags,
     articleGalleryUrls,
     articleVideoUrl,
     detailVideoRef,
@@ -1146,7 +1181,6 @@ export function useArticleDetail() {
     renderedContent,
     renderCommentHtml,
     replies,
-    sendIconUrl,
     replyContent,
     replyCountDisplay,
     replyEmojiPanelOpen,
@@ -1159,6 +1193,7 @@ export function useArticleDetail() {
     replyPlaceholder,
     replySelectedPack,
     replyTarget,
+    replyTargetLabel,
     replyVisiblePacks,
     removePendingEmoji,
     removePendingImage,

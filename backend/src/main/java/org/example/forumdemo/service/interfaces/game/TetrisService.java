@@ -7,8 +7,6 @@ import org.example.forumdemo.entity.vo.game.TetrisRecordVO;
 import org.example.forumdemo.entity.vo.game.TetrisReplayVO;
 import org.example.forumdemo.entity.vo.game.TetrisSettleResultVO;
 
-import java.util.List;
-
 // 俄罗斯方块单人模式服务
 public interface TetrisService {
 
@@ -16,7 +14,7 @@ public interface TetrisService {
 
     PageResult<TetrisRecordVO> listRecords(Long userId, Integer pageNum, Integer pageSize);
 
-    List<TetrisProfileVO> listLeaderboard(Integer pageSize);
+    PageResult<TetrisProfileVO> listLeaderboard(Integer pageNum, Integer pageSize);
 
     TetrisSettleResultVO settle(Long userId, TetrisSettleRequest request);
 

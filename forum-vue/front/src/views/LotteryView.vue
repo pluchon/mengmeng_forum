@@ -1,14 +1,6 @@
 ﻿<template>
   <div v-loading="loading" class="lottery-page shell-page-scroll animate-fade-in">
     <div class="lottery-inner">
-      <div class="lottery-demo-banner" role="alert">
-        <el-icon class="lottery-demo-banner__icon" :size="20"><WarningFilled /></el-icon>
-        <div class="lottery-demo-banner__body">
-          <strong class="lottery-demo-banner__title">演示说明</strong>
-          <p class="lottery-demo-banner__text">{{ LOTTERY_DEMO_NOTICE }}</p>
-        </div>
-      </div>
-
       <header class="lottery-topbar">
         <div class="lottery-title-block">
           <el-icon :size="26"><Trophy /></el-icon>
@@ -18,7 +10,7 @@
 
       <div class="lottery-scroll-body">
       <div class="lottery-main-grid">
-        <!-- 左：积分与保底 -->
+        <!-- 左：抽奖状态 -->
         <aside class="lottery-glass lottery-info-col">
           <button
             type="button"
@@ -31,33 +23,11 @@
           </button>
 
           <div class="lottery-info-main">
-            <div class="lottery-info-label">当前积分余额</div>
-            <div class="lottery-info-value">{{ info.balance ?? '—' }}</div>
-            <div class="lottery-info-sub">
-              距攒够一次十连还差 <strong>{{ ptsToTen }}</strong> 积分
-            </div>
-            <div class="lottery-progress-bg">
-              <div class="lottery-progress-fill" :style="{ width: tenProgressPct + '%' }" />
-            </div>
-            <div class="lottery-progress-hint">{{ info.balance ?? 0 }} / {{ tenCost }}</div>
+            <h2 class="lottery-info-heading">抽奖状态</h2>
 
             <div class="lottery-pity-row">
-              <span>
-                神秘大奖硬保底：
-                <template v-if="hardPityRemaining <= 0">下次抽取必得神秘大奖档（若无库存则回落普通池）</template>
-                <template v-else>还差 {{ hardPityRemaining }} 抽触发必得</template>
-              </span>
-              <el-tooltip placement="top" effect="dark" :show-after="200">
-                <template #content>
-                  <div class="lottery-tooltip-inner">
-                    累计未中神秘大奖达到 {{ info.hardPityThreshold ?? 50 }} 抽后强制命中；
-                    十连若前 9 抽均无稀有档（大奖/周边/VIP），第 10 抽仅在稀有子池抽取。
-                  </div>
-                </template>
-                <span class="lottery-pity-info-wrap">
-                  <el-icon :size="14"><InfoFilled /></el-icon>
-                </span>
-              </el-tooltip>
+              <span>硬保底</span>
+              <strong>{{ hardPityRemaining <= 0 ? (jackpotAvailable ? '下次必得' : '头奖已发完') : `剩余 ${hardPityRemaining} 抽` }}</strong>
             </div>
 
             <div v-if="activityList.length" class="lottery-activity-picker">
@@ -87,7 +57,7 @@
           </div>
         </aside>
 
-        <!-- 中：抽奖操作 / 洗牌 + 说明（与左右列同高） -->
+        <!-- 中：抽奖操作 -->
         <section class="lottery-glass lottery-draw-stack lottery-draw-col">
           <div class="lottery-draw-body" :class="{ 'is-busy': phase !== 'idle' }">
             <div
@@ -142,7 +112,7 @@
             </div>
 
             <div v-if="phase === 'idle'" class="lottery-draw-idle-wrap">
-              <h3 class="lottery-draw-strategy-title">请选择你的策略</h3>
+              <h3 class="lottery-draw-strategy-title">抽奖</h3>
               <div class="lottery-compact-actions">
                 <button
                   type="button"
@@ -153,7 +123,10 @@
                   <span class="play-icon" aria-hidden="true">
                     <el-icon><Coin /></el-icon>
                   </span>
-                  <span class="play-label">单抽</span>
+                  <span class="play-copy">
+                    <span class="play-label">单抽</span>
+                    <span class="play-cost">{{ costPer }} 积分</span>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -164,35 +137,33 @@
                   <span class="play-icon" aria-hidden="true">
                     <el-icon><Grid /></el-icon>
                   </span>
-                  <span class="play-label">十连</span>
+                  <span class="play-copy">
+                    <span class="play-label">十连</span>
+                    <span class="play-cost">{{ tenCost }} 积分</span>
+                  </span>
                 </button>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 右：消耗与规则摘要 -->
+        <!-- 右：核心规则 -->
         <aside class="lottery-glass lottery-cost-col">
-          <div class="lottery-cost-head">消耗说明</div>
-          <div class="lottery-cost-row">
-            <span class="lottery-cost-name">单次消耗</span>
-            <span class="lottery-cost-val">{{ costPer }} 积分</span>
+          <div class="lottery-cost-head">核心规则</div>
+          <div class="lottery-core-rules">
+            <div class="lottery-core-rule">
+              <span>抽取消耗</span>
+              <strong>{{ costPer }} / {{ tenCost }} 积分</strong>
+            </div>
+            <div class="lottery-core-rule">
+              <span>十连保底</span>
+              <strong>至少 1 件稀有档</strong>
+            </div>
+            <div class="lottery-core-rule">
+              <span>硬保底</span>
+              <strong>{{ info.hardPityThreshold ?? 50 }} 抽未出必得</strong>
+            </div>
           </div>
-          <div class="lottery-cost-row">
-            <span class="lottery-cost-name">十连消耗</span>
-            <span class="lottery-cost-val">{{ tenCost }} 积分</span>
-          </div>
-          <div class="lottery-cost-row">
-            <span class="lottery-cost-name">十连保底（稀有）</span>
-            <span class="lottery-cost-val lottery-cost-val--ok">至少 1 件稀有档</span>
-          </div>
-          <div class="lottery-cost-row">
-            <span class="lottery-cost-name">神秘大奖硬保底</span>
-            <span class="lottery-cost-val lottery-cost-val--ok">{{ info.hardPityThreshold ?? 50 }} 抽未出必得</span>
-          </div>
-          <ul class="lottery-cost-rules">
-            <li v-for="(line, i) in costRuleHints" :key="i">{{ line }}</li>
-          </ul>
         </aside>
       </div>
 
@@ -206,12 +177,11 @@
             <div
               v-for="(p, i) in info.prizes || []"
               :key="i"
-              class="lottery-pool-chip"
+              class="lottery-pool-chip lottery-prize-chip"
               :class="{ jackpot: p.jackpot }"
             >
-              <span class="chip-name">{{ p.name }}</span>
-              <span class="chip-weight">{{ formatPrizePercent(p) }}</span>
-              <span class="chip-meta" :class="{ scarce: poolStockScarce(p.stockRemaining) }">{{
+              <span class="chip-name lottery-prize-chip__name">{{ p.name }}</span>
+              <span class="chip-meta lottery-prize-chip__stock" :class="{ scarce: poolStockScarce(p.stockRemaining) }">{{
                 poolStockHint(p.stockRemaining)
               }}</span>
             </div>
@@ -229,37 +199,6 @@
               <p class="lottery-chart-hint">售罄档位会自动剔除，其余奖品概率按比例重算。</p>
             </div>
           </div>
-          <div class="lottery-chart-block">
-            <div class="lottery-chart-head">
-              <el-icon :size="17"><TrendCharts /></el-icon>
-              近期开奖热度（当前活动）
-            </div>
-            <div class="lottery-chart-inner">
-              <EChart class="lottery-chart lottery-chart--bar" :option="barOption" />
-              <p class="lottery-chart-hint">统计全站玩家在当前活动下的中奖次数。</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="lottery-surprise-row lottery-glass">
-        <button type="button" class="lottery-surprise-cta" @click="focusSurprisePreview">
-          点我看看
-        </button>
-        <div
-          ref="surprisePreviewRef"
-          class="lottery-surprise-preview"
-          :class="{ 'lottery-surprise-preview--claimed': info.lotterySurpriseClaimed }"
-          role="button"
-          tabindex="0"
-          @click="openSurprisePhase1"
-          @keydown.enter.prevent="openSurprisePhase1"
-        >
-          <img :src="surpriseTeaserImg" alt="" @error="onSurpriseImgError" />
-          <div class="lottery-surprise-mask" />
-          <span class="lottery-surprise-hint">
-            {{ info.lotterySurpriseClaimed ? '已领取' : '限领一次 · 点图领取积分' }}
-          </span>
         </div>
       </div>
       </div>
@@ -342,41 +281,6 @@
           </div>
         </li>
       </ul>
-    </el-dialog>
-
-    <el-dialog
-      v-model="surprisePhaseVisible"
-      :title="surpriseDialogTitle"
-      :show-close="surprisePhase < 3"
-      width="min(380px, 90vw)"
-      class="lottery-dialog lottery-dialog--surprise"
-      align-center
-      append-to-body
-      @closed="resetSurpriseFlow"
-    >
-      <div v-if="surprisePhase === 1" class="lottery-surprise-dialog-text">确认要点吗？</div>
-      <div v-else-if="surprisePhase === 2" class="lottery-surprise-dialog-text">真的真的要点吗？</div>
-      <div v-else-if="surprisePhase === 3" class="lottery-surprise-reward-wrap">
-        <div class="lottery-surprise-reward-photo">
-          <img :src="surpriseRewardImg" alt="" @error="onSurpriseImgError" />
-          <div class="lottery-surprise-reward-banner">恭喜你获得{{ PAGE_SURPRISE_POINTS }} 积分！</div>
-        </div>
-        <p class="lottery-surprise-reward-note">积分已入账，可在积分钱包明细中查看。</p>
-      </div>
-
-      <template #footer>
-        <div v-if="surprisePhase === 1" class="lottery-dialog-footer">
-          <el-button round @click="surprisePhaseVisible = false">算了</el-button>
-          <el-button type="warning" round @click="surprisePhase = 2">确认</el-button>
-        </div>
-        <div v-else-if="surprisePhase === 2" class="lottery-dialog-footer">
-          <el-button round @click="surprisePhase = 1">我再想想</el-button>
-          <el-button type="danger" round :loading="surpriseClaimBusy" @click="confirmSurpriseClaim">点就点</el-button>
-        </div>
-        <div v-else-if="surprisePhase === 3" class="lottery-dialog-footer lottery-dialog-footer--solo">
-          <el-button type="primary" round @click="surprisePhaseVisible = false">收下好心情</el-button>
-        </div>
-      </template>
     </el-dialog>
 
     <teleport to="body">

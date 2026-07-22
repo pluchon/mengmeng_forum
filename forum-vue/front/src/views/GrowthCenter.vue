@@ -30,76 +30,27 @@
               </div>
             </div>
 
-            <div class="growth-level-card">
-              <div class="growth-level-head">
-                <strong>Lv.{{ overview.growthLevel }}</strong>
-                <span>{{ overview.experience }} / {{ overview.nextLevelExperience }} XP</span>
-              </div>
+              <div class="growth-level-card">
+                <div class="growth-level-head">
+                  <strong>Lv.{{ overview.growthLevel }}</strong>
+                  <div class="growth-level-meta">
+                    <span>{{ overview.experience }} / {{ overview.nextLevelExperience }} XP</span>
+                    <button
+                      type="button"
+                      class="growth-record-trigger"
+                      aria-label="查看成长记录"
+                      title="成长记录"
+                      @click="openRecordDialog"
+                    >
+                      <el-icon><Clock /></el-icon>
+                    </button>
+                  </div>
+                </div>
               <div class="growth-level-progress">
                 <i :style="{ width: progress + '%' }"></i>
               </div>
             </div>
           </header>
-
-          <section v-loading="recordLoading" class="growth-record-card">
-            <header class="growth-record-header">
-              <div>
-                <span class="growth-record-icon"><el-icon><Clock /></el-icon></span>
-                <div>
-                  <h2>成长记录</h2>
-                  <p>每一次成长都有迹可循</p>
-                </div>
-              </div>
-              <button
-                v-if="recordTotal > 5"
-                type="button"
-                @click="toggleRecords"
-              >
-                {{ recordsExpanded ? '收起记录' : '查看全部' }}
-              </button>
-            </header>
-
-            <div v-if="recordForbidden" class="growth-record-state">暂无权限查看成长记录</div>
-            <div v-else-if="recordError" class="growth-record-state is-error">
-              <span>{{ recordError }}</span>
-              <button type="button" @click="loadRecordPage(recordPage)">重新加载</button>
-            </div>
-            <div v-else-if="records.length" class="growth-record-list">
-              <article v-for="item in records" :key="item.id">
-                <span class="growth-record-mark"><el-icon><CircleCheck /></el-icon></span>
-                <div class="growth-record-copy">
-                  <strong>{{ item.remark || item.sourceLabel }}</strong>
-                  <span>{{ item.sourceLabel }} · {{ formatRecordTime(item.createTime) }}</span>
-                </div>
-                <em>+{{ item.experienceDelta }} XP</em>
-              </article>
-            </div>
-            <div v-else class="growth-record-state">完成挑战或每日签到后，成长记录会出现在这里</div>
-
-            <nav
-              v-if="recordsExpanded && recordPages > 1 && !recordError"
-              class="growth-record-pagination"
-              aria-label="成长记录分页"
-            >
-              <button
-                type="button"
-                :disabled="recordPage <= 1 || recordLoading"
-                @click="loadRecordPage(recordPage - 1)"
-              >
-                <el-icon><ArrowLeft /></el-icon>
-                上一页
-              </button>
-              <span>{{ recordPage }} / {{ recordPages }}</span>
-              <button
-                type="button"
-                :disabled="recordPage >= recordPages || recordLoading"
-                @click="loadRecordPage(recordPage + 1)"
-              >
-                下一页
-                <el-icon><ArrowRight /></el-icon>
-              </button>
-            </nav>
-          </section>
 
           <main class="growth-dashboard">
             <section
@@ -199,6 +150,61 @@
               </div>
             </aside>
           </main>
+
+          <el-dialog
+            v-model="recordDialogVisible"
+            class="growth-record-dialog"
+            width="min(760px, calc(100vw - 32px))"
+            append-to-body
+            align-center
+          >
+            <template #header>
+              <h2 class="growth-record-dialog-title">成长记录</h2>
+            </template>
+
+            <div v-if="recordForbidden" class="growth-record-dialog-state">暂无权限查看成长记录</div>
+            <div v-else-if="recordError" class="growth-record-dialog-state is-error">
+              <span>{{ recordError }}</span>
+              <button type="button" @click="loadRecordPage(recordPage)">重新加载</button>
+            </div>
+            <div v-else-if="!recordLoading && !records.length" class="growth-record-dialog-state">
+              暂无成长记录
+            </div>
+            <el-table
+              v-else
+              v-loading="recordLoading"
+              :data="records"
+              class="growth-record-table"
+              stripe
+            >
+              <el-table-column label="名称" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <strong class="growth-record-name">{{ row.remark || row.sourceLabel }}</strong>
+                </template>
+              </el-table-column>
+              <el-table-column prop="sourceLabel" label="来源" min-width="120" show-overflow-tooltip />
+              <el-table-column label="时间" width="160">
+                <template #default="{ row }">{{ formatRecordTime(row.createTime) }}</template>
+              </el-table-column>
+              <el-table-column label="经验" width="100" align="right">
+                <template #default="{ row }">
+                  <strong class="growth-record-xp">+{{ row.experienceDelta }} XP</strong>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div v-if="recordPages > 1 && !recordError" class="growth-record-dialog-pagination">
+              <el-pagination
+                v-model:current-page="recordPage"
+                :page-size="10"
+                :total="recordTotal"
+                layout="prev, pager, next"
+                background
+                :disabled="recordLoading"
+                @current-change="onRecordPageChange"
+              />
+            </div>
+          </el-dialog>
 
           <el-dialog
             v-model="levelDialogVisible"

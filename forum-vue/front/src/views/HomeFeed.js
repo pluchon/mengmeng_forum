@@ -1,10 +1,8 @@
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
-import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
+import { ArrowDown, Close, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import FollowingBadge from '@/components/common/FollowingBadge.vue'
 import { useBoardStore } from '@/stores/board'
 import { useHomeShellContext } from '@/composables/useHomeShell'
 import { useHomeMasonry } from '@/composables/useHomeMasonry'
@@ -19,8 +17,6 @@ const router = useRouter()
 const boardStore = useBoardStore()
 
 const {
-  CircleCheck,
-  Close,
   articleList,
   activeCategoryId,
   categoriesWithId,
@@ -73,6 +69,10 @@ const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(fee
   gap: 16,
 })
 
+function handleDismissCheckin() {
+  dismissCheckinHomeStrip()
+}
+
 function openArticle(entry, event) {
   const id = entry?.article?.id
   if (!id) return
@@ -86,6 +86,15 @@ function formatCardNickname(nickname) {
   const characters = Array.from(String(nickname || ''))
   if (characters.length <= 5) return characters.join('')
   return `${characters.slice(0, 5).join('')}…`
+}
+
+function categoryTriggerLabel(item) {
+  if (Number(activeCategoryId.value) !== Number(item?.category?.id)) {
+    return item?.category?.name || ''
+  }
+  const selectedBoard = (item?.boardList || [])
+    .find(board => Number(board?.id) === Number(currentBoardId.value))
+  return selectedBoard?.name || item?.category?.name || ''
 }
 
 function openCategory(categoryId) {

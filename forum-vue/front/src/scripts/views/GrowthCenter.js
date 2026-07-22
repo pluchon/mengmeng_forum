@@ -21,7 +21,7 @@ import {
 import { useUserStore } from '@/stores/user'
 
 const CHALLENGE_PAGE_SIZE = 4
-const RECORD_PAGE_SIZE = 5
+const RECORD_PAGE_SIZE = 10
 const QUESTION_MAP_PAGE_SIZE = 10
 const LEVEL_DEFINITIONS = [
   { level: 1, name: '萌芽', threshold: 0, description: '初次进入社区' },
@@ -50,7 +50,7 @@ export function useGrowthCenter() {
   const recordPage = ref(1)
   const recordPages = ref(0)
   const recordTotal = ref(0)
-  const recordsExpanded = ref(false)
+  const recordDialogVisible = ref(false)
   const active = ref(null)
   const answers = ref({})
   const activeQuestionIndex = ref(0)
@@ -154,7 +154,7 @@ export function useGrowthCenter() {
       const res = await getGrowthOverview()
       if (res.code === 0) {
         overview.value = res.data
-        await Promise.all([loadChallengePage(1), loadRecordPage(1)])
+        await loadChallengePage(1)
       } else {
         error.value = res.message || '成长中心加载失败'
       }
@@ -165,11 +165,13 @@ export function useGrowthCenter() {
     }
   }
 
-  async function toggleRecords() {
-    recordsExpanded.value = !recordsExpanded.value
-    if (!recordsExpanded.value && recordPage.value !== 1) {
-      await loadRecordPage(1)
-    }
+  async function openRecordDialog() {
+    recordDialogVisible.value = true
+    await loadRecordPage(1)
+  }
+
+  async function onRecordPageChange(pageNum) {
+    await loadRecordPage(pageNum)
   }
 
   function formatRecordTime(value) {
@@ -177,6 +179,7 @@ export function useGrowthCenter() {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ''
     return new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -318,10 +321,11 @@ export function useGrowthCenter() {
     recordPage,
     recordPages,
     recordTotal,
-    recordsExpanded,
+    recordDialogVisible,
     formatRecordTime,
     loadRecordPage,
-    toggleRecords,
+    onRecordPageChange,
+    openRecordDialog,
     userStore,
     userTypeLabel,
     ArrowLeft,

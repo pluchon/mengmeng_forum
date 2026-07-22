@@ -1,7 +1,6 @@
 package org.example.forumdemo.service.interfaces.checkin;
 
 import org.example.forumdemo.entity.db.CheckinLog;
-import org.example.forumdemo.entity.vo.checkin.CheckinMonthTrendResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinResultResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinStatusResponse;
@@ -30,11 +29,6 @@ public interface CheckinService {
      * 查询指定月份签到积分规则, 月份为空则取当前月. 找不到该月规则时回退 month=0 的默认配置.
      */
     CheckinRuleMonthResponse getRule(Integer month);
-
-    /**
-     * 按月汇总签到萌币趋势（基础 + 连续奖励）
-     */
-    CheckinMonthTrendResponse getMonthTrend(Long userId, Integer year, Integer month);
 
     /**
      * 游标分页查询签到流水，适用于深分页

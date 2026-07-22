@@ -1041,3 +1041,228 @@
   75% { transform: translateX(-37.5%) scaleY(0.95); }
   100% { transform: translateX(-50%) scaleY(1.05); }
 }
+
+/* 桌面端紧凑工作台 */
+.drift-page {
+  background-color: #f5f8fb;
+  background-image:
+    radial-gradient(at 12% 18%, rgba(200, 230, 255, 0.52) 0%, transparent 48%),
+    radial-gradient(at 88% 82%, rgba(190, 232, 239, 0.46) 0%, transparent 52%);
+  animation: none;
+}
+
+.drift-shell {
+  max-width: 1180px;
+  padding: 20px 24px 28px;
+}
+
+.drift-hero {
+  min-height: 48px;
+  margin-bottom: 14px;
+}
+
+.drift-hero h1 {
+  margin: 0;
+  font-size: 26px;
+  gap: 8px;
+}
+
+.drift-title-icon {
+  font-size: 24px;
+}
+
+.drift-quota-row {
+  gap: 8px;
+}
+
+.drift-quota {
+  min-width: 72px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.drift-quota span {
+  margin-bottom: 1px;
+  font-size: 11px;
+}
+
+.drift-quota strong {
+  font-size: 17px;
+}
+
+.drift-grid {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 14px;
+}
+
+.drift-panel {
+  padding: 18px;
+  border: 1px solid #e4ebf2;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(31, 55, 76, 0.06);
+  animation: none;
+}
+
+.drift-panel::after {
+  display: none;
+}
+
+.drift-compose,
+.drift-current {
+  min-height: 360px;
+}
+
+.drift-mine {
+  margin-top: 0;
+}
+
+.drift-panel-head {
+  margin-bottom: 10px;
+}
+
+.drift-panel-head h2 {
+  font-size: 16px;
+  gap: 7px;
+}
+
+.drift-panel-head .el-icon {
+  font-size: 18px;
+}
+
+.mood-selector-btn {
+  min-width: 102px;
+  padding: 6px 12px;
+}
+
+.drift-textarea {
+  margin-bottom: 12px;
+}
+
+.drift-compose .drift-textarea {
+  padding: 8px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.drift-compose .drift-textarea :deep(.el-textarea__inner) {
+  min-height: 180px !important;
+  padding: 12px;
+}
+
+.drift-progress-wrapper {
+  gap: 8px;
+  margin-right: 14px;
+}
+
+.drift-progress-bar {
+  height: 7px;
+  border-width: 1px;
+}
+
+.drift-compose-foot .el-button,
+.drift-comment-foot .el-button {
+  padding: 8px 18px;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+
+.drift-empty-sea {
+  min-height: 250px;
+  padding: 22px;
+  border-radius: 12px;
+}
+
+.drift-empty-scene {
+  width: 120px;
+  height: 102px;
+}
+
+.drift-floating-bottle {
+  left: 40px;
+  top: 28px;
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+}
+
+.drift-empty-mark {
+  right: 14px;
+  top: 10px;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+.drift-bottle-card {
+  margin-top: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.drift-bottle-content {
+  margin-bottom: 12px;
+  padding-right: 40px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.drift-bottle-seal {
+  right: 14px;
+  top: 14px;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+}
+
+.drift-bottle-meta,
+.drift-mine-top,
+.drift-mine-bottom {
+  margin-bottom: 10px;
+}
+
+.drift-comments {
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.drift-comment-list {
+  gap: 8px;
+}
+
+.drift-comment {
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.drift-comment p,
+.drift-mine-item p {
+  margin: 5px 0;
+  font-size: 13px;
+}
+
+.drift-mine-row {
+  gap: 10px;
+  padding: 9px 14px;
+}
+
+.ocean-waves {
+  display: block;
+  height: 100px;
+  margin-top: -18px;
+  opacity: 0.82;
+}
+
+@media (max-width: 900px) {
+  .drift-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave {
+    animation: none;
+  }
+}

@@ -55,28 +55,28 @@
           </div>
         </div>
         <el-table class="gobang-record-table" :data="records" size="small" stripe empty-text="暂无对局记录">
-          <el-table-column label="房间" prop="roomId" min-width="150" show-overflow-tooltip />
-          <el-table-column label="结果" width="92">
+          <el-table-column label="房间" prop="roomId" min-width="170" align="center" header-align="center" show-overflow-tooltip />
+          <el-table-column label="结果" width="96" align="center" header-align="center">
             <template #default="{ row }">
               <span :class="['gobang-result-tag', { 'is-win': row.winnerUserId === profile.userId }]">
                 {{ recordResultText(row) }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="积分" width="82">
+          <el-table-column label="积分" width="88" align="center" header-align="center">
             <template #default="{ row }">
               <span :class="['gobang-score-delta', { 'is-plus': recordScoreDelta(row) > 0 }]">
                 {{ scoreDeltaText(row) }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="结束原因" width="118">
+          <el-table-column label="结束原因" width="124" align="center" header-align="center">
             <template #default="{ row }">{{ endReasonText(row.endReason) }}</template>
           </el-table-column>
-          <el-table-column label="结束时间" min-width="150">
+          <el-table-column label="结束时间" min-width="160" align="center" header-align="center">
             <template #default="{ row }">{{ formatDateTime(row.endedAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="86" fixed="right">
+          <el-table-column label="操作" width="96" align="center" header-align="center">
             <template #default="{ row }">
               <el-button link type="primary" @click="openReplay(row)">回放</el-button>
             </template>

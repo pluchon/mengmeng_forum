@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -127,5 +128,18 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(companionMemoryService.listMessages(user.getId(), sessionId));
+    }
+
+    /** 删除陪伴助手会话 */
+    @DeleteMapping("/companion/sessions/{sessionId}")
+    public Result<Void> deleteCompanionSession(
+            @PathVariable Long sessionId,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        companionMemoryService.deleteSession(user.getId(), sessionId);
+        return Result.success();
     }
 }

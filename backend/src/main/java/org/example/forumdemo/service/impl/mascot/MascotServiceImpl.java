@@ -189,8 +189,7 @@ public class MascotServiceImpl implements MascotService {
         String route = request.getLlmProvider() != null ? request.getLlmProvider().trim().toLowerCase(Locale.ROOT) : "";
         route = route.replace('_', '-');
         if ("help".equals(skill)) {
-            if (!vip || route.isBlank() || route.contains("deep")
-                    || route.startsWith("gemini") || route.startsWith("claude")) {
+            if (!vip || route.isBlank() || route.contains("deep")) {
                 return "qwen-flash";
             }
         }
@@ -199,12 +198,6 @@ public class MascotServiceImpl implements MascotService {
             return "qwen-flash";
         }
         int tier = effectiveVipTier(user);
-        if (route.startsWith("claude-sonnet") && tier < Constant.VIP_TIER_MAX) {
-            return "qwen-flash";
-        }
-        if ((route.startsWith("gemini") || route.startsWith("claude")) && tier < Constant.VIP_TIER_PRO) {
-            return "qwen-flash";
-        }
         if (route.contains("deep") && tier < Constant.VIP_TIER_PRO) {
             return route.replace("-deep", "-flash");
         }
@@ -226,9 +219,7 @@ public class MascotServiceImpl implements MascotService {
                 aiQuotaService.consumeDeepseekWrite(user);
                 reservedDeepseek[0] = true;
             }
-        } else if (route.startsWith("qwen-deep")
-                || route.startsWith("gemini")
-                || route.startsWith("claude")) {
+        } else if (route.startsWith("qwen-deep")) {
             aiQuotaService.consumeAdvancedLlm(user);
             reservedAdvanced[0] = true;
         }

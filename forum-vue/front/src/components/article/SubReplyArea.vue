@@ -31,7 +31,7 @@
                     class="sub-user-link"
                     @click="goProfile(sub.postUser?.id)"
                   >{{ sub.postUser?.nickname }}</el-text>
-                  <template v-if="sub.replyUserNickname">
+                  <template v-if="shouldShowReplyMention(sub)">
                     <el-text type="info" size="small">回复</el-text>
                     <el-text type="primary" size="small">@{{ sub.replyUserNickname }}</el-text>
                   </template>
@@ -80,65 +80,7 @@
   </div>
 </template>
 
-<script setup>
-import { ChatDotRound } from '@element-plus/icons-vue'
-import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
-import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
-import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
-import { useSubReplyArea } from '@scripts/components/article/SubReplyArea'
-
-const props = defineProps({
-  replyId: { type: [Number, String], required: true },
-  articleId: { type: [Number, String], required: true },
-  readOnly: { type: Boolean, default: true },
-  refreshToken: { type: Number, default: 0 },
-  subReplyCount: { type: Number, default: 0 },
-})
-
-const emit = defineEmits(['reply', 'open-shop'])
-
-const {
-  CaretBottom,
-  CaretTop,
-  defaultAvatar,
-  emitReply,
-  expanded,
-  goProfile,
-  loadSubs,
-  page,
-  pageSize,
-  subList,
-  toggle,
-  toggleSubLike,
-  total,
-} = useSubReplyArea(props, emit)
-</script>
+<script setup src="@scripts/components/article/SubReplyArea.js"></script>
 
 <style scoped src="@/assets/styles/article.css"></style>
-
-<style scoped>
-.sub-item-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.sub-item-meta-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sub-item-meta-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sub-user-link {
-  cursor: pointer;
-}
-</style>
+<style scoped lang="scss" src="./SubReplyArea.scss"></style>

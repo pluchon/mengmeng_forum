@@ -9,12 +9,6 @@
   }
 }
 
-/* Teleport / popper：抽奖页弹层与全局 tooltip 文案（不受 scoped 影响） */
-.lottery-tooltip-inner {
-  max-width: 280px;
-  line-height: 1.55;
-}
-
 .lottery-dialog.el-dialog {
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -46,25 +40,6 @@
 .lottery-dialog .el-dialog__footer {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 12px;
-}
-
-.lottery-surprise-dialog-text {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
-  color: #4e5969;
-}
-
-.lottery-dialog-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  width: 100%;
-}
-
-.lottery-dialog-footer--solo {
-  justify-content: center;
 }
 
 .lottery-history-footnote {
@@ -107,44 +82,6 @@
   display: flex;
   justify-content: center;
   padding-top: 14px;
-}
-
-.lottery-surprise-reward-wrap {
-  padding: 0 0 4px;
-}
-
-.lottery-surprise-reward-photo {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.lottery-surprise-reward-photo img {
-  display: block;
-  width: 100%;
-  vertical-align: middle;
-}
-
-.lottery-surprise-reward-banner {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 12px 14px;
-  font-size: 16px;
-  font-weight: 800;
-  color: #fff;
-  text-align: center;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72));
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
-}
-
-.lottery-surprise-reward-note {
-  margin: 10px 0 0;
-  font-size: 11px;
-  color: #86909c;
-  text-align: center;
 }
 
 .lottery-activity-list {

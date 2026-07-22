@@ -1,24 +1,37 @@
 <template>
   <div class="auth-page">
     <div class="auth-container animate-fade-up">
-      <div class="auth-card auth-card--tall">
+      <div class="auth-card">
         <div class="auth-layout">
           <div class="brand-side">
             <img
               class="brand-side__img"
-              :src="registerBg"
-              alt=""
+              :src="registerScene"
+              alt="女孩在社区活动桌旁准备加入讨论"
               loading="eager"
               decoding="async"
             >
             <div class="image-mask" aria-hidden="true" />
+            <div class="auth-scene-copy">
+              <h2 class="auth-scene-copy__title">加入萌部落</h2>
+              <p class="auth-scene-copy__description">认识新朋友，也分享你的兴趣与日常。</p>
+            </div>
           </div>
 
-          <div class="form-side form-side--auth-relaxed form-side--signup">
-            <p class="form-side__brand-mobile">注册账号</p>
+          <main class="form-side form-side--signup">
+            <div class="auth-form-body">
+            <header class="auth-brand-header">
+              <h1 class="auth-page-title auth-page-title--standalone">创建账号</h1>
+            </header>
 
-            <div class="form-side__main">
-            <el-form ref="formRef" :model="regForm" :rules="rules" label-position="top" class="signup-form">
+            <el-form
+              ref="formRef"
+              :model="regForm"
+              :rules="rules"
+              :show-message="false"
+              label-position="top"
+              class="signup-form"
+            >
               <div class="form-grid">
                 <el-form-item label="用户名" prop="userName" class="flat-form-item">
                   <el-input v-model="regForm.userName" placeholder="登录唯一账号" />
@@ -59,19 +72,26 @@
                 </el-checkbox>
               </div>
 
-              <div class="submit-bar">
-                <el-button type="primary" class="flat-submit-btn" :loading="loading" @click="handleSignUp">
-                  立即创建账号
-                </el-button>
+              <el-button
+                type="primary"
+                class="flat-submit-btn"
+                :loading="loading"
+                @click="handleSignUp"
+              >
+                创建账号
+              </el-button>
 
-                <el-button class="login-link-btn login-link-btn--text" @click="$router.push('/sign-in')">
-                  直接登录
-                </el-button>
+              <div class="auth-secondary-links">
+                <span>已有账号？</span>
+                <button type="button" class="auth-text-link" @click="$router.push('/sign-in')">
+                  返回登录
+                </button>
               </div>
-              <SiteIcpLink variant="auth" />
             </div>
             </div>
-          </div>
+
+            <SiteIcpLink variant="auth" class="form-side__footer-icp" />
+          </main>
         </div>
       </div>
     </div>
@@ -84,10 +104,9 @@ import { ref } from 'vue'
 import { useSignUp } from '@scripts/views/SignUp'
 import BehaviorCaptchaDialog from '@/components/captcha/BehaviorCaptchaDialog.vue'
 import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
-import { REGISTER_WEBP_URL } from '@/utils/clientOss'
+import { REGISTER_WEBP_URL as registerScene } from '@/utils/clientOss'
 
 const captchaDialogRef = ref()
-const registerBg = REGISTER_WEBP_URL
 
 const {
   agreed,
