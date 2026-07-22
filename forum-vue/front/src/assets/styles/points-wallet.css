@@ -532,36 +532,6 @@
   cursor: not-allowed;
 }
 
-:global(:root[data-theme='dark']) :where(
-  .points-month-nav-btn,
-  .points-chart-type-tabs,
-  .points-chart-type-tab,
-  .points-log-more-btn
-) {
-  background: #1b2435 !important;
-  border-color: rgba(148, 163, 184, 0.3) !important;
-  color: #c9d7eb !important;
-}
-
-:global(:root[data-theme='dark']) :where(
-  .points-month-nav-btn:hover,
-  .points-chart-type-tab:hover,
-  .points-log-more-btn:hover:not(:disabled)
-) {
-  background: #263653 !important;
-  color: #f3f7ff !important;
-}
-
-:global(:root[data-theme='dark']) .points-chart-type-tab.is-active {
-  background: #355789 !important;
-  color: #f8fbff !important;
-  box-shadow: none !important;
-}
-
-:global(:root[data-theme='dark']) .points-month-nav-icon {
-  filter: brightness(0) invert(0.86) !important;
-}
-
 .points-log-empty {
   padding: 40px 0;
   text-align: center;
