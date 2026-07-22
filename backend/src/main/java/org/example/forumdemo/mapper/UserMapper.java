@@ -49,8 +49,4 @@ public interface UserMapper extends BaseMapper<User> {
     @Update("UPDATE user SET lottery_pity_draws = lottery_pity_draws + 1 WHERE id = #{userId} AND delete_state = 0")
     int incrementLotteryPityDraws(@Param("userId") Long userId);
 
-    /** @return 1 表示由未领取更新为已领取 */
-    @Update("UPDATE user SET lottery_surprise_claimed = 1 WHERE id = #{userId} AND delete_state = 0 "
-            + "AND COALESCE(lottery_surprise_claimed, 0) = 0")
-    int markLotterySurpriseClaimed(@Param("userId") Long userId);
 }

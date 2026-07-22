@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.constant.ForumBusinessConstants;
 import org.example.forumdemo.common.enums.ArticleStatus;
+import org.example.forumdemo.common.enums.HotArticleTrendDirection;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -103,7 +104,8 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
             }
         }
         hotArticleRedisOps.rebuildBlueGreen(scores);
-        log.info("热帖榜蓝绿重算完成: 共写入 {} 篇", scores.size());
+        updateDailyTrendSnapshots(articles);
+        log.info("热帖榜蓝绿重算与趋势快照完成: 共写入 {} 篇", scores.size());
     }
 
     @Override
@@ -154,6 +156,85 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
     @Override
     public void removeFromRanking(Long articleId) {
         hotArticleRedisOps.remove(articleId);
+    }
+
+    @Override
+    public Map<Long, HotArticleTrendDirection> getTrendDirections(List<Long> articleIds) {
+        return hotArticleRedisOps.readTrendDirections(articleIds);
+    }
+
+    void updateDailyTrendSnapshots(List<Article> articles) {
+        List<Long> articleIds = articles.stream().map(Article::getId).toList();
+        boolean initialized = hotArticleRedisOps.isDailyTrendInitialized();
+        Map<Long, String> previousBaselines = hotArticleRedisOps.readDailyMetricBaselines(articleIds);
+        Map<Long, Double> previousScores = hotArticleRedisOps.readPreviousPeriodScores(articleIds);
+        Map<Long, String> nextBaselines = new HashMap<>();
+        Map<Long, Double> nextScores = new HashMap<>();
+        Map<Long, HotArticleTrendDirection> directions = new HashMap<>();
+        for (Article article : articles) {
+            int visit = safeMetric(article.getVisitCount());
+            int like = safeMetric(article.getLikeCount());
+            int favorite = safeMetric(article.getFavoriteCount());
+            int[] previous = parseMetricBaseline(previousBaselines.get(article.getId()));
+            double currentScore = initialized
+                    ? computePeriodScore(
+                            Math.max(0, visit - previous[0]),
+                            Math.max(0, like - previous[1]),
+                            Math.max(0, favorite - previous[2]))
+                    : 0;
+            HotArticleTrendDirection direction = initialized
+                    ? comparePeriodScores(currentScore, previousScores.getOrDefault(article.getId(), 0D))
+                    : HotArticleTrendDirection.STABLE;
+            nextBaselines.put(article.getId(), encodeMetricBaseline(visit, like, favorite));
+            nextScores.put(article.getId(), currentScore);
+            directions.put(article.getId(), direction);
+        }
+        hotArticleRedisOps.replaceDailyTrendSnapshots(nextBaselines, nextScores, directions);
+    }
+
+    static double computePeriodScore(int visitDelta, int likeDelta, int favoriteDelta) {
+        return Math.max(0, visitDelta) * Constant.HOT_SCORE_WEIGHT_VISIT
+                + Math.max(0, likeDelta) * Constant.HOT_SCORE_WEIGHT_LIKE
+                + Math.max(0, favoriteDelta) * Constant.HOT_SCORE_WEIGHT_FAVORITE;
+    }
+
+    static HotArticleTrendDirection comparePeriodScores(double currentScore, double previousScore) {
+        int comparison = Double.compare(currentScore, previousScore);
+        if (comparison > 0) {
+            return HotArticleTrendDirection.UP;
+        }
+        if (comparison < 0) {
+            return HotArticleTrendDirection.DOWN;
+        }
+        return HotArticleTrendDirection.STABLE;
+    }
+
+    private static int safeMetric(Integer value) {
+        return value == null ? 0 : Math.max(0, value);
+    }
+
+    private static String encodeMetricBaseline(int visit, int like, int favorite) {
+        return visit + "," + like + "," + favorite;
+    }
+
+    private static int[] parseMetricBaseline(String value) {
+        int[] empty = new int[]{0, 0, 0};
+        if (value == null || value.isBlank()) {
+            return empty;
+        }
+        String[] parts = value.split(",", -1);
+        if (parts.length != 3) {
+            return empty;
+        }
+        try {
+            return new int[]{
+                    Math.max(0, Integer.parseInt(parts[0])),
+                    Math.max(0, Integer.parseInt(parts[1])),
+                    Math.max(0, Integer.parseInt(parts[2]))
+            };
+        } catch (NumberFormatException ignored) {
+            return empty;
+        }
     }
 
     private List<Long> loadTopHotFromDb(int topN) {

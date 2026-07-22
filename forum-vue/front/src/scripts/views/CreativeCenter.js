@@ -268,14 +268,6 @@ export function useCreativeCenter() {
     return articleStatusMeta(row.article.status).isDraft ? 'creative-post-title--draft' : ''
   }
 
-  function postLink(row) {
-    const a = row.article
-    if (Number(a.status) === ARTICLE_STATUS.PUBLISHED && Number(a.state) !== 1) {
-      return `/article/${a.id}`
-    }
-    return editTargetPath(row)
-  }
-
   function editTargetPath(row) {
     const id = row.article?.id
     const s = Number(row.article?.status)
@@ -332,7 +324,6 @@ export function useCreativeCenter() {
     monthNewReads,
     pageNum,
     pagedArticles,
-    postLink,
     postTitle,
     postTitleClass,
     statusFilter,

@@ -4,6 +4,8 @@ import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.user.UserFollowListItemVO;
 import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 public interface UserFollowService {
@@ -15,6 +17,8 @@ public interface UserFollowService {
     boolean isFollowing(Long followerId, Long followeeId);
 
     UserFollowStatsVO getStats(Long userId, Long viewerId);
+
+    Map<Long, UserFollowStatsVO> getBatchStats(Collection<Long> userIds, Long viewerId);
 
     /** 当前用户关注的全部用户 ID（用于首页热帖榜等客户端标注） */
     Set<Long> listFollowingIds(Long followerId);

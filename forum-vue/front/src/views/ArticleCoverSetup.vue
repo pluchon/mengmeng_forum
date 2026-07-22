@@ -59,7 +59,6 @@
                   {{ hintsLoading ? '生成中…' : '根据正文推荐配图要点' }}
                 </button>
                 <div class="cover-prompt-wrap">
-                  <div class="cover-prompt-label">封面描述词</div>
                   <textarea
                     v-model="aiPrompt"
                     class="cover-prompt-textarea"
@@ -158,8 +157,7 @@
                 :disabled="isPublished"
                 @click="saveDraftOnly"
               >
-                <img :src="iconDraft" alt="" class="cover-footer-btn-icon" aria-hidden="true">
-                仅保留草稿
+                保存为草稿
               </el-button>
               <el-button
                 class="editor-btn-primary"
@@ -167,8 +165,7 @@
                 :loading="processing"
                 @click="finishAndSubmitAudit"
               >
-                <el-icon><CircleCheck /></el-icon>
-                {{ isPublished ? '保存封面' : '上传封面并提交审核' }}
+                {{ isPublished ? '保存封面' : '发布' }}
               </el-button>
             </div>
           </footer>
@@ -178,45 +175,8 @@
   </div>
 </template>
 
-<script setup>
-import { CircleCheck } from '@element-plus/icons-vue'
-import iconAi from '@/assets/svg/AI.svg'
-import iconDraft from '@/assets/svg/草稿.svg'
-import { useArticleCoverSetup } from '@scripts/views/ArticleCoverSetup'
-
-const {
-  COVER_PROMPT_MAX,
-  IMAGE_MODEL_OPTIONS,
-  Document,
-  Download,
-  InfoFilled,
-  MagicStick,
-  Picture,
-  Refresh,
-  Upload,
-  View,
-  aiGenerating,
-  aiPrompt,
-  articleTextPlain,
-  canRegenerate,
-  coverPreview,
-  coverPreviewKey,
-  downloadCoverImage,
-  fetchCoverHints,
-  finishAndSubmitAudit,
-  generateAiCover,
-  handleCoverChange,
-  hintsLoading,
-  imageQuality,
-  isPublished,
-  isVip,
-  processing,
-  promptLength,
-  saveDraftOnly,
-  setImageModel,
-  title,
-} = useArticleCoverSetup()
-</script>
+<script setup src="./ArticleCoverSetup.js"></script>
 
 <style scoped src="@/assets/styles/editor.css"></style>
 <style scoped src="@/assets/styles/article-cover-setup.css"></style>
+<style scoped lang="scss" src="./ArticleCoverSetup.scss"></style>

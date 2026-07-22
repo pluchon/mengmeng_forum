@@ -55,11 +55,6 @@ class Settings:
         hu = raw.get("huanapi", {}) or {}
         hu["base_url"] = os.environ.get("HUANAPI_BASE_URL", hu.get("base_url"))
         hu["image_key"] = os.environ.get("HUANAPI_IMAGE_KEY", hu.get("image_key"))
-        hu["gemini_key"] = os.environ.get("HUANAPI_GEMINI_KEY", hu.get("gemini_key"))
-        hu["claude_key"] = os.environ.get(
-            "HUANAPI_CLAUDE_KEY",
-            hu.get("claude_key") or hu.get("gemini_key"),
-        )
         raw["huanapi"] = hu
 
         ah = raw.get("ai_hub", {}) or {}

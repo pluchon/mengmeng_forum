@@ -16,5 +16,6 @@ public interface SearchService {
     /**
      * 用户搜索: 普通模式 DB 用户名/昵称 LIKE；AI 模式 RAG 语义匹配。均无结果则 empty.
      */
-    SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag);
+    SearchUserResponse searchUsers(String keyword, Integer pageNum, Integer pageSize,
+                                   boolean preferAiRag, Long viewerId);
 }

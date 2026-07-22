@@ -31,7 +31,7 @@ public class MascotChatRequest {
     @Schema(description = "功能：chat（对话与帮助，服务端自动路由）| writing | help | drawing")
     private String skill;
 
-    @Schema(description = "文本对话后端路由：qwen-flash | qwen-deep | deepseek-flash | deepseek-deep（深度档服务端会对非 VIP 降级；旧 gemini-* 会映射为通义）")
+    @Schema(description = "文本对话后端路由：qwen-flash | qwen-deep | deepseek-flash | deepseek-deep")
     private String llmProvider;
 
     @Schema(description = "为 true 时不写入陪伴助手会话表，仅依赖 history 维持上下文")

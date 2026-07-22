@@ -9,27 +9,23 @@
 }
 
 .creative-center-header {
+  position: relative;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 1.25rem;
-  flex-wrap: wrap;
 }
 
 .creative-center-title {
   font-size: 20px;
-  font-weight: 500;
-  margin: 0 0 2px;
-}
-
-.creative-center-desc {
-  font-size: 13px;
-  color: var(--color-text-secondary, #86909c);
+  font-weight: 700;
+  text-align: center;
   margin: 0;
 }
 
 .creative-center-create-btn {
+  position: absolute;
+  right: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -92,6 +88,13 @@
   font-size: 26px;
   font-weight: 500;
   line-height: 1.1;
+}
+
+.creative-stat-value-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .creative-stat-value--pink {
@@ -209,13 +212,8 @@
   padding: 0 0 8px;
 }
 
-.creative-posts-head span:nth-child(2),
-.creative-posts-head span:nth-child(3) {
+.creative-posts-head span:nth-child(n + 2) {
   text-align: center;
-}
-
-.creative-posts-head span:last-child {
-  text-align: right;
 }
 
 .creative-post-row {
@@ -241,10 +239,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
-}
-
-.creative-post-title:hover {
-  color: #d4537e;
 }
 
 .creative-post-title--draft {
@@ -283,11 +277,12 @@
 .creative-post-date {
   font-size: 12px;
   color: var(--color-text-secondary, #86909c);
+  text-align: center;
 }
 
 .creative-post-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: 14px;
 }

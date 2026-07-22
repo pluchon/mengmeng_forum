@@ -35,40 +35,17 @@
     </div>
 
     <div class="home-shell-tools">
-      <ThemeModeSwitch />
-      <el-tooltip
-        :content="mascotPassthroughTip"
-        placement="bottom"
-        :show-after="280"
-      >
-        <button
-          type="button"
-          class="home-shell-icon-btn"
-          :class="{ 'is-active': mascotUi.pointerPassThrough }"
-          :aria-label="mascotPassthroughTip"
-          @click="toggleMascotPassthrough"
-        >
-          <el-icon><Mouse /></el-icon>
-        </button>
-      </el-tooltip>
-      <div class="home-msg-notify-wrap">
-        <el-badge :value="msgUnread" :hidden="msgUnread === 0" class="home-msg-badge">
-          <button type="button" class="home-shell-icon-btn" aria-label="站内信" @click="openMessageCenter">
-            <el-icon><Message /></el-icon>
-          </button>
-        </el-badge>
-        <MessageIncomingBubble v-if="userStore.isLoggedIn" />
-      </div>
       <button type="button" class="home-shell-icon-btn" aria-label="设置" @click="goSettings">
         <el-icon><Setting /></el-icon>
       </button>
       <button
+        v-if="userStore.isLoggedIn"
         type="button"
         class="home-shell-points"
         @click="goPoints"
       >
         <el-icon><Coin /></el-icon>
-        <span>积分 {{ userStore.isLoggedIn ? pointsBalance : '--' }}</span>
+        <span>积分 {{ pointsBalance }}</span>
       </button>
       <template v-if="userStore.isLoggedIn">
         <el-dropdown trigger="click" placement="bottom-end">
@@ -82,28 +59,13 @@
           </button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="showAnnouncement">公告与活动</el-dropdown-item>
-              <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+              <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
       </template>
       <template v-else>
-        <el-dropdown trigger="click" placement="bottom-end">
-          <button type="button" class="home-shell-avatar-btn" aria-label="个人菜单">
-            <UserAvatarVip
-              :size="36"
-              :src="defaultAvatar"
-              :vip-tier="0"
-            />
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="showAnnouncement">公告与活动</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button type="primary" round size="small" @click="$router.push('/sign-in')">
+        <el-button class="home-shell-auth-entry" round @click="$router.push('/sign-in')">
           登录 / 注册
         </el-button>
       </template>

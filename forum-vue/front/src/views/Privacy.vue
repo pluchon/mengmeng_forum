@@ -3,13 +3,13 @@
     <ParticleSea />
     <div class="privacy-container animate-fade-up">
       <main class="privacy-content">
-        <div class="hero-section">
+        <header class="hero-section">
           <h1>隐私政策</h1>
           <p>萌部落重视您的隐私。注册或使用本平台前，请仔细阅读以下内容。</p>
           <div class="update-tag">最近更新：2026-05-14</div>
-        </div>
+        </header>
 
-        <div class="policy-card">
+        <article class="policy-card">
           <section v-for="(section, index) in policyData" :key="index" class="policy-section">
             <h2 class="section-title">{{ section.title }}</h2>
             <div class="section-body" v-html="section.content"></div>
@@ -36,12 +36,8 @@
               </div>
             </div>
           </section>
-        </div>
+        </article>
       </main>
-
-      <footer class="privacy-footer">
-        <SiteIcpLink variant="footer" />
-      </footer>
     </div>
   </div>
 </template>
@@ -49,7 +45,6 @@
 <script setup>
 import { ref } from 'vue'
 import ParticleSea from '@/components/common/ParticleSea.vue'
-import SiteIcpLink from '@/components/layout/SiteIcpLink.vue'
 import { usePrivacy } from '@scripts/views/Privacy'
 
 import { clientOssUrl } from '@/utils/clientOss'

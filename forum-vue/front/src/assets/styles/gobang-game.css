@@ -298,6 +298,12 @@
 
 .gobang-record-table {
   width: 100%;
+  overflow-x: hidden;
+}
+
+.gobang-record-table :deep(.el-table__body-wrapper),
+.gobang-record-table :deep(.el-scrollbar__wrap) {
+  overflow-x: hidden !important;
 }
 
 .gobang-record-table :deep(.el-table__cell) {
@@ -308,6 +314,8 @@
   display: flex;
   align-items: center;
   min-height: 32px;
+  justify-content: center;
+  text-align: center;
 }
 
 .gobang-record-table :deep(th .cell) {
@@ -353,22 +361,47 @@
   min-height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 24% 28%, rgba(122, 170, 255, 0.9) 0 1px, transparent 2px),
-    linear-gradient(135deg, #050a13, #10244a);
-  color: #fff;
+  border: 1px solid #e2e5ea;
+  background: #f2f3f5;
+  color: #4e5969;
   font-weight: 900;
 }
 
 .tetris-pk-record-table :deep(.el-table__cell .cell) {
   display: block;
   align-items: initial;
-  justify-content: initial;
+  justify-content: center;
   min-height: 32px;
   line-height: 32px;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.game-room-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 1px solid #cfe5ff;
+  border-radius: 12px;
+  background: #eef7ff;
+  color: #315b7d;
+  cursor: pointer;
+  text-align: left;
+}
+
+.game-room-chip em {
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #dceeff;
+  color: #1677d2;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .tetris-pk-record-table :deep(.is-center .cell) {

@@ -29,7 +29,6 @@ public final class UserConverter {
         vo.setIsAdmin(user.getIsAdmin());
         vo.setPoints(user.getPoints());
         vo.setLotteryPityDraws(user.getLotteryPityDraws());
-        vo.setLotterySurpriseClaimed(user.getLotterySurpriseClaimed());
         vo.setVipTier(user.getVipTier());
         vo.setVipExpireAt(user.getVipExpireAt());
         vo.setMascotModelId(user.getMascotModelId());

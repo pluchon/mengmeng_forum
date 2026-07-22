@@ -20,8 +20,6 @@ import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @Tag(name = "收藏夹模块", description = "用户收藏夹与帖子收藏管理")
 @RestController
 @RequestMapping("/favorite")
@@ -72,23 +70,28 @@ public class FavoriteController {
         return Result.success("收藏夹已删除");
     }
 
-    @Operation(summary = "我的收藏夹列表", description = "返回当前登录用户的所有未删除收藏夹, 含默认夹; owner=true")
+    @Operation(summary = "我的收藏夹列表", description = "分页返回当前登录用户的未删除收藏夹, 含默认夹; owner=true")
     @GetMapping("/folder/myList")
-    public Result<List<FolderVO>> myFolders(HttpServletRequest httpServletRequest) {
+    public Result<PageResult<FolderVO>> myFolders(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "5") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
         User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
-        return Result.success(folderService.queryMyFolders(loginUser.getId()));
+        return Result.success(folderService.queryMyFolders(loginUser.getId(), pageNum, pageSize));
     }
 
-    @Operation(summary = "查他人的公开收藏夹", description = "私密夹不返回. 如果 userId == 当前用户, 等价于 myList")
+    @Operation(summary = "查他人的公开收藏夹", description = "分页返回公开夹; 私密夹不返回. 如果 userId == 当前用户, 等价于 myList")
     @GetMapping("/folder/userList")
-    public Result<List<FolderVO>> userFolders(@RequestParam Long userId,
+    public Result<PageResult<FolderVO>> userFolders(@RequestParam Long userId,
+                                              @RequestParam(defaultValue = "1") Integer pageNum,
+                                              @RequestParam(defaultValue = "5") Integer pageSize,
                                               HttpServletRequest httpServletRequest) {
         User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? -1L : loginUser.getId();
-        return Result.success(folderService.queryUserPublicFolders(userId, loginUserId));
+        return Result.success(folderService.queryUserPublicFolders(userId, loginUserId, pageNum, pageSize));
     }
 
     @Operation(summary = "夹内帖子列表(分页)",

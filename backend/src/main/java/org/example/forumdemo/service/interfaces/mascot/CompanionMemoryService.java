@@ -25,4 +25,6 @@ public interface CompanionMemoryService {
     List<CompanionSessionVO> listSessions(Long userId, String skill, int limit);
 
     List<CompanionMessageVO> listMessages(Long userId, Long sessionId);
+
+    void deleteSession(Long userId, Long sessionId);
 }

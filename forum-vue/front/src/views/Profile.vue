@@ -28,14 +28,6 @@
               <div class="name-meta-row">
                 <h1 class="nickname">{{ userInfo?.nickname || '匿名用户' }}</h1>
                 <span class="id-inline">ID: {{ userInfo?.id || '---' }}</span>
-                <img
-                  v-if="showVipBadge"
-                  :src="vipCrownSrc"
-                  class="profile-vip-crown"
-                  width="28"
-                  height="28"
-                  alt="VIP"
-                />
               </div>
               <div class="name-row-right">
                 <IpRegionLabel :region="profileIpRegion" />
@@ -107,6 +99,10 @@
               <span class="profile-tab-post-count-val">{{ total }}</span>
               <span class="profile-tab-post-count-lab">发帖数</span>
             </div>
+            <div v-if="activeTab === 'liked' && isMe" class="profile-tab-post-count">
+              <span class="profile-tab-post-count-val">{{ likedTotal }}</span>
+              <span class="profile-tab-post-count-lab">点赞帖子</span>
+            </div>
             <button
               v-if="activeTab === 'collect' && isMe"
               type="button"
@@ -157,6 +153,13 @@
           </div>
 
           <div v-show="activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
+            <el-alert
+              v-if="favoriteFolderError"
+              :title="favoriteFolderError"
+              type="error"
+              :closable="false"
+              show-icon
+            />
             <el-card
               v-for="f in favoriteFolders"
               :key="f.id"
@@ -183,6 +186,24 @@
             </el-card>
 
             <el-empty v-if="!loadingFavorites && favoriteFolders.length === 0" description="暂无收藏" />
+            <div v-if="favoriteFolderTotalPages > 1" class="profile-pager">
+              <el-button size="small" @click="goFavoriteFoldersFirst">首页</el-button>
+              <el-button size="small" :disabled="favoriteFolderPageNum <= 1" @click="goFavoriteFoldersPrev">上一页</el-button>
+              <el-input
+                v-model="favoriteFolderPageInput"
+                size="small"
+                class="profile-pager-input"
+                @keyup.enter="jumpFavoriteFolderPage"
+              />
+              <span class="profile-pager-sep">/ {{ favoriteFolderTotalPages }}</span>
+              <el-button
+                size="small"
+                :disabled="favoriteFolderPageNum >= favoriteFolderTotalPages"
+                @click="goFavoriteFoldersNext"
+              >
+                下一页
+              </el-button>
+            </div>
           </div>
 
           <div v-show="activeTab === 'liked'" class="profile-content">
@@ -310,7 +331,15 @@
                 class="profile-fav-rename-input"
                 @keyup.enter="confirmFavoriteFolderRename"
               />
-              <el-button size="small" type="primary" @click="confirmFavoriteFolderRename">保存</el-button>
+              <button
+                type="button"
+                class="profile-fav-rename-save"
+                :disabled="favoriteFolderRenameSaving"
+                aria-label="保存收藏夹名称"
+                @click="confirmFavoriteFolderRename"
+              >
+                ✓
+              </button>
             </template>
             <template v-else>
               <span class="profile-fav-dialog-title">{{ favoriteDialogTitle }}</span>
@@ -360,12 +389,23 @@
           </div>
           <div class="profile-fav-item-main">
             <div class="profile-fav-item-title">{{ row.article?.title }}</div>
-            <div class="profile-fav-item-stats">
-              <span>赞 {{ row.article?.likeCount ?? 0 }}</span>
-              <span>评 {{ row.article?.replyCount ?? 0 }}</span>
-              <span>藏 {{ row.article?.favoriteCount ?? 0 }}</span>
+            <div class="profile-fav-item-snippet">{{ row.article?.content }}</div>
+          </div>
+          <div class="profile-fav-item-stats">
+            <span>赞 {{ row.article?.likeCount ?? 0 }}</span>
+            <span>评 {{ row.article?.replyCount ?? 0 }}</span>
+            <span>藏 {{ row.article?.favoriteCount ?? 0 }}</span>
+          </div>
+          <div class="profile-fav-item-side">
+            <div class="profile-fav-item-author">
+              <UserAvatarVip
+                :size="40"
+                :src="row.author?.avatarUrl || defaultAvatar"
+                :vip-tier="Number(row.author?.vipTier) || 0"
+                :vip-expire-at="row.author?.vipExpireAt"
+              />
+              <span>{{ row.author?.nickname || '匿名用户' }}</span>
             </div>
-            <div class="profile-fav-item-snippet">{{ favoriteSnippet(row.article) }}</div>
           </div>
         </div>
         <el-empty v-if="!favoriteDialogLoading && !favoriteDialogItems.length" description="暂无收藏帖子" />
@@ -430,9 +470,7 @@ import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import UserFollowListDialog from '@/components/user/UserFollowListDialog.vue'
 import { useProfile } from '@scripts/views/Profile'
-import vipCrownUrl from '@/assets/svg/VIP.svg?url'
 
-const vipCrownSrc = vipCrownUrl
 const followListDialogRef = ref(null)
 
 const {
@@ -452,11 +490,19 @@ const {
   favoriteDialogPageInput,
   favoriteDialogPageNum,
   favoriteDialogTotalPages,
+  favoriteFolderError,
+  favoriteFolderPageInput,
+  favoriteFolderPageNum,
   favoriteFolderRenaming,
+  favoriteFolderRenameSaving,
   favoriteFolderRenameValue,
+  favoriteFolderTotalPages,
   goFavoriteDialogFirst,
   goFavoriteDialogNext,
   goFavoriteDialogPrev,
+  goFavoriteFoldersFirst,
+  goFavoriteFoldersNext,
+  goFavoriteFoldersPrev,
   goLikedFirst,
   goLikedNext,
   goLikedPrev,
@@ -472,11 +518,13 @@ const {
   followerCount,
   isMe,
   jumpFavoriteDialogPage,
+  jumpFavoriteFolderPage,
   jumpLikedPage,
   jumpNotesPage,
   likedArticles,
   likedPageInput,
   likedPageNum,
+  likedTotal,
   likedTotalPages,
   favoriteCreateForm,
   favoriteCreateSaving,
@@ -488,7 +536,6 @@ const {
   favoriteDialogVisible,
   favoriteFolderPublic,
   favoriteFolders,
-  favoriteSnippet,
   favoriteVisibilitySaving,
   formatProfileDate,
   goPublicGroupsFirst,
@@ -524,7 +571,6 @@ const {
   userInfo,
   displayVipTier,
   displayVipExpireAt,
-  showVipBadge,
 } = useProfile()
 
 function openFollowingList() {

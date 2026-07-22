@@ -10,7 +10,6 @@ import {
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
-import { useMascotUiStore } from '@/stores/mascotUi'
 import {
   getMascotPublicModels,
   getMascotQuotaHint,
@@ -18,6 +17,7 @@ import {
   setMascotModel,
   getCompanionSessions,
   getCompanionMessages,
+  deleteCompanionSession,
 } from '@/api/mascot'
 import { aiImage, aiPriceEstimate } from '@/api/ai'
 import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
@@ -155,6 +155,7 @@ export function useMascotDock() {
     sessionEmpty: '暂无会话，点击 + 新建',
     untitledSession: '新会话',
     alreadyNewSession: '当前已是新会话，直接输入即可开始对话',
+    deleteSession: '删除会话',
     chatEmptyHint: '暂无消息，在下方输入开始对话',
   }
 
@@ -175,7 +176,6 @@ export function useMascotDock() {
   
   const userStore = useUserStore()
   const pointsWallet = usePointsWalletStore()
-  const mascotUi = useMascotUiStore()
   const stageHost = ref(null)
   const stageUseFallback = ref(false)
   const scrollbarFs = ref(null)
@@ -190,6 +190,7 @@ export function useMascotDock() {
   const messages = ref([])
   const draft = ref('')
   const loading = ref(false)
+  const deletingSessionId = ref('')
   const sessionId = ref('')
   const localSessionsByMode = ref({
     chat: [],
@@ -517,8 +518,10 @@ export function useMascotDock() {
     saveLocalSessionsToStorage()
   }
 
-  async function selectLocalSession(id) {
-    persistCurrentMessages()
+  async function selectLocalSession(id, persistBeforeSelect = true) {
+    if (persistBeforeSelect) {
+      persistCurrentMessages()
+    }
     const nav = activeNav.value
     const sess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
     if (!sess) return
@@ -539,6 +542,69 @@ export function useMascotDock() {
     }
     messages.value = (sess.messages || []).map((m) => ({ ...m }))
     scrollFsToBottom()
+  }
+
+  async function deleteSession(session) {
+    const id = String(session?.id || '')
+    const nav = activeNav.value
+    if (!id || nav === 'appearance' || deletingSessionId.value) return
+    try {
+      await ElMessageBox.confirm(
+        '删除后会话记录无法恢复，确认继续？',
+        '删除会话',
+        {
+          type: 'warning',
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          confirmButtonClass: 'mascot-session-delete-confirm',
+        },
+      )
+    } catch {
+      return
+    }
+
+    deletingSessionId.value = id
+    try {
+      if (userStore.isLoggedIn && /^\d+$/.test(id)) {
+        const res = await deleteCompanionSession(id)
+        if (res.code !== 0) {
+          throw new Error(res.message || '删除失败')
+        }
+      }
+      const currentList = [...(localSessionsByMode.value[nav] || [])]
+      const removedIndex = currentList.findIndex((item) => String(item.id) === id)
+      const nextList = currentList.filter((item) => String(item.id) !== id)
+      const deletingActive = String(activeLocalSessionId.value[nav]) === id
+      localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: nextList }
+
+      if (deletingActive) {
+        const nextSession = nextList[Math.min(Math.max(removedIndex, 0), nextList.length - 1)]
+        if (nextSession) {
+          activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: nextSession.id }
+          sessionId.value = nextSession.id
+          await selectLocalSession(nextSession.id, false)
+        } else {
+          const newId = newLocalSessionId()
+          const newSession = {
+            id: newId,
+            title: uiLabels.untitledSession,
+            messages: [],
+            updateTime: Date.now(),
+          }
+          localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: [newSession] }
+          activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: newId }
+          sessionId.value = newId
+          messages.value = []
+          draft.value = ''
+        }
+      }
+      saveLocalSessionsToStorage()
+      ElMessage.success('会话已删除')
+    } catch (error) {
+      ElMessage.error(error?.message || '删除失败')
+    } finally {
+      deletingSessionId.value = ''
+    }
   }
   
   function mapVoToMessages(rows) {
@@ -815,8 +881,6 @@ export function useMascotDock() {
       const legacyMap = {
         qwen: 'qwen-flash',
         deepseek: 'deepseek-flash',
-        gemini: 'gemini-deep',
-        claude: 'qwen-deep',
         openai: 'qwen-flash',
       }
       const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
@@ -1658,6 +1722,8 @@ export function useMascotDock() {
     companionAvatarSrc,
     currentLlmStorageKey,
     draft,
+    deleteSession,
+    deletingSessionId,
     dragOffset,
     ensureSessionId,
     estimateHintText,
@@ -1683,7 +1749,6 @@ export function useMascotDock() {
     loadSavedOffset,
     loading,
     mapVoToMessages,
-    mascotUi,
     messages,
     modeTabs,
     navToSkill,

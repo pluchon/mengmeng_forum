@@ -59,8 +59,8 @@
             class="game-room-chip"
             @click="watchRoom(roomRow)"
           >
-            <span>{{ roomRow.roomId.slice(0, 8) }}</span>
-            <em>{{ roomRow.redScore }} : {{ roomRow.blueScore }}</em>
+            <span>{{ roomRow.redNickname || '红方' }} VS {{ roomRow.blueNickname || '蓝方' }}</span>
+            <em>观战</em>
           </button>
         </div>
       </section>
@@ -72,33 +72,33 @@
           </div>
         </div>
         <el-table class="gobang-record-table tetris-pk-record-table" :data="records" size="small" stripe empty-text="暂无对局记录">
-          <el-table-column label="房间" min-width="140" show-overflow-tooltip>
+          <el-table-column label="房间" min-width="130" align="center" header-align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ row.roomId || '-' }}</template>
           </el-table-column>
-          <el-table-column label="对手" min-width="100" show-overflow-tooltip>
+          <el-table-column label="对手" min-width="110" align="center" header-align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ row.opponentNickname || '-' }}</template>
           </el-table-column>
-          <el-table-column label="比分" width="96" align="center">
+          <el-table-column label="比分" width="92" align="center" header-align="center">
             <template #default="{ row }">{{ row.myScore ?? 0 }} : {{ row.opponentScore ?? 0 }}</template>
           </el-table-column>
-          <el-table-column label="结果" width="100" align="center" class-name="tetris-pk-result-col" label-class-name="tetris-pk-result-col">
+          <el-table-column label="结果" width="96" align="center" header-align="center" class-name="tetris-pk-result-col" label-class-name="tetris-pk-result-col">
             <template #default="{ row }">
               <span :class="['gobang-result-tag', { 'is-win': row.winnerUserId === profile.userId }]">
                 {{ row.winnerUserId === profile.userId ? '胜利' : '失败' }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="积分" width="72" align="center">
+          <el-table-column label="积分" width="76" align="center" header-align="center">
             <template #default="{ row }">
               <span :class="['gobang-score-delta', { 'is-plus': Number(row.scoreDelta) > 0 }]">
                 {{ formatScoreDelta(row.scoreDelta) }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="结束原因" min-width="96" show-overflow-tooltip>
+          <el-table-column label="结束原因" min-width="108" align="center" header-align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ endReasonText(row.endReason) }}</template>
           </el-table-column>
-          <el-table-column label="结束时间" min-width="156" show-overflow-tooltip>
+          <el-table-column label="结束时间" min-width="158" align="center" header-align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.endedAt) }}</template>
           </el-table-column>
         </el-table>

@@ -42,39 +42,6 @@
   display: none;
 }
 
-.lottery-demo-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 14px 16px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #fff8e6 0%, #ffefcc 100%);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-
-.lottery-demo-banner__icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: #b45309;
-}
-
-.lottery-demo-banner__title {
-  display: block;
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #92400e;
-}
-
-.lottery-demo-banner__text {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.65;
-  color: #78350f;
-}
-
 .lottery-topbar {
   display: flex;
   align-items: center;
@@ -111,7 +78,7 @@
 
 .lottery-main-grid {
   display: grid;
-  grid-template-columns: 1fr 1.1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.9fr);
   gap: 14px;
   margin-bottom: 14px;
   align-items: stretch;
@@ -166,60 +133,23 @@
   opacity: 0.75;
 }
 
-.lottery-pity-info-wrap .el-icon {
-  color: #86909c;
-}
-
-.lottery-info-label {
-  font-size: 12px;
-  color: #86909c;
-  margin-bottom: 4px;
-}
-
-.lottery-info-value {
-  font-size: 2rem;
-  font-weight: 900;
-  color: #d4537e;
-  line-height: 1.1;
-}
-
-.lottery-info-sub {
-  font-size: 12px;
-  color: #86909c;
-  margin-top: 6px;
-}
-
-.lottery-info-sub strong {
-  color: #d4537e;
-}
-
-.lottery-progress-bg {
-  height: 6px;
-  background: #eef0f3;
-  border-radius: 999px;
-  margin-top: 12px;
-}
-
-.lottery-progress-fill {
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #d4537e, #f0b8cc);
-}
-
-.lottery-progress-hint {
-  font-size: 11px;
-  color: #c9cdd4;
-  margin-top: 4px;
-}
-
 .lottery-info-main {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
   padding-right: 36px;
 }
 
+.lottery-info-heading {
+  margin: 10px 0 0;
+  color: #1a1c1c;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .lottery-activity-picker {
-  margin-top: 16px;
+  margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
@@ -292,10 +222,22 @@
 }
 
 .lottery-pity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   font-size: 12px;
   color: #4e5969;
   line-height: 1.5;
+}
+
+.lottery-pity-row strong {
+  color: #d4537e;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* —— 中部抽奖 —— */
@@ -401,11 +343,25 @@
 .lottery-play-card .play-label {
   font-size: 16px;
   font-weight: 700;
+}
+
+.lottery-play-card--ten .play-label,
+.lottery-play-card--ten .play-cost {
+  color: #fff;
+}
+
+.lottery-play-card .play-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   margin-left: auto;
 }
 
-.lottery-play-card--ten .play-label {
-  color: #fff;
+.lottery-play-card .play-cost {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* 抽奖动画：双环旋转 + 核心奖杯 */
@@ -635,7 +591,7 @@
   background: #c23d68;
 }
 
-/* —— 右侧消耗说明 —— */
+/* —— 右侧核心规则 —— */
 .lottery-cost-col {
   display: flex;
   flex-direction: column;
@@ -648,49 +604,42 @@
   margin-bottom: 8px;
 }
 
-.lottery-cost-row {
+.lottery-core-rules {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+.lottery-core-rule {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  gap: 12px;
+  padding: 14px 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.lottery-cost-name {
+.lottery-core-rule:last-child {
+  border-bottom: 0;
+}
+
+.lottery-core-rule span {
   font-size: 12px;
   color: #4e5969;
 }
 
-.lottery-cost-val {
+.lottery-core-rule strong {
   font-size: 13px;
   font-weight: 700;
   color: #d4537e;
-}
-
-.lottery-cost-val--ok {
-  color: #00b578;
-}
-
-.lottery-cost-rules {
-  margin: 12px 0 0;
-  padding: 0 0 0 18px;
-  font-size: 11px;
-  color: #86909c;
-  line-height: 1.65;
-}
-
-.lottery-cost-rules li {
-  margin-bottom: 6px;
-}
-
-.lottery-cost-rules li:last-child {
-  margin-bottom: 0;
+  line-height: 1.4;
+  text-align: right;
 }
 
 /* —— 下半区 —— */
 .lottery-bottom-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   gap: 14px;
   align-items: stretch;
 }
@@ -723,11 +672,19 @@
 
 .lottery-pool-chip {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   padding: 10px;
   border-radius: 12px;
   background: #f7f8fa;
   border: 1px solid rgba(0, 0, 0, 0.06);
   transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.lottery-prize-chip.jackpot {
+  align-items: flex-start;
+  text-align: left;
 }
 
 .lottery-pool-chip:hover {
@@ -743,8 +700,9 @@
 .lottery-pool-chip.jackpot::before {
   content: '头奖档';
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 10px;
+  left: auto;
+  right: 10px;
   font-size: 9px;
   font-weight: 700;
   color: #d4537e;
@@ -763,18 +721,12 @@
   text-overflow: ellipsis;
 }
 
-.lottery-pool-chip.jackpot .chip-name {
-  padding-right: 48px;
-}
-
-.lottery-pool-chip .chip-weight {
-  display: block;
-  font-size: 11px;
-  color: #86909c;
-  margin-top: 4px;
+.lottery-prize-chip.jackpot .chip-name {
+  max-width: calc(100% - 54px);
 }
 
 .lottery-pool-chip .chip-meta {
+  display: block;
   font-size: 10px;
   color: #86909c;
   margin-top: 4px;
@@ -814,91 +766,11 @@
   height: 200px;
 }
 
-.lottery-chart--bar {
-  height: 160px;
-}
-
 .lottery-chart-hint {
   font-size: 10px;
   color: #c9cdd4;
   margin-top: 6px;
   text-align: center;
-}
-
-/* —— 惊喜卡片独占一行 —— */
-.lottery-surprise-row {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.lottery-surprise-cta {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 13px;
-  font-weight: 700;
-  color: #d4537e;
-  text-align: left;
-  cursor: pointer;
-}
-
-.lottery-surprise-preview {
-  position: relative;
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  aspect-ratio: 21 / 6;
-  max-height: 200px;
-}
-
-.lottery-surprise-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.lottery-surprise-preview .lottery-surprise-mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.08);
-  transition: background 0.2s ease;
-  pointer-events: none;
-}
-
-.lottery-surprise-preview:hover:not(.lottery-surprise-preview--claimed) .lottery-surprise-mask {
-  background: rgba(0, 0, 0, 0.14);
-}
-
-.lottery-surprise-preview--claimed {
-  cursor: default;
-}
-
-.lottery-surprise-preview--claimed .lottery-surprise-mask {
-  background: rgba(110, 110, 118, 0.62);
-}
-
-.lottery-surprise-preview--claimed:hover .lottery-surprise-mask {
-  background: rgba(110, 110, 118, 0.62);
-}
-
-.lottery-surprise-preview .lottery-surprise-hint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
 }
 
 .jackpot-overlay.lottery-jackpot-light {

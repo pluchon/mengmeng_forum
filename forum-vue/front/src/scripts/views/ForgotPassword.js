@@ -1,12 +1,15 @@
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
 import { sendSmsCodeForReset, sendMailCodeForReset, findPasswordByMail, findPasswordBySms } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_RE = /^1[3-9]\d{9}$/
 
 export function useForgotPassword(captchaDialogRef) {
   const router = useRouter()
 
+  const recoverFormRef = ref()
   const loading = ref(false)
   const sendingCode = ref(false)
   const countdown = ref(0)
@@ -18,6 +21,47 @@ export function useForgotPassword(captchaDialogRef) {
     newPassword: '',
     type: 'EMAIL',
   })
+
+  const rules = {
+    account: [
+      { required: true, message: '请输入账号', trigger: 'blur' },
+      {
+        validator: (_rule, value, callback) => {
+          const pattern = form.value.type === 'PHONE' ? PHONE_RE : EMAIL_RE
+          if (pattern.test(String(value || '').trim())) {
+            callback()
+            return
+          }
+          callback(new Error(form.value.type === 'PHONE' ? '手机号格式不正确' : '邮箱格式不正确'))
+        },
+        trigger: 'blur',
+      },
+    ],
+    code: [
+      { required: true, message: '请输入验证码', trigger: 'blur' },
+      {
+        validator: (_rule, value, callback) => {
+          const expectedLength = form.value.type === 'PHONE' ? 4 : 6
+          if (String(value || '').trim().length === expectedLength) {
+            callback()
+            return
+          }
+          callback(new Error(`验证码为 ${expectedLength} 位`))
+        },
+        trigger: 'blur',
+      },
+    ],
+    newPassword: [
+      { required: true, message: '请输入新密码', trigger: 'blur' },
+      { min: 6, max: 12, message: '密码长度为 6 到 12 位', trigger: 'blur' },
+    ],
+  }
+
+  const switchRecoveryType = (type) => {
+    if (form.value.type === type) return
+    form.value.type = type
+    recoverFormRef.value?.clearValidate(['account', 'code'])
+  }
 
   async function verifyCaptcha(purpose) {
     const dlg = captchaDialogRef?.value
@@ -33,12 +77,15 @@ export function useForgotPassword(captchaDialogRef) {
   }
 
   const handleSendCode = async () => {
-    const account = form.value.account
-    if (!account) return ElMessage.warning('请输入账号')
+    if (!recoverFormRef.value) return
+    try {
+      await recoverFormRef.value.validateField('account')
+    } catch {
+      return
+    }
 
+    const account = form.value.account
     const isPhone = form.value.type === 'PHONE'
-    if (isPhone && !/^1[3-9]\d{9}$/.test(account)) return ElMessage.warning('手机号格式不正确')
-    if (!isPhone && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account)) return ElMessage.warning('邮箱格式不正确')
 
     const ticket = await verifyCaptcha('RESET_SEND')
     if (!ticket) return
@@ -63,8 +110,11 @@ export function useForgotPassword(captchaDialogRef) {
   }
 
   const handleSubmit = async () => {
-    if (!form.value.account || !form.value.code || !form.value.newPassword) {
-      return ElMessage.warning('请填写完整信息')
+    if (!recoverFormRef.value) return
+    try {
+      await recoverFormRef.value.validate()
+    } catch {
+      return
     }
     const ticket = await verifyCaptcha('RESET_SUBMIT')
     if (!ticket) return
@@ -89,12 +139,14 @@ export function useForgotPassword(captchaDialogRef) {
   })
 
   return {
-    ArrowLeft,
     countdown,
     form,
     handleSendCode,
     handleSubmit,
     loading,
+    recoverFormRef,
+    rules,
     sendingCode,
+    switchRecoveryType,
   }
 }

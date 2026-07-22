@@ -189,3 +189,33 @@
     flex-direction: column;
   }
 }
+.favorite-dialog {
+  .el-dialog__header {
+    padding-bottom: 8px;
+    text-align: center;
+  }
+
+  .el-dialog__title {
+    color: #1d2129;
+    font-weight: 800;
+  }
+
+  .el-dialog__footer {
+    padding-top: 0;
+  }
+
+  .favorite-dialog-confirm {
+    width: 100%;
+    min-height: 42px;
+    margin: 0;
+    border-color: #ff2442;
+    background: #ff2442;
+    font-weight: 700;
+  }
+
+  .favorite-dialog-confirm:hover,
+  .favorite-dialog-confirm:focus {
+    border-color: #e61e3a;
+    background: #e61e3a;
+  }
+}

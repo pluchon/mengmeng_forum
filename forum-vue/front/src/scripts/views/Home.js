@@ -29,7 +29,6 @@ import { shanghaiCalendarYmd } from '@/utils/datetime'
 import { blockIfMuted } from '@/utils/userMute'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
-import { useMascotUiStore } from '@/stores/mascotUi'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { ElMessage } from 'element-plus'
 import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
@@ -50,7 +49,6 @@ export function useHome() {
   const messageStore = useMessageStore()
   const pointsWalletStore = usePointsWalletStore()
   const messageCenterUi = useMessageCenterUiStore()
-  const mascotUi = useMascotUiStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
 
   const { streakDays, totalPoints, todaySigned, loaded: checkinLoaded } = storeToRefs(checkinSnapshotStore)
@@ -224,7 +222,6 @@ export function useHome() {
   const showCheckinHomeStrip = computed(() => {
     const s = checkinSummary.value
     if (!userStore.isLoggedIn || !s) return false
-    if (!s.todaySigned) return true
     return !checkinStripDismissedToday.value
   })
 
@@ -553,13 +550,6 @@ export function useHome() {
     })()
   }
 
-  function toggleMascotPassthrough() {
-    void (async () => {
-      if (!(await ensureLoggedIn('该功能需要登录'))) return
-      mascotUi.togglePointerPassThrough()
-    })()
-  }
-
   function showAnnouncement() {
     announcementRef.value?.show()
   }
@@ -633,7 +623,6 @@ export function useHome() {
     isPersonalizedRecommendation,
     isRecommendationFeed,
     loading,
-    mascotUi,
     menuActiveKey,
     msgUnread,
     openMessageCenter,
@@ -659,7 +648,6 @@ export function useHome() {
     showRecommendationInterestMask,
     submitSearch,
     toggleAiSearchMode,
-    toggleMascotPassthrough,
     toggleSearchTargetMode,
     total,
     toggleHomeHotCollapsed,

@@ -3,8 +3,6 @@
 const PERSONA_BY_LLM = {
   'deepseek-flash': '小鲸鱼',
   'deepseek-deep': '小鲸鱼',
-  'gemini-deep': '哈基米',
-  'claude-sonnet': 'Claude',
   'qwen-flash': 'Qwen',
   'qwen-deep': 'Qwen',
 }
@@ -24,8 +22,6 @@ export function resolveThinkingPersona(llmId) {
   const id = (llmId || '').trim()
   if (PERSONA_BY_LLM[id]) return PERSONA_BY_LLM[id]
   if (id.startsWith('deepseek')) return '小鲸鱼'
-  if (id.startsWith('gemini')) return '哈基米'
-  if (id.startsWith('claude')) return 'Claude'
   if (id.startsWith('qwen')) return 'Qwen'
   return '小萌'
 }

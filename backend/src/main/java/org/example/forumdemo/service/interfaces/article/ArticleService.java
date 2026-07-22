@@ -101,16 +101,15 @@ public interface ArticleService {
      *
      * @param articleId   要审核的帖子 ID
      * @param loginUserId 当前登录用户 ID (必须为帖子作者)
-     * @param notifyEmail 审核结果是否额外推邮件; 站内信无论如何都发
      * @return 本次审核任务 ID
      */
-    String submitForAudit(Long articleId, Long loginUserId, Boolean notifyEmail);
+    String submitForAudit(Long articleId, Long loginUserId);
 
     /**
      * 应用 Python 端回执的审核结果. 由 ForumConsumer 调用, 不允许外部 Controller 调.
      *  - 幂等: 同 taskId 重复调用直接返回
      *  - CAS: 仅当 article.status=PENDING 且 article.audit_task_id=入参 taskId 才扭转
-     *  - 通过 -> PUBLISHED + 系统消息 + 可选邮件 + 入热帖榜 + 摘要写缓存
+     *  - 通过 -> PUBLISHED + 系统消息 + 入热帖榜 + 摘要写缓存
      *  - 不通过 -> REJECTED + 系统消息 (附拒绝理由)
      *  - 异常 -> AUDIT_ERROR + 系统消息 (提示重试)
      */

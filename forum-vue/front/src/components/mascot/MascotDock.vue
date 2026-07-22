@@ -1,7 +1,6 @@
 <template>
   <div
     class="mascot-root"
-    :class="{ 'mascot-root--pass-through': mascotUi.pointerPassThrough }"
     :aria-label="uiLabels.ariaRoot"
     :style="rootStyle"
   >
@@ -92,20 +91,6 @@
                 </div>
               </div>
             </div>
-            <div class="mascot-dlg-head__right">
-              <template v-if="userStore.isLoggedIn">
-                <UserAvatarVip
-                  :size="36"
-                  :src="userStore.avatarUrl || DEFAULT_AVATAR"
-                  :vip-tier="ringVipTier"
-                  :vip-expire-at="userStore.vipExpireAt"
-                />
-                <span class="mascot-dlg-head__nickname">{{ userStore.nickname || uiLabels.defaultNickname }}</span>
-              </template>
-              <template v-else>
-                <span class="mascot-dlg-head__guest">{{ uiLabels.guest }}</span>
-              </template>
-            </div>
           </div>
         </template>
 
@@ -126,16 +111,6 @@
                 <span>{{ tab.label }}</span>
               </button>
             </div>
-            <button
-              v-if="activeNav !== 'appearance'"
-              type="button"
-              class="mascot-new-session-icon"
-              :title="uiLabels.newSession"
-              :aria-label="uiLabels.newSession"
-              @click="startNewSession"
-            >
-              <el-icon><Plus /></el-icon>
-            </button>
           </div>
 
           <div v-if="activeNav === 'appearance'" class="mascot-appearance">
@@ -167,21 +142,47 @@
           <template v-else>
             <div class="mascot-fs-body">
               <aside class="mascot-fs-sidebar">
-                <div class="mascot-fs-sidebar__title">{{ uiLabels.sessionListTitle }}</div>
+                <div class="mascot-fs-sidebar__header">
+                  <div class="mascot-fs-sidebar__title">{{ uiLabels.sessionListTitle }}</div>
+                  <button
+                    type="button"
+                    class="mascot-new-session-icon"
+                    :title="uiLabels.newSession"
+                    :aria-label="uiLabels.newSession"
+                    @click="startNewSession"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </button>
+                </div>
                 <p v-if="!sessionListForNav.length" class="mascot-fs-sidebar__empty">
                   {{ uiLabels.sessionEmpty }}
                 </p>
-                <button
+                <div
                   v-for="sess in sessionListForNav"
                   :key="sess.id"
-                  type="button"
                   class="mascot-fs-session-item"
                   :class="{ 'is-active': String(sess.id) === String(sessionId) }"
+                  role="button"
+                  tabindex="0"
                   @click="selectLocalSession(sess.id)"
+                  @keydown.enter.prevent="selectLocalSession(sess.id)"
+                  @keydown.space.prevent="selectLocalSession(sess.id)"
                 >
-                  <span class="mascot-fs-session-item__title">{{ sess.title || uiLabels.untitledSession }}</span>
-                  <span class="mascot-fs-session-item__time">{{ formatSessionTime(sess.updateTime) }}</span>
-                </button>
+                  <span class="mascot-fs-session-item__copy">
+                    <span class="mascot-fs-session-item__title">{{ sess.title || uiLabels.untitledSession }}</span>
+                    <span class="mascot-fs-session-item__time">{{ formatSessionTime(sess.updateTime) }}</span>
+                  </span>
+                  <button
+                    type="button"
+                    class="mascot-fs-session-item__delete"
+                    :aria-label="`${uiLabels.deleteSession}：${sess.title || uiLabels.untitledSession}`"
+                    :title="uiLabels.deleteSession"
+                    :disabled="Boolean(deletingSessionId)"
+                    @click.stop="deleteSession(sess)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </button>
+                </div>
               </aside>
 
               <div class="mascot-fs-main">
@@ -341,7 +342,7 @@
 </template>
 
 <script setup>
-import { EditPen, Picture, Plus, QuestionFilled, Refresh, UserFilled, ZoomIn } from '@element-plus/icons-vue'
+    import { Delete, EditPen, Picture, Plus, QuestionFilled, Refresh, UserFilled, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { DEFAULT_AVATAR } from '@/utils/constants'
@@ -353,7 +354,9 @@ const {
   assistantOpen,
   catalog,
   companionAvatarSrc,
-  draft,
+      draft,
+      deleteSession,
+      deletingSessionId,
   estimateHintText,
   estimateLoading,
   showPointsPayButton,
@@ -370,7 +373,6 @@ const {
   isVip,
   llmOptions,
   loading,
-  mascotUi,
   messages,
   modeTabs,
   onAssistantOpened,

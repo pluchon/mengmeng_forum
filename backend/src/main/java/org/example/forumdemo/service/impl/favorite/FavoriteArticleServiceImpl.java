@@ -9,6 +9,7 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forumdemo.converter.FavoriteConverter;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.ArticleFavorite;
 import org.example.forumdemo.entity.db.User;
@@ -241,7 +242,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             Article article = articleMap.get(fav.getArticleId());
             if (article == null) continue;
             UserBriefVO author = userMap.get(article.getUserId());
-            records.add(new FolderArticleVO(article, author, fav.getCreateTime()));
+            records.add(FavoriteConverter.toFolderArticleVO(article, author, fav.getCreateTime()));
         }
         return new PageResult<>(records, result.getTotal(), p, s, result.getPages(), result.hasNext());
     }

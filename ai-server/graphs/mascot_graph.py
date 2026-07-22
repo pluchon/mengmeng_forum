@@ -26,7 +26,6 @@ from clients.dashscope_chat_client import (
 )
 from clients.deepseek_client import deepseek_stream_text
 from clients.deepseek_client import deepseek_chat_completion
-from clients.huanapi_client import huanapi_messages
 from config import settings
 from mcp.registry import invoke_tool
 from utils.mascot_article_rag import fetch_related_articles, format_related_for_prompt
@@ -97,12 +96,6 @@ def _normalize_llm_route(raw: str | None, vip_tier: int, skill: str) -> str:
         "qwen": "qwen-flash",
         "deepseek": "deepseek-flash",
         "openai": "qwen-flash",
-        "gemini": "gemini-deep",
-        "gemini-flash": "gemini-deep",
-        "claude": "claude-sonnet",
-        "claude-flash": "claude-sonnet",
-        "claude-deep": "claude-sonnet",
-        "claude-haiku": "claude-sonnet",
     }
     if s in legacy:
         s = legacy[s]
@@ -111,25 +104,20 @@ def _normalize_llm_route(raw: str | None, vip_tier: int, skill: str) -> str:
         "qwen-flash", "deepseek-flash",
     }
     valid_deep = {
-        "qwen-deep", "deepseek-deep", "gemini-deep", "claude-sonnet",
+        "qwen-deep", "deepseek-deep",
     }
     pro_routes = valid_flash | valid_deep
-    max_only = {"claude-sonnet"}
 
     if s not in pro_routes:
         s = "qwen-flash"
 
-    if s in max_only and vip_tier < 2:
-        s = "qwen-flash"
-    elif s in valid_deep and vip_tier < 1:
+    if s in valid_deep and vip_tier < 1:
         s = s.replace("-deep", "-flash")
-    elif s in {"gemini-deep", "claude-sonnet"} and vip_tier < 1:
-        s = "qwen-flash"
 
     if skill == "help":
         if s not in {"qwen-flash", "deepseek-flash"}:
             s = "qwen-flash"
-        if s in valid_deep or s.startswith("gemini") or s.startswith("claude"):
+        if s in valid_deep:
             s = "qwen-flash"
 
     return s
@@ -167,26 +155,12 @@ def _lc_to_openai_messages(msgs: list[Any]) -> list[dict[str, str]]:
     return out
 
 
-def _huanapi_invoke(model: str, msgs: list[Any], *, use_claude_key: bool = False) -> tuple[str, dict[str, Any]]:
-    hu = settings.huanapi
-    base = str(hu.get("base_url") or "https://www.huanapi.com")
-    if use_claude_key:
-        key = (hu.get("claude_key") or hu.get("gemini_key") or "").strip()
-    else:
-        key = (hu.get("gemini_key") or "").strip()
-    openai_msgs = _lc_to_openai_messages(msgs)
-    text, usage = huanapi_messages(base, key, model, openai_msgs)
-    usage["model_code"] = model
-    return text, usage
-
-
 def _invoke_mascot_llm(route: str, msgs: list[Any]) -> tuple[str, dict[str, Any]]:
     from clients.usage_util import attach_latency
 
     t0 = time.perf_counter()
     ds = settings.dashscope
     dsk = settings.deepseek
-    hu = settings.huanapi
     openai_msgs = _lc_to_openai_messages(msgs)
 
     if route == "qwen-flash":
@@ -211,16 +185,6 @@ def _invoke_mascot_llm(route: str, msgs: list[Any]) -> tuple[str, dict[str, Any]
         base = str(dsk.get("base_url") or "https://api.deepseek.com/v1")
         key = str(dsk.get("api_key") or "")
         text, usage = deepseek_chat_completion(base, key, model, openai_msgs)
-        return text, attach_latency(usage, t0)
-
-    if route == "gemini-deep":
-        model = str(hu.get("model_gemini_deep") or "gemini-3.1-pro")
-        text, usage = _huanapi_invoke(model, msgs)
-        return text, attach_latency(usage, t0)
-
-    if route == "claude-sonnet":
-        model = str(hu.get("model_claude_sonnet") or "claude-sonnet-4-6")
-        text, usage = _huanapi_invoke(model, msgs, use_claude_key=True)
         return text, attach_latency(usage, t0)
 
     raise ValueError(f"未知 mascot llm 路由: {route}")

@@ -7,7 +7,6 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.CheckinLog;
 import org.example.forumdemo.entity.db.User;
-import org.example.forumdemo.entity.vo.checkin.CheckinMonthTrendResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinResultResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinStatusResponse;
@@ -55,14 +54,6 @@ public class CheckinController {
     @GetMapping("/rule")
     public Result<CheckinRuleMonthResponse> getRule(@RequestParam(required = false) Integer month) {
         return Result.success(checkinService.getRule(month));
-    }
-
-    @Operation(summary = "签到萌币月度趋势", description = "按日汇总当月签到获得的萌币（基础+连续奖励）")
-    @GetMapping("/trend")
-    public Result<CheckinMonthTrendResponse> getMonthTrend(@RequestParam(required = false) Integer year,
-            @RequestParam(required = false) Integer month, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(checkinService.getMonthTrend(sessionUser.getId(), year, month));
     }
 
     @Operation(summary = "签到流水游标分页", description = "深分页推荐；cursor 取自上一页 nextCursor")

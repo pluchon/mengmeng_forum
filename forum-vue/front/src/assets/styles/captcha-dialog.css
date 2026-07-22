@@ -1,4 +1,15 @@
 ﻿/* ── 对话框 ── */
+.captcha-dialog-title {
+  width: 100%;
+  margin: 0;
+  padding-left: 24px;
+  color: #303133;
+  font-size: 20px;
+  line-height: 1.4;
+  text-align: center;
+  font-weight: 800;
+}
+
 .behavior-captcha-dialog :deep(.el-dialog__body) {
   padding: 8px 20px 12px;
 }

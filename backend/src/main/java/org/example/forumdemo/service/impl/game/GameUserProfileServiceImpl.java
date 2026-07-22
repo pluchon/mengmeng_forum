@@ -191,28 +191,6 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     }
 
     @Override
-    public List<GameUserProfileVO> listLeaderboard(String gameCode, Integer pageSize) {
-        if (gameCode == null || gameCode.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<GameUserProfile> page = new Page<>(1, validPageSize);
-        LambdaQueryWrapper<GameUserProfile> wrapper = new LambdaQueryWrapper<GameUserProfile>()
-                .eq(GameUserProfile::getGameCode, gameCode)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
-                .orderByDesc(GameUserProfile::getScore)
-                .orderByDesc(GameUserProfile::getWinCount)
-                .orderByDesc(GameUserProfile::getTotalCount)
-                .orderByAsc(GameUserProfile::getId);
-        Page<GameUserProfile> result = gameUserProfileMapper.selectPage(page, wrapper);
-        List<GameUserProfileVO> rows = new ArrayList<>(result.getRecords().size());
-        for (GameUserProfile profile : result.getRecords()) {
-            rows.add(GameConverter.toProfileVO(profile, userMapper.selectById(profile.getUserId())));
-        }
-        return rows;
-    }
-
-    @Override
     public GobangReplayVO getGobangReplay(Long userId, Long recordId) {
         if (userId == null || recordId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));

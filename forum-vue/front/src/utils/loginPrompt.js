@@ -5,13 +5,15 @@ import router from '@/router'
  * 需登录操作：弹窗确认，而非直接跳转登录页。
  * @returns {Promise<boolean>} 用户选择去登录则为 true
  */
-export async function promptLogin(message = '该功能需要登录后才能使用，是否前往登录？') {
+export async function promptLogin(_message = '') {
   try {
-    await ElMessageBox.confirm(message, '需要登录', {
+    await ElMessageBox.confirm('', '需要登录', {
       confirmButtonText: '去登录',
-      cancelButtonText: '暂不登录',
-      type: 'info',
-      distinguishCancelAndClose: true,
+      showCancelButton: false,
+      showClose: true,
+      closeOnClickModal: false,
+      customClass: 'login-required-box',
+      confirmButtonClass: 'login-required-box__confirm',
     })
     const redirect = router.currentRoute.value?.fullPath
     if (redirect && redirect !== '/sign-in' && redirect !== '/sign-up') {

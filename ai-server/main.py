@@ -11,6 +11,12 @@ ai-server 启动入口.
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
 
 from flask import Flask
 

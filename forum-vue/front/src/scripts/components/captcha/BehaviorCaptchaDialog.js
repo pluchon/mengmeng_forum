@@ -168,6 +168,21 @@ async function onPointerUp(e) {
   await submitSlider()
 }
 
+function failAndClose(message) {
+  if (message) ElMessage.error(message)
+  settled = true
+  submitting.value = false
+  dragging.value = false
+  vo.value = null
+  errorMsg.value = ''
+  resetSlider()
+  resetClick()
+  visible.value = false
+  rejectPromise?.(new Error('failed'))
+  rejectPromise = null
+  resolvePromise = null
+}
+
 async function submitSlider() {
   if (!vo.value || submitting.value) return
   submitting.value = true
@@ -199,10 +214,15 @@ async function submitSlider() {
       trackList: scaledTrack,
       data: vo.value.data,
     }
-    const res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
+    let res
+    try {
+      res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
+    } catch (err) {
+      failAndClose(err?.message || '验证失败，请重试')
+      return
+    }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      ElMessage.error(res.message || '验证失败，请重试')
-      await loadVo()
+      failAndClose(res.message || '验证失败，请重试')
       return
     }
     resolveWithTicket(res.data.captchaTicket)
@@ -279,16 +299,12 @@ async function submitClickTrack() {
     let res
     try {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
-    } catch {
-      // axios 拦截器已对业务码弹窗；勿再向外抛，避免 Vue 点击处理器出现 Unhandled promise
-      resetClick()
-      await loadVo()
+    } catch (err) {
+      failAndClose(err?.message || '验证失败，请重试')
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      ElMessage.error(res.message || '验证失败，请重试')
-      resetClick()
-      await loadVo()
+      failAndClose(res.message || '验证失败，请重试')
       return
     }
     resolveWithTicket(res.data.captchaTicket)
@@ -343,13 +359,10 @@ function resolveWithTicket(ticket) {
 
 function onDialogClosed() {
   if (settled) return
+  settled = true
   rejectPromise?.(new Error('cancelled'))
   rejectPromise = null
   resolvePromise = null
-}
-
-function closeReject() {
-  visible.value = false
 }
 
 function run(purpose) {

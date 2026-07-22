@@ -2,15 +2,19 @@ package org.example.forumdemo.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.vo.search.SearchArticleResponse;
 import org.example.forumdemo.entity.vo.search.SearchUserResponse;
+import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.service.interfaces.search.SearchService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 搜索: 帖子 / 用户；DB 优先，未命中走 Python RAG.
@@ -42,8 +46,11 @@ public class SearchController {
     public Result<SearchUserResponse> searchUser(@RequestParam String keyword,
                                                  @RequestParam(defaultValue = "1") Integer pageNum,
                                                  @RequestParam(defaultValue = "10") Integer pageSize,
-                                                 @RequestParam(required = false) String ai) {
+                                                 @RequestParam(required = false) String ai,
+                                                 HttpServletRequest request) {
         boolean preferAiRag = ai != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
-        return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag));
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        Long viewerId = loginUser == null ? null : loginUser.getId();
+        return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag, viewerId));
     }
 }

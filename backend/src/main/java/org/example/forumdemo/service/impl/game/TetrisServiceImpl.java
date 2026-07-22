@@ -30,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 // 俄罗斯方块单人模式服务：结算、历史、排行榜
@@ -91,9 +93,10 @@ public class TetrisServiceImpl implements TetrisService {
     }
 
     @Override
-    public List<TetrisProfileVO> listLeaderboard(Integer pageSize) {
+    public PageResult<TetrisProfileVO> listLeaderboard(Integer pageNum, Integer pageSize) {
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<GameUserProfile> page = new Page<>(1, validPageSize);
+        Page<GameUserProfile> page = new Page<>(validPageNum, validPageSize);
         LambdaQueryWrapper<GameUserProfile> wrapper = new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, TetrisConstants.GAME_CODE)
                 .eq(GameUserProfile::getDeleteState, (byte) 0)
@@ -101,12 +104,23 @@ public class TetrisServiceImpl implements TetrisService {
                 .orderByDesc(GameUserProfile::getTotalCount)
                 .orderByAsc(GameUserProfile::getId);
         Page<GameUserProfile> result = gameUserProfileMapper.selectPage(page, wrapper);
+        List<Long> userIds = result.getRecords().stream().map(GameUserProfile::getUserId).toList();
+        Map<Long, User> userMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        }
         List<TetrisProfileVO> rows = new ArrayList<>(result.getRecords().size());
         for (GameUserProfile profile : result.getRecords()) {
-            User user = userMapper.selectById(profile.getUserId());
-            rows.add(TetrisConverter.toProfileVO(profile, user));
+            rows.add(TetrisConverter.toProfileVO(profile, userMap.get(profile.getUserId())));
         }
-        return rows;
+        return new PageResult<>(
+                rows,
+                result.getTotal(),
+                validPageNum,
+                validPageSize,
+                result.getPages(),
+                result.hasNext()
+        );
     }
 
     @Override

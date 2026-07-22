@@ -12,7 +12,6 @@ import org.example.forumdemo.entity.vo.lottery.LotteryActivityInfoVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryActivityListItemVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawRecordVO;
 import org.example.forumdemo.entity.vo.lottery.LotteryDrawResultVO;
-import org.example.forumdemo.entity.vo.lottery.LotterySurpriseClaimVO;
 import org.example.forumdemo.service.interfaces.lottery.LotteryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,10 +64,4 @@ public class LotteryController {
         return Result.success(lotteryService.draw(loginUser.getId(), dto));
     }
 
-    @Operation(summary = "抽奖页彩蛋积分", description = "「点我看看」一次性积分；已领取则返回幂等结果")
-    @PostMapping("/surprise-bonus")
-    public Result<LotterySurpriseClaimVO> surpriseBonus(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(lotteryService.claimPageSurpriseBonus(loginUser.getId()));
-    }
 }

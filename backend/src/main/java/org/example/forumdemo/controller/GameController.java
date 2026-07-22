@@ -19,6 +19,7 @@ import org.example.forumdemo.entity.vo.game.TetrisProfileVO;
 import org.example.forumdemo.entity.vo.game.TetrisRecordVO;
 import org.example.forumdemo.entity.vo.game.TetrisReplayVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkRecordVO;
+import org.example.forumdemo.entity.vo.game.TetrisPkLeaderboardVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkReplayVO;
 import org.example.forumdemo.entity.vo.game.TetrisActiveRoomVO;
 import org.example.forumdemo.entity.vo.game.TetrisRoomStateVO;
@@ -117,20 +118,6 @@ public class GameController {
         ));
     }
 
-    @Operation(summary = "五子棋天梯榜", description = "返回五子棋玩家排行榜")
-    @GetMapping("/gobang/leaderboard")
-    public Result<List<GameUserProfileVO>> gobangLeaderboard(
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return Result.success(gameUserProfileService.listLeaderboard(GameConstants.GOBANG, pageSize));
-    }
-
-    @Operation(summary = "井字棋天梯榜", description = "返回井字棋玩家排行榜")
-    @GetMapping("/jinzi/leaderboard")
-    public Result<List<GameUserProfileVO>> jinziLeaderboard(
-            @RequestParam(defaultValue = "20") Integer pageSize) {
-        return Result.success(gameUserProfileService.listLeaderboard(GameConstants.JINZI, pageSize));
-    }
-
     @Operation(summary = "五子棋活跃房间", description = "返回当前可观战的五子棋房间")
     @GetMapping("/gobang/rooms/active")
     public Result<List<GobangActiveRoomVO>> activeRooms() {
@@ -212,9 +199,10 @@ public class GameController {
 
     /** 俄罗斯方块排行榜 */
     @GetMapping("/tetris/leaderboard")
-    public Result<List<TetrisProfileVO>> tetrisLeaderboard(
+    public Result<PageResult<TetrisProfileVO>> tetrisLeaderboard(
+            @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-        return Result.success(tetrisService.listLeaderboard(pageSize));
+        return Result.success(tetrisService.listLeaderboard(pageNum, pageSize));
     }
 
     /** 俄罗斯方块单局结算 */
@@ -254,9 +242,10 @@ public class GameController {
 
     /** 俄罗斯方块 PK 排行榜 */
     @GetMapping("/tetris/pk/leaderboard")
-    public Result<List<GameUserProfileVO>> tetrisPkLeaderboard(
+    public Result<PageResult<TetrisPkLeaderboardVO>> tetrisPkLeaderboard(
+            @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-        return Result.success(tetrisPkService.listLeaderboard(pageSize));
+        return Result.success(tetrisPkService.listLeaderboard(pageNum, pageSize));
     }
 
     /** 俄罗斯方块 PK 活跃房间 */

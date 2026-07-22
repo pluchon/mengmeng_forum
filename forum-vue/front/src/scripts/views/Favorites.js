@@ -31,9 +31,9 @@ export function useFavorites() {
   async function refresh() {
     loading.value = true
     try {
-      const res = await getMyFavoriteFolders()
+      const res = await getMyFavoriteFolders({ pageNum: 1, pageSize: 100 })
       if (res.code === 0) {
-        folders.value = res.data || []
+        folders.value = res.data?.records || []
       } else {
         ElMessage.error(res.message || '加载收藏夹失败')
       }

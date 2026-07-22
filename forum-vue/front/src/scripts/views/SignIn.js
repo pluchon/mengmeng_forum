@@ -1,13 +1,5 @@
-import { ref, onUnmounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import {
-  Key,
-  CirclePlus,
-  UserFilled,
-  ArrowLeft,
-  Lock,
-  Message as MailIcon,
-} from '@element-plus/icons-vue'
+import { ref, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { login as apiLogin, smsLogin, mailLogin } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
@@ -15,25 +7,14 @@ import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function useSignIn(captchaDialogRef) {
-  const route = useRoute()
   const router = useRouter()
   const announcementRef = ref()
   const phoneFormRef = ref()
   const userNameFormRef = ref()
-  const emailFormRef = ref()
+  const emailCodeFormRef = ref()
+  const emailPasswordFormRef = ref()
 
   const loginTab = ref('phone')
-  /** 邮箱页：null 时仅展示方式选择；'password' | 'code' 时展示对应表单 */
-  const emailSubTab = ref(null)
-
-  watch(loginTab, (v) => {
-    if (v !== 'email') emailSubTab.value = null
-  })
-
-  watch(emailSubTab, (v) => {
-    if (v === 'password') loginForm.value.emailCode = ''
-    if (v === 'code') loginForm.value.emailPassword = ''
-  })
   const loading = ref(false)
   const sendingCode = ref(false)
   const sendingMailCode = ref(false)
@@ -65,11 +46,11 @@ export function useSignIn(captchaDialogRef) {
     userName: [
       { required: true, message: '请输入用户名', trigger: 'blur' },
       {
-        validator: (_r, v, cb) => {
-          if (v && String(v).includes('@')) {
-            cb(new Error('邮箱登录请切换到「邮箱登录」页签'))
+        validator: (_rule, value, callback) => {
+          if (value && String(value).includes('@')) {
+            callback(new Error('邮箱登录请切换到邮箱登录方式'))
           } else {
-            cb()
+            callback()
           }
         },
         trigger: 'blur',
@@ -83,18 +64,24 @@ export function useSignIn(captchaDialogRef) {
       { required: true, message: '请输入邮箱', trigger: 'blur' },
       { pattern: EMAIL_RE, message: '邮箱格式不正确', trigger: 'blur' },
     ],
-    emailPassword: [],
-    emailCode: [],
+    emailPassword: [
+      { required: true, message: '请输入密码', trigger: 'blur' },
+      { min: 6, message: '密码不能少于 6 位', trigger: 'blur' },
+    ],
+    emailCode: [
+      { required: true, message: '请输入验证码', trigger: 'blur' },
+      { len: 6, message: '验证码为 6 位', trigger: 'blur' },
+    ],
   }
 
   async function verifyCaptcha(purpose) {
-    const dlg = captchaDialogRef?.value
-    if (!dlg?.run) {
+    const dialog = captchaDialogRef?.value
+    if (!dialog?.run) {
       ElMessage.error('人机验证未就绪')
       return null
     }
     try {
-      return await dlg.run(purpose)
+      return await dialog.run(purpose)
     } catch {
       return null
     }
@@ -150,12 +137,8 @@ export function useSignIn(captchaDialogRef) {
   }
 
   const handleSendMailCode = async () => {
-    if (emailSubTab.value !== 'code') {
-      ElMessage.warning('请先选择「验证码登录」')
-      return
-    }
     try {
-      await emailFormRef.value.validateField('email')
+      await emailCodeFormRef.value.validateField('email')
     } catch {
       return
     }
@@ -190,39 +173,15 @@ export function useSignIn(captchaDialogRef) {
     let formRef = null
     if (tab === 'phone') formRef = phoneFormRef.value
     else if (tab === 'userName') formRef = userNameFormRef.value
-    else formRef = emailFormRef.value
+    else if (tab === 'emailCode') formRef = emailCodeFormRef.value
+    else if (tab === 'emailPassword') formRef = emailPasswordFormRef.value
 
     if (!formRef) return
 
-    if (tab === 'email') {
-      if (!emailSubTab.value) {
-        ElMessage.warning('请先选择「密码登录」或「验证码登录」')
-        return
-      }
-      try {
-        await formRef.validateField('email')
-      } catch {
-        return
-      }
-      if (emailSubTab.value === 'password') {
-        const pwd = String(loginForm.value.emailPassword || '').trim()
-        if (pwd.length < 6) {
-          ElMessage.warning('密码不能少于 6 位')
-          return
-        }
-      } else {
-        const code = String(loginForm.value.emailCode || '').trim()
-        if (code.length !== 6) {
-          ElMessage.warning('请输入 6 位邮箱验证码')
-          return
-        }
-      }
-    } else {
-      try {
-        await formRef.validate()
-      } catch {
-        return
-      }
+    try {
+      await formRef.validate()
+    } catch {
+      return
     }
 
     loading.value = true
@@ -250,34 +209,29 @@ export function useSignIn(captchaDialogRef) {
           },
           ticket,
         )
-      } else {
-        const email = loginForm.value.email
-        const code = String(loginForm.value.emailCode || '').trim()
-        const pwd = String(loginForm.value.emailPassword || '').trim()
-        if (emailSubTab.value === 'code') {
-          const ticket = await verifyCaptcha('MAIL_LOGIN')
-          if (!ticket) return
-          const res = await mailLogin(email, code, ticket)
-          if (res.code !== 0) {
-            if (res.code === 1119) {
-              ElMessage.info('该邮箱未绑定账号')
-              router.push('/sign-up')
-            } else {
-              ElMessage.error(res.message || '登录失败')
-            }
-            return
+      } else if (tab === 'emailCode') {
+        const ticket = await verifyCaptcha('MAIL_LOGIN')
+        if (!ticket) return
+        const res = await mailLogin(loginForm.value.email, loginForm.value.emailCode.trim(), ticket)
+        if (res.code !== 0) {
+          if (res.code === 1119) {
+            ElMessage.info('该邮箱未绑定账号')
+            router.push('/sign-up')
+          } else {
+            ElMessage.error(res.message || '登录失败')
           }
-        } else {
-          const ticket = await verifyCaptcha('USER_LOGIN')
-          if (!ticket) return
-          await apiLogin(
-            {
-              userName: email,
-              password: pwd,
-            },
-            ticket,
-          )
+          return
         }
+      } else if (tab === 'emailPassword') {
+        const ticket = await verifyCaptcha('USER_LOGIN')
+        if (!ticket) return
+        await apiLogin(
+          {
+            userName: loginForm.value.email,
+            password: loginForm.value.emailPassword.trim(),
+          },
+          ticket,
+        )
       }
 
       afterLoginSuccess()
@@ -298,28 +252,22 @@ export function useSignIn(captchaDialogRef) {
 
   return {
     AnnouncementBoard,
-    ArrowLeft,
-    Key,
-    Lock,
-    MailIcon,
-    CirclePlus,
-    UserFilled,
-    userNameFormRef,
-    emailFormRef,
     agreed,
     announcementRef,
     countdown,
-    mailCountdown,
+    emailCodeFormRef,
+    emailPasswordFormRef,
     handleLogin,
     handleSendCode,
     handleSendMailCode,
     loading,
     loginForm,
     loginTab,
-    emailSubTab,
+    mailCountdown,
     phoneFormRef,
     rules,
     sendingCode,
     sendingMailCode,
+    userNameFormRef,
   }
 }

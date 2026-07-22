@@ -1,4 +1,4 @@
-/* 登录 / 注册 / 找回密码 — 左图右表分栏（与 SignIn 一致） */
+/* 三个认证页共用同一张 2:1 分栏卡片，页面保持透明以透出粒子海。 */
 .auth-page {
   width: 100vw;
   min-height: 100vh;
@@ -8,13 +8,12 @@
   justify-content: center;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 16px;
+  padding: 24px 32px;
   box-sizing: border-box;
   background: transparent;
-  perspective: 1000px;
 }
-
 .auth-container {
+  position: relative;
   z-index: 10;
   width: 100%;
   display: flex;
@@ -22,50 +21,40 @@
 }
 
 .auth-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  width: min(1240px, 96vw);
-  min-height: 600px;
-  max-height: min(720px, 92vh);
-  border-radius: 40px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  display: flex;
-  overflow: hidden;
   position: relative;
-}
-
-.auth-card--tall {
-  min-height: 640px;
-  max-height: min(820px, 94vh);
+  box-sizing: border-box;
+  width: min(1200px, calc(100vw - 64px));
+  height: min(700px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 28px;
+  background: #fffafb;
+  box-shadow:
+    0 28px 72px rgba(255, 36, 66, 0.14),
+    0 8px 24px rgba(40, 44, 60, 0.1);
 }
 
 .auth-layout {
-  display: flex;
+  display: grid;
   width: 100%;
-  min-height: inherit;
-  max-height: inherit;
-  align-items: stretch;
-  flex: 1;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
 }
 
 .brand-side {
   position: relative;
-  flex: 1.35 1 0;
   min-width: 0;
-  max-width: 62%;
-  min-height: 600px;
   overflow: hidden;
-  background: #f3f4f6;
+  background: #eef0f5;
 }
 
 .brand-side__img {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 100%;
   object-fit: cover;
-  object-position: left center;
-  display: block;
+  object-position: center center;
   user-select: none;
   pointer-events: none;
 }
@@ -75,102 +64,167 @@
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.04) 0%,
-      transparent 42%,
-      transparent 72%,
-      rgba(255, 255, 255, 0.55) 92%,
-      rgba(255, 255, 255, 0.92) 100%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.06) 0%,
-      transparent 28%,
-      transparent 78%,
-      rgba(0, 0, 0, 0.08) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    rgba(18, 20, 30, 0) 48%,
+    rgba(18, 20, 30, 0.08) 66%,
+    rgba(18, 20, 30, 0.68) 100%
+  );
+}
+
+.auth-scene-copy {
+  position: absolute;
+  left: 36px;
+  bottom: 34px;
+  z-index: 2;
+  width: min(390px, calc(100% - 72px));
+  color: #fff;
+  text-shadow: 0 2px 16px rgba(13, 16, 26, 0.5);
+}
+
+.auth-scene-copy::before {
+  content: '';
+  display: block;
+  width: 34px;
+  height: 4px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--primary-red);
+  box-shadow: 0 3px 12px rgba(255, 36, 66, 0.42);
+}
+
+.auth-scene-copy__title {
+  margin: 0;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.18;
+  letter-spacing: 0.04em;
+}
+
+.auth-scene-copy__description {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.65;
 }
 
 .form-side {
-  flex: 0 0 clamp(380px, 38%, 480px);
-  width: clamp(380px, 38%, 480px);
-  padding: 28px 36px 32px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  padding: 28px 28px 16px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: stretch;
-  gap: 8px;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.96);
-}
-
-.form-side--scroll {
-  justify-content: flex-start;
+  overflow-x: hidden;
   overflow-y: auto;
+  background: #fffafb;
 }
 
-/* 注册 / 找回等页在 scoped 中覆盖 padding 与宽度 */
-.form-side--auth-relaxed {
+.auth-form-body {
+  display: flex;
+  min-height: 0;
+  padding-bottom: 72px;
   box-sizing: border-box;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.form-side__brand-mobile {
-  display: none;
-  margin: 0 0 4px;
+.form-side :deep(.el-form-item.is-error .el-input__wrapper) {
+  border-color: var(--primary-red) !important;
+  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.1) !important;
+}
+
+.auth-brand-header {
+  flex: 0 0 auto;
+  margin: 0 0 18px;
   text-align: center;
-  font-size: 22px;
+}
+
+.auth-brand-title {
+  margin: 0;
+  color: #202124;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+}
+
+.auth-page-title {
+  margin: 10px 0 0;
+  color: #4a4b52;
+  font-size: 17px;
   font-weight: 800;
-  letter-spacing: 2px;
-  color: #1a1a1a;
-  line-height: 1.25;
+  line-height: 1.35;
+}
+
+.auth-page-title--standalone {
+  margin: 0;
+  color: #202124;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.form-side :deep(.site-icp-link--auth) {
+  flex: 0 0 auto;
+  margin: auto 0 0;
+  padding: 10px 0 0;
+  border-top: 0;
+}
+
+.form-side :deep(.site-icp-link--auth .site-icp-link__a) {
+  color: #b7b9c2;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.form-side :deep(.site-icp-link--auth .site-icp-link__a:hover) {
+  color: var(--primary-red);
 }
 
 @media (max-width: 1100px) {
-  .auth-card {
-    width: min(96vw, 720px);
-    min-height: 580px;
-    max-height: none;
+  .auth-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
   }
 
-  .brand-side {
-    flex: 1 1 52%;
-    max-width: 52%;
-  }
-
-  .brand-side__img {
-    min-height: 580px;
+  .auth-scene-copy {
+    left: 26px;
+    bottom: 26px;
+    width: min(330px, calc(100% - 52px));
   }
 
   .form-side {
-    flex: 0 0 clamp(320px, 48%, 400px);
-    width: clamp(320px, 48%, 400px);
-    padding: 24px 28px 28px;
+    padding-right: 24px;
+    padding-left: 24px;
   }
 }
 
 @media (max-width: 900px) {
+  .auth-page {
+    padding: 16px;
+  }
+
+  .auth-card {
+    width: min(440px, calc(100vw - 32px));
+    height: auto;
+    min-height: 620px;
+  }
+
+  .auth-layout {
+    display: block;
+  }
+
   .brand-side {
     display: none;
   }
 
-  .auth-card {
-    width: min(440px, 94vw);
-    min-height: auto;
-    max-height: none;
-  }
-
   .form-side {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: none;
-    padding: 28px 24px 36px;
-    justify-content: flex-start;
-  }
-
-  .form-side__brand-mobile {
-    display: block;
-    margin-bottom: 12px;
+    min-height: 620px;
+    padding: 30px 24px 20px;
   }
 }

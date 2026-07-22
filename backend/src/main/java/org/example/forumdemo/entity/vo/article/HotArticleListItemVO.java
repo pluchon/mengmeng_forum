@@ -1,6 +1,7 @@
 package org.example.forumdemo.entity.vo.article;
 
 import lombok.Data;
+import org.example.forumdemo.common.enums.HotArticleTrendDirection;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 
 // 热帖榜分页列表项
@@ -18,4 +19,7 @@ public class HotArticleListItemVO {
 
     // 当前登录用户是否关注作者
     private Boolean fromFollowing;
+
+    // 相对上一统计周期的热度方向
+    private HotArticleTrendDirection trendDirection;
 }

@@ -163,7 +163,7 @@ public class VipCenterServiceImpl implements VipCenterService {
     }
 
     private static boolean routeNeedsAdvancedDaily(String route) {
-        return route.startsWith("qwen-deep") || route.startsWith("gemini") || route.startsWith("claude");
+        return route.startsWith("qwen-deep");
     }
 
     private static String resolveModelCodeFromRoute(String route) {
@@ -175,8 +175,6 @@ public class VipCenterServiceImpl implements VipCenterService {
             case "qwen-deep" -> "qwen3.7-max";
             case "deepseek-flash" -> "deepseek-v4-flash";
             case "deepseek-deep" -> "deepseek-v4-pro";
-            case "gemini-deep" -> "gemini-3.1-pro";
-            case "claude-sonnet" -> "claude-sonnet-4-6";
             default -> route;
         };
     }
@@ -223,11 +221,11 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(0);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 写作 每日 10 次", true),
-                feat("封面「推荐配图要点」单独调用", true),
-                feat("高级大模型写作", false),
+                feat("DeepSeek V4 Flash 每日 10 次", true),
+                feat("推荐配图要点", true),
+                feat("高级模型写作", false),
                 feat("AI 生图", false),
-                feat("深度模型 Token 配额", false)));
+                feat("深度模型配额", false)));
         if (!active || curTier == 0) {
             p.setButtonState("current");
             p.setButtonLabel("当前方案");
@@ -249,11 +247,11 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(true);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 会员期内不限次", true),
-                feat("文本：通义 / DeepSeek / Gemini / Claude", true),
-                feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
-                feat("高级写作 50 次/日 · 生图 25 次/日", true),
-                feat("深度 Token：通义/DeepSeek/Gemini/Claude", true)));
+                feat("DeepSeek V4 Flash 不限次", true),
+                feat("通义与 DeepSeek 写作", true),
+                feat("Z-Image Turbo 与 GPT Image 2 生图", true),
+                feat("高级写作每日 50 次", true),
+                feat("AI 生图每日 25 次", true)));
         applyPlanButton(p, curTier, active, 1);
         return p;
     }
@@ -269,11 +267,11 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 会员期内不限次", true),
-                feat("文本：通义 / DeepSeek / Gemini / Claude（含 Sonnet）", true),
-                feat("AI 生图：Z-Image Turbo + GPT Image 2", true),
-                feat("高级写作 300 次/日 · 生图 100 次/日", true),
-                feat("深度 Token 配额全面提升", true)));
+                feat("DeepSeek V4 Flash 不限次", true),
+                feat("通义与 DeepSeek 写作", true),
+                feat("Z-Image Turbo 与 GPT Image 2 生图", true),
+                feat("高级写作每日 300 次", true),
+                feat("AI 生图每日 100 次", true)));
         applyPlanButton(p, curTier, active, 2);
         return p;
     }
@@ -335,18 +333,11 @@ public class VipCenterServiceImpl implements VipCenterService {
         return panel;
     }
 
-    /** Claude Haiku 已下线，不在会员中心展示配额。 */
     private boolean isHiddenQuota(ForumVipQuotaConfig cfg) {
         if (cfg == null) {
             return true;
         }
-        if ("token_claude_haiku".equals(cfg.getQuotaKey())) {
-            return true;
-        }
-        if ("advanced_llm".equals(cfg.getQuotaKey())) {
-            return true;
-        }
-        return Constant.AI_MODEL_CLAUDE_HAIKU.equals(cfg.getModelCode());
+        return "advanced_llm".equals(cfg.getQuotaKey());
     }
 
     private VipQuotaItemVO toItem(ForumVipQuotaConfig cfg, AiUsageDaily daily,

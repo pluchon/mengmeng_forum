@@ -45,15 +45,6 @@
                   class="checkin-icon-btn"
                   circle
                   plain
-                  aria-label="回到今天"
-                  @click="goTodayCalendar"
-                >
-                  <img :src="iconTodayUrl" alt="" class="checkin-toolbar-icon" />
-                </el-button>
-                <el-button
-                  class="checkin-icon-btn"
-                  circle
-                  plain
                   aria-label="查看签到记录"
                   @click="openLogDrawer"
                 >
@@ -117,17 +108,7 @@
       <el-card v-if="status" class="checkin-stats-panel" shadow="never">
         <div class="checkin-stats-grid">
           <div class="checkin-stat-mini">
-            <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
-            <div class="checkin-stat-mini-mask" />
             <div class="checkin-stat-mini-content">
-              <button
-                type="button"
-                class="checkin-stat-corner-btn"
-                aria-label="查看签到趋势"
-                @click="openTrendOverlay"
-              >
-                <img :src="iconTrendUrl" alt="" class="checkin-stat-corner-icon" />
-              </button>
               <div class="checkin-stat-mini-row">
                 <span class="checkin-stat-mini-label">萌币（累计）</span>
                 <span class="checkin-stat-mini-value">
@@ -138,8 +119,6 @@
             </div>
           </div>
           <div class="checkin-stat-mini">
-            <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
-            <div class="checkin-stat-mini-mask" />
             <div class="checkin-stat-mini-content">
               <div class="checkin-stat-mini-row">
                 <span class="checkin-stat-mini-label">连续签到</span>
@@ -148,8 +127,6 @@
             </div>
           </div>
           <div class="checkin-stat-mini">
-            <img :src="statCardBgUrl" alt="" class="checkin-stat-mini-bg" />
-            <div class="checkin-stat-mini-mask" />
             <div class="checkin-stat-mini-content">
               <div class="checkin-stat-mini-row">
                 <span class="checkin-stat-mini-label">累计签到</span>
@@ -160,33 +137,6 @@
         </div>
       </el-card>
     </div>
-
-    <teleport to="body">
-      <div
-        v-if="trendOverlayVisible"
-        class="checkin-trend-overlay"
-        @click.self="closeTrendOverlay"
-      >
-        <div
-          class="checkin-trend-card"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="checkin-trend-title"
-          @click.stop
-        >
-          <div class="checkin-trend-head">
-            <div>
-              <h2 id="checkin-trend-title" class="checkin-trend-title">萌币累计趋势</h2>
-              <p class="checkin-trend-sub">仅统计签到流水（基础分 + 连签奖励），不含站内消费</p>
-            </div>
-            <el-button text circle type="primary" :icon="Close" aria-label="关闭" @click="closeTrendOverlay" />
-          </div>
-          <div v-loading="trendLoading" class="checkin-trend-chart-wrap">
-            <EChart v-if="trendChartOption" class="checkin-trend-echart" :option="trendChartOption" />
-          </div>
-        </div>
-      </div>
-    </teleport>
 
     <el-drawer v-model="logDrawer" title="签到记录" size="440px" class="checkin-log-drawer" destroy-on-close>
       <el-table v-loading="logLoading" :data="logRows" stripe size="small" empty-text="暂无记录">
@@ -219,8 +169,6 @@
 </template>
 
 <script setup>
-import { Close } from '@element-plus/icons-vue'
-import EChart from '@/components/common/EChart.vue'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import { formatCheckinLogDateOnly, formatCheckinLogInstantShanghai } from '@/utils/datetime'
 import { useCheckin } from '@scripts/views/Checkin'
@@ -229,16 +177,12 @@ const {
   calendarDate,
   calendarTitle,
   cellPointsForDay,
-  closeTrendOverlay,
   dismissRewardTip,
-  goTodayCalendar,
   handleCheckin,
   heroImageUrl,
   iconLogUrl,
   iconNextUrl,
   iconPrevUrl,
-  iconTodayUrl,
-  iconTrendUrl,
   isSignedDay,
   isTodayCell,
   loading,
@@ -251,18 +195,13 @@ const {
   nextRewardText,
   onLogPageChange,
   openLogDrawer,
-  openTrendOverlay,
   prevMonth,
   nextMonth,
   rewardTipVisible,
   showSignedOverlay,
   signedTodayIconUrl,
-  statCardBgUrl,
   status,
   submitting,
-  trendChartOption,
-  trendLoading,
-  trendOverlayVisible,
 } = useCheckin()
 </script>
 

@@ -1,6 +1,6 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import {
   Edit,
@@ -16,7 +16,10 @@ import {
 } from '@element-plus/icons-vue'
 import { getArticleDetail, uploadCoverFile, updateArticleCoverByUrl } from '@/api/article'
 import { aiCoverHints, aiImage } from '@/api/ai'
-import { submitArticleForAuditWithPrompt, auditSubmitMessageBoxOptions } from '@/composables/useArticleAuditSubmit'
+import {
+  confirmArticlePublish,
+  submitArticleForAuditWithPrompt,
+} from '@/composables/useArticleAuditSubmit'
 import { ARTICLE_STATUS, isArticleEditingLocked } from '@/utils/articleStatus'
 import { useUserStore } from '@/stores/user'
 import { COVER_IMAGE_QUALITY_OPTIONS } from '@/constants/aiModels'
@@ -318,7 +321,7 @@ export function useArticleCoverSetup() {
         return
       }
 
-      const audit = await submitArticleForAuditWithPrompt(articleId)
+      const audit = await submitArticleForAuditWithPrompt(articleId, { confirmed: true })
       if (!audit.ok) return
       router.push('/')
     } finally {
@@ -335,20 +338,7 @@ export function useArticleCoverSetup() {
       await persistCoverThen(false)
       return
     }
-    try {
-      await ElMessageBox.confirm(
-        '是否提交内容审核？通过后笔记将自动发布并在本站展示。',
-        '提交审核',
-        {
-          confirmButtonText: '提交审核',
-          cancelButtonText: '取消',
-          type: 'info',
-          ...auditSubmitMessageBoxOptions,
-        },
-      )
-    } catch {
-      return
-    }
+    if (!(await confirmArticlePublish())) return
     await persistCoverThen(true)
   }
 

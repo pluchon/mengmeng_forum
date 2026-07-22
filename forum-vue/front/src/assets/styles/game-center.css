@@ -63,12 +63,16 @@
 }
 
 .game-points-balance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-width: 92px;
   padding: 8px 12px;
   border: 1px solid #e5e9f2;
   border-radius: 8px;
   background: #fff;
-  text-align: right;
+  text-align: center;
   box-shadow: 0 12px 30px rgba(42, 75, 120, 0.08);
 }
 
@@ -210,13 +214,18 @@
 }
 
 .game-metric-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   min-height: 68px;
   padding: 17px 22px;
+  white-space: nowrap;
 }
 
 .game-metric-card strong {
-  display: block;
-  margin-top: 10px;
+  display: inline;
+  margin-top: 0;
   color: #151b2d;
   font-size: 24px;
   line-height: 1;
@@ -576,14 +585,17 @@
 
 .game-watch-search :deep(.el-button) {
   min-height: 34px;
-  border: 0;
+  border: 1px solid #e2e5ea;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 22% 34%, rgba(112, 164, 255, 0.95) 0 1px, transparent 2px),
-    radial-gradient(circle at 78% 42%, rgba(255, 255, 255, 0.85) 0 1px, transparent 2px),
-    linear-gradient(135deg, #050a13, #10244a);
-  color: #fff;
+  background: #f1f2f4;
+  color: #4e5969;
   font-weight: 900;
+}
+
+.game-watch-search :deep(.el-button:hover) {
+  border-color: #d7dbe1;
+  background: #e7e9ed;
+  color: #252b36;
 }
 
 .game-room-list {
@@ -643,9 +655,16 @@
   font-weight: 900;
 }
 
-.game-room-row i {
+.game-room-row__watch {
+  display: inline-grid;
+  place-items: center;
+  min-width: 68px;
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #e8f3ff;
   font-style: normal;
-  color: #1b5cff;
+  color: #1677d2;
   font-size: 13px;
   font-weight: 900;
 }
@@ -696,12 +715,20 @@
 
 .game-center-dialog :deep(.el-dialog__header) {
   padding-bottom: 8px;
+  text-align: center;
 }
 
-.game-center-dialog :deep(.el-dialog__header span) {
+.game-dialog-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
   color: #121826;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .game-center-dialog :deep(.el-tabs__active-bar) {
@@ -720,6 +747,10 @@
   margin-top: 8px;
 }
 
+.game-stats-summary.is-tetris {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .game-stats-summary div {
   padding: 14px;
   border-radius: 8px;
@@ -734,11 +765,23 @@
   font-weight: 900;
 }
 
-.game-stats-record-head {
-  margin: 22px 0 10px;
-  color: #121826;
-  font-size: 15px;
-  font-weight: 900;
+.game-stats-record-columns,
+.game-stats-record-item {
+  display: grid;
+  grid-template-columns: 1.1fr 1.1fr 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.game-stats-record-columns {
+  margin-top: 18px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #f5f8ff;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .game-stats-record-list,
@@ -748,20 +791,22 @@
   padding: 0;
 }
 
-.game-stats-record-item,
 .game-rank-list li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 14px 0;
   border-bottom: 1px solid #e5e9f2;
 }
 
+.game-stats-record-item {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e5e9f2;
+}
+
 .game-stats-record-item strong,
 .game-rank-list strong {
   display: block;
-  margin-bottom: 4px;
   color: #121826;
   font-size: 14px;
   font-weight: 900;
@@ -774,12 +819,32 @@
   color: #1b5cff;
 }
 
+.game-stats-record-item > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .game-stats-record-item em.is-win {
   color: #13a36b;
 }
 
 .game-rank-list li {
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 30px 40px minmax(0, 1fr) auto;
+}
+
+.game-rank-list.is-tetris_pk li {
+  grid-template-columns: 30px 40px minmax(0, 1fr) minmax(100px, 0.55fr) auto;
+}
+
+.game-rank-list__avatar {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f1f3f6;
 }
 
 .game-rank-list span {
@@ -795,9 +860,22 @@
   font-weight: 900;
 }
 
-.game-rank-list b {
+.game-rank-list__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-rank-list__rate {
+  text-align: center;
+}
+
+.game-rank-list__score {
   color: #1b5cff;
   font-size: 17px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .game-stats-empty {
@@ -904,6 +982,7 @@
 
 .tetris-record-table {
   width: 100%;
+  overflow-x: hidden;
 }
 
 .tetris-record-table :deep(.el-table__fixed-right .cell),
@@ -949,10 +1028,9 @@
   min-height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 24% 28%, rgba(122, 170, 255, 0.9) 0 1px, transparent 2px),
-    linear-gradient(135deg, #050a13, #10244a);
-  color: #fff;
+  border: 1px solid #e2e5ea;
+  background: #f2f3f5;
+  color: #4e5969;
   font-weight: 900;
 }
 

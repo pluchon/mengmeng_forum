@@ -27,6 +27,7 @@ import { clientOssUrl } from '@/utils/clientOss'
 import { parseForumDateTime } from '@/utils/datetime'
 
 const PROFILE_PAGE_SIZE = 12
+const FAVORITE_FOLDER_PAGE_SIZE = 5
 const FAVORITE_DIALOG_PAGE_SIZE = 10
 const PUBLIC_GROUP_PAGE_SIZE = 10
 const PROFILE_RETURN_KEY = 'profile-return-state'
@@ -56,6 +57,10 @@ export function useProfile() {
 
   const favoriteFolders = ref([])
   const loadingFavorites = ref(false)
+  const favoriteFolderError = ref('')
+  const favoriteFolderPageNum = ref(1)
+  const favoriteFolderTotal = ref(0)
+  const favoriteFolderPageInput = ref('1')
   const favoriteDialogVisible = ref(false)
   const favoriteDialogLoading = ref(false)
   const favoriteDialogTitle = ref('收藏')
@@ -65,6 +70,7 @@ export function useProfile() {
   const favoriteDialogPageInput = ref('1')
   const favoriteFolderRenaming = ref(false)
   const favoriteFolderRenameValue = ref('')
+  const favoriteFolderRenameSaving = ref(false)
   const activeFavoriteFolder = ref(null)
   const favoriteFolderPublic = ref(1)
   const favoriteVisibilitySaving = ref(false)
@@ -97,7 +103,7 @@ export function useProfile() {
       loadLikedArticles(1)
     }
     if (tab === 'collect' && favoriteFolders.value.length === 0) {
-      loadFavoriteFolders()
+      loadFavoriteFolders(1)
     }
     if (tab === 'groups' && publicGroups.value.length === 0) {
       loadPublicGroups(1)
@@ -114,6 +120,10 @@ export function useProfile() {
 
   const favoriteDialogTotalPages = computed(() =>
     Math.max(1, Math.ceil((favoriteDialogTotal.value || 0) / FAVORITE_DIALOG_PAGE_SIZE)),
+  )
+
+  const favoriteFolderTotalPages = computed(() =>
+    Math.max(1, Math.ceil((favoriteFolderTotal.value || 0) / FAVORITE_FOLDER_PAGE_SIZE)),
   )
 
   const publicGroupsTotalPages = computed(() =>
@@ -142,19 +152,51 @@ export function useProfile() {
     }
   }
 
-  async function loadFavoriteFolders() {
+  async function loadFavoriteFolders(page = 1) {
     const userId = route.params.id || userStore.id
+    favoriteFolderPageNum.value = page
+    favoriteFolderPageInput.value = String(page)
     loadingFavorites.value = true
+    favoriteFolderError.value = ''
     try {
       const res = isMe.value
-        ? await getMyFavoriteFolders()
-        : await getUserFavoriteFolders(userId)
+        ? await getMyFavoriteFolders({ pageNum: page, pageSize: FAVORITE_FOLDER_PAGE_SIZE })
+        : await getUserFavoriteFolders(userId, { pageNum: page, pageSize: FAVORITE_FOLDER_PAGE_SIZE })
       if (res.code === 0) {
-        favoriteFolders.value = res.data || []
+        favoriteFolders.value = res.data?.records || []
+        favoriteFolderTotal.value = Number(res.data?.total) || 0
+      } else {
+        favoriteFolders.value = []
+        favoriteFolderTotal.value = 0
+        favoriteFolderError.value = res.message || '收藏夹加载失败'
       }
+    } catch {
+      favoriteFolders.value = []
+      favoriteFolderTotal.value = 0
+      favoriteFolderError.value = '收藏夹加载失败'
     } finally {
       loadingFavorites.value = false
     }
+  }
+
+  function goFavoriteFoldersFirst() {
+    loadFavoriteFolders(1)
+  }
+
+  function goFavoriteFoldersPrev() {
+    if (favoriteFolderPageNum.value > 1) loadFavoriteFolders(favoriteFolderPageNum.value - 1)
+  }
+
+  function goFavoriteFoldersNext() {
+    if (favoriteFolderPageNum.value < favoriteFolderTotalPages.value) {
+      loadFavoriteFolders(favoriteFolderPageNum.value + 1)
+    }
+  }
+
+  function jumpFavoriteFolderPage() {
+    const n = Number(favoriteFolderPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadFavoriteFolders(Math.min(favoriteFolderTotalPages.value, Math.max(1, Math.floor(n))))
   }
 
   function openCreateFavoriteFolder() {
@@ -177,7 +219,7 @@ export function useProfile() {
       if (res.code === 0) {
         ElMessage.success('已创建')
         favoriteCreateVisible.value = false
-        await loadFavoriteFolders()
+        await loadFavoriteFolders(1)
       } else {
         ElMessage.error(res.message || '创建失败')
       }
@@ -201,16 +243,6 @@ export function useProfile() {
   const displayVipExpireAt = computed(() => {
     if (isMe.value) return userStore.vipExpireAt ?? null
     return userInfo.value?.vipExpireAt ?? null
-  })
-
-  const showVipBadge = computed(() => {
-    const t = Number(displayVipTier.value) || 0
-    if (t <= 0) return false
-    const exp = displayVipExpireAt.value
-    if (!exp) return true
-    const ms = new Date(exp).getTime()
-    if (Number.isNaN(ms)) return true
-    return Date.now() <= ms
   })
 
   const isMe = computed(() => {
@@ -485,22 +517,27 @@ export function useProfile() {
 
   async function confirmFavoriteFolderRename() {
     const folder = activeFavoriteFolder.value
-    if (!folder?.id) return
+    if (!folder?.id || favoriteFolderRenameSaving.value) return
     const name = favoriteFolderRenameValue.value.trim().slice(0, 25)
     if (!name) {
       ElMessage.warning('请输入收藏夹名称')
       return
     }
-    const res = await updateFavoriteFolder({ folderId: folder.id, name })
-    if (res.code === 0) {
-      folder.name = name
-      favoriteDialogTitle.value = name
-      const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
-      if (idx >= 0) favoriteFolders.value[idx].name = name
-      favoriteFolderRenaming.value = false
-      ElMessage.success('已更新名称')
-    } else {
-      ElMessage.error(res.message || '更新失败')
+    favoriteFolderRenameSaving.value = true
+    try {
+      const res = await updateFavoriteFolder({ folderId: folder.id, name })
+      if (res.code === 0) {
+        folder.name = name
+        favoriteDialogTitle.value = name
+        const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
+        if (idx >= 0) favoriteFolders.value[idx].name = name
+        favoriteFolderRenaming.value = false
+        ElMessage.success('已更新名称')
+      } else {
+        ElMessage.error(res.message || '更新失败')
+      }
+    } finally {
+      favoriteFolderRenameSaving.value = false
     }
   }
 
@@ -534,7 +571,9 @@ export function useProfile() {
       await loadLikedArticles(Number(state.page) || 1)
     }
     if (state.tab === 'collect' && state.folderId) {
-      if (!favoriteFolders.value.length) await loadFavoriteFolders()
+      if (!favoriteFolders.value.length) {
+        await loadFavoriteFolders(Number(state.folderPage) || 1)
+      }
       const folder = favoriteFolders.value.find((f) => Number(f.id) === Number(state.folderId))
       if (folder) {
         activeFavoriteFolder.value = folder
@@ -584,20 +623,13 @@ export function useProfile() {
     return { background: 'hsl(330, 70%, 94%)' }
   }
 
-  function favoriteSnippet(article) {
-    const raw = String(article?.content || '')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\s+/g, '')
-      .trim()
-    return raw ? raw.slice(0, 15) : '暂无正文'
-  }
-
   function openArticleFromFavorite(row) {
     const id = row?.article?.id
     if (!id) return
     saveProfileReturnState({
       tab: 'collect',
       folderId: activeFavoriteFolder.value?.id,
+      folderPage: favoriteFolderPageNum.value,
       page: favoriteDialogPageNum.value,
     })
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
@@ -739,11 +771,19 @@ export function useProfile() {
     favoriteDialogPageInput,
     favoriteDialogPageNum,
     favoriteDialogTotalPages,
+    favoriteFolderError,
+    favoriteFolderPageInput,
+    favoriteFolderPageNum,
     favoriteFolderRenaming,
+    favoriteFolderRenameSaving,
     favoriteFolderRenameValue,
+    favoriteFolderTotalPages,
     goFavoriteDialogFirst,
     goFavoriteDialogNext,
     goFavoriteDialogPrev,
+    goFavoriteFoldersFirst,
+    goFavoriteFoldersNext,
+    goFavoriteFoldersPrev,
     goLikedFirst,
     goLikedNext,
     goLikedPrev,
@@ -759,11 +799,13 @@ export function useProfile() {
     followingCount,
     followerCount,
     jumpFavoriteDialogPage,
+    jumpFavoriteFolderPage,
     jumpLikedPage,
     jumpNotesPage,
     likedArticles,
     likedPageInput,
     likedPageNum,
+    likedTotal,
     likedTotalPages,
     loadLikedArticles,
     favoriteCreateForm,
@@ -776,7 +818,6 @@ export function useProfile() {
     favoriteDialogVisible,
     favoriteFolderPublic,
     favoriteFolders,
-    favoriteSnippet,
     favoriteVisibilitySaving,
     formatProfileDate,
     loadFavoriteFolders,
@@ -815,6 +856,5 @@ export function useProfile() {
     userInfo,
     displayVipTier,
     displayVipExpireAt,
-    showVipBadge,
   }
 }

@@ -243,29 +243,49 @@ h1, h2, h3 {
   background: rgba(148, 163, 184, 0.34);
 }
 
-/* 提交审核确认框：灰色扁平主按钮（MessageBox 挂载在 body） */
+/* 发布确认框（MessageBox 挂载在 body） */
+.audit-submit-msgbox .el-message-box__header {
+  padding-right: 20px;
+  text-align: center;
+}
+
+.audit-submit-msgbox .el-message-box__title {
+  justify-content: center;
+  font-weight: 800;
+}
+
+.audit-submit-msgbox .el-message-box__btns {
+  display: flex;
+  gap: 12px;
+}
+
+.audit-submit-msgbox .el-message-box__btns .el-button {
+  flex: 1;
+  min-height: 42px;
+  margin: 0;
+}
+
 .audit-submit-msgbox .audit-submit-msgbox__confirm,
 .audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary {
-  background: #f2f3f5 !important;
+  background: #ff2442 !important;
   border: none !important;
-  color: #4e5969 !important;
-  box-shadow: none !important;
+  color: #fff !important;
+  box-shadow: 0 8px 18px rgba(255, 36, 66, 0.16) !important;
   border-radius: 8px !important;
   font-weight: 600;
-  padding: 10px 20px;
 }
 
 .audit-submit-msgbox .audit-submit-msgbox__confirm:hover,
 .audit-submit-msgbox .audit-submit-msgbox__confirm:focus,
 .audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary:hover,
 .audit-submit-msgbox .audit-submit-msgbox__confirm.el-button--primary:focus {
-  background: #e5e6eb !important;
-  color: #1d2129 !important;
+  background: #e61e3a !important;
+  color: #fff !important;
   border: none !important;
 }
 
 .audit-submit-msgbox .audit-submit-msgbox__cancel {
-  background: transparent !important;
+  background: #f2f3f5 !important;
   border: none !important;
   color: #86909c !important;
   box-shadow: none !important;
@@ -274,5 +294,71 @@ h1, h2, h3 {
 
 .audit-submit-msgbox .audit-submit-msgbox__cancel:hover {
   color: #4e5969 !important;
-  background: transparent !important;
+  background: #e5e6eb !important;
+}
+
+/* 登录提示框（挂载在 body） */
+.login-required-box .el-message-box__header {
+  padding-right: 20px;
+  text-align: center;
+}
+
+.login-required-box .el-message-box__title {
+  justify-content: center;
+  font-weight: 800;
+}
+
+.login-required-box .el-message-box__content {
+  display: none;
+}
+
+.login-required-box .el-message-box__btns {
+  display: block;
+  padding-top: 18px;
+}
+
+.login-required-box .el-message-box__confirm,
+.login-required-box .login-required-box__confirm {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: #ff2442 !important;
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(255, 36, 66, 0.16) !important;
+}
+
+.login-required-box .el-message-box__confirm:hover,
+.login-required-box .login-required-box__confirm:hover {
+  background: #e61e3a !important;
+}
+
+/* 群消息举报框（挂载在 body） */
+.group-message-report-box .el-message-box__header {
+  padding-right: 20px;
+  text-align: center;
+}
+
+.group-message-report-box .el-message-box__title {
+  justify-content: center;
+  font-weight: 800;
+}
+
+.group-message-report-box .el-message-box__content {
+  padding-top: 8px;
+}
+
+.group-message-report-box .el-message-box__message {
+  display: none;
+}
+
+.group-message-report-box .el-textarea__inner {
+  min-height: 40px !important;
+  max-height: 144px;
+  field-sizing: content;
+  overflow-y: auto;
+  resize: none;
+  border-radius: 12px;
 }

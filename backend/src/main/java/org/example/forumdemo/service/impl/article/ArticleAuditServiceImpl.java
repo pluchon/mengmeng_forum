@@ -10,8 +10,6 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.mq.ForumProducer;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.common.utils.MailUtil;
-import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RequestIpUtils;
 import org.example.forumdemo.common.utils.TransactionHooks;
 import org.example.forumdemo.entity.db.Article;
@@ -58,8 +56,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
-    private static final byte AUDIT_NOTIFY_EMAIL_ON = 1;
-    private static final byte AUDIT_NOTIFY_EMAIL_OFF = 0;
 
     @Autowired
     private ArticleMapper articleMapper;
@@ -78,9 +74,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
 
     @Autowired
     private SystemMessageService systemMessageService;
-
-    @Autowired
-    private MailUtil mailUtil;
 
     @Autowired
     private WebSocketPushService webSocketPushService;
@@ -124,7 +117,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String submitForAudit(Long articleId, Long loginUserId, Boolean notifyEmail) {
+    public String submitForAudit(Long articleId, Long loginUserId) {
         if (articleId == null || loginUserId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -142,7 +135,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .set(Article::getStatus, ArticleStatus.PENDING_AUDIT.getCode())
                 .set(Article::getAuditTaskId, taskId)
-                .set(Article::getAuditNotifyEmail, Boolean.TRUE.equals(notifyEmail) ? AUDIT_NOTIFY_EMAIL_ON : AUDIT_NOTIFY_EMAIL_OFF)
                 .set(Article::getAuditRetryCount, curRetry + 1)
                 .set(Article::getAuditSubmittedAt, new Date())
                 .set(Article::getAuditFinishedAt, null)
@@ -371,9 +363,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             log.error("写入系统消息失败: userId={}, articleId={}", userId, articleId, e);
         }
         pushAuditRealtimeNotify(userId, articleId, result, title, content, systemMsgId);
-        if (article.getAuditNotifyEmail() != null && article.getAuditNotifyEmail() == AUDIT_NOTIFY_EMAIL_ON) {
-            sendAuditEmail(userId, title, content);
-        }
     }
 
     private void pushAuditRealtimeNotify(Long userId, Long articleId, ArticleAuditResultMqVO result,
@@ -414,25 +403,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             case "REJECTED" -> ArticleStatus.REJECTED.getCode();
             default -> ArticleStatus.AUDIT_ERROR.getCode();
         };
-    }
-
-    private void sendAuditEmail(Long userId, String title, String content) {
-        try {
-            User user = userService.queryUserByUserId(userId);
-            if (user == null || !StringUtils.hasText(user.getEmail())) {
-                log.info("跳过邮件通知: 用户未绑定邮箱 userId={}", userId);
-                return;
-            }
-            String email = PiiUtils.decrypt(user.getEmail());
-            if (!StringUtils.hasText(email)) {
-                log.info("跳过邮件通知: 邮箱解密为空 userId={}", userId);
-                return;
-            }
-            mailUtil.sendSampleMail(email, title, content);
-            log.info("审核邮件通知已发送: userId={}", userId);
-        } catch (Exception e) {
-            log.error("发送审核邮件失败: userId={}", userId, e);
-        }
     }
 
     private static String safeTitle(String title) {

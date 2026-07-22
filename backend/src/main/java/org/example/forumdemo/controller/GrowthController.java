@@ -56,7 +56,7 @@ public class GrowthController {
     @GetMapping("/records")
     public Result<PageResult<GrowthExperienceRecordVO>> records(
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "5") Integer pageSize,
+            @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
         return Result.success(growthService.experienceRecordPage(userId(request), pageNum, pageSize));
     }

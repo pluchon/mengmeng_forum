@@ -1,0 +1,25 @@
+.mascot-settings-panel {
+  width: 100%;
+  padding: 40px;
+  box-sizing: border-box;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
+}
+
+.mascot-settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 68px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.mascot-settings-toggle span {
+  color: #4e5969;
+  font-size: 15px;
+  font-weight: 700;
+}

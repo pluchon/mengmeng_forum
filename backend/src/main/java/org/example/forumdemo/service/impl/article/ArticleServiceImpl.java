@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.enums.ArticleType;
+import org.example.forumdemo.common.enums.HotArticleTrendDirection;
 import org.example.forumdemo.common.enums.QuestionStatus;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
@@ -493,6 +494,7 @@ public class ArticleServiceImpl implements ArticleService {
                     idPage.getPages(), idPage.getHasNextPage());
         }
         List<Long> rankedIds = idPage.getRecords();
+        Map<Long, HotArticleTrendDirection> trendDirections = articleHotRankingService.getTrendDirections(rankedIds);
         Map<Long, Article> articleMap = articleMapper.selectList(new LambdaQueryWrapper<Article>()
                         .in(Article::getId, rankedIds)
                         .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
@@ -530,6 +532,7 @@ public class ArticleServiceImpl implements ArticleService {
             item.setArticle(ArticleConverter.toBriefVO(article));
             item.setUser(new UserBriefVO(author));
             item.setFromFollowing(followingIds.contains(article.getUserId()));
+            item.setTrendDirection(trendDirections.getOrDefault(article.getId(), HotArticleTrendDirection.STABLE));
             records.add(item);
         }
         return new PageResult<>(records, idPage.getTotal(), idPage.getPageNum(), idPage.getPageSize(),
@@ -652,8 +655,8 @@ public class ArticleServiceImpl implements ArticleService {
     // 异步审核（委托 ArticleAuditService）
     // ============================================================
     @Override
-    public String submitForAudit(Long articleId, Long loginUserId, Boolean notifyEmail) {
-        return articleAuditService.submitForAudit(articleId, loginUserId, notifyEmail);
+    public String submitForAudit(Long articleId, Long loginUserId) {
+        return articleAuditService.submitForAudit(articleId, loginUserId);
     }
 
     @Override

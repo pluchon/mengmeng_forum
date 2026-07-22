@@ -82,10 +82,6 @@ public class User {
     @Schema(description = "抽奖硬保底计数：距上次神秘大奖已连续开奖次数")
     private Integer lotteryPityDraws;
 
-    /** 抽奖页「点我看看」彩蛋积分是否已领取：0 否 1 是 */
-    @Schema(description = "抽奖页彩蛋积分是否已领取 0否 1是")
-    private Byte lotterySurpriseClaimed;
-
     @Schema(description = "VIP档位: 0普通 1PRO 2MAX")
     private Byte vipTier;
 

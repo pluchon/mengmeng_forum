@@ -1,8 +1,8 @@
 package org.example.forumdemo.service.impl.mascot;
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import jakarta.annotation.Resource;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -14,7 +14,9 @@ import org.example.forumdemo.entity.vo.mascot.CompanionSessionVO;
 import org.example.forumdemo.mapper.ForumCompanionMessageMapper;
 import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,10 +29,10 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     private static final int MAX_HISTORY_TURNS = 16;
     private static final int TITLE_MAX = 48;
 
-    @Resource
+    @Autowired
     private ForumCompanionSessionMapper companionSessionMapper;
 
-    @Resource
+    @Autowired
     private ForumCompanionMessageMapper companionMessageMapper;
 
     @Override
@@ -43,13 +45,14 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Long ensureSession(Long userId, String skill, String sessionIdRaw) {
         String sk = normalizeSkill(skill);
         if (sessionIdRaw != null && !sessionIdRaw.isBlank()) {
             try {
                 long sid = Long.parseLong(sessionIdRaw.trim());
                 ForumCompanionSession existing = companionSessionMapper.selectOne(
-                        Wrappers.lambdaQuery(ForumCompanionSession.class)
+                        new LambdaQueryWrapper<ForumCompanionSession>()
                                 .eq(ForumCompanionSession::getId, sid)
                                 .eq(ForumCompanionSession::getUserId, userId)
                                 .eq(ForumCompanionSession::getSkill, sk)
@@ -75,7 +78,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     public List<MascotHistoryTurn> loadHistoryTurns(Long sessionId, int maxTurns) {
         int limit = maxTurns > 0 ? maxTurns : MAX_HISTORY_TURNS;
         List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2, false),
-                Wrappers.lambdaQuery(ForumCompanionMessage.class)
+                new LambdaQueryWrapper<ForumCompanionMessage>()
                         .eq(ForumCompanionMessage::getSessionId, sessionId)
                         .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
                         .orderByDesc(ForumCompanionMessage::getId)).getRecords();
@@ -95,11 +98,13 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void appendTextMessage(Long sessionId, String role, String content) {
         appendTextMessage(sessionId, role, content, null);
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
         if (sessionId == null || content == null || content.isBlank()) {
             return;
@@ -120,6 +125,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void appendImageMessage(Long sessionId, String role, String imageUrl, String promptText) {
         if (sessionId == null || imageUrl == null || imageUrl.isBlank()) {
             return;
@@ -154,7 +160,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         String sk = normalizeSkill(skill);
         int lim = limit > 0 ? Math.min(limit, 50) : 30;
         List<ForumCompanionSession> rows = companionSessionMapper.selectPage(new Page<>(1, lim, false),
-                Wrappers.lambdaQuery(ForumCompanionSession.class)
+                new LambdaQueryWrapper<ForumCompanionSession>()
                         .eq(ForumCompanionSession::getUserId, userId)
                         .eq(ForumCompanionSession::getSkill, sk)
                         .eq(ForumCompanionSession::getDeleteState, (byte) 0)
@@ -174,7 +180,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     @Override
     public List<CompanionMessageVO> listMessages(Long userId, Long sessionId) {
         ForumCompanionSession sess = companionSessionMapper.selectOne(
-                Wrappers.lambdaQuery(ForumCompanionSession.class)
+                new LambdaQueryWrapper<ForumCompanionSession>()
                         .eq(ForumCompanionSession::getId, sessionId)
                         .eq(ForumCompanionSession::getUserId, userId)
                         .eq(ForumCompanionSession::getDeleteState, (byte) 0));
@@ -182,7 +188,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "会话不存在"));
         }
         List<ForumCompanionMessage> rows = companionMessageMapper.selectList(
-                Wrappers.lambdaQuery(ForumCompanionMessage.class)
+                new LambdaQueryWrapper<ForumCompanionMessage>()
                         .eq(ForumCompanionMessage::getSessionId, sessionId)
                         .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
                         .orderByAsc(ForumCompanionMessage::getId));
@@ -205,5 +211,31 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
             out.add(v);
         }
         return out;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSession(Long userId, Long sessionId) {
+        if (userId == null || userId <= 0 || sessionId == null || sessionId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        ForumCompanionSession session = companionSessionMapper.selectOne(
+                new LambdaQueryWrapper<ForumCompanionSession>()
+                        .eq(ForumCompanionSession::getId, sessionId)
+                        .eq(ForumCompanionSession::getUserId, userId)
+                        .eq(ForumCompanionSession::getDeleteState, (byte) 0));
+        if (session == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "会话不存在"));
+        }
+        companionMessageMapper.update(null, new LambdaUpdateWrapper<ForumCompanionMessage>()
+                .eq(ForumCompanionMessage::getSessionId, sessionId)
+                .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
+                .set(ForumCompanionMessage::getDeleteState, (byte) 1));
+        companionSessionMapper.update(null, new LambdaUpdateWrapper<ForumCompanionSession>()
+                .eq(ForumCompanionSession::getId, sessionId)
+                .eq(ForumCompanionSession::getUserId, userId)
+                .eq(ForumCompanionSession::getDeleteState, (byte) 0)
+                .set(ForumCompanionSession::getDeleteState, (byte) 1)
+                .set(ForumCompanionSession::getUpdateTime, new Date()));
     }
 }

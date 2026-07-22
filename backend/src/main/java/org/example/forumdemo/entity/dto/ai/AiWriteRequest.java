@@ -8,7 +8,7 @@ import java.util.List;
 public class AiWriteRequest {
 
     /**
-     * deepseek_flash | deepseek_pro | qwen_flash | qwen_pro | gemini_pro | claude_haiku | claude_sonnet
+     * deepseek_flash | deepseek_pro | qwen_flash | qwen_pro
      */
     private String kind;
 

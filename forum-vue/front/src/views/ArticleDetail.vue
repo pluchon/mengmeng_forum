@@ -35,7 +35,14 @@
                   :initial-index="activeGalleryIndex"
                   preview-teleported
                   :z-index="5200"
-                />
+                >
+                  <template #error>
+                    <div class="article-image-error" role="img" aria-label="图片加载失败">
+                      <el-icon><PictureFilled /></el-icon>
+                      <span>图片加载失败</span>
+                    </div>
+                  </template>
+                </el-image>
                 <div v-else class="cover-content">
                   <el-icon :size="120" color="rgba(0,0,0,0.03)"><PictureFilled /></el-icon>
                   <p class="media-empty-hint">{{ isVideoArticle ? '暂无视频' : '暂无相册图片' }}</p>
@@ -60,7 +67,13 @@
                     :class="{ 'is-active': gi === activeGalleryIndex }"
                     @click="setActiveGalleryIndex(gi)"
                   >
-                    <img :src="url" alt="">
+                    <el-image :src="url" fit="cover" class="media-gallery-thumb-image">
+                      <template #error>
+                        <div class="article-image-error" role="img" aria-label="图片加载失败">
+                          <el-icon><PictureFilled /></el-icon>
+                        </div>
+                      </template>
+                    </el-image>
                   </button>
                 </div>
               </div>
@@ -203,13 +216,21 @@
                 <div class="content-meta">
                   <span class="content-meta__time">{{ formatForumDateTimeShanghai(article.createTime) }}</span>
                   <span
-                    v-for="t in articleTags"
+                    v-for="t in visibleArticleTags"
                     :key="'at-' + t.id"
                     class="article-detail-tag"
                     :class="`article-detail-tag--${t.colorKey || 'sky'}`"
                   >
                     {{ t.name }}
                   </span>
+                  <button
+                    v-if="hiddenArticleTagCount > 0 || tagsExpanded"
+                    type="button"
+                    class="article-tags-toggle"
+                    @click="toggleArticleTags"
+                  >
+                    {{ tagsExpanded ? '< 收起' : `> 展开 +${hiddenArticleTagCount}` }}
+                  </button>
                 </div>
               </div>
 
@@ -332,7 +353,7 @@
               <template v-else>
               <div v-if="replyTarget" class="reply-target-bar">
                 <div class="reply-target-text">
-                  <span class="reply-target-label">回复给 @{{ replyTarget.nickname }}</span>
+                  <span class="reply-target-label">{{ replyTargetLabel }}</span>
                   <span v-if="replyTarget.contentPreview" class="reply-target-preview">
                     {{ replyTarget.contentPreview }}
                   </span>
@@ -348,7 +369,13 @@
                   :key="`img-${img.mediaUrl}`"
                   class="reply-pending-card"
                 >
-                  <img :src="img.mediaUrl" alt="" class="reply-pending-thumb">
+                  <el-image :src="img.mediaUrl" fit="cover" class="reply-pending-thumb">
+                    <template #error>
+                      <div class="article-image-error" role="img" aria-label="图片加载失败">
+                        <el-icon><PictureFilled /></el-icon>
+                      </div>
+                    </template>
+                  </el-image>
                   <button type="button" class="reply-pending-remove" aria-label="移除" @click="removePendingImage(idx)">
                     <el-icon><Close /></el-icon>
                   </button>
@@ -358,17 +385,30 @@
                   :key="`em-${em.mediaUrl}`"
                   class="reply-pending-card reply-pending-card--emoji"
                 >
-                  <img :src="em.mediaUrl" alt="" class="reply-pending-thumb">
+                  <el-image :src="em.mediaUrl" fit="contain" class="reply-pending-thumb">
+                    <template #error>
+                      <div class="article-image-error" role="img" aria-label="图片加载失败">
+                        <el-icon><PictureFilled /></el-icon>
+                      </div>
+                    </template>
+                  </el-image>
                   <img :src="emojiPackIconUrl" alt="" class="reply-pending-emoji-badge" aria-hidden="true">
                   <button type="button" class="reply-pending-remove" aria-label="移除" @click="removePendingEmoji(idx)">
                     <el-icon><Close /></el-icon>
                   </button>
                 </div>
               </div>
-              <div
-                class="comment-input-wrap comment-input-full"
-                :class="{ 'vip-comment-gold': isVipGold }"
-              >
+              <div class="comment-composer" :class="{ 'vip-comment-gold': isVipGold }">
+                <button
+                  type="button"
+                  class="comment-upload-btn"
+                  title="上传图片"
+                  aria-label="上传图片"
+                  @click.stop="triggerReplyImagePick"
+                >
+                  <el-icon><Picture /></el-icon>
+                </button>
+                <div class="comment-input-wrap comment-input-full">
                 <el-input
                   v-model="replyContent"
                   :placeholder="replyPlaceholder"
@@ -377,14 +417,6 @@
                 >
                   <template #suffix>
                     <div class="comment-suffix-tools">
-                      <button
-                        type="button"
-                        class="comment-tool-btn comment-tool-btn--muted"
-                        title="上传图片"
-                        @click.stop="triggerReplyImagePick"
-                      >
-                        <el-icon><Picture /></el-icon>
-                      </button>
                       <el-popover
                         v-model:visible="replyEmojiPanelOpen"
                         placement="top-start"
@@ -410,14 +442,20 @@
                           <div v-else class="mc-emoji-purchased-layout">
                             <div class="mc-emoji-pack-body">
                               <div class="mc-emoji-grid mc-emoji-grid--pack mc-emoji-grid--scroll">
-                                <img
+                                <el-image
                                   v-for="(url, uidx) in (replySelectedPack?.imageUrls || [])"
                                   :key="uidx"
                                   :src="url"
-                                  alt=""
+                                  fit="contain"
                                   class="mc-emoji-thumb"
                                   @click="addReplyShopEmoji(url)"
                                 >
+                                  <template #error>
+                                    <div class="article-image-error" role="img" aria-label="图片加载失败">
+                                      <el-icon><PictureFilled /></el-icon>
+                                    </div>
+                                  </template>
+                                </el-image>
                               </div>
                             </div>
                             <div class="mc-emoji-pack-bar">
@@ -447,7 +485,13 @@
                                     :title="pack.name"
                                     @click="selectReplyPack(pack)"
                                   >
-                                    <img :src="pack.coverUrl || pack.imageUrls?.[0]" alt="">
+                                    <el-image :src="pack.coverUrl || pack.imageUrls?.[0]" fit="cover" class="mc-emoji-pack-cover-image">
+                                      <template #error>
+                                        <div class="article-image-error" role="img" aria-label="图片加载失败">
+                                          <el-icon><PictureFilled /></el-icon>
+                                        </div>
+                                      </template>
+                                    </el-image>
                                   </button>
                                   <transition name="mc-pack-name">
                                     <span
@@ -471,23 +515,19 @@
                           </div>
                         </div>
                       </el-popover>
-                      <button
-                        type="button"
-                        class="comment-send-btn"
-                        :class="{ 'is-disabled': !canSubmitReply }"
-                        aria-label="发送"
-                        :disabled="!canSubmitReply"
-                        @click="submitReply"
-                      >
-                        <img
-                          :src="sendIconUrl"
-                          alt=""
-                          class="detail-plain-svg detail-plain-svg--send"
-                        />
-                      </button>
                     </div>
                   </template>
                 </el-input>
+                </div>
+                <button
+                  type="button"
+                  class="comment-send-btn"
+                  :class="{ 'is-disabled': !canSubmitReply }"
+                  :disabled="!canSubmitReply"
+                  @click="submitReply"
+                >
+                  发送
+                </button>
               </div>
               <input
                 ref="replyImageInput"
@@ -510,10 +550,6 @@
                   <el-icon :size="24"><CollectionTag /></el-icon>
                   <span class="count">{{ article?.favoriteCount ?? 0 }}</span>
                 </el-button>
-                <el-button class="action-item">
-                  <el-icon :size="24"><ChatDotRound /></el-icon>
-                  <span class="count">{{ replyCountDisplay }}</span>
-                </el-button>
                 <el-button
                   class="action-item share-action-btn"
                   :class="{ 'share-action-btn--copied': shareCopied }"
@@ -535,11 +571,11 @@
 
     <el-dialog
       v-model="favoriteDialogVisible"
-      title="收藏到"
+      title="添加到收藏夹"
       width="420px"
       append-to-body
       :z-index="4000"
-      class="red-dialog"
+      class="red-dialog favorite-dialog"
       @open="loadFavoriteFolders"
     >
       <el-form label-width="96px">
@@ -557,18 +593,19 @@
             <el-option
               v-for="f in favoriteFolders"
               :key="'folder-' + f.id"
-              :label="f.name + (f.isDefault === 1 ? '（默认）' : '')"
+              :label="f.name"
               :value="f.id"
             />
           </el-select>
-          <div style="margin-top: 6px; font-size: 12px; color: #86909c">
-            不选则会收藏到默认收藏夹
-          </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="favoriteDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="favoriteSaving" @click="confirmFavorite">确定</el-button>
+        <el-button
+          type="primary"
+          class="favorite-dialog-confirm"
+          :loading="favoriteSaving"
+          @click="confirmFavorite"
+        >确定</el-button>
       </template>
     </el-dialog>
   </div>

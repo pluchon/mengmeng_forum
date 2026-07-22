@@ -5,9 +5,7 @@ import { ArrowLeft, DataLine, Promotion, Trophy, VideoPlay } from '@element-plus
 import {
   getGameCenterOverview,
   getGobangActiveRooms,
-  getGobangLeaderboard,
   getGobangRecords,
-  getJinziLeaderboard,
   getJinziRecords,
   getTetrisLeaderboard,
   getTetrisPkActiveRooms,
@@ -25,12 +23,15 @@ import { drawBoard } from '@/scripts/games/tetris/canvas'
 import { createReplayRunner } from '@/scripts/games/tetris/replayRunner'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
+import { DEFAULT_AVATAR } from '@/utils/constants'
 
 const TETRIS_REPLAY_CELL = 20
 let refreshTimer = null
 let tetrisReplayTimer = null
 let tetrisReplayRunner = null
 let tetrisReplayStartedAt = 0
+let statsRequestSequence = 0
+let leaderboardRequestSequence = 0
 
 function endReasonText(reason) {
   if (reason === 'FIVE') return '五子连珠'
@@ -64,7 +65,8 @@ const loading = ref(false)
 const statsVisible = ref(false)
 const recentVisible = ref(false)
 const leaderboardVisible = ref(false)
-const activeGameCode = ref('gobang')
+const statsGameCode = ref('gobang')
+const leaderboardGameCode = ref('tetris')
 const watchGameCode = ref('gobang')
 const watchKeyword = ref('')
 const watchSearchKeyword = ref('')
@@ -80,7 +82,7 @@ const recentPage = ref(1)
 const recentPageSize = ref(10)
 const leaderboardPage = ref(1)
 const leaderboardPageSize = ref(5)
-const leaderboardHasNext = ref(false)
+const leaderboardTotal = ref(0)
 const tetrisReplayVisible = ref(false)
 const tetrisReplayPlaying = ref(false)
 const tetrisReplayProgress = ref(0)
@@ -161,21 +163,16 @@ const tetrisPkGame = computed(() =>
   },
 )
 
-const profile = computed(() => {
-  if (activeGameCode.value === 'jinzi') return overview.jinziProfile || {}
-  if (activeGameCode.value === 'tetris') return tetrisProfile
-  if (activeGameCode.value === 'tetris_pk') return tetrisPkProfile
+const statsProfile = computed(() => {
+  if (statsGameCode.value === 'jinzi') return overview.jinziProfile || {}
+  if (statsGameCode.value === 'tetris') return tetrisProfile
+  if (statsGameCode.value === 'tetris_pk') return tetrisPkProfile
   return overview.gobangProfile || {}
 })
-const tetrisWinRateText = computed(() => {
-  const total = Number(tetrisProfile.totalCount) || 0
-  if (!total) return '0%'
-  const best = Number(tetrisProfile.bestScore) || 0
-  return best > 0 ? `最高 ${best}` : '0%'
-})
 const gobangProfile = computed(() => overview.gobangProfile || {})
-const totalCount = computed(() => Number(profile.value.totalCount) || 0)
-const winRateText = computed(() => `${Number(profile.value.winRate) || 0}%`)
+const statsTotalCount = computed(() => Number(statsProfile.value.totalCount) || 0)
+const statsWinRateText = computed(() => `${Number(statsProfile.value.winRate) || 0}%`)
+const homeWinRateText = computed(() => `${Number(gobangProfile.value.winRate) || 0}%`)
 const lobbyOnlineText = computed(() => `${Number(overview.lobbyOnlineCount) || 0}人`)
 const gameOnlineCount = computed(() => Number(gobangGame.value.onlineCount) || 0)
 const gameOnlineText = computed(() => `${gameOnlineCount.value}人在线`)
@@ -186,12 +183,6 @@ const gobangTotalText = computed(() => `共游玩了 ${Number(gobangProfile.valu
 const jinziTotalText = computed(() => `共游玩了 ${Number(overview.jinziProfile?.totalCount) || 0} 局`)
 const tetrisTotalText = computed(() => `共游玩了 ${Number(tetrisProfile.totalCount) || 0} 局`)
 const tetrisPkTotalText = computed(() => `共游玩了 ${Number(tetrisPkProfile.totalCount) || 0} 局`)
-const activeGameName = computed(() => {
-  if (activeGameCode.value === 'jinzi') return '井字'
-  if (activeGameCode.value === 'tetris') return '俄罗斯方块单人版'
-  if (activeGameCode.value === 'tetris_pk') return '俄罗斯方块PK版'
-  return '五子棋'
-})
 const rankText = computed(() => {
   return gobangProfile.value.rankName || '青铜 III'
 })
@@ -224,7 +215,7 @@ const filteredWatchRooms = computed(() => {
   const keyword = normalizeWatchKeyword(watchSearchKeyword.value)
   if (!keyword) return watchRooms.value
   return watchRooms.value.filter((row) => {
-    return [watchRoomTitle(row), watchRoomMeta(row), row?.roomId]
+    return [watchRoomTitle(row)]
       .some((text) => normalizeWatchKeyword(text).includes(keyword))
   })
 })
@@ -233,11 +224,7 @@ const pagedWatchRooms = computed(() => {
   const start = (watchPage.value - 1) * watchPageSize.value
   return filteredWatchRooms.value.slice(start, start + watchPageSize.value)
 })
-const leaderboardRows = computed(() => leaderboard.value.slice(0, leaderboardPageSize.value))
-const leaderboardTotal = computed(() => {
-  const viewed = (leaderboardPage.value - 1) * leaderboardPageSize.value + leaderboardRows.value.length
-  return leaderboardHasNext.value ? viewed + 1 : viewed
-})
+const leaderboardRows = computed(() => leaderboard.value)
 
 function normalizeWatchKeyword(value) {
   return String(value ?? '').trim().toLowerCase()
@@ -283,12 +270,6 @@ function watchRoomTitle(row) {
   return `${watchPlayerName(row, 'left')} VS ${watchPlayerName(row, 'right')}`
 }
 
-function watchRoomMeta(row) {
-  const roomId = String(row?.roomId ?? '').trim()
-  if (!roomId) return '等待同步房间信息'
-  return roomId.length > 18 ? `${roomId.slice(0, 18)}...` : roomId
-}
-
 async function loadOverview(silent = false) {
   if (!silent) loading.value = true
   try {
@@ -315,24 +296,23 @@ async function loadActiveRooms() {
   clampWatchPage()
 }
 
-async function loadLeaderboard(gameCode = activeGameCode.value) {
+async function loadLeaderboard(gameCode = leaderboardGameCode.value) {
+  const requestSequence = ++leaderboardRequestSequence
   const request = resolveLeaderboardRequest(gameCode)
-  const requestSize = leaderboardPage.value * leaderboardPageSize.value + 1
-  const res = await request({ pageSize: requestSize })
-  if (res.code === 0) {
-    const rows = Array.isArray(res.data) ? res.data : []
-    const start = (leaderboardPage.value - 1) * leaderboardPageSize.value
-    const end = start + leaderboardPageSize.value + 1
-    leaderboard.value = rows.slice(start, end)
-    leaderboardHasNext.value = leaderboard.value.length > leaderboardPageSize.value
+  const res = await request({
+    pageNum: leaderboardPage.value,
+    pageSize: leaderboardPageSize.value,
+  })
+  if (requestSequence !== leaderboardRequestSequence || gameCode !== leaderboardGameCode.value) return
+  if (res.code === 0 && res.data) {
+    leaderboard.value = unwrapPageRecords(res.data)
+    leaderboardTotal.value = Number(res.data.total) || leaderboard.value.length
   }
 }
 
 function resolveLeaderboardRequest(gameCode) {
-  if (gameCode === 'jinzi') return getJinziLeaderboard
-  if (gameCode === 'tetris') return getTetrisLeaderboard
   if (gameCode === 'tetris_pk') return getTetrisPkLeaderboard
-  return getGobangLeaderboard
+  return getTetrisLeaderboard
 }
 
 async function refreshLobby(silent = false) {
@@ -435,9 +415,11 @@ async function openTetrisReplay(row) {
   paintTetrisReplayFrame()
 }
 
-async function loadStatRecords(gameCode = activeGameCode.value, page = statPage.value) {
+async function loadStatRecords(gameCode = statsGameCode.value, page = statPage.value) {
+  const requestSequence = ++statsRequestSequence
   const request = resolveRecordsRequest(gameCode)
   const res = await request({ pageNum: page, pageSize: statPageSize.value })
+  if (requestSequence !== statsRequestSequence || gameCode !== statsGameCode.value) return
   if (res.code === 0 && res.data) {
     statRecords.value = unwrapPageRecords(res.data)
     statTotal.value = Number(res.data.total) || statRecords.value.length
@@ -469,40 +451,40 @@ async function loadProfileByGame(gameCode) {
 }
 
 async function openStats(gameCode = 'gobang') {
-  activeGameCode.value = gameCode
+  statsGameCode.value = gameCode
   statPage.value = 1
   statsVisible.value = true
   await loadProfileByGame(gameCode)
   await loadStatRecords(gameCode, 1)
 }
 
-async function openLeaderboard(gameCode = 'gobang') {
-  activeGameCode.value = gameCode
+async function openLeaderboard(gameCode = 'tetris') {
+  leaderboardGameCode.value = gameCode
   leaderboardPage.value = 1
   leaderboardVisible.value = true
   await loadLeaderboard(gameCode)
 }
 
 async function onStatsGameChange(gameCode) {
-  activeGameCode.value = gameCode
+  statsGameCode.value = gameCode
   statPage.value = 1
   await loadProfileByGame(gameCode)
   await loadStatRecords(gameCode, 1)
 }
 
 async function onLeaderboardGameChange(gameCode) {
-  activeGameCode.value = gameCode
+  leaderboardGameCode.value = gameCode
   leaderboardPage.value = 1
   await loadLeaderboard(gameCode)
 }
 
 function onStatPageChange(page) {
-  loadStatRecords(activeGameCode.value, page)
+  loadStatRecords(statsGameCode.value, page)
 }
 
 function onLeaderboardPageChange(page) {
   leaderboardPage.value = page
-  loadLeaderboard(activeGameCode.value)
+  loadLeaderboard(leaderboardGameCode.value)
 }
 
 function setWatchGame(gameCode) {
@@ -535,29 +517,41 @@ function clampWatchPage() {
 }
 
 function recordResultText(row) {
-  if (activeGameCode.value === 'tetris') {
+  if (statsGameCode.value === 'tetris') {
     return `得分 ${row.score ?? 0}`
   }
   if (!row.winnerUserId) return '平局'
-  return row.winnerUserId === profile.value.userId ? '胜利' : '失败'
+  return String(row.winnerUserId) === String(statsProfile.value.userId) ? '胜利' : '失败'
+}
+
+function recordEndReasonText(row) {
+  if (statsGameCode.value === 'tetris') return '自然结束'
+  return endReasonText(row?.endReason)
 }
 
 function recordScoreDelta(row) {
   if (row?.viewerScoreDelta !== null && row?.viewerScoreDelta !== undefined) {
     return Number(row.viewerScoreDelta) || 0
   }
+  if (statsGameCode.value === 'tetris_pk') return Number(row.scoreDelta) || 0
   if (!row?.winnerUserId) return 0
   const delta = Number(row.scoreDelta) || 0
-  return row.winnerUserId === profile.value.userId ? delta : -delta
+  return String(row.winnerUserId) === String(statsProfile.value.userId) ? delta : -delta
 }
 
 function formatScoreDelta(row) {
-  if (activeGameCode.value === 'tetris') {
+  if (statsGameCode.value === 'tetris') {
     const points = Number(row?.forumPointsAwarded) || 0
     return points > 0 ? `+${points}` : String(points)
   }
   const delta = recordScoreDelta(row)
   return delta > 0 ? `+${delta}` : String(delta)
+}
+
+function onLeaderboardAvatarError(event) {
+  const image = event?.currentTarget
+  if (!image || image.src === defaultAvatar) return
+  image.src = defaultAvatar
 }
 
 function enterGobang() {
@@ -590,9 +584,10 @@ function backHome() {
   router.push('/')
 }
 
+const defaultAvatar = DEFAULT_AVATAR
+
 onMounted(async () => {
   await refreshLobby()
-  await loadLeaderboard('gobang')
   lobbySocket.connect()
   refreshTimer = window.setInterval(() => {
     refreshLobby(true)

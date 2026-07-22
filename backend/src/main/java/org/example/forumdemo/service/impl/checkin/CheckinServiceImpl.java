@@ -17,8 +17,6 @@ import org.example.forumdemo.entity.db.CheckinLog;
 import org.example.forumdemo.entity.db.CheckinRule;
 import org.example.forumdemo.entity.db.CheckinStreakReward;
 import org.example.forumdemo.entity.db.UserCheckinInfo;
-import org.example.forumdemo.entity.vo.checkin.CheckinDayTrendVO;
-import org.example.forumdemo.entity.vo.checkin.CheckinMonthTrendResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinResultResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleDayResponse;
 import org.example.forumdemo.entity.vo.checkin.CheckinRuleMonthResponse;
@@ -311,34 +309,6 @@ public class CheckinServiceImpl implements CheckinService {
         monthRule.forEach((day, points) -> days.add(new CheckinRuleDayResponse(day, points)));
         days.sort(Comparator.comparingInt(CheckinRuleDayResponse::getDayNumber));
         return new CheckinRuleMonthResponse(target, days);
-    }
-
-    @Override
-    public CheckinMonthTrendResponse getMonthTrend(Long userId, Integer year, Integer month) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        LocalDate now = LocalDate.now(SHANGHAI);
-        int targetYear = year != null && year >= 2000 ? year : now.getYear();
-        int targetMonth = month != null && month >= 1 && month <= 12 ? month : now.getMonthValue();
-        LocalDate monthStart = LocalDate.of(targetYear, targetMonth, 1);
-        LocalDate monthEnd = monthStart.plusMonths(1);
-        List<CheckinLog> rows = checkinLogMapper.selectList(new LambdaQueryWrapper<CheckinLog>()
-                .eq(CheckinLog::getUserId, userId)
-                .ge(CheckinLog::getCheckinDate, toDate(monthStart))
-                .lt(CheckinLog::getCheckinDate, toDate(monthEnd))
-                .ne(CheckinLog::getDeleteState, 1)
-                .orderByAsc(CheckinLog::getCheckinDate));
-        List<CheckinDayTrendVO> days = new ArrayList<>(rows.size());
-        int totalPoints = 0;
-        for (CheckinLog row : rows) {
-            int base = row.getPoints() != null ? row.getPoints() : 0;
-            int bonus = row.getBonusPoints() != null ? row.getBonusPoints() : 0;
-            int dayTotal = base + bonus;
-            totalPoints += dayTotal;
-            days.add(new CheckinDayTrendVO(row.getCheckinDate(), dayTotal));
-        }
-        return new CheckinMonthTrendResponse(targetYear, targetMonth, days.size(), totalPoints, days);
     }
 
     @Override

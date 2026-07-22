@@ -41,9 +41,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     private static final String K_DEEPSEEK_PRO = "deepseek_pro";
     private static final String K_QWEN_FLASH = "qwen_flash";
     private static final String K_QWEN_PRO = "qwen_pro";
-    private static final String K_GEMINI_PRO = "gemini_pro";
-    private static final String K_CLAUDE_HAIKU = "claude_haiku";
-    private static final String K_CLAUDE_SONNET = "claude_sonnet";
 
     @Autowired
     private UserMapper userMapper;
@@ -123,9 +120,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                         aiQuotaService.consumeDeepseekWrite(user);
                         reservedDeepseekFree = true;
                     }
-                } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)
-                        || K_GEMINI_PRO.equals(kind)
-                        || K_CLAUDE_HAIKU.equals(kind) || K_CLAUDE_SONNET.equals(kind)) {
+                } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)) {
                     aiQuotaService.consumeAdvancedLlm(user);
                     reservedAdvanced = true;
                 } else {
@@ -312,9 +307,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             case K_DEEPSEEK_PRO -> "deepseek-v4-pro";
             case K_QWEN_FLASH -> "qwen3.6-flash";
             case K_QWEN_PRO -> Constant.AI_MODEL_QWEN_DEEP;
-            case K_GEMINI_PRO -> Constant.AI_MODEL_GEMINI_DEEP;
-            case K_CLAUDE_HAIKU -> Constant.AI_MODEL_CLAUDE_HAIKU;
-            case K_CLAUDE_SONNET -> Constant.AI_MODEL_CLAUDE_SONNET;
             default -> null;
         };
     }

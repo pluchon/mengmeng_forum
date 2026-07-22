@@ -16,7 +16,4 @@ public class SubmitForAuditRequest {
     @NotNull(message = "articleId 不能为空")
     @Schema(description = "帖子ID", example = "12")
     private Long articleId;
-
-    @Schema(description = "审核结果是否额外推邮件; 站内信无论如何都发. 默认 false", example = "false")
-    private Boolean notifyEmail;
 }

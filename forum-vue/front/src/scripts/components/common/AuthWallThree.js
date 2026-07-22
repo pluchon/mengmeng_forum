@@ -9,6 +9,7 @@ export async function createAuthWallThree(canvas) {
   const PAD_CELLS = 34
   const MIN_CELLS = 72
   const MAX_CELLS = 120
+  const AUTH_WAVE_PHASE_STEP = 0.012
 
   let animationId = null
   let count = 0
@@ -107,7 +108,7 @@ export async function createAuthWallThree(canvas) {
     geometry.attributes.position.needsUpdate = true
 
     renderer.render(scene, camera)
-    count += 0.08
+    count += AUTH_WAVE_PHASE_STEP
   }
 
   window.addEventListener('mousemove', onMouseMove, false)

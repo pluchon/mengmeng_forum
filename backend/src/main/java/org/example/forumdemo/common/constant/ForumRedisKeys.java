@@ -21,6 +21,10 @@ public final class ForumRedisKeys {
     public static final String HOT_ARTICLES_ACTIVE = "hot:articles:active";
     public static final String HOT_ARTICLES_SLOT_A = "hot:articles:a";
     public static final String HOT_ARTICLES_SLOT_B = "hot:articles:b";
+    public static final String HOT_ARTICLES_METRIC_BASELINE = "hot:articles:metric:baseline";
+    public static final String HOT_ARTICLES_PERIOD_SCORE = "hot:articles:period:score";
+    public static final String HOT_ARTICLES_TREND = "hot:articles:trend";
+    public static final String HOT_ARTICLES_TREND_INITIALIZED = "hot:articles:trend:initialized";
     public static final String MQ_EVENT_DEDUP = "forum:mq:dedup:";
     public static final long TTL_MQ_EVENT_DEDUP = 86400L;
     public static final String GAME_MATCH_ROOM = "forum:game:match:";

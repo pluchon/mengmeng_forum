@@ -21,7 +21,6 @@ public class UserSessionVO {
     private Byte isAdmin;
     private Integer points;
     private Integer lotteryPityDraws;
-    private Byte lotterySurpriseClaimed;
     private Byte vipTier;
     private Date vipExpireAt;
     private Long mascotModelId;
