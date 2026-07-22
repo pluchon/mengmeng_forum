@@ -46,30 +46,25 @@
 
 ```mermaid
 flowchart TD
-  U[用户] --> C[内容社区]
-  C --> C1[图文与视频发帖]
-  C1 --> C2[标签、评论楼中楼、问答采纳、弹幕]
-  C2 --> C3[热帖榜与个性化推荐]
+  U[用户]
 
-  C3 --> S[社交互动]
-  S --> S1[私信、群聊、群语音]
-  S1 --> S2[关注、收藏夹、表情包商城]
-  S2 --> S3[匿名漂流瓶与举报]
+  subgraph Community[社区互动]
+    direction LR
+    C[内容<br/>发帖、评论、问答、弹幕、推荐]
+    S[社交<br/>私信、群聊、漂流瓶、收藏]
+    C --> S
+  end
 
-  S3 --> G[成长与权益]
-  G --> G1[每日签到与积分钱包]
-  G1 --> G2[积分抽奖与奖池保底]
-  G2 --> G3[成长中心、挑战、会员权益]
+  subgraph Experience[成长与体验]
+    direction LR
+    G[成长<br/>签到、积分、抽奖、会员]
+    A[智能<br/>审核、写作、搜索、看板娘]
+    P[游戏<br/>五子棋、井字棋、俄罗斯方块]
+    G --> A --> P
+  end
 
-  G3 --> A[智能服务]
-  A --> A1[AI 审核与写作]
-  A1 --> A2[AI 搜索与语义检索]
-  A2 --> A3[看板娘对话与会话管理]
-
-  A3 --> P[游戏中心]
-  P --> P1[五子棋]
-  P1 --> P2[井字棋]
-  P2 --> P3[俄罗斯方块]
+  U --> C
+  S --> G
 ```
 | 模块 | 已提供能力 | 关键体验 |
 | --- | --- | --- |
@@ -102,14 +97,30 @@ flowchart TD
 flowchart TD
   U[用户端 Web] --> N[Nginx]
   N --> J[Java 后端]
-  N --> F[FFmpeg]
-  J --> M[(MySQL)]
-  J --> R[(Redis)]
-  J --> Q[(RabbitMQ)]
-  J --> P[Python AI]
-  J --> G[Game WS]
-  P --> PG[(PostgreSQL)]
-  P --> OSS[(OSS)]
+
+  subgraph Core[核心服务]
+    direction LR
+    J --- F[FFmpeg]
+    J --- G[Game WS]
+  end
+
+  subgraph Infrastructure[数据与异步]
+    direction LR
+    M[(MySQL)]
+    R[(Redis)]
+    Q[(RabbitMQ)]
+  end
+
+  subgraph AiService[AI 服务]
+    direction LR
+    P[Python AI] --> PG[(PostgreSQL)]
+    P --> OSS[(OSS)]
+  end
+
+  J --> M
+  J --> R
+  J --> Q
+  J --> P
 ```
 
 - 用户端 → **Nginx**（静态 `dist/` + 反代 API）
@@ -569,12 +580,25 @@ python main.py
 flowchart TD
   Dev[开发者] --> FE[Vue:5173]
   FE --> BE[Java:10086]
-  BE --> M[(MySQL)]
-  BE --> R[(Redis)]
-  BE --> Q[(RabbitMQ)]
-  BE --> AI[AI:5000]
-  BE --> FF[FFmpeg]
-  AI --> PG[(PostgreSQL)]
+
+  subgraph Middleware[本地中间件]
+    direction LR
+    M[(MySQL)]
+    R[(Redis)]
+    Q[(RabbitMQ)]
+  end
+
+  subgraph LocalServices[本地服务]
+    direction LR
+    AI[AI:5000] --> PG[(PostgreSQL)]
+    FF[FFmpeg]
+  end
+
+  BE --> M
+  BE --> R
+  BE --> Q
+  BE --> AI
+  BE --> FF
 ```
 
 **IDEA 打开后端**：File → Open → 选 `backend` 文件夹或 `pom.xml`，Maven Reload，开启 Lombok Annotation Processors。
