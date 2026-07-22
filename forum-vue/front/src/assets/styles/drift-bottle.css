@@ -599,10 +599,15 @@
 
 :root[data-theme='dark'] .drift-page :where(
   .drift-bottle-content,
-  .drift-comment-content,
-  .drift-comment-author
+  .drift-comment-name,
+  .drift-comment p
 ) {
   color: #edf4ff !important;
+}
+
+:root[data-theme='dark'] .drift-page .drift-comment-name span {
+  background: #3e2940;
+  color: #ffd7e5 !important;
 }
 
 .drift-bottle-actions {

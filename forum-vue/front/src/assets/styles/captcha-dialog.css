@@ -14,6 +14,10 @@
   padding: 8px 16px 12px;
 }
 
+.behavior-captcha-dialog {
+  width: min(calc(100vw - 32px), 360px) !important;
+}
+
 /* ── 错误 ── */
 .captcha-error {
   display: flex;
@@ -38,7 +42,7 @@
 
 /* ── 通用面板 ── */
 .cap-panel {
-  width: min(100%, 340px);
+  width: min(100%, 300px) !important;
   margin: 0 auto;
   user-select: none;
 }
