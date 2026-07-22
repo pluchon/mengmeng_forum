@@ -1394,17 +1394,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   box-sizing: border-box;
 }
 
-@media (min-width: 1201px) {
-  .home-xhs-main--with-hot {
-    padding-right: 338px;
-  }
-
-  .home-xhs-main--with-hot .checkin-home-strip {
-    width: calc(100% + 318px);
-    max-width: none;
-  }
-}
-
 .recommendation-feed-stage {
   position: relative;
   min-height: 360px;

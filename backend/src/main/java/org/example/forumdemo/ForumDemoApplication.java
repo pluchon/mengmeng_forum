@@ -37,7 +37,7 @@ public class ForumDemoApplication {
         if (value == null) {
             log.warn("⚠️  未读取到环境变量: [{} ({})]，将使用默认配置或启动失败！", key, desc);
         } else {
-            String masked = value.length() > 6 
+            String masked = value.length() > 6
                 ? value.substring(0, 3) + "****" + value.substring(value.length() - 3)
                 : "****";
             log.debug("已成功读取环境变量: [{} ({})], 当前值: {}", key, desc, masked);

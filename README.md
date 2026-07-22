@@ -5,8 +5,6 @@
 ![Vue.js](https://img.shields.io/badge/Vue.js-3.5+-4FC08D?style=flat&logo=vue.js&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 
-[![Issues](https://img.shields.io/github/issues/yourusername/luntan)](https://github.com/yourusername/luntan/issues)
-
 [![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com)
 
@@ -16,54 +14,23 @@
 
 ## 主要功能演示
 
-![image-20260709080237946](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080238307.png)
+![image-20260722165915197](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722165915752.png)
 
-![image-20260709080703458](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080703717.png)
+![image-20260722165945205](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722165945609.png)
 
-![image-20260709081946237](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081946530.png)
+![image-20260722170011789](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170012141.png)
 
-![image-20260709081830277](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081830523.png)
+![image-20260722170033274](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170033456.png)
 
-![image-20260709080448034](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080448258.png)
+![image-20260722170046716](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170047039.png)
 
-![image-20260709080618564](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709080618757.png)
+![image-20260722170102428](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170102767.png)
 
-![image-20260709090025805](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090026009.png)
+![image-20260722170114759](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170114978.png)
 
-![image-20260709085942220](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709085942431.png)
+![image-20260722170126920](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170127123.png)
 
-![image-20260709090046487](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090046681.png)
-
-![image-20260709090112158](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090112349.png)
-
-![image-20260709090131047](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709090131245.png)
-
-![image-20260709081122758](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081123140.png)
-
-![image-20260709081141484](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081141687.png)
-
-![image-20260709081303397](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081303610.png)
-
-![image-20260709081343636](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081343972.png)
-
-![image-20260709081418931](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081419116.png)
-
-![image-20260709081445342](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081445540.png)
-
-![image-20260709081457209](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081457373.png)
-
-![image-20260709081510296](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081510462.png)
-
-![image-20260709081527812](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081528016.png)
-
-![image-20260709081538690](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081538867.png)
-
-![image-20260709081607597](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081607755.png)
-
-![image-20260709081652710](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081652883.png)
-
-![image-20260709081705785](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260709081705984.png)
-
+![image-20260722170135408](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260722170135657.png)
 
 ***
 

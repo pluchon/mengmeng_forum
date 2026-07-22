@@ -1776,4 +1776,142 @@ CREATE TABLE `user_recommend_feedback` (
     KEY `idx_user_recommend_feedback_active` (`user_id`, `delete_state`, `article_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐帖子反馈';
 
+-- ----------------------------
+-- 29. 成长中心与体验会员
+-- ----------------------------
+DROP TABLE IF EXISTS `vip_trial_entitlement`;
+DROP TABLE IF EXISTS `growth_reward_record`;
+DROP TABLE IF EXISTS `growth_experience_log`;
+DROP TABLE IF EXISTS `growth_challenge_attempt`;
+DROP TABLE IF EXISTS `growth_challenge`;
+DROP TABLE IF EXISTS `user_growth_profile`;
+
+CREATE TABLE `user_growth_profile` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '成长档案ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `formal_state` tinyint NOT NULL DEFAULT 0 COMMENT '正式用户状态: 0非正式 1正式',
+    `experience` int NOT NULL DEFAULT 0 COMMENT '成长经验',
+    `growth_level` int NOT NULL DEFAULT 1 COMMENT '成长等级',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_growth_profile_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户成长档案';
+
+CREATE TABLE `growth_challenge` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '挑战ID',
+    `challenge_code` varchar(40) NOT NULL COMMENT '挑战编码',
+    `challenge_type` varchar(30) NOT NULL COMMENT '挑战类型',
+    `title` varchar(80) NOT NULL COMMENT '挑战标题',
+    `description` varchar(500) DEFAULT NULL COMMENT '挑战说明',
+    `bank_id` bigint NOT NULL COMMENT '关联题库ID',
+    `question_count` int NOT NULL DEFAULT 10 COMMENT '抽题数',
+    `passing_score` int NOT NULL DEFAULT 80 COMMENT '及格分',
+    `max_attempts_per_day` int NOT NULL DEFAULT 3 COMMENT '每日最大尝试数',
+    `experience_reward` int NOT NULL DEFAULT 0 COMMENT '通过经验奖励',
+    `enabled` tinyint NOT NULL DEFAULT 1 COMMENT '是否启用: 0否 1是',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_growth_challenge_code` (`challenge_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成长挑战定义';
+
+CREATE TABLE `growth_challenge_attempt` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '挑战尝试ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `challenge_id` bigint NOT NULL COMMENT '挑战ID',
+    `attempt_no` int NOT NULL COMMENT '尝试序号',
+    `status` varchar(20) NOT NULL COMMENT '尝试状态',
+    `question_ids_json` json NOT NULL COMMENT '本次题目ID',
+    `answers_json` json DEFAULT NULL COMMENT '用户答案',
+    `score` int DEFAULT NULL COMMENT '得分',
+    `started_at` datetime NOT NULL COMMENT '开始时间',
+    `submitted_at` datetime DEFAULT NULL COMMENT '提交时间',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_growth_attempt_user_challenge_no` (`user_id`, `challenge_id`, `attempt_no`),
+    KEY `idx_growth_attempt_user_challenge` (`user_id`, `challenge_id`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成长挑战尝试记录';
+
+CREATE TABLE `growth_experience_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '经验流水ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `source_type` varchar(30) NOT NULL COMMENT '经验来源类型',
+    `source_business_id` bigint NOT NULL COMMENT '来源业务ID',
+    `experience_delta` int NOT NULL COMMENT '经验变动',
+    `remark` varchar(200) DEFAULT NULL COMMENT '备注',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_growth_experience_source` (`user_id`, `source_type`, `source_business_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成长经验流水';
+
+CREATE TABLE `growth_reward_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '奖励流水ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `challenge_id` bigint NOT NULL COMMENT '挑战ID',
+    `reward_type` varchar(30) NOT NULL COMMENT '奖励类型',
+    `reward_value` varchar(100) DEFAULT NULL COMMENT '奖励值',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_growth_reward_user_challenge_type` (`user_id`, `challenge_id`, `reward_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成长奖励流水';
+
+CREATE TABLE `vip_trial_entitlement` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '体验会员ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `trial_code` varchar(30) NOT NULL COMMENT '体验编码',
+    `status` varchar(20) NOT NULL COMMENT '状态: ACTIVE EXPIRED SUPERSEDED',
+    `expire_at` datetime NOT NULL COMMENT '体验到期时间',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0否 1是',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_vip_trial_user_code` (`user_id`, `trial_code`),
+    KEY `idx_vip_trial_active` (`user_id`, `status`, `expire_at`, `delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='体验会员权益';
+
+INSERT INTO `exam_question_bank`
+(`user_id`, `subject`, `source_name`, `total_count`, `choice_count`, `judgement_count`, `subjective_count`, `warnings_json`, `delete_state`) VALUES
+(0, '成长中心·新人试炼', 'growth-center-formal-user', 10, 10, 0, 0, JSON_ARRAY(), 0),
+(0, '成长中心·会员体验', 'growth-center-vip-trial-900', 10, 10, 0, 0, JSON_ARRAY(), 0);
+
+SET @formal_bank := (SELECT `id` FROM `exam_question_bank` WHERE `user_id` = 0 AND `subject` = '成长中心·新人试炼' AND `delete_state` = 0 ORDER BY `id` DESC LIMIT 1);
+SET @trial_bank := (SELECT `id` FROM `exam_question_bank` WHERE `user_id` = 0 AND `subject` = '成长中心·会员体验' AND `delete_state` = 0 ORDER BY `id` DESC LIMIT 1);
+
+INSERT INTO `exam_question`
+(`bank_id`, `question_order`, `source_no`, `section_name`, `question_type`, `stem`, `options_json`, `standard_answer`, `explanation`, `answer_inferred_from_user`, `needs_option_review`, `delete_state`) VALUES
+(@formal_bank, 1, '1', '社区规则', 'SINGLE', '发现违规内容时，正确的做法是？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '使用举报入口并提供真实说明'), JSON_OBJECT('label', 'B', 'text', '在评论区攻击对方')), 'A', '维护社区安全', 0, 0, 0),
+(@formal_bank, 2, '2', '社区规则', 'SINGLE', '发布他人隐私信息是否允许？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '不允许，应尊重他人隐私'), JSON_OBJECT('label', 'B', 'text', '允许，只要内容有热度')), 'A', '保护隐私是基本规则', 0, 0, 0),
+(@formal_bank, 3, '3', '社区规则', 'SINGLE', '遇到陌生链接时应当？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '谨慎核实来源，不随意输入账号信息'), JSON_OBJECT('label', 'B', 'text', '立刻点击并转发')), 'A', '防范账号风险', 0, 0, 0),
+(@formal_bank, 4, '4', '社区规则', 'SINGLE', '评论交流应遵循什么原则？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '友善、就事论事'), JSON_OBJECT('label', 'B', 'text', '人身攻击更有说服力')), 'A', '文明交流', 0, 0, 0),
+(@formal_bank, 5, '5', '社区规则', 'SINGLE', '转载社区内容前应当？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '确认授权并注明来源'), JSON_OBJECT('label', 'B', 'text', '直接复制即可')), 'A', '尊重原创', 0, 0, 0),
+(@formal_bank, 6, '6', '社区规则', 'SINGLE', '账号密码应当？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '妥善保管且不与他人共用'), JSON_OBJECT('label', 'B', 'text', '告诉陌生网友')), 'A', '账号安全', 0, 0, 0),
+(@formal_bank, 7, '7', '社区规则', 'SINGLE', '发现账号异常登录时应当？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '及时修改密码并查看登录记录'), JSON_OBJECT('label', 'B', 'text', '继续忽略')), 'A', '及时处置风险', 0, 0, 0),
+(@formal_bank, 8, '8', '社区规则', 'SINGLE', '发布内容时应当？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '遵守法律和社区规则'), JSON_OBJECT('label', 'B', 'text', '为了流量可以造谣')), 'A', '内容责任', 0, 0, 0),
+(@formal_bank, 9, '9', '社区规则', 'SINGLE', '与他人意见不同可以？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '理性表达观点'), JSON_OBJECT('label', 'B', 'text', '恶意骚扰对方')), 'A', '尊重不同意见', 0, 0, 0),
+(@formal_bank, 10, '10', '社区规则', 'SINGLE', '社区功能遇到问题时可以？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '查看帮助或反馈问题'), JSON_OBJECT('label', 'B', 'text', '发布无关攻击内容')), 'A', '合理反馈', 0, 0, 0),
+(@trial_bank, 1, '1', '会员体验', 'SINGLE', '会员体验有效期是？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '7 天'), JSON_OBJECT('label', 'B', 'text', '永久有效')), 'A', '体验权益有明确期限', 0, 0, 0),
+(@trial_bank, 2, '2', '会员体验', 'SINGLE', '体验会员可以领取几次？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '每个账号一次'), JSON_OBJECT('label', 'B', 'text', '每天一次')), 'A', '避免重复领取', 0, 0, 0),
+(@trial_bank, 3, '3', '会员体验', 'SINGLE', '体验会员的模型额度？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '使用独立体验额度'), JSON_OBJECT('label', 'B', 'text', '等同完整付费额度')), 'A', '体验额度独立管理', 0, 0, 0),
+(@trial_bank, 4, '4', '会员体验', 'SINGLE', '已有有效付费会员能否领取体验？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '不能'), JSON_OBJECT('label', 'B', 'text', '可以叠加')), 'A', '避免覆盖付费权益', 0, 0, 0),
+(@trial_bank, 5, '5', '会员体验', 'SINGLE', '会员功能应当如何使用？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '遵守站内规则合理使用'), JSON_OBJECT('label', 'B', 'text', '用于违规内容')), 'A', '权益也需遵守规则', 0, 0, 0),
+(@trial_bank, 6, '6', '会员体验', 'SINGLE', '体验到期后会？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '自动失效'), JSON_OBJECT('label', 'B', 'text', '自动续期')), 'A', '体验不续期', 0, 0, 0),
+(@trial_bank, 7, '7', '会员体验', 'SINGLE', '模型用量达到体验额度后？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '等待重置或按规则使用其他能力'), JSON_OBJECT('label', 'B', 'text', '绕过限制')), 'A', '额度受系统控制', 0, 0, 0),
+(@trial_bank, 8, '8', '会员体验', 'SINGLE', '会员中心主要用于？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '查看权益和额度'), JSON_OBJECT('label', 'B', 'text', '修改他人账号')), 'A', '权益信息透明展示', 0, 0, 0),
+(@trial_bank, 9, '9', '会员体验', 'SINGLE', '体验挑战通过后获得？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '7 天 TRIAL_900 体验'), JSON_OBJECT('label', 'B', 'text', '永久 MAX')), 'A', '奖励与挑战匹配', 0, 0, 0),
+(@trial_bank, 10, '10', '会员体验', 'SINGLE', '会员体验挑战的目的？', JSON_ARRAY(JSON_OBJECT('label', 'A', 'text', '了解站内会员能力'), JSON_OBJECT('label', 'B', 'text', '绕过付费规则')), 'A', '合理体验权益', 0, 0, 0);
+
+INSERT INTO `growth_challenge`
+(`challenge_code`, `challenge_type`, `title`, `description`, `bank_id`, `question_count`, `passing_score`, `max_attempts_per_day`, `experience_reward`, `enabled`, `delete_state`) VALUES
+('FORMAL_USER', 'FORMAL_USER', '新人试炼', '完成社区规则与安全基础题，获得正式用户资格。', @formal_bank, 10, 80, 3, 100, 1, 0),
+('VIP_TRIAL_900', 'VIP_TRIAL_900', '会员体验挑战', '通过后获得一次 7 天 TRIAL_900 会员体验。', @trial_bank, 10, 80, 3, 80, 1, 0);
+
 SET FOREIGN_KEY_CHECKS = 1;
