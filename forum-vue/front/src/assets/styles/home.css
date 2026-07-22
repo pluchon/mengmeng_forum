@@ -2528,6 +2528,58 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   color: #ff2442;
 }
 
+:root[data-theme='dark'] .activity-center-dialog.el-dialog,
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .el-dialog__body,
+  .activity-center-header,
+  .activity-center-content
+) {
+  background: #121a2b !important;
+  color: #edf4ff !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-list-scroll,
+  .activity-center-list-item
+) {
+  background: #182235 !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-list-item:hover,
+  .activity-center-list-item.is-active
+) {
+  background: #24334e !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-center-title,
+  .activity-list-title,
+  .view-title,
+  .feature-desc,
+  .announcement-md
+) {
+  color: #edf4ff !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog :where(
+  .activity-list-updated,
+  .view-subtitle,
+  .view-updated,
+  .activity-center-content--empty,
+  .announcement-loading,
+  .announcement-empty
+) {
+  color: #aebed4 !important;
+}
+
+:root[data-theme='dark'] .activity-center-dialog .activity-center-close {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #c9d7eb !important;
+}
+
 .activity-center-header {
   padding: 20px 52px 16px;
   border-bottom: 1px solid #f2f3f5;

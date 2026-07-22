@@ -543,6 +543,12 @@
   padding: 48px 16px;
 }
 
+.mc-list-loading {
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .mc-left-bottom {
   flex-shrink: 0;
   display: flex;
@@ -1118,6 +1124,20 @@
   font-size: 12px;
   line-height: 1.65;
   color: #4e5969;
+}
+
+.mc-ncard--audit .mc-ncard-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.mc-ncard--audit .mc-ncard-body {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mc-article-link {
@@ -1775,6 +1795,69 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-voice-entry,
+  .mc-voice-answer,
+  .mc-voice-answer button,
+  .mc-dialog-action,
+  .mc-emoji-fav-pager-btn,
+  .mc-emoji-fav-pager-input,
+  .mc-emoji-pack-more
+) {
+  background: #1b2435 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  color: #c9d7eb !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-voice-entry:hover,
+  .mc-dialog-action:hover:not(:disabled),
+  .mc-emoji-fav-pager-btn:hover:not(:disabled),
+  .mc-emoji-pack-more:hover
+) {
+  background: #263653 !important;
+  color: #f3f7ff !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-dialog-action--primary,
+:root[data-theme='dark'] .mc-dialog .mc-voice-entry.is-active {
+  background: #d4537e !important;
+  border-color: #d4537e !important;
+  color: #fff !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-voice-entry.is-waiting {
+  background: #3a2c1c !important;
+  border-color: #8d6a2e !important;
+  color: #ffe2a7 !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-bbl:not(.is-me):not(.is-recalled):not(.is-media),
+  .mc-bbl.is-me
+) {
+  color: #f3f7ff !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-bbl:not(.is-me):not(.is-recalled):not(.is-media) {
+  background: #253249 !important;
+}
+
+:root[data-theme='dark'] .mc-dialog .mc-bbl.is-me {
+  background: #54243a !important;
+  border-color: #9c496c !important;
+}
+
+:root[data-theme='dark'] .mc-dialog :where(
+  .mc-sender-name,
+  .mc-reply-quote,
+  .mc-group-system-tip,
+  .mc-ncard-body,
+  .mc-list-loading
+) {
+  color: #c9d7eb !important;
 }
 
 .mc-group-settings-dialog .el-dialog__header {

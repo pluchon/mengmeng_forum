@@ -11,7 +11,7 @@
 }
 
 .behavior-captcha-dialog :deep(.el-dialog__body) {
-  padding: 8px 20px 12px;
+  padding: 8px 16px 12px;
 }
 
 /* ── 错误 ── */
@@ -37,7 +37,11 @@
 .cap-link--danger { color: #f56c6c; }
 
 /* ── 通用面板 ── */
-.cap-panel { user-select: none; }
+.cap-panel {
+  width: min(100%, 340px);
+  margin: 0 auto;
+  user-select: none;
+}
 
 .cap-tip {
   display: flex;

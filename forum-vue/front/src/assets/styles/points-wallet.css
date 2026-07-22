@@ -241,8 +241,8 @@
 }
 
 .points-month-nav-btn:hover:not(:disabled) {
-  border-color: var(--el-color-primary-light-5);
-  background: #fff;
+  border-color: var(--points-control-hover-border, var(--el-color-primary-light-5));
+  background: var(--points-control-hover-bg, #fff);
 }
 
 .points-month-nav-btn:disabled {
@@ -251,6 +251,7 @@
 }
 
 .points-month-nav-icon {
+  filter: var(--points-month-nav-filter, none);
   display: block;
   width: 18px;
   height: 18px;
@@ -314,8 +315,8 @@
   gap: 6px;
   padding: 3px;
   border-radius: 10px;
-  border: 1px solid #e5e6eb;
-  background: #f7f8fa;
+  border: 1px solid var(--points-control-border, #e5e6eb);
+  background: var(--points-tabs-bg, #f7f8fa);
 }
 
 .points-chart-type-tab {
@@ -325,19 +326,19 @@
   background: transparent;
   font-size: 12px;
   font-weight: 700;
-  color: #4e5969;
+  color: var(--points-control-text, #4e5969);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .points-chart-type-tab:hover {
-  color: #1d2129;
+  color: var(--points-control-hover-text, #1d2129);
 }
 
 .points-chart-type-tab.is-active {
-  background: #fff;
-  color: #6b4cff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  background: var(--points-tab-active-bg, #fff);
+  color: var(--points-tab-active-text, #6b4cff);
+  box-shadow: var(--points-tab-active-shadow, 0 1px 3px rgba(15, 23, 42, 0.08));
 }
 
 .points-chart-stat-label {
@@ -515,20 +516,50 @@
   padding: 0;
   border: 1px solid #e5e6eb;
   border-radius: 50%;
-  background: #f7f8fa;
-  color: #4e5969;
+  background: var(--points-control-bg, #f7f8fa);
+  color: var(--points-control-text, #4e5969);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .points-log-more-btn:hover:not(:disabled) {
-  background: #fff;
-  border-color: #c9cdd4;
+  background: var(--points-control-hover-bg, #fff);
+  border-color: var(--points-control-hover-border, #c9cdd4);
 }
 
 .points-log-more-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+:global(:root[data-theme='dark']) :where(
+  .points-month-nav-btn,
+  .points-chart-type-tabs,
+  .points-chart-type-tab,
+  .points-log-more-btn
+) {
+  background: #1b2435 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  color: #c9d7eb !important;
+}
+
+:global(:root[data-theme='dark']) :where(
+  .points-month-nav-btn:hover,
+  .points-chart-type-tab:hover,
+  .points-log-more-btn:hover:not(:disabled)
+) {
+  background: #263653 !important;
+  color: #f3f7ff !important;
+}
+
+:global(:root[data-theme='dark']) .points-chart-type-tab.is-active {
+  background: #355789 !important;
+  color: #f8fbff !important;
+  box-shadow: none !important;
+}
+
+:global(:root[data-theme='dark']) .points-month-nav-icon {
+  filter: brightness(0) invert(0.86) !important;
 }
 
 .points-log-empty {

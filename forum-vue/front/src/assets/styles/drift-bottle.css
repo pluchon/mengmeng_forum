@@ -597,6 +597,14 @@
   padding-right: 54px;
 }
 
+:root[data-theme='dark'] .drift-page :where(
+  .drift-bottle-content,
+  .drift-comment-content,
+  .drift-comment-author
+) {
+  color: #edf4ff !important;
+}
+
 .drift-bottle-actions {
   display: flex;
   justify-content: space-between;

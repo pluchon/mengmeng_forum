@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    width="420px"
+    width="380px"
     append-to-body
     destroy-on-close
     class="behavior-captcha-dialog"

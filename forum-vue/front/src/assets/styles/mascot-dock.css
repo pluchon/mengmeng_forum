@@ -659,6 +659,23 @@
   border-radius: 14px 14px 4px 14px;
 }
 
+:root[data-theme='dark'] .mascot-fs-dialog :where(
+  .mascot-bubble--ai,
+  .mascot-bubble--user
+) {
+  color: #f3f7ff !important;
+}
+
+:root[data-theme='dark'] .mascot-fs-dialog .mascot-bubble--ai {
+  background: #253249 !important;
+  border-color: #3b4b66 !important;
+}
+
+:root[data-theme='dark'] .mascot-fs-dialog .mascot-bubble--user {
+  background: #54243a !important;
+  border-color: #9c496c !important;
+}
+
 .mascot-img-wrap {
   display: flex;
   flex-direction: column;
