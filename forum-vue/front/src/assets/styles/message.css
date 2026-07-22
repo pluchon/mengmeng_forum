@@ -1126,18 +1126,32 @@
   color: #4e5969;
 }
 
-.mc-ncard--audit .mc-ncard-head {
+.mc-ncard--audit {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 0;
+}
+
+.mc-ncard--audit .mc-ncard-head {
+  display: contents;
+}
+
+.mc-ncard--audit .mc-tag {
+  grid-column: 1;
+  margin-right: 0;
 }
 
 .mc-ncard--audit .mc-ncard-body {
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mc-ncard--audit .mc-ncard-time {
+  grid-column: 3;
 }
 
 .mc-article-link {
