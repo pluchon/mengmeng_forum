@@ -55,7 +55,7 @@
       </nav>
     </div>
 
-    <main class="home-xhs-main home-xhs-main--feed" :class="{ 'home-xhs-main--with-hot': isHomeFeed }">
+    <main class="home-xhs-main home-xhs-main--feed">
       <div v-if="showCheckinHomeStrip" class="checkin-home-strip animate-fade-up">
         <el-card
           class="checkin-home-card"

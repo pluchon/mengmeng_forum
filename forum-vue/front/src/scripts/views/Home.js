@@ -77,10 +77,10 @@ export function useHome() {
   const recommendationSaving = ref(false)
 
   try {
-    homeHotCollapsed.value = typeof localStorage !== 'undefined'
-      && localStorage.getItem(HOME_HOT_COLLAPSED_LS) === '1'
+    homeHotCollapsed.value = typeof localStorage === 'undefined'
+      || localStorage.getItem(HOME_HOT_COLLAPSED_LS) !== '0'
   } catch {
-    homeHotCollapsed.value = false
+    homeHotCollapsed.value = true
   }
 
   /** 0 = 首页全站流；正数 = 首页顶部导航中选中的分类。 */

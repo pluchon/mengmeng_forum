@@ -11,8 +11,40 @@ param(
 $ErrorActionPreference = "Stop"
 $nginxRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $nginxRoot
+$hostBuildProxy = "http://127.0.0.1:7897"
+$containerBuildProxy = "http://host.docker.internal:7897"
+
+# 主机侧 npm / Maven 通过本地代理；Docker 构建容器通过宿主机别名访问同一代理。
+$env:http_proxy = $hostBuildProxy
+$env:https_proxy = $hostBuildProxy
+$env:HTTP_PROXY = $hostBuildProxy
+$env:HTTPS_PROXY = $hostBuildProxy
+$env:NO_PROXY = "localhost,127.0.0.1"
+$env:no_proxy = $env:NO_PROXY
+$env:MAVEN_OPTS = "-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7897 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897"
+
+$dockerBuildProxyArgs = @(
+    "--build-arg", "http_proxy=$containerBuildProxy",
+    "--build-arg", "https_proxy=$containerBuildProxy",
+    "--build-arg", "HTTP_PROXY=$containerBuildProxy",
+    "--build-arg", "HTTPS_PROXY=$containerBuildProxy",
+    "--build-arg", "no_proxy=localhost,127.0.0.1",
+    "--build-arg", "NO_PROXY=localhost,127.0.0.1"
+)
 
 function Step($msg) { Write-Host ""; Write-Host "==> $msg" -ForegroundColor Cyan }
+
+function Invoke-DockerBuild {
+    param(
+        [string]$Tag,
+        [string]$Context,
+        [string]$DisplayName
+    )
+    Step "Docker build $DisplayName"
+    & docker build --progress=plain @dockerBuildProxyArgs -t $Tag $Context
+    if ($LASTEXITCODE -ne 0) { throw "$DisplayName image build failed" }
+    Write-Host "Image $Tag ready" -ForegroundColor Green
+}
 
 function Sync-Dist($src, $dst) {
     if (-not (Test-Path $src)) { throw "Missing build output: $src" }
@@ -80,14 +112,11 @@ if (-not $SkipFront) {
 
 if (-not $SkipBackend) {
     if (-not $SkipDocker) {
-        Step "Docker build forum-backend:latest"
-        docker build -t forum-backend:latest (Join-Path $repoRoot "backend")
-        if ($LASTEXITCODE -ne 0) { throw "forum-backend image build failed" }
-        Write-Host "Image forum-backend:latest ready" -ForegroundColor Green
+        Invoke-DockerBuild -Tag "forum-backend:latest" -Context (Join-Path $repoRoot "backend") -DisplayName "forum-backend:latest"
     } else {
         Step "Maven package backend"
         Push-Location (Join-Path $repoRoot "backend")
-        mvn -q -B package -DskipTests
+        mvn -B package -DskipTests
         if ($LASTEXITCODE -ne 0) { Pop-Location; throw "mvn package failed" }
         Pop-Location
         Write-Host "JAR in backend/target/" -ForegroundColor Green
@@ -99,15 +128,9 @@ if (-not $SkipDocker) {
     $envExample = Join-Path $nginxRoot ".env.example"
     Sync-EnvFromExample -EnvFile $envFile -EnvExample $envExample
 
-    Step "Docker build forum-ffmpeg:latest"
-    docker build -t forum-ffmpeg:latest (Join-Path $nginxRoot "ffmpeg")
-    if ($LASTEXITCODE -ne 0) { throw "forum-ffmpeg image build failed" }
-    Write-Host "Image forum-ffmpeg:latest ready" -ForegroundColor Green
+    Invoke-DockerBuild -Tag "forum-ffmpeg:latest" -Context (Join-Path $nginxRoot "ffmpeg") -DisplayName "forum-ffmpeg:latest"
 
-    Step "Docker build forum-ai-server"
-    docker build -t forum-ai-server:latest (Join-Path $repoRoot "ai-server")
-    if ($LASTEXITCODE -ne 0) { throw "ai-server image build failed" }
-    Write-Host "Image forum-ai-server:latest ready" -ForegroundColor Green
+    Invoke-DockerBuild -Tag "forum-ai-server:latest" -Context (Join-Path $repoRoot "ai-server") -DisplayName "forum-ai-server:latest"
 }
 
 if ($SkipFront) {
