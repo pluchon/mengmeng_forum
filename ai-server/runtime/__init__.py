@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from runtime.ai_runtime import AiRuntime
-from runtime.contracts import ModuleRequest, ModuleResult
+from runtime.contracts import ModuleEvent, ModuleRequest, ModuleResult
 from runtime.module_registry import ModuleRegistry
 
-__all__ = ["AiRuntime", "ModuleRegistry", "ModuleRequest", "ModuleResult"]
+__all__ = ["AiRuntime", "ModuleEvent", "ModuleRegistry", "ModuleRequest", "ModuleResult"]
