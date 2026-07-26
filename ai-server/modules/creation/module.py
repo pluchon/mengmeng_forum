@@ -32,7 +32,11 @@ class CoverHintsModule:
         if not article:
             raise ModuleRequestError("INVALID_COVER_PAYLOAD", "articleText 不能为空")
         content, usage = await asyncio.to_thread(generate_cover_hints, article[:12000])
-        return ModuleResult(success=True, data={"prompt": content, "artifactType": "COVER_PROMPT"}, usage=usage)
+        return ModuleResult(
+            success=True,
+            data={"content": content, "prompt": content, "artifactType": "COVER_PROMPT"},
+            usage=usage,
+        )
 
 
 class ImageGenerationModule:
