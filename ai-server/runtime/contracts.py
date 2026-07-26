@@ -46,6 +46,17 @@ class ModuleResult:
         return result
 
 
+@dataclass(frozen=True)
+class ModuleEvent:
+    """Gateway 对外的标准流式事件。"""
+
+    event_type: str
+    data: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.event_type, "data": self.data}
+
+
 class ModuleRequestError(ValueError):
     """Gateway 参数或路由不符合契约。"""
 

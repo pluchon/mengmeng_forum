@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import queue
+import threading
 import uuid
+from collections.abc import Iterator
 from typing import Any
 
 from modules.moderation import ContentModerationModule
@@ -13,7 +16,7 @@ from modules.creation import CoverHintsModule, ImageGenerationModule, PostWriteM
 from modules.game import GobangMoveModule, JiziMoveModule
 from modules.search import SearchModule
 from modules.summary import PostSummaryModule
-from runtime.contracts import ModuleRequest, ModuleRequestError
+from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError
 from runtime.module_registry import ModuleRegistry
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,39 @@ def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
 def registered_routes() -> list[tuple[str, str, str]]:
     """仅供健康检查和单元测试读取，不暴露为公共业务接口。"""
     return _registry.registered_routes()
+
+
+def stream_gateway(raw: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """把标准模块执行包装为 SSE 可消费的事件序列。"""
+    try:
+        request = _parse_request(raw)
+    except ModuleRequestError as exc:
+        yield ModuleEvent("error", {"errorCode": exc.code, "message": exc.message}).to_dict()
+        yield ModuleEvent("done", {"success": False}).to_dict()
+        return
+
+    events: queue.Queue[ModuleEvent] = queue.Queue()
+
+    def execute() -> None:
+        events.put(ModuleEvent("progress", {"stage": "module_started", "traceId": request.trace_id}))
+        try:
+            result = asyncio.run(_registry.invoke(request))
+            events.put(ModuleEvent("final", result.to_dict(request)))
+            events.put(ModuleEvent("done", {"success": result.success, "traceId": request.trace_id}))
+        except ModuleRequestError as exc:
+            events.put(ModuleEvent("error", {"errorCode": exc.code, "message": exc.message}))
+            events.put(ModuleEvent("done", {"success": False, "traceId": request.trace_id}))
+        except Exception:
+            logger.exception("AI Gateway 流式执行失败 trace_id=%s", request.trace_id)
+            events.put(ModuleEvent("error", {"errorCode": "AI_GATEWAY_FAILED", "message": "AI Gateway 执行失败"}))
+            events.put(ModuleEvent("done", {"success": False, "traceId": request.trace_id}))
+
+    threading.Thread(target=execute, name=f"ai-gateway-{request.request_id[:16]}", daemon=True).start()
+    while True:
+        event = events.get()
+        yield event.to_dict()
+        if event.event_type == "done":
+            return
 
 
 def _parse_request(raw: dict[str, Any]) -> ModuleRequest:
