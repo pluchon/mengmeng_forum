@@ -12,7 +12,7 @@ from typing import Any
 
 from modules.moderation import ContentModerationModule
 from modules.mascot import MascotChatModule
-from modules.creation import CoverHintsModule, ImageGenerationModule, PostWriteModule
+from modules.creation import CoverHintsModule, ImageGenerationModule, PostPolishModule
 from modules.game import GobangMoveModule, JiziMoveModule
 from modules.search import SearchModule
 from modules.summary import PostSummaryModule
@@ -27,7 +27,7 @@ _registry.register("CONTENT_MODERATION", "ARTICLE_AUDIT", "v1", ContentModeratio
 _registry.register("CONTENT_MODERATION", "TEXT_AUDIT", "v1", ContentModerationModule())
 _registry.register("CONTENT_MODERATION", "IMAGE_AUDIT", "v1", ContentModerationModule())
 _registry.register("POST_SUMMARY", "GENERATE", "v1", PostSummaryModule())
-_registry.register("POST_CREATION", "WRITE", "v1", PostWriteModule())
+_registry.register("POST_CREATION", "POLISH", "v1", PostPolishModule())
 _registry.register("POST_CREATION", "COVER_HINTS", "v1", CoverHintsModule())
 _registry.register("IMAGE_GENERATION", "GENERATE", "v1", ImageGenerationModule())
 _registry.register("GAME", "GOBANG_MOVE", "v1", GobangMoveModule())

@@ -27,12 +27,12 @@ export function aiImage(data) {
 }
 
 /**
- * AI 辅助写作（Java BFF -> ai-server）
- * @param {{ kind: string, messages: Array<{ role: string, content: string }> }} data
+ * 帖子正文一键润色（Java BFF -> ai-server）
+ * @param {{ title: string, content: string, editorMode: 'rich' | 'markdown' }} data
  */
-export function aiWrite(data) {
+export function aiPolish(data) {
   return request({
-    url: '/ai/write',
+    url: '/ai/polish',
     method: 'post',
     data,
     timeout: 120000,

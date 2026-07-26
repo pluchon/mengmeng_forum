@@ -3,9 +3,9 @@ package org.example.forumdemo.entity.vo.ai;
 import lombok.Data;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 
-// AI Hub 写作接口响应
+// AI Hub 正文润色响应
 @Data
-public class AiHubWriteResultVO {
+public class AiHubPolishResultVO {
 
     private String text;
     private String model;

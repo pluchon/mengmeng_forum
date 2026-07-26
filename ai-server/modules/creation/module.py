@@ -3,25 +3,31 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
-from modules.creation.service import generate_cover_hints, generate_image, generate_write_content
+from modules.creation.service import generate_cover_hints, generate_image, generate_polished_content
 
 
-class PostWriteModule:
-    """正文生成产物模块。"""
+class PostPolishModule:
+    """帖子正文一键润色模块。"""
 
     async def run(self, request: ModuleRequest) -> ModuleResult:
         kind = str(request.payload.get("kind") or "").strip().lower()
-        messages = request.payload.get("messages")
-        if not kind or not isinstance(messages, list):
-            raise ModuleRequestError("INVALID_CREATION_PAYLOAD", "kind 和 messages 为必填字段")
-        normalized = _clean_messages(messages)
-        if not normalized:
-            raise ModuleRequestError("INVALID_CREATION_PAYLOAD", "messages 至少包含一条有效消息")
-        content, usage = await asyncio.to_thread(generate_write_content, kind, normalized)
-        return ModuleResult(success=True, data={"content": content, "artifactType": "POST_BODY"}, usage=usage)
+        title = str(request.payload.get("title") or "").strip()
+        content = str(request.payload.get("content") or "").strip()
+        editor_mode = str(request.payload.get("editorMode") or "rich").strip().lower()
+        if not kind or not content:
+            raise ModuleRequestError("INVALID_POLISH_PAYLOAD", "kind 和 content 为必填字段")
+        if editor_mode not in {"rich", "markdown"}:
+            raise ModuleRequestError("INVALID_POLISH_PAYLOAD", "editorMode 必须为 rich 或 markdown")
+        polished, usage = await asyncio.to_thread(
+            generate_polished_content,
+            kind,
+            title[:200],
+            content[:32000],
+            editor_mode,
+        )
+        return ModuleResult(success=True, data={"content": polished, "artifactType": "POST_POLISH"}, usage=usage)
 
 
 class CoverHintsModule:
@@ -55,15 +61,3 @@ class ImageGenerationModule:
             data={"url": url, "artifactType": "IMAGE", "mcpUsed": mcp_used},
             usage=usage,
         )
-
-
-def _clean_messages(raw: list[Any]) -> list[dict[str, str]]:
-    messages: list[dict[str, str]] = []
-    for item in raw[-24:]:
-        if not isinstance(item, dict):
-            continue
-        role = str(item.get("role") or "").strip().lower()
-        content = str(item.get("content") or "").strip()
-        if role in {"system", "user", "assistant"} and content:
-            messages.append({"role": role, "content": content[:32000]})
-    return messages

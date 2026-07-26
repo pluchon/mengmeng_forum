@@ -5,10 +5,10 @@ import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
-import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiUsageStatsVO;
-import org.example.forumdemo.entity.vo.ai.AiWriteResponseVO;
+import org.example.forumdemo.entity.vo.ai.AiPolishResponseVO;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 
@@ -23,8 +23,8 @@ public final class AiHubConverter {
     private AiHubConverter() {
     }
 
-    public static AiHubWriteResultVO toWriteResult(Map<String, Object> data) {
-        AiHubWriteResultVO vo = new AiHubWriteResultVO();
+    public static AiHubPolishResultVO toPolishResult(Map<String, Object> data) {
+        AiHubPolishResultVO vo = new AiHubPolishResultVO();
         if (data == null) {
             return vo;
         }
@@ -66,8 +66,8 @@ public final class AiHubConverter {
         return vo;
     }
 
-    public static AiWriteResponseVO toWriteResponse(AiHubWriteResultVO hub, Map<String, Object> billing) {
-        AiWriteResponseVO vo = new AiWriteResponseVO();
+    public static AiPolishResponseVO toPolishResponse(AiHubPolishResultVO hub, Map<String, Object> billing) {
+        AiPolishResponseVO vo = new AiPolishResponseVO();
         if (hub != null) {
             vo.setText(hub.getText());
             vo.setModel(hub.getModel());
@@ -92,7 +92,7 @@ public final class AiHubConverter {
         return vo;
     }
 
-    private static void applyBilling(AiWriteResponseVO vo, Map<String, Object> billing) {
+    private static void applyBilling(AiPolishResponseVO vo, Map<String, Object> billing) {
         if (vo == null || billing == null) {
             return;
         }

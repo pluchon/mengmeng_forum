@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from modules.creation.module import CoverHintsModule, ImageGenerationModule, PostWriteModule
+from modules.creation.module import CoverHintsModule, ImageGenerationModule, PostPolishModule
 
-__all__ = ["CoverHintsModule", "ImageGenerationModule", "PostWriteModule"]
+__all__ = ["CoverHintsModule", "ImageGenerationModule", "PostPolishModule"]
