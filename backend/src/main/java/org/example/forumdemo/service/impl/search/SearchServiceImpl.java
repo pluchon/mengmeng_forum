@@ -54,6 +54,8 @@ public class SearchServiceImpl implements SearchService {
     private static final double ARTICLE_AI_HYBRID_MIN_SCORE = 0.22;
     /** AI 搜索：无字面候选时，纯向量兜底最低分（更高，减少误召回） */
     private static final double ARTICLE_AI_VECTOR_MIN_SCORE = 0.30;
+    // 帖子正文未命中时，作者语义回退的高相似度阈值
+    private static final double ARTICLE_AUTHOR_VECTOR_MIN_SCORE = 0.72;
     /** AI 用户搜索：候选集 hybrid_rank 最低分 */
     private static final double USER_AI_HYBRID_MIN_SCORE = 0.22;
     /** AI 用户搜索：纯向量兜底最低分 */
@@ -145,6 +147,10 @@ public class SearchServiceImpl implements SearchService {
         }
 
         if (rankedIds.isEmpty()) {
+            rankedIds = articleIdsByHighSimilarityAuthors(kw);
+        }
+
+        if (rankedIds.isEmpty()) {
             log.info("AI 帖子语义搜索未命中 keyword={}", kw);
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
         }
@@ -166,6 +172,26 @@ public class SearchServiceImpl implements SearchService {
         PageResult<ArticleListResponse> pageResult = new PageResult<>(
                 records, total, p, s, pages, toIdx < rankedIds.size());
         return new SearchArticleResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
+    }
+
+    // 正文未命中时，只接受高相似度作者语义命中，避免把普通用户检索扩散为无关帖子。
+    private List<Long> articleIdsByHighSimilarityAuthors(String keyword) {
+        List<Long> authorIds = extractUserHitIds(aiHubService.ragUserVectorRanked(keyword),
+                ARTICLE_AUTHOR_VECTOR_MIN_SCORE);
+        if (authorIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return articleMapper.selectPage(new Page<>(1, Constant.SEARCH_RAG_MAX_RESULTS, false), new LambdaQueryWrapper<Article>()
+                        .in(Article::getUserId, authorIds)
+                        .ne(Article::getDeleteState, DELETE_TRUE)
+                        .ne(Article::getState, STATE_FORBIDDEN)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                        .orderByDesc(Article::getUpdateTime)
+                        .select(Article::getId))
+                .getRecords()
+                .stream()
+                .map(Article::getId)
+                .toList();
     }
 
     @Override

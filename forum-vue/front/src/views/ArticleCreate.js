@@ -10,6 +10,7 @@ import { ARTICLE_TYPE } from '@/utils/articleQuestion'
 const {
   WangEditor,
   aiWorkspaceId,
+  aiWriting,
   applyAiContent,
   applyAiWorkspaceVersion,
   bindGalleryItemsRef,
@@ -49,6 +50,7 @@ const {
   renderedPreview,
   selectedBoard,
   setEditorMode,
+  setAiWriting,
   setMediaMode,
   onMdKeydown,
   submitting,

@@ -44,6 +44,7 @@ export function useArticleCreate() {
   const submitting = ref(false)
   const editorMode = ref('rich')
   const aiWorkspaceId = ref(null)
+  const aiWriting = ref(false)
   const selectedBoard = ref([])
 
   const form = reactive({
@@ -340,6 +341,10 @@ export function useArticleCreate() {
 
   function applyAiContent(text) {
     form.content = text || ''
+  }
+
+  function setAiWriting(value) {
+    aiWriting.value = Boolean(value)
   }
 
   function handleAiWorkspaceReady(payload) {
@@ -725,6 +730,7 @@ export function useArticleCreate() {
     Plus,
     WangEditor,
     aiWorkspaceId,
+    aiWriting,
     applyAiContent,
     applyAiWorkspaceVersion,
     cascaderOptions,
@@ -769,6 +775,7 @@ export function useArticleCreate() {
     submitting,
     tagIds,
     setEditorMode,
+    setAiWriting,
     setMediaMode,
     onMdKeydown,
     switchMode,

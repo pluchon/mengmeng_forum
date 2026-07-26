@@ -206,3 +206,37 @@
     grid-template-columns: 1fr;
   }
 }
+
+.editor-workspace,
+.editor-md-workspace {
+  position: relative;
+}
+
+.editor-ai-writing-mask {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--editor-accent, #e91e8c);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  backdrop-filter: blur(1px);
+}
+
+.editor-ai-writing-mask span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: editor-ai-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes editor-ai-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(1.8);
+  }
+}

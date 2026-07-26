@@ -1,13 +1,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  ZoomIn,
-  ChatLineRound,
-  Picture,
-  UserFilled,
-  Brush,
-  Avatar,
-} from '@element-plus/icons-vue'
+import { ZoomIn } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import {
@@ -42,6 +35,10 @@ function escapeHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function isImageGenerationRequest(text) {
+  return /^(画一张|生成(?:一张)?图片|帮我画|绘制|画图)/.test(String(text || '').trim())
 }
 
 /** 看板娘 AI 回复：Markdown → HTML（表格、列表、加粗等） */
@@ -188,6 +185,7 @@ export function useMascotDock() {
   const messages = ref([])
   const draft = ref('')
   const loading = ref(false)
+  const imageGenerating = ref(false)
   const deletingSessionId = ref('')
   const sessionId = ref('')
   const localSessionsByMode = ref({
@@ -287,12 +285,6 @@ export function useMascotDock() {
     }
   }
   
-  const modeTabs = [
-    { id: 'chat', label: '对话与帮助', icon: ChatLineRound },
-    { id: 'drawing', label: '画图', icon: Picture },
-    { id: 'appearance', label: '形象选择', icon: UserFilled },
-  ]
-  
   const FLASH_LLM = ['qwen-flash']
   
   function llmStorageKey() {
@@ -324,14 +316,7 @@ export function useMascotDock() {
   let stageStart = { px: 0, py: 0, ox: 0, oy: 0 }
   
   const inputPlaceholder = computed(() => {
-    switch (activeNav.value) {
-      case 'chat':
-        return '示范：帮我写发帖草稿 / 积分怎么获得 / 四川雪山好美（可代写也可问站点功能）'
-      case 'drawing':
-        return '示范：描述你想生成的图片，例如：赛博朋克风格的猫咪头像'
-      default:
-        return '说点什么…'
-    }
+    return '随心输入'
   })
   
   const vipTierNum = computed(() => {
@@ -1272,6 +1257,12 @@ export function useMascotDock() {
       ElMessage.warning('形象已保存，舞台加载失败')
     }
   }
+
+  async function switchMascot(code) {
+    if (!code || code === activeCode.value) return
+    await onPreviewPick(code)
+    await applyAppearance()
+  }
   
   function isWebGLAvailable() {
     try {
@@ -1422,7 +1413,7 @@ export function useMascotDock() {
       ElMessage.warning('请先登录')
       return
     }
-    if (activeNav.value === 'drawing' && !isVip.value) {
+    if (isImageGenerationRequest(userText) && !isVip.value) {
       ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
       return
     }
@@ -1448,12 +1439,14 @@ export function useMascotDock() {
 
     const history = buildChatHistory()
 
-    const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
+    const imageRequest = isImageGenerationRequest(text)
+    const skill = imageRequest ? 'drawing' : 'chat'
     let streamHadError = false
     let assistantIdx = -1
 
     try {
-      if (activeNav.value === 'drawing') {
+      if (imageRequest) {
+        imageGenerating.value = true
         const q = imageQuality.value === 'premium' && isVip.value ? 'premium' : 'normal'
         if (q === 'premium') showGptImageSlowToast()
         let res
@@ -1596,6 +1589,7 @@ export function useMascotDock() {
       throw e
     } finally {
       loading.value = false
+      imageGenerating.value = false
       if (assistantIdx >= 0) {
         const row = messages.value[assistantIdx]
         if (row?.streaming) {
@@ -1614,7 +1608,7 @@ export function useMascotDock() {
       ElMessage.warning('请先登录')
       return
     }
-    if (activeNav.value === 'drawing' && !isVip.value) {
+    if (isImageGenerationRequest(text) && !isVip.value) {
       ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
       return
     }
@@ -1713,6 +1707,7 @@ export function useMascotDock() {
     buildModelsPayload,
     catalog,
     startNewSession,
+    switchMascot,
     companionAvatarSrc,
     currentLlmStorageKey,
     draft,
@@ -1733,6 +1728,7 @@ export function useMascotDock() {
     hideMascotSearchImage,
     isLatestRegeneratableAssistant,
     imageQuality,
+    imageGenerating,
     initOml2dStage,
     inputPlaceholder,
     isVip,
@@ -1744,7 +1740,6 @@ export function useMascotDock() {
     loading,
     mapVoToMessages,
     messages,
-    modeTabs,
     navToSkill,
     oml2d,
     onAssistantOpened,

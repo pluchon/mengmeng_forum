@@ -84,7 +84,35 @@
             <div class="mascot-dlg-head__left">
               <img :src="companionAvatarSrc" alt="" class="mascot-dlg-companion-avatar">
               <div class="mascot-dlg-head__titles">
-                <div class="mascot-dlg-head__brand">{{ uiLabels.brandTitle }}</div>
+                <div class="mascot-dlg-head__brand">
+                  <span>{{ uiLabels.brandTitle }}</span>
+                  <el-dropdown
+                    v-if="catalog.length > 1"
+                    trigger="click"
+                    @command="switchMascot"
+                  >
+                    <button
+                      type="button"
+                      class="mascot-dlg-head__switch"
+                      title="切换形象"
+                      aria-label="切换形象"
+                    >
+                      <el-icon><Refresh /></el-icon>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-for="mascot in catalog"
+                          :key="mascot.code"
+                          :command="mascot.code"
+                          :disabled="mascot.code === activeCode"
+                        >
+                          {{ mascot.name || mascot.code }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
                 <div class="mascot-dlg-head__status">
                   <span class="mascot-dlg-head__dot" aria-hidden="true" />
                   <span>{{ userStore.isLoggedIn ? uiLabels.statusOnline : uiLabels.statusOffline }}</span>
@@ -95,51 +123,7 @@
         </template>
 
         <div class="mascot-fs-layout">
-          <div class="mascot-mode-tabs-row">
-            <div class="mascot-mode-tabs" role="tablist">
-              <button
-                v-for="tab in modeTabs"
-                :key="tab.id"
-                type="button"
-                class="mascot-mode-tab"
-                :class="{ 'mascot-mode-tab--on': activeNav === tab.id, 'mascot-mode-tab--ghost': tab.id === 'appearance' }"
-                role="tab"
-                :aria-selected="activeNav === tab.id"
-                @click="selectNav(tab.id)"
-              >
-                <el-icon><component :is="tab.icon" /></el-icon>
-                <span>{{ tab.label }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div v-if="activeNav === 'appearance'" class="mascot-appearance">
-            <p v-if="!catalog.length" class="mascot-picker-empty">{{ uiLabels.appearanceEmpty }}</p>
-            <div v-else class="mascot-appearance__panel">
-              <div class="mascot-appearance__grid">
-                <button
-                  v-for="m in catalog"
-                  :key="m.code"
-                  type="button"
-                  class="mascot-appearance__item"
-                  :class="{ 'is-active': pendingCode === m.code }"
-                  @click="onPreviewPick(m.code)"
-                >
-                  {{ m.name || m.code }}
-                </button>
-              </div>
-              <button
-                type="button"
-                class="mascot-appearance__apply"
-                :disabled="!catalog.length || !pendingCode"
-                @click="applyAppearance"
-              >
-                {{ uiLabels.applyAppearance }}
-              </button>
-            </div>
-          </div>
-
-          <template v-else>
+          <template>
             <div class="mascot-fs-body">
               <aside class="mascot-fs-sidebar">
                 <div class="mascot-fs-sidebar__header">
@@ -302,8 +286,15 @@
                         </template>
                       </div>
                     </div>
+                      <div v-if="imageGenerating" class="mascot-msg-row assistant">
+                        <img :src="companionAvatarSrc" alt="" class="mascot-msg-avatar mascot-msg-avatar--ai">
+                        <div class="mascot-image-generating" role="status">
+                          <span class="mascot-image-generating__spark" />
+                          <span>正在绘制画面</span>
+                        </div>
+                      </div>
                       <div
-                        v-if="loading && !(messages.length && messages[messages.length - 1]?.streaming)"
+                        v-else-if="loading && !(messages.length && messages[messages.length - 1]?.streaming)"
                         class="mascot-msg-row assistant"
                       >
                         <img :src="companionAvatarSrc" alt="" class="mascot-msg-avatar mascot-msg-avatar--ai">
@@ -317,17 +308,13 @@
 
                 <MascotChatInput
                   v-model="draft"
-                  v-model:llm="selectedLlm"
                   v-model:image-quality="imageQuality"
-                  :options="llmOptions"
                   :image-options="imageModelOptions"
-                  :mode="activeNav"
                   :loading="loading"
+                  :image-generating="imageGenerating"
                   :vip="isVip"
                   :placeholder="inputPlaceholder"
-                  :estimate-hint="estimateHintText"
-                  :estimate-loading="estimateLoading"
-                  :show-model-picker="false"
+                  generation-hint="AI 生成内容仅供参考，请结合自己的想法修改"
                   :show-points-pay-button="showPointsPayButton"
                   :points-pay-active="usePointsBilling"
                   @send="send"
@@ -343,23 +330,20 @@
 </template>
 
 <script setup>
-    import { Delete, EditPen, Picture, Plus, QuestionFilled, Refresh, UserFilled, ZoomIn } from '@element-plus/icons-vue'
+import { Delete, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { useMascotDock } from '@scripts/components/mascot/MascotDock'
 
 const {
-  activeNav,
-  applyAppearance,
+  activeCode,
   assistantOpen,
   catalog,
   companionAvatarSrc,
       draft,
       deleteSession,
       deletingSessionId,
-  estimateHintText,
-  estimateLoading,
   showPointsPayButton,
   togglePointsPay,
   usePointsBilling,
@@ -370,18 +354,15 @@ const {
   isLatestRegeneratableAssistant,
   imageModelOptions,
   imageQuality,
+  imageGenerating,
   inputPlaceholder,
   isVip,
-  llmOptions,
   loading,
   messages,
-  modeTabs,
   onAssistantOpened,
-  onPreviewPick,
   onScaleSliderChange,
   onStageLeave,
   onStagePointerDown,
-  pendingCode,
   regenerateAssistant,
   renderMascotMarkdown,
   ringVipTier,
@@ -389,8 +370,6 @@ const {
   scalePopoverOpen,
   scrollbarFs,
   selectLocalSession,
-  selectNav,
-  selectedLlm,
   send,
   sessionId,
   sessionListForNav,
@@ -402,6 +381,7 @@ const {
   stageUseFallback,
   stageWrapStyle,
   startNewSession,
+  switchMascot,
   uiLabels,
   userStore,
 } = useMascotDock()
