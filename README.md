@@ -143,7 +143,7 @@ flowchart TD
   AUTH --> AUDIT_J[AuditService]
   
   MASCOT_J --> MASCOT_API[/mascot/chat/]
-  AIHUB_J --> AI_API[/ai/write/]
+  AIHUB_J --> AI_API[/ai/polish/]
   AIHUB_J --> RAG_API[/rag/search/]
   
   MASCOT_API --> MASCOT_G[看板娘Graph]
@@ -166,7 +166,7 @@ flowchart TD
 现状要点：
 
 - `article_audit.py` 是真实 LangGraph 固定审核流程，并绑定 PostgreSQL checkpoint。
-- `mascot_graph.py` 是看板娘对话图，已接入站内 RAG、Tavily、地图、天气等 MCP 工具。
+- `mascot_graph.py` 先以 Supervisor 读取最近会话并决定聊天或委派生图；聊天分支已接入站内 RAG、Tavily、地图、天气等 MCP 工具，生图仍由 Java 负责计费与执行。
 - RAG 当前主要使用 Redis 保存文章 / 用户向量索引，展示前仍回到 Java / MySQL 过滤公开状态。
 - 看板娘会话消息持久化在 MySQL，Python 只接收 Java 传入的历史上下文。
 - 异步审核采用 MQ 双向回执：Java 投递审核任务，Python 回投审核结果，最终发布状态由 Java 决定。

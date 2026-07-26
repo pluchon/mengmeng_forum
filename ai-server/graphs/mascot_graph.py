@@ -27,6 +27,7 @@ from clients.dashscope_chat_client import (
 from config import settings
 from mcp.registry import invoke_tool
 from utils.mascot_article_rag import fetch_related_articles, format_related_for_prompt
+from utils.mascot_intent_router import decide_mascot_action
 from utils.mascot_mcp_orchestrator import prepare_mascot_mcp_bundle
 from utils.mascot_skill_router import route_mascot_skill
 from utils.site_help import get_site_help_snippet
@@ -42,6 +43,9 @@ class MascotState(TypedDict, total=False):
     vip_tier: int
     skill: str
     routed_skill: str
+    action: str
+    image_prompt: str
+    supervisor_usage: dict[str, Any]
     llm_route: str
     history: list[dict[str, str]]
     need_mcp_search: bool
@@ -113,6 +117,26 @@ def node_route_skill(state: MascotState) -> MascotState:
         )
         return {"routed_skill": routed}
     return {"routed_skill": "writing"}
+
+
+def node_supervisor(state: MascotState) -> MascotState:
+    """只做受控动作分派；业务执行仍由 Java 和具体模块负责。"""
+    if _vip_tier_num(state) < 1:
+        return {"action": "CHAT", "image_prompt": "", "supervisor_usage": {}}
+    action, image_prompt, usage = decide_mascot_action(
+        (state.get("message") or "").strip(),
+        state.get("history") or [],
+    )
+    return {"action": action, "image_prompt": image_prompt, "supervisor_usage": usage}
+
+
+def _route_after_supervisor(state: MascotState) -> Literal["image", "assess"]:
+    return "image" if state.get("action") == "IMAGE" else "assess"
+
+
+def node_image_action(state: MascotState) -> MascotState:
+    """声明生图委派；Java 将执行鉴权、计费和真正的生图调用。"""
+    return {"action": "IMAGE", "image_prompt": state.get("image_prompt") or ""}
 
 
 def _lc_to_openai_messages(msgs: list[Any]) -> list[dict[str, str]]:
@@ -218,6 +242,9 @@ def _prepare_mascot_context(
         "client_datetime": client_datetime or "",
     }
     state.update(node_route_skill(state))
+    state.update(node_supervisor(state))
+    if state.get("action") == "IMAGE":
+        return state
     state.update(node_assess(state))
     if state.get("need_mcp_search") and (state.get("mcp_query") or "").strip():
         state.update(node_tavily_search(state))
@@ -281,6 +308,10 @@ def stream_mascot_chat(
         vip_tier=vip_tier,
         client_datetime=client_datetime,
     )
+    if ctx.get("action") == "IMAGE":
+        yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
+        yield ("usage", ctx.get("supervisor_usage") or {})
+        return
     search_image = str(ctx.get("search_image_url") or "").strip()
     if search_image:
         yield ("meta", {"searchImageUrl": search_image})
@@ -339,6 +370,7 @@ def _skill_system_stream(
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
 你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。
+若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
 若系统已展示联网配图，正文无需再插入多张图片。
 站内相关帖子由系统在消息下方按相关度展示（0~5 条），弱相关时不要强行提及。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
@@ -511,7 +543,7 @@ def node_agent(state: MascotState) -> MascotState:
             "reply": "我现在有点累了，稍后再来找我玩吧～",
             "live2d": {},
             "suggested_appearance": None,
-            "usage": usage,
+            "usage": _merge_usage(usage, state.get("supervisor_usage")),
         }
 
     data = _parse_json_object(raw)
@@ -535,18 +567,33 @@ def node_agent(state: MascotState) -> MascotState:
         "reply": reply[:4000],
         "live2d": live2d,
         "suggested_appearance": sug,
-        "usage": usage,
+        "usage": _merge_usage(usage, state.get("supervisor_usage")),
     }
+
+
+def _merge_usage(main: dict[str, Any], supervisor: Any) -> dict[str, Any]:
+    """将 Supervisor 的轻量判断计入本次看板娘用量。"""
+    merged = dict(main or {})
+    if not isinstance(supervisor, dict):
+        return merged
+    for key in ("input_tokens", "output_tokens", "latency_ms"):
+        merged[key] = int(merged.get(key) or 0) + int(supervisor.get(key) or 0)
+    merged["estimated"] = bool(merged.get("estimated")) or bool(supervisor.get("estimated"))
+    return merged
 
 
 def build_mascot_graph() -> Any:
     g = StateGraph(MascotState)
     g.add_node("route_skill", node_route_skill)
+    g.add_node("supervisor", node_supervisor)
+    g.add_node("image", node_image_action)
     g.add_node("assess", node_assess)
     g.add_node("tavily_search", node_tavily_search)
     g.add_node("agent", node_agent)
     g.add_edge(START, "route_skill")
-    g.add_edge("route_skill", "assess")
+    g.add_edge("route_skill", "supervisor")
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"image": "image", "assess": "assess"})
+    g.add_edge("image", END)
     g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "agent": "agent"})
     g.add_edge("tavily_search", "agent")
     g.add_edge("agent", END)
@@ -590,6 +637,8 @@ def run_mascot_chat(
         "reply": out.get("reply", ""),
         "live2d": out.get("live2d") or {},
         "suggested_appearance": out.get("suggested_appearance"),
-        "usage": out.get("usage") or {},
+        "usage": out.get("usage") or out.get("supervisor_usage") or {},
         "mcp_used": mcp_used,
+        "action": out.get("action") or "CHAT",
+        "image_prompt": out.get("image_prompt") or "",
     }

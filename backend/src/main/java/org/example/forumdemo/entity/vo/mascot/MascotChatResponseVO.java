@@ -9,6 +9,7 @@ public class MascotChatResponseVO {
 
     private String sessionId;
     private String reply;
+    private String imageUrl;
     private Object live2d;
     private Object suggestedAppearance;
     private String tier;

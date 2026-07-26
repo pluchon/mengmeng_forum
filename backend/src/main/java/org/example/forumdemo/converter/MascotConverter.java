@@ -34,6 +34,7 @@ public final class MascotConverter {
         }
         vo.setSessionId(stringVal(data.get("sessionId")));
         vo.setReply(stringVal(data.get("reply")));
+        vo.setImageUrl(stringVal(data.get("imageUrl")));
         vo.setLive2d(data.get("live2d"));
         vo.setSuggestedAppearance(data.get("suggestedAppearance"));
         vo.setTier(stringVal(data.get("tier")));
