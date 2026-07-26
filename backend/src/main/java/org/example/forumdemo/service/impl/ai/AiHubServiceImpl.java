@@ -17,7 +17,6 @@ import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -50,10 +49,6 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Autowired
     private RestTemplate forumRestTemplate;
-
-    @Autowired
-    @Qualifier("aiRestTemplate")
-    private RestTemplate aiRestTemplate;
 
     private String joinUrl(String path) {
         String base = hubBaseUrl.endsWith("/") ? hubBaseUrl.substring(0, hubBaseUrl.length() - 1) : hubBaseUrl;
@@ -119,30 +114,49 @@ public class AiHubServiceImpl implements AiHubService {
         return -1;
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> invokeGateway(String taskType, String intent, Long userId, Map<String, Object> payload) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("taskType", taskType);
+        body.put("intent", intent);
+        body.put("version", "v1");
+        body.put("userContext", Collections.singletonMap("userId", userId));
+        body.put("payload", payload);
+        Map<String, Object> gateway = postJson("/api/v1/gateway/invoke", body);
+        Object success = gateway.get("success");
+        if (!(success instanceof Boolean) || !((Boolean) success)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 模块执行失败"));
+        }
+        Map<String, Object> result = new HashMap<>();
+        Object data = gateway.get("data");
+        if (data instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+        }
+        result.put("usage", gateway.get("usage"));
+        return result;
+    }
+
     @Override
     public AiHubWriteResultVO write(Long userId, AiWriteRequest request) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("user_id", userId);
-        body.put("kind", request.getKind());
-        body.put("messages", request.getMessages());
-        return AiHubConverter.toWriteResult(postJson("/api/v1/ai/write", body));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("kind", request.getKind());
+        payload.put("messages", request.getMessages());
+        return AiHubConverter.toWriteResult(invokeGateway("POST_CREATION", "WRITE", userId, payload));
     }
 
     @Override
     public AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest request) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("user_id", userId);
-        body.put("article_text", request.getArticleText());
-        return AiHubConverter.toCoverHintsResult(postJson("/api/v1/ai/cover-hints", body));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("articleText", request.getArticleText());
+        return AiHubConverter.toCoverHintsResult(invokeGateway("POST_CREATION", "COVER_HINTS", userId, payload));
     }
 
     @Override
     public AiHubImageResultVO image(Long userId, AiImageRequest request) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("user_id", userId);
-        body.put("prompt", request.getPrompt());
-        body.put("quality", request.getQuality());
-        return AiHubConverter.toImageResult(postJson(aiRestTemplate, "/api/v1/ai/image", body));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("prompt", request.getPrompt());
+        payload.put("quality", request.getQuality());
+        return AiHubConverter.toImageResult(invokeGateway("IMAGE_GENERATION", "GENERATE", userId, payload));
     }
 
     @Override
