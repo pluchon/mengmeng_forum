@@ -22,6 +22,8 @@ public interface AiHubService {
 
     AiHubImageResultVO image(Long userId, AiImageRequest request);
 
+    String summarize(String content);
+
     void indexArticleRag(RagArticleIndexDTO payload);
 
     void indexUserRag(RagUserIndexDTO payload);

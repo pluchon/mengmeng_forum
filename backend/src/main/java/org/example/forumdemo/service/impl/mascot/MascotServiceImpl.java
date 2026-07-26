@@ -50,6 +50,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -431,7 +432,7 @@ public class MascotServiceImpl implements MascotService {
         if (internalKey != null && !internalKey.isBlank()) {
             headers.set("X-Internal-Key", internalKey);
         }
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(pyBody, headers);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(gatewayRequest(pyBody), headers);
 
         if (!ephemeral && dbSessionId != null) {
             companionMemoryService.appendTextMessage(dbSessionId, "user", request.getMessage().trim());
@@ -473,6 +474,15 @@ public class MascotServiceImpl implements MascotService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, msg));
         }
 
+        Map<String, Object> moduleData = gatewayModuleData(body);
+        if (moduleData == null) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, "mascot gateway response invalid");
+            if (reservedBasic) {
+                releaseBasicSlot(user.getId());
+            }
+            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI));
+        }
         AiModelUsageDTO usage = parseUsage(body, fallbackModel);
         Map<String, Object> billing;
         try {
@@ -487,7 +497,7 @@ public class MascotServiceImpl implements MascotService {
             throw ex;
         }
 
-        String reply = body.get("reply") != null ? String.valueOf(body.get("reply")) : "";
+        String reply = moduleData.get("reply") != null ? String.valueOf(moduleData.get("reply")) : "";
         if (!ephemeral && dbSessionId != null) {
             companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
         }
@@ -495,8 +505,8 @@ public class MascotServiceImpl implements MascotService {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("sessionId", pySessionKey);
         data.put("reply", reply);
-        data.put("live2d", body.get("live2d") instanceof Map ? body.get("live2d") : Map.of());
-        data.put("suggestedAppearance", body.get("suggested_appearance"));
+        data.put("live2d", moduleData.get("live2d") instanceof Map ? moduleData.get("live2d") : Map.of());
+        data.put("suggestedAppearance", moduleData.get("suggestedAppearance"));
         data.put("tier", vip ? "vip" : "basic");
         data.put("pointsCost", billing.get("pointsCost"));
         data.put("balanceAfter", billing.get("balanceAfter"));
@@ -509,16 +519,34 @@ public class MascotServiceImpl implements MascotService {
 
     private String mascotStreamAiUrl() {
         if (mascotAiUrl == null || mascotAiUrl.isBlank()) {
-            return "http://localhost:5000/api/v1/mascot/chat/stream";
+            return "http://localhost:5000/api/v1/gateway/stream";
         }
         String u = mascotAiUrl.trim();
-        if (u.endsWith("/chat")) {
-            return u + "/stream";
+        return u.endsWith("/invoke") ? u.substring(0, u.length() - "/invoke".length()) + "/stream" : u;
+    }
+
+    private Map<String, Object> gatewayRequest(Map<String, Object> payload) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("taskType", "MASCOT");
+        request.put("intent", "CHAT");
+        request.put("version", "v1");
+        request.put("userContext", Collections.emptyMap());
+        request.put("payload", payload);
+        return request;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> gatewayModuleData(Map body) {
+        if (!(body.get("data") instanceof Map<?, ?> gateway)
+                || !Boolean.TRUE.equals(gateway.get("success"))
+                || !(gateway.get("data") instanceof Map<?, ?> data)) {
+            return null;
         }
-        if (u.endsWith("/chat/")) {
-            return u + "stream";
-        }
-        return u.replaceAll("/chat$", "/chat/stream");
+        Map<String, Object> normalized = new HashMap<>();
+        data.forEach((key, value) -> normalized.put(String.valueOf(key), value));
+        Object usage = gateway.get("usage");
+        body.put("usage", usage instanceof Map ? usage : Map.of());
+        return normalized;
     }
 
     private void sendMascotSse(SseEmitter emitter, Map<String, Object> payload) throws Exception {
@@ -687,7 +715,7 @@ public class MascotServiceImpl implements MascotService {
             }
             conn.setConnectTimeout(15_000);
             conn.setReadTimeout(180_000);
-            byte[] body = objectMapper.writeValueAsBytes(pyBody);
+            byte[] body = objectMapper.writeValueAsBytes(gatewayRequest(pyBody));
             conn.getOutputStream().write(body);
             int code = conn.getResponseCode();
             if (code < 200 || code >= 300) {
@@ -716,6 +744,31 @@ public class MascotServiceImpl implements MascotService {
                     }
                     @SuppressWarnings("unchecked")
                     Map<String, Object> chunk = objectMapper.readValue(payload, Map.class);
+                    if ("error".equals(chunk.get("type")) && chunk.get("data") instanceof Map<?, ?> errorData) {
+                        Object message = errorData.get("message");
+                        sendMascotSse(emitter, Map.of("error", message != null ? String.valueOf(message) : "AI 服务暂时不可用"));
+                        break;
+                    }
+                    if ("final".equals(chunk.get("type")) && chunk.get("data") instanceof Map<?, ?> gateway) {
+                        if (!(gateway.get("data") instanceof Map<?, ?> rawData)) {
+                            continue;
+                        }
+                        Map<String, Object> finalData = new HashMap<>();
+                        rawData.forEach((key, value) -> finalData.put(String.valueOf(key), value));
+                        Object reply = finalData.get("reply");
+                        if (reply != null && !String.valueOf(reply).isEmpty()) {
+                            String text = String.valueOf(reply);
+                            replyBuffer.append(text);
+                            sendMascotSse(emitter, Map.of("text", text));
+                        }
+                        Object usageObj = gateway.get("usage");
+                        if (usageObj instanceof Map<?, ?> usageMap) {
+                            Map<String, Object> normalizedUsage = new HashMap<>();
+                            usageMap.forEach((key, value) -> normalizedUsage.put(String.valueOf(key), value));
+                            usage = parseUsage(Map.of("usage", normalizedUsage), fallbackModel);
+                        }
+                        continue;
+                    }
                     if (chunk.get("error") != null) {
                         sendMascotSse(emitter, Map.of("error", String.valueOf(chunk.get("error"))));
                         break;

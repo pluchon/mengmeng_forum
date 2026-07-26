@@ -2,7 +2,6 @@ package org.example.forumdemo.service.impl.article;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.example.forumdemo.common.config.AiHubUrls;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.db.Article;
@@ -17,14 +16,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -76,52 +69,12 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
             }
             return;
         }
-        StringBuilder full = new StringBuilder();
-        HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) URI.create(AiHubUrls.summarizeStreamUrl()).toURL().openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-            conn.setConnectTimeout(15_000);
-            conn.setReadTimeout(180_000);
-            byte[] body = objectMapper.writeValueAsBytes(Collections.singletonMap("content", content));
-            conn.getOutputStream().write(body);
-            int code = conn.getResponseCode();
-            if (code < 200 || code >= 300) {
-                sendGuideSseChunk(emitter, Constant.SUMMARY_AI_SERVICE_UNAVAILABLE);
-                emitter.complete();
-                return;
-            }
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.startsWith("data:")) {
-                        continue;
-                    }
-                    String payload = line.substring(5).trim();
-                    if ("[DONE]".equals(payload)) {
-                        break;
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> chunk = objectMapper.readValue(payload, Map.class);
-                    Object textObj = chunk.get("text");
-                    if (textObj == null) {
-                        continue;
-                    }
-                    String piece = String.valueOf(textObj);
-                    if (piece.isEmpty()) {
-                        continue;
-                    }
-                    full.append(piece);
-                    emitter.send(SseEmitter.event().data(payload));
-                }
-            }
-            String summary = full.toString().trim();
-            if (summary.isEmpty()) {
+            String summary = aiHubService.summarize(content);
+            if (summary == null || summary.isEmpty()) {
                 sendGuideSseChunk(emitter, "AI 未能生成有效摘要，请稍后重试或充实正文后再试。");
             } else if (!isSummaryTooSimilarToBody(summary, plainText)) {
+                streamGuideTextToClient(emitter, summary);
                 Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(
                         guideKey, summary, Constant.REDIS_TTL_ARTICLE_GUIDE, TimeUnit.SECONDS);
                 if (Boolean.TRUE.equals(first)) {
@@ -138,10 +91,6 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
                 emitter.complete();
             } catch (Exception ex) {
                 emitter.completeWithError(ex);
-            }
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
             }
         }
     }

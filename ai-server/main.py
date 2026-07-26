@@ -2,7 +2,7 @@
 ai-server 启动入口.
 
 一个进程承担两件事:
-  1) Flask 暴露同步 REST API (健康检查 / validate-text / validate-image / summarize / article-rag-search)
+  1) Flask 只暴露健康检查与统一 AI Gateway
   2) 后台 daemon 线程消费 q-audit-article 跑 LangGraph, 把结果回投 forum.audit.result
 
 小项目 / 低并发, 这种"单进程多职责"足够简单透明.

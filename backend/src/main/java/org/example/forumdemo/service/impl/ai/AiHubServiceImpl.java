@@ -160,9 +160,20 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
+    public String summarize(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("content", content);
+        Object summary = invokeGateway("POST_SUMMARY", "GENERATE", null, payload).get("summary");
+        return summary != null ? String.valueOf(summary).trim() : null;
+    }
+
+    @Override
     public void indexArticleRag(RagArticleIndexDTO payload) {
         try {
-            postJson("/api/v1/rag/index-article", AiHubConverter.ragArticleIndexToMap(payload));
+            invokeGateway("RAG", "INDEX_ARTICLE", null, AiHubConverter.ragArticleIndexToMap(payload));
         } catch (Exception e) {
             log.warn("RAG 帖子索引失败 articleId={}: {}", payload != null ? payload.getArticleId() : null, e.getMessage());
         }
@@ -171,7 +182,7 @@ public class AiHubServiceImpl implements AiHubService {
     @Override
     public void indexUserRag(RagUserIndexDTO payload) {
         try {
-            postJson("/api/v1/rag/index-user", AiHubConverter.ragUserIndexToMap(payload));
+            invokeGateway("RAG", "INDEX_USER", null, AiHubConverter.ragUserIndexToMap(payload));
         } catch (Exception e) {
             log.warn("RAG 用户索引失败 userId={}: {}", payload != null ? payload.getUserId() : null, e.getMessage());
         }
@@ -184,8 +195,8 @@ public class AiHubServiceImpl implements AiHubService {
         }
         try {
             Map<String, Object> body = new HashMap<>();
-            body.put("article_id", articleId);
-            postJson("/api/v1/rag/remove-article", body);
+            body.put("articleId", articleId);
+            invokeGateway("RAG", "REMOVE_ARTICLE", null, body);
         } catch (Exception e) {
             log.warn("RAG 帖子索引删除失败 articleId={}: {}", articleId, e.getMessage());
         }
@@ -201,22 +212,9 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
-                    joinUrl("/api/v1/rag/article-vector-search"), req, Map.class);
-            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                log.warn("RAG 帖子向量 HTTP 异常 status={}", resp.getStatusCode());
-                return Collections.emptyList();
-            }
-            Map<String, Object> respBody = resp.getBody();
-            int code = parseHubCode(respBody.get("code"));
-            if (code != 200) {
-                log.warn("RAG 帖子向量业务码异常 code={} msg={}", code, respBody.get("msg"));
-                return Collections.emptyList();
-            }
-            Object results = respBody.get("results");
+            Object results = searchResults("ARTICLE", body);
             if (!(results instanceof List<?> list)) {
-                log.info("RAG 帖子向量无 results 字段 keyword={} msg={}", query.trim(), respBody.get("msg"));
+                log.info("RAG 帖子向量无有效结果 keyword={}", query.trim());
                 return Collections.emptyList();
             }
             List<Long> sorted = new ArrayList<>();
@@ -234,7 +232,7 @@ public class AiHubServiceImpl implements AiHubService {
                 }
             }
             if (sorted.isEmpty()) {
-                log.info("RAG 帖子向量召回为空 keyword={} msg={}", query.trim(), respBody.get("msg"));
+                log.info("RAG 帖子向量召回为空 keyword={}", query.trim());
             }
             return sorted;
         } catch (Exception e) {
@@ -274,13 +272,7 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
-                    joinUrl("/api/v1/rag/article-vector-search"), req, Map.class);
-            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                return Collections.emptyList();
-            }
-            Object results = resp.getBody().get("results");
+            Object results = searchResults("ARTICLE", body);
             if (!(results instanceof List<?> list)) {
                 return Collections.emptyList();
             }
@@ -305,13 +297,7 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", Collections.emptyList());
-            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
-                    joinUrl("/api/v1/rag/user-vector-search"), req, Map.class);
-            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                return Collections.emptyList();
-            }
-            Object results = resp.getBody().get("results");
+            Object results = searchResults("USER", body);
             if (!(results instanceof List<?> list)) {
                 return Collections.emptyList();
             }
@@ -336,13 +322,7 @@ public class AiHubServiceImpl implements AiHubService {
             Map<String, Object> body = new HashMap<>();
             body.put("query", query.trim());
             body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, jsonHeaders());
-            ResponseEntity<Map> resp = forumRestTemplate.postForEntity(
-                    joinUrl("/api/v1/rag/user-vector-search"), req, Map.class);
-            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                return Collections.emptyList();
-            }
-            Object results = resp.getBody().get("results");
+            Object results = searchResults("USER", body);
             if (!(results instanceof List<?> list)) {
                 return Collections.emptyList();
             }
@@ -365,5 +345,12 @@ public class AiHubServiceImpl implements AiHubService {
             log.warn("RAG 用户向量检索失败 keyword={}: {}", query.trim(), e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object searchResults(String scope, Map<String, Object> payload) {
+        payload.put("scope", scope);
+        Map<String, Object> data = invokeGateway("SEARCH", "QUERY", null, payload);
+        return "ARTICLE".equals(scope) ? data.get("articleResults") : data.get("userResults");
     }
 }
