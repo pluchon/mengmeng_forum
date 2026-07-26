@@ -8,7 +8,7 @@ from clients.dashscope_chat_client import dashscope_chat_completion
 from clients.dashscope_image import dashscope_text_to_image
 from clients.huanapi_client import huanapi_images
 from config import settings
-from graphs.ai_write_graph import run_ai_write
+from graphs.text_generation import run_text_generation
 from utils.image_mcp import enrich_image_prompt
 
 logger = logging.getLogger(__name__)
@@ -18,11 +18,27 @@ class CreationConfigError(RuntimeError):
     """创作模块所需外部配置缺失。"""
 
 
-def generate_write_content(
+def generate_polished_content(
     kind: str,
-    messages: list[dict[str, str]],
+    title: str,
+    content: str,
+    editor_mode: str,
 ) -> tuple[str, dict[str, Any]]:
-    return run_ai_write(kind, messages)
+    title_part = f"帖子标题：{title}。" if title else ""
+    natural_style = (
+        "保持原意、事实、语气和段落层次，只优化表达的流畅度与可读性。"
+        "使用自然、克制、像真人分享的中文；禁止机械套话、emoji、颜文字、图标列表、编号列表、"
+        "Markdown 代码围栏、前言、解释或多套版本。"
+    )
+    if editor_mode == "markdown":
+        output_rule = "只输出可直接替换的 Markdown 正文；除非原文已有必要结构，不新增标题或列表。"
+    else:
+        output_rule = "只输出可直接替换的富文本 HTML 片段，以 p 为主；不要 Markdown、完整 HTML 文档或代码围栏。"
+    messages = [
+        {"role": "system", "content": f"你是论坛正文润色助手。{title_part}{natural_style}{output_rule}"},
+        {"role": "user", "content": content},
+    ]
+    return run_text_generation(kind, messages)
 
 
 def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:

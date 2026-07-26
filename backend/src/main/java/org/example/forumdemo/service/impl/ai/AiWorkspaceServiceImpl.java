@@ -55,7 +55,7 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
     private static final int MAX_ARTIFACT_LENGTH = 200_000;
     private static final int MAX_MEMORY_LENGTH = 1_000;
     private static final Set<String> ARTIFACT_TYPES = Set.of(
-            "WRITE", "COVER_HINTS", "COVER_IMAGE", "TITLE", "TAGS", "CREATION_RESULT");
+            "WRITE", "POLISH", "COVER_HINTS", "COVER_IMAGE", "TITLE", "TAGS", "CREATION_RESULT");
     private static final Set<String> MEMORY_TYPES = Set.of("PREFERENCE", "WRITING_STYLE", "TOPIC");
 
     @Autowired

@@ -12,14 +12,14 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
-import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
+import org.example.forumdemo.entity.dto.ai.AiPolishRequest;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
-import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
 import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
-import org.example.forumdemo.entity.vo.ai.AiWriteResponseVO;
+import org.example.forumdemo.entity.vo.ai.AiPolishResponseVO;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
@@ -29,12 +29,13 @@ import org.example.forumdemo.service.interfaces.file.FileService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Locale;
 import java.util.Map;
 
-// AI 写作/生图用例：配额预占、Hub 调用、计费与 OSS 落库
+// AI 润色/生图用例：配额预占、Hub 调用、计费与 OSS 落库
 @Slf4j
 @Service
 public class AiCompanionApiServiceImpl implements AiCompanionApiService {
@@ -95,14 +96,18 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     }
 
     @Override
-    public AiWriteResponseVO write(Long userId, AiWriteRequest req) {
+    @Transactional(rollbackFor = Exception.class)
+    public AiPolishResponseVO polish(Long userId, AiPolishRequest req) {
         User user = requireUser(userId);
-        if (req == null || req.getMessages() == null || req.getMessages().isEmpty()) {
+        if (req == null || !StringUtils.hasText(req.getContent())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        req.setTitle(StringUtils.hasText(req.getTitle()) ? req.getTitle().trim() : "");
+        req.setContent(req.getContent().trim());
+        req.setEditorMode("markdown".equalsIgnoreCase(req.getEditorMode()) ? "markdown" : "rich");
         String kind = aiQuotaService.hasAdvancedQwenAccess(user) ? K_QWEN_PRO : K_QWEN_FLASH;
         req.setKind(kind);
-        String modelCode = modelCodeForWriteKind(kind);
+        String modelCode = modelCodeForPolishKind(kind);
         if (modelCode == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -121,7 +126,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         boolean reservedQwenFlash = false;
         boolean reservedAdvanced = false;
         AiCallBeginResult begin = aiCallRecordService.beginCall(
-                user.getId(), "ai_write", req.getClientRequestId(), modelCode);
+                user.getId(), "ai_polish", req.getClientRequestId(), modelCode);
         rejectDuplicateAiBegin(begin);
         long startMs = System.currentTimeMillis();
         try {
@@ -136,30 +141,30 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                     throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
                 }
             }
-            AiHubWriteResultVO hubResult = aiHubService.write(user.getId(), req);
+            AiHubPolishResultVO hubResult = aiHubService.polish(user.getId(), req);
             AiModelUsageDTO usage = aiPointsBillingService.normalizeUsage(hubResult.getUsage(), modelCode);
             String relatedId = StringUtils.hasText(req.getClientRequestId())
                     ? req.getClientRequestId().trim() : null;
             Map<String, Object> billing = aiCallRecordService.settleSuccess(
-                    begin, user, "ai_write", usage, relatedId,
+                    begin, user, "ai_polish", usage, relatedId,
                     Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
                     System.currentTimeMillis() - startMs);
-            AiWriteResponseVO response = AiHubConverter.toWriteResponse(hubResult, billing);
+            AiPolishResponseVO response = AiHubConverter.toPolishResponse(hubResult, billing);
             if (workspaceId == null) {
                 workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), null, req.getCheckpointId());
             }
             Long versionId = aiWorkspaceService.appendGeneratedArtifact(user.getId(), workspaceId,
-                    req.getParentVersionId(), "WRITE", artifactJson("WRITE", response), req.getCheckpointId());
+                    req.getParentVersionId(), "POLISH", artifactJson("POLISH", response), req.getCheckpointId());
             response.setWorkspaceId(workspaceId);
             response.setWorkspaceVersionId(versionId);
             return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseWriteReservation(user, reservedQwenFlash, reservedAdvanced);
+            releasePolishReservation(user, reservedQwenFlash, reservedAdvanced);
             throw ex;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseWriteReservation(user, reservedQwenFlash, reservedAdvanced);
+            releasePolishReservation(user, reservedQwenFlash, reservedAdvanced);
             throw ex;
         }
     }
@@ -300,7 +305,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         return user;
     }
 
-    private void releaseWriteReservation(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
+    private void releasePolishReservation(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
         if (reservedQwenFlash) {
             aiQuotaService.releaseQwenFlash(user);
         }
@@ -330,7 +335,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
-    private static String modelCodeForWriteKind(String kind) {
+    private static String modelCodeForPolishKind(String kind) {
         if (kind == null) {
             return null;
         }

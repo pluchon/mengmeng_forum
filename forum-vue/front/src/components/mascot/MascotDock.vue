@@ -123,8 +123,7 @@
         </template>
 
         <div class="mascot-fs-layout">
-          <template>
-            <div class="mascot-fs-body">
+          <div class="mascot-fs-body">
               <aside class="mascot-fs-sidebar">
                 <div class="mascot-fs-sidebar__header">
                   <div class="mascot-fs-sidebar__title">{{ uiLabels.sessionListTitle }}</div>
@@ -321,8 +320,7 @@
                   @toggle-points-pay="togglePointsPay"
                 />
               </div>
-            </div>
-          </template>
+          </div>
         </div>
       </el-dialog>
     </div>

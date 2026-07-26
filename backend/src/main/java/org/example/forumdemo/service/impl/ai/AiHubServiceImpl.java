@@ -7,12 +7,12 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.converter.AiHubConverter;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
-import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
+import org.example.forumdemo.entity.dto.ai.AiPolishRequest;
 import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
-import org.example.forumdemo.entity.vo.ai.AiHubWriteResultVO;
+import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
@@ -137,11 +137,13 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
-    public AiHubWriteResultVO write(Long userId, AiWriteRequest request) {
+    public AiHubPolishResultVO polish(Long userId, AiPolishRequest request) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("kind", request.getKind());
-        payload.put("messages", request.getMessages());
-        return AiHubConverter.toWriteResult(invokeGateway("POST_CREATION", "WRITE", userId, payload));
+        payload.put("title", request.getTitle());
+        payload.put("content", request.getContent());
+        payload.put("editorMode", request.getEditorMode());
+        return AiHubConverter.toPolishResult(invokeGateway("POST_CREATION", "POLISH", userId, payload));
     }
 
     @Override

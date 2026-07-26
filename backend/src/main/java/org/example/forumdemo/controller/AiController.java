@@ -10,11 +10,11 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
-import org.example.forumdemo.entity.dto.ai.AiWriteRequest;
+import org.example.forumdemo.entity.dto.ai.AiPolishRequest;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
-import org.example.forumdemo.entity.vo.ai.AiWriteResponseVO;
+import org.example.forumdemo.entity.vo.ai.AiPolishResponseVO;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,11 +43,12 @@ public class AiController {
         return Result.success(aiCompanionApiService.priceEstimate(user.getId(), skill, route, quality));
     }
 
-    @Operation(summary = "对话写作", description = "模型由服务端按会员档位自动选择")
-    @PostMapping("/write")
-    public Result<AiWriteResponseVO> write(@RequestBody AiWriteRequest req, HttpServletRequest request) {
+    /** 帖子正文一键润色 */
+    @Operation(summary = "帖子正文一键润色", description = "模型与润色提示均由服务端确定")
+    @PostMapping("/polish")
+    public Result<AiPolishResponseVO> polish(@RequestBody AiPolishRequest req, HttpServletRequest request) {
         User user = requireLoginUser(request);
-        return Result.success(aiCompanionApiService.write(user.getId(), req));
+        return Result.success(aiCompanionApiService.polish(user.getId(), req));
     }
 
     @Operation(summary = "封面推荐配图要点", description = "不计入文本写作日额，仅审计")
