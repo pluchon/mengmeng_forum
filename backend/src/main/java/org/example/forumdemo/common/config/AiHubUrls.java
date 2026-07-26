@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Python ai-server 基址（与 {@code forum.ai.hub-base-url} / {@code FORUM_AI_HUB_BASE_URL} 一致）。
- * 供 {@link org.example.forumdemo.common.utils.AiAuditUtils} 等同步 HTTP 调用使用。
+ * 供同步工具统一调用 AI Gateway。
  */
 @Slf4j
 @Component
@@ -21,7 +21,7 @@ public class AiHubUrls {
     @PostConstruct
     void init() {
         baseUrl = normalize(hubBaseUrl);
-        log.info("AI hub base URL for audit/RAG: {}", baseUrl);
+        log.info("AI Gateway base URL: {}", baseUrl);
     }
 
     private static String normalize(String raw) {
@@ -36,35 +36,7 @@ public class AiHubUrls {
         return baseUrl + suffix;
     }
 
-    public static String validateImageUrl() {
-        return path("/api/v1/validate-image");
-    }
-
-    public static String validateTextUrl() {
-        return path("/api/v1/validate-text");
-    }
-
-    public static String summarizeUrl() {
-        return path("/api/v1/summarize");
-    }
-
-    public static String summarizeStreamUrl() {
-        return path("/api/v1/summarize/stream");
-    }
-
-    public static String articleRagSearchUrl() {
-        return path("/api/v1/article-rag-search");
-    }
-
-    public static String userRagSearchUrl() {
-        return path("/api/v1/user-rag-search");
-    }
-
-    public static String gobangMoveUrl() {
-        return path("/api/v1/ai/gobang-move");
-    }
-
-    public static String jinziMoveUrl() {
-        return path("/api/v1/ai/jinzi-move");
+    public static String gatewayInvokeUrl() {
+        return path("/api/v1/gateway/invoke");
     }
 }

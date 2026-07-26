@@ -63,6 +63,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.util.concurrent.Executor;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -997,16 +998,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             if (aiInternalKey != null && !aiInternalKey.isBlank()) {
                 headers.set("X-Internal-Key", aiInternalKey);
             }
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("board", room.copyBoard());
+            payload.put("aiChess", 2);
+            payload.put("modelCode", room.getAiModelCode());
+            payload.put("useLlm", true);
             Map<String, Object> body = new HashMap<>();
-            body.put("game_code", GameConstants.GOBANG);
-            body.put("board", room.copyBoard());
-            body.put("ai_chess", 2);
-            body.put("player_chess", 1);
-            body.put("room_id", room.getRoomId());
-            body.put("model_code", room.getAiModelCode());
-            body.put("use_llm", true);
+            body.put("taskType", "GAME");
+            body.put("intent", "GOBANG_MOVE");
+            body.put("version", "v1");
+            body.put("userContext", Collections.emptyMap());
+            body.put("payload", payload);
             ResponseEntity<Map> response = gameAiRestTemplate.postForEntity(
-                    AiHubUrls.gobangMoveUrl(),
+                    AiHubUrls.gatewayInvokeUrl(),
                     new HttpEntity<>(body, headers),
                     Map.class
             );
@@ -1014,7 +1018,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 return null;
             }
             Map resp = response.getBody();
-            if (parseInt(resp.get("code"), -1) != 200 || !(resp.get("data") instanceof Map data)) {
+            if (parseInt(resp.get("code"), -1) != 200 || !(resp.get("data") instanceof Map gateway)
+                    || !Boolean.TRUE.equals(gateway.get("success"))
+                    || !(gateway.get("data") instanceof Map data)) {
                 return null;
             }
             int row = parseInt(data.get("row"), -1);
