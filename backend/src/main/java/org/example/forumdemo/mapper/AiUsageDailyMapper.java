@@ -12,16 +12,16 @@ import java.time.LocalDate;
 @Mapper
 public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
 
-    @Insert("INSERT INTO ai_usage_daily (user_id, usage_date, deepseek_write_used, advanced_llm_used, "
+    @Insert("INSERT INTO ai_usage_daily (user_id, usage_date, qwen_flash_used, advanced_llm_used, "
             + "image_normal_used, image_premium_used, companion_normal_used, companion_premium_used, "
             + "cover_hint_used, delete_state) VALUES (#{userId}, #{usageDate}, 0, 0, 0, 0, 0, 0, 0, 0) "
             + "ON DUPLICATE KEY UPDATE user_id = user_id")
     void ensureUsageRow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 
-    @Update("UPDATE ai_usage_daily SET deepseek_write_used = deepseek_write_used + 1 "
+    @Update("UPDATE ai_usage_daily SET qwen_flash_used = qwen_flash_used + 1 "
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "
-            + "AND deepseek_write_used < #{cap}")
-    int incrementDeepseekIfBelow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate,
+            + "AND qwen_flash_used < #{cap}")
+    int incrementQwenFlashIfBelow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate,
                                    @Param("cap") int cap);
 
     @Update("UPDATE ai_usage_daily SET advanced_llm_used = advanced_llm_used + 1 "
@@ -46,10 +46,10 @@ public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0")
     int incrementCoverHint(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 
-    @Update("UPDATE ai_usage_daily SET deepseek_write_used = deepseek_write_used - 1 "
+    @Update("UPDATE ai_usage_daily SET qwen_flash_used = qwen_flash_used - 1 "
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "
-            + "AND deepseek_write_used > 0")
-    int decrementDeepseek(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
+            + "AND qwen_flash_used > 0")
+    int decrementQwenFlash(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 
     @Update("UPDATE ai_usage_daily SET advanced_llm_used = advanced_llm_used - 1 "
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "

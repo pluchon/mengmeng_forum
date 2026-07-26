@@ -1,8 +1,6 @@
 /** 看板娘 · 模型思考态文案（随机语义） */
 
 const PERSONA_BY_LLM = {
-  'deepseek-flash': '小鲸鱼',
-  'deepseek-deep': '小鲸鱼',
   'qwen-flash': 'Qwen',
   'qwen-deep': 'Qwen',
 }
@@ -21,7 +19,6 @@ const PHRASE_TEMPLATES = [
 export function resolveThinkingPersona(llmId) {
   const id = (llmId || '').trim()
   if (PERSONA_BY_LLM[id]) return PERSONA_BY_LLM[id]
-  if (id.startsWith('deepseek')) return '小鲸鱼'
   if (id.startsWith('qwen')) return 'Qwen'
   return '小萌'
 }

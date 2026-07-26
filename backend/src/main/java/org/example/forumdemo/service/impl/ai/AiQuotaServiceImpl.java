@@ -19,8 +19,8 @@ public class AiQuotaServiceImpl implements AiQuotaService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
-    /** 普通用户每日 DeepSeek 写作上限 */
-    private static final int FREE_DEEPSEEK_DAILY_CAP = 10;
+    /** 普通用户每日 Qwen Flash 写作上限 */
+    private static final int FREE_QWEN_FLASH_DAILY_CAP = 10;
     /** PRO / MAX 高级模型每日上限 */
     private static final int PRO_ADVANCED_CAP = 50;
     private static final int MAX_ADVANCED_CAP = 300;
@@ -66,18 +66,18 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public boolean hasUnlimitedDeepseek(User user) {
+    public boolean hasAdvancedQwenAccess(User user) {
         return isProOrMax(user);
     }
 
     @Override
-    public void consumeDeepseekWrite(User user) {
+    public void consumeQwenFlash(User user) {
         if (isProOrMax(user)) {
             return;
         }
         LocalDate d = today();
         ensureRow(user.getId(), d);
-        int n = aiUsageDailyMapper.incrementDeepseekIfBelow(user.getId(), d, FREE_DEEPSEEK_DAILY_CAP);
+        int n = aiUsageDailyMapper.incrementQwenFlashIfBelow(user.getId(), d, FREE_QWEN_FLASH_DAILY_CAP);
         if (n != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_QUOTA_EXCEEDED));
         }
@@ -133,11 +133,11 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void releaseDeepseekWrite(User user) {
+    public void releaseQwenFlash(User user) {
         if (isProOrMax(user)) {
             return;
         }
-        aiUsageDailyMapper.decrementDeepseek(user.getId(), today());
+        aiUsageDailyMapper.decrementQwenFlash(user.getId(), today());
     }
 
     @Override

@@ -159,7 +159,7 @@ flowchart TD
   BE --> MYSQL[(MySQL)]
   RAG --> REDIS[(Redis)]
   AUDIT_G --> PG[(PostgreSQL)]
-  MASCOT_G --> MODEL[DeepSeek]
+  MASCOT_G --> MODEL[Qwen]
   HUB_SVC --> OSS[(OSS)]
 ```
 
@@ -180,7 +180,7 @@ flowchart TD
 **五子棋能力**
 
 - 快速匹配：真人优先，长时间无人时自动创建 AI 房间
-- AI 对手：Java 调 Python AI Hub；低水平玩家使用 `deepseek-v4-flash`，高水平玩家使用 `deepseek-v4-pro`；DeepSeek 不可用或返回非法坐标时才走本地规则兜底
+- AI 对手：Java 调 Python AI Hub；低水平玩家使用 `qwen3.6-flash`，高水平玩家使用 `qwen3.7-max`；Qwen 不可用或返回非法坐标时才走本地规则兜底
 - 实时对局：服务端维护权威棋盘，校验回合、坐标、棋色和观战身份；落子结果通过房间 WebSocket 主动推送
 - 计时规则：支持 10 分钟局时、60 秒步时，任一玩家超时直接结算
 - 观战与聊天：观众只读棋局，不能落子 / 认输；房间内支持文本和已购表情包，终局后禁止继续发送消息或表情
@@ -202,7 +202,7 @@ sequenceDiagram
   alt 匹配真人
     J->>Room: 创建真人房间
   else AI房间
-    J->>P: DeepSeek落子
+    J->>P: Qwen落子
   end
   Room->>J: 玩家落子
   J->>DB: 写战绩
@@ -217,7 +217,7 @@ sequenceDiagram
 
 - 快速匹配：按论坛积分分桶（青铜 / 白银 / 黄金 / 大师），同桶内真人优先配对
 - 入场门槛：开始匹配前须至少有 **3** 论坛积分；真人胜局 ±3 分，AI 胜局 ±1 分，**平局不结算积分**
-- AI 对手：队列等待约 **15 秒**无人匹配时自动创建 AI 房间；积分低于 1600 走 `deepseek-v4-flash`，达到 1600 及以上走 `deepseek-v4-pro`；DeepSeek 不可用或返回非法坐标时走本地 Minimax 兜底
+- AI 对手：队列等待约 **15 秒**无人匹配时自动创建 AI 房间；积分低于 1600 走 `qwen3.6-flash`，达到 1600 及以上走 `qwen3.7-max`；Qwen 不可用或返回非法坐标时走本地 Minimax 兜底
 - 实时对局：服务端维护权威 3×3 棋盘，校验回合、坐标、棋色；三连成线推送 `winningLine`，平局走 `END_DRAW`
 - 计时规则：支持 **2 分钟**局时、**20 秒**步时；断线保留 **30 秒**重连窗口，超时判负
 - 房间聊天：对局双方支持文本和已购表情包；**不开放观战席**，终局后禁止继续落子 / 认输 / 聊天
@@ -239,7 +239,7 @@ sequenceDiagram
   alt 真人
     J->>Room: 创建房间
   else AI(15s无人)
-    J->>P: DeepSeek落子
+    J->>P: Qwen落子
   end
   Room->>J: 玩家落子
   J->>DB: 写战绩
@@ -608,7 +608,7 @@ flowchart TD
 - 游戏入口：用户端登录后访问 `/games`，再进入 `/games/gobang`
 - WebSocket 入口：`/ws/game-center/lobby`、`/ws/games/gobang`、`/ws/games/gobang/rooms/{roomId}`
 - 对局结果依赖 MySQL；在线、匹配与多实例房间事件依赖 Redis；异步结算事件依赖 RabbitMQ
-- AI 对手依赖 `ai-server` 与 `DEEPSEEK_API_KEY`；Python 服务不可用时 Java 会使用本地规则兜底，但界面会展示兜底标识
+- AI 对手依赖 `ai-server` 与 `DASHSCOPE_API_KEY`；Python 服务不可用时 Java 会使用本地规则兜底，但界面会展示兜底标识
 
 **井字棋本地调试**
 
@@ -616,7 +616,7 @@ flowchart TD
 - WebSocket 入口：`/ws/game-center/lobby`、`/ws/games/jinzi`、`/ws/games/jinzi/rooms/{roomId}`
 - 匹配门槛：论坛积分至少 3 分；真人胜局 ±3 分，AI 胜局 ±1 分，平局不结算
 - 计时：2 分钟局时、20 秒步时；断线 30 秒内可重连，否则判负
-- AI 对手约 15 秒无人匹配后触发；同样依赖 `ai-server` 与 `DEEPSEEK_API_KEY`，不可用时走本地 Minimax 兜底
+- AI 对手约 15 秒无人匹配后触发；同样依赖 `ai-server` 与 `DASHSCOPE_API_KEY`，不可用时走本地 Minimax 兜底
 
 ### 本地密钥
 
@@ -786,12 +786,12 @@ flowchart TD
 |------|------|
 | 安全 | `JWT_SECRET`、`PII_CRYPTO_SECRET`、`FORUM_MASCOT_INTERNAL_KEY`、`FORUM_AI_INTERNAL_KEY` |
 | 数据 | `MYSQL_*`、`REDIS_PASSWORD`、`RABBITMQ_*`、`POSTGRES_*` |
-| AI | `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`（须来自 [platform.deepseek.com](https://platform.deepseek.com)，**勿与 DashScope 混用**）、`HUANAPI_*`、`TAVILY_API_KEY`、`BAIDU_MAP_API_KEY` |
+| AI | `DASHSCOPE_API_KEY`、`HUANAPI_*`、`TAVILY_API_KEY`、`BAIDU_MAP_API_KEY` |
 | OSS | `ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`、`OSS_BUCKET_NAME`、`OSS_URL_PREFIX`、`OSS_ROOT_PREFIX` |
 | OSS → ai-server | 同上 OSS 变量须注入 **forum-ai-server**（视频审核签名读私有桶） |
 | 邮件 | `MAIL_USERNAME`、`MAIL_PASSWORD` |
 
-五子棋 / 井字棋 AI 使用 DeepSeek：低水平对手走 `deepseek-v4-flash`，高水平对手走 `deepseek-v4-pro`；模型名称配置在 `ai-server/config.yaml` / `config.docker.yaml` 的 `deepseek.model_flash`、`deepseek.model_pro`。看板娘 MCP 内置 `tavily_search`、`get_current_datetime`、`map_*`，需要对应 API Key。
+五子棋 / 井字棋 AI 使用 Qwen：低水平对手走 `qwen3.6-flash`，高水平对手走 `qwen3.7-max`；模型名称配置在 `ai-server/config.yaml` / `config.docker.yaml` 的 `dashscope.model_text_flash`、`dashscope.model_text_deep`。看板娘 MCP 内置 `tavily_search`、`get_current_datetime`、`map_*`，需要对应 API Key。
 
 ---
 
@@ -822,7 +822,7 @@ flowchart TD
 
 ### 4) AI 对手一直显示本地策略兜底
 
-说明 Java 没拿到 Python / DeepSeek 的合法坐标。依次检查：`ai-server` 是否在 `5000` 端口；`FORUM_AI_INTERNAL_KEY` 是否一致；`DEEPSEEK_API_KEY` 是否有效；Python 返回坐标是否为空位。兜底不是错误，但如果 Python 已启动仍长期兜底，优先查 Python 日志里的 DeepSeek 调用失败原因。
+说明 Java 没拿到 Python / Qwen 的合法坐标。依次检查：`ai-server` 是否在 `5000` 端口；`FORUM_AI_INTERNAL_KEY` 是否一致；`DASHSCOPE_API_KEY` 是否有效；Python 返回坐标是否为空位。兜底不是错误，但如果 Python 已启动仍长期兜底，优先查 Python 日志里的 Qwen 调用失败原因。
 
 ### 5) 前端 403 / 白屏
 

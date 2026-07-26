@@ -1,6 +1,6 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { Loading, Promotion } from '@element-plus/icons-vue'
-import { findImageQualityOption, findTextLlmOption } from '@/constants/aiModels'
+import { findImageQualityOption } from '@/constants/aiModels'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -32,7 +32,6 @@ const emit = defineEmits([
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
-const activeTextOption = computed(() => findTextLlmOption(props.llm) || props.options.find(o => o.id === props.llm))
 const activeImageOption = computed(() => findImageQualityOption(props.imageQuality) || props.imageOptions[0])
 
 function resizeTextarea() {

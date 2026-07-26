@@ -65,9 +65,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     private static final int AI_PRO_SCORE_THRESHOLD = 1600;
 
-    private static final String AI_MODEL_FLASH = "deepseek-v4-flash";
+    private static final String AI_MODEL_FLASH = "qwen3.6-flash";
 
-    private static final String AI_MODEL_PRO = "deepseek-v4-pro";
+    private static final String AI_MODEL_PRO = "qwen3.7-max";
 
     private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH;
 

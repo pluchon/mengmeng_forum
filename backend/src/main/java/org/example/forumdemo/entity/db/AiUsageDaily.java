@@ -16,7 +16,7 @@ public class AiUsageDaily {
     private Long id;
     private Long userId;
     private LocalDate usageDate;
-    private Integer deepseekWriteUsed;
+    private Integer qwenFlashUsed;
     private Integer advancedLlmUsed;
     private Integer imageNormalUsed;
     private Integer imagePremiumUsed;

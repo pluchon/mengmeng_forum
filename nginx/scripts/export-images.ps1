@@ -322,8 +322,8 @@ OUT="logs-collect-$(date +%Y%m%d-%H%M%S).txt"
   echo "=== forum-backend-1 (last 120) ==="
   docker logs forum-backend-1 --tail 120 2>&1 || true
   echo ""
-  echo "=== forum-ai-server (last 120, deepseek) ==="
-  docker logs forum-ai-server --tail 120 2>&1 | grep -i -E 'deepseek|error|exception|traceback' || docker logs forum-ai-server --tail 120 2>&1 || true
+  echo "=== forum-ai-server (last 120, AI) ==="
+  docker logs forum-ai-server --tail 120 2>&1 | grep -i -E 'error|exception|traceback' || docker logs forum-ai-server --tail 120 2>&1 || true
   echo ""
   echo "=== forum-ffmpeg (last 60) ==="
   docker logs forum-ffmpeg --tail 60 2>&1 || true
@@ -331,8 +331,6 @@ OUT="logs-collect-$(date +%Y%m%d-%H%M%S).txt"
   echo "=== forum-nginx (last 40) ==="
   docker logs forum-nginx --tail 40 2>&1 || true
   echo ""
-  echo "=== DEEPSEEK_API_KEY prefix (container env) ==="
-  docker exec forum-ai-server sh -c 'echo "${DEEPSEEK_API_KEY:-EMPTY}" | cut -c1-8' 2>&1 || true
 } > "$OUT"
 echo "Wrote $OUT"
 '@
@@ -377,7 +375,6 @@ $deployTxt = @'
 【F】线上排错（勿用 docker-compose.dev.yaml，package 内没有该文件）
   bash collect-logs.sh
   # 把生成的 logs-collect-*.txt 发给开发排查
-  # DeepSeek：DEEPSEEK_API_KEY 必须是 platform.deepseek.com 的密钥（不能与 DASHSCOPE 相同）
 
 镜像均在 images/*.tar 内，含 forum-ffmpeg，勿依赖 docker pull。
 

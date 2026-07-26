@@ -6,7 +6,7 @@ import org.example.forumdemo.service.impl.game.GobangRoom;
 // AI 落子调度：决定何时调用大模型、思考最短展示时长
 public final class GameAiPlanner {
 
-    private static final String AI_MODEL_PRO = "deepseek-v4-pro";
+    private static final String AI_MODEL_PRO = "qwen3.7-max";
 
     private static final int GOBANG_LLM_MIN_STONES = 6;
 
@@ -40,9 +40,9 @@ public final class GameAiPlanner {
     }
 
     public static String formatModelLabel(String modelCode, boolean usedLlm, boolean fallback) {
-        String safe = AI_MODEL_PRO.equals(modelCode) ? AI_MODEL_PRO : "deepseek-v4-flash";
+        String safe = AI_MODEL_PRO.equals(modelCode) ? AI_MODEL_PRO : "qwen3.6-flash";
         if (usedLlm && !fallback) {
-            return safe + " · DeepSeek";
+            return safe + " · Qwen";
         }
         return safe + " · 智能引擎";
     }

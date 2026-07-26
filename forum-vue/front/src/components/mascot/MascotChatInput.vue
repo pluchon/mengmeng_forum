@@ -66,38 +66,6 @@
           </template>
         </el-dropdown>
 
-        <el-dropdown
-          v-else-if="showModelPicker"
-          trigger="click"
-          @command="(c) => emit('update:llm', c)"
-        >
-          <span class="mascot-model-selector" role="button" tabindex="0">
-            <img v-if="activeTextOption?.icon" :src="activeTextOption.icon" alt="" class="mascot-llm-ico">
-            <span class="mascot-llm-meta mascot-llm-meta--inline">
-              <span class="mascot-llm-txt">{{ activeTextOption?.label ?? '模型' }}</span>
-              <span v-if="activeTextOption?.hint" class="mascot-llm-hint">{{ activeTextOption.hint }}</span>
-            </span>
-            <span class="mascot-llm-caret">▾</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="o in options"
-                :key="o.id"
-                :command="o.id"
-              >
-                <span class="mascot-llm-row">
-                  <img :src="o.icon" alt="" class="mascot-llm-ico">
-                  <span class="mascot-llm-meta mascot-llm-meta--menu">
-                    <span class="mascot-llm-txt">{{ o.label }}</span>
-                    <span v-if="o.hint" class="mascot-llm-hint">{{ o.hint }}</span>
-                  </span>
-                </span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
         <button
           v-if="showPointsPayButton"
           type="button"
@@ -116,7 +84,7 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import { Loading, Promotion } from '@element-plus/icons-vue'
-import { findImageQualityOption, findTextLlmOption } from '@/constants/aiModels'
+import { findImageQualityOption } from '@/constants/aiModels'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -148,7 +116,6 @@ const emit = defineEmits([
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
-const activeTextOption = computed(() => findTextLlmOption(props.llm) || props.options.find(o => o.id === props.llm))
 const activeImageOption = computed(() => findImageQualityOption(props.imageQuality) || props.imageOptions[0])
 
 function resizeTextarea() {

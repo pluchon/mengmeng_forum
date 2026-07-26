@@ -39,8 +39,6 @@ import java.util.Map;
 @Service
 public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
-    private static final String K_DEEPSEEK_FLASH = "deepseek_flash";
-    private static final String K_DEEPSEEK_PRO = "deepseek_pro";
     private static final String K_QWEN_FLASH = "qwen_flash";
     private static final String K_QWEN_PRO = "qwen_pro";
 
@@ -85,8 +83,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             out = 0;
             img = 1;
         } else {
-            model = aiPointsBillingService.resolveModelFromRoute(
-                    route != null && !route.isBlank() ? route : "qwen-flash");
+            User user = requireUser(userId);
+            model = aiQuotaService.hasAdvancedQwenAccess(user)
+                    ? Constant.AI_MODEL_QWEN_DEEP : "qwen3.6-flash";
         }
         AiPriceEstimateVO vo = new AiPriceEstimateVO();
         vo.setModelCode(model);
@@ -98,10 +97,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     @Override
     public AiWriteResponseVO write(Long userId, AiWriteRequest req) {
         User user = requireUser(userId);
-        if (req == null || !StringUtils.hasText(req.getKind()) || req.getMessages() == null || req.getMessages().isEmpty()) {
+        if (req == null || req.getMessages() == null || req.getMessages().isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        String kind = req.getKind().trim().toLowerCase(Locale.ROOT);
+        String kind = aiQuotaService.hasAdvancedQwenAccess(user) ? K_QWEN_PRO : K_QWEN_FLASH;
         req.setKind(kind);
         String modelCode = modelCodeForWriteKind(kind);
         if (modelCode == null) {
@@ -119,7 +118,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                             Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
         }
 
-        boolean reservedDeepseekFree = false;
+        boolean reservedQwenFlash = false;
         boolean reservedAdvanced = false;
         AiCallBeginResult begin = aiCallRecordService.beginCall(
                 user.getId(), "ai_write", req.getClientRequestId(), modelCode);
@@ -127,12 +126,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
-                if (K_DEEPSEEK_FLASH.equals(kind) || K_DEEPSEEK_PRO.equals(kind)) {
-                    if (!aiQuotaService.hasUnlimitedDeepseek(user)) {
-                        aiQuotaService.consumeDeepseekWrite(user);
-                        reservedDeepseekFree = true;
-                    }
-                } else if (K_QWEN_FLASH.equals(kind) || K_QWEN_PRO.equals(kind)) {
+                if (K_QWEN_FLASH.equals(kind)) {
+                    aiQuotaService.consumeQwenFlash(user);
+                    reservedQwenFlash = true;
+                } else if (K_QWEN_PRO.equals(kind)) {
                     aiQuotaService.consumeAdvancedLlm(user);
                     reservedAdvanced = true;
                 } else {
@@ -158,11 +155,11 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
+            releaseWriteReservation(user, reservedQwenFlash, reservedAdvanced);
             throw ex;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
+            releaseWriteReservation(user, reservedQwenFlash, reservedAdvanced);
             throw ex;
         }
     }
@@ -303,9 +300,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         return user;
     }
 
-    private void releaseWriteReservation(User user, boolean reservedDeepseekFree, boolean reservedAdvanced) {
-        if (reservedDeepseekFree) {
-            aiQuotaService.releaseDeepseekWrite(user);
+    private void releaseWriteReservation(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
+        if (reservedQwenFlash) {
+            aiQuotaService.releaseQwenFlash(user);
         }
         if (reservedAdvanced) {
             aiQuotaService.releaseAdvancedLlm(user);
@@ -338,8 +335,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             return null;
         }
         return switch (kind) {
-            case K_DEEPSEEK_FLASH -> "deepseek-v4-flash";
-            case K_DEEPSEEK_PRO -> "deepseek-v4-pro";
             case K_QWEN_FLASH -> "qwen3.6-flash";
             case K_QWEN_PRO -> Constant.AI_MODEL_QWEN_DEEP;
             default -> null;

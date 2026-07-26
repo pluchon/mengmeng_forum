@@ -118,7 +118,6 @@ services:
     restart: unless-stopped
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       HUANAPI_IMAGE_KEY: ${HUANAPI_IMAGE_KEY:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}

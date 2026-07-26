@@ -168,10 +168,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String normalizeLlmRoute(String route) {
-        if (route == null || route.isBlank()) {
-            return "qwen-flash";
-        }
-        return route.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+        return "qwen-deep".equals(route) ? "qwen-deep" : "qwen-flash";
     }
 
     private int effectiveVipTier(User user) {
@@ -187,22 +184,11 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, User user) {
-        String route = request.getLlmProvider() != null ? request.getLlmProvider().trim().toLowerCase(Locale.ROOT) : "";
-        route = route.replace('_', '-');
         if ("help".equals(skill)) {
-            if (!vip || route.isBlank() || route.contains("deep")) {
-                return "qwen-flash";
-            }
-        }
-        // chat 由 Python 路由；深度模型仍受 VIP 档位约束（下方 tier 判断）
-        if (route.isBlank()) {
             return "qwen-flash";
         }
         int tier = effectiveVipTier(user);
-        if (route.contains("deep") && tier < Constant.VIP_TIER_PRO) {
-            return route.replace("-deep", "-flash");
-        }
-        return route;
+        return vip && tier >= Constant.VIP_TIER_PRO ? "qwen-deep" : "qwen-flash";
     }
 
     private String featureCode(String skill) {
@@ -214,21 +200,19 @@ public class MascotServiceImpl implements MascotService {
         };
     }
 
-    private void reserveAiQuota(User user, String route, boolean[] reservedDeepseek, boolean[] reservedAdvanced) {
-        if (route.startsWith("deepseek")) {
-            if (!aiQuotaService.hasUnlimitedDeepseek(user)) {
-                aiQuotaService.consumeDeepseekWrite(user);
-                reservedDeepseek[0] = true;
-            }
-        } else if (route.startsWith("qwen-deep")) {
+    private void reserveAiQuota(User user, String route, boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
+        if (route.startsWith("qwen-deep")) {
             aiQuotaService.consumeAdvancedLlm(user);
             reservedAdvanced[0] = true;
+        } else {
+            aiQuotaService.consumeQwenFlash(user);
+            reservedQwenFlash[0] = true;
         }
     }
 
-    private void releaseAiQuota(User user, boolean reservedDeepseek, boolean reservedAdvanced) {
-        if (reservedDeepseek) {
-            aiQuotaService.releaseDeepseekWrite(user);
+    private void releaseAiQuota(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
+        if (reservedQwenFlash) {
+            aiQuotaService.releaseQwenFlash(user);
         }
         if (reservedAdvanced) {
             aiQuotaService.releaseAdvancedLlm(user);
@@ -328,15 +312,10 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
-    private void reserveUsageQuota(User user, boolean vip, String skill, String route,
-                                 boolean[] reservedDeepseek, boolean[] reservedAdvanced) {
-        if (vip && ("writing".equals(skill) || "chat".equals(skill))) {
-            reserveAiQuota(user, route, reservedDeepseek, reservedAdvanced);
-            return;
-        }
-        if (!vip && route.startsWith("deepseek") && !aiQuotaService.hasUnlimitedDeepseek(user)) {
-            aiQuotaService.consumeDeepseekWrite(user);
-            reservedDeepseek[0] = true;
+    private void reserveUsageQuota(User user, String skill, String route,
+                                 boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
+        if ("writing".equals(skill) || "chat".equals(skill) || "help".equals(skill)) {
+            reserveAiQuota(user, route, reservedQwenFlash, reservedAdvanced);
         }
     }
 
@@ -376,11 +355,11 @@ public class MascotServiceImpl implements MascotService {
             reservedBasic = true;
         }
 
-        boolean[] reservedDeepseek = {false};
+        boolean[] reservedQwenFlash = {false};
         boolean[] reservedAdvanced = {false};
         if (!usePoints) {
             try {
-                reserveUsageQuota(user, vip, skill, route, reservedDeepseek, reservedAdvanced);
+                reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
             } catch (ApplicationException ex) {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
@@ -450,7 +429,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             throw ex;
         } catch (Exception e) {
             log.warn("看板娘 Python 调用失败: {}", e.getMessage());
@@ -458,7 +437,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI));
         }
 
@@ -469,7 +448,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             String msg = body.get("msg") != null ? String.valueOf(body.get("msg")) : "mascot error";
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, msg));
         }
@@ -480,7 +459,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI));
         }
         AiModelUsageDTO usage = parseUsage(body, fallbackModel);
@@ -493,7 +472,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             throw ex;
         }
 
@@ -593,11 +572,11 @@ public class MascotServiceImpl implements MascotService {
             }
         }
 
-        boolean[] reservedDeepseek = {false};
+        boolean[] reservedQwenFlash = {false};
         boolean[] reservedAdvanced = {false};
         if (!usePoints) {
             try {
-                reserveUsageQuota(user, vip, skill, route, reservedDeepseek, reservedAdvanced);
+                reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
             } catch (ApplicationException ex) {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
@@ -640,7 +619,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             try {
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "duplicate"));
                 emitter.complete();
@@ -722,7 +701,7 @@ public class MascotServiceImpl implements MascotService {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
                 }
-                releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
                 aiCallRecordService.markFailure(streamBegin, AiCallState.TIMEOUT, "stream http " + code);
                 persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用"));
@@ -815,7 +794,7 @@ public class MascotServiceImpl implements MascotService {
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
                 }
-                releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+                releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
                 aiCallRecordService.markFailure(streamBegin, AiCallState.FAILED, ex.getMessage());
                 persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
@@ -850,7 +829,7 @@ public class MascotServiceImpl implements MascotService {
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
-            releaseAiQuota(user, reservedDeepseek[0], reservedAdvanced[0]);
+            releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             if (replyBuffer.length() > 0) {
                 aiCallRecordService.settlePartialOutput(
                         streamBegin, user, featureCode(skill), fallbackModel,

@@ -110,10 +110,6 @@ class Settings:
         )
         raw["mascot"] = mc
 
-        ds = raw.get("deepseek", {}) or {}
-        ds["api_key"] = os.environ.get("DEEPSEEK_API_KEY", ds.get("api_key"))
-        raw["deepseek"] = ds
-
         hu = raw.get("huanapi", {}) or {}
         hu["base_url"] = os.environ.get("HUANAPI_BASE_URL", hu.get("base_url"))
         hu["image_key"] = os.environ.get("HUANAPI_IMAGE_KEY", hu.get("image_key"))
@@ -207,10 +203,6 @@ class Settings:
     @property
     def mascot(self) -> dict[str, Any]:
         return self.raw.get("mascot", {})
-
-    @property
-    def deepseek(self) -> dict[str, Any]:
-        return self.raw.get("deepseek", {})
 
     @property
     def huanapi(self) -> dict[str, Any]:

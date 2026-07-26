@@ -7,10 +7,10 @@ import org.example.forumdemo.entity.db.User;
  */
 public interface AiQuotaService {
 
-    /** 有效 VIP 且为 PRO/MAX 时 DeepSeek 写作不限次（不计入日额） */
-    boolean hasUnlimitedDeepseek(User user);
+    /** 有效 VIP 且为 PRO/MAX 时可使用 Qwen 深度档。 */
+    boolean hasAdvancedQwenAccess(User user);
 
-    void consumeDeepseekWrite(User user);
+    void consumeQwenFlash(User user);
 
     void consumeAdvancedLlm(User user);
 
@@ -18,7 +18,7 @@ public interface AiQuotaService {
 
     void consumeImagePremium(User user);
 
-    void releaseDeepseekWrite(User user);
+    void releaseQwenFlash(User user);
 
     void releaseAdvancedLlm(User user);
 
@@ -26,6 +26,6 @@ public interface AiQuotaService {
 
     void releaseImagePremium(User user);
 
-    /** 封面「推荐配图要点」：仅审计计数，不计入 DeepSeek 写作配额 */
+    /** 封面「推荐配图要点」：仅审计计数，不计入文本写作配额 */
     void recordCoverHint(User user);
 }

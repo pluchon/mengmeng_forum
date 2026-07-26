@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from clients.dashscope_image import dashscope_text_to_image
-from clients.deepseek_client import deepseek_chat_completion
+from clients.dashscope_chat_client import dashscope_chat_completion
 from clients.huanapi_client import huanapi_images
 from config import settings
 from graphs.ai_write_graph import run_ai_write
@@ -30,7 +30,6 @@ def generate_write_content(
 
 def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:
     """根据正文生成封面图提示词."""
-    ds = settings.deepseek
     system = (
         "你是论坛封面配图助手。根据用户正文提炼一个且仅一个「AI 绘图提示词」，"
         "必须严格使用以下单行模板（不要换行、不要列表、不要编号、不要引号包裹整句）：\n"
@@ -43,10 +42,8 @@ def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:
         {"role": "system", "content": system},
         {"role": "user", "content": article[:12000]},
     ]
-    base = ds.get("base_url") or "https://api.deepseek.com/v1"
-    model = ds.get("model_flash") or "deepseek-v4-flash"
-    key = ds.get("api_key") or ""
-    return deepseek_chat_completion(base, key, model, messages)
+    model = settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash"
+    return dashscope_chat_completion(model, messages, temperature=0.3)
 
 
 def generate_gobang_move(
@@ -56,11 +53,10 @@ def generate_gobang_move(
     *,
     use_llm: bool = True,
 ) -> dict[str, Any]:
-    """五子棋落子：战术手与本地搜索优先，仅在 use_llm 时调用 DeepSeek。"""
+    """五子棋落子：战术手与本地搜索优先，仅在需要时调用 Qwen。"""
     safe_board = _normalize_gobang_board(board)
     player_chess = 1 if ai_chess == 2 else 2
-    ds = settings.deepseek
-    model = _resolve_gobang_model(ds, model_code)
+    model = _resolve_gobang_model(settings.dashscope, model_code)
     tactical = _find_tactical_gobang_move(safe_board, ai_chess, player_chess)
     if tactical is not None:
         return {
@@ -85,8 +81,6 @@ def generate_gobang_move(
             "fallback": False,
             "usage": {"model_code": model, "estimated": True, "local": True},
         }
-    base = ds.get("base_url") or "https://api.deepseek.com/v1"
-    key = ds.get("api_key") or ""
     stones = _sparse_board_stones(safe_board)
     system = (
         "你是五子棋 AI。row/col 从 0 开始，1=黑 2=白。"
@@ -100,21 +94,18 @@ def generate_gobang_move(
     }
     usage: dict[str, Any] = {"model_code": model, "estimated": True}
     try:
-        content, usage = deepseek_chat_completion(
-            base,
-            key,
+        content, usage = dashscope_chat_completion(
             model,
             [
                 {"role": "system", "content": system},
                 {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
             ],
             timeout=8,
-            max_tokens=24,
             temperature=0,
         )
         row, col = _parse_gobang_point(content)
         if not _is_gobang_empty(safe_board, row, col):
-            raise ValueError("DeepSeek 返回了非法五子棋坐标")
+            raise ValueError("Qwen 返回了非法五子棋坐标")
         return {
             "row": row,
             "col": col,
@@ -126,7 +117,7 @@ def generate_gobang_move(
             "usage": usage,
         }
     except Exception as exc:
-        logger.warning("DeepSeek 五子棋不可用，使用 Python 本地策略兜底: %s", exc)
+        logger.warning("Qwen 五子棋不可用，使用 Python 本地策略兜底: %s", exc)
         row, col = _choose_local_gobang_move(safe_board, ai_chess, player_chess)
         return {
             "row": row,
@@ -150,8 +141,7 @@ def generate_jinzi_move(
     """井字棋落子：始终本地 minimax 战术，不调用大模型。"""
     safe_board = _normalize_jinzi_board(board)
     player_chess = 1 if ai_chess == 2 else 2
-    ds = settings.deepseek
-    model = _resolve_gobang_model(ds, model_code)
+    model = _resolve_gobang_model(settings.dashscope, model_code)
     row, col = _choose_local_jinzi_move(safe_board, ai_chess, player_chess)
     return {
         "row": row,
@@ -175,10 +165,10 @@ def _sparse_board_stones(board: list[list[int]]) -> list[dict[str, int]]:
     return stones
 
 
-def _resolve_gobang_model(ds: dict[str, Any], model_code: str | None) -> str:
+def _resolve_gobang_model(dashscope: dict[str, Any], model_code: str | None) -> str:
     requested = (model_code or "").strip()
-    flash = str(ds.get("model_flash") or "deepseek-v4-flash").strip()
-    pro = str(ds.get("model_pro") or "deepseek-v4-pro").strip()
+    flash = str(dashscope.get("model_text_flash") or dashscope.get("model_text") or "qwen3.6-flash").strip()
+    pro = str(dashscope.get("model_text_deep") or "qwen3.7-max").strip()
     if requested == pro:
         return pro
     return flash
@@ -206,7 +196,7 @@ def _parse_gobang_point(content: str) -> tuple[int, int]:
     text = (content or "").strip()
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
-        raise ValueError("DeepSeek 未返回 JSON 坐标")
+        raise ValueError("Qwen 未返回 JSON 坐标")
     data = json.loads(match.group(0))
     row = int(data.get("row"))
     col = int(data.get("col"))
@@ -233,17 +223,6 @@ def _normalize_jinzi_board(board: list[list[int]]) -> list[list[int]]:
             safe_row.append(value if value in (0, 1, 2) else 0)
         safe.append(safe_row)
     return safe
-
-
-def _parse_jinzi_point(content: str) -> tuple[int, int]:
-    text = (content or "").strip()
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        raise ValueError("DeepSeek 未返回 JSON 坐标")
-    data = json.loads(match.group(0))
-    row = int(data.get("row"))
-    col = int(data.get("col"))
-    return row, col
 
 
 def _is_jinzi_empty(board: list[list[int]], row: int, col: int) -> bool:

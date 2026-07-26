@@ -327,6 +327,7 @@
                   :placeholder="inputPlaceholder"
                   :estimate-hint="estimateHintText"
                   :estimate-loading="estimateLoading"
+                  :show-model-picker="false"
                   :show-points-pay-button="showPointsPayButton"
                   :points-pay-active="usePointsBilling"
                   @send="send"
