@@ -8,6 +8,10 @@ import uuid
 from typing import Any
 
 from modules.moderation import ContentModerationModule
+from modules.creation import CoverHintsModule, ImageGenerationModule, PostWriteModule
+from modules.game import GobangMoveModule, JiziMoveModule
+from modules.search import SearchModule
+from modules.summary import PostSummaryModule
 from runtime.contracts import ModuleRequest, ModuleRequestError
 from runtime.module_registry import ModuleRegistry
 
@@ -15,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 _registry = ModuleRegistry()
 _registry.register("CONTENT_MODERATION", "ARTICLE_AUDIT", "v1", ContentModerationModule())
+_registry.register("POST_SUMMARY", "GENERATE", "v1", PostSummaryModule())
+_registry.register("POST_CREATION", "WRITE", "v1", PostWriteModule())
+_registry.register("POST_CREATION", "COVER_HINTS", "v1", CoverHintsModule())
+_registry.register("IMAGE_GENERATION", "GENERATE", "v1", ImageGenerationModule())
+_registry.register("GAME", "GOBANG_MOVE", "v1", GobangMoveModule())
+_registry.register("GAME", "JIZI_MOVE", "v1", JiziMoveModule())
+_registry.register("SEARCH", "QUERY", "v1", SearchModule())
 
 
 def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
