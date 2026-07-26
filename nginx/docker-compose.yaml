@@ -69,7 +69,7 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/notice/center/list || exit 1"]
+      test: ["CMD-SHELL", "/bin/busybox nc -z 127.0.0.1 8080"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -125,7 +125,11 @@ services:
       AI_HUB_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       AI_REQUIRE_INTERNAL_KEY: ${AI_REQUIRE_INTERNAL_KEY:-1}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USER:-nuonuo}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-123456}
+      RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-forum-demo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
       ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
       ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
@@ -199,6 +203,7 @@ services:
   rabbitmq:
     image: rabbitmq:4.3-management
     container_name: forum-rabbitmq
+    hostname: forum-rabbitmq
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}

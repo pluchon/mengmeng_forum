@@ -1,6 +1,10 @@
 server:
   port: 10086
 spring:
+  config:
+    import:
+      - "optional:file:./nginx/.env[.properties]"
+      - "optional:file:../nginx/.env[.properties]"
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
@@ -43,7 +47,7 @@ spring:
     port: ${SPRING_RABBITMQ_PORT:56720}
     virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:forum-demo}
     username: ${SPRING_RABBITMQ_USERNAME:nuonuo}
-    password: ${SPRING_RABBITMQ_PASSWORD:123456}
+    password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:123456}}
     listener:
       simple:
         acknowledge-mode: manual

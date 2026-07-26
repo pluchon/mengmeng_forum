@@ -161,7 +161,8 @@ export function useArticleDetail() {
     replyPendingEmojis.value = replyPendingEmojis.value.filter((_, i) => i !== idx)
   }
 
-  function triggerReplyImagePick() {
+  async function triggerReplyImagePick() {
+    if (!(await ensureLoggedIn())) return
     replyImageInput.value?.click()
   }
 
@@ -169,6 +170,7 @@ export function useArticleDetail() {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
     if (!files.length) return
+    if (!(await ensureLoggedIn())) return
 
     const current = replyPendingImages.value.length
     const remaining = REPLY_IMAGE_MAX - current

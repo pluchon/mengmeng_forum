@@ -16,11 +16,59 @@ logger = logging.getLogger(__name__)
 
 _AI_SERVER_ROOT = Path(__file__).resolve().parent
 _CONFIG_PATH = Path(os.environ.get("AI_SERVER_CONFIG", str(_AI_SERVER_ROOT / "config.yaml"))).resolve()
+_LOCAL_ENV_PATH = _AI_SERVER_ROOT.parent / "nginx" / ".env"
+
+
+def _load_local_env() -> None:
+    """本地直接启动 main.py 时读取 nginx/.env，显式环境变量始终优先。"""
+    if not _LOCAL_ENV_PATH.exists():
+        return
+    try:
+        for raw_line in _LOCAL_ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key or key in os.environ:
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            os.environ[key] = value
+    except OSError:
+        logger.warning("读取本地 nginx/.env 失败，继续使用进程环境变量", exc_info=True)
+
+
+_load_local_env()
 
 
 def env_truthy(name: str) -> bool:
     """环境变量是否为真值（1 / true / yes / on，大小写不敏感）。"""
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def env_nonempty(name: str, fallback: Any) -> Any:
+    """优先读取非空环境变量，空值继续使用配置文件默认值。"""
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return fallback
+    return value.strip()
+
+
+def rabbitmq_port(fallback: Any) -> int:
+    """读取 Python 连接端口，兼容开发 Compose 的 RABBITMQ_AMQP_PORT。"""
+    raw_port = env_nonempty(
+        "RABBITMQ_PORT",
+        env_nonempty("RABBITMQ_AMQP_PORT", fallback),
+    )
+    try:
+        port = int(raw_port)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("RABBITMQ_PORT 或 RABBITMQ_AMQP_PORT 必须是有效端口") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("RABBITMQ_PORT 或 RABBITMQ_AMQP_PORT 必须在 1-65535 范围内")
+    return port
 
 
 def _load() -> dict[str, Any]:
@@ -41,11 +89,25 @@ class Settings:
         rd = raw.get("redis", {})
         rd["password"] = os.environ.get("REDIS_PASSWORD", rd.get("password"))
         rb = raw.get("rabbitmq", {})
-        rb["password"] = os.environ.get("RABBITMQ_PASSWORD", rb.get("password"))
+        rb["host"] = env_nonempty("RABBITMQ_HOST", rb.get("host"))
+        rb["port"] = rabbitmq_port(rb.get("port", 5672))
+        rb["virtual_host"] = env_nonempty(
+            "RABBITMQ_VIRTUAL_HOST",
+            env_nonempty("RABBITMQ_VHOST", rb.get("virtual_host")),
+        )
+        rb["username"] = env_nonempty(
+            "RABBITMQ_USERNAME",
+            env_nonempty("RABBITMQ_USER", rb.get("username")),
+        )
+        rb["password"] = env_nonempty("RABBITMQ_PASSWORD", rb.get("password"))
+        raw["rabbitmq"] = rb
         pg = raw.get("postgres", {})
         pg["password"] = os.environ.get("POSTGRES_PASSWORD", pg.get("password"))
         mc = raw.get("mascot", {}) or {}
-        mc["internal_key"] = os.environ.get("MASCOT_INTERNAL_KEY", mc.get("internal_key", ""))
+        mc["internal_key"] = env_nonempty(
+            "MASCOT_INTERNAL_KEY",
+            env_nonempty("FORUM_MASCOT_INTERNAL_KEY", mc.get("internal_key", "")),
+        )
         raw["mascot"] = mc
 
         ds = raw.get("deepseek", {}) or {}
@@ -58,9 +120,12 @@ class Settings:
         raw["huanapi"] = hu
 
         ah = raw.get("ai_hub", {}) or {}
-        ah["internal_key"] = os.environ.get(
+        ah["internal_key"] = env_nonempty(
             "AI_HUB_INTERNAL_KEY",
-            os.environ.get("MASCOT_INTERNAL_KEY", ah.get("internal_key", mc.get("internal_key", ""))),
+            env_nonempty(
+                "FORUM_AI_INTERNAL_KEY",
+                env_nonempty("MASCOT_INTERNAL_KEY", mc.get("internal_key", "")),
+            ),
         )
         raw["ai_hub"] = ah
 

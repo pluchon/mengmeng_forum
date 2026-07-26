@@ -46,10 +46,10 @@ export const useUserStore = defineStore('user', () => {
         state.value = res.data.state != null ? Number(res.data.state) : 0
         ipRegion.value = res.data.ipRegion || ''
       } else {
-        logout()
+        logout({ redirect: false })
       }
     } catch (error) {
-      logout()
+      logout({ redirect: false })
     }
   }
 
@@ -75,6 +75,7 @@ export const useUserStore = defineStore('user', () => {
 
   async function logout(options = {}) {
     const shouldRemoteLogout = options?.remote === true
+    const shouldRedirect = options?.redirect !== false
     if (shouldRemoteLogout && token.value) {
       try {
         await logoutCurrentUser()
@@ -97,7 +98,7 @@ export const useUserStore = defineStore('user', () => {
     gender.value = 2
     state.value = 0
     ipRegion.value = ''
-    router.push('/sign-in')
+    if (shouldRedirect) router.push('/sign-in')
   }
 
   return {

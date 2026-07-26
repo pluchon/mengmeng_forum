@@ -42,7 +42,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             } catch (Exception e) {
                 log.warn("令牌解析失败: {}, uri: {}", e.getMessage(), uri);
                 // 如果是强制登录路径，解析失败直接拦截
-                if (!isOptionalPath(uri)) {
+                if (!isOptionalPath(uri, request.getMethod())) {
                     response.setStatus(401);
                     return false;
                 }
@@ -69,7 +69,7 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
         // 到这里说明没有 Token
         // 如果是公开路径（Optional），放行
-        if (isOptionalPath(uri)) {
+        if (isOptionalPath(uri, request.getMethod())) {
             return true;
         }
         // 既没有 Token 又不是公开路径，拦截
@@ -78,7 +78,7 @@ public class LoginInterceptor implements HandlerInterceptor {
     }
 
     // 检测游客模式下是否是我们的定义好的公开路径，如果不是就进行拦截
-    private boolean isOptionalPath(String uri) {
-        return AuthApiPaths.isOptionalAuth(uri);
+    private boolean isOptionalPath(String uri, String method) {
+        return AuthApiPaths.isOptionalAuth(uri, method);
     }
 }

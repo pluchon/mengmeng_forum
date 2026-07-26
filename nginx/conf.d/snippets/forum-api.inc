@@ -30,12 +30,15 @@ location = /user/register {
 }
 
 
-location ~ ^/mail/send {
-    limit_req zone=forum_captcha_send burst=3 nodelay;
+# 游客搜索、推荐和验证码校验均不需要登录，但必须分别限制资源消耗。
+location ~ ^/captcha/(generate|check)$ {
     error_page 418 = @forum_spa_fallback;
     if ($proxy_forum_api = 0) {
         return 418;
     }
+
+    limit_req zone=forum_captcha_challenge burst=3 nodelay;
+
     proxy_pass http://forum_backend;
     proxy_http_version 1.1;
     proxy_set_header Connection        "";
@@ -43,14 +46,17 @@ location ~ ^/mail/send {
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 64k;
 }
 
-location ~ ^/sms/send {
-    limit_req zone=forum_captcha_send burst=3 nodelay;
+location ~ ^/search/(article|user)$ {
     error_page 418 = @forum_spa_fallback;
     if ($proxy_forum_api = 0) {
         return 418;
     }
+
+    limit_req zone=forum_public_search burst=5 nodelay;
+
     proxy_pass http://forum_backend;
     proxy_http_version 1.1;
     proxy_set_header Connection        "";
@@ -58,6 +64,25 @@ location ~ ^/sms/send {
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 16k;
+}
+
+location = /recommend/feed {
+    error_page 418 = @forum_spa_fallback;
+    if ($proxy_forum_api = 0) {
+        return 418;
+    }
+
+    limit_req zone=forum_public_read burst=20 nodelay;
+
+    proxy_pass http://forum_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Connection        "";
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 16k;
 }
 
 location /ws/ {
@@ -111,7 +136,7 @@ location = /mascot/chat/stream {
     proxy_send_timeout    200s;
     proxy_read_timeout    200s;
     proxy_buffering off;
-    client_max_body_size 350m;
+    client_max_body_size 2m;
 }
 
 location ~ ^/(user|board|article|articleQuestion|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|vip|game|growth|profile|recommend|ai|notice|captcha|drift-bottle|group-chat|voice)(/|$) {
@@ -133,7 +158,6 @@ location ~ ^/(user|board|article|articleQuestion|articleDanmaku|message|mail|sms
     proxy_send_timeout    120s;
     proxy_read_timeout    120s;
 
-    # 大文件上传（封面 / 聊天图）走 file 接口
-    # 视频帖上传可能超过100MB，放开到 350MB（后端 multipart 配置需同步）
-    client_max_body_size 350m;
+    # 大文件上传仅走 file 接口；其余 API 不应在鉴权前接收大请求体。
+    client_max_body_size 4m;
 }

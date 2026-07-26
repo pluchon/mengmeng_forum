@@ -71,6 +71,7 @@
                 笔记
               </button>
               <button
+                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'collect' }"
@@ -79,6 +80,7 @@
                 收藏
               </button>
               <button
+                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'liked' }"
@@ -87,6 +89,7 @@
                 点赞
               </button>
               <button
+                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'groups' }"
@@ -152,7 +155,7 @@
             </div>
           </div>
 
-          <div v-show="activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
+          <div v-if="canAccessProfileActivity && activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
             <el-alert
               v-if="favoriteFolderError"
               :title="favoriteFolderError"
@@ -206,7 +209,7 @@
             </div>
           </div>
 
-          <div v-show="activeTab === 'liked'" class="profile-content">
+          <div v-if="canAccessProfileActivity && activeTab === 'liked'" class="profile-content">
             <el-row :gutter="20">
               <el-col
                 v-for="item in likedArticles"
@@ -253,7 +256,7 @@
             </div>
           </div>
 
-          <div v-show="activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
+          <div v-if="canAccessProfileActivity && activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
             <div
               v-for="group in publicGroups"
               :key="group.id"

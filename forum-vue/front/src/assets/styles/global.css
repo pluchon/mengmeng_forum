@@ -298,6 +298,10 @@ h1, h2, h3 {
 }
 
 /* 登录提示框（挂载在 body） */
+.login-required-overlay {
+  z-index: 13000 !important;
+}
+
 .login-required-box .el-message-box__header {
   padding-right: 20px;
   text-align: center;

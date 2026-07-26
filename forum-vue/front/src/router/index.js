@@ -55,7 +55,7 @@ const router = createRouter({
           path: 'board/:id',
           name: 'articleList',
           component: () => import('../views/ArticleList.vue'),
-          meta: { requiresAuth: true },
+          meta: { public: true },
         },
         {
           path: 'article/create',
@@ -80,10 +80,16 @@ const router = createRouter({
           redirect: '/',
         },
         {
-          path: 'profile/:id?',
-          name: 'profile',
+          path: 'profile',
+          name: 'myProfile',
           component: () => import('../views/Profile.vue'),
           meta: { requiresAuth: true },
+        },
+        {
+          path: 'profile/:id',
+          name: 'profile',
+          component: () => import('../views/Profile.vue'),
+          meta: { public: true },
         },
         {
           path: 'settings',

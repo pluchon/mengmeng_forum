@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import router from '../router'
 import { useUserStore } from '../stores/user'
 import { extractApiErrorMessage } from '@/api/httpError'
+import { promptLogin } from '@/utils/loginPrompt'
 
 const request = axios.create({
   // 开发环境下使用代理，因此不需要配置写死的 base URL，由 vite.config 代理
@@ -58,12 +59,13 @@ request.interceptors.response.use(
     }
     return res
   },
-  error => {
+  async error => {
     if (error.response) {
       const status = error.response.status
       if (status === 401) {
         const userStore = useUserStore()
-        userStore.logout() // 包含 router.push('/sign-in')
+        await userStore.logout({ redirect: false })
+        await promptLogin()
       } else {
         const msg = extractApiErrorMessage(error, `请求失败（${status}）`)
         ElMessage.error(msg)
