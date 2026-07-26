@@ -1,6 +1,7 @@
 package org.example.forumdemo.service.impl.ai;
 
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.AiCallState;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -23,6 +24,7 @@ import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
+import org.example.forumdemo.service.interfaces.ai.AiWorkspaceService;
 import org.example.forumdemo.service.interfaces.file.FileService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +65,12 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     @Autowired
     private FileService fileService;
 
+    @Autowired
+    private AiWorkspaceService aiWorkspaceService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Override
     public AiPriceEstimateVO priceEstimate(Long userId, String skill, String route, String quality) {
         requireUser(userId);
@@ -100,6 +108,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        Long workspaceId = req.getWorkspaceId();
+        if (workspaceId != null) {
+            workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), workspaceId, req.getCheckpointId());
+        }
         if (usePoints) {
             aiPointsBillingService.ensureBalance(user,
                     aiPointsBillingService.estimatePoints(modelCode,
@@ -135,7 +147,15 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                     begin, user, "ai_write", usage, relatedId,
                     Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
                     System.currentTimeMillis() - startMs);
-            return AiHubConverter.toWriteResponse(hubResult, billing);
+            AiWriteResponseVO response = AiHubConverter.toWriteResponse(hubResult, billing);
+            if (workspaceId == null) {
+                workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), null, req.getCheckpointId());
+            }
+            Long versionId = aiWorkspaceService.appendGeneratedArtifact(user.getId(), workspaceId,
+                    req.getParentVersionId(), "WRITE", artifactJson("WRITE", response), req.getCheckpointId());
+            response.setWorkspaceId(workspaceId);
+            response.setWorkspaceVersionId(versionId);
+            return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseWriteReservation(user, reservedDeepseekFree, reservedAdvanced);
@@ -157,6 +177,13 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         try {
             AiHubCoverHintsResultVO result = aiHubService.coverHints(user.getId(), req);
             aiQuotaService.recordCoverHint(user);
+            if (req.getWorkspaceId() != null) {
+                Long workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), req.getWorkspaceId(), req.getCheckpointId());
+                Long versionId = aiWorkspaceService.appendGeneratedArtifact(user.getId(), workspaceId,
+                        req.getParentVersionId(), "COVER_HINTS", artifactJson("COVER_HINTS", result), req.getCheckpointId());
+                result.setWorkspaceId(workspaceId);
+                result.setWorkspaceVersionId(versionId);
+            }
             return result;
         } catch (ApplicationException ex) {
             throw ex;
@@ -242,7 +269,15 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             if (!ephemeral && dbSessionId != null) {
                 companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
             }
-            return AiHubConverter.toImageResponse(hubResult, modelCode, chargeRef, storedUrl, billing);
+            AiImageResponseVO response = AiHubConverter.toImageResponse(hubResult, modelCode, chargeRef, storedUrl, billing);
+            if (req.getWorkspaceId() != null) {
+                Long workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), req.getWorkspaceId(), req.getCheckpointId());
+                Long versionId = aiWorkspaceService.appendGeneratedArtifact(user.getId(), workspaceId,
+                        req.getParentVersionId(), "COVER_IMAGE", artifactJson("COVER_IMAGE", response), req.getCheckpointId());
+                response.setWorkspaceId(workspaceId);
+                response.setWorkspaceVersionId(versionId);
+            }
+            return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releaseImageReservation(user, reservedNormal, reservedPremium);
@@ -309,5 +344,12 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             case K_QWEN_PRO -> Constant.AI_MODEL_QWEN_DEEP;
             default -> null;
         };
+    }
+
+    private String artifactJson(String artifactType, Object payload) {
+        return objectMapper.createObjectNode()
+                .put("artifactType", artifactType)
+                .set("payload", objectMapper.valueToTree(payload))
+                .toString();
     }
 }

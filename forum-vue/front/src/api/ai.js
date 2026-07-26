@@ -51,3 +51,19 @@ export function aiPriceEstimate(params) {
   })
 }
 
+/** 查询 AI 创作工作区版本历史 */
+export function getAiWorkspaceVersions(workspaceId) {
+  return request({
+    url: `/ai/workspaces/${workspaceId}/versions`,
+    method: 'get',
+  })
+}
+
+/** 选择 AI 创作工作区版本 */
+export function selectAiWorkspaceVersion(workspaceId, versionId) {
+  return request({
+    url: `/ai/workspaces/${workspaceId}/selected-version/${versionId}`,
+    method: 'put',
+  })
+}
+

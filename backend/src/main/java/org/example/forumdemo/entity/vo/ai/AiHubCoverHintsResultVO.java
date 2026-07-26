@@ -12,4 +12,6 @@ public class AiHubCoverHintsResultVO {
     private List<String> hints;
     private List<String> themes;
     private String summary;
+    private Long workspaceId;
+    private Long workspaceVersionId;
 }

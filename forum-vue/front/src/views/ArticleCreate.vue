@@ -121,6 +121,11 @@
               :editor-mode="editorMode"
               :title="form.title"
               @apply="applyAiContent"
+              @workspace-ready="handleAiWorkspaceReady"
+            />
+            <AiWorkspaceHistory
+              :workspace-id="aiWorkspaceId"
+              @selected="applyAiWorkspaceVersion"
             />
             <div class="editor-mode-seg" role="tablist" aria-label="编辑器模式">
               <button
