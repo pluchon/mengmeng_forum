@@ -4,10 +4,56 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.prod.yml"
+echo "Forum package release: 20260722-mq-healthcheck-v2"
+
+read_env() {
+  local key="$1" line value
+  line="$(grep -E "^${key}=" .env 2>/dev/null | tail -1 || true)"
+  value="${line#*=}"
+  value="${value//$'\r'/}"
+  value="${value%\"}"; value="${value#\"}"
+  printf '%s' "$value"
+}
+
+wait_rabbitmq() {
+  local i
+  for i in $(seq 1 90); do
+    if docker exec forum-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: RabbitMQ not ready"
+  return 1
+}
+
+sync_rabbitmq_credentials() {
+  local user password vhost
+  user="$(read_env RABBITMQ_USER)"
+  password="$(read_env RABBITMQ_PASSWORD)"
+  vhost="$(read_env RABBITMQ_VHOST)"
+  user="${user:-nuonuo}"
+  vhost="${vhost:-forum-demo}"
+  [[ -n "$password" ]] || { echo "ERROR: RABBITMQ_PASSWORD is empty"; return 1; }
+
+  wait_rabbitmq
+  if docker exec forum-rabbitmq rabbitmqctl list_users -q | cut -f1 | grep -Fxq "$user"; then
+    docker exec forum-rabbitmq rabbitmqctl change_password "$user" "$password" >/dev/null
+  else
+    docker exec forum-rabbitmq rabbitmqctl add_user "$user" "$password" >/dev/null
+  fi
+  docker exec forum-rabbitmq rabbitmqctl add_vhost "$vhost" >/dev/null 2>&1 || true
+  docker exec forum-rabbitmq rabbitmqctl set_permissions -p "$vhost" "$user" ".*" ".*" ".*" >/dev/null
+  docker exec forum-rabbitmq rabbitmqctl set_user_tags "$user" administrator >/dev/null
+  docker exec forum-rabbitmq rabbitmqctl authenticate_user "$user" "$password" >/dev/null
+  echo "RabbitMQ credentials synchronized"
+}
 
 for f in .env up.sh start.sh verify-frontend-dist.sh; do
   [[ -f "$f" ]] && sed -i 's/\r$//' "$f" 2>/dev/null || true
 done
+
+test -f .env || { echo "ERROR: missing .env in package/"; exit 1; }
 
 chmod -R a+rX dist conf.d ssl 2>/dev/null || true
 mkdir -p logs/backend
@@ -37,8 +83,12 @@ for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx
   }
 done
 
-echo "==> compose up --force-recreate"
-$COMPOSE up -d --force-recreate
+echo "==> compose middleware"
+$COMPOSE up -d mysql redis rabbitmq postgres ffmpeg
+sync_rabbitmq_credentials
+
+echo "==> compose application"
+$COMPOSE up -d --force-recreate --no-deps ai-server backend-1 nginx
 
 sleep 3
 if curl -sf http://127.0.0.1/healthz >/dev/null; then

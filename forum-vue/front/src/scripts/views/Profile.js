@@ -25,6 +25,7 @@ import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
 import { parseForumDateTime } from '@/utils/datetime'
+import { ensureLoggedIn } from '@/utils/loginPrompt'
 
 const PROFILE_PAGE_SIZE = 12
 const FAVORITE_FOLDER_PAGE_SIZE = 5
@@ -97,8 +98,13 @@ export function useProfile() {
     if (isMe.value && userStore.ipRegion) return userStore.ipRegion
     return ''
   })
+  const canAccessProfileActivity = computed(() => userStore.isLoggedIn)
 
   watch(activeTab, (tab) => {
+    if (!canAccessProfileActivity.value && tab !== 'notes') {
+      activeTab.value = 'notes'
+      return
+    }
     if (tab === 'liked' && likedArticles.value.length === 0) {
       loadLikedArticles(1)
     }
@@ -563,14 +569,15 @@ export function useProfile() {
     }
     if (String(state.profileUserId) !== String(route.params.id || userStore.id)) return
     sessionStorage.removeItem(PROFILE_RETURN_KEY)
-    if (state.tab) activeTab.value = state.tab
-    if (state.tab === 'notes' && state.page) {
+    const restoredTab = canAccessProfileActivity.value ? state.tab : 'notes'
+    if (restoredTab) activeTab.value = restoredTab
+    if (restoredTab === 'notes' && state.page) {
       await loadProfile(Number(state.page) || 1)
     }
-    if (state.tab === 'liked' && state.page) {
+    if (restoredTab === 'liked' && state.page) {
       await loadLikedArticles(Number(state.page) || 1)
     }
-    if (state.tab === 'collect' && state.folderId) {
+    if (restoredTab === 'collect' && state.folderId) {
       if (!favoriteFolders.value.length) {
         await loadFavoriteFolders(Number(state.folderPage) || 1)
       }
@@ -661,7 +668,8 @@ export function useProfile() {
     return { background: `hsl(${hues[Math.floor(Math.random() * hues.length)]}, 70%, 96%)` }
   }
 
-  function handleChat() {
+  async function handleChat() {
+    if (!(await ensureLoggedIn('私信需要登录'))) return
     const uid = userInfo.value?.id
     if (uid == null) return
     messageCenterUi.open({
@@ -688,10 +696,7 @@ export function useProfile() {
   }
 
   async function toggleFollow() {
-    if (!userStore.isLoggedIn) {
-      ElMessage.warning('请先登录')
-      return
-    }
+    if (!(await ensureLoggedIn('关注用户需要登录'))) return
     const uid = userInfo.value?.id
     if (!uid || isMe.value) return
     followSaving.value = true
@@ -756,6 +761,7 @@ export function useProfile() {
 
   return {
     Camera,
+    canAccessProfileActivity,
     Lock,
     Plus,
     Star,

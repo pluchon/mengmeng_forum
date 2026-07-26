@@ -35,8 +35,10 @@ public class SearchController {
     public Result<SearchArticleResponse> searchArticle(@RequestParam String keyword,
                                                        @RequestParam(defaultValue = "1") Integer pageNum,
                                                        @RequestParam(defaultValue = "10") Integer pageSize,
-                                                       @RequestParam(required = false) String ai) {
-        boolean preferAiRag = ("1".equals(ai) || "true".equalsIgnoreCase(ai));
+                                                       @RequestParam(required = false) String ai,
+                                                       HttpServletRequest request) {
+        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         return Result.success(searchService.searchArticles(keyword, pageNum, pageSize, preferAiRag));
     }
 
@@ -48,8 +50,9 @@ public class SearchController {
                                                  @RequestParam(defaultValue = "10") Integer pageSize,
                                                  @RequestParam(required = false) String ai,
                                                  HttpServletRequest request) {
-        boolean preferAiRag = ai != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        boolean preferAiRag = loginUser != null && ai != null
+                && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         Long viewerId = loginUser == null ? null : loginUser.getId();
         return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag, viewerId));
     }

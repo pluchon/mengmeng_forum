@@ -440,7 +440,12 @@ public class ArticleServiceImpl implements ArticleService {
         User user = userService.getUserInfoById(userId);
         PageResult<ArticleBriefVO> pageResult = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(),
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
-        return new ArticleListByUserIdPageResponse(pageResult, new UserBriefVO(user), isOwner);
+        UserBriefVO profileUser = new UserBriefVO(user);
+        if (!isOwner) {
+            profileUser.setVipExpireAt(null);
+            profileUser.setIpRegion(null);
+        }
+        return new ArticleListByUserIdPageResponse(pageResult, profileUser, isOwner);
     }
 
     private Page<Article> buildUserArticlePage(Long userId, int pageNum, int pageSize) {

@@ -145,6 +145,7 @@ $startSh = @'
 set -euo pipefail
 cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.prod.yml"
+echo "Forum package release: 20260722-mq-healthcheck-v2"
 
 fix_crlf() {
   for f in .env start.sh verify-frontend-dist.sh reset-db.sh; do
@@ -201,8 +202,42 @@ wait_mysql() {
   echo "ERROR: MySQL not ready"; return 1
 }
 
-echo "==> compose up"
-$COMPOSE up -d --force-recreate
+wait_rabbitmq() {
+  local i
+  for i in $(seq 1 90); do
+    if docker exec forum-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: RabbitMQ not ready"; return 1
+}
+
+sync_rabbitmq_credentials() {
+  local user password vhost
+  user="$(read_env RABBITMQ_USER)"
+  password="$(read_env RABBITMQ_PASSWORD)"
+  vhost="$(read_env RABBITMQ_VHOST)"
+  user="${user:-nuonuo}"
+  vhost="${vhost:-forum-demo}"
+  [[ -n "$password" ]] || { echo "ERROR: RABBITMQ_PASSWORD is empty"; return 1; }
+
+  wait_rabbitmq
+  if docker exec forum-rabbitmq rabbitmqctl list_users -q | cut -f1 | grep -Fxq "$user"; then
+    docker exec forum-rabbitmq rabbitmqctl change_password "$user" "$password" >/dev/null
+  else
+    docker exec forum-rabbitmq rabbitmqctl add_user "$user" "$password" >/dev/null
+  fi
+  docker exec forum-rabbitmq rabbitmqctl add_vhost "$vhost" >/dev/null 2>&1 || true
+  docker exec forum-rabbitmq rabbitmqctl set_permissions -p "$vhost" "$user" ".*" ".*" ".*" >/dev/null
+  docker exec forum-rabbitmq rabbitmqctl set_user_tags "$user" administrator >/dev/null
+  docker exec forum-rabbitmq rabbitmqctl authenticate_user "$user" "$password" >/dev/null
+  echo "RabbitMQ credentials synchronized"
+}
+
+echo "==> compose middleware"
+$COMPOSE up -d mysql redis rabbitmq postgres ffmpeg
+sync_rabbitmq_credentials
 
 root_pw="$(read_env MYSQL_ROOT_PASSWORD)"
 wait_mysql "$root_pw" || true
@@ -215,9 +250,10 @@ if [[ -f sql/create.sql ]] && [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
     pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
     docker exec -i forum-postgres psql -U "${pu}" -d "${pd}" < sql/postgres_ai_session.sql || true
   fi
-  echo "==> restart backend/nginx after DB init"
-  $COMPOSE restart backend-1 nginx 2>/dev/null || $COMPOSE up -d backend-1 nginx
 fi
+
+echo "==> compose application"
+$COMPOSE up -d --force-recreate --no-deps ai-server backend-1 nginx
 
 echo "--- middleware ---"
 $COMPOSE ps

@@ -41,7 +41,7 @@ function Invoke-DockerBuild {
         [string]$DisplayName
     )
     Step "Docker build $DisplayName"
-    & docker build --progress=plain @dockerBuildProxyArgs -t $Tag $Context
+    & docker build --pull=false --progress=plain @dockerBuildProxyArgs -t $Tag $Context
     if ($LASTEXITCODE -ne 0) { throw "$DisplayName image build failed" }
     Write-Host "Image $Tag ready" -ForegroundColor Green
 }
