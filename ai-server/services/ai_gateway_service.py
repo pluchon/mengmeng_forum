@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from modules.moderation import ContentModerationModule
+from modules.mascot import MascotChatModule
 from modules.creation import CoverHintsModule, ImageGenerationModule, PostWriteModule
 from modules.game import GobangMoveModule, JiziMoveModule
 from modules.search import SearchModule
@@ -26,6 +27,7 @@ _registry.register("IMAGE_GENERATION", "GENERATE", "v1", ImageGenerationModule()
 _registry.register("GAME", "GOBANG_MOVE", "v1", GobangMoveModule())
 _registry.register("GAME", "JIZI_MOVE", "v1", JiziMoveModule())
 _registry.register("SEARCH", "QUERY", "v1", SearchModule())
+_registry.register("MASCOT", "CHAT", "v1", MascotChatModule())
 
 
 def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
