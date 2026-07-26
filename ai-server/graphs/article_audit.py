@@ -44,6 +44,7 @@ from graphs.prompts import (
     TEXT_AUDIT_TEMPLATE,
 )
 from graphs.state import AuditState
+from runtime.ai_runtime import AiRuntime
 from utils import cache as semantic_cache
 from utils.html import clean_html
 from utils.image import fetch_image_bytes, to_data_url, validate_image_bytes
@@ -55,16 +56,20 @@ logger = logging.getLogger(__name__)
 _FINAL_APPROVED = "APPROVED"
 _FINAL_REJECTED = "REJECTED"
 _FINAL_ERROR = "AUDIT_ERROR"
+_runtime = AiRuntime()
 
 
 # ────────────────────────────────────────────────────────────
 # 节点实现
 # ────────────────────────────────────────────────────────────
-def _llm_text(prompt_inputs: dict, *, label: str) -> str | None:
+def _llm_text(prompt_inputs: dict, *, label: str, trace_id: str) -> str | None:
     """文本类 LLM 调用; 失败返回 None"""
     try:
-        chain = TEXT_AUDIT_TEMPLATE | text_llm()
-        resp = chain.invoke(prompt_inputs)
+        resp = _runtime.call_llm(
+            lambda: (TEXT_AUDIT_TEMPLATE | text_llm()).invoke(prompt_inputs),
+            trace_id=trace_id,
+            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+        )
     except Exception:
         logger.exception("[graph:%s] LLM 调用失败", label)
         return None
@@ -105,7 +110,11 @@ def node_validate_text(state: AuditState) -> AuditState:
         new_state["text_result"] = cached
         return new_state
 
-    raw = _llm_text({"title": title, "text": plain or "(无正文)"}, label="text")
+    raw = _llm_text(
+        {"title": title, "text": plain or "(无正文)"},
+        label="text",
+        trace_id=str(state.get("task_id") or ""),
+    )
     if raw is None:
         # LLM 失败 -> 走 AUDIT_ERROR; 这里设置一个错误占位, 由 route 路由到 finalize
         new_state["text_result"] = {"allow": False, "reason": "审核服务暂时不可用", "error": True}
@@ -119,39 +128,46 @@ def node_validate_text(state: AuditState) -> AuditState:
     return new_state
 
 
-def _describe_image(image_bytes: bytes) -> str:
+def _describe_image(image_bytes: bytes, *, trace_id: str) -> str:
     fmt = validate_image_bytes(image_bytes)
     if not fmt:
         return ""
     data_url = to_data_url(image_bytes, fmt)
     try:
-        resp = vision_llm().invoke([HumanMessage(content=[
-            {"image": data_url},
-            {"text": IMAGE_DESC_PROMPT},
-        ])])
-    except Exception:
-        logger.warning("[graph:image] qwen3-vl-flash 图片描述失败，尝试 qwen3-vl-plus")
-        try:
-            resp = vision_llm_fallback().invoke([HumanMessage(content=[
+        resp = _runtime.call_llm(
+            lambda: vision_llm().invoke([HumanMessage(content=[
                 {"image": data_url},
                 {"text": IMAGE_DESC_PROMPT},
-            ])])
-        except Exception:
-            logger.exception("[graph:image] 生成图片描述失败（含兜底）")
-            return ""
+            ])]),
+            trace_id=trace_id,
+            model_name=str(settings.dashscope.get("model_vision") or "qwen3-vl-flash"),
+            fallback=lambda: vision_llm_fallback().invoke([HumanMessage(content=[
+                {"image": data_url},
+                {"text": IMAGE_DESC_PROMPT},
+            ])]),
+            fallback_model_name=str(
+                settings.dashscope.get("model_vision_fallback") or "qwen3-vl-plus"
+            ),
+        )
+    except Exception:
+        logger.exception("[graph:image] 生成图片描述失败（含兜底）")
+        return ""
     return _extract_text(resp)
 
 
-def _audit_image_bytes(img_bytes: bytes, *, source: str = "") -> dict:
+def _audit_image_bytes(img_bytes: bytes, *, source: str = "", trace_id: str = "") -> dict:
     """对已下载的图片 bytes 做视觉描述 + 文本审核."""
     if not img_bytes:
         return {"url": source, "allow": False, "reason": "图片无法拉取或格式不支持"}
-    desc = _describe_image(img_bytes)
+    desc = _describe_image(img_bytes, trace_id=trace_id)
     if not desc:
         return {"url": source, "allow": False, "reason": "图片识别失败"}
     try:
-        chain = IMAGE_AUDIT_TEMPLATE | text_llm()
-        resp = chain.invoke({"desc": desc})
+        resp = _runtime.call_llm(
+            lambda: (IMAGE_AUDIT_TEMPLATE | text_llm()).invoke({"desc": desc}),
+            trace_id=trace_id,
+            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+        )
     except Exception:
         logger.exception("[graph:image] 审核 LLM 失败")
         return {"url": source, "allow": False, "reason": "图片审核服务异常", "error": True}
@@ -161,14 +177,14 @@ def _audit_image_bytes(img_bytes: bytes, *, source: str = "") -> dict:
             "reason": "" if allowed else f"图片不合规({desc[:30]})"}
 
 
-def _audit_single_image(url: str) -> dict:
+def _audit_single_image(url: str, *, trace_id: str) -> dict:
     """拉远程图 -> 视觉描述 -> 文本审核"""
     if not url:
         return {"url": url, "allow": True, "reason": "skip empty"}
     img_bytes = fetch_image_bytes(url)
     if not img_bytes:
         return {"url": url, "allow": False, "reason": "图片无法拉取或格式不支持"}
-    return _audit_image_bytes(img_bytes, source=url)
+    return _audit_image_bytes(img_bytes, source=url, trace_id=trace_id)
 
 
 def node_validate_video(state: AuditState) -> AuditState:
@@ -177,7 +193,11 @@ def node_validate_video(state: AuditState) -> AuditState:
         return {"video_result": {"allow": True, "reason": "skip empty"}}
     result = audit_video_url(
         url,
-        image_audit_fn=lambda b: _audit_image_bytes(b, source=url),
+        image_audit_fn=lambda b: _audit_image_bytes(
+            b,
+            source=url,
+            trace_id=str(state.get("task_id") or ""),
+        ),
     )
     return {"video_result": result}
 
@@ -195,7 +215,10 @@ def node_validate_images(state: AuditState) -> AuditState:
     max_workers = int(settings.audit.get("max_image_workers", 3))
     results: list[dict] = []
     with cf.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for r in pool.map(_audit_single_image, urls):
+        for r in pool.map(
+            lambda url: _audit_single_image(url, trace_id=str(state.get("task_id") or "")),
+            urls,
+        ):
             results.append(r)
     return {"image_results": results}
 
@@ -206,8 +229,11 @@ def node_summarize(state: AuditState) -> AuditState:
     if not plain or len(plain) < min_len:
         return {"summary": plain[:100] if plain else ""}
     try:
-        chain = SUMMARY_TEMPLATE | text_llm(temperature=0.3)
-        resp = chain.invoke({"text": plain})
+        resp = _runtime.call_llm(
+            lambda: (SUMMARY_TEMPLATE | text_llm(temperature=0.3)).invoke({"text": plain}),
+            trace_id=str(state.get("task_id") or ""),
+            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+        )
     except Exception:
         logger.exception("[graph:summarize] 摘要 LLM 失败")
         return {"summary": ""}
