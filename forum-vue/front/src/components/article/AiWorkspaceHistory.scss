@@ -1,0 +1,55 @@
+.ai-workspace-history {
+  min-width: 150px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(78, 55, 62, 0.12);
+}
+
+.ai-workspace-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-workspace-history-title {
+  color: #61575f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-workspace-history-state {
+  max-width: 220px;
+  margin-top: 4px;
+  color: #8b8188;
+  font-size: 12px;
+}
+
+.ai-workspace-history-state--error {
+  color: #c2576a;
+}
+
+.ai-workspace-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.ai-workspace-history-item {
+  display: inline-flex;
+  gap: 6px;
+  border: 1px solid rgba(78, 55, 62, 0.14);
+  border-radius: 7px;
+  padding: 3px 6px;
+  color: #6c6269;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ai-workspace-history-item:hover:not(:disabled),
+.ai-workspace-history-item.is-selected {
+  border-color: rgba(204, 54, 83, 0.4);
+  color: #b03d59;
+  background: #fff4f6;
+}

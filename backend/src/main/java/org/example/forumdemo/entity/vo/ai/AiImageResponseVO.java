@@ -16,4 +16,6 @@ public class AiImageResponseVO {
     private Integer balanceAfter;
     private String billingMode;
     private AiUsageStatsVO usageStats;
+    private Long workspaceId;
+    private Long workspaceVersionId;
 }

@@ -2,13 +2,16 @@ import { InfoFilled, Picture, VideoCamera } from '@element-plus/icons-vue'
 import ArticleCreateGallerySection from '@/components/article/ArticleCreateGallerySection.vue'
 import ArticleCreateVideoSection from '@/components/article/ArticleCreateVideoSection.vue'
 import ArticleAiWriteAssist from '@/components/article/ArticleAiWriteAssist.vue'
+import AiWorkspaceHistory from '@/components/article/AiWorkspaceHistory.vue'
 import ArticleTagEditor from '@/components/article/ArticleTagEditor.vue'
 import { useArticleCreate } from '@scripts/views/ArticleCreate'
 import { ARTICLE_TYPE } from '@/utils/articleQuestion'
 
 const {
   WangEditor,
+  aiWorkspaceId,
   applyAiContent,
+  applyAiWorkspaceVersion,
   bindGalleryItemsRef,
   canAddGallery,
   cascaderOptions,
@@ -27,6 +30,7 @@ const {
   galleryUploading,
   videoInputRef,
   handleBoardChange,
+  handleAiWorkspaceReady,
   handleCancel,
   handleMdFileSelected,
   handleMdInsertImage,

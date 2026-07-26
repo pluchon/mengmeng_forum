@@ -15,4 +15,6 @@ public class AiWriteResponseVO {
     private Integer balanceAfter;
     private String billingMode;
     private AiUsageStatsVO usageStats;
+    private Long workspaceId;
+    private Long workspaceVersionId;
 }
