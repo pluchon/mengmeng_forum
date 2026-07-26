@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
-from services.ai_hub_service import generate_cover_hints, generate_image, generate_write_content
+from modules.creation.service import generate_cover_hints, generate_image, generate_write_content
 
 
 class PostWriteModule:

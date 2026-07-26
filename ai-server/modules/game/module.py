@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
-from services.ai_hub_service import generate_gobang_move, generate_jinzi_move
+from modules.game.service import generate_gobang_move, generate_jinzi_move
 
 
 class GobangMoveModule:
