@@ -9,32 +9,26 @@
       @show="onPanelShow"
     >
       <template #reference>
-        <button type="button" class="article-ai-write-trigger" :disabled="loading">
+        <button type="button" class="article-ai-write-trigger" :disabled="loading" title="AI 灵感">
           <el-icon class="article-ai-write-trigger-icon"><MagicStick /></el-icon>
-          AI 写作
         </button>
       </template>
 
       <div class="article-ai-write-panel">
-        <p class="article-ai-write-title">AI 辅助写作</p>
-        <p class="article-ai-write-hint">
-          将按当前{{ editorMode === 'markdown' ? ' Markdown ' : '富文本' }}模式生成正文并填入编辑器
-        </p>
-
-        <label class="article-ai-write-label">写作要求</label>
+        <button type="button" class="article-ai-write-close" aria-label="关闭" @click="panelOpen = false">×</button>
+        <p class="article-ai-write-title">{{ panelTitle }}</p>
         <el-input
           v-model="prompt"
           type="textarea"
-          :rows="4"
-          maxlength="800"
+          :rows="3"
+          maxlength="50"
           show-word-limit
-          placeholder="例如：写一篇关于 Spring Boot 自动配置原理的教程，分章节、语气友好"
+          :placeholder="panelTitle === 'AI 灵感' ? '写下想表达的主题或角度' : '写下希望调整的方向'"
         />
 
         <div class="article-ai-write-actions">
-          <el-button size="small" @click="panelOpen = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="loading" @click="runWrite">
-            生成并填入
+          <el-button class="article-ai-write-generate" type="primary" :loading="loading" @click="runWrite">
+            生成
           </el-button>
         </div>
       </div>

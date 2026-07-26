@@ -1,8 +1,10 @@
 .article-ai-write-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 1px solid rgba(233, 30, 140, 0.35);
   border-radius: 8px;
   color: var(--editor-accent, #e91e8c);
@@ -27,27 +29,29 @@
 }
 
 .article-ai-write-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .article-ai-write-title {
-  margin: 0;
+  margin: 2px 0 4px;
+  text-align: center;
   font-size: 15px;
   font-weight: 600;
 }
 
-.article-ai-write-hint {
-  margin: 0 0 4px;
-  color: #888;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.article-ai-write-label {
-  color: #666;
-  font-size: 12px;
+.article-ai-write-close {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  border: 0;
+  background: transparent;
+  color: #9ba1ad;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .article-ai-write-select {
@@ -73,8 +77,10 @@
 }
 
 .article-ai-write-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  display: block;
   margin-top: 4px;
+}
+
+.article-ai-write-generate {
+  width: 100%;
 }

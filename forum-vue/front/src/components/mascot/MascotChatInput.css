@@ -103,6 +103,20 @@
   max-width: min(100%, 280px);
 }
 
+.mascot-model-selector.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mascot-generation-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mascot-llm-caret {
   opacity: 0.65;
   font-size: 10px;

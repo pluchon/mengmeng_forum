@@ -94,6 +94,14 @@
           <div class="editor-content-head">
             <div class="editor-field-label editor-field-label--inline">
               <span class="editor-req">*</span> {{ form.articleType === ARTICLE_TYPE.QUESTION ? '问题描述' : '内容' }}
+              <ArticleAiWriteAssist
+                :editor-mode="editorMode"
+                :title="form.title"
+                :content="form.content"
+                @apply="applyAiContent"
+                @generating="setAiWriting"
+                @workspace-ready="handleAiWorkspaceReady"
+              />
             </div>
             <div class="editor-content-head-tools">
             <div class="editor-media-toggle">
@@ -117,12 +125,6 @@
               </button>
               <span class="editor-media-toggle__thumb" :class="{ 'is-right': mediaMode === 'video' }" />
             </div>
-            <ArticleAiWriteAssist
-              :editor-mode="editorMode"
-              :title="form.title"
-              @apply="applyAiContent"
-              @workspace-ready="handleAiWorkspaceReady"
-            />
             <AiWorkspaceHistory
               :workspace-id="aiWorkspaceId"
               @selected="applyAiWorkspaceVersion"
@@ -154,6 +156,7 @@
           </div>
 
           <div v-if="editorMode === 'rich'" class="editor-workspace editor-workspace--single">
+            <div v-if="aiWriting" class="editor-ai-writing-mask"><span />正在组织文字</div>
             <div class="editor-container rich-container">
               <WangEditor
                 v-model="form.content"
@@ -165,6 +168,7 @@
           </div>
 
           <div v-else class="editor-md-workspace">
+            <div v-if="aiWriting" class="editor-ai-writing-mask"><span />正在组织文字</div>
             <div class="editor-container md-container">
               <div class="md-toolbar">
                 <template v-if="isEdit">

@@ -6,27 +6,21 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   llm: { type: String, default: 'qwen-flash' },
   imageQuality: { type: String, default: 'normal' },
-  options: { type: Array, default: () => [] },
   imageOptions: { type: Array, default: () => [] },
-  mode: { type: String, default: 'chat' },
   loading: { type: Boolean, default: false },
+  imageGenerating: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '说点什么…' },
   vip: { type: Boolean, default: false },
-  showModelPicker: { type: Boolean, default: true },
-  estimatePoints: { type: Number, default: null },
-  estimateLoading: { type: Boolean, default: false },
-  estimateHint: { type: String, default: '' },
+  generationHint: { type: String, default: '' },
   showPointsPayButton: { type: Boolean, default: false },
   pointsPayActive: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'update:modelValue',
-  'update:llm',
   'update:imageQuality',
   'send',
-  'clear',
   'toggle-points-pay',
 ])
 
