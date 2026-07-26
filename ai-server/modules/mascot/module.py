@@ -27,6 +27,8 @@ class MascotChatModule:
                 "live2d": result.get("live2d") or {},
                 "suggestedAppearance": result.get("suggested_appearance"),
                 "mcpUsed": bool(result.get("mcp_used")),
+                "action": result.get("action") or "CHAT",
+                "imagePrompt": result.get("image_prompt") or "",
             },
             usage=result.get("usage") or {},
         )

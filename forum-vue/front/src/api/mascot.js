@@ -132,6 +132,23 @@ export function streamMascotChat(data, { onChunk, onMeta, onDone, onError } = {}
           }
         }
       }
+      const trailing = buf.trim()
+      if (trailing.startsWith('data:')) {
+        try {
+          const o = JSON.parse(trailing.slice(5).trim())
+          if (o.error) {
+            settle(() => {
+              onError?.(o.error)
+              onDone?.()
+            })
+            return
+          }
+          if (o.text) onChunk?.(o.text)
+          if (o.meta) onMeta?.(o.meta)
+        } catch {
+          /* ignore incomplete trailing SSE payload */
+        }
+      }
       settle(() => onDone?.())
     })
     .catch((err) => {

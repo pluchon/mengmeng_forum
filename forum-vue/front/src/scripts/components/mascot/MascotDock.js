@@ -12,8 +12,7 @@ import {
   getCompanionMessages,
   deleteCompanionSession,
 } from '@/api/mascot'
-import { aiImage, aiPriceEstimate } from '@/api/ai'
-import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
+import { aiPriceEstimate } from '@/api/ai'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import {
   MASCOT_IMAGE_QUALITY_OPTIONS,
@@ -35,10 +34,6 @@ function escapeHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-}
-
-function isImageGenerationRequest(text) {
-  return /^(画一张|生成(?:一张)?图片|帮我画|绘制|画图)/.test(String(text || '').trim())
 }
 
 /** 看板娘 AI 回复：Markdown → HTML（表格、列表、加粗等） */
@@ -1413,10 +1408,6 @@ export function useMascotDock() {
       ElMessage.warning('请先登录')
       return
     }
-    if (isImageGenerationRequest(userText) && !isVip.value) {
-      ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
-      return
-    }
     let userIdx = i - 1
     while (userIdx >= 0 && messages.value[userIdx].role !== 'user') userIdx -= 1
     if (userIdx < 0) return
@@ -1439,44 +1430,11 @@ export function useMascotDock() {
 
     const history = buildChatHistory()
 
-    const imageRequest = isImageGenerationRequest(text)
-    const skill = imageRequest ? 'drawing' : 'chat'
+    const skill = 'chat'
     let streamHadError = false
     let assistantIdx = -1
 
     try {
-      if (imageRequest) {
-        imageGenerating.value = true
-        const q = imageQuality.value === 'premium' && isVip.value ? 'premium' : 'normal'
-        if (q === 'premium') showGptImageSlowToast()
-        let res
-        try {
-          res = await aiImage({
-            prompt: text,
-            quality: q,
-            ephemeral: true,
-          })
-        } finally {
-          if (q === 'premium') dismissGptImageSlowToast()
-        }
-        const data = res.data || {}
-        const url = data.url || data.payload?.url
-        if (!url) throw new Error('image url missing')
-        const imgStats = usageStatsFromApi(data)
-        messages.value.push({
-          role: 'assistant',
-          type: 'image',
-          url,
-          at: Date.now(),
-          usageStats: imgStats,
-        })
-        notifyAiBilling(data)
-        showStageCloudTip('生成完成', 3000)
-        refreshEstimate()
-        persistCurrentMessages()
-        return
-      }
-
       if (chatStreamAbort) {
         chatStreamAbort()
         chatStreamAbort = null
@@ -1508,6 +1466,7 @@ export function useMascotDock() {
             mascotModelCode: activeCode.value,
             llmProvider: selectedLlm.value,
             skill,
+            imageQuality: imageQuality.value,
             history,
             ephemeral: !userStore.isLoggedIn,
             excludeArticleIds: buildExcludeArticleIds(),
@@ -1528,6 +1487,27 @@ export function useMascotDock() {
               const row = messages.value[assistantIdx]
               if (meta?.status === 'preparing' && row?.streaming && !(row.content || '').length) {
                 row.thinkingText = '正在整理资料…'
+              }
+              if (meta?.imageGenerating) {
+                imageGenerating.value = true
+                if (row?.streaming && !(row.content || '').length) {
+                  row.thinkingText = '正在绘制画面…'
+                }
+              }
+              if (meta?.imageUrl && isSafeMascotImageUrl(meta.imageUrl)) {
+                if (assistantIdx >= 0) {
+                  messages.value.splice(assistantIdx, 1)
+                }
+                messages.value.push({
+                  role: 'assistant',
+                  type: 'image',
+                  url: meta.imageUrl,
+                  at: Date.now(),
+                  usageStats: usageStatsFromApi(meta),
+                })
+                assistantIdx = -1
+                persistCurrentMessages()
+                scrollFsToBottom()
               }
               if (meta?.relatedArticles?.length && row) {
                 row.relatedArticles = filterRelatedArticles(meta.relatedArticles, text)
@@ -1606,10 +1586,6 @@ export function useMascotDock() {
     if (!text) return
     if (!userStore.isLoggedIn) {
       ElMessage.warning('请先登录')
-      return
-    }
-    if (isImageGenerationRequest(text) && !isVip.value) {
-      ElMessage.warning('画图需 VIP；对话与帮助所有登录用户可用')
       return
     }
     if (usePointsBilling.value && estimatePoints.value != null

@@ -11,10 +11,12 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.ForumMascotModel;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
+import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
 import org.example.forumdemo.converter.MascotConverter;
 import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
+import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
@@ -22,6 +24,7 @@ import org.example.forumdemo.service.impl.ai.AiCallRecordService;
 import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
+import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -88,6 +91,9 @@ public class MascotServiceImpl implements MascotService {
 
     @Resource
     private AiQuotaService aiQuotaService;
+
+    @Resource
+    private AiCompanionApiService aiCompanionApiService;
 
     @Resource
     private CompanionMemoryService companionMemoryService;
@@ -319,6 +325,47 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
+    private AiImageResponseVO delegateMascotImage(
+            User user,
+            MascotChatRequest request,
+            String imagePrompt,
+            String sessionKey,
+            Long dbSessionId) {
+        if (!isVip(user)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_QUOTA, "生图功能仅向会员开放"));
+        }
+        AiImageRequest imageRequest = new AiImageRequest();
+        imageRequest.setPrompt(imagePrompt);
+        imageRequest.setQuality(resolveImageQuality(request, user));
+        imageRequest.setSessionId(sessionKey);
+        imageRequest.setEphemeral(true);
+        imageRequest.setUsePointsBilling(Boolean.TRUE.equals(request.getUsePointsBilling()));
+        imageRequest.setClientRequestId(imageRequestId(request, sessionKey));
+        AiImageResponseVO image = aiCompanionApiService.image(user.getId(), imageRequest);
+        if (dbSessionId != null && image.getUrl() != null && !image.getUrl().isBlank()) {
+            companionMemoryService.appendImageMessage(dbSessionId, "assistant", image.getUrl(), imagePrompt);
+        }
+        return image;
+    }
+
+    private String resolveImageQuality(MascotChatRequest request, User user) {
+        if ("premium".equalsIgnoreCase(request.getImageQuality()) && isVip(user)) {
+            return "premium";
+        }
+        return "normal";
+    }
+
+    private String imageRequestId(MascotChatRequest request, String sessionKey) {
+        if (request.getClientRequestId() != null && !request.getClientRequestId().isBlank()) {
+            return request.getClientRequestId().trim() + ":image";
+        }
+        return "mascot-image-" + sessionKey + "-" + System.currentTimeMillis();
+    }
+
+    private boolean isImageAction(Map<String, Object> moduleData) {
+        return "IMAGE".equalsIgnoreCase(String.valueOf(moduleData.get("action")));
+    }
+
     private static Integer intVal(Object o) {
         if (o instanceof Number n) {
             return n.intValue();
@@ -477,13 +524,25 @@ public class MascotServiceImpl implements MascotService {
         }
 
         String reply = moduleData.get("reply") != null ? String.valueOf(moduleData.get("reply")) : "";
+        String imageUrl = "";
+        if (isImageAction(moduleData)) {
+            String imagePrompt = String.valueOf(moduleData.getOrDefault("imagePrompt", "")).trim();
+            if (imagePrompt.isBlank()) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "生图提示词不能为空"));
+            }
+            AiImageResponseVO image = delegateMascotImage(user, request, imagePrompt, pySessionKey, dbSessionId);
+            imageUrl = image.getUrl();
+        }
         if (!ephemeral && dbSessionId != null) {
-            companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
+            if (!reply.isBlank()) {
+                companionMemoryService.appendTextMessage(dbSessionId, "assistant", reply);
+            }
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("sessionId", pySessionKey);
         data.put("reply", reply);
+        data.put("imageUrl", imageUrl);
         data.put("live2d", moduleData.get("live2d") instanceof Map ? moduleData.get("live2d") : Map.of());
         data.put("suggestedAppearance", moduleData.get("suggestedAppearance"));
         data.put("tier", vip ? "vip" : "basic");
@@ -610,6 +669,8 @@ public class MascotServiceImpl implements MascotService {
         final String userMessage = request.getMessage().trim();
         final StringBuilder replyBuffer = new StringBuilder();
         final AtomicReference<String> streamSearchImageUrl = new AtomicReference<>();
+        boolean imageRequested = false;
+        String imagePrompt = "";
         final String billingRelatedId = billingRelatedId(request, pySessionKey);
         final AiCallBeginResult streamBegin = aiCallRecordService.beginCall(
                 user.getId(), featureCode(skill), request.getClientRequestId(), fallbackModel);
@@ -734,6 +795,10 @@ public class MascotServiceImpl implements MascotService {
                         }
                         Map<String, Object> finalData = new HashMap<>();
                         rawData.forEach((key, value) -> finalData.put(String.valueOf(key), value));
+                        if (isImageAction(finalData)) {
+                            imageRequested = true;
+                            imagePrompt = String.valueOf(finalData.getOrDefault("imagePrompt", "")).trim();
+                        }
                         Object reply = finalData.get("reply");
                         if (reply != null && !String.valueOf(reply).isEmpty()) {
                             String text = String.valueOf(reply);
@@ -800,6 +865,30 @@ public class MascotServiceImpl implements MascotService {
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
                 emitter.complete();
                 return;
+            }
+
+            AiImageResponseVO delegatedImage = null;
+            if (imageRequested) {
+                if (imagePrompt.isBlank()) {
+                    sendMascotSse(emitter, Map.of("error", "生图提示词不能为空"));
+                    emitter.complete();
+                    return;
+                }
+                sendMascotSse(emitter, Map.of("meta", Map.of("imageGenerating", true)));
+                try {
+                    delegatedImage = delegateMascotImage(user, request, imagePrompt, pySessionKey, persistSessionId);
+                } catch (ApplicationException ex) {
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "生图失败"));
+                    emitter.complete();
+                    return;
+                }
+                Map<String, Object> imageMeta = new LinkedHashMap<>();
+                imageMeta.put("imageUrl", delegatedImage.getUrl());
+                imageMeta.put("usageStats", delegatedImage.getUsageStats());
+                imageMeta.put("pointsCost", delegatedImage.getPointsCost());
+                imageMeta.put("balanceAfter", delegatedImage.getBalanceAfter());
+                imageMeta.put("billingMode", delegatedImage.getBillingMode());
+                sendMascotSse(emitter, Map.of("meta", imageMeta));
             }
 
             Map<String, Object> meta = new LinkedHashMap<>();
