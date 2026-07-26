@@ -145,13 +145,6 @@ mascot:
   max_user_message_len: 2000
   max_history_turns: 8
 
-# DeepSeek OpenAI 兼容（写作 / 封面要点）; 密钥用环境变量 DEEPSEEK_API_KEY 覆盖
-deepseek:
-  base_url: "https://api.deepseek.com/v1"
-  api_key: ""
-  model_flash: "deepseek-v4-flash"
-  model_pro: "deepseek-v4-pro"
-
 # HuanAPI：GPT Image 生图
 huanapi:
   base_url: "https://www.huanapi.com"

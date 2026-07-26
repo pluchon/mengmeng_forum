@@ -1,13 +1,9 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
 import { aiWrite } from '@/api/ai'
-import {
-  MASCOT_TEXT_LLM_OPTIONS,
-  llmRouteToWriteKind,
-} from '@/constants/aiModels'
 
 const props = defineProps({
   editorMode: {
@@ -26,27 +22,7 @@ const userStore = useUserStore()
 const panelOpen = ref(false)
 const loading = ref(false)
 const prompt = ref('')
-const selectedRoute = ref('qwen-flash')
-
-const vipTierNum = computed(() => {
-  if (Number(userStore.isAdmin) === 1) return 2
-  return Number(userStore.vipTier) || 0
-})
-
-const llmOptions = computed(() => {
-  const tier = vipTierNum.value
-  return MASCOT_TEXT_LLM_OPTIONS.filter((o) => {
-    if (o.maxOnly && tier < 2) return false
-    if (o.vipOnly && tier < 1) return false
-    return true
-  })
-})
-
-function onPanelShow() {
-  if (!llmOptions.value.some((o) => o.id === selectedRoute.value)) {
-    selectedRoute.value = llmOptions.value[0]?.id || 'qwen-flash'
-  }
-}
+function onPanelShow() {}
 
 function buildSystemPrompt() {
   const titlePart = props.title?.trim()
@@ -73,15 +49,9 @@ async function runWrite() {
     ElMessage.warning('请先填写写作要求')
     return
   }
-  const kind = llmRouteToWriteKind(selectedRoute.value)
-  if (!kind) {
-    ElMessage.warning('请选择有效模型')
-    return
-  }
   loading.value = true
   try {
     const res = await aiWrite({
-      kind,
       messages: [
         { role: 'system', content: buildSystemPrompt() },
         { role: 'user', content: userPrompt },

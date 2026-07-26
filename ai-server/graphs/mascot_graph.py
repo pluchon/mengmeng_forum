@@ -24,8 +24,6 @@ from clients.dashscope_chat_client import (
     dashscope_stream_text,
     lc_messages_to_openai,
 )
-from clients.deepseek_client import deepseek_stream_text
-from clients.deepseek_client import deepseek_chat_completion
 from config import settings
 from mcp.registry import invoke_tool
 from utils.mascot_article_rag import fetch_related_articles, format_related_for_prompt
@@ -91,36 +89,10 @@ def _vip_tier_num(state: MascotState) -> int:
 
 
 def _normalize_llm_route(raw: str | None, vip_tier: int, skill: str) -> str:
-    s = (raw or "").strip().lower().replace("_", "-")
-    legacy = {
-        "qwen": "qwen-flash",
-        "deepseek": "deepseek-flash",
-        "openai": "qwen-flash",
-    }
-    if s in legacy:
-        s = legacy[s]
-
-    valid_flash = {
-        "qwen-flash", "deepseek-flash",
-    }
-    valid_deep = {
-        "qwen-deep", "deepseek-deep",
-    }
-    pro_routes = valid_flash | valid_deep
-
-    if s not in pro_routes:
-        s = "qwen-flash"
-
-    if s in valid_deep and vip_tier < 1:
-        s = s.replace("-deep", "-flash")
-
-    if skill == "help":
-        if s not in {"qwen-flash", "deepseek-flash"}:
-            s = "qwen-flash"
-        if s in valid_deep:
-            s = "qwen-flash"
-
-    return s
+    del raw
+    if skill == "help" or vip_tier < 1:
+        return "qwen-flash"
+    return "qwen-deep"
 
 
 def _effective_skill(state: dict[str, Any]) -> str:
@@ -160,7 +132,6 @@ def _invoke_mascot_llm(route: str, msgs: list[Any]) -> tuple[str, dict[str, Any]
 
     t0 = time.perf_counter()
     ds = settings.dashscope
-    dsk = settings.deepseek
     openai_msgs = _lc_to_openai_messages(msgs)
 
     if route == "qwen-flash":
@@ -171,20 +142,6 @@ def _invoke_mascot_llm(route: str, msgs: list[Any]) -> tuple[str, dict[str, Any]
     if route == "qwen-deep":
         model = str(ds.get("model_text_deep") or "qwen3.7-max")
         text, usage = dashscope_chat_completion(model, lc_messages_to_openai(msgs), temperature=0.55)
-        return text, attach_latency(usage, t0)
-
-    if route == "deepseek-flash":
-        model = str(dsk.get("model_flash") or "deepseek-v4-flash")
-        base = str(dsk.get("base_url") or "https://api.deepseek.com/v1")
-        key = str(dsk.get("api_key") or "")
-        text, usage = deepseek_chat_completion(base, key, model, openai_msgs)
-        return text, attach_latency(usage, t0)
-
-    if route == "deepseek-deep":
-        model = str(dsk.get("model_pro") or "deepseek-v4-pro")
-        base = str(dsk.get("base_url") or "https://api.deepseek.com/v1")
-        key = str(dsk.get("api_key") or "")
-        text, usage = deepseek_chat_completion(base, key, model, openai_msgs)
         return text, attach_latency(usage, t0)
 
     raise ValueError(f"未知 mascot llm 路由: {route}")
@@ -219,7 +176,6 @@ def _invoke_mascot_llm_stream(
 ) -> Iterator[tuple[str, dict[str, Any] | None]]:
     """yield (text_chunk, usage_or_none)；usage 仅在最后一次非 None。"""
     ds = settings.dashscope
-    dsk = settings.deepseek
     openai_msgs = _lc_to_openai_messages(msgs)
 
     if route in ("qwen-flash", "qwen-deep"):
@@ -230,18 +186,6 @@ def _invoke_mascot_llm_stream(
         )
         temp = 0.55 if route == "qwen-deep" else 0.6
         events = dashscope_stream_text(model, lc_messages_to_openai(msgs), temperature=temp)
-        yield from _yield_stream_events(events, model_code=model)
-        return
-
-    if route in ("deepseek-flash", "deepseek-deep"):
-        model = (
-            str(dsk.get("model_pro") or "deepseek-v4-pro")
-            if route == "deepseek-deep"
-            else str(dsk.get("model_flash") or "deepseek-v4-flash")
-        )
-        base = str(dsk.get("base_url") or "https://api.deepseek.com/v1")
-        key = str(dsk.get("api_key") or "")
-        events = deepseek_stream_text(base, key, model, openai_msgs)
         yield from _yield_stream_events(events, model_code=model)
         return
 

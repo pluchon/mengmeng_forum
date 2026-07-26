@@ -23,9 +23,7 @@ import { aiImage, aiPriceEstimate } from '@/api/ai'
 import { dismissGptImageSlowToast, showGptImageSlowToast } from '@/utils/gptImageToast'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import {
-  MASCOT_TEXT_LLM_OPTIONS,
   MASCOT_IMAGE_QUALITY_OPTIONS,
-  MASCOT_FLASH_LLM_IDS,
   findImageQualityOption,
 } from '@/constants/aiModels'
 import { clientOssUrl } from '@/utils/clientOss'
@@ -170,8 +168,8 @@ export function useMascotDock() {
     return `${LOCAL_SESSIONS_KEY_PREFIX}_guest`
   }
   
-  /** 文本模型（对话与帮助）；生图模型见 IMAGE_MODEL_OPTIONS */
-  const ALL_LLM_OPTIONS = MASCOT_TEXT_LLM_OPTIONS
+  /** 文本模型由服务端按会员档位自动选择；前端不提供切换。 */
+  const ALL_LLM_OPTIONS = [{ id: 'qwen-flash' }]
   const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
   const userStore = useUserStore()
@@ -295,7 +293,7 @@ export function useMascotDock() {
     { id: 'appearance', label: '形象选择', icon: UserFilled },
   ]
   
-  const FLASH_LLM = MASCOT_FLASH_LLM_IDS
+  const FLASH_LLM = ['qwen-flash']
   
   function llmStorageKey() {
     return LLM_CHAT_KEY
@@ -878,11 +876,7 @@ export function useMascotDock() {
       const w = localStorage.getItem(LLM_WRITING_KEY)
       const h = localStorage.getItem(LLM_HELP_KEY)
       const legacy = localStorage.getItem('mascot_llm_provider_v1')
-      const legacyMap = {
-        qwen: 'qwen-flash',
-        deepseek: 'deepseek-flash',
-        openai: 'qwen-flash',
-      }
+      const legacyMap = { qwen: 'qwen-flash', openai: 'qwen-flash' }
       const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
       const pick = chat || w || h || leg
       if (pick && ALL_LLM_OPTIONS.some(x => x.id === pick))

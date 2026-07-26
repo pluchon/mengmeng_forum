@@ -43,14 +43,14 @@ public class AiController {
         return Result.success(aiCompanionApiService.priceEstimate(user.getId(), skill, route, quality));
     }
 
-    @Operation(summary = "对话写作", description = "kind: deepseek_flash | deepseek_pro | qwen_flash | qwen_pro")
+    @Operation(summary = "对话写作", description = "模型由服务端按会员档位自动选择")
     @PostMapping("/write")
     public Result<AiWriteResponseVO> write(@RequestBody AiWriteRequest req, HttpServletRequest request) {
         User user = requireLoginUser(request);
         return Result.success(aiCompanionApiService.write(user.getId(), req));
     }
 
-    @Operation(summary = "封面推荐配图要点", description = "不计入 DeepSeek 写作日额，仅审计")
+    @Operation(summary = "封面推荐配图要点", description = "不计入文本写作日额，仅审计")
     @PostMapping("/cover-hints")
     public Result<AiHubCoverHintsResultVO> coverHints(@RequestBody AiCoverHintsRequest req, HttpServletRequest request) {
         User user = requireLoginUser(request);

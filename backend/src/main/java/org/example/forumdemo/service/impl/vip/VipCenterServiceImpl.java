@@ -106,7 +106,7 @@ public class VipCenterServiceImpl implements VipCenterService {
                 && !Constant.VIP_TIER_MAX.equals(user.getVipTier()))) {
             return MascotConverter.toQuotaHintVO(out);
         }
-        String route = llmRoute != null ? llmRoute.trim().toLowerCase(Locale.ROOT).replace('_', '-') : "";
+        String route = "qwen-deep";
         VipQuotaPanelVO panel = buildQuotaPanel(user);
         String modelCode = resolveModelCodeFromRoute(route);
         int percent = 0;
@@ -117,13 +117,6 @@ public class VipCenterServiceImpl implements VipCenterService {
             }
             for (VipQuotaItemVO item : g.getItems()) {
                 if ("unlimited".equals(item.getQuotaType())) {
-                    if (route.startsWith("deepseek") && item.getModelCode() != null
-                            && item.getModelCode().startsWith("deepseek")) {
-                        out.put("percent", 0);
-                        out.put("canUsePointsPay", false);
-                        out.put("quotaLabel", item.getDisplayName());
-                        return MascotConverter.toQuotaHintVO(out);
-                    }
                     continue;
                 }
                 boolean match = false;
@@ -173,8 +166,6 @@ public class VipCenterServiceImpl implements VipCenterService {
         return switch (route) {
             case "qwen-flash" -> "qwen3.6-flash";
             case "qwen-deep" -> "qwen3.7-max";
-            case "deepseek-flash" -> "deepseek-v4-flash";
-            case "deepseek-deep" -> "deepseek-v4-pro";
             default -> route;
         };
     }
@@ -221,7 +212,7 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(0);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 每日 10 次", true),
+                feat("Qwen Flash 每日 10 次", true),
                 feat("推荐配图要点", true),
                 feat("高级模型写作", false),
                 feat("AI 生图", false),
@@ -247,10 +238,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(true);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 不限次", true),
-                feat("通义与 DeepSeek 写作", true),
+                feat("Qwen 智能写作", true),
                 feat("Z-Image Turbo 与 GPT Image 2 生图", true),
-                feat("高级写作每日 50 次", true),
+                feat("Qwen 深度写作每日 50 次", true),
                 feat("AI 生图每日 25 次", true)));
         applyPlanButton(p, curTier, active, 1);
         return p;
@@ -267,10 +257,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("DeepSeek V4 Flash 不限次", true),
-                feat("通义与 DeepSeek 写作", true),
+                feat("Qwen 智能写作", true),
                 feat("Z-Image Turbo 与 GPT Image 2 生图", true),
-                feat("高级写作每日 300 次", true),
+                feat("Qwen 深度写作每日 300 次", true),
                 feat("AI 生图每日 100 次", true)));
         applyPlanButton(p, curTier, active, 2);
         return p;
@@ -357,7 +346,7 @@ public class VipCenterServiceImpl implements VipCenterService {
             item.setLimit(null);
             item.setUnit("无限");
             item.setPercent(0);
-            item.setResetHint("DeepSeek 写作不限次（PRO/MAX）");
+            item.setResetHint("Qwen Flash 写作额度由服务端统一管理");
             return item;
         }
         if ("daily_count".equals(type)) {
@@ -396,7 +385,7 @@ public class VipCenterServiceImpl implements VipCenterService {
             return 0;
         }
         return switch (bucket) {
-            case "deepseek_write" -> nvl(daily.getDeepseekWriteUsed());
+            case "qwen_flash" -> nvl(daily.getQwenFlashUsed());
             case "advanced_llm" -> nvl(daily.getAdvancedLlmUsed());
             case "image_normal" -> nvl(daily.getImageNormalUsed());
             case "image_premium" -> nvl(daily.getImagePremiumUsed());

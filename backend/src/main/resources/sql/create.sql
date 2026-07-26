@@ -857,7 +857,7 @@ DROP TABLE IF EXISTS `forum_ai_model_price`;
 CREATE TABLE `forum_ai_model_price` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `model_code` varchar(64) NOT NULL COMMENT '模型标识,与埋点一致',
-    `provider` varchar(32) NOT NULL DEFAULT 'dashscope' COMMENT 'dashscope|deepseek|huanapi',
+    `provider` varchar(32) NOT NULL DEFAULT 'dashscope' COMMENT 'dashscope|huanapi',
     `bill_unit` varchar(32) NOT NULL COMMENT 'per_1m_input|per_1m_output|per_image|per_call',
     `price_yuan` decimal(12,6) NOT NULL COMMENT '单价(元),按 bill_unit 计量',
     `vip_only` tinyint NOT NULL DEFAULT 0 COMMENT '1=仅VIP可用深度档等',
@@ -880,10 +880,6 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 ('qwen3-vl-plus', 'dashscope', 'per_1m_input', 1.000000, 0, 1, '视觉兜底'),
 ('qwen3-vl-plus', 'dashscope', 'per_1m_output', 10.000000, 0, 1, '视觉兜底'),
 ('tongyi-embedding-vision-flash', 'dashscope', 'per_1m_input', 0.150000, 0, 1, 'RAG向量'),
-('deepseek-v4-flash', 'deepseek', 'per_1m_input', 1.000000, 0, 1, '缓存未命中'),
-('deepseek-v4-flash', 'deepseek', 'per_1m_output', 2.000000, 0, 1, '缓存未命中'),
-('deepseek-v4-pro', 'deepseek', 'per_1m_input', 3.000000, 1, 1, '缓存未命中'),
-('deepseek-v4-pro', 'deepseek', 'per_1m_output', 6.000000, 1, 1, '缓存未命中'),
 ('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 1, 'prompt_extend=false'),
 ('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)'),
 ('gpt-image-2', 'huanapi', 'per_image', 0.200000, 1, 1, 'GPT Image 进阶生图');
@@ -1445,8 +1441,8 @@ CREATE TABLE `game_tetris_pk_match_record` (
 
 -- ----------------------------
 -- 24. AI 每日用量表 (ai_usage_daily)
--- 按用户 + 自然日(建议 Asia/Shanghai)滚动; 推荐配图要点单独计数不计入 deepseek_write 写作配额.
--- deepseek_write_used: 仅普通用户档位累计至 10 上限; PRO/MAX 可不递增或由业务忽略校验.
+-- 按用户 + 自然日(建议 Asia/Shanghai)滚动; 推荐配图要点单独计数不计入 qwen_flash 写作配额.
+-- qwen_flash_used: 普通用户档位累计至 10 上限; PRO/MAX 使用 Qwen 深度档配额.
 -- advanced_llm_used / image_* / companion_* : 按 VIP 矩阵限额在业务层校验.
 -- ----------------------------
 DROP TABLE IF EXISTS `ai_usage_daily`;
@@ -1454,7 +1450,7 @@ CREATE TABLE `ai_usage_daily` (
                                   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
                                   `user_id` bigint NOT NULL COMMENT '用户ID',
                                   `usage_date` date NOT NULL COMMENT '用量归属日',
-                                  `deepseek_write_used` int NOT NULL DEFAULT 0 COMMENT 'DeepSeek写作已用次数(普通用户上限10)',
+                                  `qwen_flash_used` int NOT NULL DEFAULT 0 COMMENT 'Qwen Flash写作已用次数(普通用户上限10)',
                                   `advanced_llm_used` int NOT NULL DEFAULT 0 COMMENT '高级大模型写作已用次数',
                                   `image_normal_used` int NOT NULL DEFAULT 0 COMMENT 'AI生图普通档已用次数',
                                   `image_premium_used` int NOT NULL DEFAULT 0 COMMENT 'AI生图高级档已用次数',
@@ -1473,7 +1469,7 @@ CREATE TABLE `ai_usage_daily` (
 -- ----------------------------
 -- 24.1 VIP 会员中心配额展示配置 (forum_vip_quota_config)
 -- quota_type: unlimited=不限次 daily_count=按日次数(对应 ai_usage_daily 字段) token_period=订阅周期内 Token
--- daily_bucket: deepseek_write | advanced_llm | image_normal | image_premium
+-- daily_bucket: qwen_flash | advanced_llm | image_normal | image_premium
 -- ----------------------------
 DROP TABLE IF EXISTS `forum_vip_quota_config`;
 CREATE TABLE `forum_vip_quota_config` (
@@ -1485,7 +1481,7 @@ CREATE TABLE `forum_vip_quota_config` (
     `quota_type` varchar(32) NOT NULL COMMENT 'unlimited|daily_count|token_period',
     `daily_bucket` varchar(32) DEFAULT NULL COMMENT '日配额桶',
     `model_code` varchar(64) DEFAULT NULL COMMENT 'token_period 时按模型汇总 forum_ai_usage_log',
-    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|openai|huanapi',
+    `icon_provider` varchar(32) DEFAULT NULL COMMENT 'qwen|openai|huanapi',
     `daily_limit` int DEFAULT NULL COMMENT '日次数上限',
     `token_limit` bigint DEFAULT NULL COMMENT '周期 Token 上限',
     `tier_tag` varchar(16) DEFAULT NULL COMMENT 'PRO|MAX|免费 角标',
@@ -1497,16 +1493,12 @@ CREATE TABLE `forum_vip_quota_config` (
 
 INSERT INTO `forum_vip_quota_config`
 (`vip_tier`, `quota_key`, `group_label`, `display_name`, `quota_type`, `daily_bucket`, `model_code`, `icon_provider`, `daily_limit`, `token_limit`, `tier_tag`, `sort_order`) VALUES
-(1, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
 (1, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 15, NULL, 'PRO', 30),
 (1, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 10, NULL, 'PRO', 40),
 (1, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 500000, 'PRO', 50),
-(1, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 450000, 'PRO', 60),
-(2, 'deepseek_flash', 'DeepSeek · 会员权益', 'DeepSeek V4 Flash', 'unlimited', NULL, 'deepseek-v4-flash', 'deepseek', NULL, NULL, '免费', 10),
 (2, 'image_normal', 'AI 生图 · 每日', 'Z-Image Turbo（普通）', 'daily_count', 'image_normal', 'z-image-turbo', 'qwen', 50, NULL, 'MAX', 30),
 (2, 'image_premium', 'AI 生图 · 每日', 'GPT Image 2（进阶）', 'daily_count', 'image_premium', 'gpt-image-2', 'openai', 50, NULL, 'MAX', 40),
-(2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50),
-(2, 'token_deepseek_deep', '本期 Token 配额 · 文本', 'DeepSeek · 深度', 'token_period', NULL, 'deepseek-v4-pro', 'deepseek', NULL, 1300000, 'MAX', 60);
+(2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50);
 
 -- ----------------------------
 -- 25. 群聊模块

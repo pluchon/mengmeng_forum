@@ -7,9 +7,7 @@ import java.util.List;
 @Data
 public class AiWriteRequest {
 
-    /**
-     * deepseek_flash | deepseek_pro | qwen_flash | qwen_pro
-     */
+    /** 由服务端按会员档位确定，客户端传值会被忽略。 */
     private String kind;
 
     private List<AiChatMessage> messages;

@@ -21,22 +21,6 @@
           将按当前{{ editorMode === 'markdown' ? ' Markdown ' : '富文本' }}模式生成正文并填入编辑器
         </p>
 
-        <label class="article-ai-write-label">模型</label>
-        <el-select v-model="selectedRoute" class="article-ai-write-select" size="small">
-          <el-option
-            v-for="opt in llmOptions"
-            :key="opt.id"
-            :label="opt.label"
-            :value="opt.id"
-          >
-            <div class="article-ai-write-opt">
-              <img :src="opt.icon" alt="" class="article-ai-write-opt-icon" />
-              <span>{{ opt.label }}</span>
-              <span class="article-ai-write-opt-hint">{{ opt.hint }}</span>
-            </div>
-          </el-option>
-        </el-select>
-
         <label class="article-ai-write-label">写作要求</label>
         <el-input
           v-model="prompt"

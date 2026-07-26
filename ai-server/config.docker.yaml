@@ -114,12 +114,6 @@ mascot:
   max_user_message_len: 2000
   max_history_turns: 8
 
-deepseek:
-  base_url: "https://api.deepseek.com/v1"
-  api_key: ""
-  model_flash: "deepseek-v4-flash"
-  model_pro: "deepseek-v4-pro"
-
 huanapi:
   base_url: "https://www.huanapi.com"
   image_key: ""

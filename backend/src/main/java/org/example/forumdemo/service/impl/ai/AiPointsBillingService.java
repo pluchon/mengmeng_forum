@@ -358,8 +358,6 @@ public class AiPointsBillingService {
         return switch (llmRoute.trim().toLowerCase(Locale.ROOT)) {
             case "qwen-flash" -> "qwen3.6-flash";
             case "qwen-deep" -> Constant.AI_MODEL_QWEN_DEEP;
-            case "deepseek-flash" -> "deepseek-v4-flash";
-            case "deepseek-deep" -> "deepseek-v4-pro";
             case "gpt-image-2" -> Constant.AI_MODEL_IMAGE_PREMIUM;
             default -> llmRoute;
         };

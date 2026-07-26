@@ -261,7 +261,7 @@ function fallbackParticipant(userId, label) {
     vip: false,
     vipTier: 0,
     ai: userId === -1,
-    aiModelName: userId === -1 ? 'deepseek-v4-flash · DeepSeek' : '',
+    aiModelName: userId === -1 ? 'qwen3.6-flash · Qwen' : '',
   }
 }
 
@@ -409,7 +409,7 @@ function avatarText(player) {
 
 function aiModelCode(player) {
   const text = String(player?.aiModelName || '')
-  return text.includes('deepseek-v4-pro') ? 'deepseek-v4-pro' : 'deepseek-v4-flash'
+  return text.includes('qwen3.7-max') ? 'qwen3.7-max' : 'qwen3.6-flash'
 }
 
 function aiModelIcon(player) {
