@@ -8,6 +8,7 @@ import {
   getMascotPublicModels,
   getMascotQuotaHint,
   getMascotRelatedRecommendations,
+  listMascotRelatedRecommendations,
   streamMascotChat,
   setMascotModel,
   getCompanionSessions,
@@ -600,6 +601,7 @@ export function useMascotDock() {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
           messages.value = mapVoToMessages(res.data)
+          await restoreRelatedRecommendations(id)
           cacheSessionMessages(nav, id, messages.value)
           scrollFsToBottom()
           return
@@ -610,7 +612,39 @@ export function useMascotDock() {
     }
     const sess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
     messages.value = sess ? (sess.messages || []).map((m) => ({ ...m })) : []
+    await restoreRelatedRecommendations(id)
     scrollFsToBottom()
+  }
+
+  async function restoreRelatedRecommendations(id) {
+    if (!userStore.isLoggedIn || !/^\d+$/.test(String(id))) return
+    try {
+      const res = await listMascotRelatedRecommendations(id)
+      if (res.code !== 0 || !Array.isArray(res.data)) return
+      const restoredIds = new Set(
+        messages.value
+          .filter((message) => message.type === 'related-result' && message.recommendationId)
+          .map((message) => String(message.recommendationId)),
+      )
+      const restored = res.data
+        .filter((recommendation) => !restoredIds.has(String(recommendation.id)))
+        .map((recommendation) => {
+          const items = Array.isArray(recommendation.items) ? recommendation.items : []
+          if (!items.length) return null
+          return {
+            role: 'assistant',
+            type: 'related-result',
+            content: `检索到 ${items.length} 条相关帖子`,
+            relatedItems: items,
+            recommendationId: recommendation.id,
+            at: Date.now(),
+          }
+        })
+        .filter(Boolean)
+      if (restored.length) messages.value.push(...restored)
+    } catch {
+      /* 已加载会话消息时，推荐恢复失败不影响对话 */
+    }
   }
 
   function applyServerSessionId(meta) {

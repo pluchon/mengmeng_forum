@@ -6,7 +6,6 @@
     width="min(920px, 94vw)"
     align-center
     destroy-on-close
-    :show-close="false"
     @update:model-value="emit('update:visible', $event)"
   >
     <div class="mascot-related-dialog__body">
