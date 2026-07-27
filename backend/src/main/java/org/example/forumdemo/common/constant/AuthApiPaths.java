@@ -26,6 +26,7 @@ public final class AuthApiPaths {
             "/shop/list",
             "/shop/detail",
             "/favorite/folder/userList",
+            "/like/queryArticleListForUserLikeWithPage",
             "/user/followStats",
             "/user/followingList",
             "/user/followerList",

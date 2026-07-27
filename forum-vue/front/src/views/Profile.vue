@@ -71,7 +71,6 @@
                 笔记
               </button>
               <button
-                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'collect' }"
@@ -80,7 +79,6 @@
                 收藏
               </button>
               <button
-                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'liked' }"
@@ -89,7 +87,6 @@
                 点赞
               </button>
               <button
-                v-if="canAccessProfileActivity"
                 type="button"
                 class="profile-tab-btn"
                 :class="{ 'is-active': activeTab === 'groups' }"
@@ -102,7 +99,7 @@
               <span class="profile-tab-post-count-val">{{ total }}</span>
               <span class="profile-tab-post-count-lab">发帖数</span>
             </div>
-            <div v-if="activeTab === 'liked' && isMe" class="profile-tab-post-count">
+            <div v-if="activeTab === 'liked'" class="profile-tab-post-count">
               <span class="profile-tab-post-count-val">{{ likedTotal }}</span>
               <span class="profile-tab-post-count-lab">点赞帖子</span>
             </div>
@@ -155,7 +152,7 @@
             </div>
           </div>
 
-          <div v-if="canAccessProfileActivity && activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
+          <div v-if="activeTab === 'collect'" class="profile-content profile-fav-list" v-loading="loadingFavorites">
             <el-alert
               v-if="favoriteFolderError"
               :title="favoriteFolderError"
@@ -209,7 +206,7 @@
             </div>
           </div>
 
-          <div v-if="canAccessProfileActivity && activeTab === 'liked'" class="profile-content">
+          <div v-if="activeTab === 'liked'" class="profile-content">
             <el-row :gutter="20">
               <el-col
                 v-for="item in likedArticles"
@@ -242,7 +239,7 @@
               </el-col>
             </el-row>
             <el-empty v-if="likedArticles.length === 0" description="还没有点赞过帖子哦" />
-            <div v-if="isMe && likedTotalPages > 1" class="profile-pager">
+            <div v-if="likedTotalPages > 1" class="profile-pager">
               <el-button size="small" @click="goLikedFirst">首页</el-button>
               <el-button size="small" :disabled="likedPageNum <= 1" @click="goLikedPrev">上一页</el-button>
               <el-input
@@ -256,7 +253,7 @@
             </div>
           </div>
 
-          <div v-if="canAccessProfileActivity && activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
+          <div v-if="activeTab === 'groups'" class="profile-content profile-public-groups" v-loading="publicGroupsLoading">
             <div
               v-for="group in publicGroups"
               :key="group.id"

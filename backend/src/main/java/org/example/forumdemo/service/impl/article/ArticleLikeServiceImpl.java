@@ -136,6 +136,12 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
                 result.getPages(), result.hasNext());
     }
 
+    @Override
+    public PageResult<ArticleListByLikeResponse> queryUserArticleListForLikeWithPage(
+            Long userId, Integer pageNum, Integer pageSize) {
+        return queryArticleListForLikeWithPage(userId, pageNum, pageSize);
+    }
+
     private ArticleListByLikeResponse buildLikeResponse(ArticleLike like) {
         try {
             Article article = articleService.selectArticleByArticleId(like.getArticleId());

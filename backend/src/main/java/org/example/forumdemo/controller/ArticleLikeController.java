@@ -56,4 +56,14 @@ public class ArticleLikeController {
         return Result.success(articleLikeService.queryArticleListForLikeWithPage(loginUser.getId(), pageNum, pageSize));
     }
 
+    /** 查询用户主页公开的点赞帖子 */
+    @Operation(summary = "查询用户点赞列表", description = "返回指定用户点赞过且当前仍可公开访问的帖子")
+    @GetMapping("/queryArticleListForUserLikeWithPage")
+    public Result<PageResult<ArticleListByLikeResponse>> queryUserArticleListForLikeWithPage(
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(articleLikeService.queryUserArticleListForLikeWithPage(userId, pageNum, pageSize));
+    }
+
 }
