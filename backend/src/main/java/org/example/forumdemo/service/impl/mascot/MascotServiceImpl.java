@@ -68,7 +68,7 @@ public class MascotServiceImpl implements MascotService {
     @Value("${forum.mascot.ai-url}")
     private String mascotAiUrl;
 
-    @Value("${forum.mascot.internal-key:}")
+    @Value("${forum.ai.internal-key:}")
     private String internalKey;
 
     @Value("${forum.mascot.basic-daily-limit:30}")
