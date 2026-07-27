@@ -9,11 +9,13 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
+import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationRequest;
 import org.example.forumdemo.entity.vo.mascot.CompanionMessageVO;
 import org.example.forumdemo.entity.vo.mascot.CompanionSessionVO;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
+import org.example.forumdemo.entity.vo.mascot.MascotRelatedRecommendationVO;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
 import org.example.forumdemo.service.interfaces.vip.VipCenterService;
@@ -103,6 +105,19 @@ public class MascotController {
         }
         sseExecutor.execute(() -> mascotService.streamChat(user, request, emitter));
         return emitter;
+    }
+
+    /** 用户确认后检索相关帖子 */
+    @Operation(summary = "检索看板娘相关帖子", description = "用户确认后执行 RAG 检索，并保存实际展示的帖子结果")
+    @PostMapping("/related-recommendations")
+    public Result<MascotRelatedRecommendationVO> relatedRecommendations(
+            @Valid @RequestBody MascotRelatedRecommendationRequest request,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotService.recommendRelatedArticles(user, request));
     }
 
     @Operation(summary = "陪伴助手会话列表", description = "按功能 skill 分页返回当前用户会话")

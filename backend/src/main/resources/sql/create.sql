@@ -1906,4 +1906,32 @@ INSERT INTO `growth_challenge`
 ('FORMAL_USER', 'FORMAL_USER', '新人试炼', '完成社区规则与安全基础题，获得正式用户资格。', @formal_bank, 10, 80, 3, 100, 1, 0),
 ('VIP_TRIAL_900', 'VIP_TRIAL_900', '会员体验挑战', '通过后获得一次 7 天 TRIAL_900 会员体验。', @trial_bank, 10, 80, 3, 80, 1, 0);
 
+CREATE TABLE `forum_mascot_related_recommendation` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `companion_session_id` bigint NOT NULL,
+    `query` varchar(500) NOT NULL,
+    `result_state` varchar(16) NOT NULL,
+    `result_count` int NOT NULL DEFAULT 0,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_mascot_related_user_session_time` (`user_id`, `companion_session_id`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘已确认相关帖子检索';
+
+CREATE TABLE `forum_mascot_related_recommendation_item` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `recommendation_id` bigint NOT NULL,
+    `article_id` bigint NOT NULL,
+    `display_order` int NOT NULL,
+    `selection_reason` varchar(16) NOT NULL,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_mascot_related_recommendation_article` (`recommendation_id`, `article_id`),
+    KEY `idx_mascot_related_item_recommendation` (`recommendation_id`, `delete_state`, `display_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘相关帖子检索结果项';
+
 SET FOREIGN_KEY_CHECKS = 1;

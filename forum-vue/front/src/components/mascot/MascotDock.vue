@@ -210,6 +210,15 @@
                             <a class="mascot-img-link" :href="m.url" target="_blank" rel="noreferrer">{{ uiLabels.openImageInNewTab }}</a>
                           </div>
                         </template>
+                        <template v-else-if="m.type === 'related-result'">
+                          <button
+                            type="button"
+                            class="mascot-related-result-bubble"
+                            @click="openRelatedRecommendation(m.relatedItems)"
+                          >
+                            {{ m.content }}
+                          </button>
+                        </template>
                         <template v-else>
                           <div class="mascot-bubble-wrap">
                             <div
@@ -267,19 +276,25 @@
                             <span class="mascot-bubble-time">{{ formatMsgTime(m.at) }}</span>
                           </div>
                           <div
-                            v-if="m.role === 'assistant' && m.relatedArticles?.length && !m.streaming"
-                            class="mascot-related-block"
+                            v-if="m.role === 'assistant' && m.relatedSearchOffer && !m.streaming"
+                            class="mascot-related-offer"
                           >
-                            <div class="mascot-related-label">相关帖子</div>
-                            <div class="mascot-related-links">
-                              <router-link
-                                v-for="art in m.relatedArticles"
-                                :key="'rel-' + art.articleId"
-                                :to="{ name: 'articleDetail', params: { id: art.articleId } }"
-                                class="mascot-related-link"
+                            <span>要不要我帮你看看部落里有没有人聊过？</span>
+                            <div class="mascot-related-offer__actions">
+                              <button
+                                type="button"
+                                :disabled="m.relatedSearchOffer.loading"
+                                @click="acceptRelatedSearchOffer(m)"
                               >
-                                {{ art.title }}
-                              </router-link>
+                                看看
+                              </button>
+                              <button
+                                type="button"
+                                :disabled="m.relatedSearchOffer.loading"
+                                @click="dismissRelatedSearchOffer(m)"
+                              >
+                                不用
+                              </button>
                             </div>
                           </div>
                         </template>
@@ -323,6 +338,11 @@
           </div>
         </div>
       </el-dialog>
+      <MascotRelatedArticlesDialog
+        v-model:visible="relatedDialogVisible"
+        :items="relatedDialogItems"
+        @open-article="openRelatedArticle"
+      />
     </div>
   </div>
 </template>
@@ -330,18 +350,21 @@
 <script setup>
 import { Delete, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
+import MascotRelatedArticlesDialog from '@/components/mascot/MascotRelatedArticlesDialog.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { useMascotDock } from '@scripts/components/mascot/MascotDock'
 
 const {
   activeCode,
+  acceptRelatedSearchOffer,
   assistantOpen,
   catalog,
   companionAvatarSrc,
       draft,
       deleteSession,
       deletingSessionId,
+  dismissRelatedSearchOffer,
   showPointsPayButton,
   togglePointsPay,
   usePointsBilling,
@@ -361,10 +384,14 @@ const {
   onScaleSliderChange,
   onStageLeave,
   onStagePointerDown,
+  openRelatedArticle,
+  openRelatedRecommendation,
   regenerateAssistant,
   renderMascotMarkdown,
   ringVipTier,
   rootStyle,
+  relatedDialogItems,
+  relatedDialogVisible,
   scalePopoverOpen,
   scrollbarFs,
   selectLocalSession,

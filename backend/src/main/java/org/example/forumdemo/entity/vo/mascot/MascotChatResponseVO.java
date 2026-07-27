@@ -19,4 +19,6 @@ public class MascotChatResponseVO {
     private AiUsageStatsVO usageStats;
     private String modelCode;
     private Boolean estimated;
+    private Boolean relatedSearchOffer;
+    private String relatedSearchQuery;
 }

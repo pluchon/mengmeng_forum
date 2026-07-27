@@ -1,0 +1,99 @@
+.mascot-related-dialog__body {
+  display: grid;
+  gap: 12px;
+}
+
+.mascot-related-dialog__item {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mascot-related-dialog__item:hover {
+  background: #fff6f8;
+}
+
+.mascot-related-dialog__cover {
+  width: 108px;
+  height: 76px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fff1f5;
+}
+
+.mascot-related-dialog__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mascot-related-dialog__main {
+  min-width: 0;
+}
+
+.mascot-related-dialog__title {
+  overflow: hidden;
+  color: #34363a;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mascot-related-dialog__snippet {
+  display: -webkit-box;
+  margin-top: 7px;
+  overflow: hidden;
+  color: #90949d;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mascot-related-dialog__stats,
+.mascot-related-dialog__author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8c9099;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mascot-related-dialog__stats {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.mascot-related-dialog__author img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+@media (max-width: 680px) {
+  .mascot-related-dialog__item {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .mascot-related-dialog__cover {
+    width: 84px;
+    height: 64px;
+  }
+
+  .mascot-related-dialog__stats,
+  .mascot-related-dialog__author {
+    grid-column: 2;
+  }
+}

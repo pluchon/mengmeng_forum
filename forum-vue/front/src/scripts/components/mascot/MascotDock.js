@@ -1,11 +1,13 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ZoomIn } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import {
   getMascotPublicModels,
   getMascotQuotaHint,
+  getMascotRelatedRecommendations,
   streamMascotChat,
   setMascotModel,
   getCompanionSessions,
@@ -50,61 +52,6 @@ function renderMascotMarkdown(content, stripInlineImages = false) {
   }
 }
 
-const MASCOT_RELATED_MIN_SCORE = 0.42
-const MASCOT_RELATED_TOP_MIN = 0.46
-const MASCOT_RELATED_RELATIVE_TO_TOP = 0.93
-const MASCOT_RELATED_SCORE_GAP = 0.055
-const MASCOT_RELATED_HIGH_BYPASS = 0.52
-const MASCOT_RELATED_MAX = 5
-
-function tokenizeMascotQuery(query) {
-  const parts = String(query || '').trim().split(/[\s,，、；;|/\\]+/)
-  const out = []
-  for (const p of parts) {
-    const t = p.trim()
-    if (t.length < 2 || out.includes(t)) continue
-    out.push(t)
-    if (out.length >= 8) break
-  }
-  return out
-}
-
-function passesMascotTitleGate(query, title, score) {
-  if (score >= MASCOT_RELATED_HIGH_BYPASS) return true
-  const t = String(title || '').trim()
-  if (!t) return false
-  const tokens = tokenizeMascotQuery(query)
-  if (!tokens.length) return score >= MASCOT_RELATED_TOP_MIN
-  const lower = t.toLowerCase()
-  return tokens.some((tok) => lower.includes(tok.toLowerCase()))
-}
-
-function filterRelatedArticles(list, query = '') {
-  if (!Array.isArray(list) || !list.length) return []
-  const eligible = list
-    .map((a) => ({
-      ...a,
-      score: Number(a.score) || 0,
-    }))
-    .filter((a) => a.score >= MASCOT_RELATED_MIN_SCORE)
-    .sort((a, b) => b.score - a.score)
-  if (!eligible.length) return []
-  const top = eligible[0].score
-  if (top < MASCOT_RELATED_TOP_MIN) return []
-  const relativeFloor = Math.max(MASCOT_RELATED_MIN_SCORE, top * MASCOT_RELATED_RELATIVE_TO_TOP)
-  const out = []
-  let prevScore = -1
-  for (const row of eligible) {
-    if (out.length >= MASCOT_RELATED_MAX) break
-    if (row.score < relativeFloor) break
-    if (!passesMascotTitleGate(query, row.title, row.score)) continue
-    if (prevScore >= 0 && prevScore - row.score > MASCOT_RELATED_SCORE_GAP) break
-    prevScore = row.score
-    out.push(row)
-  }
-  return out
-}
-
 function isSafeMascotImageUrl(url) {
   const s = String(url || '').trim()
   return s.startsWith('https://') && s.length <= 2048
@@ -124,6 +71,8 @@ export function useMascotDock() {
   const GUEST_MASCOT_CODE_KEY = 'mascot_guest_model_code_v1'
   const STAGE_BASE_W = 400
   const STAGE_BASE_H = 460
+  const relatedDialogVisible = ref(false)
+  const relatedDialogItems = ref([])
 
   const uiLabels = {
     ariaRoot: '看板娘',
@@ -165,6 +114,7 @@ export function useMascotDock() {
   const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
   const userStore = useUserStore()
+  const router = useRouter()
   const pointsWallet = usePointsWalletStore()
   const stageHost = ref(null)
   const stageUseFallback = ref(false)
@@ -663,17 +613,6 @@ export function useMascotDock() {
     scrollFsToBottom()
   }
 
-  function buildExcludeArticleIds() {
-    const ids = new Set()
-    for (const m of messages.value) {
-      for (const a of m.relatedArticles || []) {
-        const n = Number(a.articleId)
-        if (Number.isFinite(n) && n > 0) ids.add(n)
-      }
-    }
-    return [...ids]
-  }
-
   function applyServerSessionId(meta) {
     if (!userStore.isLoggedIn || !meta?.sessionId) return
     const sid = String(meta.sessionId)
@@ -695,6 +634,71 @@ export function useMascotDock() {
     }
     localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
     saveLocalSessionsToStorage()
+  }
+
+  function dismissRelatedSearchOffer(message) {
+    if (!message?.relatedSearchOffer) return
+    message.relatedSearchOffer = null
+    persistCurrentMessages()
+  }
+
+  async function acceptRelatedSearchOffer(message) {
+    const offer = message?.relatedSearchOffer
+    if (!offer || offer.loading || !userStore.isLoggedIn) return
+    const numericSessionId = Number(sessionId.value)
+    if (!Number.isInteger(numericSessionId) || numericSessionId <= 0) {
+      ElMessage.warning('会话尚未准备好，请稍后再试')
+      return
+    }
+    offer.loading = true
+    try {
+      const res = await getMascotRelatedRecommendations({
+        sessionId: numericSessionId,
+        query: offer.query,
+      })
+      if (res.code !== 0) {
+        ElMessage.error(res.message || '相关帖子检索失败')
+        return
+      }
+      message.relatedSearchOffer = null
+      const items = Array.isArray(res.data?.items) ? res.data.items : []
+      if (items.length) {
+        messages.value.push({
+          role: 'assistant',
+          type: 'related-result',
+          content: `检索到 ${items.length} 条相关帖子`,
+          relatedItems: items,
+          recommendationId: res.data?.id,
+          at: Date.now(),
+        })
+      } else {
+        messages.value.push({
+          role: 'assistant',
+          type: 'text',
+          content: '部落里暂时还没人发过这个话题，你想当第一个吗？',
+          at: Date.now(),
+        })
+      }
+      persistCurrentMessages()
+      scrollFsToBottom()
+    } catch {
+      ElMessage.error('相关帖子检索失败')
+    } finally {
+      if (message.relatedSearchOffer) {
+        message.relatedSearchOffer.loading = false
+      }
+    }
+  }
+
+  function openRelatedRecommendation(items) {
+    relatedDialogItems.value = Array.isArray(items) ? items : []
+    relatedDialogVisible.value = true
+  }
+
+  function openRelatedArticle(articleId) {
+    if (!articleId) return
+    relatedDialogVisible.value = false
+    router.push({ name: 'articleDetail', params: { id: articleId } })
   }
   
   function formatSessionTime(t) {
@@ -1449,7 +1453,6 @@ export function useMascotDock() {
         at: Date.now(),
         streaming: true,
         thinkingText: pickThinkingPhrase(llmForThinking),
-        relatedArticles: [],
         searchImageUrl: '',
       })
       stopThinkingRotation = startThinkingRotation(llmForThinking, (text) => {
@@ -1469,7 +1472,6 @@ export function useMascotDock() {
             imageQuality: imageQuality.value,
             history,
             ephemeral: !userStore.isLoggedIn,
-            excludeArticleIds: buildExcludeArticleIds(),
             clientDatetime: new Date().toISOString(),
             usePointsBilling: usePointsBilling.value,
           },
@@ -1509,8 +1511,11 @@ export function useMascotDock() {
                 persistCurrentMessages()
                 scrollFsToBottom()
               }
-              if (meta?.relatedArticles?.length && row) {
-                row.relatedArticles = filterRelatedArticles(meta.relatedArticles, text)
+              if (meta?.relatedSearchOffer && meta?.relatedSearchQuery && row) {
+                row.relatedSearchOffer = {
+                  query: String(meta.relatedSearchQuery).slice(0, 500),
+                  loading: false,
+                }
               }
               if (meta?.searchImageUrl && row && isSafeMascotImageUrl(meta.searchImageUrl)) {
                 row.searchImageUrl = meta.searchImageUrl
@@ -1677,6 +1682,7 @@ export function useMascotDock() {
     activeCode,
     activeNav,
     activeSkill,
+    acceptRelatedSearchOffer,
     applyAppearance,
     applyStageScaleToLib,
     assistantOpen,
@@ -1689,6 +1695,7 @@ export function useMascotDock() {
     draft,
     deleteSession,
     deletingSessionId,
+    dismissRelatedSearchOffer,
     dragOffset,
     ensureSessionId,
     estimateHintText,
@@ -1720,6 +1727,8 @@ export function useMascotDock() {
     oml2d,
     onAssistantOpened,
     onPreviewPick,
+    openRelatedArticle,
+    openRelatedRecommendation,
     onScaleSliderChange,
     onSkillForSend,
     onStageLeave,
@@ -1734,6 +1743,8 @@ export function useMascotDock() {
     resolveInitialCode,
     ringVipTier,
     rootStyle,
+    relatedDialogItems,
+    relatedDialogVisible,
     saveLlmPrefs,
     saveOffset,
     saveScale,
