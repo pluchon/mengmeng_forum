@@ -1,7 +1,7 @@
 """
 看板娘对话 — LangGraph 编排:
 
-  START -> route_skill -> assess -> [tavily_search?] -> agent -> END
+  START -> route_skill -> supervisor -> assess -> [tavily_search?] -> agent -> END
 
 - skill=chat：自动路由为 writing | help
 - writing：本地站点文档可答则不搜；否则按需 MCP(Tavily) / 地图
@@ -26,7 +26,6 @@ from clients.dashscope_chat_client import (
 )
 from config import settings
 from mcp.registry import invoke_tool
-from utils.mascot_article_rag import fetch_related_articles, format_related_for_prompt
 from utils.mascot_intent_router import decide_mascot_action
 from utils.mascot_mcp_orchestrator import prepare_mascot_mcp_bundle
 from utils.mascot_skill_router import route_mascot_skill
@@ -46,6 +45,9 @@ class MascotState(TypedDict, total=False):
     action: str
     image_prompt: str
     supervisor_usage: dict[str, Any]
+    complexity: str
+    related_search_offer: bool
+    related_search_query: str
     llm_route: str
     history: list[dict[str, str]]
     need_mcp_search: bool
@@ -56,8 +58,6 @@ class MascotState(TypedDict, total=False):
     datetime_context: str
     travel_guidance: str
     travel_phase: str
-    related_articles: list[dict[str, Any]]
-    related_articles_prompt: str
     mcp_used: bool
     reply: str
     live2d: dict[str, Any]
@@ -93,8 +93,7 @@ def _vip_tier_num(state: MascotState) -> int:
 
 
 def _normalize_llm_route(raw: str | None, vip_tier: int, skill: str) -> str:
-    del raw
-    if skill == "help" or vip_tier < 1:
+    if skill == "help" or vip_tier < 1 or raw != "qwen-deep":
         return "qwen-flash"
     return "qwen-deep"
 
@@ -121,13 +120,24 @@ def node_route_skill(state: MascotState) -> MascotState:
 
 def node_supervisor(state: MascotState) -> MascotState:
     """只做受控动作分派；业务执行仍由 Java 和具体模块负责。"""
-    if _vip_tier_num(state) < 1:
-        return {"action": "CHAT", "image_prompt": "", "supervisor_usage": {}}
-    action, image_prompt, usage = decide_mascot_action(
+    action, image_prompt, complexity, search_offer, search_query, usage = decide_mascot_action(
         (state.get("message") or "").strip(),
         state.get("history") or [],
     )
-    return {"action": action, "image_prompt": image_prompt, "supervisor_usage": usage}
+    if _vip_tier_num(state) < 1 and action == "IMAGE":
+        action = "CHAT"
+        image_prompt = ""
+    if action == "IMAGE":
+        search_offer = False
+        search_query = ""
+    return {
+        "action": action,
+        "image_prompt": image_prompt,
+        "complexity": complexity,
+        "related_search_offer": search_offer,
+        "related_search_query": search_query,
+        "supervisor_usage": usage,
+    }
 
 
 def _route_after_supervisor(state: MascotState) -> Literal["image", "assess"]:
@@ -268,7 +278,6 @@ def _build_agent_messages(state: dict[str, Any], *, stream: bool = False) -> tup
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
         travel_guidance=state.get("travel_guidance") or "",
-        related_articles_prompt=state.get("related_articles_prompt") or "",
     )
     msgs: list = [SystemMessage(content=sys)]
     for item in history[-max_turns:]:
@@ -312,6 +321,12 @@ def stream_mascot_chat(
         yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
         yield ("usage", ctx.get("supervisor_usage") or {})
         return
+    if ctx.get("related_search_offer") and ctx.get("related_search_query"):
+        yield ("meta", {
+            "relatedSearchOffer": True,
+            "relatedSearchQuery": ctx.get("related_search_query") or "",
+            "complexity": ctx.get("complexity") or "SIMPLE",
+        })
     search_image = str(ctx.get("search_image_url") or "").strip()
     if search_image:
         yield ("meta", {"searchImageUrl": search_image})
@@ -332,7 +347,7 @@ def stream_mascot_chat(
         usage = {"model_code": route, "estimated": True}
     if not usage:
         usage = {"model_code": route, "estimated": True}
-    yield ("usage", attach_latency(usage, t0))
+    yield ("usage", _merge_usage(attach_latency(usage, t0), ctx.get("supervisor_usage")))
 
 
 def _skill_system_stream(
@@ -343,7 +358,6 @@ def _skill_system_stream(
     local_kb: str = "",
     mcp_context: str = "",
     travel_guidance: str = "",
-    related_articles_prompt: str = "",
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短的中文回复。
 
@@ -360,8 +374,6 @@ def _skill_system_stream(
 不要代写长文或生图。不要引用未提供的站外信息。"""
     if skill == "writing":
         extra = ""
-        if related_articles_prompt:
-            extra += f"\n【相关站内帖子（系统会在消息下方展示链接，可引用标题）】\n{related_articles_prompt}\n"
         if local_kb:
             extra += f"\n【本站知识库（优先使用，无需编造）】\n{local_kb}\n"
         if travel_guidance:
@@ -372,7 +384,7 @@ def _skill_system_stream(
 你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。
 若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
 若系统已展示联网配图，正文无需再插入多张图片。
-站内相关帖子由系统在消息下方按相关度展示（0~5 条），弱相关时不要强行提及。"""
+不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
             tail += " 出行规划请用 Markdown 表格输出阶段路线，并单独写目的地天气。"
         else:
@@ -390,7 +402,6 @@ def _skill_system(
     local_kb: str = "",
     mcp_context: str = "",
     travel_guidance: str = "",
-    related_articles_prompt: str = "",
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短的中文回复。
 
@@ -408,8 +419,6 @@ def _skill_system(
 不要代写长文或生图。不要引用未提供的站外信息。"""
     if skill == "writing":
         extra = ""
-        if related_articles_prompt:
-            extra += f"\n【相关站内帖子（系统会在消息下方展示链接，可引用标题）】\n{related_articles_prompt}\n"
         if local_kb:
             extra += f"\n【本站知识库（优先使用，无需编造）】\n{local_kb}\n"
         if travel_guidance:
@@ -438,15 +447,6 @@ def node_assess(state: MascotState) -> MascotState:
         client_datetime=client_dt or None,
     )
 
-    related: list[dict[str, Any]] = []
-    related_prompt = ""
-    if skill == "writing" and len(message) >= 2:
-        try:
-            related = fetch_related_articles(message)
-            related_prompt = format_related_for_prompt(related)
-        except Exception:
-            logger.exception("看板娘帖子向量检索失败")
-
     out: MascotState = {
         "need_mcp_search": bool(bundle.get("need_mcp_search")),
         "mcp_query": bundle.get("mcp_query") or "",
@@ -455,8 +455,6 @@ def node_assess(state: MascotState) -> MascotState:
         "datetime_context": bundle.get("datetime_context") or "",
         "travel_guidance": bundle.get("travel_guidance") or "",
         "travel_phase": bundle.get("travel_phase") or "none",
-        "related_articles": related,
-        "related_articles_prompt": related_prompt,
         "mcp_used": bool(bundle.get("mcp_used")),
     }
     return out
@@ -519,7 +517,6 @@ def node_agent(state: MascotState) -> MascotState:
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
         travel_guidance=state.get("travel_guidance") or "",
-        related_articles_prompt=state.get("related_articles_prompt") or "",
     )
 
     msgs: list = [SystemMessage(content=sys)]
@@ -641,4 +638,7 @@ def run_mascot_chat(
         "mcp_used": mcp_used,
         "action": out.get("action") or "CHAT",
         "image_prompt": out.get("image_prompt") or "",
+        "complexity": out.get("complexity") or "SIMPLE",
+        "related_search_offer": bool(out.get("related_search_offer")),
+        "related_search_query": out.get("related_search_query") or "",
     }

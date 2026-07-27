@@ -43,6 +43,13 @@ public final class MascotConverter {
         vo.setBillingMode(stringVal(data.get("billingMode")));
         vo.setUsageStats(toUsageStatsVO(data.get("usageStats")));
         vo.setModelCode(stringVal(data.get("modelCode")));
+        Object relatedSearchOffer = data.get("relatedSearchOffer");
+        if (relatedSearchOffer instanceof Boolean b) {
+            vo.setRelatedSearchOffer(b);
+        } else if (relatedSearchOffer != null) {
+            vo.setRelatedSearchOffer(Boolean.parseBoolean(String.valueOf(relatedSearchOffer)));
+        }
+        vo.setRelatedSearchQuery(stringVal(data.get("relatedSearchQuery")));
         Object est = data.get("estimated");
         if (est instanceof Boolean b) {
             vo.setEstimated(b);

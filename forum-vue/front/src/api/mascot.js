@@ -41,6 +41,15 @@ export function postMascotChat(data) {
   })
 }
 
+/** 用户确认后检索并保存看板娘相关帖子结果 */
+export function getMascotRelatedRecommendations(data) {
+  return request({
+    url: '/mascot/related-recommendations',
+    method: 'post',
+    data,
+  })
+}
+
 /**
  * 看板娘流式对话（SSE）
  * @returns {() => void} abort

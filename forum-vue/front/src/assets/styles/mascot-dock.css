@@ -1178,3 +1178,44 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+.mascot-related-result-bubble {
+  padding: 10px 14px;
+  border: 1px solid #ff9eb4;
+  border-radius: 16px;
+  background: #fff7f9;
+  color: #d94d76;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mascot-related-result-bubble:hover {
+  background: #ffeef3;
+}
+
+.mascot-related-offer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: #737780;
+  font-size: 13px;
+}
+
+.mascot-related-offer__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.mascot-related-offer__actions button {
+  padding: 4px 10px;
+  border: 1px solid #ffc0d0;
+  border-radius: 999px;
+  background: #fff;
+  color: #d84a74;
+  cursor: pointer;
+}
+
+.mascot-related-offer__actions button:disabled {
+  cursor: wait;
+  opacity: .6;
+}

@@ -5,27 +5,44 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.AiCallState;
+import org.example.forumdemo.common.enums.MascotRelatedRecommendationState;
+import org.example.forumdemo.common.enums.MascotRelatedSelectionReason;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.ForumMascotModel;
+import org.example.forumdemo.entity.db.ForumCompanionSession;
+import org.example.forumdemo.entity.db.ForumMascotRelatedRecommendation;
+import org.example.forumdemo.entity.db.ForumMascotRelatedRecommendationItem;
+import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
+import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationRequest;
+import org.example.forumdemo.converter.ArticleConverter;
 import org.example.forumdemo.converter.MascotConverter;
 import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
+import org.example.forumdemo.entity.vo.mascot.MascotRelatedArticleCandidate;
+import org.example.forumdemo.entity.vo.mascot.MascotRelatedRecommendationItemVO;
+import org.example.forumdemo.entity.vo.mascot.MascotRelatedRecommendationVO;
+import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
+import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
+import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationItemMapper;
+import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationMapper;
+import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.ai.AiCallRecordService;
 import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
+import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -34,6 +51,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -45,21 +63,21 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 @Slf4j
 @Service
@@ -107,6 +125,21 @@ public class MascotServiceImpl implements MascotService {
     @Resource
     private MascotArticleRagHelper mascotArticleRagHelper;
 
+    @Resource
+    private ForumCompanionSessionMapper forumCompanionSessionMapper;
+
+    @Resource
+    private ForumMascotRelatedRecommendationMapper mascotRelatedRecommendationMapper;
+
+    @Resource
+    private ForumMascotRelatedRecommendationItemMapper mascotRelatedRecommendationItemMapper;
+
+    @Resource
+    private UserMapper userMapper;
+
+    @Resource
+    private ArticleHotRankingService articleHotRankingService;
+
     @Override
     public List<MascotModelPublicVO> listPublicModels() {
         List<ForumMascotModel> list = forumMascotModelMapper.selectList(
@@ -128,6 +161,147 @@ public class MascotServiceImpl implements MascotService {
             v.setStageHeight(m.getStageHeight());
             return v;
         }).toList();
+    }
+
+    /** 用户确认后的相关帖子检索；结果项与选择原因在同一事务内保存。 */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MascotRelatedRecommendationVO recommendRelatedArticles(
+            User user, MascotRelatedRecommendationRequest request) {
+        Long sessionId = request.getSessionId();
+        ForumCompanionSession session = forumCompanionSessionMapper.selectOne(
+                Wrappers.lambdaQuery(ForumCompanionSession.class)
+                        .eq(ForumCompanionSession::getId, sessionId)
+                        .eq(ForumCompanionSession::getUserId, user.getId())
+                        .eq(ForumCompanionSession::getDeleteState, (byte) 0));
+        if (session == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "会话不存在或无权访问"));
+        }
+
+        String query = request.getQuery().trim();
+        List<MascotRelatedArticleCandidate> candidates = mascotArticleRagHelper.findConfirmedRelatedCandidates(query);
+        List<RelatedArticleSelection> selections = selectRelatedArticles(candidates);
+
+        ForumMascotRelatedRecommendation recommendation = new ForumMascotRelatedRecommendation();
+        recommendation.setUserId(user.getId());
+        recommendation.setCompanionSessionId(sessionId);
+        recommendation.setQuery(query);
+        recommendation.setResultState((selections.isEmpty()
+                ? MascotRelatedRecommendationState.EMPTY : MascotRelatedRecommendationState.FOUND).name());
+        recommendation.setResultCount(selections.size());
+        recommendation.setDeleteState((byte) 0);
+        mascotRelatedRecommendationMapper.insert(recommendation);
+
+        for (int index = 0; index < selections.size(); index++) {
+            RelatedArticleSelection selection = selections.get(index);
+            ForumMascotRelatedRecommendationItem item = new ForumMascotRelatedRecommendationItem();
+            item.setRecommendationId(recommendation.getId());
+            item.setArticleId(selection.candidate().getArticle().getId());
+            item.setDisplayOrder(index + 1);
+            item.setSelectionReason(selection.reason().name());
+            item.setDeleteState((byte) 0);
+            mascotRelatedRecommendationItemMapper.insert(item);
+        }
+        return buildRelatedRecommendationVO(recommendation, selections);
+    }
+
+    private List<RelatedArticleSelection> selectRelatedArticles(
+            List<MascotRelatedArticleCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MascotRelatedArticleCandidate> unique = new ArrayList<>();
+        Set<Long> seenIds = new HashSet<>();
+        for (MascotRelatedArticleCandidate candidate : candidates) {
+            Article article = candidate.getArticle();
+            if (article != null && article.getId() != null && seenIds.add(article.getId())) {
+                unique.add(candidate);
+            }
+        }
+        if (unique.size() <= 5) {
+            List<RelatedArticleSelection> selected = new ArrayList<>();
+            for (MascotRelatedArticleCandidate candidate : unique) {
+                selected.add(new RelatedArticleSelection(candidate, MascotRelatedSelectionReason.RELEVANCE));
+            }
+            return selected;
+        }
+
+        List<MascotRelatedArticleCandidate> hot = unique.stream()
+                .filter(candidate -> articleHotRankingService.computeHotScore(candidate.getArticle()) > 0D)
+                .sorted(Comparator.comparingDouble(
+                        (MascotRelatedArticleCandidate candidate) -> articleHotRankingService.computeHotScore(candidate.getArticle()))
+                        .reversed())
+                .toList();
+        if (hot.isEmpty()) {
+            return unique.stream()
+                    .sorted(Comparator.comparing(
+                            candidate -> candidate.getArticle().getCreateTime(),
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(5)
+                    .map(candidate -> new RelatedArticleSelection(candidate, MascotRelatedSelectionReason.RECENT))
+                    .toList();
+        }
+
+        List<RelatedArticleSelection> selected = new ArrayList<>();
+        Set<Long> selectedIds = new HashSet<>();
+        for (MascotRelatedArticleCandidate candidate : hot) {
+            if (selected.size() >= 2) {
+                break;
+            }
+            selected.add(new RelatedArticleSelection(candidate, MascotRelatedSelectionReason.HOT));
+            selectedIds.add(candidate.getArticle().getId());
+        }
+        List<MascotRelatedArticleCandidate> recentPool = unique.stream()
+                .filter(candidate -> !selectedIds.contains(candidate.getArticle().getId()))
+                .sorted(Comparator.comparing(
+                        candidate -> candidate.getArticle().getCreateTime(),
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(20)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Collections.shuffle(recentPool);
+        for (MascotRelatedArticleCandidate candidate : recentPool) {
+            if (selected.size() >= 5) {
+                break;
+            }
+            selected.add(new RelatedArticleSelection(candidate, MascotRelatedSelectionReason.RECENT));
+        }
+        return selected;
+    }
+
+    private MascotRelatedRecommendationVO buildRelatedRecommendationVO(
+            ForumMascotRelatedRecommendation recommendation,
+            List<RelatedArticleSelection> selections) {
+        Set<Long> userIds = new HashSet<>();
+        for (RelatedArticleSelection selection : selections) {
+            userIds.add(selection.candidate().getArticle().getUserId());
+        }
+        Map<Long, User> usersById = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            for (User author : userMapper.selectByIds(userIds)) {
+                usersById.put(author.getId(), author);
+            }
+        }
+        List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
+        for (RelatedArticleSelection selection : selections) {
+            Article article = selection.candidate().getArticle();
+            MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
+            item.setArticle(ArticleConverter.toBriefVO(article));
+            User author = usersById.get(article.getUserId());
+            item.setAuthor(author == null ? null : new UserBriefVO(author));
+            item.setSelectionReason(selection.reason().name());
+            items.add(item);
+        }
+        MascotRelatedRecommendationVO vo = new MascotRelatedRecommendationVO();
+        vo.setId(recommendation.getId());
+        vo.setQuery(recommendation.getQuery());
+        vo.setResultState(recommendation.getResultState());
+        vo.setItems(items);
+        return vo;
+    }
+
+    private record RelatedArticleSelection(
+            MascotRelatedArticleCandidate candidate,
+            MascotRelatedSelectionReason reason) {
     }
 
     private boolean isVip(User user) {
@@ -190,11 +364,32 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, User user) {
-        if ("help".equals(skill)) {
+        if ("help".equals(skill) || !vip) {
             return "qwen-flash";
         }
         int tier = effectiveVipTier(user);
-        return vip && tier >= Constant.VIP_TIER_PRO ? "qwen-deep" : "qwen-flash";
+        if (tier < Constant.VIP_TIER_PRO || !isComplexMascotRequest(request)) {
+            return "qwen-flash";
+        }
+        return "qwen-deep";
+    }
+
+    private boolean isComplexMascotRequest(MascotChatRequest request) {
+        String message = request.getMessage() == null ? "" : request.getMessage().trim();
+        if (message.length() >= 320) {
+            return true;
+        }
+        int indicators = 0;
+        for (String keyword : List.of("深入分析", "详细分析", "对比", "比较", "方案", "规划", "计划", "推理", "论证", "优缺点", "多步", "教程", "长文", "大纲")) {
+            if (message.contains(keyword)) {
+                indicators++;
+            }
+        }
+        if (indicators >= 2 || message.contains("帮我写一篇") || message.contains("制定一个")) {
+            return true;
+        }
+        int historyTurns = request.getHistory() == null ? 0 : request.getHistory().size();
+        return historyTurns >= 4 && message.length() >= 120 && indicators >= 1;
     }
 
     private String featureCode(String skill) {
@@ -552,6 +747,8 @@ public class MascotServiceImpl implements MascotService {
         data.put("usageStats", billing.get("usageStats"));
         data.put("modelCode", usage.getModelCode());
         data.put("estimated", usage.getEstimated());
+        data.put("relatedSearchOffer", Boolean.TRUE.equals(moduleData.get("relatedSearchOffer")));
+        data.put("relatedSearchQuery", moduleData.get("relatedSearchQuery"));
         return MascotConverter.toChatResponse(data);
     }
 
@@ -717,33 +914,6 @@ public class MascotServiceImpl implements MascotService {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
 
-        CompletableFuture<List<Map<String, Object>>> relatedFuture = null;
-        if ("writing".equals(skill) || "help".equals(skill) || "chat".equals(skill)) {
-            String ragQuery = userMessage;
-            List<Long> excludeIds = request.getExcludeArticleIds() != null
-                    ? request.getExcludeArticleIds() : List.of();
-            relatedFuture = CompletableFuture.supplyAsync(
-                    () -> mascotArticleRagHelper.recommendRelatedArticles(ragQuery, excludeIds));
-        }
-
-        final AtomicBoolean relatedMetaSent = new AtomicBoolean(false);
-        if (relatedFuture != null) {
-            relatedFuture.whenComplete((related, ex) -> {
-                if (ex != null || related == null || related.isEmpty()) {
-                    return;
-                }
-                if (relatedMetaSent.compareAndSet(false, true)) {
-                    try {
-                        Map<String, Object> earlyMeta = new LinkedHashMap<>();
-                        earlyMeta.put("relatedArticles", related);
-                        sendMascotSse(emitter, Map.of("meta", earlyMeta));
-                    } catch (Exception sendEx) {
-                        log.warn("推送相关帖子 meta 失败: {}", sendEx.getMessage());
-                    }
-                }
-            });
-        }
-
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) URI.create(mascotStreamAiUrl()).toURL().openConnection();
@@ -798,6 +968,14 @@ public class MascotServiceImpl implements MascotService {
                         if (isImageAction(finalData)) {
                             imageRequested = true;
                             imagePrompt = String.valueOf(finalData.getOrDefault("imagePrompt", "")).trim();
+                        }
+                        if (Boolean.TRUE.equals(finalData.get("relatedSearchOffer"))
+                                && finalData.get("relatedSearchQuery") != null) {
+                            Map<String, Object> searchMeta = new LinkedHashMap<>();
+                            searchMeta.put("relatedSearchOffer", true);
+                            searchMeta.put("relatedSearchQuery", String.valueOf(finalData.get("relatedSearchQuery")));
+                            searchMeta.put("complexity", String.valueOf(finalData.getOrDefault("complexity", "SIMPLE")));
+                            sendMascotSse(emitter, Map.of("meta", searchMeta));
                         }
                         Object reply = finalData.get("reply");
                         if (reply != null && !String.valueOf(reply).isEmpty()) {
@@ -899,17 +1077,6 @@ public class MascotServiceImpl implements MascotService {
             meta.put("usageStats", billing.get("usageStats"));
             meta.put("modelCode", usage.getModelCode());
             meta.put("llmRoute", route);
-            if (relatedFuture != null) {
-                try {
-                    List<Map<String, Object>> related = relatedFuture.get(12, TimeUnit.SECONDS);
-                    if (related != null && !related.isEmpty()) {
-                        meta.put("relatedArticles", related);
-                        relatedMetaSent.set(true);
-                    }
-                } catch (Exception ex) {
-                    log.warn("看板娘帖子推荐超时或失败: {}", ex.getMessage());
-                }
-            }
             persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageUrl.get());
             sendMascotSse(emitter, Map.of("meta", meta));
             emitter.complete();
