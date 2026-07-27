@@ -1,6 +1,7 @@
 <template>
   <el-dialog
     :model-value="visible"
+    append-to-body
     class="mascot-related-dialog"
     width="min(920px, 94vw)"
     align-center
