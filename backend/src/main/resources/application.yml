@@ -106,7 +106,7 @@ forum:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
   mascot:
     ai-url: ${FORUM_MASCOT_AI_URL:http://localhost:5000/api/v1/gateway/invoke}
-    internal-key: ${FORUM_MASCOT_INTERNAL_KEY:}
+    internal-key: ${FORUM_MASCOT_INTERNAL_KEY:${FORUM_AI_INTERNAL_KEY:}}
     basic-daily-limit: ${FORUM_MASCOT_BASIC_DAILY_LIMIT:30}
     treat-admin-as-vip: ${FORUM_MASCOT_TREAT_ADMIN_AS_VIP:true}
   ai:
