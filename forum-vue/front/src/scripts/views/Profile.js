@@ -4,7 +4,7 @@ import { Star, Camera, Plus, Lock, Unlock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { getArticleListWithUser } from '@/api/article'
-import { getMyLikeList } from '@/api/like'
+import { getMyLikeList, getUserLikeList } from '@/api/like'
 import {
   getFavoriteFolderArticles,
   getMyFavoriteFolders,
@@ -98,13 +98,7 @@ export function useProfile() {
     if (isMe.value && userStore.ipRegion) return userStore.ipRegion
     return ''
   })
-  const canAccessProfileActivity = computed(() => userStore.isLoggedIn)
-
   watch(activeTab, (tab) => {
-    if (!canAccessProfileActivity.value && tab !== 'notes') {
-      activeTab.value = 'notes'
-      return
-    }
     if (tab === 'liked' && likedArticles.value.length === 0) {
       loadLikedArticles(1)
     }
@@ -141,14 +135,17 @@ export function useProfile() {
   )
 
   async function loadLikedArticles(page = 1) {
-    if (!isMe.value) return
+    const userId = route.params.id || userStore.id
     likedPageNum.value = page
     likedPageInput.value = String(page)
     try {
-      const res = await getMyLikeList({
+      const params = {
         pageNum: likedPageNum.value,
         pageSize: PROFILE_PAGE_SIZE,
-      })
+      }
+      const res = isMe.value
+        ? await getMyLikeList(params)
+        : await getUserLikeList(userId, params)
       if (res.code === 0) {
         likedArticles.value = res.data?.records || []
         likedTotal.value = Number(res.data?.total) || 0
@@ -569,7 +566,7 @@ export function useProfile() {
     }
     if (String(state.profileUserId) !== String(route.params.id || userStore.id)) return
     sessionStorage.removeItem(PROFILE_RETURN_KEY)
-    const restoredTab = canAccessProfileActivity.value ? state.tab : 'notes'
+    const restoredTab = state.tab || 'notes'
     if (restoredTab) activeTab.value = restoredTab
     if (restoredTab === 'notes' && state.page) {
       await loadProfile(Number(state.page) || 1)
@@ -761,7 +758,6 @@ export function useProfile() {
 
   return {
     Camera,
-    canAccessProfileActivity,
     Lock,
     Plus,
     Star,

@@ -15,4 +15,7 @@ public interface ArticleLikeService {
     // 当前用户点赞过的帖子列表（分页）
     PageResult<ArticleListByLikeResponse> queryArticleListForLikeWithPage(Long userId, Integer pageNum, Integer pageSize);
 
+    // 指定用户点赞过的公开帖子列表（分页）
+    PageResult<ArticleListByLikeResponse> queryUserArticleListForLikeWithPage(Long userId, Integer pageNum, Integer pageSize);
+
 }
