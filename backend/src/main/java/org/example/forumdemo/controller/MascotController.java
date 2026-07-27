@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.result.Result;
@@ -118,6 +119,19 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotService.recommendRelatedArticles(user, request));
+    }
+
+    /** 读取当前会话已保存的相关帖子结果 */
+    @Operation(summary = "读取看板娘相关帖子", description = "返回当前用户指定会话中已保存的相关帖子检索结果")
+    @GetMapping("/related-recommendations")
+    public Result<List<MascotRelatedRecommendationVO>> relatedRecommendationHistory(
+            @RequestParam @Positive Long sessionId,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotService.listRelatedRecommendations(user, sessionId));
     }
 
     @Operation(summary = "陪伴助手会话列表", description = "按功能 skill 分页返回当前用户会话")

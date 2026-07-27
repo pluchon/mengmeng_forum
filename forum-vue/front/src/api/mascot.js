@@ -50,6 +50,15 @@ export function getMascotRelatedRecommendations(data) {
   })
 }
 
+/** 读取当前会话已保存的相关帖子检索结果 */
+export function listMascotRelatedRecommendations(sessionId) {
+  return request({
+    url: '/mascot/related-recommendations',
+    method: 'get',
+    params: { sessionId },
+  })
+}
+
 /**
  * 看板娘流式对话（SSE）
  * @returns {() => void} abort

@@ -35,6 +35,7 @@ import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationMapper;
+import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.ai.AiCallRecordService;
 import org.example.forumdemo.service.impl.ai.AiPointsBillingService;
@@ -135,6 +136,9 @@ public class MascotServiceImpl implements MascotService {
     private ForumMascotRelatedRecommendationItemMapper mascotRelatedRecommendationItemMapper;
 
     @Resource
+    private ArticleMapper articleMapper;
+
+    @Resource
     private UserMapper userMapper;
 
     @Resource
@@ -169,14 +173,7 @@ public class MascotServiceImpl implements MascotService {
     public MascotRelatedRecommendationVO recommendRelatedArticles(
             User user, MascotRelatedRecommendationRequest request) {
         Long sessionId = request.getSessionId();
-        ForumCompanionSession session = forumCompanionSessionMapper.selectOne(
-                Wrappers.lambdaQuery(ForumCompanionSession.class)
-                        .eq(ForumCompanionSession::getId, sessionId)
-                        .eq(ForumCompanionSession::getUserId, user.getId())
-                        .eq(ForumCompanionSession::getDeleteState, (byte) 0));
-        if (session == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "会话不存在或无权访问"));
-        }
+        requireOwnedSession(user.getId(), sessionId);
 
         String query = request.getQuery().trim();
         List<MascotRelatedArticleCandidate> candidates = mascotArticleRagHelper.findConfirmedRelatedCandidates(query);
@@ -203,6 +200,94 @@ public class MascotServiceImpl implements MascotService {
             mascotRelatedRecommendationItemMapper.insert(item);
         }
         return buildRelatedRecommendationVO(recommendation, selections);
+    }
+
+    @Override
+    public List<MascotRelatedRecommendationVO> listRelatedRecommendations(User user, Long sessionId) {
+        requireOwnedSession(user.getId(), sessionId);
+        List<ForumMascotRelatedRecommendation> recommendations = mascotRelatedRecommendationMapper.selectList(
+                Wrappers.lambdaQuery(ForumMascotRelatedRecommendation.class)
+                        .eq(ForumMascotRelatedRecommendation::getUserId, user.getId())
+                        .eq(ForumMascotRelatedRecommendation::getCompanionSessionId, sessionId)
+                        .eq(ForumMascotRelatedRecommendation::getDeleteState, (byte) 0)
+                        .orderByAsc(ForumMascotRelatedRecommendation::getCreateTime)
+                        .orderByAsc(ForumMascotRelatedRecommendation::getId));
+        if (recommendations.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> recommendationIds = recommendations.stream()
+                .map(ForumMascotRelatedRecommendation::getId)
+                .toList();
+        List<ForumMascotRelatedRecommendationItem> savedItems = mascotRelatedRecommendationItemMapper.selectList(
+                Wrappers.lambdaQuery(ForumMascotRelatedRecommendationItem.class)
+                        .in(ForumMascotRelatedRecommendationItem::getRecommendationId, recommendationIds)
+                        .eq(ForumMascotRelatedRecommendationItem::getDeleteState, (byte) 0)
+                        .orderByAsc(ForumMascotRelatedRecommendationItem::getRecommendationId)
+                        .orderByAsc(ForumMascotRelatedRecommendationItem::getDisplayOrder));
+        Map<Long, List<ForumMascotRelatedRecommendationItem>> itemsByRecommendationId = new HashMap<>();
+        Set<Long> articleIds = new HashSet<>();
+        for (ForumMascotRelatedRecommendationItem savedItem : savedItems) {
+            itemsByRecommendationId.computeIfAbsent(savedItem.getRecommendationId(), key -> new ArrayList<>())
+                    .add(savedItem);
+            articleIds.add(savedItem.getArticleId());
+        }
+
+        Map<Long, Article> articlesById = new HashMap<>();
+        if (!articleIds.isEmpty()) {
+            for (Article article : articleMapper.selectList(
+                    Wrappers.lambdaQuery(Article.class)
+                            .in(Article::getId, articleIds)
+                            .eq(Article::getDeleteState, (byte) 0))) {
+                articlesById.put(article.getId(), article);
+            }
+        }
+        Set<Long> authorIds = new HashSet<>();
+        for (Article article : articlesById.values()) {
+            authorIds.add(article.getUserId());
+        }
+        Map<Long, User> usersById = new HashMap<>();
+        if (!authorIds.isEmpty()) {
+            for (User author : userMapper.selectByIds(authorIds)) {
+                usersById.put(author.getId(), author);
+            }
+        }
+
+        List<MascotRelatedRecommendationVO> result = new ArrayList<>();
+        for (ForumMascotRelatedRecommendation recommendation : recommendations) {
+            List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
+            for (ForumMascotRelatedRecommendationItem savedItem : itemsByRecommendationId
+                    .getOrDefault(recommendation.getId(), Collections.emptyList())) {
+                Article article = articlesById.get(savedItem.getArticleId());
+                if (article == null) {
+                    continue;
+                }
+                MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
+                item.setArticle(ArticleConverter.toBriefVO(article));
+                User author = usersById.get(article.getUserId());
+                item.setAuthor(author == null ? null : new UserBriefVO(author));
+                item.setSelectionReason(savedItem.getSelectionReason());
+                items.add(item);
+            }
+            MascotRelatedRecommendationVO vo = new MascotRelatedRecommendationVO();
+            vo.setId(recommendation.getId());
+            vo.setQuery(recommendation.getQuery());
+            vo.setResultState(recommendation.getResultState());
+            vo.setItems(items);
+            result.add(vo);
+        }
+        return result;
+    }
+
+    private void requireOwnedSession(Long userId, Long sessionId) {
+        ForumCompanionSession session = forumCompanionSessionMapper.selectOne(
+                Wrappers.lambdaQuery(ForumCompanionSession.class)
+                        .eq(ForumCompanionSession::getId, sessionId)
+                        .eq(ForumCompanionSession::getUserId, userId)
+                        .eq(ForumCompanionSession::getDeleteState, (byte) 0));
+        if (session == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "会话不存在或无权访问"));
+        }
     }
 
     private List<RelatedArticleSelection> selectRelatedArticles(

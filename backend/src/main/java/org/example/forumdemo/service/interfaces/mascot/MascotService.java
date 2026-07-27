@@ -25,5 +25,8 @@ public interface MascotService {
     MascotRelatedRecommendationVO recommendRelatedArticles(
             User user, MascotRelatedRecommendationRequest request);
 
+    /** 读取当前用户在指定会话中已保存的相关帖子检索结果。 */
+    List<MascotRelatedRecommendationVO> listRelatedRecommendations(User user, Long sessionId);
+
     List<MascotModelPublicVO> listPublicModels();
 }
