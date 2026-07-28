@@ -212,3 +212,12 @@ export function deleteCompanionSession(sessionId) {
     method: 'delete',
   })
 }
+
+/** 陪伴助手：修改会话名称 */
+export function renameCompanionSession(sessionId, data) {
+  return request({
+    url: `/mascot/companion/sessions/${sessionId}`,
+    method: 'put',
+    data,
+  })
+}

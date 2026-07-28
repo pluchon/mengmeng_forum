@@ -805,7 +805,7 @@
 .mascot-fs-session-item {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 26px;
+  grid-template-columns: minmax(0, 1fr) 26px 26px;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -850,6 +850,7 @@
   color: var(--el-text-color-placeholder);
 }
 
+.mascot-fs-session-item__edit,
 .mascot-fs-session-item__delete {
   display: inline-flex;
   align-items: center;
@@ -867,10 +868,17 @@
   transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
+.mascot-fs-session-item:hover .mascot-fs-session-item__edit,
 .mascot-fs-session-item:hover .mascot-fs-session-item__delete,
+.mascot-fs-session-item:focus-within .mascot-fs-session-item__edit,
 .mascot-fs-session-item:focus-within .mascot-fs-session-item__delete {
   opacity: 1;
   transform: translateX(0);
+}
+
+.mascot-fs-session-item__edit:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--el-color-primary, #f56c8c);
 }
 
 .mascot-fs-session-item__delete:hover {
@@ -878,6 +886,7 @@
   color: #e5484d;
 }
 
+.mascot-fs-session-item__edit:disabled,
 .mascot-fs-session-item__delete:disabled {
   cursor: wait;
   opacity: 0.45;

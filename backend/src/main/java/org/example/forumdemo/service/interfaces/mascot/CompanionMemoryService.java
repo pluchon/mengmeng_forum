@@ -26,5 +26,7 @@ public interface CompanionMemoryService {
 
     List<CompanionMessageVO> listMessages(Long userId, Long sessionId);
 
+    void renameSession(Long userId, Long sessionId, String title);
+
     void deleteSession(Long userId, Long sessionId);
 }
