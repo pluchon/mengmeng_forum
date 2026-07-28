@@ -51,8 +51,7 @@ public class SearchController {
                                                  @RequestParam(required = false) String ai,
                                                  HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
-        boolean preferAiRag = loginUser != null && ai != null
-                && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
+        boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         Long viewerId = loginUser == null ? null : loginUser.getId();
         return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag, viewerId));
     }
