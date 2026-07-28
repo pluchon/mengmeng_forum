@@ -100,10 +100,17 @@
       </div>
 
       <div v-if="!loading && (feedList.length || showRecommendationInterestMask)" class="recommendation-feed-stage">
+        <section v-if="showRecommendationInterestMask" class="recommendation-interest-prompt" aria-label="选择内容偏好">
+          <div class="recommendation-interest-prompt__copy">
+            <span class="recommendation-interest-prompt__eyebrow">为你定制</span>
+            <h2>内容偏好</h2>
+            <p>选择几个内容方向，系统也会参考你的收藏、回复和关注。</p>
+          </div>
+          <el-button type="primary" round @click="openRecommendationPreferences">设置偏好</el-button>
+        </section>
         <div
           ref="masonryRef"
           class="home-masonry"
-          :class="{ 'home-masonry--obscured': showRecommendationInterestMask }"
         >
           <div
             v-for="(col, colIdx) in masonryColumns"
@@ -206,12 +213,6 @@
             </div>
           </div>
         </div>
-        <section v-if="showRecommendationInterestMask" class="recommendation-interest-mask" aria-label="选择推荐兴趣">
-          <div class="recommendation-interest-mask-card">
-            <h2>选择感兴趣的板块</h2>
-            <el-button type="primary" round @click="openRecommendationPreferences">选择兴趣</el-button>
-          </div>
-        </section>
       </div>
 
       <transition name="home-hot-collapse" mode="out-in">
@@ -308,30 +309,13 @@
       />
     </main>
 
-    <el-dialog
-      v-model="recommendationDialogVisible"
-      class="recommendation-interest-dialog"
-      title="兴趣卡片"
-      width="min(620px, calc(100vw - 32px))"
-      :close-on-click-modal="!recommendationSaving"
-      :close-on-press-escape="!recommendationSaving"
-    >
-      <div class="recommendation-interest-groups">
-        <section v-for="item in categoriesWithId" :key="item.category.id" class="recommendation-interest-group">
-          <h3>{{ item.category.name }}</h3>
-          <el-checkbox-group v-model="recommendationDraftBoardIds" :disabled="recommendationSaving">
-            <el-checkbox v-for="board in item.boardList || []" :key="board.id" :value="Number(board.id)">
-              {{ board.name }}
-            </el-checkbox>
-          </el-checkbox-group>
-        </section>
-      </div>
-      <template #footer>
-        <div class="recommendation-dialog-actions">
-          <el-button class="recommendation-save-button" type="primary" :loading="recommendationSaving" @click="saveRecommendationPreferences">保存</el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <InterestPreferenceDialog
+      v-model:visible="recommendationDialogVisible"
+      v-model:board-ids="recommendationDraftBoardIds"
+      :categories="categoriesWithId"
+      :saving="recommendationSaving"
+      @save="saveRecommendationPreferences"
+    />
   </div>
   <router-view />
 </template>

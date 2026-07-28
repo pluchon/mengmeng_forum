@@ -81,51 +81,16 @@
       <div v-else class="login-log-empty">暂无登录记录，成功登录后将自动记录。</div>
     </el-dialog>
 
-    <el-dialog
-      v-model="interestDialogVisible"
-      class="recommendation-interest-dialog"
-      title="兴趣卡片"
-      width="min(620px, calc(100vw - 32px))"
-      :close-on-click-modal="!savingPersonalization"
-      :close-on-press-escape="!savingPersonalization"
-    >
-      <div v-loading="interestLoading" class="settings-interest-editor">
-        <el-result
-          v-if="interestError"
-          icon="error"
-          title="兴趣板块加载失败"
-          :sub-title="interestError"
-        >
-          <template #extra>
-            <el-button type="primary" @click="openInterestEditor">重试</el-button>
-          </template>
-        </el-result>
-        <div v-else-if="categoriesWithId.length" class="recommendation-interest-groups">
-          <section v-for="item in categoriesWithId" :key="item.category.id" class="recommendation-interest-group">
-            <h3>{{ item.category.name }}</h3>
-            <el-checkbox-group v-model="interestDraftBoardIds" :disabled="savingPersonalization">
-              <el-checkbox v-for="board in item.boardList || []" :key="board.id" :value="Number(board.id)">
-                {{ board.name }}
-              </el-checkbox>
-            </el-checkbox-group>
-          </section>
-        </div>
-        <el-empty v-else-if="!interestLoading" :image-size="64" description="暂无可选择的兴趣板块" />
-      </div>
-      <template #footer>
-        <div class="recommendation-dialog-actions">
-          <el-button
-            class="recommendation-save-button"
-            type="primary"
-            :loading="savingPersonalization"
-            :disabled="interestLoading || !!interestError"
-            @click="saveInterestPreferences"
-          >
-            保存
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <InterestPreferenceDialog
+      v-model:visible="interestDialogVisible"
+      v-model:board-ids="interestDraftBoardIds"
+      :categories="categoriesWithId"
+      :loading="interestLoading"
+      :saving="savingPersonalization"
+      :error="interestError"
+      @retry="openInterestEditor"
+      @save="saveInterestPreferences"
+    />
   </section>
 </template>
 
