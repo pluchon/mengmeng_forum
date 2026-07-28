@@ -1,11 +1,13 @@
 # One-shot: build + export nginx/package/ (ONLY upload package/ to the server)
 # Usage: cd nginx; .\scripts\make-package.ps1
 #        .\scripts\make-package.ps1 -SkipDocker -SkipBackend
+#        .\scripts\make-package.ps1 -ShowBuildDetails
 
 param(
     [switch]$SkipDocker,
     [switch]$SkipFront,
-    [switch]$SkipBackend
+    [switch]$SkipBackend,
+    [switch]$ShowBuildDetails
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +25,7 @@ $buildArgs = @()
 if ($SkipDocker) { $buildArgs += "-SkipDocker" }
 if ($SkipFront) { $buildArgs += "-SkipFront" }
 if ($SkipBackend) { $buildArgs += "-SkipBackend" }
+if ($ShowBuildDetails) { $buildArgs += "-ShowBuildDetails" }
 
 & (Join-Path $scriptsDir "build-all.ps1") @buildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

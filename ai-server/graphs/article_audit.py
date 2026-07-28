@@ -229,10 +229,14 @@ def node_summarize(state: AuditState) -> AuditState:
     if not plain or len(plain) < min_len:
         return {"summary": plain[:100] if plain else ""}
     try:
+        flash_model = str(settings.dashscope.get("model_text_flash") or "qwen3.6-flash")
         resp = _runtime.call_llm(
-            lambda: (SUMMARY_TEMPLATE | text_llm(temperature=0.3)).invoke({"text": plain}),
+            lambda: (SUMMARY_TEMPLATE | text_llm(
+                temperature=0.3,
+                model_name=flash_model,
+            )).invoke({"text": plain}),
             trace_id=str(state.get("task_id") or ""),
-            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+            model_name=flash_model,
         )
     except Exception:
         logger.exception("[graph:summarize] 摘要 LLM 失败")

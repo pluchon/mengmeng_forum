@@ -13,7 +13,8 @@ $required = @(
     "start.sh",
     "up.sh",
     "verify-frontend-dist.sh",
-    "sql\create.sql"
+    "sql\create.sql",
+    "sql\incremental_ai_module_release.sql"
 )
 $optional = @("sql\postgres_ai_session.sql", "ssl", "ffmpeg\Dockerfile")
 
