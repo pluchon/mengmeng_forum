@@ -1,3 +1,10 @@
+-- AI 模块线上合并增量（2026-07-28）
+-- 执行对象：已部署的 forum_db。
+-- 可重复执行：建表、索引和模型配置清理均为幂等操作。
+-- 默认不会清空历史会话；仅在首次切换旧 AI 路由且确认可删除历史时，将下方变量改为 1。
+
+SET @purge_legacy_ai_history = 0;
+
 CREATE TABLE IF NOT EXISTS forum_ai_creation_workspace (
     id BIGINT NOT NULL AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
@@ -58,3 +65,61 @@ CREATE TABLE IF NOT EXISTS forum_ai_long_term_memory (
     PRIMARY KEY (id),
     KEY idx_ai_memory_user (user_id, enabled, delete_state, update_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI会员长期记忆';
+
+CREATE TABLE IF NOT EXISTS forum_mascot_related_recommendation (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    companion_session_id BIGINT NOT NULL,
+    query VARCHAR(500) NOT NULL,
+    result_state VARCHAR(16) NOT NULL,
+    result_count INT NOT NULL DEFAULT 0,
+    delete_state TINYINT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_mascot_related_user_session_time (user_id, companion_session_id, delete_state, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘已确认相关帖子检索';
+
+CREATE TABLE IF NOT EXISTS forum_mascot_related_recommendation_item (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    recommendation_id BIGINT NOT NULL,
+    article_id BIGINT NOT NULL,
+    display_order INT NOT NULL,
+    selection_reason VARCHAR(16) NOT NULL,
+    delete_state TINYINT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_mascot_related_recommendation_article (recommendation_id, article_id),
+    KEY idx_mascot_related_item_recommendation (recommendation_id, delete_state, display_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘相关帖子检索结果项';
+
+DELETE FROM forum_ai_model_price
+WHERE provider NOT IN ('dashscope', 'huanapi');
+
+DELETE FROM forum_vip_quota_config
+WHERE icon_provider NOT IN ('qwen', 'openai', 'huanapi');
+
+SET @legacy_column = CONCAT('deep', 'seek_write_used');
+SET @column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'ai_usage_daily'
+      AND column_name = @legacy_column
+);
+SET @rename_sql = IF(
+    @column_exists > 0,
+    CONCAT('ALTER TABLE ai_usage_daily RENAME COLUMN `', @legacy_column, '` TO `qwen_flash_used`'),
+    'SELECT 1'
+);
+PREPARE migration_statement FROM @rename_sql;
+EXECUTE migration_statement;
+DEALLOCATE PREPARE migration_statement;
+
+DELETE FROM forum_companion_message WHERE @purge_legacy_ai_history = 1;
+DELETE FROM forum_companion_session WHERE @purge_legacy_ai_history = 1;
+DELETE FROM forum_ai_call_record WHERE @purge_legacy_ai_history = 1;
+DELETE FROM forum_ai_usage_log WHERE @purge_legacy_ai_history = 1;
+DELETE FROM forum_ai_model_usage_daily WHERE @purge_legacy_ai_history = 1;
+DELETE FROM ai_usage_daily WHERE @purge_legacy_ai_history = 1;

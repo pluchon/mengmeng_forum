@@ -43,10 +43,16 @@ class PostSummaryModule:
     @staticmethod
     async def _summarize(content: str, trace_id: str) -> str:
         def invoke() -> str:
+            flash_model = str(
+                settings.dashscope.get("model_text_flash") or "qwen3.6-flash"
+            )
             response = _runtime.call_llm(
-                lambda: (SUMMARY_TEMPLATE | text_llm(temperature=0.3)).invoke({"text": content}),
+                lambda: (SUMMARY_TEMPLATE | text_llm(
+                    temperature=0.3,
+                    model_name=flash_model,
+                )).invoke({"text": content}),
                 trace_id=trace_id,
-                model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+                model_name=flash_model,
             )
             raw = getattr(response, "content", response)
             if isinstance(raw, list) and raw:

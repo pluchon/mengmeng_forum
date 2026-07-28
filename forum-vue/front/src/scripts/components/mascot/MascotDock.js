@@ -97,7 +97,7 @@ export function useMascotDock() {
     untitledSession: '新会话',
     alreadyNewSession: '当前已是新会话，直接输入即可开始对话',
     deleteSession: '删除会话',
-    renameSession: '编辑会话',
+    renameSession: '编辑会话名称',
     chatEmptyHint: '暂无消息，在下方输入开始对话',
   }
 
@@ -484,9 +484,10 @@ export function useMascotDock() {
     if (!id || nav === 'appearance' || renamingSessionId.value || deletingSessionId.value) return
     let title = ''
     try {
-      const result = await ElMessageBox.prompt('请输入会话名称', uiLabels.renameSession, {
+      const result = await ElMessageBox.prompt('', uiLabels.renameSession, {
         inputValue: String(session.title || '').trim(),
-        inputPlaceholder: '会话名称',
+        inputPlaceholder: '',
+        customClass: 'mascot-session-rename-dialog',
         inputValidator: (value) => {
           const text = String(value || '').trim()
           if (!text) return '会话名称不能为空'
