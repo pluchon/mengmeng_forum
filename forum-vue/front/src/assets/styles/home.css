@@ -1399,47 +1399,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   min-height: 360px;
 }
 
-.home-masonry--obscured {
-  filter: blur(7px);
-  pointer-events: none;
-  user-select: none;
-  transform: scale(1.008);
-}
-
-.recommendation-interest-mask {
-  position: fixed;
-  top: var(--home-top-row-h, 56px);
-  right: 0;
-  bottom: 0;
-  left: 220px;
-  z-index: 130;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(249, 250, 252, 0.28);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-
-.recommendation-interest-mask-card {
-  width: min(420px, 100%);
-  padding: 0;
-  text-align: center;
-}
-
-.recommendation-interest-mask-card h2 {
-  margin: 0 0 22px;
-  color: #2b3038;
-  font-size: 26px;
-  font-weight: 850;
-  line-height: 1.35;
-}
-
-.recommendation-interest-mask-card .el-button {
-  min-width: 120px;
-  font-weight: 750;
-}
-
 .recommendation-reason {
   width: fit-content;
   max-width: 100%;
@@ -1475,67 +1434,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
 
 .home-feed-error {
   padding: 38px 0 10px;
-}
-
-.recommendation-interest-dialog .el-dialog__body {
-  padding: 6px 24px 18px;
-}
-
-.recommendation-interest-dialog .el-dialog__header {
-  margin-right: 0;
-  padding: 22px 56px 14px;
-  text-align: center;
-}
-
-.recommendation-interest-dialog .el-dialog__title {
-  color: #242a33;
-  font-size: 21px;
-  font-weight: 850;
-}
-
-.recommendation-interest-groups {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 2px;
-}
-
-.recommendation-interest-group {
-  padding: 10px 12px;
-  border: 1px solid #eceef2;
-  border-radius: 12px;
-}
-
-.recommendation-interest-group h3 {
-  margin: 0 0 6px;
-  color: #4d5561;
-  font-size: 13px;
-}
-
-.recommendation-interest-group .el-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 13px;
-}
-
-.recommendation-interest-group .el-checkbox {
-  margin-right: 0;
-}
-
-.recommendation-dialog-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.recommendation-save-button {
-  min-width: 112px;
-  min-height: 44px;
-  padding: 0 28px !important;
-  border-radius: 999px !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
 }
 
 /* 首页右侧热帖榜：沿用收藏夹的行式信息密度，不再占用左侧导航。 */
@@ -1726,31 +1624,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   transform: translateX(18px) scale(0.88);
 }
 
-:root[data-theme='dark'] .recommendation-interest-mask {
-  background: rgba(11, 16, 32, 0.34);
-}
-
-:root[data-theme='dark'] .recommendation-interest-mask-card {
-  background: transparent;
-}
-
-:root[data-theme='dark'] .recommendation-interest-mask-card h2 {
-  color: #edf5ff;
-}
-
-:root[data-theme='dark'] .recommendation-interest-dialog .el-dialog__title {
-  color: #edf5ff !important;
-}
-
-:root[data-theme='dark'] .recommendation-interest-group h3 {
-  color: #edf5ff;
-}
-
-:root[data-theme='dark'] .recommendation-interest-group {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.64);
-}
-
 :root[data-theme='dark'] .home-hot-floating {
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.88);
@@ -1780,10 +1653,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
     flex-wrap: wrap;
   }
 
-  .recommendation-interest-mask {
-    left: 72px;
-  }
-
   .home-hot-collapsed-button {
     top: calc(var(--home-top-row-h, 56px) + 88px);
   }
@@ -1800,18 +1669,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
 }
 
 @media (max-width: 640px) {
-  .recommendation-interest-mask {
-    left: 0;
-    padding: 18px;
-  }
-
-  .recommendation-interest-mask-card h2 {
-    font-size: 22px;
-  }
-
-  .recommendation-interest-groups {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* 帖子区：flex 等宽多列瀑布流，列宽由 JS 计算后平分整行 */

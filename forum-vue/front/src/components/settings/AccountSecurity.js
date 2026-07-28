@@ -1,5 +1,6 @@
 import { EditPen } from '@element-plus/icons-vue'
 import editPwdIconUrl from '@/assets/svg/修改.svg?url'
+import InterestPreferenceDialog from '@/components/recommendation/InterestPreferenceDialog.vue'
 import { useAccountSecurity } from '@scripts/components/settings/AccountSecurity'
 
 const emit = defineEmits(['open-password'])

@@ -1,0 +1,198 @@
+:global(.interest-preference-dialog-overlay) {
+  z-index: 10000 !important;
+}
+
+.interest-preference-dialog__header {
+  padding: 8px 18px 0;
+}
+
+.interest-preference-dialog__eyebrow {
+  color: #ff5570;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.interest-preference-dialog__title {
+  margin: 8px 0 6px;
+  color: #20242d;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.interest-preference-dialog__description {
+  margin: 0;
+  color: #77808d;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.interest-preference-dialog__body {
+  min-height: 220px;
+  padding: 8px 18px 0;
+}
+
+.interest-preference-dialog__summary,
+.interest-preference-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.interest-preference-dialog__summary {
+  margin-bottom: 16px;
+  color: #5f6876;
+  font-size: 13px;
+}
+
+.interest-preference-dialog__summary strong {
+  color: #ff2442;
+  font-size: 16px;
+}
+
+.interest-preference-dialog__hint {
+  color: #9aa2ae;
+}
+
+.interest-preference-dialog__groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.interest-preference-dialog__group {
+  min-height: 148px;
+  padding: 16px;
+  border: 1px solid #ebeef3;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff, #fbfcff);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.interest-preference-dialog__group:hover {
+  border-color: rgba(255, 36, 66, .24);
+  box-shadow: 0 10px 24px rgba(51, 65, 85, .07);
+  transform: translateY(-1px);
+}
+
+.interest-preference-dialog__group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.interest-preference-dialog__group-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: #fff0f3;
+  color: #ff4260;
+  font-size: 16px;
+}
+
+.interest-preference-dialog__group h3 {
+  margin: 0;
+  color: #3b4350;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.interest-preference-dialog__group p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #9aa2ae;
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interest-preference-dialog__group :deep(.el-checkbox-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interest-preference-dialog__option {
+  margin-right: 0;
+}
+
+.interest-preference-dialog__option :deep(.el-checkbox__label) {
+  padding: 6px 9px 6px 5px;
+  border: 1px solid #edf0f4;
+  border-radius: 999px;
+  color: #697280;
+  font-size: 13px;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.interest-preference-dialog__option.is-checked :deep(.el-checkbox__label) {
+  border-color: rgba(255, 36, 66, .18);
+  background: #fff0f3;
+  color: #ed2340;
+}
+
+.interest-preference-dialog__footer {
+  padding: 4px 18px 12px;
+  color: #9098a5;
+  font-size: 12px;
+}
+
+.interest-preference-dialog__footer :deep(.el-button) {
+  min-width: 112px;
+  font-weight: 750;
+}
+
+:global(:root[data-theme='dark']) .interest-preference-dialog__title,
+:global(:root[data-theme='dark']) .interest-preference-dialog__group h3 {
+  color: #edf5ff;
+}
+
+:global(:root[data-theme='dark']) .interest-preference-dialog__description,
+:global(:root[data-theme='dark']) .interest-preference-dialog__summary,
+:global(:root[data-theme='dark']) .interest-preference-dialog__footer {
+  color: #aebbd0;
+}
+
+:global(:root[data-theme='dark']) .interest-preference-dialog__group {
+  border-color: rgba(148, 163, 184, .18);
+  background: linear-gradient(145deg, rgba(30, 41, 59, .92), rgba(15, 23, 42, .82));
+}
+
+:global(:root[data-theme='dark']) .interest-preference-dialog__option :deep(.el-checkbox__label) {
+  border-color: rgba(148, 163, 184, .18);
+  color: #c3cedf;
+}
+
+:global(:root[data-theme='dark']) .interest-preference-dialog__option.is-checked :deep(.el-checkbox__label) {
+  border-color: rgba(255, 111, 134, .3);
+  background: rgba(255, 70, 97, .14);
+  color: #ff9aaa;
+}
+
+@media (max-width: 640px) {
+  .interest-preference-dialog__header,
+  .interest-preference-dialog__body,
+  .interest-preference-dialog__footer {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .interest-preference-dialog__title {
+    font-size: 24px;
+  }
+
+  .interest-preference-dialog__groups {
+    grid-template-columns: 1fr;
+  }
+
+  .interest-preference-dialog__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
