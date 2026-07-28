@@ -175,7 +175,22 @@ public class MascotServiceImpl implements MascotService {
         Long sessionId = request.getSessionId();
         requireOwnedSession(user.getId(), sessionId);
 
-        String query = request.getQuery().trim();
+        String query = normalizeRelatedQuery(request.getQuery());
+        ForumMascotRelatedRecommendation existing = mascotRelatedRecommendationMapper.selectOne(
+                Wrappers.lambdaQuery(ForumMascotRelatedRecommendation.class)
+                        .eq(ForumMascotRelatedRecommendation::getUserId, user.getId())
+                        .eq(ForumMascotRelatedRecommendation::getCompanionSessionId, sessionId)
+                        .eq(ForumMascotRelatedRecommendation::getQuery, query)
+                        .eq(ForumMascotRelatedRecommendation::getDeleteState, (byte) 0)
+                        .orderByDesc(ForumMascotRelatedRecommendation::getId)
+                        .last("LIMIT 1"));
+        if (existing != null) {
+            return listRelatedRecommendations(user, sessionId).stream()
+                    .filter(item -> existing.getId().equals(item.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ApplicationException(Result.fail(
+                            ResultCode.FAILED_MASCOT_AI, "相关帖子检索结果读取失败")));
+        }
         List<MascotRelatedArticleCandidate> candidates = mascotArticleRagHelper.findConfirmedRelatedCandidates(query);
         List<RelatedArticleSelection> selections = selectRelatedArticles(candidates);
 
@@ -210,8 +225,8 @@ public class MascotServiceImpl implements MascotService {
                         .eq(ForumMascotRelatedRecommendation::getUserId, user.getId())
                         .eq(ForumMascotRelatedRecommendation::getCompanionSessionId, sessionId)
                         .eq(ForumMascotRelatedRecommendation::getDeleteState, (byte) 0)
-                        .orderByAsc(ForumMascotRelatedRecommendation::getCreateTime)
-                        .orderByAsc(ForumMascotRelatedRecommendation::getId));
+                        .orderByDesc(ForumMascotRelatedRecommendation::getCreateTime)
+                        .orderByDesc(ForumMascotRelatedRecommendation::getId));
         if (recommendations.isEmpty()) {
             return Collections.emptyList();
         }
@@ -254,7 +269,11 @@ public class MascotServiceImpl implements MascotService {
         }
 
         List<MascotRelatedRecommendationVO> result = new ArrayList<>();
+        Set<String> loadedQueries = new HashSet<>();
         for (ForumMascotRelatedRecommendation recommendation : recommendations) {
+            if (!loadedQueries.add(normalizeRelatedQuery(recommendation.getQuery()))) {
+                continue;
+            }
             List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
             for (ForumMascotRelatedRecommendationItem savedItem : itemsByRecommendationId
                     .getOrDefault(recommendation.getId(), Collections.emptyList())) {
@@ -277,6 +296,10 @@ public class MascotServiceImpl implements MascotService {
             result.add(vo);
         }
         return result;
+    }
+
+    private String normalizeRelatedQuery(String query) {
+        return query == null ? "" : query.trim().replaceAll("\\s+", " ");
     }
 
     private void requireOwnedSession(Long userId, Long sessionId) {

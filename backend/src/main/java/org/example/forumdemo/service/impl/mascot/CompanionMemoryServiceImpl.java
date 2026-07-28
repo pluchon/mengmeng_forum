@@ -215,6 +215,25 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void renameSession(Long userId, Long sessionId, String title) {
+        String normalizedTitle = title == null ? "" : title.trim();
+        if (userId == null || userId <= 0 || sessionId == null || sessionId <= 0
+                || normalizedTitle.isBlank() || normalizedTitle.length() > TITLE_MAX) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int updated = companionSessionMapper.update(null, new LambdaUpdateWrapper<ForumCompanionSession>()
+                .eq(ForumCompanionSession::getId, sessionId)
+                .eq(ForumCompanionSession::getUserId, userId)
+                .eq(ForumCompanionSession::getDeleteState, (byte) 0)
+                .set(ForumCompanionSession::getTitle, normalizedTitle)
+                .set(ForumCompanionSession::getUpdateTime, new Date()));
+        if (updated <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "会话不存在"));
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteSession(Long userId, Long sessionId) {
         if (userId == null || userId <= 0 || sessionId == null || sessionId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));

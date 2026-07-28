@@ -157,10 +157,20 @@
                   </span>
                   <button
                     type="button"
+                    class="mascot-fs-session-item__edit"
+                    :aria-label="`${uiLabels.renameSession}：${sess.title || uiLabels.untitledSession}`"
+                    :title="uiLabels.renameSession"
+                    :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
+                    @click.stop="renameSession(sess)"
+                  >
+                    <el-icon><Edit /></el-icon>
+                  </button>
+                  <button
+                    type="button"
                     class="mascot-fs-session-item__delete"
                     :aria-label="`${uiLabels.deleteSession}：${sess.title || uiLabels.untitledSession}`"
                     :title="uiLabels.deleteSession"
-                    :disabled="Boolean(deletingSessionId)"
+                    :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
                     @click.stop="deleteSession(sess)"
                   >
                     <el-icon><Delete /></el-icon>
@@ -328,7 +338,7 @@
                   :image-generating="imageGenerating"
                   :vip="isVip"
                   :placeholder="inputPlaceholder"
-                  generation-hint="AI 生成内容仅供参考，请结合自己的想法修改"
+                  generation-hint="AI 也有可能出错，请自行甄别"
                   :show-points-pay-button="showPointsPayButton"
                   :points-pay-active="usePointsBilling"
                   @send="send"
@@ -348,7 +358,7 @@
 </template>
 
 <script setup>
-import { Delete, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import MascotRelatedArticlesDialog from '@/components/mascot/MascotRelatedArticlesDialog.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -364,6 +374,8 @@ const {
       draft,
       deleteSession,
       deletingSessionId,
+  renameSession,
+  renamingSessionId,
   dismissRelatedSearchOffer,
   showPointsPayButton,
   togglePointsPay,

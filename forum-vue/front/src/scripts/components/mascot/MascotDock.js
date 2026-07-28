@@ -14,6 +14,7 @@ import {
   getCompanionSessions,
   getCompanionMessages,
   deleteCompanionSession,
+  renameCompanionSession,
 } from '@/api/mascot'
 import { aiPriceEstimate } from '@/api/ai'
 import { DEFAULT_AVATAR } from '@/utils/constants'
@@ -96,6 +97,7 @@ export function useMascotDock() {
     untitledSession: '新会话',
     alreadyNewSession: '当前已是新会话，直接输入即可开始对话',
     deleteSession: '删除会话',
+    renameSession: '编辑会话',
     chatEmptyHint: '暂无消息，在下方输入开始对话',
   }
 
@@ -133,6 +135,7 @@ export function useMascotDock() {
   const loading = ref(false)
   const imageGenerating = ref(false)
   const deletingSessionId = ref('')
+  const renamingSessionId = ref('')
   const sessionId = ref('')
   const localSessionsByMode = ref({
     chat: [],
@@ -461,6 +464,7 @@ export function useMascotDock() {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
           messages.value = mapVoToMessages(res.data)
+          await restoreRelatedRecommendations(id)
           cacheSessionMessages(nav, id, messages.value)
           scrollFsToBottom()
           return
@@ -470,7 +474,52 @@ export function useMascotDock() {
       }
     }
     messages.value = (sess.messages || []).map((m) => ({ ...m }))
+    await restoreRelatedRecommendations(id)
     scrollFsToBottom()
+  }
+
+  async function renameSession(session) {
+    const id = String(session?.id || '')
+    const nav = activeNav.value
+    if (!id || nav === 'appearance' || renamingSessionId.value || deletingSessionId.value) return
+    let title = ''
+    try {
+      const result = await ElMessageBox.prompt('请输入会话名称', uiLabels.renameSession, {
+        inputValue: String(session.title || '').trim(),
+        inputPlaceholder: '会话名称',
+        inputValidator: (value) => {
+          const text = String(value || '').trim()
+          if (!text) return '会话名称不能为空'
+          if (text.length > 48) return '会话名称最长 48 个字符'
+          return true
+        },
+      })
+      title = String(result.value || '').trim()
+    } catch {
+      return
+    }
+
+    renamingSessionId.value = id
+    try {
+      if (userStore.isLoggedIn && /^\d+$/.test(id)) {
+        const res = await renameCompanionSession(id, { title })
+        if (res.code !== 0) {
+          throw new Error(res.message || '修改失败')
+        }
+      }
+      const sessions = [...(localSessionsByMode.value[nav] || [])]
+      const index = sessions.findIndex((item) => String(item.id) === id)
+      if (index >= 0) {
+        sessions[index] = { ...sessions[index], title, updateTime: Date.now() }
+        localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: sessions }
+        saveLocalSessionsToStorage()
+      }
+      ElMessage.success('会话名称已更新')
+    } catch (error) {
+      ElMessage.error(error?.message || '修改失败')
+    } finally {
+      renamingSessionId.value = ''
+    }
   }
 
   async function deleteSession(session) {
@@ -626,21 +675,33 @@ export function useMascotDock() {
           .filter((message) => message.type === 'related-result' && message.recommendationId)
           .map((message) => String(message.recommendationId)),
       )
-      const restored = res.data
-        .filter((recommendation) => !restoredIds.has(String(recommendation.id)))
-        .map((recommendation) => {
-          const items = Array.isArray(recommendation.items) ? recommendation.items : []
-          if (!items.length) return null
-          return {
-            role: 'assistant',
-            type: 'related-result',
-            content: `检索到 ${items.length} 条相关帖子`,
-            relatedItems: items,
-            recommendationId: recommendation.id,
-            at: Date.now(),
-          }
+      const restoredQueries = new Set(
+        messages.value
+          .filter((message) => message.type === 'related-result')
+          .map((message) => normalizeRelatedQuery(message.relatedQuery))
+          .filter(Boolean),
+      )
+      const restored = []
+      for (const recommendation of res.data) {
+        const recommendationId = String(recommendation.id)
+        const relatedQuery = normalizeRelatedQuery(recommendation.query)
+        if (restoredIds.has(recommendationId) || (relatedQuery && restoredQueries.has(relatedQuery))) {
+          continue
+        }
+        restoredIds.add(recommendationId)
+        if (relatedQuery) restoredQueries.add(relatedQuery)
+        const items = Array.isArray(recommendation.items) ? recommendation.items : []
+        if (!items.length) continue
+        restored.push({
+          role: 'assistant',
+          type: 'related-result',
+          content: `检索到 ${items.length} 条相关帖子`,
+          relatedItems: items,
+          relatedQuery,
+          recommendationId: recommendation.id,
+          at: Date.now(),
         })
-        .filter(Boolean)
+      }
       if (restored.length) messages.value.push(...restored)
     } catch {
       /* 已加载会话消息时，推荐恢复失败不影响对话 */
@@ -696,16 +757,23 @@ export function useMascotDock() {
       }
       message.relatedSearchOffer = null
       const items = Array.isArray(res.data?.items) ? res.data.items : []
-      if (items.length) {
+      const relatedQuery = normalizeRelatedQuery(res.data?.query || offer.query)
+      const hasRelatedResult = messages.value.some((item) => (
+        item.type === 'related-result'
+        && relatedQuery
+        && normalizeRelatedQuery(item.relatedQuery) === relatedQuery
+      ))
+      if (items.length && !hasRelatedResult) {
         messages.value.push({
           role: 'assistant',
           type: 'related-result',
           content: `检索到 ${items.length} 条相关帖子`,
           relatedItems: items,
+          relatedQuery,
           recommendationId: res.data?.id,
           at: Date.now(),
         })
-      } else {
+      } else if (!hasRelatedResult) {
         messages.value.push({
           role: 'assistant',
           type: 'text',
@@ -722,6 +790,10 @@ export function useMascotDock() {
         message.relatedSearchOffer.loading = false
       }
     }
+  }
+
+  function normalizeRelatedQuery(query) {
+    return String(query || '').trim().replace(/\s+/g, ' ')
   }
 
   function openRelatedRecommendation(items) {
@@ -1770,6 +1842,8 @@ export function useMascotDock() {
     onStagePointerMove,
     onStagePointerUp,
     regenerateAssistant,
+    renameSession,
+    renamingSessionId,
     renderMascotMarkdown,
     pendingCode,
     pointsWallet,

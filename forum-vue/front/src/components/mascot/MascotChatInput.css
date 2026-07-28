@@ -77,9 +77,10 @@
 }
 
 .mascot-input-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 0 2px;
 }
 
@@ -113,6 +114,7 @@
   overflow: hidden;
   color: var(--el-text-color-secondary, #909399);
   font-size: 11px;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

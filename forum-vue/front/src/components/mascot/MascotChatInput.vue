@@ -39,11 +39,7 @@
             role="button"
             tabindex="0"
           >
-            <img :src="activeImageOption?.icon" alt="" class="mascot-llm-ico">
-            <span class="mascot-llm-meta mascot-llm-meta--inline">
-              <span class="mascot-llm-txt">{{ activeImageOption?.label ?? '生图' }}</span>
-              <span v-if="activeImageOption?.hint" class="mascot-llm-hint">{{ activeImageOption.hint }}</span>
-            </span>
+            <span class="mascot-model-selector__label">生图模型</span>
             <span class="mascot-llm-caret">▾</span>
           </span>
           <template #dropdown>
@@ -66,8 +62,6 @@
           </template>
         </el-dropdown>
 
-        <span class="mascot-generation-hint">{{ generationHint }}</span>
-
         <button
           v-if="showPointsPayButton"
           type="button"
@@ -78,6 +72,7 @@
           {{ pointsPayActive ? '已用萌币' : '使用萌币积分' }}
         </button>
       </div>
+      <span class="mascot-generation-hint">{{ generationHint }}</span>
       <span class="mascot-counter" aria-live="polite">{{ charCount }} / 2000</span>
     </div>
   </div>

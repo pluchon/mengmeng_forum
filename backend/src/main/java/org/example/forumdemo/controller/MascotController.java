@@ -9,6 +9,7 @@ import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.dto.mascot.CompanionSessionRenameRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationRequest;
 import org.example.forumdemo.entity.vo.mascot.CompanionMessageVO;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -157,6 +159,20 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(companionMemoryService.listMessages(user.getId(), sessionId));
+    }
+
+    /** 修改陪伴助手会话名称 */
+    @PutMapping("/companion/sessions/{sessionId}")
+    public Result<Void> renameCompanionSession(
+            @PathVariable @Positive Long sessionId,
+            @Valid @RequestBody CompanionSessionRenameRequest request,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        companionMemoryService.renameSession(user.getId(), sessionId, request.getTitle());
+        return Result.success();
     }
 
     /** 删除陪伴助手会话 */

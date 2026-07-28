@@ -22,11 +22,11 @@
         <div class="mascot-related-dialog__main">
           <div class="mascot-related-dialog__title">{{ item.article?.title }}</div>
           <div class="mascot-related-dialog__snippet">{{ item.article?.content }}</div>
-        </div>
-        <div class="mascot-related-dialog__stats">
-          <span>赞 {{ item.article?.likeCount ?? 0 }}</span>
-          <span>评 {{ item.article?.replyCount ?? 0 }}</span>
-          <span>藏 {{ item.article?.favoriteCount ?? 0 }}</span>
+          <div class="mascot-related-dialog__stats">
+            <span>赞 {{ item.article?.likeCount ?? 0 }}</span>
+            <span>评 {{ item.article?.replyCount ?? 0 }}</span>
+            <span>藏 {{ item.article?.favoriteCount ?? 0 }}</span>
+          </div>
         </div>
         <div class="mascot-related-dialog__author">
           <img :src="item.author?.avatarUrl || DEFAULT_AVATAR" alt="">
