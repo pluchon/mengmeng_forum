@@ -31,9 +31,6 @@ public class FavoriteController {
     @Autowired
     private FavoriteArticleService favoriteService;
 
-    // ============================================================
-    // 收藏夹
-    // ============================================================
     @Operation(summary = "创建收藏夹",
             description = "name 必填, isPublic 留空按 1(公开). 同一用户同名夹返回 1149.")
     @PostMapping("/folder/create")
