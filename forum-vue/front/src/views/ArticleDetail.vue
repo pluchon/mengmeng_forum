@@ -234,7 +234,7 @@
                   </button>
                 </div>
                 <button
-                  v-if="!isOwner && !isNotInterested"
+                  v-if="!isNotInterested"
                   type="button"
                   class="article-not-interested-trigger"
                   aria-label="不感兴趣"
