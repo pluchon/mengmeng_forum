@@ -1,5 +1,5 @@
 import { computed, ref, watch, nextTick } from 'vue'
-import { Loading, MagicStick, Promotion } from '@element-plus/icons-vue'
+import { Loading, Promotion, ScaleToOriginal } from '@element-plus/icons-vue'
 import { findImageQualityOption } from '@/constants/aiModels'
 
 const props = defineProps({
@@ -31,7 +31,11 @@ const emit = defineEmits([
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
-const activeImageOption = computed(() => findImageQualityOption(props.imageQuality) || props.imageOptions[0])
+const activeImageOption = computed(() =>
+  props.imageOptions.find((item) => item.id === props.imageQuality)
+  || findImageQualityOption(props.imageQuality)
+  || props.imageOptions[0]
+)
 const contextPercent = computed(() => {
   if (!props.contextMaxTokens) return 0
   return Math.max(0, Math.min(100, (props.contextUsedTokens / props.contextMaxTokens) * 100))

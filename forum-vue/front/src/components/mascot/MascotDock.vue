@@ -202,7 +202,7 @@
                         :class="[m.role, { 'mascot-msg-row--context': m.type === 'context_summary' }]"
                       >
                       <template v-if="m.type === 'context_summary'">
-                        <div class="mascot-context-marker"><span>———————</span><el-icon><MagicStick /></el-icon><span>上下文已压缩</span><span>———————</span></div>
+                        <div class="mascot-context-marker"><span>———————</span><el-icon><ScaleToOriginal /></el-icon><span>上下文已压缩</span><span>———————</span></div>
                       </template>
                       <template v-else>
                       <img
@@ -369,7 +369,7 @@
 </template>
 
 <script setup>
-import { Delete, Edit, MagicStick, Picture, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
+import { Delete, Edit, Picture, Plus, Refresh, ScaleToOriginal, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import MascotRelatedArticlesDialog from '@/components/mascot/MascotRelatedArticlesDialog.vue'
 import MascotSearchGalleryDialog from '@/components/mascot/MascotSearchGalleryDialog.vue'

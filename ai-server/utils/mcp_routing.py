@@ -22,6 +22,17 @@ _FORUM_INTERNAL_RE = re.compile(
     r"账号|注册|登录|萌萌技术分享笔记|论坛|板块|版主|管理员",
     re.I,
 )
+_EXPLICIT_WEB_IMAGE_REQUEST_RE = re.compile(
+    r"(?:联网|网络|网上|互联网|网页|百科).{0,24}(?:图片|图集|配图|照片)|"
+    r"(?:搜|搜索|找|抓取).{0,24}(?:图片|图集|配图|照片)|"
+    r"(?:展示|显示|看看).{0,20}(?:图片|图集|配图|照片)",
+    re.I,
+)
+
+
+def is_explicit_web_image_request(message: str) -> bool:
+    """识别用户明确要求联网检索并展示图片的请求。"""
+    return bool(_EXPLICIT_WEB_IMAGE_REQUEST_RE.search((message or "").strip()))
 
 
 def _mcp_enabled() -> bool:
@@ -32,6 +43,11 @@ def _mcp_enabled() -> bool:
     if not tav.get("enabled", True):
         return False
     return bool((tav.get("api_key") or "").strip())
+
+
+def is_tavily_search_enabled() -> bool:
+    """供看板娘编排层判断联网检索是否可用。"""
+    return _mcp_enabled()
 
 
 def local_kb_covers_writing(message: str) -> tuple[bool, str]:

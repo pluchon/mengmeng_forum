@@ -40,6 +40,7 @@
             tabindex="0"
           >
             <span class="mascot-model-selector__label">生图模型</span>
+            <img v-if="activeImageOption?.icon" :src="activeImageOption.icon" alt="" class="mascot-model-selector__icon">
             <span class="mascot-llm-caret">▾</span>
           </span>
           <template #dropdown>
@@ -76,7 +77,7 @@
             aria-label="压缩上下文"
             @click="emit('compress-context')"
           >
-            <el-icon :class="{ 'is-loading': contextCompressing }"><MagicStick /></el-icon>
+            <el-icon :class="{ 'is-loading': contextCompressing }"><ScaleToOriginal /></el-icon>
           </button>
         </div>
 

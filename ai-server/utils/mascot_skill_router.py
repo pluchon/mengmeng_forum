@@ -11,7 +11,7 @@ from typing import Any
 
 from clients.dashscope_chat_client import dashscope_chat_completion
 from config import settings
-from utils.mcp_routing import _FORUM_INTERNAL_RE
+from utils.mcp_routing import _FORUM_INTERNAL_RE, is_explicit_web_image_request
 
 _TRAVEL_SCENE_RE = re.compile(
     r"雪山|川西|西藏|新疆|云南|旅行|旅游|自驾|路线|攻略|景点|想去|去看看|"
@@ -53,6 +53,8 @@ def _heuristic_route(message: str) -> str | None:
     msg = (message or "").strip()
     if not msg:
         return "help"
+    if is_explicit_web_image_request(msg):
+        return "writing"
     if _TRAVEL_SCENE_RE.search(msg):
         return "writing"
     if _WRITING_STRONG_RE.search(msg):
