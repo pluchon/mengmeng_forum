@@ -1,5 +1,6 @@
 package org.example.forumdemo.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.example.forumdemo.common.constant.Constant;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@Tag(name = "群聊", description = "群聊、成员与消息管理")
 @RestController
 @RequestMapping("/group-chat")
 public class GroupChatController {

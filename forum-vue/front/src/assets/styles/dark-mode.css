@@ -2351,7 +2351,6 @@
 }
 
 :root[data-theme='dark'] .red-settings-page :where(
-  .setting-label-icon,
   .security-pwd-icon
 ) {
   filter: brightness(0) invert(0.78) sepia(0.16) saturate(1.8) hue-rotate(176deg) !important;

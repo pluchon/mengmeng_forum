@@ -1,15 +1,17 @@
 -- PostgreSQL：AI 多轮会话（封面配图要点 / 看板娘绘画等 LangGraph 状态）
 -- 在目标库中执行；与 MySQL forum_db 仅通过 user_id 逻辑关联。
--- 本文件可重复执行。已有库仅需跑下方 ALTER / 索引 / 触发器段时，也可单独执行同目录 incremental_postgres_ai_session.sql。
+-- 本文件可重复执行；已有库直接重复执行即可补齐扩展、索引与触发器。
 -- 开发清空 LangGraph checkpoint：见 ai-server/clients/checkpoint.py（PostgresSaver auto_setup）。
 -- 看板娘对话历史在 MySQL forum_companion_*，需整库重跑 create.sql 或 TRUNCATE 该两表。
 --
 -- LangGraph PostgresSaver 会在同一库自动创建 checkpoint_* 系统表，与本文件业务表互不冲突。
--- MySQL forum_ai_usage_log.related_id 可与 ai_chat_session.id / client_request_id 对齐做计费幂等。
+-- MySQL 的创作工作区、任务状态与看板娘会话由 forum_db 管理；PostgreSQL 仅保存 LangGraph checkpoint 与本文件定义的会话索引。
 --
 -- 可选独立 schema：
 --   CREATE SCHEMA IF NOT EXISTS forum_ai;
 --   SET search_path TO forum_ai;
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS ai_chat_session (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),

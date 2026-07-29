@@ -139,12 +139,10 @@ if (Test-Path $sqlSrc) {
         Copy-Item $_.FullName (Join-Path $sqlDst $_.Name) -Force
     }
 }
-$staticSqlSrc = Join-Path $repoRoot "backend\src\main\resources\static\incremental_ai_module_release.sql"
-if (-not (Test-Path $staticSqlSrc)) {
-    throw "Missing merged online SQL: $staticSqlSrc"
+$incrementalSqlSrc = Join-Path $repoRoot "backend\src\main\resources\sql\incremental_mysql_release.sql"
+if (-not (Test-Path $incrementalSqlSrc)) {
+    throw "Missing merged MySQL incremental SQL: $incrementalSqlSrc"
 }
-New-Item -ItemType Directory -Force -Path $sqlDst | Out-Null
-Copy-Item $staticSqlSrc (Join-Path $sqlDst "incremental_ai_module_release.sql") -Force
 
 $startSh = @'
 #!/bin/bash

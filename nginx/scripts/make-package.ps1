@@ -21,13 +21,14 @@ Write-Host " Classic: dist/ bind mount (not static image)" -ForegroundColor Yell
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$buildArgs = @()
-if ($SkipDocker) { $buildArgs += "-SkipDocker" }
-if ($SkipFront) { $buildArgs += "-SkipFront" }
-if ($SkipBackend) { $buildArgs += "-SkipBackend" }
-if ($ShowBuildDetails) { $buildArgs += "-ShowBuildDetails" }
+$buildParams = @{
+    SkipDocker = $SkipDocker
+    SkipFront = $SkipFront
+    SkipBackend = $SkipBackend
+    ShowBuildDetails = $ShowBuildDetails
+}
 
-& (Join-Path $scriptsDir "build-all.ps1") @buildArgs
+& (Join-Path $scriptsDir "build-all.ps1") @buildParams
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & (Join-Path $scriptsDir "export-images.ps1")

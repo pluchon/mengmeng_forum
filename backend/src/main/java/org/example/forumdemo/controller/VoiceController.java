@@ -1,5 +1,6 @@
 package org.example.forumdemo.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "音视频配置", description = "WebRTC ICE 配置")
 @RestController
 @RequestMapping("/voice")
 public class VoiceController {
