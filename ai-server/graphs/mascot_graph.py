@@ -59,8 +59,6 @@ class MascotState(TypedDict, total=False):
     client_datetime: str
     client_location: str
     datetime_context: str
-    travel_guidance: str
-    travel_phase: str
     mcp_used: bool
     reply: str
     live2d: dict[str, Any]
@@ -284,7 +282,6 @@ def _build_agent_messages(state: dict[str, Any], *, stream: bool = False) -> tup
         appearance,
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
-        travel_guidance=state.get("travel_guidance") or "",
     )
     msgs: list = [SystemMessage(content=sys)]
     for item in history[-max_turns:]:
@@ -414,7 +411,6 @@ def _skill_system_stream(
     *,
     local_kb: str = "",
     mcp_context: str = "",
-    travel_guidance: str = "",
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
@@ -436,19 +432,14 @@ def _skill_system_stream(
         extra = ""
         if local_kb:
             extra += f"\n【本站知识库（优先使用，无需编造）】\n{local_kb}\n"
-        if travel_guidance:
-            extra += f"\n【出行对话指引】\n{travel_guidance}\n"
         if mcp_context:
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
-你正在「对话」模式：可协助写帖、解答站点问题、回答地点和行程问题。回复直接给用户可用的内容。
+你正在「对话」模式：可协助写帖、解答站点问题、聊聊地点和天气等生活话题。回复直接给用户可用的内容。
 若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
 若系统已展示联网配图，正文无需再插入多张图片；不要说自己无法联网或无法展示图片。
-不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。"""
-        if travel_guidance and "Markdown 表格" in travel_guidance:
-            tail += " 路线建议用 Markdown 表格清楚列出阶段，并单独写目的地天气。"
-        else:
-            tail += " 普通对话用自然短文即可。"
+不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。
+若有用户所在城市的生活参考，只在当前外出话题确实相关时自然带一句；不要提及 IP、定位过程或精确地址。普通对话用自然短文即可。"""
         return base + tail + extra
     return base + """
 basic 用户若要求重度能力，礼貌说明 VIP 功能。"""
@@ -461,7 +452,6 @@ def _skill_system(
     *,
     local_kb: str = "",
     mcp_context: str = "",
-    travel_guidance: str = "",
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
@@ -484,14 +474,11 @@ reply 先回应用户真正关心的内容，不要描述自己的工作流程�
         extra = ""
         if local_kb:
             extra += f"\n【本站知识库（优先使用，无需编造）】\n{local_kb}\n"
-        if travel_guidance:
-            extra += f"\n【出行对话指引】\n{travel_guidance}\n"
         if mcp_context:
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
-你正在「对话」模式：可协助写帖、解答站点问题、回答地点和行程问题。直接给用户可用的内容。"""
-        if travel_guidance and "Markdown 表格" in travel_guidance:
-            tail += " 路线建议请在 reply 中用 Markdown 表格写阶段路线，并写天气小节。"
+你正在「对话」模式：可协助写帖、解答站点问题、聊聊地点和天气等生活话题。直接给用户可用的内容。
+若有用户所在城市的生活参考，只在当前外出话题确实相关时自然带一句；不要提及 IP、定位过程或精确地址。"""
         return base + tail + extra
     return base + """
 basic 用户若要求重度能力，礼貌说明 VIP 功能；live2d.suggested_appearance 仅 legacy: standard|keyboard|gamepad 或 null。"""
@@ -519,8 +506,6 @@ def node_assess(state: MascotState) -> MascotState:
         "mcp_context": bundle.get("mcp_context") or "",
         "local_kb_snippet": bundle.get("local_kb_snippet") or "",
         "datetime_context": bundle.get("datetime_context") or "",
-        "travel_guidance": bundle.get("travel_guidance") or "",
-        "travel_phase": bundle.get("travel_phase") or "none",
         "mcp_used": bool(bundle.get("mcp_used")),
     }
     return out
@@ -588,7 +573,6 @@ def node_agent(state: MascotState) -> MascotState:
         appearance,
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
-        travel_guidance=state.get("travel_guidance") or "",
     )
 
     msgs: list = [SystemMessage(content=sys)]
