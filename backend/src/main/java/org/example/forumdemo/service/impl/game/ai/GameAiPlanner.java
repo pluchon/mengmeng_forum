@@ -35,10 +35,6 @@ public final class GameAiPlanner {
         return consultLlm ? 650L : 320L;
     }
 
-    public static long jinziMinThinkMs() {
-        return 280L;
-    }
-
     public static String formatModelLabel(String modelCode, boolean usedLlm, boolean fallback) {
         String safe = AI_MODEL_PRO.equals(modelCode) ? AI_MODEL_PRO : "qwen3.6-flash";
         if (usedLlm && !fallback) {

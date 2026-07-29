@@ -6,13 +6,19 @@ import { getJinziRoom, surrenderJinziRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
-import { modelIcon } from '@/constants/aiModels'
 
 let timer = null
 let finishRedirectTimer = null
 
 function emptyBoard() {
   return Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0))
+}
+
+function normalizeBoard(board) {
+  if (!Array.isArray(board) || board.length !== 3 || board.some((row) => !Array.isArray(row) || row.length !== 3)) {
+    return emptyBoard()
+  }
+  return board.map((row) => row.map((cell) => (Number(cell) === 1 || Number(cell) === 2 ? Number(cell) : 0)))
 }
 
 function endReasonText(reason) {
@@ -62,8 +68,6 @@ const room = reactive({
   blackRemainingMs: 120000,
   whiteRemainingMs: 120000,
   moveRemainingMs: 20000,
-  aiRoom: false,
-  aiThinking: false,
   winningLine: [],
   blackPlayer: null,
   whitePlayer: null,
@@ -101,11 +105,6 @@ const roomSocket = useGameWebSocket(`games/jinzi/rooms/${roomId.value}`, {
 const boardRows = computed(() => room.board || emptyBoard())
 const isFinished = computed(() => room.roomStatus === 'FINISHED')
 const isMyTurn = computed(() => !isFinished.value && room.currentTurnUserId === room.thisUserId)
-const isAiThinking = computed(() => {
-  if (!room.aiRoom || isFinished.value) return false
-  if (room.aiThinking) return true
-  return !isMyTurn.value && room.roomStatus === 'PLAYING'
-})
 const currentTurnChess = computed(() => {
   if (room.currentTurnUserId === room.blackUserId) return 1
   if (room.currentTurnUserId === room.whiteUserId) return 2
@@ -117,7 +116,7 @@ const myChess = computed(() => {
   return 0
 })
 const blackPlayer = computed(() => room.blackPlayer || fallbackParticipant(room.blackUserId, '×方'))
-const whitePlayer = computed(() => room.whitePlayer || fallbackParticipant(room.whiteUserId, room.aiRoom ? '同水平AI' : '○方'))
+const whitePlayer = computed(() => room.whitePlayer || fallbackParticipant(room.whiteUserId, '○方'))
 const opponentProfile = computed(() => room.opponentPlayer || (myChess.value === 1 ? whitePlayer.value : blackPlayer.value))
 const primaryPlayerCard = computed(() => ({
   label: '我方',
@@ -141,7 +140,6 @@ const winnerText = computed(() => {
 const boardStatusText = computed(() => {
   if (isFinished.value) return winnerText.value
   if (isMyTurn.value) return '轮到你落子'
-  if (isAiThinking.value) return 'AI 思考中…'
   return '等待对手落子'
 })
 const finishCountdownText = computed(() => `${finishCountdown.value} 秒后返回井字`)
@@ -197,8 +195,6 @@ function fallbackParticipant(userId, label) {
     username: label,
     avatarUrl: '',
     vip: false,
-    ai: userId === -1,
-    aiModelName: userId === -1 ? 'qwen3.6-flash · Qwen' : '',
   }
 }
 
@@ -210,14 +206,12 @@ function applyRoomState(data) {
   room.whiteUserId = data.whiteUserId ?? room.whiteUserId
   room.currentTurnUserId = data.currentTurnUserId ?? null
   room.roomStatus = data.roomStatus || room.roomStatus
-  room.board = Array.isArray(data.board) ? data.board : emptyBoard()
+  room.board = normalizeBoard(data.board)
   room.winnerUserId = data.winnerUserId ?? null
   room.endReason = data.endReason || ''
   room.blackRemainingMs = data.blackRemainingMs == null ? room.blackRemainingMs : Number(data.blackRemainingMs)
   room.whiteRemainingMs = data.whiteRemainingMs == null ? room.whiteRemainingMs : Number(data.whiteRemainingMs)
   room.moveRemainingMs = data.moveRemainingMs == null ? room.moveRemainingMs : Number(data.moveRemainingMs)
-  room.aiRoom = Boolean(data.aiRoom)
-  room.aiThinking = Boolean(data.aiThinking)
   room.winningLine = Array.isArray(data.winningLine) ? data.winningLine : []
   room.blackPlayer = data.blackPlayer || null
   room.whitePlayer = data.whitePlayer || null
@@ -269,7 +263,7 @@ function startFinishRedirect() {
     if (finishCountdown.value <= 0) {
       window.clearInterval(finishRedirectTimer)
       finishRedirectTimer = null
-      router.push('/games/jinzi')
+      router.push({ name: 'jinziGame' })
     }
   }, 1000)
 }
@@ -327,15 +321,6 @@ function avatarText(player) {
   return name.slice(0, 1).toUpperCase()
 }
 
-function aiModelCode(player) {
-  const text = String(player?.aiModelName || '')
-  return text.includes('qwen3.7-max') ? 'qwen3.7-max' : 'qwen3.6-flash'
-}
-
-function aiModelIcon(player) {
-  return modelIcon(aiModelCode(player))
-}
-
 function openOpponentStats() {
   if (!opponentProfile.value) return
   opponentStatsVisible.value = true
@@ -375,7 +360,7 @@ async function backGame() {
       return
     }
   }
-  router.push('/games/jinzi')
+  router.push({ name: 'jinziGame' })
 }
 
 onMounted(async () => {

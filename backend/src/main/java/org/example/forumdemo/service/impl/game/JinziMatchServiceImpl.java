@@ -111,14 +111,11 @@ public class JinziMatchServiceImpl implements JinziMatchService {
         return gameMatchQueueService.dequeue(GameConstants.JINZI, userId);
     }
 
-    // 每秒扫描一次井字棋匹配队列，井字棋一局很短，超时后直接分配本地 AI
+    // 每秒扫描一次井字棋匹配队列，只匹配真实玩家
     @Scheduled(fixedDelay = 1_000)
     public void matchQueuedUsers() {
         for (String bucket : MATCH_BUCKETS) {
             matchQueue(bucket);
-        }
-        for (String bucket : MATCH_BUCKETS) {
-            matchAiFromQueue(bucket);
         }
     }
 
@@ -140,23 +137,6 @@ public class JinziMatchServiceImpl implements JinziMatchService {
                 "match_success",
                 null,
                 new GameMatchSuccessVO(roomId, pair.getUserIdB(), pair.getUserIdA())
-        ));
-    }
-
-    private void matchAiFromQueue(String bucketCode) {
-        Long userId = gameMatchQueueService.pollAiCandidate(
-                GameConstants.JINZI,
-                bucketCode,
-                GameConstants.AI_MATCH_TIMEOUT_MS
-        );
-        if (userId == null) {
-            return;
-        }
-        String roomId = jinziRoomService.createAiRoom(userId);
-        sendToGame(userId, GameWsResponse.ok(
-                "match_success",
-                null,
-                new GameMatchSuccessVO(roomId, userId, GameConstants.AI_USER_ID)
         ));
     }
 

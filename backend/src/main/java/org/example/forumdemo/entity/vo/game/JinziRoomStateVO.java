@@ -54,12 +54,6 @@ public class JinziRoomStateVO {
     // 服务器当前时间戳
     private Long serverNowMs;
 
-    // 是否 AI 对局
-    private Boolean aiRoom;
-
-    // AI 是否正在思考
-    private Boolean aiThinking;
-
     // 三连坐标，非三连结束为空
     private List<JinziBoardPointVO> winningLine;
 

@@ -45,7 +45,6 @@ public class GameConstants {
 
     public static final int JINZI_BOARD_SIZE = 3;
     public static final int JINZI_SCORE_DELTA = 3;
-    public static final int JINZI_AI_SCORE_DELTA = 1;
     public static final long JINZI_GAME_TIME_MS = 2 * 60 * 1000L;
     public static final long JINZI_MOVE_TIME_MS = 20 * 1000L;
     public static final long JINZI_RECONNECT_WINDOW_MS = 30 * 1000L;

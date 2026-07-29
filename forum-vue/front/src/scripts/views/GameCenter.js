@@ -1,4 +1,5 @@
 ﻿import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, DataLine, Promotion, Trophy, VideoPlay } from '@element-plus/icons-vue'
@@ -32,6 +33,7 @@ let tetrisReplayRunner = null
 let tetrisReplayStartedAt = 0
 let statsRequestSequence = 0
 let leaderboardRequestSequence = 0
+let gameCenterInitialized = false
 
 function endReasonText(reason) {
   if (reason === 'FIVE') return '五子连珠'
@@ -559,7 +561,7 @@ function enterGobang() {
 }
 
 function enterJinzi() {
-  router.push('/games/jinzi')
+  router.push({ name: 'jinziGame' })
 }
 
 function enterTetris() {
@@ -588,10 +590,17 @@ const defaultAvatar = DEFAULT_AVATAR
 
 onMounted(async () => {
   await refreshLobby()
+  gameCenterInitialized = true
   lobbySocket.connect()
   refreshTimer = window.setInterval(() => {
     refreshLobby(true)
   }, 5000)
+})
+
+onActivated(() => {
+  if (gameCenterInitialized) {
+    void refreshLobby(true)
+  }
 })
 
 onUnmounted(() => {

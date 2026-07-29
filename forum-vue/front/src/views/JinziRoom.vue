@@ -34,14 +34,13 @@
           </div>
 
           <section class="gobang-opponent-card" role="button" tabindex="0" @click="openOpponentStats" @keyup.enter="openOpponentStats">
-            <span class="gobang-avatar is-large" :class="{ 'is-vip': opponentProfile?.vip, 'is-ai': opponentProfile?.ai }">
+            <span class="gobang-avatar is-large" :class="{ 'is-vip': opponentProfile?.vip }">
               <img v-if="opponentProfile?.avatarUrl" :src="opponentProfile.avatarUrl" alt="" />
-              <img v-else-if="opponentProfile?.ai" :src="aiModelIcon(opponentProfile)" alt="" class="gobang-ai-icon" />
               <b v-else>{{ avatarText(opponentProfile) }}</b>
             </span>
             <div>
               <strong>{{ opponentProfile?.nickname || opponentProfile?.username || '对手' }}</strong>
-              <em>{{ opponentProfile?.ai ? opponentProfile.aiModelName : '对局玩家' }}</em>
+              <em>对局玩家</em>
             </div>
           </section>
 
@@ -58,7 +57,7 @@
         </aside>
 
         <section class="gobang-board-shell">
-          <div class="gobang-board-status" :class="{ 'is-my-turn': isMyTurn, 'is-finished': isFinished, 'is-ai-thinking': isAiThinking }">
+          <div class="gobang-board-status" :class="{ 'is-my-turn': isMyTurn, 'is-finished': isFinished }">
             <span>{{ boardStatusText }}</span>
             <em>
               <el-icon><Timer /></el-icon>
@@ -148,9 +147,8 @@
     <el-dialog v-model="opponentStatsVisible" title="对手井字资料" width="360px" destroy-on-close>
       <div class="gobang-opponent-stats-dialog">
         <div class="gobang-dialog-user">
-          <span class="gobang-avatar" :class="{ 'is-vip': opponentProfile?.vip, 'is-ai': opponentProfile?.ai }">
+          <span class="gobang-avatar" :class="{ 'is-vip': opponentProfile?.vip }">
             <img v-if="opponentProfile?.avatarUrl" :src="opponentProfile.avatarUrl" alt="" />
-            <img v-else-if="opponentProfile?.ai" :src="aiModelIcon(opponentProfile)" alt="" class="gobang-ai-icon" />
             <b v-else>{{ avatarText(opponentProfile) }}</b>
           </span>
           <strong>{{ opponentProfile?.nickname || opponentProfile?.username || '对手' }}</strong>
