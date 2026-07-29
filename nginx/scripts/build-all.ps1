@@ -53,6 +53,37 @@ function Invoke-DockerBuild {
     Write-Host "Image $Tag ready" -ForegroundColor Green
 }
 
+function Invoke-NpmBuild {
+    param([string]$WorkingDirectory)
+
+    $npmCommand = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
+    if ($null -eq $npmCommand) {
+        $npmCommand = Get-Command "npm" -ErrorAction Stop
+    }
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $npmCommand.Source
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.ArgumentList.Add("run")
+    $startInfo.ArgumentList.Add("build")
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.UseShellExecute = $false
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $null = $process.Start()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+
+    return [PSCustomObject]@{
+        ExitCode = $process.ExitCode
+        Stdout = $stdoutTask.GetAwaiter().GetResult()
+        Stderr = $stderrTask.GetAwaiter().GetResult()
+    }
+}
+
 function Sync-Dist($src, $dst) {
     if (-not (Test-Path $src)) { throw "Missing build output: $src" }
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
@@ -109,14 +140,16 @@ if (-not $SkipFront) {
     $front = Join-Path $repoRoot "forum-vue\front"
     Push-Location $front
     if (-not (Test-Path "node_modules")) { npm ci }
-    $frontBuildOutput = @()
+    $frontBuildResult = Invoke-NpmBuild -WorkingDirectory $front
     if ($ShowBuildDetails) {
-        npm run build
-    } else {
-        $frontBuildOutput = @(& npm run build 2>&1)
+        $frontBuildResult.Stdout | Write-Host
+        $frontBuildResult.Stderr | Write-Host -ForegroundColor Yellow
     }
-    if ($LASTEXITCODE -ne 0) {
-        if (-not $ShowBuildDetails) { $frontBuildOutput | Write-Host }
+    if ($frontBuildResult.ExitCode -ne 0) {
+        if (-not $ShowBuildDetails) {
+            $frontBuildResult.Stdout | Write-Host
+            $frontBuildResult.Stderr | Write-Host -ForegroundColor Red
+        }
         Pop-Location
         throw "front build failed"
     }
