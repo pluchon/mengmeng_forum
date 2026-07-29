@@ -31,25 +31,28 @@ const selectedBoardIds = computed({
 
 const selectedCount = computed(() => selectedBoardIds.value.length)
 
-const categoryIcons = ['✦', '⌘', '☼', '◌', '✎', '♡', '⌁', '♧']
+const categoryColumns = computed(() => [
+  {
+    key: 'left',
+    items: props.categories.filter((_, index) => index % 2 === 0),
+  },
+  {
+    key: 'right',
+    items: props.categories.filter((_, index) => index % 2 === 1),
+  },
+])
 
-function categoryIcon(item, index) {
+function categoryIcon(item) {
   const name = String(item?.category?.name || '')
+  if (name.includes('二次元')) return '✦'
   if (name.includes('游戏')) return '🎮'
   if (name.includes('数码') || name.includes('科技')) return '⌘'
   if (name.includes('学习') || name.includes('职场')) return '✎'
   if (name.includes('生活')) return '☼'
-  if (name.includes('影视') || name.includes('音乐')) return '◌'
+  if (name.includes('影视') || name.includes('音乐')) return '🎬'
+  if (name.includes('情感')) return '♡'
   if (name.includes('萌宠')) return '♧'
-  return categoryIcons[index % categoryIcons.length]
-}
-
-function groupDescription(item) {
-  const description = String(item?.category?.description || '').trim()
-  if (description) return description
-  const boardNames = (item?.boardList || []).map(board => board?.name).filter(Boolean)
-  if (boardNames.length === 0) return '等待内容加入'
-  return boardNames.slice(0, 3).join(' · ')
+  return '◌'
 }
 
 function isBoardSelectionDisabled(boardId) {
