@@ -95,7 +95,7 @@ def _llm_route_decision(
         raw, _ = dashscope_chat_completion(
             model,
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=0.1,
+            temperature=0.0,
         )
     except Exception:
         logger.exception("MCP 路由 LLM 失败")
