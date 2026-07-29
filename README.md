@@ -446,7 +446,7 @@ flowchart LR
 .\scripts\verify-package.ps1
 ```
 
-线上 MySQL 增量统一使用 [`incremental_mysql_release.sql`](backend/src/main/resources/sql/incremental_mysql_release.sql)。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
+发布包以 [`create.sql`](backend/src/main/resources/sql/create.sql) 作为新环境初始化基线；已上线环境按已执行的发布变更维护，不再要求携带历史增量 SQL。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
 
 ## 开发约定
 
