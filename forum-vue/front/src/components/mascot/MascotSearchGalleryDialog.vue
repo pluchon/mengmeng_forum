@@ -15,7 +15,12 @@
         target="_blank"
         rel="noreferrer"
       >
-        <img :src="item.url" :alt="item.title || '搜索图片'" loading="lazy">
+        <img
+          :src="item.url"
+          :alt="item.title || '搜索图片'"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+        >
         <span v-if="item.title" class="mascot-search-gallery__caption">{{ item.title }}</span>
       </a>
     </div>
