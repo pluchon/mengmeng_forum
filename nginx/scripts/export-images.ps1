@@ -209,12 +209,16 @@ wait_mysql() {
 wait_rabbitmq() {
   local i
   for i in $(seq 1 90); do
-    if docker exec forum-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+    # ping 只代表 Erlang 运行时可连通；同步用户与 vhost 前必须等待 RabbitMQ 应用完成启动。
+    if docker exec forum-rabbitmq rabbitmq-diagnostics -q check_running >/dev/null 2>&1; then
+      echo "RabbitMQ application ready"
       return 0
     fi
     sleep 2
   done
-  echo "ERROR: RabbitMQ not ready"; return 1
+  echo "ERROR: RabbitMQ application did not become ready within 180 seconds"
+  docker logs --tail 100 forum-rabbitmq >&2 || true
+  return 1
 }
 
 sync_rabbitmq_credentials() {
