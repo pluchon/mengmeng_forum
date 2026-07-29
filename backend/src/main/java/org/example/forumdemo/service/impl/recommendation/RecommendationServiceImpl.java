@@ -162,8 +162,11 @@ public class RecommendationServiceImpl implements RecommendationService {
         if (reasonDetail != null && reasonDetail.isEmpty()) {
             reasonDetail = null;
         }
-        Article article = articleMapper.selectOne(visibleArticleWrapper(loginUserId, Set.of())
-                .eq(Article::getId, request.getArticleId()));
+        Article article = articleMapper.selectOne(new LambdaQueryWrapper<Article>()
+                .eq(Article::getId, request.getArticleId())
+                .eq(Article::getDeleteState, DELETE_FALSE)
+                .eq(Article::getState, STATE_ENABLED)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()));
         if (article == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }

@@ -944,7 +944,7 @@ export function useArticleDetail() {
   }
 
   async function submitNotInterested() {
-    if (!article.value?.id || isOwner.value || notInterestedSaving.value) return
+    if (!article.value?.id || notInterestedSaving.value) return
     if (!(await ensureLoggedIn('调整推荐内容需要登录'))) return
     if (!notInterestedReasonCode.value) {
       ElMessage.warning('请选择原因')
