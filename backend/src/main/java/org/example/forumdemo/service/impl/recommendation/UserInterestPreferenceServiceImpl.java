@@ -15,6 +15,7 @@ import org.example.forumdemo.mapper.BoardMapper;
 import org.example.forumdemo.mapper.UserInterestPreferenceMapper;
 import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
 import org.example.forumdemo.service.interfaces.recommendation.UserInterestPreferenceService;
+import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,9 @@ public class UserInterestPreferenceServiceImpl implements UserInterestPreference
 
     @Autowired
     private BoardMapper boardMapper;
+
+    @Autowired
+    private RecommendationAiProfileService recommendationAiProfileService;
 
     @Override
     public UserInterestPreferenceVO getPreferences(Long userId) {
@@ -91,6 +95,11 @@ public class UserInterestPreferenceServiceImpl implements UserInterestPreference
             upsertPreference(recordsByBoard.get(boardId), userId, boardId,
                     request.getPersonalizedEnabled() ? PersonalizationState.ENABLED.getCode() : PersonalizationState.DISABLED.getCode());
         }
+        if (request.getPersonalizedEnabled()) {
+            recommendationAiProfileService.requestProfileRefresh(userId);
+        } else {
+            recommendationAiProfileService.clearProfile(userId);
+        }
     }
 
     @Override
@@ -105,6 +114,7 @@ public class UserInterestPreferenceServiceImpl implements UserInterestPreference
                 .eq(UserRecommendFeedback::getUserId, userId)
                 .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)
                 .set(UserRecommendFeedback::getDeleteState, DELETE_TRUE));
+        recommendationAiProfileService.clearProfile(userId);
     }
 
     @Override

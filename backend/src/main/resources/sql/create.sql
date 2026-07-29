@@ -1934,4 +1934,37 @@ CREATE TABLE `forum_mascot_related_recommendation_item` (
     KEY `idx_mascot_related_item_recommendation` (`recommendation_id`, `delete_state`, `display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘相关帖子检索结果项';
 
+CREATE TABLE `forum_article_ai_feature` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `article_id` bigint NOT NULL,
+    `feature_json` mediumtext NOT NULL,
+    `feature_version` varchar(32) NOT NULL,
+    `content_hash` varchar(64) NOT NULL,
+    `generated_by` varchar(32) NOT NULL,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_article_ai_feature_article` (`article_id`),
+    KEY `idx_article_ai_feature_state_time` (`delete_state`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子推荐AI特征';
+
+CREATE TABLE `forum_user_ai_profile_snapshot` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `profile_version` bigint NOT NULL DEFAULT 0,
+    `profile_json` mediumtext NOT NULL,
+    `feature_version` varchar(32) NOT NULL,
+    `source_window_start` datetime DEFAULT NULL,
+    `source_window_end` datetime DEFAULT NULL,
+    `refresh_after` datetime NOT NULL,
+    `generated_by` varchar(32) NOT NULL,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_ai_profile_snapshot_user` (`user_id`),
+    KEY `idx_user_ai_profile_snapshot_refresh` (`delete_state`, `refresh_after`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐AI画像快照';
+
 SET FOREIGN_KEY_CHECKS = 1;

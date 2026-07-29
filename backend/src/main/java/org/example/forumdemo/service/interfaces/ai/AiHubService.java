@@ -3,11 +3,15 @@ package org.example.forumdemo.service.interfaces.ai;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.ai.AiPolishRequest;
+import org.example.forumdemo.entity.dto.ai.AiRecommendationArticleFeatureRequest;
+import org.example.forumdemo.entity.dto.ai.AiRecommendationProfileRequest;
 import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationFeatureResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 
@@ -21,6 +25,10 @@ public interface AiHubService {
     AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest request);
 
     AiHubImageResultVO image(Long userId, AiImageRequest request);
+
+    AiRecommendationFeatureResultVO generateRecommendationArticleFeature(AiRecommendationArticleFeatureRequest request);
+
+    AiRecommendationProfileResultVO generateRecommendationProfile(Long userId, AiRecommendationProfileRequest request);
 
     String summarize(String content);
 

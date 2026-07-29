@@ -17,6 +17,7 @@ from modules.game import GobangMoveModule, JiziMoveModule
 from modules.search import SearchModule
 from modules.summary import PostSummaryModule
 from modules.rag import RagIndexArticleModule, RagIndexUserModule, RagRemoveArticleModule
+from modules.recommendation import ArticleFeatureModule, UserProfileModule
 from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError
 from runtime.module_registry import ModuleRegistry
 
@@ -36,6 +37,8 @@ _registry.register("SEARCH", "QUERY", "v1", SearchModule())
 _registry.register("RAG", "INDEX_ARTICLE", "v1", RagIndexArticleModule())
 _registry.register("RAG", "INDEX_USER", "v1", RagIndexUserModule())
 _registry.register("RAG", "REMOVE_ARTICLE", "v1", RagRemoveArticleModule())
+_registry.register("RECOMMENDATION", "ARTICLE_FEATURE", "v1", ArticleFeatureModule())
+_registry.register("RECOMMENDATION", "USER_PROFILE", "v1", UserProfileModule())
 _registry.register("MASCOT", "CHAT", "v1", MascotChatModule())
 
 

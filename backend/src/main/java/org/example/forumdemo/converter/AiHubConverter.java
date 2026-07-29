@@ -6,6 +6,8 @@ import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationFeatureResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiUsageStatsVO;
 import org.example.forumdemo.entity.vo.ai.AiPolishResponseVO;
@@ -63,6 +65,32 @@ public final class AiHubConverter {
         vo.setUrl(url);
         vo.setModel(stringVal(data.get("model")));
         vo.setUsage(parseUsage(data.get("usage")));
+        return vo;
+    }
+
+    public static AiRecommendationFeatureResultVO toRecommendationFeatureResult(Map<String, Object> data) {
+        AiRecommendationFeatureResultVO vo = new AiRecommendationFeatureResultVO();
+        if (data == null) {
+            return vo;
+        }
+        vo.setArticleId(longVal(data.get("articleId")));
+        vo.setFeatureVersion(stringVal(data.get("featureVersion")));
+        vo.setTopics(mapList(data.get("topics")));
+        vo.setSummary(stringVal(data.get("summary")));
+        vo.setContentFingerprint(stringVal(data.get("contentFingerprint")));
+        vo.setGeneratedBy(stringVal(data.get("generatedBy")));
+        return vo;
+    }
+
+    public static AiRecommendationProfileResultVO toRecommendationProfileResult(Map<String, Object> data) {
+        AiRecommendationProfileResultVO vo = new AiRecommendationProfileResultVO();
+        if (data == null) {
+            return vo;
+        }
+        vo.setFeatureVersion(stringVal(data.get("featureVersion")));
+        vo.setTopics(mapList(data.get("topics")));
+        vo.setSummary(stringVal(data.get("summary")));
+        vo.setGeneratedBy(stringVal(data.get("generatedBy")));
         return vo;
     }
 
@@ -282,5 +310,21 @@ public final class AiHubConverter {
             }
         }
         return out;
+    }
+
+    private static List<Map<String, Object>> mapList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+            Map<String, Object> normalized = new HashMap<>();
+            map.forEach((key, value) -> normalized.put(String.valueOf(key), value));
+            result.add(normalized);
+        }
+        return result;
     }
 }
