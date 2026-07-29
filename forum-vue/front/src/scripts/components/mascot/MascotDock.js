@@ -598,6 +598,7 @@ export function useMascotDock() {
         ? m.imageGallery.filter((item) => isSafeMascotImageUrl(item?.url)).slice(0, 5)
         : []
       return {
+        messageId: m.id || null,
         role: m.role === 'assistant' ? 'assistant' : (m.type === 'context_summary' ? 'system' : 'user'),
         content: m.content || '',
         type: m.type === 'image' || m.type === 'context_summary' ? m.type : 'text',
@@ -690,7 +691,6 @@ export function useMascotDock() {
           .map((message) => normalizeRelatedQuery(message.relatedQuery))
           .filter(Boolean),
       )
-      const restored = []
       for (const recommendation of res.data) {
         const recommendationId = String(recommendation.id)
         const relatedQuery = normalizeRelatedQuery(recommendation.query)
@@ -701,20 +701,38 @@ export function useMascotDock() {
         if (relatedQuery) restoredQueries.add(relatedQuery)
         const items = Array.isArray(recommendation.items) ? recommendation.items : []
         if (!items.length) continue
-        restored.push({
+        insertRelatedResult({
           role: 'assistant',
           type: 'related-result',
           content: `检索到 ${items.length} 条相关帖子`,
           relatedItems: items,
           relatedQuery,
           recommendationId: recommendation.id,
-          at: Date.now(),
+          sourceMessageId: recommendation.sourceMessageId || null,
+          at: recommendation.createTime ? new Date(recommendation.createTime).getTime() : Date.now(),
         })
       }
-      if (restored.length) messages.value.push(...restored)
     } catch {
       /* 已加载会话消息时，推荐恢复失败不影响对话 */
     }
+  }
+
+  function insertRelatedResult(result) {
+    const sourceMessageId = result?.sourceMessageId == null ? '' : String(result.sourceMessageId)
+    const sourceIndex = sourceMessageId
+      ? messages.value.findIndex((message) => String(message.messageId || '') === sourceMessageId)
+      : -1
+    if (sourceIndex >= 0) {
+      messages.value.splice(sourceIndex + 1, 0, result)
+      return
+    }
+    const resultTime = Number(result?.at || 0)
+    const laterIndex = messages.value.findIndex((message) => Number(message.at || 0) > resultTime)
+    if (laterIndex >= 0) {
+      messages.value.splice(laterIndex, 0, result)
+      return
+    }
+    messages.value.push(result)
   }
 
   function applyServerSessionId(meta) {
@@ -750,14 +768,20 @@ export function useMascotDock() {
     const offer = message?.relatedSearchOffer
     if (!offer || offer.loading || !userStore.isLoggedIn) return
     const numericSessionId = Number(sessionId.value)
+    const sourceMessageId = Number(message.messageId)
     if (!Number.isInteger(numericSessionId) || numericSessionId <= 0) {
       ElMessage.warning('会话尚未准备好，请稍后再试')
+      return
+    }
+    if (!Number.isInteger(sourceMessageId) || sourceMessageId <= 0) {
+      ElMessage.warning('消息仍在保存，请稍后再试')
       return
     }
     offer.loading = true
     try {
       const res = await getMascotRelatedRecommendations({
         sessionId: numericSessionId,
+        sourceMessageId,
         query: offer.query,
       })
       if (res.code !== 0) {
@@ -769,18 +793,18 @@ export function useMascotDock() {
       const relatedQuery = normalizeRelatedQuery(res.data?.query || offer.query)
       const hasRelatedResult = messages.value.some((item) => (
         item.type === 'related-result'
-        && relatedQuery
-        && normalizeRelatedQuery(item.relatedQuery) === relatedQuery
+        && String(item.sourceMessageId || '') === String(sourceMessageId)
       ))
       if (items.length && !hasRelatedResult) {
-        messages.value.push({
+        insertRelatedResult({
           role: 'assistant',
           type: 'related-result',
           content: `检索到 ${items.length} 条相关帖子`,
           relatedItems: items,
           relatedQuery,
           recommendationId: res.data?.id,
-          at: Date.now(),
+          sourceMessageId: res.data?.sourceMessageId || sourceMessageId,
+          at: message.at || Date.now(),
         })
       } else if (!hasRelatedResult) {
         messages.value.push({
@@ -815,7 +839,7 @@ export function useMascotDock() {
     searchGalleryVisible.value = searchGalleryItems.value.length > 0
   }
 
-  async function refreshContextWindow() {
+  async function refreshContextWindow({ autoCompress = true } = {}) {
     const id = String(sessionId.value || '')
     if (!userStore.isLoggedIn || !/^\d+$/.test(id)) {
       contextWindow.value = { usedTokens: 0, maxTokens: 128000, canCompress: false }
@@ -829,18 +853,22 @@ export function useMascotDock() {
     } catch {
       contextWindow.value = { usedTokens: 0, maxTokens: 128000, canCompress: false }
     }
+    if (autoCompress && contextWindow.value.canCompress
+        && contextWindow.value.usedTokens >= contextWindow.value.maxTokens) {
+      await compressContext({ automatic: true })
+    }
   }
 
-  async function compressContext() {
+  async function compressContext({ automatic = false } = {}) {
     const id = String(sessionId.value || '')
-    if (!/^\d+$/.test(id) || contextCompressing.value || loading.value) return
+    if (!/^\d+$/.test(id) || contextCompressing.value) return
     contextCompressing.value = true
     try {
       const res = await compressCompanionContext(id)
       if (res.code !== 0) throw new Error(res.message || '上下文压缩失败')
       await loadMessagesForNav(activeNav.value)
-      await refreshContextWindow()
-      ElMessage.success('上下文已压缩')
+      await refreshContextWindow({ autoCompress: false })
+      if (!automatic) ElMessage.success('上下文已压缩')
     } catch (error) {
       ElMessage.error(error?.message || '上下文压缩失败')
     } finally {
@@ -1687,6 +1715,9 @@ export function useMascotDock() {
                   loading: false,
                 }
               }
+              if (meta?.assistantMessageId && row) {
+                row.messageId = meta.assistantMessageId
+              }
               if (Array.isArray(meta?.searchImageGallery) && row) {
                 row.imageGallery = meta.searchImageGallery
                   .filter((item) => isSafeMascotImageUrl(item?.url))
@@ -1762,6 +1793,7 @@ export function useMascotDock() {
   async function send() {
     const text = draft.value.trim()
     if (!text) return
+    if (contextCompressing.value) return
     if (!userStore.isLoggedIn) {
       ElMessage.warning('请先登录')
       return
@@ -1771,6 +1803,8 @@ export function useMascotDock() {
       ElMessage.warning('萌币余额不足，请先充值或赚取积分')
       return
     }
+    await refreshContextWindow()
+    if (contextCompressing.value) return
     draft.value = ''
     try {
       await sendInternal(text)

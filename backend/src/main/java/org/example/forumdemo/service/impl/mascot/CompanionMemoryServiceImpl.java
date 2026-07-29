@@ -125,28 +125,28 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void appendTextMessage(Long sessionId, String role, String content) {
-        appendTextMessage(sessionId, role, content, (String) null);
+    public Long appendTextMessage(Long sessionId, String role, String content) {
+        return appendTextMessage(sessionId, role, content, (String) null);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
+    public Long appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
         List<CompanionImageGalleryItemVO> gallery = new ArrayList<>();
         if (searchImageUrl != null && !searchImageUrl.isBlank()) {
             CompanionImageGalleryItemVO item = new CompanionImageGalleryItemVO();
             item.setUrl(searchImageUrl.trim());
             gallery.add(item);
         }
-        appendTextMessage(sessionId, role, content, gallery);
+        return appendTextMessage(sessionId, role, content, gallery);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void appendTextMessage(Long sessionId, String role, String content,
+    public Long appendTextMessage(Long sessionId, String role, String content,
                                   List<CompanionImageGalleryItemVO> imageGallery) {
         if (sessionId == null || content == null || content.isBlank()) {
-            return;
+            return null;
         }
         ForumCompanionMessage m = new ForumCompanionMessage();
         m.setSessionId(sessionId);
@@ -166,6 +166,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         m.setCreateTime(new Date());
         companionMessageMapper.insert(m);
         touchSession(sessionId, "user".equals(role) ? content : null);
+        return m.getId();
     }
 
     @Override

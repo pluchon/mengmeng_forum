@@ -338,6 +338,7 @@
                   :image-options="imageModelOptions"
                   :loading="loading"
                   :image-generating="imageGenerating"
+                  :disabled="contextCompressing"
                   :vip="isVip"
                   :placeholder="inputPlaceholder"
                   generation-hint="AI 也有可能出错，请自行甄别"

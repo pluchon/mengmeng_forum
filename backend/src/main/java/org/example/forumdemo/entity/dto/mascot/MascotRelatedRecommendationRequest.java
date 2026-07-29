@@ -17,6 +17,11 @@ public class MascotRelatedRecommendationRequest {
     @Schema(description = "当前陪伴会话 ID")
     private Long sessionId;
 
+    @NotNull(message = "来源消息不能为空")
+    @Positive(message = "来源消息非法")
+    @Schema(description = "发起本次检索的看板娘回复消息 ID")
+    private Long sourceMessageId;
+
     @NotBlank(message = "query 不能为空")
     @Size(max = 500, message = "query 过长")
     @Schema(description = "由看板娘结合上下文生成的检索语句")
