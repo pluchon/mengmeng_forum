@@ -29,6 +29,8 @@ public class ArticleDetailResponse {
     private Boolean isLiked;
     // 当前登录用户是否已收藏此帖子
     private Boolean isFavorited;
+    // 当前登录用户是否设为不感兴趣
+    private Boolean isNotInterested;
     // 相册图URL列表, 按 sort 升序; 老帖 / 无图帖返回空数组
     private List<String> imageUrls;
 
@@ -37,6 +39,6 @@ public class ArticleDetailResponse {
 
     /** 兼容旧的 6 参构造调用; imageUrls/tags 默认空列表, 调用方按需 set 注入 */
     public ArticleDetailResponse(UserBriefVO user, Article article, Board board, Boolean isOwner, Boolean isLiked, Boolean isFavorited) {
-        this(user, article, board, isOwner, isLiked, isFavorited, Collections.emptyList(), Collections.emptyList());
+        this(user, article, board, isOwner, isLiked, isFavorited, false, Collections.emptyList(), Collections.emptyList());
     }
 }

@@ -16,12 +16,7 @@ import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { useMessageStore } from '@/stores/message'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { getArticleList, getHotArticleListWithPage } from '@/api/article'
-import {
-  getRecommendationFeed,
-  getRecommendationInterests,
-  markRecommendationNotInterested,
-  saveRecommendationInterests,
-} from '@/api/recommendation'
+import { getRecommendationFeed } from '@/api/recommendation'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -70,11 +65,6 @@ export function useHome() {
   const homeHotCollapsed = ref(false)
   const homeHotPage = ref(1)
   const homeHotPageSize = 10
-  const recommendationPreferences = ref({ personalizedEnabled: true, boardIds: [] })
-  const recommendationPreferenceLoaded = ref(false)
-  const recommendationDialogVisible = ref(false)
-  const recommendationDraftBoardIds = ref([])
-  const recommendationSaving = ref(false)
 
   try {
     homeHotCollapsed.value = typeof localStorage === 'undefined'
@@ -112,18 +102,6 @@ export function useHome() {
 
   const isHomeFeed = computed(() => menuActiveKey.value === 'home')
   const isRecommendationFeed = computed(() => menuActiveKey.value === 'rec')
-  const hasRecommendationInterests = computed(() => recommendationPreferences.value.boardIds.length > 0)
-  const isPersonalizedRecommendation = computed(() =>
-    userStore.isLoggedIn
-      && recommendationPreferences.value.personalizedEnabled
-      && hasRecommendationInterests.value,
-  )
-  const showRecommendationInterestMask = computed(() =>
-    isRecommendationFeed.value
-      && userStore.isLoggedIn
-      && recommendationPreferenceLoaded.value
-      && !hasRecommendationInterests.value,
-  )
 
   const searchInputPlaceholder = computed(() =>
     aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
@@ -387,78 +365,8 @@ export function useHome() {
       activeCategoryId.value = 0
       menuActiveKey.value = 'rec'
       currentBoardId.value = 0
-      await loadRecommendationPreferences()
       fetchArticles(1)
       return
-    }
-  }
-
-  async function loadRecommendationPreferences() {
-    if (!userStore.isLoggedIn) {
-      recommendationPreferences.value = { personalizedEnabled: false, boardIds: [] }
-      recommendationPreferenceLoaded.value = true
-      return
-    }
-    try {
-      const res = await getRecommendationInterests()
-      if (res.code === 0) {
-        recommendationPreferences.value = {
-          personalizedEnabled: res.data?.personalizedEnabled !== false,
-          boardIds: Array.isArray(res.data?.boardIds) ? res.data.boardIds.map(Number) : [],
-        }
-      }
-    } catch {
-      recommendationPreferences.value = { personalizedEnabled: true, boardIds: [] }
-    } finally {
-      recommendationPreferenceLoaded.value = true
-    }
-  }
-
-  async function openRecommendationPreferences() {
-    if (!(await ensureLoggedIn('管理推荐兴趣需要登录'))) return
-    if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
-    if (!recommendationPreferenceLoaded.value) await loadRecommendationPreferences()
-    recommendationDraftBoardIds.value = [...recommendationPreferences.value.boardIds]
-    recommendationDialogVisible.value = true
-  }
-
-  async function saveRecommendationPreferences() {
-    if (recommendationDraftBoardIds.value.length > 8) {
-      ElMessage.warning('最多选择 8 个细分板块')
-      return
-    }
-    recommendationSaving.value = true
-    try {
-      await saveRecommendationInterests({
-        personalizedEnabled: true,
-        boardIds: recommendationDraftBoardIds.value,
-      })
-      recommendationPreferences.value = {
-        personalizedEnabled: true,
-        boardIds: [...recommendationDraftBoardIds.value],
-      }
-      recommendationPreferenceLoaded.value = true
-      recommendationDialogVisible.value = false
-      ElMessage.success('推荐兴趣已更新')
-      if (isRecommendationFeed.value) await fetchArticles(1)
-    } catch {
-      /* 请求层已经统一展示错误提示，避免未处理的 Promise 继续冒泡 */
-    } finally {
-      recommendationSaving.value = false
-    }
-  }
-
-  async function hideRecommendedArticle(articleId) {
-    if (!articleId || !isRecommendationFeed.value || recommendationSaving.value) return
-    if (!(await ensureLoggedIn('调整推荐内容需要登录'))) return
-    recommendationSaving.value = true
-    try {
-      await markRecommendationNotInterested(articleId)
-      articleList.value = articleList.value.filter(item => Number(item.article?.id) !== Number(articleId))
-      total.value = Math.max(0, Number(total.value) - 1)
-      ElMessage.success('已减少此类推荐')
-    } finally {
-      recommendationSaving.value = false
     }
   }
 
@@ -611,8 +519,6 @@ export function useHome() {
     goSettings,
     goToCreative,
     handleLogout,
-    hasRecommendationInterests,
-    hideRecommendedArticle,
     homeHotList,
     homeHotTotal,
     homeHotLoading,
@@ -620,22 +526,15 @@ export function useHome() {
     homeHotPage,
     homeHotPageSize,
     isHomeFeed,
-    isPersonalizedRecommendation,
     isRecommendationFeed,
     loading,
     menuActiveKey,
     msgUnread,
     openMessageCenter,
-    openRecommendationPreferences,
     pageNum,
     pageSize,
     placeholderMinHeight,
     pointsBalance,
-    recommendationDialogVisible,
-    recommendationDraftBoardIds,
-    recommendationPreferenceLoaded,
-    recommendationSaving,
-    saveRecommendationPreferences,
     searchInputPlaceholder,
     searchQuery,
     searchTargetMode,
@@ -645,7 +544,6 @@ export function useHome() {
     showCategoryNavigator,
     showAnnouncement,
     showCheckinHomeStrip,
-    showRecommendationInterestMask,
     submitSearch,
     toggleAiSearchMode,
     toggleSearchTargetMode,

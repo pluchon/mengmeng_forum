@@ -16,12 +16,14 @@ import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.Board;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserRecommendFeedback;
 import org.example.forumdemo.entity.vo.article.ArticleListResponse;
 import org.example.forumdemo.entity.vo.board.BoardPublicVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.BoardMapper;
+import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
 import org.example.forumdemo.service.interfaces.board.BoardService;
 import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.example.forumdemo.service.interfaces.user.UserService;
@@ -48,6 +50,9 @@ public class BoardServiceImpl implements BoardService {
 
     @Autowired
     private ArticleMapper articleMapper;
+
+    @Autowired
+    private UserRecommendFeedbackMapper userRecommendFeedbackMapper;
 
     @Autowired
     private UserService userService;
@@ -153,6 +158,7 @@ public class BoardServiceImpl implements BoardService {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = PageUtils.getPage(validPageNum, validPageSize);
+        List<Long> notInterestedArticleIds = listNotInterestedArticleIds(loginUserId);
         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<Article>()
                 .ne(Article::getDeleteState, 1)
                 .ne(Article::getState, 1)
@@ -161,9 +167,12 @@ public class BoardServiceImpl implements BoardService {
         if (boardId > 0) {
             wrapper.eq(Article::getBoardId, boardId);
         }
+        if (!notInterestedArticleIds.isEmpty()) {
+            wrapper.notIn(Article::getId, notInterestedArticleIds);
+        }
         Page<Article> result = articleMapper.selectPage(page, wrapper);
         List<Article> articleRecords = boardId == 0
-                ? mixHomeFeedArticles(result.getRecords(), validPageSize)
+                ? mixHomeFeedArticles(result.getRecords(), validPageSize, notInterestedArticleIds)
                 : result.getRecords();
         Set<Long> followingIds = (loginUserId != null && loginUserId > 0)
                 ? userFollowService.listFollowingIds(loginUserId)
@@ -181,23 +190,28 @@ public class BoardServiceImpl implements BoardService {
     }
 
     /** 首页全站流以新帖为主体，随机插入少量高互动帖子，避免每次只按时间倒序展示。 */
-    private List<Article> mixHomeFeedArticles(List<Article> newestArticles, int pageSize) {
+    private List<Article> mixHomeFeedArticles(List<Article> newestArticles, int pageSize,
+            List<Long> notInterestedArticleIds) {
         if (newestArticles == null || newestArticles.isEmpty()) {
             return List.of();
         }
         int hotCount = Math.min(Math.min(Math.max(2, pageSize / 5), 4), newestArticles.size());
+        LambdaQueryWrapper<Article> engagementWrapper = new LambdaQueryWrapper<Article>()
+                .ne(Article::getDeleteState, 1)
+                .ne(Article::getState, 1)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                .orderByDesc(Article::getLikeCount)
+                .orderByDesc(Article::getFavoriteCount)
+                .orderByDesc(Article::getReplyCount)
+                .orderByDesc(Article::getSubReplyCount)
+                .orderByDesc(Article::getVisitCount)
+                .orderByDesc(Article::getCreateTime);
+        if (!notInterestedArticleIds.isEmpty()) {
+            engagementWrapper.notIn(Article::getId, notInterestedArticleIds);
+        }
         List<Article> engagementCandidates = articleMapper.selectPage(
                 PageUtils.getPage(1, Math.max(pageSize * 3, 30)),
-                new LambdaQueryWrapper<Article>()
-                        .ne(Article::getDeleteState, 1)
-                        .ne(Article::getState, 1)
-                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                        .orderByDesc(Article::getLikeCount)
-                        .orderByDesc(Article::getFavoriteCount)
-                        .orderByDesc(Article::getReplyCount)
-                        .orderByDesc(Article::getSubReplyCount)
-                        .orderByDesc(Article::getVisitCount)
-                        .orderByDesc(Article::getCreateTime))
+                engagementWrapper)
                 .getRecords();
         if (engagementCandidates.isEmpty()) {
             return newestArticles;
@@ -242,6 +256,20 @@ public class BoardServiceImpl implements BoardService {
             }
         }
         return -1;
+    }
+
+    private List<Long> listNotInterestedArticleIds(Long loginUserId) {
+        if (loginUserId == null || loginUserId <= 0) {
+            return List.of();
+        }
+        return userRecommendFeedbackMapper.selectList(new LambdaQueryWrapper<UserRecommendFeedback>()
+                        .eq(UserRecommendFeedback::getUserId, loginUserId)
+                        .eq(UserRecommendFeedback::getDeleteState, 0)
+                        .select(UserRecommendFeedback::getArticleId))
+                .stream()
+                .map(UserRecommendFeedback::getArticleId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     // ============================================================

@@ -13,6 +13,8 @@ import org.example.forumdemo.entity.vo.recommendation.RecommendArticleVO;
 import org.example.forumdemo.service.interfaces.recommendation.RecommendationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,5 +50,25 @@ public class RecommendationController {
         User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         recommendationService.markNotInterested(loginUser.getId(), request);
         return Result.success("已减少这篇帖子的推荐");
+    }
+
+    /** 分页查询当前用户设为不感兴趣的帖子。 */
+    @Operation(summary = "分页查询不感兴趣帖子")
+    @GetMapping("/feedback/not-interested")
+    public Result<PageResult<RecommendArticleVO>> getNotInterestedArticles(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "12") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(recommendationService.getNotInterestedArticles(loginUser.getId(), pageNum, pageSize));
+    }
+
+    /** 恢复当前用户对指定帖子的兴趣。 */
+    @Operation(summary = "恢复推荐帖子兴趣")
+    @DeleteMapping("/feedback/not-interested/{articleId}")
+    public Result<String> restoreInterested(@PathVariable Long articleId, HttpServletRequest httpServletRequest) {
+        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        recommendationService.restoreInterested(loginUser.getId(), articleId);
+        return Result.success("已恢复兴趣");
     }
 }

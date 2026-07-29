@@ -1,8 +1,7 @@
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Close, Loading, MoreFilled, TrendCharts } from '@element-plus/icons-vue'
+import { ArrowDown, Close, Loading, TrendCharts } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
-import InterestPreferenceDialog from '@/components/recommendation/InterestPreferenceDialog.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { useBoardStore } from '@/stores/board'
 import { useHomeShellContext } from '@/composables/useHomeShell'
@@ -10,6 +9,7 @@ import { useHomeMasonry } from '@/composables/useHomeMasonry'
 import { restoreFeedScroll } from '@/utils/feedScrollRestore'
 import { captureFeedCardOrigin, captureFeedOpenFrom } from '@/utils/feedNavigation'
 import { isQuestionArticle, questionStatusClass, questionStatusLabel } from '@/utils/articleQuestion'
+import { useNotInterestedArticleStore } from '@/stores/notInterestedArticle'
 
 defineOptions({ name: 'HomeFeed' })
 
@@ -32,7 +32,6 @@ const {
   fetchArticles,
   fetchHomeHotList,
   getRandomPastel,
-  hideRecommendedArticle,
   homeHotList,
   homeHotTotal,
   homeHotLoading,
@@ -51,16 +50,14 @@ const {
   showCheckinHomeStrip,
   total,
   toggleHomeHotCollapsed,
-  openRecommendationPreferences,
-  recommendationDialogVisible,
-  recommendationDraftBoardIds,
-  recommendationSaving,
-  saveRecommendationPreferences,
-  showRecommendationInterestMask,
-  userStore,
 } = useHomeShellContext()
 
 const feedList = computed(() => articleList.value)
+const notInterestedArticleStore = useNotInterestedArticleStore()
+
+function isNotInterestedArticle(articleId) {
+  return notInterestedArticleStore.isNotInterested(articleId)
+}
 
 const openCategoryId = ref(null)
 let categoryCloseTimer = null

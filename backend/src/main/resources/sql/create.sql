@@ -1826,6 +1826,8 @@ CREATE TABLE `user_recommend_feedback` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id` bigint NOT NULL COMMENT '用户ID',
     `article_id` bigint NOT NULL COMMENT '帖子ID',
+    `reason_code` varchar(32) NOT NULL COMMENT '不感兴趣原因编码',
+    `reason_detail` varchar(200) DEFAULT NULL COMMENT '用户补充原因',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除：0否 1是',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

@@ -21,10 +21,23 @@ export function resetRecommendationInterests() {
 }
 
 // 标记当前帖子不感兴趣
-export function markRecommendationNotInterested(articleId) {
+export function markRecommendationNotInterested(articleId, reasonCode, reasonDetail) {
   return request({
     url: '/recommend/feedback/not-interested',
     method: 'post',
-    data: { articleId },
+    data: { articleId, reasonCode, reasonDetail },
+  })
+}
+
+// 分页查询当前用户设为不感兴趣的帖子
+export function getNotInterestedArticles(params) {
+  return request({ url: '/recommend/feedback/not-interested', method: 'get', params })
+}
+
+// 恢复当前用户对帖子的兴趣
+export function restoreRecommendationInterested(articleId) {
+  return request({
+    url: `/recommend/feedback/not-interested/${articleId}`,
+    method: 'delete',
   })
 }

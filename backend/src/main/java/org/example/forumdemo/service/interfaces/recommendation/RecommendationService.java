@@ -10,4 +10,8 @@ public interface RecommendationService {
     PageResult<RecommendArticleVO> getFeed(Long loginUserId, Integer pageNum, Integer pageSize);
 
     void markNotInterested(Long loginUserId, NotInterestedArticleRequest request);
+
+    PageResult<RecommendArticleVO> getNotInterestedArticles(Long loginUserId, Integer pageNum, Integer pageSize);
+
+    void restoreInterested(Long loginUserId, Long articleId);
 }

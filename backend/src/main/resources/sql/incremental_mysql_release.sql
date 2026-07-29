@@ -189,3 +189,35 @@ SET @related_source_message_sql = IF(
 PREPARE related_source_message_statement FROM @related_source_message_sql;
 EXECUTE related_source_message_statement;
 DEALLOCATE PREPARE related_source_message_statement;
+
+SET @recommend_feedback_reason_code_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'user_recommend_feedback'
+      AND column_name = 'reason_code'
+);
+SET @recommend_feedback_reason_code_sql = IF(
+    @recommend_feedback_reason_code_exists = 0,
+    'ALTER TABLE user_recommend_feedback ADD COLUMN reason_code VARCHAR(32) NOT NULL DEFAULT ''UNRELATED'' AFTER article_id',
+    'SELECT 1'
+);
+PREPARE recommend_feedback_reason_code_statement FROM @recommend_feedback_reason_code_sql;
+EXECUTE recommend_feedback_reason_code_statement;
+DEALLOCATE PREPARE recommend_feedback_reason_code_statement;
+
+SET @recommend_feedback_reason_detail_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'user_recommend_feedback'
+      AND column_name = 'reason_detail'
+);
+SET @recommend_feedback_reason_detail_sql = IF(
+    @recommend_feedback_reason_detail_exists = 0,
+    'ALTER TABLE user_recommend_feedback ADD COLUMN reason_detail VARCHAR(200) NULL AFTER reason_code',
+    'SELECT 1'
+);
+PREPARE recommend_feedback_reason_detail_statement FROM @recommend_feedback_reason_detail_sql;
+EXECUTE recommend_feedback_reason_detail_statement;
+DEALLOCATE PREPARE recommend_feedback_reason_detail_statement;

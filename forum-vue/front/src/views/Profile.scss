@@ -1,0 +1,31 @@
+.profile-not-interested-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile-not-interested-restore {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #edf9f1;
+  color: #1f6743;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.profile-not-interested-restore:hover:not(:disabled) {
+  background: #dff3e6;
+}
+
+.profile-not-interested-restore:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+:global(:root[data-theme='dark']) .profile-not-interested-restore {
+  background: rgba(34, 197, 94, 0.14);
+  color: #8fe1b5;
+}

@@ -47,19 +47,29 @@ class RecommendationFeatureService:
         explicit = _name_list(payload.get("explicitBoards"))
         recent7 = _signals(payload.get("recent7"))
         recent14 = _signals(payload.get("recent14"))
+        negative_recent7 = _negative_signals(payload.get("negativeRecent7"))
+        negative_recent14 = _negative_signals(payload.get("negativeRecent14"))
         allowed = explicit + [item["board"] for item in recent7] + [item["board"] for item in recent14]
+        allowed_avoid = [item["board"] for item in negative_recent7] + [item["board"] for item in negative_recent14]
         fallback = {
             "featureVersion": _FEATURE_VERSION,
             "topics": _topics_from_names(allowed),
+            "avoidTopics": _topics_from_names(allowed_avoid),
             "summary": "基于近期公开互动生成的内容偏好",
             "generatedBy": "RULE_FALLBACK",
         }
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "你是论坛用户画像整理器。只返回 JSON，不要 Markdown。只能从输入的板块名称中选择 topics.name，并原样输出；topics 至多 5 项，weight 在 0 到 1。近 7 天权重高于第 8 至 14 天；手选兴趣优先。不得猜测敏感属性。"),
-            ("human", "手选兴趣：{explicit}\n近7天聚合：{recent7}\n第8至14天聚合：{recent14}\n输出 JSON：{{\"topics\":[{{\"name\":\"\",\"weight\":0.0}}],\"summary\":\"\"}}"),
+            ("system", "你是论坛用户画像整理器。只返回 JSON，不要 Markdown。topics.name 只能从正向输入板块中选择，avoidTopics.name 只能从负向输入板块中选择，均需原样输出；每组至多 5 项，weight 在 0 到 1。近 7 天权重高于第 8 至 14 天；手选兴趣优先。不得猜测敏感属性。"),
+            ("human", "手选兴趣：{explicit}\n近7天正向聚合：{recent7}\n第8至14天正向聚合：{recent14}\n近7天负向反馈：{negative_recent7}\n第8至14天负向反馈：{negative_recent14}\n输出 JSON：{{\"topics\":[{{\"name\":\"\",\"weight\":0.0}}],\"avoidTopics\":[{{\"name\":\"\",\"weight\":0.0}}],\"summary\":\"\"}}"),
         ])
-        raw = await self._invoke(prompt, {"explicit": explicit, "recent7": recent7, "recent14": recent14}, trace_id, fallback)
-        return _normalize_profile(raw, fallback, set(allowed))
+        raw = await self._invoke(prompt, {
+            "explicit": explicit,
+            "recent7": recent7,
+            "recent14": recent14,
+            "negative_recent7": negative_recent7,
+            "negative_recent14": negative_recent14,
+        }, trace_id, fallback)
+        return _normalize_profile(raw, fallback, set(allowed), set(allowed_avoid))
 
     async def _invoke(
         self,
@@ -95,10 +105,16 @@ def _normalize_feature(raw: dict[str, Any], fallback: dict[str, Any]) -> dict[st
     return result
 
 
-def _normalize_profile(raw: dict[str, Any], fallback: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
+def _normalize_profile(
+    raw: dict[str, Any],
+    fallback: dict[str, Any],
+    allowed: set[str],
+    allowed_avoid: set[str],
+) -> dict[str, Any]:
     result = dict(fallback)
     used_fallback = raw is fallback
     result["topics"] = _normalize_topics(raw.get("topics"), allowed) or fallback["topics"]
+    result["avoidTopics"] = _normalize_topics(raw.get("avoidTopics"), allowed_avoid) or fallback["avoidTopics"]
     result["summary"] = _optional_text(raw.get("summary"), 80) or fallback["summary"]
     result["generatedBy"] = "RULE_FALLBACK" if used_fallback else "AI"
     return result
@@ -155,6 +171,30 @@ def _signals(raw: Any) -> list[dict[str, Any]]:
         score = item.get("score")
         if board and isinstance(score, (int, float)):
             result.append({"board": board, "score": round(float(score), 2)})
+    return result
+
+
+def _negative_signals(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in raw[:8]:
+        if not isinstance(item, dict):
+            continue
+        board = _optional_text(item.get("board"), 32)
+        score = item.get("score")
+        reasons = item.get("reasons")
+        if not board or not isinstance(score, (int, float)):
+            continue
+        normalized_reasons = []
+        if isinstance(reasons, list):
+            normalized_reasons = [_optional_text(reason, 200) for reason in reasons[:3]]
+            normalized_reasons = [reason for reason in normalized_reasons if reason]
+        result.append({
+            "board": board,
+            "score": round(float(score), 2),
+            "reasons": normalized_reasons,
+        })
     return result
 
 

@@ -35,6 +35,8 @@ import {
 } from '@/utils/articleQuestion'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
+import { markRecommendationNotInterested } from '@/api/recommendation'
+import { useNotInterestedArticleStore } from '@/stores/notInterestedArticle'
 import { uploadChatImage } from '@/api/message'
 import { useEmojiShopStore } from '@/stores/emojiShop'
 import { validateLocalImageFile, openImageUploadLoading, getBatchImageUploadLoadingText } from '@/utils/imageUploadFeedback'
@@ -47,6 +49,7 @@ export function useArticleDetail() {
   const route = useRoute()
   const router = useRouter()
   const userStore = useUserStore()
+  const notInterestedArticleStore = useNotInterestedArticleStore()
   const defaultAvatar = DEFAULT_AVATAR
 
   const loading = ref(true)
@@ -56,6 +59,18 @@ export function useArticleDetail() {
   const isLiked = ref(false)
   const isOwner = ref(false)
   const isFavorited = ref(false)
+  const notInterestedSaving = ref(false)
+  const notInterestedDialogVisible = ref(false)
+  const notInterestedReasonCode = ref('')
+  const notInterestedReasonDetail = ref('')
+  const notInterestedReasons = [
+    { code: 'UNRELATED', label: '与我无关' },
+    { code: 'TOPIC', label: '不喜欢这个话题' },
+    { code: 'AUTHOR', label: '不喜欢这位作者' },
+    { code: 'DUPLICATE', label: '内容重复' },
+    { code: 'LOW_QUALITY', label: '内容质量不佳' },
+    { code: 'OTHER', label: '其他原因' },
+  ]
   const questionActionSaving = ref(false)
   const aiSummary = ref('')
   const aiSummaryIsHint = ref(false)
@@ -108,6 +123,7 @@ export function useArticleDetail() {
   const REPLY_EMOJI_MAX = 5
 
   const isQuestion = computed(() => isQuestionArticle(article.value))
+  const isNotInterested = computed(() => notInterestedArticleStore.isNotInterested(article.value?.id))
   const isQuestionClosed = computed(() =>
     isQuestion.value && Number(article.value?.questionStatus) === QUESTION_STATUS.CLOSED,
   )
@@ -541,6 +557,7 @@ export function useArticleDetail() {
         isLiked.value = res.data.isLiked || false
         isOwner.value = res.data.isOwner || false
         isFavorited.value = res.data.isFavorited || false
+        notInterestedArticleStore.syncFeedbackState(articleId, res.data.isNotInterested === true)
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         await loadAuthorFollowState()
         await syncOwnerArticleStatus(articleId)
@@ -919,6 +936,38 @@ export function useArticleDetail() {
     }
   }
 
+  function openNotInterestedDialog() {
+    if (!article.value?.id || isOwner.value || isNotInterested.value) return
+    notInterestedReasonCode.value = ''
+    notInterestedReasonDetail.value = ''
+    notInterestedDialogVisible.value = true
+  }
+
+  async function submitNotInterested() {
+    if (!article.value?.id || isOwner.value || notInterestedSaving.value) return
+    if (!(await ensureLoggedIn('调整推荐内容需要登录'))) return
+    if (!notInterestedReasonCode.value) {
+      ElMessage.warning('请选择原因')
+      return
+    }
+    notInterestedSaving.value = true
+    try {
+      const articleId = article.value.id
+      const res = await markRecommendationNotInterested(
+        articleId,
+        notInterestedReasonCode.value,
+        notInterestedReasonCode.value === 'OTHER' ? notInterestedReasonDetail.value.trim() : undefined,
+      )
+      if (res.code === 0) {
+        notInterestedArticleStore.markNotInterested(articleId)
+        notInterestedDialogVisible.value = false
+        ElMessage.success('已设为不感兴趣')
+      }
+    } finally {
+      notInterestedSaving.value = false
+    }
+  }
+
   async function loadFavoriteFolders() {
     favoriteFoldersLoading.value = true
     try {
@@ -1162,6 +1211,7 @@ export function useArticleDetail() {
     handleShare,
     shareCopied,
     isLiked,
+    isNotInterested,
     isOwner,
     isFavorited,
     isVipGold,
@@ -1208,6 +1258,13 @@ export function useArticleDetail() {
     startReplyToSub,
     subReplyRefreshTokens,
     submitReply,
+    notInterestedSaving,
+    notInterestedDialogVisible,
+    notInterestedReasonCode,
+    notInterestedReasonDetail,
+    notInterestedReasons,
+    openNotInterestedDialog,
+    submitNotInterested,
     toggleReplyLike,
     toggleFavorite,
     triggerReplyImagePick,

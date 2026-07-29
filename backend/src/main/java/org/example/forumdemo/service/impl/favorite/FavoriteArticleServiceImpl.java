@@ -26,6 +26,7 @@ import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteArticleService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
+import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -70,6 +71,9 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
 
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
+
+    @Autowired
+    private RecommendationAiProfileService recommendationAiProfileService;
 
     // ============================================================
     // 收藏 / 取消 / 移动
@@ -134,6 +138,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
                     .eq(Article::getId, articleId).setSql("favorite_count = favorite_count + 1"));
             articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE);
         }
+        recommendationAiProfileService.requestProfileRefresh(loginUserId);
         log.info("用户 {} 收藏帖子 {} 到夹 {}", loginUserId, articleId, folderId);
         return folderId;
     }
@@ -164,6 +169,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
                 .eq(Article::getId, articleId)
                 .setSql("favorite_count = GREATEST(favorite_count - 1, 0)"));
         articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_FAVORITE);
+        recommendationAiProfileService.requestProfileRefresh(loginUserId);
         log.info("用户 {} 取消收藏帖子 {}", loginUserId, articleId);
     }
 

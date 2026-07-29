@@ -182,6 +182,8 @@ public class AiHubServiceImpl implements AiHubService {
         payload.put("explicitBoards", request.getExplicitBoards());
         payload.put("recent7", request.getRecent7());
         payload.put("recent14", request.getRecent14());
+        payload.put("negativeRecent7", request.getNegativeRecent7());
+        payload.put("negativeRecent14", request.getNegativeRecent14());
         return AiHubConverter.toRecommendationProfileResult(
                 invokeGateway("RECOMMENDATION", "USER_PROFILE", userId, payload));
     }

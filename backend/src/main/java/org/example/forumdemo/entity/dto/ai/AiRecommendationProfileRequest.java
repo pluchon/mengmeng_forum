@@ -17,4 +17,10 @@ public class AiRecommendationProfileRequest {
 
     // 第八至十四天板块聚合信号
     private List<Map<String, Object>> recent14;
+
+    // 近七天不感兴趣板块聚合信号
+    private List<Map<String, Object>> negativeRecent7;
+
+    // 第八至十四天不感兴趣板块聚合信号
+    private List<Map<String, Object>> negativeRecent14;
 }
