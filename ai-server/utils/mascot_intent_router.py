@@ -24,8 +24,10 @@ def decide_mascot_action(
     conversation = _format_history(history)
     model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash")
     system = """你是论坛看板娘的受控 Supervisor。判断本轮生图、复杂度和是否适合询问站内帖子检索。
-仅当用户明确说要画、生成图片、绘制或为其出图时 action 才能为 IMAGE；询问画法、评价图片、
-描述画面、要求搜索图片或普通聊天都必须是 CHAT。你可以参考历史对话补全用户已经明确的主体、场景、风格。
+仅当用户明确要求“由你新生成一张图”时 action 才能为 IMAGE；用户想看、查找、搜索、展示、识别或评价已有图片，
+即使消息里出现“图片”“画面”“图”，也都必须是 CHAT，后续联网链路会处理图集。
+例如“帮我画一张琪露诺”“生成一张海边插画”是 IMAGE；“想看看琪露诺的图片”“网上搜图给我看”
+“这张图是什么”都是 CHAT。你可以参考历史对话补全用户已经明确的主体、场景、风格。
 action=IMAGE 时 image_prompt 必须是一段可独立交给生图模型的中文画面描述，保留已知事实，不要编造人物身份、
 地名、品牌、图片文字或敏感内容；action=CHAT 时 image_prompt 必须为空。
 complexity 只能是 SIMPLE 或 COMPLEX：闲聊、单点问答、简短改写、简单站点功能提问属于 SIMPLE；
@@ -39,7 +41,7 @@ suggest_related_search=true 仅限用户确实在谈一个可被部落帖子帮�
         raw, usage = dashscope_chat_completion(
             model,
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.1,
+            temperature=0.0,
         )
     except Exception:
         logger.exception("看板娘 Supervisor 意图判断失败")
