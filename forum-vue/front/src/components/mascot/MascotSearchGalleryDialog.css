@@ -1,0 +1,32 @@
+.mascot-search-gallery {
+  display: flex;
+  gap: 12px;
+  min-height: 180px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.mascot-search-gallery__item {
+  flex: 0 0 145px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--el-text-color-regular);
+  text-decoration: none;
+}
+
+.mascot-search-gallery__item img {
+  width: 145px;
+  height: 145px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--el-fill-color-light);
+}
+
+.mascot-search-gallery__caption {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

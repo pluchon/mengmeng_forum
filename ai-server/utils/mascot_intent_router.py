@@ -19,7 +19,7 @@ _CHAT_ACTION = "CHAT"
 def decide_mascot_action(
     message: str,
     history: list[dict[str, str]] | None,
-) -> tuple[str, str, str, bool, str, dict[str, Any]]:
+) -> tuple[str, str, str, bool, str, bool, dict[str, Any]]:
     """根据最近对话决定生图、复杂度与是否主动询问站内检索。"""
     conversation = _format_history(history)
     model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash")
@@ -32,8 +32,8 @@ complexity 只能是 SIMPLE 或 COMPLEX：闲聊、单点问答、简短改写�
 需要多步推理、比较取舍、方案规划、长篇结构化创作或深入分析才是 COMPLEX。
 suggest_related_search=true 仅限用户确实在谈一个可被部落帖子帮助的话题，并且自然地问一句“要不要我帮你看看部落里有没有人聊过？”会有价值；
 不要每轮都建议，不要对寒暄、站点操作、已有明确答案、图片生成请求建议。related_search_query 必须是结合最近上下文和本轮内容的简洁检索语句；
-不建议时 related_search_query 为空。只输出合法 JSON，不要 Markdown：
-{"action":"CHAT|IMAGE","image_prompt":"","complexity":"SIMPLE|COMPLEX","suggest_related_search":false,"related_search_query":""}"""
+不建议时 related_search_query 为空。need_search_images=true 仅当本轮需要联网查询、用户在了解新实体、地点或作品且图片确实有助于理解时才允许；普通问答、新闻、操作说明一律 false。只输出合法 JSON，不要 Markdown：
+{"action":"CHAT|IMAGE","image_prompt":"","complexity":"SIMPLE|COMPLEX","suggest_related_search":false,"related_search_query":"","need_search_images":false}"""
     user = f"最近对话：\n{conversation}\n\n本轮用户：{message[:2000]}"
     try:
         raw, usage = dashscope_chat_completion(
@@ -43,7 +43,7 @@ suggest_related_search=true 仅限用户确实在谈一个可被部落帖子帮�
         )
     except Exception:
         logger.exception("看板娘 Supervisor 意图判断失败")
-        return _CHAT_ACTION, "", "SIMPLE", False, "", {"model_code": model, "estimated": True}
+        return _CHAT_ACTION, "", "SIMPLE", False, "", False, {"model_code": model, "estimated": True}
     data = _parse_json(raw)
     action = str(data.get("action") or "").strip().upper() if data else _CHAT_ACTION
     prompt = str(data.get("image_prompt") or "").strip() if data else ""
@@ -52,12 +52,13 @@ suggest_related_search=true 仅限用户确实在谈一个可被部落帖子帮�
         complexity = "SIMPLE"
     suggest = bool(data.get("suggest_related_search")) if data else False
     query = str(data.get("related_search_query") or "").strip() if data else ""
+    need_search_images = bool(data.get("need_search_images")) if data else False
     if not suggest or not query:
         suggest = False
         query = ""
     if action != _IMAGE_ACTION or not prompt:
-        return _CHAT_ACTION, "", complexity, suggest, query[:500], usage
-    return _IMAGE_ACTION, prompt[:1600], complexity, False, "", usage
+        return _CHAT_ACTION, "", complexity, suggest, query[:500], need_search_images, usage
+    return _IMAGE_ACTION, prompt[:1600], complexity, False, "", False, usage
 
 
 def _format_history(history: list[dict[str, str]] | None) -> str:

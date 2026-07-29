@@ -15,6 +15,8 @@ import {
   getCompanionMessages,
   deleteCompanionSession,
   renameCompanionSession,
+  getCompanionContextWindow,
+  compressCompanionContext,
 } from '@/api/mascot'
 import { aiPriceEstimate } from '@/api/ai'
 import { DEFAULT_AVATAR } from '@/utils/constants'
@@ -75,6 +77,8 @@ export function useMascotDock() {
   const STAGE_BASE_H = 460
   const relatedDialogVisible = ref(false)
   const relatedDialogItems = ref([])
+  const searchGalleryVisible = ref(false)
+  const searchGalleryItems = ref([])
 
   const uiLabels = {
     ariaRoot: '看板娘',
@@ -153,6 +157,8 @@ export function useMascotDock() {
   const estimateLoading = ref(false)
   const usePointsBilling = ref(false)
   const quotaHint = ref({ percent: 0, canUsePointsPay: false, quotaLabel: '' })
+  const contextWindow = ref({ usedTokens: 0, maxTokens: 128000, canCompress: false })
+  const contextCompressing = ref(false)
 
   const estimateHintText = computed(() => {
     if (estimateLoading.value) return '正在估算…'
@@ -588,14 +594,16 @@ export function useMascotDock() {
   
   function mapVoToMessages(rows) {
     return (rows || []).map((m) => {
-      const searchImageUrl = m.searchImageUrl || ''
+      const imageGallery = Array.isArray(m.imageGallery)
+        ? m.imageGallery.filter((item) => isSafeMascotImageUrl(item?.url)).slice(0, 5)
+        : []
       return {
-        role: m.role === 'assistant' ? 'assistant' : 'user',
+        role: m.role === 'assistant' ? 'assistant' : (m.type === 'context_summary' ? 'system' : 'user'),
         content: m.content || '',
-        type: m.type === 'image' ? 'image' : 'text',
+        type: m.type === 'image' || m.type === 'context_summary' ? m.type : 'text',
         url: m.url || '',
-        searchImageUrl: isSafeMascotImageUrl(searchImageUrl) ? searchImageUrl : '',
-        stripInlineImages: isSafeMascotImageUrl(searchImageUrl),
+        imageGallery,
+        stripInlineImages: imageGallery.length > 0,
         at: m.at ? new Date(m.at).getTime() : Date.now(),
       }
     })
@@ -802,6 +810,44 @@ export function useMascotDock() {
     relatedDialogVisible.value = true
   }
 
+  function openSearchGallery(items) {
+    searchGalleryItems.value = Array.isArray(items) ? items : []
+    searchGalleryVisible.value = searchGalleryItems.value.length > 0
+  }
+
+  async function refreshContextWindow() {
+    const id = String(sessionId.value || '')
+    if (!userStore.isLoggedIn || !/^\d+$/.test(id)) {
+      contextWindow.value = { usedTokens: 0, maxTokens: 128000, canCompress: false }
+      return
+    }
+    try {
+      const res = await getCompanionContextWindow(id)
+      contextWindow.value = res.code === 0 && res.data
+        ? res.data
+        : { usedTokens: 0, maxTokens: 128000, canCompress: false }
+    } catch {
+      contextWindow.value = { usedTokens: 0, maxTokens: 128000, canCompress: false }
+    }
+  }
+
+  async function compressContext() {
+    const id = String(sessionId.value || '')
+    if (!/^\d+$/.test(id) || contextCompressing.value || loading.value) return
+    contextCompressing.value = true
+    try {
+      const res = await compressCompanionContext(id)
+      if (res.code !== 0) throw new Error(res.message || '上下文压缩失败')
+      await loadMessagesForNav(activeNav.value)
+      await refreshContextWindow()
+      ElMessage.success('上下文已压缩')
+    } catch (error) {
+      ElMessage.error(error?.message || '上下文压缩失败')
+    } finally {
+      contextCompressing.value = false
+    }
+  }
+
   function openRelatedArticle(articleId) {
     if (!articleId) return
     relatedDialogVisible.value = false
@@ -815,10 +861,26 @@ export function useMascotDock() {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
   
-  function formatMsgTime(ts) {
-    if (!ts) return ''
-    const d = new Date(ts)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  function formatMessageDay(ts) {
+    const date = new Date(ts)
+    if (Number.isNaN(date.getTime())) return ''
+    const now = new Date()
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const startMessage = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+    const dayDiff = Math.floor((startToday - startMessage) / 86_400_000)
+    if (dayDiff === 0) return '今天'
+    if (dayDiff === 1) return '昨天'
+    if (dayDiff === 2) return '前天'
+    if (date.getFullYear() !== now.getFullYear()) return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+    return `${date.getMonth() + 1}月${date.getDate()}日`
+  }
+
+  function shouldShowDateDivider(rows, index) {
+    if (!rows[index]?.at) return false
+    if (index === 0) return true
+    const current = new Date(rows[index].at)
+    const previous = new Date(rows[index - 1]?.at)
+    return current.toDateString() !== previous.toDateString()
   }
 
   function notifyAiBilling(payload) {
@@ -1496,6 +1558,7 @@ export function useMascotDock() {
     scrollFsToBottom()
     refreshEstimate()
     refreshQuotaHint()
+    refreshContextWindow()
   }
   
   function onSkillForSend() {
@@ -1504,7 +1567,7 @@ export function useMascotDock() {
   
   function buildChatHistory() {
     const rows = messages.value
-      .filter((m) => m.type !== 'image')
+      .filter((m) => m.type !== 'image' && m.type !== 'context_summary' && m.type !== 'related-result')
       .map((m) => ({ role: m.role, content: m.content }))
     if (rows.length && rows[rows.length - 1].role === 'user') {
       return rows.slice(0, -1)
@@ -1560,7 +1623,7 @@ export function useMascotDock() {
         at: Date.now(),
         streaming: true,
         thinkingText: pickThinkingPhrase(llmForThinking),
-        searchImageUrl: '',
+        imageGallery: [],
       })
       stopThinkingRotation = startThinkingRotation(llmForThinking, (text) => {
         const row = messages.value[assistantIdx]
@@ -1624,9 +1687,11 @@ export function useMascotDock() {
                   loading: false,
                 }
               }
-              if (meta?.searchImageUrl && row && isSafeMascotImageUrl(meta.searchImageUrl)) {
-                row.searchImageUrl = meta.searchImageUrl
-                row.stripInlineImages = true
+              if (Array.isArray(meta?.searchImageGallery) && row) {
+                row.imageGallery = meta.searchImageGallery
+                  .filter((item) => isSafeMascotImageUrl(item?.url))
+                  .slice(0, 5)
+                row.stripInlineImages = row.imageGallery.length > 0
               }
               const stats = usageStatsFromApi(meta)
               if (stats && row) row.usageStats = stats
@@ -1642,6 +1707,7 @@ export function useMascotDock() {
               }
               chatStreamAbort = null
               refreshEstimate()
+              refreshContextWindow()
               persistCurrentMessages()
               if (!streamHadError) {
                 showStageCloudTip('回复好了，点我查看～', 2800)
@@ -1766,10 +1832,6 @@ export function useMascotDock() {
     clearOml2dStageHost()
   })
 
-  function hideMascotSearchImage(msg) {
-    if (msg) msg.searchImageUrl = ''
-  }
-
   return {
     DEFAULT_AVATAR,
     ALL_LLM_OPTIONS,
@@ -1808,14 +1870,17 @@ export function useMascotDock() {
     estimateHintText,
     estimateLoading,
     estimatePoints,
+    contextCompressing,
+    contextWindow,
+    compressContext,
     showPointsPayButton,
     usePointsBilling,
     togglePointsPay,
     fetchCatalog,
     formatAiUsageLine,
-    formatMsgTime,
+    formatMessageDay,
     formatSessionTime,
-    hideMascotSearchImage,
+    shouldShowDateDivider,
     isLatestRegeneratableAssistant,
     imageQuality,
     imageGenerating,
@@ -1836,6 +1901,7 @@ export function useMascotDock() {
     onPreviewPick,
     openRelatedArticle,
     openRelatedRecommendation,
+    openSearchGallery,
     onScaleSliderChange,
     onSkillForSend,
     onStageLeave,
@@ -1854,6 +1920,8 @@ export function useMascotDock() {
     rootStyle,
     relatedDialogItems,
     relatedDialogVisible,
+    searchGalleryItems,
+    searchGalleryVisible,
     saveLlmPrefs,
     saveOffset,
     saveScale,

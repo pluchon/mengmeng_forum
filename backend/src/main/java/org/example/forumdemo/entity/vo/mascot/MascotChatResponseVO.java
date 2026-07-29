@@ -3,6 +3,8 @@ package org.example.forumdemo.entity.vo.mascot;
 import lombok.Data;
 import org.example.forumdemo.entity.vo.ai.AiUsageStatsVO;
 
+import java.util.List;
+
 // 看板娘单次对话响应
 @Data
 public class MascotChatResponseVO {
@@ -21,4 +23,5 @@ public class MascotChatResponseVO {
     private Boolean estimated;
     private Boolean relatedSearchOffer;
     private String relatedSearchQuery;
+    private List<CompanionImageGalleryItemVO> searchImageGallery;
 }

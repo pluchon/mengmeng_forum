@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _AFFIRM_RE = re.compile(r"^(是的?|对|嗯|好|可以|想去|要去|走|行|没问题|ok|yes)[\s!！。~]*$", re.I)
 _TRAVEL_TOPIC_RE = re.compile(r"雪山|川西|西藏|新疆|云南|旅行|旅游|自驾|路线|出发|想去|行程|攻略", re.I)
+_LOCAL_WEATHER_RE = re.compile(r"天气|温度|下雨|降雨|带伞|穿什么|冷不冷|热不热|空气", re.I)
 
 
 def _parse_json(text: str) -> dict[str, Any] | None:
@@ -118,6 +119,7 @@ def prepare_mascot_mcp_bundle(
     history: list[dict[str, str]] | None,
     skill: str,
     client_datetime: str | None,
+    client_location: str | None = None,
 ) -> dict[str, Any]:
     """
     返回 datetime_context, local_kb_snippet, mcp_context, need_mcp_search, mcp_query, mcp_used
@@ -140,6 +142,16 @@ def prepare_mascot_mcp_bundle(
         out["local_kb_snippet"] = snippet
         out["need_mcp_search"] = need
         out["mcp_query"] = query
+
+    location = str(client_location or "").strip()[:80]
+    if skill == "writing" and location and _LOCAL_WEATHER_RE.search(message) and _baidu_enabled():
+        try:
+            weather_context = invoke_tool("map_weather", {"location": location})
+            if weather_context:
+                ctx_parts.append(f"【用户所在城市天气】\n{weather_context}")
+                out["mcp_used"] = True
+        except Exception:
+            logger.exception("用户所在城市天气查询失败")
 
     if skill != "writing" or not _baidu_enabled():
         out["mcp_context"] = "\n".join(ctx_parts)

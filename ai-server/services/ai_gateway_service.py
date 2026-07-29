@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from modules.moderation import ContentModerationModule
-from modules.mascot import MascotChatModule
+from modules.mascot import MascotChatModule, MascotContextCompressModule
 from modules.creation import CoverHintsModule, ImageGenerationModule, PostPolishModule
 from modules.game import GobangMoveModule, JiziMoveModule
 from modules.search import SearchModule
@@ -40,6 +40,7 @@ _registry.register("RAG", "REMOVE_ARTICLE", "v1", RagRemoveArticleModule())
 _registry.register("RECOMMENDATION", "ARTICLE_FEATURE", "v1", ArticleFeatureModule())
 _registry.register("RECOMMENDATION", "USER_PROFILE", "v1", UserProfileModule())
 _registry.register("MASCOT", "CHAT", "v1", MascotChatModule())
+_registry.register("MASCOT", "CONTEXT_COMPRESS", "v1", MascotContextCompressModule())
 
 
 def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import ipaddress
 import re
 from typing import Any
 from urllib.parse import urlencode
@@ -202,3 +203,21 @@ def weather(location: str) -> str:
     if wind or wind_class:
         lines.append(f"风：{wind} {wind_class}".strip())
     return "\n".join(x for x in lines if x)
+
+
+def locate_ip(ip_address: str) -> str:
+    """仅将公网 IP 转换为城市级地点；不返回或记录原始 IP。"""
+    try:
+        ip = ipaddress.ip_address((ip_address or "").strip())
+    except ValueError:
+        return ""
+    if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_unspecified:
+        return ""
+    data = _get("/location/ip", {"ip": str(ip), "coor": "bd09ll"})
+    if data.get("status") != 0:
+        return ""
+    result = data.get("result") or {}
+    component = result.get("addressComponent") or {}
+    city = str(component.get("city") or "").strip()
+    province = str(component.get("province") or "").strip()
+    return (city or province)[:80]

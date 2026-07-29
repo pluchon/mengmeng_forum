@@ -997,6 +997,7 @@ CREATE TABLE `forum_companion_message` (
     `content` text COMMENT '文本内容',
     `msg_type` varchar(16) NOT NULL DEFAULT 'text' COMMENT 'text|image',
     `image_url` varchar(1024) DEFAULT NULL COMMENT '生图URL(OSS)；text消息时可存联网检索配图',
+    `metadata_json` mediumtext DEFAULT NULL COMMENT '消息扩展元数据（联网图集、上下文摘要来源等）',
     `delete_state` tinyint NOT NULL DEFAULT 0 COMMENT '0否 1是',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),

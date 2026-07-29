@@ -3,6 +3,8 @@ package org.example.forumdemo.service.impl.mascot;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -11,6 +13,8 @@ import org.example.forumdemo.entity.db.ForumCompanionSession;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
 import org.example.forumdemo.entity.vo.mascot.CompanionMessageVO;
 import org.example.forumdemo.entity.vo.mascot.CompanionSessionVO;
+import org.example.forumdemo.entity.vo.mascot.CompanionContextWindowVO;
+import org.example.forumdemo.entity.vo.mascot.CompanionImageGalleryItemVO;
 import org.example.forumdemo.mapper.ForumCompanionMessageMapper;
 import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
@@ -28,12 +32,16 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     private static final int MAX_HISTORY_TURNS = 16;
     private static final int TITLE_MAX = 48;
+    private static final long CONTEXT_MAX_TOKENS = 128_000L;
 
     @Autowired
     private ForumCompanionSessionMapper companionSessionMapper;
 
     @Autowired
     private ForumCompanionMessageMapper companionMessageMapper;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Override
     public String normalizeSkill(String skill) {
@@ -77,12 +85,30 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     @Override
     public List<MascotHistoryTurn> loadHistoryTurns(Long sessionId, int maxTurns) {
         int limit = maxTurns > 0 ? maxTurns : MAX_HISTORY_TURNS;
-        List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2, false),
+        ForumCompanionMessage latestSummary = companionMessageMapper.selectOne(
                 new LambdaQueryWrapper<ForumCompanionMessage>()
                         .eq(ForumCompanionMessage::getSessionId, sessionId)
+                        .eq(ForumCompanionMessage::getMsgType, "context_summary")
                         .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
-                        .orderByDesc(ForumCompanionMessage::getId)).getRecords();
+                        .orderByDesc(ForumCompanionMessage::getId)
+                        .last("LIMIT 1"));
+        LambdaQueryWrapper<ForumCompanionMessage> query = new LambdaQueryWrapper<ForumCompanionMessage>()
+                .eq(ForumCompanionMessage::getSessionId, sessionId)
+                .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
+                .ne(ForumCompanionMessage::getMsgType, "context_summary")
+                .orderByDesc(ForumCompanionMessage::getId);
+        if (latestSummary != null) {
+            query.gt(ForumCompanionMessage::getId, latestSummary.getId());
+        }
+        List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2, false),
+                query).getRecords();
         List<MascotHistoryTurn> turns = new ArrayList<>();
+        if (latestSummary != null && latestSummary.getContent() != null && !latestSummary.getContent().isBlank()) {
+            MascotHistoryTurn summary = new MascotHistoryTurn();
+            summary.setRole("assistant");
+            summary.setContent("【已压缩的先前上下文】\n" + latestSummary.getContent().trim());
+            turns.add(summary);
+        }
         for (int i = rows.size() - 1; i >= 0; i--) {
             ForumCompanionMessage m = rows.get(i);
             MascotHistoryTurn t = new MascotHistoryTurn();
@@ -100,12 +126,25 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void appendTextMessage(Long sessionId, String role, String content) {
-        appendTextMessage(sessionId, role, content, null);
+        appendTextMessage(sessionId, role, content, (String) null);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
+        List<CompanionImageGalleryItemVO> gallery = new ArrayList<>();
+        if (searchImageUrl != null && !searchImageUrl.isBlank()) {
+            CompanionImageGalleryItemVO item = new CompanionImageGalleryItemVO();
+            item.setUrl(searchImageUrl.trim());
+            gallery.add(item);
+        }
+        appendTextMessage(sessionId, role, content, gallery);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void appendTextMessage(Long sessionId, String role, String content,
+                                  List<CompanionImageGalleryItemVO> imageGallery) {
         if (sessionId == null || content == null || content.isBlank()) {
             return;
         }
@@ -114,9 +153,14 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         m.setRole(role);
         m.setContent(content.trim());
         m.setMsgType("text");
-        String img = searchImageUrl != null ? searchImageUrl.trim() : "";
-        if (!img.isBlank() && img.length() <= 1024 && img.startsWith("http")) {
-            m.setImageUrl(img);
+        List<CompanionImageGalleryItemVO> gallery = sanitizeImageGallery(imageGallery);
+        if (!gallery.isEmpty()) {
+            m.setImageUrl(gallery.get(0).getUrl());
+            try {
+                m.setMetadataJson(objectMapper.writeValueAsString(gallery));
+            } catch (Exception ignored) {
+                /* 图集持久化失败时，至少保留首图兼容旧会话。 */
+            }
         }
         m.setDeleteState((byte) 0);
         m.setCreateTime(new Date());
@@ -195,22 +239,136 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         List<CompanionMessageVO> out = new ArrayList<>();
         for (ForumCompanionMessage m : rows) {
             CompanionMessageVO v = new CompanionMessageVO();
+            v.setId(m.getId());
             v.setRole(m.getRole());
             v.setAt(m.getCreateTime());
             if ("image".equals(m.getMsgType())) {
                 v.setType("image");
                 v.setUrl(m.getImageUrl());
                 v.setContent(m.getContent());
+            } else if ("context_summary".equals(m.getMsgType())) {
+                v.setType("context_summary");
+                v.setContent("");
             } else {
                 v.setType("text");
                 v.setContent(m.getContent());
-                if (m.getImageUrl() != null && !m.getImageUrl().isBlank()) {
+                List<CompanionImageGalleryItemVO> gallery = readImageGallery(m.getMetadataJson());
+                if (!gallery.isEmpty()) {
+                    v.setImageGallery(gallery);
+                } else if (m.getImageUrl() != null && !m.getImageUrl().isBlank()) {
                     v.setSearchImageUrl(m.getImageUrl().trim());
                 }
             }
             out.add(v);
         }
         return out;
+    }
+
+    @Override
+    public CompanionContextWindowVO getContextWindow(Long userId, Long sessionId) {
+        requireOwnedSession(userId, sessionId);
+        long used = estimateTokens(loadCompressibleHistory(userId, sessionId));
+        CompanionContextWindowVO vo = new CompanionContextWindowVO();
+        vo.setUsedTokens(used);
+        vo.setMaxTokens(CONTEXT_MAX_TOKENS);
+        vo.setCanCompress(used > 0);
+        return vo;
+    }
+
+    @Override
+    public List<MascotHistoryTurn> loadCompressibleHistory(Long userId, Long sessionId) {
+        requireOwnedSession(userId, sessionId);
+        List<ForumCompanionMessage> rows = companionMessageMapper.selectList(
+                new LambdaQueryWrapper<ForumCompanionMessage>()
+                        .eq(ForumCompanionMessage::getSessionId, sessionId)
+                        .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
+                        .ne(ForumCompanionMessage::getMsgType, "context_summary")
+                        .orderByAsc(ForumCompanionMessage::getId));
+        List<MascotHistoryTurn> out = new ArrayList<>();
+        for (ForumCompanionMessage row : rows) {
+            if (row.getContent() == null || row.getContent().isBlank()) {
+                continue;
+            }
+            MascotHistoryTurn turn = new MascotHistoryTurn();
+            turn.setRole("user".equals(row.getRole()) ? "user" : "assistant");
+            turn.setContent(row.getContent().trim());
+            out.add(turn);
+        }
+        return out;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void appendContextSummary(Long userId, Long sessionId, String summary, long sourceTokens) {
+        requireOwnedSession(userId, sessionId);
+        if (summary == null || summary.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        ForumCompanionMessage row = new ForumCompanionMessage();
+        row.setSessionId(sessionId);
+        row.setRole("system");
+        row.setContent(summary.trim());
+        row.setMsgType("context_summary");
+        row.setDeleteState((byte) 0);
+        row.setCreateTime(new Date());
+        row.setMetadataJson("{\"sourceTokens\":" + Math.max(0L, sourceTokens) + "}");
+        companionMessageMapper.insert(row);
+        touchSession(sessionId, null);
+    }
+
+    private void requireOwnedSession(Long userId, Long sessionId) {
+        ForumCompanionSession session = companionSessionMapper.selectOne(
+                new LambdaQueryWrapper<ForumCompanionSession>()
+                        .eq(ForumCompanionSession::getId, sessionId)
+                        .eq(ForumCompanionSession::getUserId, userId)
+                        .eq(ForumCompanionSession::getDeleteState, (byte) 0));
+        if (session == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "会话不存在"));
+        }
+    }
+
+    private List<CompanionImageGalleryItemVO> sanitizeImageGallery(List<CompanionImageGalleryItemVO> raw) {
+        List<CompanionImageGalleryItemVO> out = new ArrayList<>();
+        if (raw == null) {
+            return out;
+        }
+        for (CompanionImageGalleryItemVO item : raw) {
+            if (item == null || item.getUrl() == null) {
+                continue;
+            }
+            String url = item.getUrl().trim();
+            if (!url.startsWith("https://") || url.length() > 2048 || out.stream().anyMatch(x -> url.equals(x.getUrl()))) {
+                continue;
+            }
+            CompanionImageGalleryItemVO accepted = new CompanionImageGalleryItemVO();
+            accepted.setUrl(url);
+            accepted.setTitle(item.getTitle() == null ? "" : item.getTitle().trim().substring(0, Math.min(120, item.getTitle().trim().length())));
+            accepted.setSource(item.getSource() == null ? "" : item.getSource().trim().substring(0, Math.min(160, item.getSource().trim().length())));
+            out.add(accepted);
+            if (out.size() >= 5) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    private List<CompanionImageGalleryItemVO> readImageGallery(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            return sanitizeImageGallery(objectMapper.readValue(raw, new TypeReference<List<CompanionImageGalleryItemVO>>() { }));
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private long estimateTokens(List<MascotHistoryTurn> turns) {
+        long chars = 0L;
+        for (MascotHistoryTurn turn : turns) {
+            chars += turn.getContent() == null ? 0 : turn.getContent().length();
+        }
+        return Math.max(0L, (long) Math.ceil(chars * 0.8D));
     }
 
     @Override

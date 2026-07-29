@@ -13,6 +13,7 @@ import org.example.forumdemo.entity.dto.mascot.CompanionSessionRenameRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationRequest;
 import org.example.forumdemo.entity.vo.mascot.CompanionMessageVO;
+import org.example.forumdemo.entity.vo.mascot.CompanionContextWindowVO;
 import org.example.forumdemo.entity.vo.mascot.CompanionSessionVO;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
@@ -85,7 +86,7 @@ public class MascotController {
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
-        return Result.success(mascotService.chat(user, request));
+        return Result.success(mascotService.chat(user, request, resolveClientIp(httpServletRequest)));
     }
 
     @Operation(summary = "看板娘流式对话", description = "SSE 流式返回；data 含 text / meta / error")
@@ -106,7 +107,8 @@ public class MascotController {
             }
             return emitter;
         }
-        sseExecutor.execute(() -> mascotService.streamChat(user, request, emitter));
+        String clientIp = resolveClientIp(httpServletRequest);
+        sseExecutor.execute(() -> mascotService.streamChat(user, request, clientIp, emitter));
         return emitter;
     }
 
@@ -161,6 +163,31 @@ public class MascotController {
         return Result.success(companionMemoryService.listMessages(user.getId(), sessionId));
     }
 
+    /** 读取当前会话的上下文估算占用。 */
+    @GetMapping("/companion/sessions/{sessionId}/context-window")
+    public Result<CompanionContextWindowVO> contextWindow(
+            @PathVariable @Positive Long sessionId,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotService.getContextWindow(user, sessionId));
+    }
+
+    /** 压缩当前会话的历史上下文。 */
+    @PostMapping("/companion/sessions/{sessionId}/compress-context")
+    public Result<Void> compressContext(
+            @PathVariable @Positive Long sessionId,
+            HttpServletRequest httpServletRequest) {
+        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        mascotService.compressContext(user, sessionId);
+        return Result.success();
+    }
+
     /** 修改陪伴助手会话名称 */
     @PutMapping("/companion/sessions/{sessionId}")
     public Result<Void> renameCompanionSession(
@@ -186,5 +213,14 @@ public class MascotController {
         }
         companionMemoryService.deleteSession(user.getId(), sessionId);
         return Result.success();
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr();
+        if (remote != null && !remote.isBlank() && !remote.startsWith("127.") && !"::1".equals(remote)) {
+            return remote.trim();
+        }
+        String forwarded = request.getHeader("X-Real-IP");
+        return forwarded == null ? "" : forwarded.trim().split(",")[0].trim();
     }
 }

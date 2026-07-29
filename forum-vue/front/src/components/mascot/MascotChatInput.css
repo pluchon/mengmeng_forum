@@ -109,6 +109,59 @@
   cursor: not-allowed;
 }
 
+.mascot-context-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 11px;
+}
+
+.mascot-context-control__track {
+  width: 54px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--el-fill-color-darker, #e4e7ed);
+}
+
+.mascot-context-control__progress {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--el-color-primary, #409eff);
+  transition: width 0.2s ease;
+}
+
+.mascot-context-control__count {
+  white-space: nowrap;
+}
+
+.mascot-context-control__compress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mascot-context-control__compress:hover:not(:disabled) {
+  color: var(--el-color-primary, #409eff);
+  background: var(--el-fill-color-light, #f5f7fa);
+}
+
+.mascot-context-control__compress:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .mascot-generation-hint {
   min-width: 0;
   overflow: hidden;

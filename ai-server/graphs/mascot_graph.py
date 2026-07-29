@@ -48,6 +48,7 @@ class MascotState(TypedDict, total=False):
     complexity: str
     related_search_offer: bool
     related_search_query: str
+    need_search_images: bool
     llm_route: str
     history: list[dict[str, str]]
     need_mcp_search: bool
@@ -55,6 +56,7 @@ class MascotState(TypedDict, total=False):
     mcp_context: str
     local_kb_snippet: str
     client_datetime: str
+    client_location: str
     datetime_context: str
     travel_guidance: str
     travel_phase: str
@@ -120,7 +122,7 @@ def node_route_skill(state: MascotState) -> MascotState:
 
 def node_supervisor(state: MascotState) -> MascotState:
     """只做受控动作分派；业务执行仍由 Java 和具体模块负责。"""
-    action, image_prompt, complexity, search_offer, search_query, usage = decide_mascot_action(
+    action, image_prompt, complexity, search_offer, search_query, need_search_images, usage = decide_mascot_action(
         (state.get("message") or "").strip(),
         state.get("history") or [],
     )
@@ -130,12 +132,14 @@ def node_supervisor(state: MascotState) -> MascotState:
     if action == "IMAGE":
         search_offer = False
         search_query = ""
+        need_search_images = False
     return {
         "action": action,
         "image_prompt": image_prompt,
         "complexity": complexity,
         "related_search_offer": search_offer,
         "related_search_query": search_query,
+        "need_search_images": need_search_images,
         "supervisor_usage": usage,
     }
 
@@ -239,6 +243,7 @@ def _prepare_mascot_context(
     skill: str,
     vip_tier: int,
     client_datetime: str = "",
+    client_location: str = "",
 ) -> dict[str, Any]:
     state: MascotState = {
         "message": message,
@@ -250,6 +255,7 @@ def _prepare_mascot_context(
         "llm_route": llm_provider or "",
         "history": history or [],
         "client_datetime": client_datetime or "",
+        "client_location": client_location or "",
     }
     state.update(node_route_skill(state))
     state.update(node_supervisor(state))
@@ -304,6 +310,7 @@ def stream_mascot_chat(
     skill: str = "chat",
     vip_tier: int = 0,
     client_datetime: str = "",
+    client_location: str = "",
 ):
     """yield ('text', str) 或 ('usage', dict)。"""
     yield ("status", "preparing")
@@ -316,6 +323,7 @@ def stream_mascot_chat(
         skill=skill,
         vip_tier=vip_tier,
         client_datetime=client_datetime,
+        client_location=client_location,
     )
     if ctx.get("action") == "IMAGE":
         yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
@@ -327,9 +335,9 @@ def stream_mascot_chat(
             "relatedSearchQuery": ctx.get("related_search_query") or "",
             "complexity": ctx.get("complexity") or "SIMPLE",
         })
-    search_image = str(ctx.get("search_image_url") or "").strip()
-    if search_image:
-        yield ("meta", {"searchImageUrl": search_image})
+    search_gallery = ctx.get("search_image_gallery") or []
+    if search_gallery:
+        yield ("meta", {"searchImageGallery": search_gallery})
     from clients.usage_util import attach_latency
 
     route, msgs = _build_agent_messages(ctx, stream=True)
@@ -445,6 +453,7 @@ def node_assess(state: MascotState) -> MascotState:
         history=history,
         skill=skill,
         client_datetime=client_dt or None,
+        client_location=str(state.get("client_location") or "").strip() or None,
     )
 
     out: MascotState = {
@@ -469,7 +478,7 @@ def _route_after_assess(state: MascotState) -> Literal["tavily_search", "agent"]
 def node_tavily_search(state: MascotState) -> MascotState:
     query = (state.get("mcp_query") or state.get("message") or "").strip()
     ctx = ""
-    search_image_url = ""
+    search_image_gallery: list[dict[str, str]] = []
     try:
         from clients.tavily_client import TavilySearchClient
         from config import settings as _settings
@@ -477,10 +486,12 @@ def node_tavily_search(state: MascotState) -> MascotState:
         cfg = _settings.tavily
         client = TavilySearchClient()
         if client.is_configured():
-            ctx, search_image_url = client.search_for_chat(
+            ctx, search_image_gallery = client.search_for_chat(
                 query,
                 max_results=int(cfg.get("max_results", 5)),
                 search_depth=str(cfg.get("search_depth", "basic")),
+                include_images=bool(state.get("need_search_images")),
+                prefer_encyclopedia=bool(state.get("need_search_images")),
             )
         else:
             ctx = invoke_tool("tavily_search", {"query": query})
@@ -497,7 +508,7 @@ def node_tavily_search(state: MascotState) -> MascotState:
         merged = f"【联网检索参考】\n{ctx}"
     else:
         merged = prev
-    return {"mcp_context": merged, "search_image_url": search_image_url}
+    return {"mcp_context": merged, "search_image_gallery": search_image_gallery}
 
 
 def node_agent(state: MascotState) -> MascotState:
@@ -611,6 +622,7 @@ def run_mascot_chat(
     skill: str = "chat",
     vip_tier: int = 0,
     client_datetime: str = "",
+    client_location: str = "",
 ) -> dict[str, Any]:
     global _GRAPH
     if _GRAPH is None:
@@ -626,6 +638,7 @@ def run_mascot_chat(
             "llm_route": llm_provider or "",
             "history": history or [],
             "client_datetime": client_datetime or "",
+            "client_location": client_location or "",
         }
     )
     # route_skill / assess 在图内执行；invoke 后补全 routed_skill 供调试
@@ -641,4 +654,5 @@ def run_mascot_chat(
         "complexity": out.get("complexity") or "SIMPLE",
         "related_search_offer": bool(out.get("related_search_offer")),
         "related_search_query": out.get("related_search_query") or "",
+        "search_image_gallery": out.get("search_image_gallery") or [],
     }
