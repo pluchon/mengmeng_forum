@@ -627,7 +627,7 @@
       append-to-body
       :modal-append-to-body="true"
       :z-index="13000"
-      :show-close="false"
+      :show-close="true"
       class="not-interested-dialog"
     >
       <h2 class="not-interested-dialog-title">不感兴趣</h2>
