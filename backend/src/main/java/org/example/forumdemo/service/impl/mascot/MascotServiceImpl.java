@@ -939,7 +939,7 @@ public class MascotServiceImpl implements MascotService {
 
     @Override
     @SuppressWarnings("rawtypes")
-    public void compressContext(User user, Long sessionId) {
+    public CompanionContextWindowVO compressContext(User user, Long sessionId) {
         List<MascotHistoryTurn> history = companionMemoryService.loadCompressibleHistory(user.getId(), sessionId);
         if (history.isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "没有可压缩的会话内容"));
@@ -969,6 +969,7 @@ public class MascotServiceImpl implements MascotService {
                 throw new IllegalStateException("context summary empty");
             }
             companionMemoryService.appendContextSummary(user.getId(), sessionId, summary, window.getUsedTokens());
+            return companionMemoryService.getContextWindow(user.getId(), sessionId);
         } catch (ApplicationException exception) {
             if (reservedFlash) {
                 aiQuotaService.releaseQwenFlash(user);
@@ -1203,6 +1204,42 @@ public class MascotServiceImpl implements MascotService {
                         sendMascotSse(emitter, Map.of("error", message != null ? String.valueOf(message) : "AI 服务暂时不可用"));
                         break;
                     }
+                    String eventType = String.valueOf(chunk.get("type"));
+                    if ("progress".equals(eventType) && chunk.get("data") instanceof Map<?, ?> progressData) {
+                        Map<String, Object> progressMeta = new HashMap<>();
+                        progressData.forEach((key, value) -> progressMeta.put(String.valueOf(key), value));
+                        sendMascotSse(emitter, Map.of("meta", progressMeta));
+                        continue;
+                    }
+                    if ("text".equals(eventType) && chunk.get("data") instanceof Map<?, ?> textData) {
+                        Object text = textData.get("text");
+                        if (text != null && !String.valueOf(text).isEmpty()) {
+                            String piece = String.valueOf(text);
+                            replyBuffer.append(piece);
+                            sendMascotSse(emitter, Map.of("text", piece));
+                        }
+                        continue;
+                    }
+                    if ("meta".equals(eventType) && chunk.get("data") instanceof Map<?, ?> eventMeta) {
+                        Map<String, Object> metaMap = new HashMap<>();
+                        eventMeta.forEach((key, value) -> metaMap.put(String.valueOf(key), value));
+                        if (isImageAction(metaMap)) {
+                            imageRequested = true;
+                            imagePrompt = String.valueOf(metaMap.getOrDefault("imagePrompt", "")).trim();
+                        }
+                        List<CompanionImageGalleryItemVO> gallery = parseImageGallery(metaMap.get("searchImageGallery"));
+                        if (!gallery.isEmpty()) {
+                            streamSearchImageGallery.set(gallery);
+                        }
+                        sendMascotSse(emitter, Map.of("meta", metaMap));
+                        continue;
+                    }
+                    if ("usage".equals(eventType) && chunk.get("data") instanceof Map<?, ?> eventUsage) {
+                        Map<String, Object> usageMap = new HashMap<>();
+                        eventUsage.forEach((key, value) -> usageMap.put(String.valueOf(key), value));
+                        usage = parseUsage(Map.of("usage", usageMap), fallbackModel);
+                        continue;
+                    }
                     if ("final".equals(chunk.get("type")) && chunk.get("data") instanceof Map<?, ?> gateway) {
                         if (!(gateway.get("data") instanceof Map<?, ?> rawData)) {
                             continue;
@@ -1220,6 +1257,11 @@ public class MascotServiceImpl implements MascotService {
                             searchMeta.put("relatedSearchQuery", String.valueOf(finalData.get("relatedSearchQuery")));
                             searchMeta.put("complexity", String.valueOf(finalData.getOrDefault("complexity", "SIMPLE")));
                             sendMascotSse(emitter, Map.of("meta", searchMeta));
+                        }
+                        List<CompanionImageGalleryItemVO> gallery = parseImageGallery(finalData.get("searchImageGallery"));
+                        if (!gallery.isEmpty()) {
+                            streamSearchImageGallery.set(gallery);
+                            sendMascotSse(emitter, Map.of("meta", Map.of("searchImageGallery", gallery)));
                         }
                         Object reply = finalData.get("reply");
                         if (reply != null && !String.valueOf(reply).isEmpty()) {

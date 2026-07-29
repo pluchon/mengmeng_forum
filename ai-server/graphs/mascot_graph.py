@@ -54,6 +54,7 @@ class MascotState(TypedDict, total=False):
     need_mcp_search: bool
     mcp_query: str
     mcp_context: str
+    search_image_gallery: list[dict[str, str]]
     local_kb_snippet: str
     client_datetime: str
     client_location: str
@@ -314,8 +315,10 @@ def stream_mascot_chat(
 ):
     """yield ('text', str) 或 ('usage', dict)。"""
     yield ("status", "preparing")
-    ctx = _prepare_mascot_context(
+    ctx: dict[str, Any] = {}
+    for status, current_state in _stream_mascot_context(
         message=message,
+        session_id=session_id,
         appearance=appearance,
         tier=tier,
         history=history,
@@ -324,7 +327,9 @@ def stream_mascot_chat(
         vip_tier=vip_tier,
         client_datetime=client_datetime,
         client_location=client_location,
-    )
+    ):
+        ctx = current_state
+        yield ("status", status)
     if ctx.get("action") == "IMAGE":
         yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
         yield ("usage", ctx.get("supervisor_usage") or {})
@@ -356,6 +361,50 @@ def stream_mascot_chat(
     if not usage:
         usage = {"model_code": route, "estimated": True}
     yield ("usage", _merge_usage(attach_latency(usage, t0), ctx.get("supervisor_usage")))
+
+
+def _stream_mascot_context(
+    *,
+    message: str,
+    session_id: str,
+    appearance: str,
+    tier: str,
+    history: list[dict[str, str]] | None,
+    llm_provider: str,
+    skill: str,
+    vip_tier: int,
+    client_datetime: str,
+    client_location: str,
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """通过 LangGraph 逐节点产出看板娘准备阶段的真实状态。"""
+    global _STREAM_PREPARE_GRAPH
+    if _STREAM_PREPARE_GRAPH is None:
+        _STREAM_PREPARE_GRAPH = build_mascot_prepare_graph()
+    state: dict[str, Any] = {
+        "message": message,
+        "session_id": session_id or "",
+        "appearance": appearance or "snow_miku",
+        "tier": tier or "basic",
+        "vip_tier": vip_tier,
+        "skill": skill or "chat",
+        "llm_route": llm_provider or "",
+        "history": history or [],
+        "client_datetime": client_datetime or "",
+        "client_location": client_location or "",
+    }
+    yield "routing", state
+    for update in _STREAM_PREPARE_GRAPH.stream(state, stream_mode="updates"):
+        for node_name, node_state in update.items():
+            if isinstance(node_state, dict):
+                state.update(node_state)
+            if node_name == "route_skill":
+                yield "supervising", state
+            elif node_name == "supervisor":
+                yield "drawing" if state.get("action") == "IMAGE" else "assessing", state
+            elif node_name == "assess":
+                yield "searching" if state.get("need_mcp_search") else "composing", state
+            elif node_name == "tavily_search":
+                yield "composing", state
 
 
 def _skill_system_stream(
@@ -614,7 +663,25 @@ def build_mascot_graph() -> Any:
     return g.compile()
 
 
+def build_mascot_prepare_graph() -> Any:
+    """流式回复的准备子图：复用节点，但不提前执行最终文本模型。"""
+    g = StateGraph(MascotState)
+    g.add_node("route_skill", node_route_skill)
+    g.add_node("supervisor", node_supervisor)
+    g.add_node("image", node_image_action)
+    g.add_node("assess", node_assess)
+    g.add_node("tavily_search", node_tavily_search)
+    g.add_edge(START, "route_skill")
+    g.add_edge("route_skill", "supervisor")
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"image": "image", "assess": "assess"})
+    g.add_edge("image", END)
+    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "agent": END})
+    g.add_edge("tavily_search", END)
+    return g.compile()
+
+
 _GRAPH = None
+_STREAM_PREPARE_GRAPH = None
 
 
 def run_mascot_chat(

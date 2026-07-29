@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from config import settings
-from graphs.mascot_graph import run_mascot_chat
+from graphs.mascot_graph import run_mascot_chat, stream_mascot_chat
 from graphs.mascot_context_graph import compress_mascot_context
-from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
+from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError, ModuleResult
 
 _ALLOWED_SKILLS = {"writing", "help", "chat"}
 _ALLOWED_TIERS = {"basic", "vip"}
@@ -37,6 +38,19 @@ class MascotChatModule:
             },
             usage=result.get("usage") or {},
         )
+
+    def stream(self, request: ModuleRequest) -> Iterator[ModuleEvent]:
+        """把 LangGraph 节点状态与模型文本转换为统一 Gateway 事件。"""
+        payload = _normalize_payload(request.payload)
+        for event_type, data in stream_mascot_chat(**payload):
+            if event_type == "status":
+                yield ModuleEvent("progress", {"status": str(data or "preparing")})
+            elif event_type == "text":
+                yield ModuleEvent("text", {"text": str(data or "")})
+            elif event_type == "meta" and isinstance(data, dict):
+                yield ModuleEvent("meta", data)
+            elif event_type == "usage" and isinstance(data, dict):
+                yield ModuleEvent("usage", data)
 
 
 class MascotContextCompressModule:

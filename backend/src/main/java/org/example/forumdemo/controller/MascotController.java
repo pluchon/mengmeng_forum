@@ -177,15 +177,14 @@ public class MascotController {
 
     /** 压缩当前会话的历史上下文。 */
     @PostMapping("/companion/sessions/{sessionId}/compress-context")
-    public Result<Void> compressContext(
+    public Result<CompanionContextWindowVO> compressContext(
             @PathVariable @Positive Long sessionId,
             HttpServletRequest httpServletRequest) {
         User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
-        mascotService.compressContext(user, sessionId);
-        return Result.success();
+        return Result.success(mascotService.compressContext(user, sessionId));
     }
 
     /** 修改陪伴助手会话名称 */
