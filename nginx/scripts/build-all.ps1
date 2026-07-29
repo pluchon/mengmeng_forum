@@ -54,33 +54,25 @@ function Invoke-DockerBuild {
 }
 
 function Invoke-NpmBuild {
-    param([string]$WorkingDirectory)
-
     $npmCommand = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
     if ($null -eq $npmCommand) {
         $npmCommand = Get-Command "npm" -ErrorAction Stop
     }
 
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $npmCommand.Source
-    $startInfo.WorkingDirectory = $WorkingDirectory
-    # Arguments 在不同 PowerShell/.NET 运行时上比 ArgumentList 更稳定；这里的参数固定且不含用户输入。
-    $startInfo.Arguments = "run build"
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.UseShellExecute = $false
-
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    $null = $process.Start()
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-    $process.WaitForExit()
+    $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+    try {
+        # Vite 将构建警告写入 stderr；保留提示，但只根据 npm 的退出码判断构建是否失败。
+        $PSNativeCommandUseErrorActionPreference = $false
+        $output = @(& $npmCommand.Source run build 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+    }
 
     return [PSCustomObject]@{
-        ExitCode = $process.ExitCode
-        Stdout = $stdoutTask.GetAwaiter().GetResult()
-        Stderr = $stderrTask.GetAwaiter().GetResult()
+        ExitCode = $exitCode
+        Output = $output
     }
 }
 
@@ -140,15 +132,13 @@ if (-not $SkipFront) {
     $front = Join-Path $repoRoot "forum-vue\front"
     Push-Location $front
     if (-not (Test-Path "node_modules")) { npm ci }
-    $frontBuildResult = Invoke-NpmBuild -WorkingDirectory $front
+    $frontBuildResult = Invoke-NpmBuild
     if ($ShowBuildDetails) {
-        $frontBuildResult.Stdout | Write-Host
-        $frontBuildResult.Stderr | Write-Host -ForegroundColor Yellow
+        $frontBuildResult.Output | Write-Host
     }
     if ($frontBuildResult.ExitCode -ne 0) {
         if (-not $ShowBuildDetails) {
-            $frontBuildResult.Stdout | Write-Host
-            $frontBuildResult.Stderr | Write-Host -ForegroundColor Red
+            $frontBuildResult.Output | Write-Host
         }
         Pop-Location
         throw "front build failed"
