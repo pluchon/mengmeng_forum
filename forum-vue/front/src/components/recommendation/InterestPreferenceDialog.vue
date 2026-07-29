@@ -12,9 +12,7 @@
   >
     <template #header>
       <div class="interest-preference-dialog__header">
-        <span class="interest-preference-dialog__eyebrow">内容偏好</span>
         <h2 class="interest-preference-dialog__title">内容偏好</h2>
-        <p class="interest-preference-dialog__description">选择你感兴趣的内容，系统也会参考收藏、回复和关注。</p>
       </div>
     </template>
 
@@ -33,48 +31,41 @@
       <template v-else-if="categories.length">
         <div class="interest-preference-dialog__summary">
           <span>已选择 <strong>{{ selectedCount }}</strong> / {{ maximumSelection }} 项</span>
-          <span class="interest-preference-dialog__hint">可随时在设置中修改</span>
+          <el-button type="primary" round :loading="saving" :disabled="loading || !!error" @click="emit('save')">
+            保存偏好
+          </el-button>
         </div>
 
         <div class="interest-preference-dialog__groups">
-          <section
-            v-for="(item, index) in categories"
-            :key="item.category.id"
-            class="interest-preference-dialog__group"
-          >
-            <div class="interest-preference-dialog__group-head">
-              <span class="interest-preference-dialog__group-icon" aria-hidden="true">{{ categoryIcon(item, index) }}</span>
-              <div>
+          <div v-for="column in categoryColumns" :key="column.key" class="interest-preference-dialog__column">
+            <section
+              v-for="item in column.items"
+              :key="item.category.id"
+              class="interest-preference-dialog__group"
+            >
+              <div class="interest-preference-dialog__group-head">
+                <span class="interest-preference-dialog__group-icon" aria-hidden="true">{{ categoryIcon(item) }}</span>
                 <h3>{{ item.category.name }}</h3>
-                <p>{{ groupDescription(item) }}</p>
               </div>
-            </div>
-            <el-checkbox-group v-model="selectedBoardIds" :disabled="saving">
-              <el-checkbox
-                v-for="board in item.boardList || []"
-                :key="board.id"
-                :value="Number(board.id)"
-                class="interest-preference-dialog__option"
-                :disabled="isBoardSelectionDisabled(board.id)"
-              >
-                {{ board.name }}
-              </el-checkbox>
-            </el-checkbox-group>
-          </section>
+              <el-checkbox-group v-model="selectedBoardIds" :disabled="saving">
+                <el-checkbox
+                  v-for="board in item.boardList || []"
+                  :key="board.id"
+                  :value="Number(board.id)"
+                  class="interest-preference-dialog__option"
+                  :disabled="isBoardSelectionDisabled(board.id)"
+                >
+                  {{ board.name }}
+                </el-checkbox>
+              </el-checkbox-group>
+            </section>
+          </div>
         </div>
       </template>
 
       <el-empty v-else-if="!loading" :image-size="64" description="暂无可选择的内容偏好" />
     </div>
 
-    <template #footer>
-      <div class="interest-preference-dialog__footer">
-        <span>不确定也没关系，之后的互动会继续优化推荐。</span>
-        <el-button type="primary" round :loading="saving" :disabled="loading || !!error" @click="emit('save')">
-          保存偏好
-        </el-button>
-      </div>
-    </template>
   </el-dialog>
 </template>
 
