@@ -169,31 +169,37 @@ flowchart LR
 
 ## AI 模块
 
-AI 模块采用“统一入口、模块化处理”的方式。Java 后端不直接调用某一张图或某个模型，而是把请求交给 AI 服务入口；AI 服务再根据用途进入对应模块。这样现在可以共用一个服务，未来某项能力需要独立扩展时也容易拆开。
+AI 模块采用“统一入口、模块化处理”的方式。Java 后端不直接调用某一张图或某个模型，而是把请求交给 AI 服务入口；AI 服务按 `taskType + intent + version` 路由到已注册模块。当前的八个 Python 模块目录承载内容审核、摘要、创作、生图、游戏、搜索、RAG、推荐和看板娘九类 Gateway 能力；Java 始终负责权限、额度、持久化与最终业务状态。
 
 ```mermaid
 flowchart LR
   FE["用户端"] --> J["Java AI 接口"]
   J --> AUTH["当前用户、额度、内部密钥"]
   AUTH --> G["AI Gateway"]
-  G --> ROUTE["模块注册与路由"]
-  ROUTE --> MOD["内容检查"]
+  G --> ROUTE["ModuleRegistry<br/>taskType + intent + version"]
+  ROUTE --> MOD["内容审核"]
   ROUTE --> SUM["帖子摘要"]
-  ROUTE --> CRE["创作辅助<br/>润色、封面要点"]
+  ROUTE --> CRE["创作辅助<br/>润色、封面提示"]
   ROUTE --> IMG["图片生成"]
-  ROUTE --> SEARCH["站内检索与 RAG"]
+  ROUTE --> GAME["五子棋 AI"]
+  ROUTE --> SEARCH["站内搜索"]
+  ROUTE --> RAG["RAG 索引"]
+  ROUTE --> REC["推荐特征与画像"]
   ROUTE --> MASCOT["看板娘 Agent"]
   MOD --> RESULT["标准事件与结果"]
   SUM --> RESULT
   CRE --> RESULT
   IMG --> RESULT
+  GAME --> RESULT
   SEARCH --> RESULT
+  RAG --> RESULT
+  REC --> RESULT
   MASCOT --> RESULT
   RESULT --> J
   J --> FE
 ```
 
-### 内容检查与帖子摘要
+### 内容审核模块
 
 ```mermaid
 flowchart LR
@@ -216,13 +222,106 @@ flowchart LR
   RQ --> J2["Java 更新帖子状态"]
 ```
 
-内容检查走异步流程，避免用户发帖时一直等待。摘要固定使用快速模型，作为展示和理解内容的辅助，不改变帖子原文。
+内容审核走 RabbitMQ 异步链路，避免用户发帖时一直等待。审核模块也提供单独的文本、图片检查入口：文本优先命中语义缓存；图片先校验 Base64、体积与格式，再由视觉模型描述、文本模型判定。无论 AI 给出什么结论，Java 才能变更帖子审核状态。
 
-### 看板娘助手
+### 帖子摘要模块
+
+```mermaid
+flowchart LR
+  A["详情页请求摘要"] --> J["Java 校验登录、额度与帖子可见性"]
+  J --> G["POST_SUMMARY / GENERATE / v1"]
+  G --> CLEAN["清理 HTML，校验正文"]
+  CLEAN --> SPLIT{"长度超过单段上限？"}
+  SPLIT -->|否| ONE["Flash 模型摘要"]
+  SPLIT -->|是| CHUNK["分块逐段摘要"]
+  CHUNK --> MERGE["合并摘要"]
+  ONE --> RESULT["summary、highlights、chunkCount"]
+  MERGE --> RESULT
+  RESULT --> J
+  J --> UI["详情页展示，不改原文"]
+```
+
+摘要模块使用 `AiRuntime` 调用快速文本模型；它仅输出内容理解结果，不修改帖子原文或审核状态。
+
+### 创作与图片生成模块
+
+```mermaid
+flowchart LR
+  U["作者"] --> E["编辑器"]
+  E --> J["Java：登录、额度、草稿归属"]
+  J --> P["POST_CREATION / POLISH"]
+  J --> C["POST_CREATION / COVER_HINTS"]
+  P --> POLISH["校验体裁与编辑器模式<br/>润色正文"]
+  C --> HINT["从文章提取封面提示词"]
+  POLISH --> BACK["返回候选文本"]
+  HINT --> BACK
+  BACK --> E
+  E --> IMG["IMAGE_GENERATION / GENERATE"]
+  IMG --> GEN["校验 prompt、quality<br/>调用生图能力"]
+  GEN --> URL["图片 URL 与用量"]
+  URL --> J
+  J --> SAVE["用户确认后保存草稿或发布"]
+```
+
+创作模块只生成候选内容、提示词或图片 URL。草稿保存、发布、积分扣除与权限校验都留在 Java，AI 不会直接写入帖子状态。
+
+### 游戏 AI 模块
+
+```mermaid
+flowchart LR
+  ROOM["五子棋房间"] --> J["Java 校验回合、玩家与棋盘状态"]
+  J --> G["GAME / GOBANG_MOVE / v1"]
+  G --> VALID["校验棋子编号与棋盘"]
+  VALID --> RULE["规则优先：生成合法候选步"]
+  RULE --> LLM{"允许 LLM 规划？"}
+  LLM -->|是| PLAN["模型评估候选步"]
+  LLM -->|否或失败| FALLBACK["规则兜底"]
+  PLAN --> MOVE["落子、模型标识、用量"]
+  FALLBACK --> MOVE
+  MOVE --> J
+  J --> APPLY["再次校验后落子并广播"]
+```
+
+游戏模块只建议一步棋；房间状态、胜负结算与 WebSocket 广播由 Java 游戏服务控制，模型不可绕过游戏规则。
+
+### 推荐画像模块
+
+```mermaid
+flowchart TB
+  subgraph Signal["行为与内容信号"]
+    Publish["帖子审核通过"]
+    Action["点赞、收藏、回复、兴趣设置"]
+    Negative["不感兴趣 / 恢复兴趣"]
+  end
+
+  Publish -. "事务提交后" .-> FeatureTask["recommendationExecutor"]
+  Action -. "事务提交后" .-> ProfileTask["recommendationExecutor"]
+  Negative --> Feedback["user_recommend_feedback"]
+  Negative -. "事务提交后" .-> ProfileTask
+
+  FeatureTask --> AF["RECOMMENDATION / ARTICLE_FEATURE"]
+  ProfileTask --> UP["RECOMMENDATION / USER_PROFILE"]
+  AF --> AI["Gateway → LangChain → 模型"]
+  UP --> AI
+  AI --> Feature["forum_article_ai_feature<br/>topics、summary、fingerprint"]
+  AI --> Snapshot["forum_user_ai_profile_snapshot<br/>topics、avoidTopics、summary"]
+
+  Feed["请求推荐流"] --> Rule["Java 推荐规则：召回、可见性、关注、热度"]
+  Feedback --> Rule
+  Feature --> Rule
+  Snapshot --> Rule
+  Rule --> Result["硬过滤不感兴趣<br/>兴趣加分、回避降分、后端分页"]
+```
+
+推荐 AI 只异步提炼公开帖主题与用户的聚合兴趣/回避主题，模型失败时使用规则兜底。推荐候选、帖子可见性、不感兴趣硬过滤和最终排序始终由 Java 完成；该模块不经过 RabbitMQ，也不需要 LangGraph。
+
+### 看板娘助手模块
 
 ```mermaid
 flowchart LR
   U["用户消息"] --> INIT["读取会话、记忆与上下文窗口"]
+  INIT -->|历史过长| COMP["MASCOT / CONTEXT_COMPRESS<br/>压缩历史为摘要"]
+  COMP --> INIT
   INIT --> SKILL["route_skill<br/>识别请求类型"]
   SKILL --> SUP["supervisor<br/>决定图片或回答路径"]
   SUP -->|生图| IMG["image<br/>结合当前上下文生成"]
@@ -236,27 +335,42 @@ flowchart LR
   EVENT --> U
 ```
 
-看板娘会参考正在进行的对话。多数问题优先快速回答；只有需要复杂推理、规划或多步骤处理时才使用更强模型。检索到的帖子结果会保存到当前会话中，用户关闭再打开仍可以继续查看。
+看板娘会参考正在进行的对话。多数问题优先快速回答；只有需要复杂推理、规划或多步骤处理时才使用更强模型。长会话先压缩为摘要，检索到的帖子结果会保存到当前会话中，用户关闭再打开仍可以继续查看。
 
-### 站内检索与工具使用
+### 站内搜索模块
 
 ```mermaid
 flowchart LR
-  Q["用户问题与上下文"] --> PLAN["Agent 判断是否检索"]
-  PLAN -->|站内内容| RAG["RAG 模块<br/>向量候选与关键词候选"]
-  RAG --> JAVA["Java 检查公开状态、作者与权限"]
-  JAVA --> POST["相关帖子或作者"]
-  PLAN -->|互联网信息| MCP["搜索 MCP"]
-  MCP --> TEXT["网页摘要"]
-  MCP --> PIC["最多五张相关图片"]
-  PLAN -->|外出话题| MAP["地图 MCP<br/>模糊地区天气信息"]
-  TEXT --> ANSWER["Agent 组织自然回答"]
-  PIC --> ANSWER
-  MAP --> ANSWER
-  POST --> ANSWER
+  Q["搜索词"] --> J["Java：提取公开候选与用户上下文"]
+  J --> G["SEARCH / QUERY / v1"]
+  G --> CLEAN["规范化 query 与 scope"]
+  CLEAN --> VECTOR["向量检索帖子 / 用户"]
+  VECTOR --> HIT{"有向量结果？"}
+  HIT -->|是| SCORE["候选 ID 与分数"]
+  HIT -->|否| KEYWORD["关键词混合排序兜底"]
+  KEYWORD --> SCORE
+  SCORE --> J2["Java 再做公开状态、作者与权限过滤"]
+  J2 --> PAGE["后端分页结果"]
 ```
 
-AI 可以帮助查找站内内容，也可以在需要时使用外部工具。但是否向用户展示内容、是否消耗额度、是否保存结果，仍然由社区后端统一决定。
+搜索模块只返回候选 ID 与分数，响应中明确标注仍需 Java 权限过滤。看板娘需要外部网页或地图信息时，才在自身 Agent 图中按需调用对应 MCP 工具。
+
+### RAG 索引模块
+
+```mermaid
+flowchart LR
+  PUB["帖子公开 / 作者资料更新"] --> J["Java：业务状态已提交"]
+  J --> IDX["RAG / INDEX_ARTICLE 或 INDEX_USER"]
+  IDX --> CLEAN["规范化可检索字段"]
+  CLEAN --> EMBED["文本向量化"]
+  EMBED --> STORE["RAG 索引存储"]
+  REMOVE["帖子下架或删除"] --> J2["Java 触发"]
+  J2 --> DEL["RAG / REMOVE_ARTICLE"]
+  DEL --> STORE
+  STORE --> SEARCH["供 SEARCH 模块召回"]
+```
+
+RAG 模块将文章与用户资料的索引写入、删除统一收敛到 Gateway；它不拥有帖子公开状态，索引命中后仍由 Java 过滤。
 
 ### AI 使用的数据与记录
 
