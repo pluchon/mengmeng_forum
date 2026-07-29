@@ -64,8 +64,8 @@ function Invoke-NpmBuild {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $npmCommand.Source
     $startInfo.WorkingDirectory = $WorkingDirectory
-    $startInfo.ArgumentList.Add("run")
-    $startInfo.ArgumentList.Add("build")
+    # Arguments 在不同 PowerShell/.NET 运行时上比 ArgumentList 更稳定；这里的参数固定且不含用户输入。
+    $startInfo.Arguments = "run build"
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.UseShellExecute = $false
