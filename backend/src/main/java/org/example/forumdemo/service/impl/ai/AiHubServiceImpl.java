@@ -8,11 +8,15 @@ import org.example.forumdemo.converter.AiHubConverter;
 import org.example.forumdemo.entity.dto.ai.AiCoverHintsRequest;
 import org.example.forumdemo.entity.dto.ai.AiImageRequest;
 import org.example.forumdemo.entity.dto.ai.AiPolishRequest;
+import org.example.forumdemo.entity.dto.ai.AiRecommendationArticleFeatureRequest;
+import org.example.forumdemo.entity.dto.ai.AiRecommendationProfileRequest;
 import org.example.forumdemo.entity.dto.ai.RagArticleIndexDTO;
 import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubImageResultVO;
 import org.example.forumdemo.entity.vo.ai.AiHubPolishResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationFeatureResultVO;
+import org.example.forumdemo.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
@@ -159,6 +163,27 @@ public class AiHubServiceImpl implements AiHubService {
         payload.put("prompt", request.getPrompt());
         payload.put("quality", request.getQuality());
         return AiHubConverter.toImageResult(invokeGateway("IMAGE_GENERATION", "GENERATE", userId, payload));
+    }
+
+    @Override
+    public AiRecommendationFeatureResultVO generateRecommendationArticleFeature(AiRecommendationArticleFeatureRequest request) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("articleId", request.getArticleId());
+        payload.put("title", request.getTitle());
+        payload.put("content", request.getContent());
+        payload.put("boardName", request.getBoardName());
+        return AiHubConverter.toRecommendationFeatureResult(
+                invokeGateway("RECOMMENDATION", "ARTICLE_FEATURE", null, payload));
+    }
+
+    @Override
+    public AiRecommendationProfileResultVO generateRecommendationProfile(Long userId, AiRecommendationProfileRequest request) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("explicitBoards", request.getExplicitBoards());
+        payload.put("recent7", request.getRecent7());
+        payload.put("recent14", request.getRecent14());
+        return AiHubConverter.toRecommendationProfileResult(
+                invokeGateway("RECOMMENDATION", "USER_PROFILE", userId, payload));
     }
 
     @Override

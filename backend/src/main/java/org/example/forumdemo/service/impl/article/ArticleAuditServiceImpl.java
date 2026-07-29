@@ -24,6 +24,7 @@ import org.example.forumdemo.service.impl.article.auditguard.ArticleAuditSubmitG
 import org.example.forumdemo.service.impl.article.auditguard.ArticleAuditSubmitGuardResult;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
+import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.example.forumdemo.service.interfaces.article.ArticleAuditService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleMediaService;
@@ -87,6 +88,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
 
     @Autowired
     private AiHubService aiHubService;
+
+    @Autowired
+    private RecommendationAiProfileService recommendationAiProfileService;
 
     @Autowired
     private ArticleTagService articleTagService;
@@ -285,6 +289,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             ragPayload.setAuthorNickname(author != null ? author.getNickname() : "");
             ragPayload.setTagNames(articleTagService.tagNamesByArticleId(articleId));
             aiHubService.indexArticleRag(ragPayload);
+            recommendationAiProfileService.generateArticleFeature(articleId);
             articleSearchIndexService.syncPublishedArticle(articleId);
         }
         notifyAuditResult(article, result,

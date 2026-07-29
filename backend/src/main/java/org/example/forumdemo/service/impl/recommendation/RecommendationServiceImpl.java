@@ -3,6 +3,8 @@ package org.example.forumdemo.service.impl.recommendation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.enums.RecommendationReasonType;
 import org.example.forumdemo.common.enums.ResultCode;
@@ -14,6 +16,7 @@ import org.example.forumdemo.entity.db.ArticleFavorite;
 import org.example.forumdemo.entity.db.ArticleLike;
 import org.example.forumdemo.entity.db.ArticleReply;
 import org.example.forumdemo.entity.db.Board;
+import org.example.forumdemo.entity.db.ForumArticleAiFeature;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.db.UserRecommendFeedback;
 import org.example.forumdemo.entity.dto.recommendation.NotInterestedArticleRequest;
@@ -25,10 +28,12 @@ import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.ArticleReplyMapper;
 import org.example.forumdemo.mapper.BoardMapper;
+import org.example.forumdemo.mapper.ForumArticleAiFeatureMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.recommendation.RecommendationService;
+import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.example.forumdemo.service.interfaces.recommendation.UserInterestPreferenceService;
 import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +90,15 @@ public class RecommendationServiceImpl implements RecommendationService {
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
 
+    @Autowired
+    private RecommendationAiProfileService recommendationAiProfileService;
+
+    @Autowired
+    private ForumArticleAiFeatureMapper articleFeatureMapper;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Override
     public PageResult<RecommendArticleVO> getFeed(Long loginUserId, Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
@@ -118,6 +132,9 @@ public class RecommendationServiceImpl implements RecommendationService {
                 listFreshArticles(loginUserId, feedbackArticleIds, candidateLimit),
                 personalized ? RecommendationReasonType.FRESH : RecommendationReasonType.COMMUNITY);
         addHotCandidates(candidateMap, listHotArticles(loginUserId, feedbackArticleIds, candidateLimit));
+        if (personalized) {
+            applyAiProfileScores(candidateMap, loginUserId);
+        }
 
         List<Candidate> activeCandidates = retainActiveAuthors(new ArrayList<>(candidateMap.values()));
         List<Candidate> visibleCandidates = rankCandidates(activeCandidates, expectedSize, validPageSize);
@@ -314,11 +331,65 @@ public class RecommendationServiceImpl implements RecommendationService {
         return switch (reason) {
             case INTEREST -> 6;
             case FOLLOWING -> 5;
-            case INTERACTION -> 4;
-            case HOT -> 3;
-            case FRESH -> 2;
-            case COMMUNITY -> 1;
+            case AI_PROFILE -> 4;
+            case INTERACTION -> 3;
+            case HOT -> 2;
+            case FRESH -> 1;
+            case COMMUNITY -> 0;
         };
+    }
+
+    private void applyAiProfileScores(Map<Long, Candidate> candidateMap, Long userId) {
+        if (candidateMap.isEmpty()) {
+            return;
+        }
+        Map<String, Double> userTopics = recommendationAiProfileService.getActiveTopicWeights(userId);
+        if (userTopics.isEmpty()) {
+            return;
+        }
+        List<ForumArticleAiFeature> features = articleFeatureMapper.selectList(new LambdaQueryWrapper<ForumArticleAiFeature>()
+                .in(ForumArticleAiFeature::getArticleId, candidateMap.keySet())
+                .eq(ForumArticleAiFeature::getDeleteState, DELETE_FALSE)
+                .select(ForumArticleAiFeature::getArticleId, ForumArticleAiFeature::getFeatureJson));
+        for (ForumArticleAiFeature feature : features) {
+            Candidate candidate = candidateMap.get(feature.getArticleId());
+            if (candidate == null) {
+                continue;
+            }
+            double overlap = calculateTopicOverlap(userTopics, feature.getFeatureJson());
+            if (overlap > 0D) {
+                mergeCandidate(candidateMap, candidate.getArticle(), RecommendationReasonType.AI_PROFILE, overlap * 18D);
+            }
+        }
+    }
+
+    private double calculateTopicOverlap(Map<String, Double> userTopics, String featureJson) {
+        if (featureJson == null || featureJson.isBlank()) {
+            return 0D;
+        }
+        try {
+            Map<String, Object> feature = objectMapper.readValue(featureJson, new TypeReference<>() { });
+            Object rawTopics = feature.get("topics");
+            if (!(rawTopics instanceof List<?> topics)) {
+                return 0D;
+            }
+            double overlap = 0D;
+            for (Object rawTopic : topics) {
+                if (!(rawTopic instanceof Map<?, ?> topic)) {
+                    continue;
+                }
+                Object rawName = topic.get("name");
+                Object rawWeight = topic.get("weight");
+                if (rawName == null || !(rawWeight instanceof Number weight)) {
+                    continue;
+                }
+                String name = String.valueOf(rawName).trim().toLowerCase();
+                overlap += userTopics.getOrDefault(name, 0D) * Math.min(weight.doubleValue(), 1D);
+            }
+            return Math.min(overlap, 1D);
+        } catch (Exception e) {
+            return 0D;
+        }
     }
 
     private double freshnessScore(Date createTime) {

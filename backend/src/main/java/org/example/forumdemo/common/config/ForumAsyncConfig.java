@@ -22,4 +22,17 @@ public class ForumAsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean("recommendationExecutor")
+    public Executor recommendationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("forum-recommendation-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(20);
+        executor.initialize();
+        return executor;
+    }
 }
