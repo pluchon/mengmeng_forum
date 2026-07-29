@@ -29,9 +29,7 @@
 
     <div class="settings-list">
       <div class="setting-item">
-        <div class="setting-label" title="昵称">
-          <img :src="nicknameIconUrl" alt="" class="setting-label-icon" />
-        </div>
+        <div class="setting-label setting-label--text">昵称</div>
         <div class="setting-content">
           <template v-if="!editing.nickname">
             <span class="value-text">{{ profileForm.nickname }}</span>
@@ -52,9 +50,7 @@
       </div>
 
       <div class="setting-item">
-        <div class="setting-label" title="性别">
-          <img :src="genderIconUrl" alt="" class="setting-label-icon" />
-        </div>
+        <div class="setting-label setting-label--text">性别</div>
         <div class="setting-content">
           <template v-if="!editing.gender">
             <span class="value-text">性别：{{ genderLabel(profileForm.gender) }}</span>
@@ -83,9 +79,7 @@
       </div>
 
       <div class="setting-item">
-        <div class="setting-label" title="个人简介">
-          <img :src="bioIconUrl" alt="" class="setting-label-icon" />
-        </div>
+        <div class="setting-label setting-label--text">个人简介</div>
         <div class="setting-content">
           <template v-if="!editing.remark">
             <span class="value-text secondary">{{ profileForm.remark || '未设置简介' }}</span>
@@ -106,9 +100,7 @@
       </div>
 
       <div class="setting-item">
-        <div class="setting-label" title="电子邮箱">
-          <img :src="emailIconUrl" alt="" class="setting-label-icon" />
-        </div>
+        <div class="setting-label setting-label--text">邮箱</div>
         <div class="setting-content">
           <span class="value-text">{{ profileForm.email || '未绑定邮箱' }}</span>
           <el-button class="edit-btn" @click="emit('open-email')">
@@ -118,9 +110,7 @@
       </div>
 
       <div class="setting-item">
-        <div class="setting-label" title="手机号码">
-          <img :src="phoneIconUrl" alt="" class="setting-label-icon" />
-        </div>
+        <div class="setting-label setting-label--text">手机号码</div>
         <div class="setting-content">
           <span class="value-text">{{ profileForm.phoneNum || '未绑定手机' }}</span>
           <el-button class="edit-btn" @click="emit('open-phone')">
@@ -134,11 +124,6 @@
 
 <script setup>
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import nicknameIconUrl from '@/assets/svg/昵称.svg?url'
-import genderIconUrl from '@/assets/svg/性别.svg?url'
-import bioIconUrl from '@/assets/svg/个人简介.svg?url'
-import emailIconUrl from '@/assets/svg/邮箱.svg?url'
-import phoneIconUrl from '@/assets/svg/手机号码.svg?url'
 import { useBasicInfo } from '@scripts/components/settings/BasicInfo'
 
 const emit = defineEmits(['open-email', 'open-phone'])

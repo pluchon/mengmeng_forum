@@ -4,6 +4,7 @@ import cloud.tianai.captcha.application.ImageCaptchaApplication;
 import cloud.tianai.captcha.application.vo.ImageCaptchaVO;
 import cloud.tianai.captcha.common.constant.CaptchaTypeConstant;
 import cloud.tianai.captcha.common.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.dto.captcha.CaptchaCheckRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // 天爱行为验证码：生成与校验；校验成功后签发一次性 Redis 票据供登录/注册等接口消费
+@Tag(name = "行为验证码", description = "登录和注册前的行为验证")
 @RestController
 @RequestMapping("/captcha")
 public class CaptchaController {

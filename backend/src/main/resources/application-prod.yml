@@ -60,6 +60,12 @@ springdoc:
   api-docs:
     enabled: false
 
+# 生产环境不继承开发桶：桶名和访问前缀必须由服务器环境变量提供。
+oss:
+  endpoint: ${OSS_ENDPOINT:https://oss-cn-shenzhen.aliyuncs.com}
+  bucket-name: ${OSS_BUCKET_NAME}
+  url-prefix: ${OSS_URL_PREFIX}
+
 forum:
   websocket:
     allowed-origins: https://www.nuonuoya.cn

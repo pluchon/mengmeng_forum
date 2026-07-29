@@ -190,6 +190,7 @@ nginx/package/
 nginx/dist/
 nginx/logs/
 output/
+test-output/
 .playwright-cli/
 *.tar
 *.tar.gz

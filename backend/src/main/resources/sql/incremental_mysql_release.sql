@@ -1,7 +1,7 @@
--- AI 模块线上合并增量（2026-07-28）
--- 执行对象：已部署的 forum_db。
--- 可重复执行：建表、索引和模型配置清理均为幂等操作。
--- 默认不会清空历史会话；仅在首次切换旧 AI 路由且确认可删除历史时，将下方变量改为 1。
+-- MySQL 线上合并增量（2026-07-29）
+-- 执行对象：已部署的 forum_db。本文件整合 AI 模块、看板娘上下文与推荐画像增量。
+-- 可重复执行：建表、补列、索引及历史模型配置清理均为幂等操作。
+-- 默认不清空历史会话；仅在确认切换旧 AI 路由且允许删除历史时，将下方变量改为 1。
 
 SET @purge_legacy_ai_history = 0;
 
@@ -95,6 +95,39 @@ CREATE TABLE IF NOT EXISTS forum_mascot_related_recommendation_item (
     KEY idx_mascot_related_item_recommendation (recommendation_id, delete_state, display_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='看板娘相关帖子检索结果项';
 
+CREATE TABLE IF NOT EXISTS forum_article_ai_feature (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    article_id BIGINT NOT NULL,
+    feature_json MEDIUMTEXT NOT NULL,
+    feature_version VARCHAR(32) NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    generated_by VARCHAR(32) NOT NULL,
+    delete_state TINYINT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_article_ai_feature_article (article_id),
+    KEY idx_article_ai_feature_state_time (delete_state, update_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子推荐AI特征';
+
+CREATE TABLE IF NOT EXISTS forum_user_ai_profile_snapshot (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    profile_version BIGINT NOT NULL DEFAULT 0,
+    profile_json MEDIUMTEXT NOT NULL,
+    feature_version VARCHAR(32) NOT NULL,
+    source_window_start DATETIME DEFAULT NULL,
+    source_window_end DATETIME DEFAULT NULL,
+    refresh_after DATETIME NOT NULL,
+    generated_by VARCHAR(32) NOT NULL,
+    delete_state TINYINT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_ai_profile_snapshot_user (user_id),
+    KEY idx_user_ai_profile_snapshot_refresh (delete_state, refresh_after)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户推荐AI画像快照';
+
 DELETE FROM forum_ai_model_price
 WHERE provider NOT IN ('dashscope', 'huanapi');
 
@@ -125,7 +158,6 @@ DELETE FROM forum_ai_usage_log WHERE @purge_legacy_ai_history = 1;
 DELETE FROM forum_ai_model_usage_daily WHERE @purge_legacy_ai_history = 1;
 DELETE FROM ai_usage_daily WHERE @purge_legacy_ai_history = 1;
 
--- 看板娘：联网图集与上下文压缩事件
 SET @companion_metadata_exists = (
     SELECT COUNT(*)
     FROM information_schema.columns
@@ -142,7 +174,6 @@ PREPARE companion_metadata_statement FROM @companion_metadata_sql;
 EXECUTE companion_metadata_statement;
 DEALLOCATE PREPARE companion_metadata_statement;
 
--- 看板娘：相关帖子检索结果锚定至触发它的助手消息，重开会话后仍显示在原位置。
 SET @related_source_message_exists = (
     SELECT COUNT(*)
     FROM information_schema.columns

@@ -72,9 +72,8 @@ oss:
   endpoint: https://oss-cn-shenzhen.aliyuncs.com
   access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
   access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
-  # 必填真实 Bucket；占位符会导致 NoSuchBucket
-  bucket-name: ${OSS_BUCKET_NAME:your-forum-oss-bucket}
-  url-prefix: ${OSS_URL_PREFIX:https://your-forum-oss-bucket.oss-cn-shenzhen.aliyuncs.com/}
+  bucket-name: ${OSS_BUCKET_NAME:item-for-picture-with-zhanglihong-local-develop}
+  url-prefix: ${OSS_URL_PREFIX:https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/}
   # 对象 key 根前缀，默认空（与 OSS 控制台 forum_xxx/ 根目录对齐）；旧数据用 forum_db_item/ 时可设 OSS_ROOT_PREFIX=forum_db_item
   root-prefix: ${OSS_ROOT_PREFIX:}
   path: forum_db_item/forum_head_picture/

@@ -1,7 +1,7 @@
 -- 全库初始化脚本（执行即删库重建 forum_db；勿与 PostgreSQL 的 postgres_ai_session.sql 混跑）
 -- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、抽奖演示）。
 -- 不含用户/帖子等业务数据；生产数据请走用户端注册与日常运营维护。
--- 结构变更：全新环境请整库重跑本脚本；已有库请执行同目录 incremental_concurrency.sql（MySQL）与 postgres_ai_session.sql（PostgreSQL）。
+-- 结构变更：全新环境请整库重跑本脚本；已有库请执行同目录 incremental_mysql_release.sql（MySQL）与 postgres_ai_session.sql（PostgreSQL）。
 -- 并发幂等（Phase 01~05）：points_log.idempotency_key、lottery_draw_request、forum_ai_usage_log(related_id 唯一)、user_follow 唯一、article_like 唯一。
 DROP DATABASE IF EXISTS `forum_db`;
 CREATE DATABASE `forum_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -978,6 +978,10 @@ CREATE TABLE `forum_ai_model_usage_daily` (
 -- ----------------------------
 DROP TABLE IF EXISTS `forum_companion_message`;
 DROP TABLE IF EXISTS `forum_companion_session`;
+DROP TABLE IF EXISTS `forum_ai_creation_version`;
+DROP TABLE IF EXISTS `forum_ai_creation_workspace`;
+DROP TABLE IF EXISTS `forum_ai_task_session`;
+DROP TABLE IF EXISTS `forum_ai_long_term_memory`;
 CREATE TABLE `forum_companion_session` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '会话ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',
@@ -1003,6 +1007,67 @@ CREATE TABLE `forum_companion_message` (
     PRIMARY KEY (`id`),
     KEY `idx_companion_msg_session` (`session_id`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='陪伴助手消息';
+
+CREATE TABLE `forum_ai_creation_workspace` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `companion_session_id` bigint DEFAULT NULL,
+    `workspace_state` varchar(24) NOT NULL DEFAULT 'ACTIVE',
+    `selected_version_id` bigint DEFAULT NULL,
+    `checkpoint_id` varchar(128) DEFAULT NULL,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_ai_workspace_user_time` (`user_id`, `delete_state`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI创作工作区';
+
+CREATE TABLE `forum_ai_creation_version` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `workspace_id` bigint NOT NULL,
+    `parent_version_id` bigint DEFAULT NULL,
+    `artifact_type` varchar(32) NOT NULL,
+    `version_no` int NOT NULL,
+    `artifact_json` mediumtext NOT NULL,
+    `selected` tinyint NOT NULL DEFAULT 0,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_ai_creation_version` (`workspace_id`, `artifact_type`, `version_no`),
+    KEY `idx_ai_creation_version_workspace` (`workspace_id`, `delete_state`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI创作产物版本';
+
+CREATE TABLE `forum_ai_task_session` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `companion_session_id` bigint DEFAULT NULL,
+    `workspace_id` bigint DEFAULT NULL,
+    `active_module` varchar(64) DEFAULT NULL,
+    `active_worker` varchar(64) DEFAULT NULL,
+    `checkpoint_id` varchar(128) DEFAULT NULL,
+    `task_mode` varchar(24) NOT NULL DEFAULT 'ASSISTANT',
+    `task_state` varchar(24) NOT NULL DEFAULT 'ACTIVE',
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_ai_task_session_user` (`user_id`, `task_state`, `delete_state`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI任务会话状态';
+
+CREATE TABLE `forum_ai_long_term_memory` (
+    `id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` bigint NOT NULL,
+    `source_session_id` bigint DEFAULT NULL,
+    `memory_type` varchar(32) NOT NULL,
+    `content` varchar(1000) NOT NULL,
+    `enabled` tinyint NOT NULL DEFAULT 1,
+    `delete_state` tinyint NOT NULL DEFAULT 0,
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_ai_memory_user` (`user_id`, `enabled`, `delete_state`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI会员长期记忆';
 
 
 -- ----------------------------
@@ -1911,6 +1976,7 @@ CREATE TABLE `forum_mascot_related_recommendation` (
     `id` bigint NOT NULL AUTO_INCREMENT,
     `user_id` bigint NOT NULL,
     `companion_session_id` bigint NOT NULL,
+    `source_message_id` bigint DEFAULT NULL,
     `query` varchar(500) NOT NULL,
     `result_state` varchar(16) NOT NULL,
     `result_count` int NOT NULL DEFAULT 0,

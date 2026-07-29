@@ -1,5 +1,6 @@
 package org.example.forumdemo.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.example.forumdemo.common.constant.Constant;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 // 问答帖状态与最佳答案接口
+@Tag(name = "问答帖子", description = "问答状态与最佳答案")
 @RestController
 @RequestMapping("/articleQuestion")
 public class ArticleQuestionController {
