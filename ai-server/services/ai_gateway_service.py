@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import queue
-import threading
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -88,28 +86,18 @@ def stream_gateway(raw: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield ModuleEvent("done", {"success": False}).to_dict()
         return
 
-    events: queue.Queue[ModuleEvent] = queue.Queue()
-
-    def execute() -> None:
-        events.put(ModuleEvent("progress", {"stage": "module_started", "traceId": request.trace_id}))
-        try:
-            result = asyncio.run(_registry.invoke(request))
-            events.put(ModuleEvent("final", result.to_dict(request)))
-            events.put(ModuleEvent("done", {"success": result.success, "traceId": request.trace_id}))
-        except ModuleRequestError as exc:
-            events.put(ModuleEvent("error", {"errorCode": exc.code, "message": exc.message}))
-            events.put(ModuleEvent("done", {"success": False, "traceId": request.trace_id}))
-        except Exception:
-            logger.exception("AI Gateway 流式执行失败 trace_id=%s", request.trace_id)
-            events.put(ModuleEvent("error", {"errorCode": "AI_GATEWAY_FAILED", "message": "AI Gateway 执行失败"}))
-            events.put(ModuleEvent("done", {"success": False, "traceId": request.trace_id}))
-
-    threading.Thread(target=execute, name=f"ai-gateway-{request.request_id[:16]}", daemon=True).start()
-    while True:
-        event = events.get()
-        yield event.to_dict()
-        if event.event_type == "done":
-            return
+    try:
+        yield ModuleEvent("progress", {"status": "preparing", "traceId": request.trace_id}).to_dict()
+        for event in _registry.stream(request):
+            yield event.to_dict()
+        yield ModuleEvent("done", {"success": True, "traceId": request.trace_id}).to_dict()
+    except ModuleRequestError as exc:
+        yield ModuleEvent("error", {"errorCode": exc.code, "message": exc.message}).to_dict()
+        yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
+    except Exception:
+        logger.exception("AI Gateway 流式执行失败 trace_id=%s", request.trace_id)
+        yield ModuleEvent("error", {"errorCode": "AI_GATEWAY_FAILED", "message": "AI Gateway 执行失败"}).to_dict()
+        yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
 
 
 def _parse_request(raw: dict[str, Any]) -> ModuleRequest:

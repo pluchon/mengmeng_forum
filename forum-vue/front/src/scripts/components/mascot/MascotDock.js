@@ -61,6 +61,19 @@ function isSafeMascotImageUrl(url) {
   return s.startsWith('https://') && s.length <= 2048
 }
 
+function streamStatusText(status) {
+  const labels = {
+    preparing: '正在准备对话…',
+    routing: '正在理解你的问题…',
+    supervising: '正在分析请求…',
+    assessing: '正在准备上下文…',
+    searching: '正在搜索网络…',
+    composing: '正在组织回复…',
+    drawing: '正在准备绘图…',
+  }
+  return labels[String(status || '').trim()] || ''
+}
+
 const companionXiaomai = clientOssUrl('xiaomai.webp')
 const companionMiku = clientOssUrl('miku.webp')
 
@@ -866,8 +879,13 @@ export function useMascotDock() {
     try {
       const res = await compressCompanionContext(id)
       if (res.code !== 0) throw new Error(res.message || '上下文压缩失败')
+      if (res.data && typeof res.data === 'object') {
+        contextWindow.value = res.data
+      }
       await loadMessagesForNav(activeNav.value)
-      await refreshContextWindow({ autoCompress: false })
+      if (!res.data || typeof res.data !== 'object') {
+        await refreshContextWindow({ autoCompress: false })
+      }
       if (!automatic) ElMessage.success('上下文已压缩')
     } catch (error) {
       ElMessage.error(error?.message || '上下文压缩失败')
@@ -1685,8 +1703,10 @@ export function useMascotDock() {
             onMeta(meta) {
               applyServerSessionId(meta)
               const row = messages.value[assistantIdx]
-              if (meta?.status === 'preparing' && row?.streaming && !(row.content || '').length) {
-                row.thinkingText = '正在整理资料…'
+              const statusText = streamStatusText(meta?.status)
+              if (statusText && row?.streaming && !(row.content || '').length) {
+                clearThinkingRotation()
+                row.thinkingText = statusText
               }
               if (meta?.imageGenerating) {
                 imageGenerating.value = true

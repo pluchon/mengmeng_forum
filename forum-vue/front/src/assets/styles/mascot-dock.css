@@ -501,6 +501,10 @@
   margin-top: 8px;
 }
 
+.mascot-bubble-actions--bottom-right {
+  width: 100%;
+}
+
 /* AI 回复 Markdown 渲染（表格、标题、列表等） */
 .mascot-bubble--ai .mascot-md {
   white-space: normal;

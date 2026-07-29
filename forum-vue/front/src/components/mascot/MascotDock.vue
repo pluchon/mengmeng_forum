@@ -251,7 +251,7 @@
                                   v-html="renderMascotMarkdown(m.content, !!m.stripInlineImages)"
                                 />
                                 <span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
-                                <div v-if="m.role === 'assistant' && !m.streaming" class="mascot-bubble-actions">
+                                <div v-if="m.role === 'assistant' && !m.streaming" class="mascot-bubble-actions mascot-bubble-actions--bottom-right">
                                   <button
                                     v-if="isLatestRegeneratableAssistant(i)"
                                     type="button"

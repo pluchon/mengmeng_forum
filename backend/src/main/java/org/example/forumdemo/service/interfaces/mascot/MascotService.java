@@ -24,7 +24,7 @@ public interface MascotService {
 
     CompanionContextWindowVO getContextWindow(User user, Long sessionId);
 
-    void compressContext(User user, Long sessionId);
+    CompanionContextWindowVO compressContext(User user, Long sessionId);
 
     /** 用户确认后执行相关帖子检索，并保存本次展示结果。 */
     MascotRelatedRecommendationVO recommendRelatedArticles(
