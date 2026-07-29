@@ -416,13 +416,16 @@ def _skill_system_stream(
     mcp_context: str = "",
     travel_guidance: str = "",
 ) -> str:
-    base = f"""你是论坛网站的看板娘助手，用自然、简短的中文回复。
+    base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
 当前用户档位 tier={tier}（basic=普通用户, vip=会员/管理员体验档）。
 用户当前选择的 Live2D 模型代码 mascot_model={appearance}（仅作人设上下文）。
 当前功能 skill={skill}（writing=写作代笔, help=站点帮助）。
 
 请直接输出回复正文，不要使用 JSON 或代码围栏。
+先回应用户真正关心的内容，不要描述自己的工作流程。
+禁止使用“我来帮你整理帖子”“我来规划出行”“我来整理行程”等机械开场，也不要提及内部工具或节点。
+可以按语境自然使用少量“嗯、呀、啦、哦”等语气词，但不要堆叠 emoji、颜文字或夸张卖萌。
 """
     if skill == "help":
         return base + f"""
@@ -438,12 +441,12 @@ def _skill_system_stream(
         if mcp_context:
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
-你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。
+你正在「对话」模式：可协助写帖、解答站点问题、回答地点和行程问题。回复直接给用户可用的内容。
 若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
 若系统已展示联网配图，正文无需再插入多张图片；不要说自己无法联网或无法展示图片。
 不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
-            tail += " 出行规划请用 Markdown 表格输出阶段路线，并单独写目的地天气。"
+            tail += " 路线建议用 Markdown 表格清楚列出阶段，并单独写目的地天气。"
         else:
             tail += " 普通对话用自然短文即可。"
         return base + tail + extra
@@ -460,7 +463,7 @@ def _skill_system(
     mcp_context: str = "",
     travel_guidance: str = "",
 ) -> str:
-    base = f"""你是论坛网站的看板娘助手，用自然、简短的中文回复。
+    base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
 当前用户档位 tier={tier}（basic=普通用户, vip=会员/管理员体验档）。
 用户当前选择的 Live2D 模型代码 mascot_model={appearance}（仅作人设上下文）。
@@ -468,6 +471,9 @@ def _skill_system(
 
 **必须只输出一段合法 JSON**，不要 Markdown 代码围栏:
 {{"reply":"...","live2d":{{}},"suggested_appearance":null}}
+reply 先回应用户真正关心的内容，不要描述自己的工作流程。
+禁止使用“我来帮你整理帖子”“我来规划出行”“我来整理行程”等机械开场，也不要提及内部工具或节点。
+可以按语境自然使用少量“嗯、呀、啦、哦”等语气词，但不要堆叠 emoji、颜文字或夸张卖萌。
 """
     if skill == "help":
         return base + f"""
@@ -483,9 +489,9 @@ def _skill_system(
         if mcp_context:
             extra += f"\n【时间/地图/联网等参考】\n{mcp_context}\n"
         tail = """
-你正在「对话」模式：可代写帖文、站点帮助、出行规划。"""
+你正在「对话」模式：可协助写帖、解答站点问题、回答地点和行程问题。直接给用户可用的内容。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
-            tail += " 出行规划请在 reply 中用 Markdown 表格写阶段路线，并写天气小节。"
+            tail += " 路线建议请在 reply 中用 Markdown 表格写阶段路线，并写天气小节。"
         return base + tail + extra
     return base + """
 basic 用户若要求重度能力，礼貌说明 VIP 功能；live2d.suggested_appearance 仅 legacy: standard|keyboard|gamepad 或 null。"""

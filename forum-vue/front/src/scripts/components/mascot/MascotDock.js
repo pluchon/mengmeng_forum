@@ -486,6 +486,7 @@ export function useMascotDock() {
           await restoreRelatedRecommendations(id)
           cacheSessionMessages(nav, id, messages.value)
           scrollFsToBottom()
+          await refreshContextWindow()
           return
         }
       } catch {
@@ -495,6 +496,7 @@ export function useMascotDock() {
     messages.value = (sess.messages || []).map((m) => ({ ...m }))
     await restoreRelatedRecommendations(id)
     scrollFsToBottom()
+    await refreshContextWindow()
   }
 
   async function renameSession(session) {
@@ -1604,7 +1606,7 @@ export function useMascotDock() {
     scrollFsToBottom()
     refreshEstimate()
     refreshQuotaHint()
-    refreshContextWindow()
+    await refreshContextWindow()
   }
   
   function onSkillForSend() {
