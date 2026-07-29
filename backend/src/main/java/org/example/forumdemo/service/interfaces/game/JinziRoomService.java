@@ -9,8 +9,6 @@ public interface JinziRoomService {
 
     String createMatchedRoom(Long userIdA, Long userIdB);
 
-    String createAiRoom(Long userId);
-
     JinziRoomStateVO joinRoom(String roomId, Long userId, WebSocketSession session);
 
     JinziRoomStateVO getRoomState(String roomId, Long userId);

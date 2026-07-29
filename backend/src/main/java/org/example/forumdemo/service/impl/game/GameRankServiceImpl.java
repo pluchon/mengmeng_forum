@@ -24,7 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 游戏排位结算服务，统一处理真人 PK 的段位分变化
+// 游戏排位结算服务，统一处理真人对局与五子棋人机对局的段位分变化
 @Service
 public class GameRankServiceImpl implements GameRankService {
 
@@ -53,9 +53,7 @@ public class GameRankServiceImpl implements GameRankService {
     public GameRankSettlementResult settleRank(GameRankSettlementCommand command) {
         validateCommand(command);
         if (isAiMatch(command)) {
-            resetProfileStatus(command.getPlayerAUserId(), command.getGameCode());
-            resetProfileStatus(command.getPlayerBUserId(), command.getGameCode());
-            return new GameRankSettlementResult(false, false, null, null);
+            return settleGobangAiRank(command);
         }
         GameUserProfile playerA = gameUserProfileService.getOrCreateProfile(
                 command.getPlayerAUserId(),
@@ -93,6 +91,37 @@ public class GameRankServiceImpl implements GameRankService {
     private boolean isAiMatch(GameRankSettlementCommand command) {
         return GameConstants.AI_USER_ID.equals(command.getPlayerAUserId())
                 || GameConstants.AI_USER_ID.equals(command.getPlayerBUserId());
+    }
+
+    private GameRankSettlementResult settleGobangAiRank(GameRankSettlementCommand command) {
+        if (!GameConstants.GOBANG.equals(command.getGameCode())) {
+            resetProfileStatus(command.getPlayerAUserId(), command.getGameCode());
+            resetProfileStatus(command.getPlayerBUserId(), command.getGameCode());
+            return new GameRankSettlementResult(false, false, null, null);
+        }
+        Long humanUserId = GameConstants.AI_USER_ID.equals(command.getPlayerAUserId())
+                ? command.getPlayerBUserId()
+                : command.getPlayerAUserId();
+        GameUserProfile human = gameUserProfileService.getOrCreateProfile(humanUserId, GameConstants.GOBANG);
+        if (command.getWinnerUserId() == null || command.getLoserUserId() == null) {
+            GameRankPlayerChange change = updateDrawProfile(human, GameConstants.GOBANG);
+            return new GameRankSettlementResult(true, true, change, null);
+        }
+        boolean humanWon = humanUserId.equals(command.getWinnerUserId());
+        boolean effective = Boolean.TRUE.equals(command.getEffectiveForRank());
+        if (humanWon) {
+            int normalDelta = baseWinDelta(human.getScore(), human.getScore())
+                    + streakBonus(GameConstants.GOBANG, humanUserId);
+            int delta = effective ? GameRankRules.gobangAiWeighted(normalDelta) : 0;
+            GameRankPlayerChange change = updateWinProfile(human, GameConstants.GOBANG, delta);
+            return new GameRankSettlementResult(effective, false, change, null);
+        }
+        int normalPenalty = isEscapeReason(command.getEndReason())
+                ? 12
+                : baseLosePenalty(human.getScore(), human.getScore());
+        int delta = effective ? -GameRankRules.gobangAiWeighted(normalPenalty) : 0;
+        GameRankPlayerChange change = updateLoseProfile(human, GameConstants.GOBANG, delta);
+        return new GameRankSettlementResult(effective, false, null, change);
     }
 
     private int computeWinnerDelta(GameRankSettlementCommand command, GameUserProfile winner, GameUserProfile loser) {

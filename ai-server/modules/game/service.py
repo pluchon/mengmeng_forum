@@ -97,30 +97,6 @@ def generate_gobang_move(
         }
 
 
-def generate_jinzi_move(
-    board: list[list[int]],
-    ai_chess: int = 2,
-    model_code: str | None = None,
-    *,
-    use_llm: bool = False,
-) -> dict[str, Any]:
-    """井字棋落子：始终本地 minimax 战术，不调用大模型。"""
-    safe_board = _normalize_jinzi_board(board)
-    player_chess = 1 if ai_chess == 2 else 2
-    model = _resolve_gobang_model(settings.dashscope, model_code)
-    row, col = _choose_local_jinzi_move(safe_board, ai_chess, player_chess)
-    return {
-        "row": row,
-        "col": col,
-        "model": model,
-        "model_name": model,
-        "model_version": model,
-        "strategy_name": "minimax_local",
-        "fallback": False,
-        "usage": {"model_code": model, "estimated": True, "local": True},
-    }
-
-
 def _sparse_board_stones(board: list[list[int]]) -> list[dict[str, int]]:
     stones: list[dict[str, int]] = []
     for row in range(len(board)):
@@ -171,74 +147,6 @@ def _parse_gobang_point(content: str) -> tuple[int, int]:
 
 def _is_gobang_empty(board: list[list[int]], row: int, col: int) -> bool:
     return 0 <= row < 15 and 0 <= col < 15 and board[row][col] == 0
-
-
-def _normalize_jinzi_board(board: list[list[int]]) -> list[list[int]]:
-    if not isinstance(board, list) or len(board) != 3:
-        raise ValueError("board must be 3x3")
-    safe: list[list[int]] = []
-    for row in board:
-        if not isinstance(row, list) or len(row) != 3:
-            raise ValueError("board must be 3x3")
-        safe_row: list[int] = []
-        for cell in row:
-            try:
-                value = int(cell)
-            except (TypeError, ValueError):
-                value = 0
-            safe_row.append(value if value in (0, 1, 2) else 0)
-        safe.append(safe_row)
-    return safe
-
-
-def _is_jinzi_empty(board: list[list[int]], row: int, col: int) -> bool:
-    return 0 <= row < 3 and 0 <= col < 3 and board[row][col] == 0
-
-
-def _choose_local_jinzi_move(
-    board: list[list[int]],
-    ai_chess: int,
-    player_chess: int,
-) -> tuple[int, int]:
-    win = _find_jinzi_line_move(board, ai_chess)
-    if win is not None:
-        return win
-    block = _find_jinzi_line_move(board, player_chess)
-    if block is not None:
-        return block
-    if board[1][1] == 0:
-        return 1, 1
-    for row, col in ((0, 0), (0, 2), (2, 0), (2, 2), (0, 1), (1, 0), (1, 2), (2, 1)):
-        if board[row][col] == 0:
-            return row, col
-    raise ValueError("井字棋棋盘已满，无法生成落子")
-
-
-def _find_jinzi_line_move(board: list[list[int]], chess: int) -> tuple[int, int] | None:
-    for row in range(3):
-        for col in range(3):
-            if board[row][col] != 0:
-                continue
-            board[row][col] = chess
-            line = _has_jinzi_line(board, chess)
-            board[row][col] = 0
-            if line:
-                return row, col
-    return None
-
-
-def _has_jinzi_line(board: list[list[int]], chess: int) -> bool:
-    lines = (
-        ((0, 0), (0, 1), (0, 2)),
-        ((1, 0), (1, 1), (1, 2)),
-        ((2, 0), (2, 1), (2, 2)),
-        ((0, 0), (1, 0), (2, 0)),
-        ((0, 1), (1, 1), (2, 1)),
-        ((0, 2), (1, 2), (2, 2)),
-        ((0, 0), (1, 1), (2, 2)),
-        ((0, 2), (1, 1), (2, 0)),
-    )
-    return any(all(board[row][col] == chess for row, col in line) for line in lines)
 
 
 def _find_tactical_gobang_move(

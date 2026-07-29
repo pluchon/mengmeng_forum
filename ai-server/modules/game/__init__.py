@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from modules.game.module import GobangMoveModule, JiziMoveModule
+from modules.game.module import GobangMoveModule
 
-__all__ = ["GobangMoveModule", "JiziMoveModule"]
+__all__ = ["GobangMoveModule"]

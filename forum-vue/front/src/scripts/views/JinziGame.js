@@ -90,7 +90,7 @@ const gameSocket = useGameWebSocket('games/jinzi', {
       matching.value = false
       profile.currentStatus = 'PLAYING'
       profile.currentRoomId = message.data.roomId
-      router.push(`/games/jinzi/rooms/${encodeURIComponent(message.data.roomId)}`)
+      router.push({ name: 'jinziRoom', params: { roomId: message.data.roomId } })
     }
   },
   onClose() {

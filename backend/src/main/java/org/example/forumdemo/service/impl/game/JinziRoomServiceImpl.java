@@ -41,8 +41,6 @@ import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.JinziRoomService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
-import org.example.forumdemo.service.impl.game.ai.GameAiPlanner;
-import org.example.forumdemo.service.impl.game.ai.JinziAiEngine;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -55,21 +53,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 // 井字棋房间服务，复用游戏结算链路但不开放观战角色
 @Slf4j
 @Service
 public class JinziRoomServiceImpl implements JinziRoomService {
-
-    private static final int AI_PRO_SCORE_THRESHOLD = 1600;
-
-    private static final String AI_MODEL_FLASH = "qwen3.6-flash";
-
-    private static final String AI_MODEL_PRO = "qwen3.7-max";
-
-    private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH;
 
     // roomId -> 房间状态
     private final ConcurrentHashMap<String, JinziRoom> rooms = new ConcurrentHashMap<>();
@@ -120,9 +109,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private JinziRuleEngine jinziRuleEngine;
 
     @Autowired
-    private JinziAiEngine jinziAiEngine;
-
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -155,27 +141,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         gameUserProfileService.updateStatus(userIdB, GameConstants.JINZI, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
-        saveRoomSnapshot(room);
-        cacheRoomState(room);
-        return room.getRoomId();
-    }
-
-    @Override
-    public String createAiRoom(Long userId) {
-        if (userId == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        JinziRoom room = new JinziRoom(userId, GameConstants.AI_USER_ID);
-        room.setAiRoom(true);
-        String modelCode = chooseAiModelCode(userId);
-        room.setAiModelCode(modelCode);
-        room.setAiModelName(GameAiPlanner.formatModelLabel(modelCode, false, false));
-        room.setRoomStatus(GameConstants.ROOM_PLAYING);
-        rooms.put(room.getRoomId(), room);
-        userRoomIds.put(userId, room.getRoomId());
-        gameUserProfileService.updateStatus(userId, GameConstants.JINZI, GameConstants.PROFILE_PLAYING, room.getRoomId());
-        saveRoomPlayer(room.getRoomId(), userId, "BLACK");
-        saveRoomPlayer(room.getRoomId(), GameConstants.AI_USER_ID, "AI");
         saveRoomSnapshot(room);
         cacheRoomState(room);
         return room.getRoomId();
@@ -271,8 +236,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 finishRoom(room, userId, GameConstants.END_LINE);
             } else if (draw) {
                 finishRoom(room, null, GameConstants.END_DRAW);
-            } else if (room.isAiRoom() && GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
-                scheduleAiMove(room);
             }
         }
     }
@@ -510,15 +473,13 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 room.getBlackUserId(),
                 "BLACK",
                 room.getStartedAt().getTime(),
-                null,
                 userMap,
                 profileMap
         );
         GobangRoomParticipantVO whitePlayer = toParticipant(
                 room.getWhiteUserId(),
-                room.isAiRoom() ? "AI" : "WHITE",
+                "WHITE",
                 room.getStartedAt().getTime(),
-                room.getAiModelName(),
                 userMap,
                 profileMap
         );
@@ -542,8 +503,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 room.remainingGameMs(room.getWhiteUserId(), now),
                 room.currentTurnRemainingMs(now),
                 now,
-                room.isAiRoom(),
-                room.isAiThinking(),
                 room.getWinningLine(),
                 blackPlayer,
                 whitePlayer,
@@ -584,26 +543,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             Long userId,
             String role,
             Long joinedAtMs,
-            String aiModelName,
             Map<Long, User> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
-        if (GameConstants.AI_USER_ID.equals(userId)) {
-            return new GobangRoomParticipantVO(
-                    GameConstants.AI_USER_ID,
-                    "ai",
-                    "同水平AI",
-                    "",
-                    (byte) 0,
-                    false,
-                    "AI",
-                    joinedAtMs,
-                    true,
-                    aiModelName == null || aiModelName.isBlank() ? DEFAULT_AI_MODEL_NAME : aiModelName,
-                    0,
-                    0
-            );
-        }
         User user = userMap.get(userId);
         String username = user == null ? null : user.getUsername();
         String nickname = user == null ? "用户 " + userId : (
@@ -630,67 +572,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 total,
                 winRate
         );
-    }
-
-    private void scheduleAiMove(JinziRoom room) {
-        long minThinkMs = GameAiPlanner.jinziMinThinkMs();
-        room.setAiThinking(true);
-        sendStateToRoom(room, "room_state_updated");
-        CompletableFuture.runAsync(() -> executeAiTurn(room.getRoomId(), minThinkMs));
-    }
-
-    private void executeAiTurn(String roomId, long minThinkMs) {
-        long started = System.currentTimeMillis();
-        try {
-            JinziRoom room = rooms.get(roomId);
-            if (room == null) {
-                return;
-            }
-            int[] move;
-            synchronized (room) {
-                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
-                        || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
-                    return;
-                }
-                room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
-                move = jinziAiEngine.chooseMove(room.getBoard(), 2);
-            }
-            if (move == null) {
-                return;
-            }
-            long elapsed = System.currentTimeMillis() - started;
-            long wait = minThinkMs - elapsed;
-            if (wait > 0) {
-                Thread.sleep(wait);
-            }
-            synchronized (room) {
-                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
-                        || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
-                    return;
-                }
-                if (!inBoard(move[0], move[1]) || room.getBoard()[move[0]][move[1]] != 0) {
-                    return;
-                }
-                handleMove(roomId, GameConstants.AI_USER_ID, move[0], move[1], null);
-                if (room.isAiRoom()) {
-                    sendStateToRoom(room, "room_state_updated");
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            JinziRoom room = rooms.get(roomId);
-            if (room != null) {
-                room.setAiThinking(false);
-                sendStateToRoom(room, "room_state_updated");
-            }
-        }
-    }
-
-    private String chooseAiModelCode(Long userId) {
-        GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.JINZI);
-        int score = profile == null || profile.getScore() == null ? 0 : profile.getScore();
-        return score < AI_PRO_SCORE_THRESHOLD ? AI_MODEL_FLASH : AI_MODEL_PRO;
     }
 
     private boolean inBoard(int row, int col) {
