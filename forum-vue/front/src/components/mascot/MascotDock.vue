@@ -192,13 +192,19 @@
                       >
                         {{ uiLabels.chatEmptyHint }}
                       </p>
-                      <div v-if="messages.length" class="mascot-divider-label">{{ uiLabels.today }}</div>
-                      <div
+                      <template
                         v-for="(m, i) in messages"
                         :key="'fs-' + i + '-' + (m.at || 0)"
-                        class="mascot-msg-row"
-                        :class="m.role"
                       >
+                      <div v-if="shouldShowDateDivider(messages, i)" class="mascot-divider-label">{{ formatMessageDay(m.at) }}</div>
+                      <div
+                        class="mascot-msg-row"
+                        :class="[m.role, { 'mascot-msg-row--context': m.type === 'context_summary' }]"
+                      >
+                      <template v-if="m.type === 'context_summary'">
+                        <div class="mascot-context-marker"><span>———————</span><el-icon><MagicStick /></el-icon><span>上下文已压缩</span><span>———————</span></div>
+                      </template>
+                      <template v-else>
                       <img
                         v-if="m.role === 'assistant'"
                         :src="companionAvatarSrc"
@@ -242,9 +248,28 @@
                               <template v-else-if="m.role === 'assistant'">
                                 <div
                                   class="mascot-md"
-                                  v-html="renderMascotMarkdown(m.content, !!(m.searchImageUrl || m.stripInlineImages))"
+                                  v-html="renderMascotMarkdown(m.content, !!m.stripInlineImages)"
                                 />
                                 <span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
+                                <div v-if="m.role === 'assistant' && !m.streaming" class="mascot-bubble-actions">
+                                  <button
+                                    v-if="isLatestRegeneratableAssistant(i)"
+                                    type="button"
+                                    class="mascot-msg-regen"
+                                    :disabled="loading"
+                                    :title="uiLabels.regenerate"
+                                    :aria-label="uiLabels.regenerate"
+                                    @click="regenerateAssistant(i)"
+                                  ><el-icon><Refresh /></el-icon></button>
+                                  <button
+                                    v-if="m.imageGallery?.length"
+                                    type="button"
+                                    class="mascot-msg-regen"
+                                    title="查看图集"
+                                    aria-label="查看图集"
+                                    @click="openSearchGallery(m.imageGallery)"
+                                  ><el-icon><Picture /></el-icon></button>
+                                </div>
                               </template>
                               <template v-else>
                                 {{ m.content }}<span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
@@ -252,38 +277,13 @@
                             </div>
                           </div>
                           <div
-                            v-if="m.searchImageUrl && !m.streaming"
-                            class="mascot-search-image-card"
-                          >
-                            <img
-                              :src="m.searchImageUrl"
-                              alt="搜索配图"
-                              class="mascot-search-image"
-                              loading="lazy"
-                              @error="hideMascotSearchImage(m)"
-                            >
-                          </div>
-                          <div
                             v-if="m.role === 'assistant' && m.type !== 'image' && !m.streaming"
                             class="mascot-bubble-meta mascot-bubble-meta--assistant"
                           >
                             <span v-if="m.usageStats" class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
-                            <span v-if="m.at" class="mascot-bubble-time">{{ formatMsgTime(m.at) }}</span>
-                            <button
-                              v-if="isLatestRegeneratableAssistant(i)"
-                              type="button"
-                              class="mascot-msg-regen"
-                              :disabled="loading"
-                              :title="uiLabels.regenerate"
-                              :aria-label="uiLabels.regenerate"
-                              @click="regenerateAssistant(i)"
-                            >
-                              <el-icon><Refresh /></el-icon>
-                            </button>
                           </div>
                           <div v-else-if="m.at && !m.streaming" class="mascot-bubble-meta">
                             <span v-if="m.usageStats" class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
-                            <span class="mascot-bubble-time">{{ formatMsgTime(m.at) }}</span>
                           </div>
                           <div
                             v-if="m.role === 'assistant' && m.relatedSearchOffer && !m.streaming"
@@ -309,7 +309,9 @@
                           </div>
                         </template>
                       </div>
-                    </div>
+                      </template>
+                      </div>
+                      </template>
                       <div v-if="imageGenerating" class="mascot-msg-row assistant">
                         <img :src="companionAvatarSrc" alt="" class="mascot-msg-avatar mascot-msg-avatar--ai">
                         <div class="mascot-image-generating" role="status">
@@ -341,8 +343,13 @@
                   generation-hint="AI 也有可能出错，请自行甄别"
                   :show-points-pay-button="showPointsPayButton"
                   :points-pay-active="usePointsBilling"
+                  :context-used-tokens="contextWindow.usedTokens"
+                  :context-max-tokens="contextWindow.maxTokens"
+                  :context-available="contextWindow.canCompress"
+                  :context-compressing="contextCompressing"
                   @send="send"
                   @toggle-points-pay="togglePointsPay"
+                  @compress-context="compressContext"
                 />
               </div>
           </div>
@@ -353,14 +360,19 @@
         :items="relatedDialogItems"
         @open-article="openRelatedArticle"
       />
+      <MascotSearchGalleryDialog
+        v-model:visible="searchGalleryVisible"
+        :items="searchGalleryItems"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { Delete, Edit, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
+import { Delete, Edit, MagicStick, Picture, Plus, Refresh, ZoomIn } from '@element-plus/icons-vue'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import MascotRelatedArticlesDialog from '@/components/mascot/MascotRelatedArticlesDialog.vue'
+import MascotSearchGalleryDialog from '@/components/mascot/MascotSearchGalleryDialog.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { useMascotDock } from '@scripts/components/mascot/MascotDock'
@@ -381,9 +393,9 @@ const {
   togglePointsPay,
   usePointsBilling,
   formatAiUsageLine,
-  formatMsgTime,
+  formatMessageDay,
   formatSessionTime,
-  hideMascotSearchImage,
+  shouldShowDateDivider,
   isLatestRegeneratableAssistant,
   imageModelOptions,
   imageQuality,
@@ -398,12 +410,15 @@ const {
   onStagePointerDown,
   openRelatedArticle,
   openRelatedRecommendation,
+  openSearchGallery,
   regenerateAssistant,
   renderMascotMarkdown,
   ringVipTier,
   rootStyle,
   relatedDialogItems,
   relatedDialogVisible,
+  searchGalleryItems,
+  searchGalleryVisible,
   scalePopoverOpen,
   scrollbarFs,
   selectLocalSession,
@@ -421,6 +436,9 @@ const {
   switchMascot,
   uiLabels,
   userStore,
+  contextCompressing,
+  contextWindow,
+  compressContext,
 } = useMascotDock()
 </script>
 

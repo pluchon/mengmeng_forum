@@ -1,5 +1,5 @@
 import { computed, ref, watch, nextTick } from 'vue'
-import { Loading, Promotion } from '@element-plus/icons-vue'
+import { Loading, MagicStick, Promotion } from '@element-plus/icons-vue'
 import { findImageQualityOption } from '@/constants/aiModels'
 
 const props = defineProps({
@@ -15,6 +15,10 @@ const props = defineProps({
   generationHint: { type: String, default: '' },
   showPointsPayButton: { type: Boolean, default: false },
   pointsPayActive: { type: Boolean, default: false },
+  contextUsedTokens: { type: Number, default: 0 },
+  contextMaxTokens: { type: Number, default: 128000 },
+  contextCompressing: { type: Boolean, default: false },
+  contextAvailable: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -22,11 +26,17 @@ const emit = defineEmits([
   'update:imageQuality',
   'send',
   'toggle-points-pay',
+  'compress-context',
 ])
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
 const activeImageOption = computed(() => findImageQualityOption(props.imageQuality) || props.imageOptions[0])
+const contextPercent = computed(() => {
+  if (!props.contextMaxTokens) return 0
+  return Math.max(0, Math.min(100, (props.contextUsedTokens / props.contextMaxTokens) * 100))
+})
+const contextUsageLabel = computed(() => `${(props.contextUsedTokens / 1000).toFixed(1)}k/${Math.round(props.contextMaxTokens / 1000)}k`)
 
 function resizeTextarea() {
   const el = textareaRef.value

@@ -436,6 +436,20 @@
   flex-direction: row-reverse;
 }
 
+.mascot-msg-row--context {
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.mascot-context-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .mascot-msg-avatar {
   width: 28px;
   height: 28px;
@@ -477,6 +491,14 @@
   color: var(--el-text-color-primary, #f5f0ff);
   border-radius: 14px 14px 14px 4px;
   white-space: normal;
+}
+
+.mascot-bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 /* AI 回复 Markdown 渲染（表格、标题、列表等） */

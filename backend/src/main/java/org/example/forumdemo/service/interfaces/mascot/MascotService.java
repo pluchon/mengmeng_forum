@@ -6,6 +6,7 @@ import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationReques
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotModelPublicVO;
 import org.example.forumdemo.entity.vo.mascot.MascotRelatedRecommendationVO;
+import org.example.forumdemo.entity.vo.mascot.CompanionContextWindowVO;
 
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -16,10 +17,14 @@ public interface MascotService {
     /**
      * 转发 Python 看板娘接口；普通用户受每日次数限制.
      */
-    MascotChatResponseVO chat(User user, MascotChatRequest request);
+    MascotChatResponseVO chat(User user, MascotChatRequest request, String clientIp);
 
     /** 流式对话（SSE），积分在流结束后结算 */
-    void streamChat(User user, MascotChatRequest request, SseEmitter emitter);
+    void streamChat(User user, MascotChatRequest request, String clientIp, SseEmitter emitter);
+
+    CompanionContextWindowVO getContextWindow(User user, Long sessionId);
+
+    void compressContext(User user, Long sessionId);
 
     /** 用户确认后执行相关帖子检索，并保存本次展示结果。 */
     MascotRelatedRecommendationVO recommendRelatedArticles(

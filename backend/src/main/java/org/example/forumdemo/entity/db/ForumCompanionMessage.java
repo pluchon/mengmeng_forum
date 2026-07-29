@@ -28,6 +28,9 @@ public class ForumCompanionMessage {
     @TableField("image_url")
     private String imageUrl;
 
+    @TableField("metadata_json")
+    private String metadataJson;
+
     @TableField("delete_state")
     private Byte deleteState;
 

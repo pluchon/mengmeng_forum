@@ -3,7 +3,10 @@ package org.example.forumdemo.converter;
 import org.example.forumdemo.entity.vo.ai.AiUsageStatsVO;
 import org.example.forumdemo.entity.vo.mascot.MascotChatResponseVO;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
+import org.example.forumdemo.entity.vo.mascot.CompanionImageGalleryItemVO;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 // 看板娘响应转换
@@ -50,6 +53,7 @@ public final class MascotConverter {
             vo.setRelatedSearchOffer(Boolean.parseBoolean(String.valueOf(relatedSearchOffer)));
         }
         vo.setRelatedSearchQuery(stringVal(data.get("relatedSearchQuery")));
+        vo.setSearchImageGallery(toImageGallery(data.get("searchImageGallery")));
         Object est = data.get("estimated");
         if (est instanceof Boolean b) {
             vo.setEstimated(b);
@@ -57,6 +61,32 @@ public final class MascotConverter {
             vo.setEstimated(Boolean.parseBoolean(String.valueOf(est)));
         }
         return vo;
+    }
+
+    private static List<CompanionImageGalleryItemVO> toImageGallery(Object raw) {
+        if (!(raw instanceof List<?> rows)) {
+            return List.of();
+        }
+        List<CompanionImageGalleryItemVO> out = new ArrayList<>();
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> item)) {
+                continue;
+            }
+            Object rawUrl = item.get("url");
+            String url = rawUrl == null ? "" : String.valueOf(rawUrl).trim();
+            if (!url.startsWith("https://") || url.length() > 2048) {
+                continue;
+            }
+            CompanionImageGalleryItemVO galleryItem = new CompanionImageGalleryItemVO();
+            galleryItem.setUrl(url);
+            galleryItem.setTitle(stringVal(item.get("title")));
+            galleryItem.setSource(stringVal(item.get("source")));
+            out.add(galleryItem);
+            if (out.size() >= 5) {
+                break;
+            }
+        }
+        return out;
     }
 
     private static AiUsageStatsVO toUsageStatsVO(Object raw) {

@@ -62,6 +62,24 @@
           </template>
         </el-dropdown>
 
+        <div class="mascot-context-control">
+          <span class="mascot-context-control__label">上下文</span>
+          <span class="mascot-context-control__track" aria-hidden="true">
+            <span class="mascot-context-control__progress" :style="{ width: `${contextPercent}%` }" />
+          </span>
+          <span class="mascot-context-control__count">{{ contextUsageLabel }}</span>
+          <button
+            type="button"
+            class="mascot-context-control__compress"
+            :disabled="contextCompressing || !contextAvailable"
+            title="压缩上下文"
+            aria-label="压缩上下文"
+            @click="emit('compress-context')"
+          >
+            <el-icon :class="{ 'is-loading': contextCompressing }"><MagicStick /></el-icon>
+          </button>
+        </div>
+
         <button
           v-if="showPointsPayButton"
           type="button"

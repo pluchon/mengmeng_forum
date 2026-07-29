@@ -205,6 +205,22 @@ export function getCompanionMessages(sessionId) {
   })
 }
 
+/** 陪伴助手：读取会话上下文占用估算 */
+export function getCompanionContextWindow(sessionId) {
+  return request({
+    url: `/mascot/companion/sessions/${sessionId}/context-window`,
+    method: 'get',
+  })
+}
+
+/** 陪伴助手：压缩并保存会话上下文 */
+export function compressCompanionContext(sessionId) {
+  return request({
+    url: `/mascot/companion/sessions/${sessionId}/compress-context`,
+    method: 'post',
+  })
+}
+
 /** 陪伴助手：删除指定会话 */
 export function deleteCompanionSession(sessionId) {
   return request({

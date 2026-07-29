@@ -123,3 +123,20 @@ DELETE FROM forum_ai_call_record WHERE @purge_legacy_ai_history = 1;
 DELETE FROM forum_ai_usage_log WHERE @purge_legacy_ai_history = 1;
 DELETE FROM forum_ai_model_usage_daily WHERE @purge_legacy_ai_history = 1;
 DELETE FROM ai_usage_daily WHERE @purge_legacy_ai_history = 1;
+
+-- 看板娘：联网图集与上下文压缩事件
+SET @companion_metadata_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'forum_companion_message'
+      AND column_name = 'metadata_json'
+);
+SET @companion_metadata_sql = IF(
+    @companion_metadata_exists = 0,
+    'ALTER TABLE forum_companion_message ADD COLUMN metadata_json MEDIUMTEXT NULL COMMENT ''消息扩展元数据（联网图集、上下文摘要来源等）'' AFTER image_url',
+    'SELECT 1'
+);
+PREPARE companion_metadata_statement FROM @companion_metadata_sql;
+EXECUTE companion_metadata_statement;
+DEALLOCATE PREPARE companion_metadata_statement;
