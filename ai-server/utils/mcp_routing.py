@@ -22,19 +22,6 @@ _FORUM_INTERNAL_RE = re.compile(
     r"账号|注册|登录|萌萌技术分享笔记|论坛|板块|版主|管理员",
     re.I,
 )
-_EXPLICIT_WEB_IMAGE_REQUEST_RE = re.compile(
-    r"(?:联网|网络|网上|互联网|网页|百科).{0,24}(?:图片|图集|配图|照片)|"
-    r"(?:搜|搜索|找|抓取).{0,24}(?:图片|图集|配图|照片)|"
-    r"(?:展示|显示|看看).{0,20}(?:图片|图集|配图|照片)",
-    re.I,
-)
-
-
-def is_explicit_web_image_request(message: str) -> bool:
-    """识别用户明确要求联网检索并展示图片的请求。"""
-    return bool(_EXPLICIT_WEB_IMAGE_REQUEST_RE.search((message or "").strip()))
-
-
 def _mcp_enabled() -> bool:
     mcp = settings.raw.get("mcp", {}) or {}
     if not mcp.get("enabled", True):
@@ -43,11 +30,6 @@ def _mcp_enabled() -> bool:
     if not tav.get("enabled", True):
         return False
     return bool((tav.get("api_key") or "").strip())
-
-
-def is_tavily_search_enabled() -> bool:
-    """供看板娘编排层判断联网检索是否可用。"""
-    return _mcp_enabled()
 
 
 def local_kb_covers_writing(message: str) -> tuple[bool, str]:
@@ -79,8 +61,9 @@ def _llm_route_decision(
     message: str,
     skill: str,
     mode: str,
-) -> tuple[bool, str]:
-    """用轻量模型判断是否需要联网及搜索词."""
+    history: list[dict[str, str]] | None = None,
+) -> tuple[bool, str, bool]:
+    """用 Flash 模型生成联网检索计划。"""
     ds = settings.dashscope
     model = str(ds.get("model_text_flash") or ds.get("model_text") or "qwen3.6-flash")
     if mode == "image":
@@ -94,12 +77,20 @@ def _llm_route_decision(
         )
     else:
         sys = (
-            "你是写作助手的路由器。用户要写论坛相关内容。"
-            "若问题纯属本站功能/规则/积分/VIP/发帖流程，输出 need_search=false。"
-            "若涉及外部事实、新闻、技术细节、人物生平、你不确定的内容，输出 need_search=true 并给出简洁 search query。"
-            '只输出 JSON：{"need_search":bool,"query":"..."}'
+            "你是看板娘的联网检索规划器。理解用户本轮意图与最近话题后，决定是否需要联网。"
+            "站点功能、规则、积分、VIP、发帖流程等可由本站知识回答时不联网；"
+            "外部事实、人物、地点、作品、新闻、技术细节或用户明确要求联网搜索时，可联网。"
+            "need_search_images=true 仅表示应把联网图片作为本条消息的图集展示："
+            "用户要求看图片，或图片确实有助于理解实体、地点、作品时为 true；否则为 false。"
+            "need_search_images=true 时 need_search 必须为 true。query 是结合本轮与已有话题的简洁检索词。"
+            '只输出 JSON：{"need_search":bool,"need_search_images":bool,"query":"..."}'
         )
-    user = f"skill={skill}\n用户消息：{message[:1500]}"
+    recent_history = "\n".join(
+        f"{item.get('role', '')}: {str(item.get('content') or '')[:300]}"
+        for item in (history or [])[-6:]
+        if isinstance(item, dict)
+    )
+    user = f"skill={skill}\n最近对话：\n{recent_history or '（无）'}\n用户消息：{message[:1500]}"
     try:
         raw, _ = dashscope_chat_completion(
             model,
@@ -108,28 +99,39 @@ def _llm_route_decision(
         )
     except Exception:
         logger.exception("MCP 路由 LLM 失败")
-        return False, ""
+        return False, "", False
     data = _parse_router_json(raw)
     if not isinstance(data, dict):
-        return False, ""
+        return False, "", False
     need = bool(data.get("need_search"))
+    need_images = bool(data.get("need_search_images"))
+    if need_images:
+        need = True
     query = str(data.get("query") or message).strip()[:300]
-    return need, query
+    return need, query, need_images
 
 
-def assess_mcp_for_writing(message: str) -> tuple[bool, str, str]:
+def assess_mcp_for_writing(
+    message: str,
+    history: list[dict[str, str]] | None = None,
+) -> tuple[bool, str, str, bool]:
     """
-    返回 (need_search, search_query, local_kb_snippet).
+    返回 (need_search, search_query, local_kb_snippet, need_search_images).
     local_kb_snippet 非空时注入系统提示，且不搜索。
     """
     if not _mcp_enabled():
-        return False, "", ""
+        return False, "", "", False
     skill = "writing"
     covered, snippet = local_kb_covers_writing(message)
     if covered:
-        return False, "", snippet
-    need, query = _llm_route_decision(message=message, skill=skill, mode="writing")
-    return need, query, ""
+        return False, "", snippet, False
+    need, query, need_images = _llm_route_decision(
+        message=message,
+        skill=skill,
+        mode="writing",
+        history=history,
+    )
+    return need, query, "", need_images
 
 
 def assess_mcp_for_image(prompt: str) -> tuple[bool, str]:
@@ -142,5 +144,5 @@ def assess_mcp_for_image(prompt: str) -> tuple[bool, str]:
     # 过于简单/generic 的描述通常不需要搜索
     if len(p) <= 12 and not re.search(r"[A-Za-z]{4,}|[\u4e00-\u9fa5]{6,}", p):
         return False, ""
-    need, query = _llm_route_decision(message=p, skill="drawing", mode="image")
+    need, query, _ = _llm_route_decision(message=p, skill="drawing", mode="image")
     return need, query or p

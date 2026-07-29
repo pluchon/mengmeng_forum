@@ -22,6 +22,9 @@ public class ForumMascotRelatedRecommendation {
     @TableField("companion_session_id")
     private Long companionSessionId;
 
+    @TableField("source_message_id")
+    private Long sourceMessageId;
+
     private String query;
 
     @TableField("result_state")

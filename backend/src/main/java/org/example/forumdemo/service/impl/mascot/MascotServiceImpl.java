@@ -14,6 +14,7 @@ import org.example.forumdemo.entity.db.ForumMascotModel;
 import org.example.forumdemo.entity.db.ForumCompanionSession;
 import org.example.forumdemo.entity.db.ForumMascotRelatedRecommendation;
 import org.example.forumdemo.entity.db.ForumMascotRelatedRecommendationItem;
+import org.example.forumdemo.entity.db.ForumCompanionMessage;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
@@ -35,6 +36,7 @@ import org.example.forumdemo.entity.vo.mascot.CompanionImageGalleryItemVO;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
+import org.example.forumdemo.mapper.ForumCompanionMessageMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
@@ -132,6 +134,9 @@ public class MascotServiceImpl implements MascotService {
     @Resource
     private ForumCompanionSessionMapper forumCompanionSessionMapper;
 
+    @Autowired
+    private ForumCompanionMessageMapper forumCompanionMessageMapper;
+
     @Resource
     private ForumMascotRelatedRecommendationMapper mascotRelatedRecommendationMapper;
 
@@ -177,13 +182,14 @@ public class MascotServiceImpl implements MascotService {
             User user, MascotRelatedRecommendationRequest request) {
         Long sessionId = request.getSessionId();
         requireOwnedSession(user.getId(), sessionId);
+        requireOwnedAssistantMessage(sessionId, request.getSourceMessageId());
 
         String query = normalizeRelatedQuery(request.getQuery());
         ForumMascotRelatedRecommendation existing = mascotRelatedRecommendationMapper.selectOne(
                 Wrappers.lambdaQuery(ForumMascotRelatedRecommendation.class)
                         .eq(ForumMascotRelatedRecommendation::getUserId, user.getId())
                         .eq(ForumMascotRelatedRecommendation::getCompanionSessionId, sessionId)
-                        .eq(ForumMascotRelatedRecommendation::getQuery, query)
+                        .eq(ForumMascotRelatedRecommendation::getSourceMessageId, request.getSourceMessageId())
                         .eq(ForumMascotRelatedRecommendation::getDeleteState, (byte) 0)
                         .orderByDesc(ForumMascotRelatedRecommendation::getId)
                         .last("LIMIT 1"));
@@ -200,6 +206,7 @@ public class MascotServiceImpl implements MascotService {
         ForumMascotRelatedRecommendation recommendation = new ForumMascotRelatedRecommendation();
         recommendation.setUserId(user.getId());
         recommendation.setCompanionSessionId(sessionId);
+        recommendation.setSourceMessageId(request.getSourceMessageId());
         recommendation.setQuery(query);
         recommendation.setResultState((selections.isEmpty()
                 ? MascotRelatedRecommendationState.EMPTY : MascotRelatedRecommendationState.FOUND).name());
@@ -272,9 +279,14 @@ public class MascotServiceImpl implements MascotService {
         }
 
         List<MascotRelatedRecommendationVO> result = new ArrayList<>();
-        Set<String> loadedQueries = new HashSet<>();
+        Set<Long> loadedSourceMessageIds = new HashSet<>();
+        Set<String> legacyLoadedQueries = new HashSet<>();
         for (ForumMascotRelatedRecommendation recommendation : recommendations) {
-            if (!loadedQueries.add(normalizeRelatedQuery(recommendation.getQuery()))) {
+            Long sourceMessageId = recommendation.getSourceMessageId();
+            if (sourceMessageId != null && !loadedSourceMessageIds.add(sourceMessageId)) {
+                continue;
+            }
+            if (sourceMessageId == null && !legacyLoadedQueries.add(normalizeRelatedQuery(recommendation.getQuery()))) {
                 continue;
             }
             List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
@@ -293,9 +305,11 @@ public class MascotServiceImpl implements MascotService {
             }
             MascotRelatedRecommendationVO vo = new MascotRelatedRecommendationVO();
             vo.setId(recommendation.getId());
+            vo.setSourceMessageId(sourceMessageId);
             vo.setQuery(recommendation.getQuery());
             vo.setResultState(recommendation.getResultState());
             vo.setItems(items);
+            vo.setCreateTime(recommendation.getCreateTime());
             result.add(vo);
         }
         return result;
@@ -303,6 +317,18 @@ public class MascotServiceImpl implements MascotService {
 
     private String normalizeRelatedQuery(String query) {
         return query == null ? "" : query.trim().replaceAll("\\s+", " ");
+    }
+
+    private void requireOwnedAssistantMessage(Long sessionId, Long messageId) {
+        ForumCompanionMessage source = forumCompanionMessageMapper.selectOne(
+                Wrappers.lambdaQuery(ForumCompanionMessage.class)
+                        .eq(ForumCompanionMessage::getId, messageId)
+                        .eq(ForumCompanionMessage::getSessionId, sessionId)
+                        .eq(ForumCompanionMessage::getRole, "assistant")
+                        .eq(ForumCompanionMessage::getDeleteState, (byte) 0));
+        if (source == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "来源消息不存在"));
+        }
     }
 
     private void requireOwnedSession(Long userId, Long sessionId) {
@@ -404,9 +430,11 @@ public class MascotServiceImpl implements MascotService {
         }
         MascotRelatedRecommendationVO vo = new MascotRelatedRecommendationVO();
         vo.setId(recommendation.getId());
+        vo.setSourceMessageId(recommendation.getSourceMessageId());
         vo.setQuery(recommendation.getQuery());
         vo.setResultState(recommendation.getResultState());
         vo.setItems(items);
+        vo.setCreateTime(recommendation.getCreateTime());
         return vo;
     }
 
@@ -1290,7 +1318,11 @@ public class MascotServiceImpl implements MascotService {
             meta.put("usageStats", billing.get("usageStats"));
             meta.put("modelCode", usage.getModelCode());
             meta.put("llmRoute", route);
-            persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
+            Long assistantMessageId = persistCompanionAssistantReply(
+                    ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
+            if (assistantMessageId != null) {
+                meta.put("assistantMessageId", assistantMessageId);
+            }
             sendMascotSse(emitter, Map.of("meta", meta));
             emitter.complete();
         } catch (Exception e) {
@@ -1321,11 +1353,11 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
-    private void persistCompanionAssistantReply(
+    private Long persistCompanionAssistantReply(
             boolean ephemeral, Long sessionId, CharSequence reply, List<CompanionImageGalleryItemVO> imageGallery) {
         if (ephemeral || sessionId == null || reply == null || reply.length() == 0) {
-            return;
+            return null;
         }
-        companionMemoryService.appendTextMessage(sessionId, "assistant", reply.toString(), imageGallery);
+        return companionMemoryService.appendTextMessage(sessionId, "assistant", reply.toString(), imageGallery);
     }
 }

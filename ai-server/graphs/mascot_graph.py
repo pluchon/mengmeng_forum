@@ -456,10 +456,11 @@ def node_assess(state: MascotState) -> MascotState:
         client_location=str(state.get("client_location") or "").strip() or None,
     )
 
+    need_search_images = bool(state.get("need_search_images")) or bool(bundle.get("need_search_images"))
     out: MascotState = {
-        "need_mcp_search": bool(bundle.get("need_mcp_search")),
-        "need_search_images": bool(state.get("need_search_images")) or bool(bundle.get("need_search_images")),
-        "mcp_query": bundle.get("mcp_query") or "",
+        "need_mcp_search": bool(bundle.get("need_mcp_search")) or need_search_images,
+        "need_search_images": need_search_images,
+        "mcp_query": bundle.get("mcp_query") or (message if need_search_images else ""),
         "mcp_context": bundle.get("mcp_context") or "",
         "local_kb_snippet": bundle.get("local_kb_snippet") or "",
         "datetime_context": bundle.get("datetime_context") or "",

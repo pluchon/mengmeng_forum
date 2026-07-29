@@ -11,31 +11,7 @@ from typing import Any
 
 from clients.dashscope_chat_client import dashscope_chat_completion
 from config import settings
-from utils.mcp_routing import _FORUM_INTERNAL_RE, is_explicit_web_image_request
-
-_TRAVEL_SCENE_RE = re.compile(
-    r"雪山|川西|西藏|新疆|云南|旅行|旅游|自驾|路线|攻略|景点|想去|去看看|"
-    r"出发|行程|度假|徒步|露营|天气怎么样",
-    re.I,
-)
-
 logger = logging.getLogger(__name__)
-
-_HELP_STRONG_RE = re.compile(
-    r"(怎么|如何|怎样|在哪|哪里|能不能|可以吗).{0,12}(发帖|回帖|评论|积分|签到|VIP|会员|"
-    r"版规|抽奖|私信|注册|登录|密码|审核|版主|板块|论坛|萌萌技术分享笔记|"
-    r"陪伴助手|看板娘|消息中心|未读|公告)",
-    re.I,
-)
-_WRITING_STRONG_RE = re.compile(
-    r"帮我写|代写|起草|润色|改写|列提纲|写一段|写篇|发帖草稿|论坛帖|文案|"
-    r"扩写|缩写|翻译成|标题怎么写",
-    re.I,
-)
-_HELP_WEAK_RE = re.compile(
-    r"^(请问|想问|咨询).{0,8}(论坛|本站|网站|功能|规则)",
-    re.I,
-)
 
 
 def _parse_json(text: str) -> dict[str, Any] | None:
@@ -47,24 +23,6 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         return json.loads(m.group(0))
     except json.JSONDecodeError:
         return None
-
-
-def _heuristic_route(message: str) -> str | None:
-    msg = (message or "").strip()
-    if not msg:
-        return "help"
-    if is_explicit_web_image_request(msg):
-        return "writing"
-    if _TRAVEL_SCENE_RE.search(msg):
-        return "writing"
-    if _WRITING_STRONG_RE.search(msg):
-        return "writing"
-    if _HELP_STRONG_RE.search(msg) or _HELP_WEAK_RE.search(msg):
-        return "help"
-    if _FORUM_INTERNAL_RE.search(msg) and len(msg) < 120:
-        if not re.search(r"雪山|旅行|旅游|风景|攻略|路线|四川|西藏|云南", msg):
-            return "help"
-    return None
 
 
 def _llm_route(message: str, history: list[dict[str, str]]) -> str:
@@ -100,8 +58,5 @@ def _llm_route(message: str, history: list[dict[str, str]]) -> str:
 
 
 def route_mascot_skill(message: str, history: list[dict[str, str]] | None) -> str:
-    """返回 writing 或 help。"""
-    hit = _heuristic_route(message)
-    if hit:
-        return hit
+    """由 Flash 模型返回 writing 或 help。"""
     return _llm_route(message, history or [])
