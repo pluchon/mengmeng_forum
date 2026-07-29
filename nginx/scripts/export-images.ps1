@@ -139,11 +139,6 @@ if (Test-Path $sqlSrc) {
         Copy-Item $_.FullName (Join-Path $sqlDst $_.Name) -Force
     }
 }
-$incrementalSqlSrc = Join-Path $repoRoot "backend\src\main\resources\sql\incremental_mysql_release.sql"
-if (-not (Test-Path $incrementalSqlSrc)) {
-    throw "Missing merged MySQL incremental SQL: $incrementalSqlSrc"
-}
-
 $startSh = @'
 #!/bin/bash
 set -euo pipefail

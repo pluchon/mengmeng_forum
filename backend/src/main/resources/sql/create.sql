@@ -1,7 +1,7 @@
 -- 全库初始化脚本（执行即删库重建 forum_db；勿与 PostgreSQL 的 postgres_ai_session.sql 混跑）
 -- 结构：DROP/CREATE 全部表 + 少量示例/配置种子（看板娘、分类版块、签到兜底、公告、AI 单价、VIP 配额、抽奖演示）。
 -- 不含用户/帖子等业务数据；生产数据请走用户端注册与日常运营维护。
--- 结构变更：全新环境请整库重跑本脚本；已有库请执行同目录 incremental_mysql_release.sql（MySQL）与 postgres_ai_session.sql（PostgreSQL）。
+-- 结构变更：全新环境请整库重跑本脚本；已有库按已执行的发布变更维护，PostgreSQL 会话表见同目录 postgres_ai_session.sql。
 -- 并发幂等（Phase 01~05）：points_log.idempotency_key、lottery_draw_request、forum_ai_usage_log(related_id 唯一)、user_follow 唯一、article_like 唯一。
 DROP DATABASE IF EXISTS `forum_db`;
 CREATE DATABASE `forum_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
