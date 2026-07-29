@@ -109,6 +109,13 @@
   cursor: not-allowed;
 }
 
+.mascot-model-selector__icon {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .mascot-context-control {
   display: inline-flex;
   align-items: center;

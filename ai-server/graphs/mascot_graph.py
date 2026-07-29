@@ -391,7 +391,7 @@ def _skill_system_stream(
         tail = """
 你正在「对话」模式：可代写帖文、站点帮助、出行规划。回复可直接使用。
 若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
-若系统已展示联网配图，正文无需再插入多张图片。
+若系统已展示联网配图，正文无需再插入多张图片；不要说自己无法联网或无法展示图片。
 不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。"""
         if travel_guidance and "Markdown 表格" in travel_guidance:
             tail += " 出行规划请用 Markdown 表格输出阶段路线，并单独写目的地天气。"
@@ -458,6 +458,7 @@ def node_assess(state: MascotState) -> MascotState:
 
     out: MascotState = {
         "need_mcp_search": bool(bundle.get("need_mcp_search")),
+        "need_search_images": bool(state.get("need_search_images")) or bool(bundle.get("need_search_images")),
         "mcp_query": bundle.get("mcp_query") or "",
         "mcp_context": bundle.get("mcp_context") or "",
         "local_kb_snippet": bundle.get("local_kb_snippet") or "",
@@ -501,6 +502,10 @@ def node_tavily_search(state: MascotState) -> MascotState:
             ctx = invoke_tool("tavily_search", {"query": query})
         except Exception:
             ctx = ""
+    if search_image_gallery:
+        ctx = f"{ctx}\n\n【联网配图】已整理 {len(search_image_gallery)} 张相关图片，系统会在本条消息的图集入口展示。"
+    elif state.get("need_search_images"):
+        ctx = f"{ctx}\n\n【联网配图】本次没有检索到适合展示的相关图片。"
     prev = (state.get("mcp_context") or "").strip()
     if ctx and prev:
         merged = f"{prev}\n\n【联网检索参考】\n{ctx}"

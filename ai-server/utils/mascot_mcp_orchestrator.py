@@ -14,13 +14,22 @@ from config import settings
 from mcp.registry import invoke_tool
 from utils.datetime_context import build_datetime_context
 from utils.mascot_travel import merge_travel_plans, rule_travel_plan
-from utils.mcp_routing import assess_mcp_for_writing
+from utils.mcp_routing import (
+    assess_mcp_for_writing,
+    is_explicit_web_image_request,
+    is_tavily_search_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
 _AFFIRM_RE = re.compile(r"^(是的?|对|嗯|好|可以|想去|要去|走|行|没问题|ok|yes)[\s!！。~]*$", re.I)
 _TRAVEL_TOPIC_RE = re.compile(r"雪山|川西|西藏|新疆|云南|旅行|旅游|自驾|路线|出发|想去|行程|攻略", re.I)
 _LOCAL_WEATHER_RE = re.compile(r"天气|温度|下雨|降雨|带伞|穿什么|冷不冷|热不热|空气", re.I)
+_IMAGE_REQUEST_TERMS_RE = re.compile(
+    r"我(?:是)?说|请|帮我|给我|把|叫你|在|从|互联网上?|网络上?|联网|检索到的?|"
+    r"搜索到的?|搜索|搜|检索|抓取|展示|显示|看看|图片|图集|配图|照片|一下",
+    re.I,
+)
 
 
 def _parse_json(text: str) -> dict[str, Any] | None:
@@ -113,6 +122,22 @@ def _plan_reply_guidance() -> str:
     )
 
 
+def _web_image_search_query(message: str, history: list[dict[str, str]] | None) -> str:
+    """优先保留本轮主体；纯指令则继承最近一轮用户主题。"""
+    message = (message or "").strip()
+    subject = _IMAGE_REQUEST_TERMS_RE.sub("", message)
+    subject = re.sub(r"[，。！？、\s]+", "", subject)
+    if len(subject) >= 3:
+        return subject[:300]
+    for item in reversed(history or []):
+        if str(item.get("role") or "").lower() != "user":
+            continue
+        previous = str(item.get("content") or "").strip()
+        if previous:
+            return previous[:300]
+    return message[:300]
+
+
 def prepare_mascot_mcp_bundle(
     *,
     message: str,
@@ -122,7 +147,7 @@ def prepare_mascot_mcp_bundle(
     client_location: str | None = None,
 ) -> dict[str, Any]:
     """
-    返回 datetime_context, local_kb_snippet, mcp_context, need_mcp_search, mcp_query, mcp_used
+    返回 datetime_context, local_kb_snippet, mcp_context、联网搜索及图集请求信息。
     """
     datetime_ctx = build_datetime_context(client_datetime)
     out: dict[str, Any] = {
@@ -130,6 +155,7 @@ def prepare_mascot_mcp_bundle(
         "local_kb_snippet": "",
         "mcp_context": "",
         "need_mcp_search": False,
+        "need_search_images": False,
         "mcp_query": "",
         "mcp_used": False,
         "travel_phase": "none",
@@ -138,7 +164,14 @@ def prepare_mascot_mcp_bundle(
     ctx_parts: list[str] = [datetime_ctx]
 
     if skill == "writing":
-        need, query, snippet = assess_mcp_for_writing(message)
+        explicit_image_request = is_explicit_web_image_request(message)
+        if explicit_image_request:
+            need = is_tavily_search_enabled()
+            query = _web_image_search_query(message, history)
+            snippet = ""
+            out["need_search_images"] = need
+        else:
+            need, query, snippet = assess_mcp_for_writing(message)
         out["local_kb_snippet"] = snippet
         out["need_mcp_search"] = need
         out["mcp_query"] = query
