@@ -234,14 +234,14 @@
                   </button>
                 </div>
                 <button
-                  v-if="!isNotInterested"
+                  v-if="!isOwner && !isNotInterested"
                   type="button"
                   class="article-not-interested-trigger"
                   aria-label="不感兴趣"
                   :disabled="notInterestedSaving"
                   @click="openNotInterestedDialog"
                 >
-                  😞
+                  <el-icon :size="20"><CircleClose /></el-icon>
                 </button>
               </div>
               </div>
@@ -625,7 +625,8 @@
       v-model="notInterestedDialogVisible"
       width="min(420px, 92vw)"
       append-to-body
-      :z-index="5200"
+      :modal-append-to-body="true"
+      :z-index="13000"
       :show-close="false"
       class="not-interested-dialog"
     >

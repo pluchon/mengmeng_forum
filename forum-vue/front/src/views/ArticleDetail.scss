@@ -60,11 +60,20 @@
 .article-not-interested-trigger {
   flex: 0 0 auto;
   border: 0;
-  padding: 2px 0 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px 0 4px 8px;
   background: transparent;
-  font-size: 18px;
+  color: #8b95a7;
   line-height: 1;
   cursor: pointer;
+}
+
+.article-not-interested-trigger:hover {
+  color: #f56c6c;
 }
 
 .article-not-interested-trigger:disabled {

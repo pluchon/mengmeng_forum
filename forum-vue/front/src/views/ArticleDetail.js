@@ -2,6 +2,7 @@ import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
+import { CircleClose } from '@element-plus/icons-vue'
 import { useArticleDetail } from '@scripts/views/ArticleDetail'
 
 defineOptions({ name: 'ArticleDetail' })
