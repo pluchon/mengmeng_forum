@@ -18,6 +18,9 @@ public class AiRecommendationProfileResultVO {
     // 画像摘要
     private String summary;
 
+    // 应减少展示的主题及权重
+    private List<Map<String, Object>> avoidTopics;
+
     // 生成来源
     private String generatedBy;
 }

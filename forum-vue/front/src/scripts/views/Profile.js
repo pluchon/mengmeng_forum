@@ -20,6 +20,8 @@ import {
   getUserPublicGroupChats,
   joinPublicGroupChat,
 } from '@/api/groupChat'
+import { getNotInterestedArticles, restoreRecommendationInterested } from '@/api/recommendation'
+import { useNotInterestedArticleStore } from '@/stores/notInterestedArticle'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
@@ -38,6 +40,7 @@ export function useProfile() {
   const router = useRouter()
   const userStore = useUserStore()
   const messageCenterUi = useMessageCenterUiStore()
+  const notInterestedArticleStore = useNotInterestedArticleStore()
   const defaultAvatar = DEFAULT_AVATAR
   const defaultBg = clientOssUrl('profileb_back.webp')
 
@@ -88,6 +91,13 @@ export function useProfile() {
   const myGroupSessions = ref([])
   const joiningGroupId = ref(null)
 
+  const notInterestedArticles = ref([])
+  const notInterestedLoading = ref(false)
+  const notInterestedPageNum = ref(1)
+  const notInterestedTotal = ref(0)
+  const notInterestedPageInput = ref('1')
+  const notInterestedRestoringId = ref(null)
+
   const followingCount = ref(0)
   const followerCount = ref(0)
   const isFollowing = ref(false)
@@ -107,6 +117,9 @@ export function useProfile() {
     }
     if (tab === 'groups' && publicGroups.value.length === 0) {
       loadPublicGroups(1)
+    }
+    if (tab === 'not-interested' && isMe.value && notInterestedArticles.value.length === 0) {
+      loadNotInterestedArticles(1)
     }
   })
 
@@ -128,6 +141,10 @@ export function useProfile() {
 
   const publicGroupsTotalPages = computed(() =>
     Math.max(1, Math.ceil((publicGroupsTotal.value || 0) / PUBLIC_GROUP_PAGE_SIZE)),
+  )
+
+  const notInterestedTotalPages = computed(() =>
+    Math.max(1, Math.ceil((notInterestedTotal.value || 0) / PROFILE_PAGE_SIZE)),
   )
 
   const joinedGroupIds = computed(() =>
@@ -268,6 +285,9 @@ export function useProfile() {
     if (activeTab.value === 'groups') {
       await loadPublicGroups(1)
     }
+    if (activeTab.value === 'not-interested' && isMe.value) {
+      await loadNotInterestedArticles(1)
+    }
     await tryRestoreProfileState()
   })
 
@@ -361,6 +381,61 @@ export function useProfile() {
       }
     } finally {
       publicGroupsLoading.value = false
+    }
+  }
+
+  async function loadNotInterestedArticles(page = 1) {
+    if (!isMe.value) return
+    notInterestedPageNum.value = page
+    notInterestedPageInput.value = String(page)
+    notInterestedLoading.value = true
+    try {
+      const res = await getNotInterestedArticles({ pageNum: page, pageSize: PROFILE_PAGE_SIZE })
+      if (res.code === 0) {
+        notInterestedArticles.value = res.data?.records || []
+        notInterestedTotal.value = Number(res.data?.total) || 0
+      }
+    } finally {
+      notInterestedLoading.value = false
+    }
+  }
+
+  function goNotInterestedFirst() {
+    loadNotInterestedArticles(1)
+  }
+
+  function goNotInterestedPrev() {
+    if (notInterestedPageNum.value > 1) loadNotInterestedArticles(notInterestedPageNum.value - 1)
+  }
+
+  function goNotInterestedNext() {
+    if (notInterestedPageNum.value < notInterestedTotalPages.value) {
+      loadNotInterestedArticles(notInterestedPageNum.value + 1)
+    }
+  }
+
+  function jumpNotInterestedPage() {
+    const n = Number(notInterestedPageInput.value)
+    if (!Number.isFinite(n)) return
+    loadNotInterestedArticles(Math.min(notInterestedTotalPages.value, Math.max(1, Math.floor(n))))
+  }
+
+  async function restoreNotInterestedArticle(item) {
+    const articleId = item?.article?.id
+    if (!articleId || notInterestedRestoringId.value != null) return
+    notInterestedRestoringId.value = articleId
+    try {
+      const res = await restoreRecommendationInterested(articleId)
+      if (res.code !== 0) return
+      notInterestedArticleStore.restoreInterested(articleId)
+      notInterestedArticles.value = notInterestedArticles.value.filter(row => Number(row.article?.id) !== Number(articleId))
+      notInterestedTotal.value = Math.max(0, notInterestedTotal.value - 1)
+      ElMessage.success('已恢复兴趣')
+      if (notInterestedArticles.value.length === 0 && notInterestedPageNum.value > 1) {
+        await loadNotInterestedArticles(Math.min(notInterestedPageNum.value - 1, notInterestedTotalPages.value))
+      }
+    } finally {
+      notInterestedRestoringId.value = null
     }
   }
 
@@ -574,6 +649,9 @@ export function useProfile() {
     if (restoredTab === 'liked' && state.page) {
       await loadLikedArticles(Number(state.page) || 1)
     }
+    if (restoredTab === 'not-interested' && isMe.value && state.page) {
+      await loadNotInterestedArticles(Number(state.page) || 1)
+    }
     if (restoredTab === 'collect' && state.folderId) {
       if (!favoriteFolders.value.length) {
         await loadFavoriteFolders(Number(state.folderPage) || 1)
@@ -650,6 +728,13 @@ export function useProfile() {
     const id = item?.article?.id || item?.id
     if (!id) return
     saveProfileReturnState({ tab: 'liked', page: likedPageNum.value })
+    router.push({ path: `/article/${id}`, query: { from: 'profile' } })
+  }
+
+  function openArticleFromNotInterested(item) {
+    const id = item?.article?.id
+    if (!id) return
+    saveProfileReturnState({ tab: 'not-interested', page: notInterestedPageNum.value })
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
@@ -792,6 +877,9 @@ export function useProfile() {
     goNotesFirst,
     goNotesNext,
     goNotesPrev,
+    goNotInterestedFirst,
+    goNotInterestedNext,
+    goNotInterestedPrev,
     handleBgUpload,
     handleChat,
     toggleFollow,
@@ -804,12 +892,14 @@ export function useProfile() {
     jumpFavoriteFolderPage,
     jumpLikedPage,
     jumpNotesPage,
+    jumpNotInterestedPage,
     likedArticles,
     likedPageInput,
     likedPageNum,
     likedTotal,
     likedTotalPages,
     loadLikedArticles,
+    loadNotInterestedArticles,
     favoriteCreateForm,
     favoriteCreateSaving,
     favoriteCreateVisible,
@@ -829,8 +919,16 @@ export function useProfile() {
   notesPageInput,
     notesPageNum,
     notesTotalPages,
+    notInterestedArticles,
+    notInterestedLoading,
+    notInterestedPageInput,
+    notInterestedPageNum,
+    notInterestedRestoringId,
+    notInterestedTotal,
+    notInterestedTotalPages,
     openArticleFromFavorite,
     openArticleFromLiked,
+    openArticleFromNotInterested,
     openArticleFromNotes,
     openCreateFavoriteFolder,
     openFavoriteDialog,
@@ -850,6 +948,7 @@ export function useProfile() {
     jumpPublicGroupsPage,
     openPublicGroupCard,
     saveFavoriteFolder,
+    restoreNotInterestedArticle,
     startFavoriteFolderRename,
     toggleFavoriteFolderPublic,
     loading,

@@ -22,6 +22,12 @@ public class UserRecommendFeedback {
     // 帖子ID
     private Long articleId;
 
+    // 反馈原因编码
+    private String reasonCode;
+
+    // 用户补充原因
+    private String reasonDetail;
+
     // 逻辑删除状态
     private Byte deleteState;
 

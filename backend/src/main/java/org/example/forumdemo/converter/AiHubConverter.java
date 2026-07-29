@@ -89,6 +89,7 @@ public final class AiHubConverter {
         }
         vo.setFeatureVersion(stringVal(data.get("featureVersion")));
         vo.setTopics(mapList(data.get("topics")));
+        vo.setAvoidTopics(mapList(data.get("avoidTopics")));
         vo.setSummary(stringVal(data.get("summary")));
         vo.setGeneratedBy(stringVal(data.get("generatedBy")));
         return vo;

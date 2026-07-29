@@ -213,8 +213,9 @@
                   />
                 </div>
 
-                <div class="content-meta">
-                  <span class="content-meta__time">{{ formatForumDateTimeShanghai(article.createTime) }}</span>
+              <div class="content-meta">
+                <span class="content-meta__time">{{ formatForumDateTimeShanghai(article.createTime) }}</span>
+                <div class="article-detail-tags">
                   <span
                     v-for="t in visibleArticleTags"
                     :key="'at-' + t.id"
@@ -232,6 +233,17 @@
                     {{ tagsExpanded ? '< 收起' : `> 展开 +${hiddenArticleTagCount}` }}
                   </button>
                 </div>
+                <button
+                  v-if="!isOwner && !isNotInterested"
+                  type="button"
+                  class="article-not-interested-trigger"
+                  aria-label="不感兴趣"
+                  :disabled="notInterestedSaving"
+                  @click="openNotInterestedDialog"
+                >
+                  😞
+                </button>
+              </div>
               </div>
 
               <el-divider content-position="left">
@@ -607,6 +619,44 @@
           @click="confirmFavorite"
         >确定</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="notInterestedDialogVisible"
+      width="min(420px, 92vw)"
+      append-to-body
+      :z-index="5200"
+      :show-close="false"
+      class="not-interested-dialog"
+    >
+      <h2 class="not-interested-dialog-title">不感兴趣</h2>
+      <el-radio-group v-model="notInterestedReasonCode" class="not-interested-reason-list">
+        <el-radio
+          v-for="reason in notInterestedReasons"
+          :key="reason.code"
+          :value="reason.code"
+          class="not-interested-reason-option"
+        >
+          {{ reason.label }}
+        </el-radio>
+      </el-radio-group>
+      <el-input
+        v-model="notInterestedReasonDetail"
+        class="not-interested-reason-detail"
+        :disabled="notInterestedReasonCode !== 'OTHER'"
+        maxlength="200"
+        :rows="3"
+        resize="none"
+        type="textarea"
+      />
+      <el-button
+        type="primary"
+        class="not-interested-submit"
+        :loading="notInterestedSaving"
+        @click="submitNotInterested"
+      >
+        提交
+      </el-button>
     </el-dialog>
   </div>
 </template>

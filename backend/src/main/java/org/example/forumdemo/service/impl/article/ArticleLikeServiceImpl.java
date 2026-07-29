@@ -21,6 +21,7 @@ import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleLikeService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
+import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.example.forumdemo.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -54,6 +55,9 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
 
+    @Autowired
+    private RecommendationAiProfileService recommendationAiProfileService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void likeArticle(Long articleId, Long userId) {
@@ -74,6 +78,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
             syncUserLikeCacheOnLike(articleId, userId);
             articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_LIKE);
         });
+        recommendationAiProfileService.requestProfileRefresh(userId);
         log.info("用户 {} 点赞帖子 {}", userId, articleId);
     }
 
@@ -94,6 +99,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
             syncUserLikeCacheOnUnlike(articleId, userId);
             articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_LIKE);
         });
+        recommendationAiProfileService.requestProfileRefresh(userId);
         log.info("用户 {} 取消点赞帖子 {}", userId, articleId);
     }
 

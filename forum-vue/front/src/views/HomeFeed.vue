@@ -99,15 +99,7 @@
         </div>
       </div>
 
-      <div v-if="!loading && (feedList.length || showRecommendationInterestMask)" class="recommendation-feed-stage">
-        <section v-if="showRecommendationInterestMask" class="recommendation-interest-prompt" aria-label="选择内容偏好">
-          <div class="recommendation-interest-prompt__copy">
-            <span class="recommendation-interest-prompt__eyebrow">为你定制</span>
-            <h2>内容偏好</h2>
-            <p>选择几个内容方向，系统也会参考你的收藏、回复和关注。</p>
-          </div>
-          <el-button type="primary" round @click="openRecommendationPreferences">设置偏好</el-button>
-        </section>
+      <div v-if="!loading && feedList.length" class="recommendation-feed-stage">
         <div
           ref="masonryRef"
           class="home-masonry"
@@ -124,7 +116,10 @@
             >
               <el-card
                 class="note-card note-card--masonry"
-                :class="{ 'note-card--question': isQuestionArticle(entry.article) }"
+                :class="{
+                  'note-card--question': isQuestionArticle(entry.article),
+                  'note-card--not-interested': isNotInterestedArticle(entry.article?.id),
+                }"
                 :body-style="{ padding: '0px' }"
                 shadow="hover"
                 @click="openArticle(entry, $event)"
@@ -170,9 +165,6 @@
                     </span>
                   </div>
                   <h3 class="note-title">{{ entry.article?.title }}</h3>
-                  <div v-if="isRecommendationFeed && entry.recommendReason" class="recommendation-reason">
-                    {{ entry.recommendReason }}
-                  </div>
                   <div class="note-footer">
                     <div class="author">
                       <UserAvatarVip
@@ -190,24 +182,10 @@
                       <LikeCountIcon />
                       <span>{{ entry.article?.likeCount }}</span>
                     </div>
-                    <el-dropdown
-                      v-if="isRecommendationFeed && userStore.isLoggedIn"
-                      trigger="click"
-                      @command="hideRecommendedArticle(entry.article?.id)"
-                      @click.stop
-                    >
-                      <button type="button" class="recommendation-card-menu" aria-label="调整推荐内容" @click.stop>
-                        <el-icon><MoreFilled /></el-icon>
-                      </button>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="not-interested" :disabled="recommendationSaving">
-                            不想看这篇
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
                   </div>
+                </div>
+                <div v-if="isNotInterestedArticle(entry.article?.id)" class="note-card-not-interested-mask">
+                  不感兴趣
                 </div>
               </el-card>
             </div>
@@ -304,18 +282,11 @@
       </div>
 
       <el-empty
-        v-if="!loading && !feedError && !showRecommendationInterestMask && feedList.length === 0"
+        v-if="!loading && !feedError && feedList.length === 0"
         description="这里还没有帖子哦"
       />
     </main>
 
-    <InterestPreferenceDialog
-      v-model:visible="recommendationDialogVisible"
-      v-model:board-ids="recommendationDraftBoardIds"
-      :categories="categoriesWithId"
-      :saving="recommendationSaving"
-      @save="saveRecommendationPreferences"
-    />
   </div>
   <router-view />
 </template>

@@ -19,6 +19,7 @@ import org.example.forumdemo.entity.db.ArticleImage;
 import org.example.forumdemo.entity.db.ArticleLike;
 import org.example.forumdemo.entity.db.Board;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserRecommendFeedback;
 import org.example.forumdemo.entity.dto.article.PublishArticleRequest;
 import org.example.forumdemo.entity.dto.article.UpdateArticleRequest;
 import org.example.forumdemo.entity.dto.article.ValidateTextRequest;
@@ -35,6 +36,7 @@ import org.example.forumdemo.mapper.ArticleImageMapper;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
 import org.example.forumdemo.service.interfaces.article.ArticleAuditService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleMediaService;
@@ -73,6 +75,9 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private UserRecommendFeedbackMapper userRecommendFeedbackMapper;
 
     @Autowired
     private UserService userService;
@@ -127,6 +132,7 @@ public class ArticleServiceImpl implements ArticleService {
     /** 状态 / 删除标记：1 表示禁用 / 已删除 */
     private static final byte STATE_FORBIDDEN = 1;
     private static final byte DELETE_TRUE = 1;
+    private static final byte DELETE_FALSE = 0;
 
     // ============================================================
     // 草稿 / 发布
@@ -244,6 +250,11 @@ public class ArticleServiceImpl implements ArticleService {
         }
         ArticleDetailResponse resp = new ArticleDetailResponse(
                 new UserBriefVO(userInfo), articleInfo, boardInfo, isOwner, isLiked, isFavorited);
+        resp.setIsNotInterested(loginUserId != null && loginUserId > 0
+                && userRecommendFeedbackMapper.selectCount(new LambdaQueryWrapper<UserRecommendFeedback>()
+                        .eq(UserRecommendFeedback::getUserId, loginUserId)
+                        .eq(UserRecommendFeedback::getArticleId, articleId)
+                        .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)) > 0);
         resp.setImageUrls(articleMediaService.queryArticleImageUrls(articleId));
         resp.setTags(articleTagService.listByArticleId(articleId));
         return resp;

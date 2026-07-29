@@ -94,6 +94,15 @@
               >
                 群聊
               </button>
+              <button
+                v-if="isMe"
+                type="button"
+                class="profile-tab-btn"
+                :class="{ 'is-active': activeTab === 'not-interested' }"
+                @click="activeTab = 'not-interested'"
+              >
+                管理不感兴趣内容
+              </button>
             </nav>
             <div v-if="activeTab === 'notes'" class="profile-tab-post-count">
               <span class="profile-tab-post-count-val">{{ total }}</span>
@@ -102,6 +111,10 @@
             <div v-if="activeTab === 'liked'" class="profile-tab-post-count">
               <span class="profile-tab-post-count-val">{{ likedTotal }}</span>
               <span class="profile-tab-post-count-lab">点赞帖子</span>
+            </div>
+            <div v-if="activeTab === 'not-interested'" class="profile-tab-post-count">
+              <span class="profile-tab-post-count-val">{{ notInterestedTotal }}</span>
+              <span class="profile-tab-post-count-lab">不感兴趣帖子数</span>
             </div>
             <button
               v-if="activeTab === 'collect' && isMe"
@@ -297,6 +310,60 @@
               />
               <span class="profile-pager-sep">/ {{ publicGroupsTotalPages }}</span>
               <el-button size="small" :disabled="publicGroupsPageNum >= publicGroupsTotalPages" @click="goPublicGroupsNext">下一页</el-button>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'not-interested' && isMe" class="profile-content" v-loading="notInterestedLoading">
+            <el-row :gutter="20">
+              <el-col
+                v-for="item in notInterestedArticles"
+                :key="item.article?.id"
+                :xs="12"
+                :sm="8"
+                :md="6"
+              >
+                <el-card
+                  class="note-card note-card--outlined animate-fade-up"
+                  :body-style="{ padding: '0px' }"
+                  shadow="never"
+                  @click="openArticleFromNotInterested(item)"
+                >
+                  <div class="note-cover" :style="coverStyle(item.article)">
+                    <span v-if="!item.article?.coverImg" class="cover-text">{{ item.article?.title?.substring(0, 1) }}</span>
+                    <div v-if="Number(item.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
+                  </div>
+                  <div class="note-info">
+                    <h3 class="note-title">{{ item.article?.title }}</h3>
+                    <div class="profile-not-interested-card-footer">
+                      <span class="note-meta">
+                        <el-icon><Star /></el-icon>
+                        {{ item.article?.likeCount || 0 }}
+                      </span>
+                      <button
+                        type="button"
+                        class="profile-not-interested-restore"
+                        :disabled="Number(notInterestedRestoringId) === Number(item.article?.id)"
+                        @click.stop="restoreNotInterestedArticle(item)"
+                      >
+                        恢复兴趣
+                      </button>
+                    </div>
+                  </div>
+                </el-card>
+              </el-col>
+            </el-row>
+            <el-empty v-if="!notInterestedLoading && notInterestedArticles.length === 0" description="暂无不感兴趣帖子" />
+            <div v-if="notInterestedTotalPages > 1" class="profile-pager">
+              <el-button size="small" @click="goNotInterestedFirst">首页</el-button>
+              <el-button size="small" :disabled="notInterestedPageNum <= 1" @click="goNotInterestedPrev">上一页</el-button>
+              <el-input
+                v-model="notInterestedPageInput"
+                size="small"
+                class="profile-pager-input"
+                @keyup.enter="jumpNotInterestedPage"
+              />
+              <span class="profile-pager-sep">/ {{ notInterestedTotalPages }}</span>
+              <el-button size="small" :disabled="notInterestedPageNum >= notInterestedTotalPages" @click="goNotInterestedNext">下一页</el-button>
             </div>
           </div>
         </div>
@@ -509,6 +576,9 @@ const {
   goNotesFirst,
   goNotesNext,
   goNotesPrev,
+  goNotInterestedFirst,
+  goNotInterestedNext,
+  goNotInterestedPrev,
   handleBgUpload,
   handleChat,
   toggleFollow,
@@ -521,6 +591,7 @@ const {
   jumpFavoriteFolderPage,
   jumpLikedPage,
   jumpNotesPage,
+  jumpNotInterestedPage,
   likedArticles,
   likedPageInput,
   likedPageNum,
@@ -551,8 +622,16 @@ const {
   notesPageInput,
   notesPageNum,
   notesTotalPages,
+  notInterestedArticles,
+  notInterestedLoading,
+  notInterestedPageInput,
+  notInterestedPageNum,
+  notInterestedRestoringId,
+  notInterestedTotal,
+  notInterestedTotalPages,
   openArticleFromFavorite,
   openArticleFromLiked,
+  openArticleFromNotInterested,
   openArticleFromNotes,
   openCreateFavoriteFolder,
   openFavoriteDialog,
@@ -564,6 +643,7 @@ const {
   publicGroupsTotalPages,
   profileIpRegion,
   saveFavoriteFolder,
+  restoreNotInterestedArticle,
   startFavoriteFolderRename,
   toggleFavoriteFolderPublic,
   total,
@@ -587,3 +667,4 @@ function openFollowersList() {
 </script>
 
 <style scoped src="@/assets/styles/user.css"></style>
+<style scoped lang="scss" src="./Profile.scss"></style>

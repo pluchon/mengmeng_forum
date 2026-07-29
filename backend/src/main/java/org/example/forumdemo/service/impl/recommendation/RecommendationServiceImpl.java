@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.enums.RecommendationReasonType;
+import org.example.forumdemo.common.enums.RecommendationFeedbackReason;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
@@ -153,6 +154,14 @@ public class RecommendationServiceImpl implements RecommendationService {
         if (request == null || request.getArticleId() == null || request.getArticleId() <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        String reasonCode = request.getReasonCode() == null ? "" : request.getReasonCode().trim();
+        if (!RecommendationFeedbackReason.isSupported(reasonCode)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        String reasonDetail = request.getReasonDetail() == null ? null : request.getReasonDetail().trim();
+        if (reasonDetail != null && reasonDetail.isEmpty()) {
+            reasonDetail = null;
+        }
         Article article = articleMapper.selectOne(visibleArticleWrapper(loginUserId, Set.of())
                 .eq(Article::getId, request.getArticleId()));
         if (article == null) {
@@ -165,13 +174,81 @@ public class RecommendationServiceImpl implements RecommendationService {
             UserRecommendFeedback record = new UserRecommendFeedback();
             record.setUserId(loginUserId);
             record.setArticleId(request.getArticleId());
+            record.setReasonCode(reasonCode);
+            record.setReasonDetail(reasonDetail);
             record.setDeleteState(DELETE_FALSE);
             feedbackMapper.insert(record);
+            recommendationAiProfileService.requestProfileRefresh(loginUserId);
             return;
         }
         feedbackMapper.update(null, new LambdaUpdateWrapper<UserRecommendFeedback>()
                 .eq(UserRecommendFeedback::getId, existing.getId())
+                .set(UserRecommendFeedback::getReasonCode, reasonCode)
+                .set(UserRecommendFeedback::getReasonDetail, reasonDetail)
                 .set(UserRecommendFeedback::getDeleteState, DELETE_FALSE));
+        recommendationAiProfileService.requestProfileRefresh(loginUserId);
+    }
+
+    @Override
+    public PageResult<RecommendArticleVO> getNotInterestedArticles(Long loginUserId, Integer pageNum, Integer pageSize) {
+        requireUserId(loginUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        Page<UserRecommendFeedback> feedbackPage = feedbackMapper.selectPage(new Page<>(validPageNum, validPageSize),
+                new LambdaQueryWrapper<UserRecommendFeedback>()
+                        .eq(UserRecommendFeedback::getUserId, loginUserId)
+                        .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)
+                        .orderByDesc(UserRecommendFeedback::getUpdateTime)
+                        .orderByDesc(UserRecommendFeedback::getId));
+        List<UserRecommendFeedback> feedbackRecords = feedbackPage.getRecords();
+        if (feedbackRecords.isEmpty()) {
+            return new PageResult<>(List.of(), feedbackPage.getTotal(), validPageNum, validPageSize,
+                    feedbackPage.getPages(), feedbackPage.hasNext());
+        }
+        List<Long> articleIds = feedbackRecords.stream().map(UserRecommendFeedback::getArticleId).toList();
+        Map<Long, Article> articles = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                        .in(Article::getId, articleIds)
+                        .eq(Article::getDeleteState, DELETE_FALSE)
+                        .eq(Article::getState, STATE_ENABLED)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Article::getId, item -> item));
+        Set<Long> authorIds = articles.values().stream().map(Article::getUserId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, User> users = authorIds.isEmpty() ? Map.of() : userMapper.selectList(new LambdaQueryWrapper<User>()
+                        .in(User::getId, authorIds)
+                        .eq(User::getDeleteState, DELETE_FALSE)
+                        .eq(User::getState, STATE_ENABLED))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(User::getId, item -> item));
+        List<RecommendArticleVO> records = new ArrayList<>();
+        for (UserRecommendFeedback feedback : feedbackRecords) {
+            Article article = articles.get(feedback.getArticleId());
+            User author = article == null ? null : users.get(article.getUserId());
+            if (article == null || author == null) {
+                continue;
+            }
+            RecommendArticleVO response = new RecommendArticleVO();
+            response.setArticle(article);
+            response.setUser(new UserBriefVO(author));
+            records.add(response);
+        }
+        return new PageResult<>(records, feedbackPage.getTotal(), validPageNum, validPageSize,
+                feedbackPage.getPages(), feedbackPage.hasNext());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreInterested(Long loginUserId, Long articleId) {
+        requireUserId(loginUserId);
+        if (articleId == null || articleId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        feedbackMapper.update(null, new LambdaUpdateWrapper<UserRecommendFeedback>()
+                .eq(UserRecommendFeedback::getUserId, loginUserId)
+                .eq(UserRecommendFeedback::getArticleId, articleId)
+                .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)
+                .set(UserRecommendFeedback::getDeleteState, DELETE_TRUE));
+        recommendationAiProfileService.requestProfileRefresh(loginUserId);
     }
 
     private List<Candidate> rankCandidates(List<Candidate> candidates, int expectedSize, int pageSize) {
@@ -260,19 +337,9 @@ public class RecommendationServiceImpl implements RecommendationService {
             RecommendArticleVO response = new RecommendArticleVO();
             response.setArticle(candidate.getArticle());
             response.setUser(new UserBriefVO(author));
-            response.setFromFollowing(followingIds.contains(candidate.getArticle().getUserId()));
-            response.setRecommendReasonType(candidate.getReason().getCode());
-            response.setRecommendReason(resolveReason(candidate.getReason(), boardNames.get(candidate.getArticle().getBoardId())));
             result.add(response);
         }
         return result;
-    }
-
-    private String resolveReason(RecommendationReasonType reason, String boardName) {
-        if (reason == RecommendationReasonType.INTEREST && boardName != null) {
-            return "因为你选择了「" + boardName + "」";
-        }
-        return reason.getMessage();
     }
 
     private void addBoardCandidates(Map<Long, Candidate> candidateMap, List<Article> articles,
@@ -344,7 +411,8 @@ public class RecommendationServiceImpl implements RecommendationService {
             return;
         }
         Map<String, Double> userTopics = recommendationAiProfileService.getActiveTopicWeights(userId);
-        if (userTopics.isEmpty()) {
+        Map<String, Double> avoidTopics = recommendationAiProfileService.getAvoidTopicWeights(userId);
+        if (userTopics.isEmpty() && avoidTopics.isEmpty()) {
             return;
         }
         List<ForumArticleAiFeature> features = articleFeatureMapper.selectList(new LambdaQueryWrapper<ForumArticleAiFeature>()
@@ -359,6 +427,10 @@ public class RecommendationServiceImpl implements RecommendationService {
             double overlap = calculateTopicOverlap(userTopics, feature.getFeatureJson());
             if (overlap > 0D) {
                 mergeCandidate(candidateMap, candidate.getArticle(), RecommendationReasonType.AI_PROFILE, overlap * 18D);
+            }
+            double avoidOverlap = calculateTopicOverlap(avoidTopics, feature.getFeatureJson());
+            if (avoidOverlap > 0D) {
+                candidate.addScore(-avoidOverlap * 20D);
             }
         }
     }

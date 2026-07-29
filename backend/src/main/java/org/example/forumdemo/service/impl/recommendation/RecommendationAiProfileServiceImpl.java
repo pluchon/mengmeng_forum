@@ -15,6 +15,7 @@ import org.example.forumdemo.entity.db.Board;
 import org.example.forumdemo.entity.db.ForumArticleAiFeature;
 import org.example.forumdemo.entity.db.ForumUserAiProfileSnapshot;
 import org.example.forumdemo.entity.db.UserInterestPreference;
+import org.example.forumdemo.entity.db.UserRecommendFeedback;
 import org.example.forumdemo.entity.dto.ai.AiRecommendationArticleFeatureRequest;
 import org.example.forumdemo.entity.dto.ai.AiRecommendationProfileRequest;
 import org.example.forumdemo.entity.vo.ai.AiRecommendationFeatureResultVO;
@@ -27,6 +28,7 @@ import org.example.forumdemo.mapper.BoardMapper;
 import org.example.forumdemo.mapper.ForumArticleAiFeatureMapper;
 import org.example.forumdemo.mapper.ForumUserAiProfileSnapshotMapper;
 import org.example.forumdemo.mapper.UserInterestPreferenceMapper;
+import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +78,9 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
 
     @Autowired
     private UserInterestPreferenceMapper preferenceMapper;
+
+    @Autowired
+    private UserRecommendFeedbackMapper feedbackMapper;
 
     @Autowired
     private ForumArticleAiFeatureMapper articleFeatureMapper;
@@ -189,13 +194,22 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
 
     @Override
     public Map<String, Double> getActiveTopicWeights(Long userId) {
+        return getProfileTopicWeights(userId, "topics");
+    }
+
+    @Override
+    public Map<String, Double> getAvoidTopicWeights(Long userId) {
+        return getProfileTopicWeights(userId, "avoidTopics");
+    }
+
+    private Map<String, Double> getProfileTopicWeights(Long userId, String fieldName) {
         ForumUserAiProfileSnapshot snapshot = findProfileSnapshot(userId);
         if (snapshot == null || snapshot.getProfileJson() == null || snapshot.getProfileJson().isBlank()) {
             return Map.of();
         }
         try {
             Map<String, Object> profile = objectMapper.readValue(snapshot.getProfileJson(), new TypeReference<>() { });
-            return normalizedTopicWeights(profile.get("topics"));
+            return normalizedTopicWeights(profile.get(fieldName));
         } catch (Exception e) {
             log.warn("用户画像解析失败 userId={}", userId);
             return Map.of();
@@ -210,21 +224,26 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
             }
             SignalWindow window = collectSignals(userId);
             List<String> explicitBoards = listExplicitBoardNames(userId);
-            if (explicitBoards.isEmpty() && window.recent7().isEmpty() && window.recent14().isEmpty()) {
+            if (explicitBoards.isEmpty() && window.recent7().isEmpty() && window.recent14().isEmpty()
+                    && window.negativeRecent7().isEmpty() && window.negativeRecent14().isEmpty()) {
                 return;
             }
             AiRecommendationProfileRequest request = new AiRecommendationProfileRequest();
             request.setExplicitBoards(explicitBoards);
             request.setRecent7(window.recent7());
             request.setRecent14(window.recent14());
+            request.setNegativeRecent7(window.negativeRecent7());
+            request.setNegativeRecent14(window.negativeRecent14());
             AiRecommendationProfileResultVO result = aiHubService.generateRecommendationProfile(userId, request);
-            if (result == null || result.getTopics() == null || result.getTopics().isEmpty()) {
+            if (result == null || ((result.getTopics() == null || result.getTopics().isEmpty())
+                    && (result.getAvoidTopics() == null || result.getAvoidTopics().isEmpty()))) {
                 return;
             }
             Date now = new Date();
             ForumUserAiProfileSnapshot snapshot = findProfileSnapshot(userId);
             String profileJson = objectMapper.writeValueAsString(Map.of(
-                    "topics", result.getTopics(),
+                    "topics", result.getTopics() == null ? List.of() : result.getTopics(),
+                    "avoidTopics", result.getAvoidTopics() == null ? List.of() : result.getAvoidTopics(),
                     "summary", result.getSummary() == null ? "" : result.getSummary()));
             upsertProfile(snapshot, userId, profileJson, result, now);
         } catch (Exception e) {
@@ -307,7 +326,68 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
                         .ge(ArticleReply::getCreateTime, since)
                         .select(ArticleReply::getArticleId, ArticleReply::getCreateTime))
                 .forEach(item -> addSignal(recent7, recent14, item.getArticleId(), item.getCreateTime(), 3D));
-        return new SignalWindow(toBoardSignals(recent7), toBoardSignals(recent14));
+        List<UserRecommendFeedback> feedbacks = feedbackMapper.selectList(new LambdaQueryWrapper<UserRecommendFeedback>()
+                .eq(UserRecommendFeedback::getUserId, userId)
+                .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)
+                .ge(UserRecommendFeedback::getUpdateTime, since)
+                .select(UserRecommendFeedback::getArticleId, UserRecommendFeedback::getReasonCode,
+                        UserRecommendFeedback::getReasonDetail, UserRecommendFeedback::getUpdateTime));
+        Map<Long, List<String>> negativeRecent7 = new HashMap<>();
+        Map<Long, List<String>> negativeRecent14 = new HashMap<>();
+        for (UserRecommendFeedback feedback : feedbacks) {
+            addNegativeSignal(negativeRecent7, negativeRecent14, feedback);
+        }
+        return new SignalWindow(toBoardSignals(recent7), toBoardSignals(recent14),
+                toNegativeBoardSignals(negativeRecent7), toNegativeBoardSignals(negativeRecent14));
+    }
+
+    private void addNegativeSignal(Map<Long, List<String>> recent7, Map<Long, List<String>> recent14,
+            UserRecommendFeedback feedback) {
+        if (feedback.getArticleId() == null || feedback.getUpdateTime() == null) {
+            return;
+        }
+        long age = Math.max(0L, System.currentTimeMillis() - feedback.getUpdateTime().getTime());
+        Map<Long, List<String>> target = age <= SEVEN_DAYS_MILLIS ? recent7
+                : (age <= FOURTEEN_DAYS_MILLIS ? recent14 : null);
+        if (target == null) {
+            return;
+        }
+        String detail = feedback.getReasonDetail();
+        String reason = feedback.getReasonCode() == null ? "UNRELATED" : feedback.getReasonCode();
+        String signal = detail == null || detail.isBlank() ? reason : reason + ":" + detail.trim();
+        target.computeIfAbsent(feedback.getArticleId(), key -> new ArrayList<>()).add(signal);
+    }
+
+    private List<Map<String, Object>> toNegativeBoardSignals(Map<Long, List<String>> feedbackByArticleId) {
+        if (feedbackByArticleId.isEmpty()) {
+            return List.of();
+        }
+        List<Article> articles = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                .in(Article::getId, feedbackByArticleId.keySet())
+                .eq(Article::getDeleteState, DELETE_FALSE)
+                .select(Article::getId, Article::getBoardId));
+        Map<Long, String> boardNames = boardMapper.selectList(new LambdaQueryWrapper<Board>()
+                        .in(Board::getId, articles.stream().map(Article::getBoardId).distinct().toList())
+                        .eq(Board::getDeleteState, DELETE_FALSE)
+                        .eq(Board::getState, STATE_ENABLED)
+                        .select(Board::getId, Board::getName))
+                .stream().collect(java.util.stream.Collectors.toMap(Board::getId, Board::getName));
+        Map<String, List<String>> reasonsByBoard = new HashMap<>();
+        for (Article article : articles) {
+            String boardName = boardNames.get(article.getBoardId());
+            if (boardName != null) {
+                reasonsByBoard.computeIfAbsent(boardName, key -> new ArrayList<>())
+                        .addAll(feedbackByArticleId.getOrDefault(article.getId(), List.of()));
+            }
+        }
+        return reasonsByBoard.entrySet().stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((Map.Entry<String, List<String>> entry) -> entry.getValue().size())
+                        .reversed())
+                .limit(8)
+                .map(entry -> Map.<String, Object>of("board", entry.getKey(), "score", entry.getValue().size(),
+                        "reasons", entry.getValue().stream().limit(3).toList()))
+                .toList();
     }
 
     private List<Map<String, Object>> toBoardSignals(Map<Long, Double> articleScores) {
@@ -450,6 +530,7 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
         });
     }
 
-    private record SignalWindow(List<Map<String, Object>> recent7, List<Map<String, Object>> recent14) {
+    private record SignalWindow(List<Map<String, Object>> recent7, List<Map<String, Object>> recent14,
+            List<Map<String, Object>> negativeRecent7, List<Map<String, Object>> negativeRecent14) {
     }
 }
