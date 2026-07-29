@@ -18,12 +18,15 @@ read_env() {
 wait_rabbitmq() {
   local i
   for i in $(seq 1 90); do
-    if docker exec forum-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+    # ping 只代表 Erlang 运行时可连通；用户与 vhost 管理必须等待 RabbitMQ 应用本身启动完成。
+    if docker exec forum-rabbitmq rabbitmq-diagnostics -q check_running >/dev/null 2>&1; then
+      echo "RabbitMQ application ready"
       return 0
     fi
     sleep 2
   done
-  echo "ERROR: RabbitMQ not ready"
+  echo "ERROR: RabbitMQ application did not become ready within 180 seconds"
+  docker logs --tail 100 forum-rabbitmq >&2 || true
   return 1
 }
 
