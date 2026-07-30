@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -26,12 +27,27 @@ from workers import audit_worker
 
 
 def _setup_logging() -> None:
-    level_name = (settings.logging_cfg.get("level") or "INFO").upper()
-    level = getattr(logging, level_name, logging.INFO)
+    logging_cfg = settings.logging_cfg
+    level_name = (logging_cfg.get("level") or "WARNING").upper()
+    level = getattr(logging, level_name, logging.WARNING)
+    log_file = Path(logging_cfg.get("file") or "../logs/ai-server/ai-server.log")
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=int(logging_cfg.get("max_bytes") or 20 * 1024 * 1024),
+        backupCount=int(logging_cfg.get("backup_count") or 14),
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[stream_handler, file_handler],
+        force=True,
     )
+    logging.getLogger("werkzeug").setLevel(level)
 
 
 def create_app() -> Flask:
@@ -67,7 +83,6 @@ def main() -> None:
     server = settings.server
     host = server.get("host", "0.0.0.0")
     port = int(server.get("port", 5000))
-    logger.info("ai-server 启动, 监听 %s:%d", host, port)
     app.run(host=host, port=port, debug=False, use_reloader=False)
 
 
