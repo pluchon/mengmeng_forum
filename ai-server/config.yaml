@@ -7,7 +7,10 @@ server:
   port: 5000
 
 logging:
-  level: INFO
+  level: WARNING
+  file: ../logs/ai-server/ai-server.log
+  max_bytes: 20971520
+  backup_count: 14
 
 dashscope:
   api_key: ""

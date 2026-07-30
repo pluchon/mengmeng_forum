@@ -14,7 +14,7 @@ services:
       - ./conf.d:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro
       - ./dist/user:/usr/share/nginx/user:ro
-      - ./logs:/var/log/nginx
+      - ${FORUM_LOG_DIR:-../logs}/nginx:/var/log/nginx
     depends_on:
       backend-1:
         condition: service_healthy
@@ -75,7 +75,7 @@ services:
       retries: 12
       start_period: 90s
     volumes:
-      - ./logs/backend:/app/logs
+      - ${FORUM_LOG_DIR:-../logs}/backend:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -96,7 +96,7 @@ services:
     restart: unless-stopped
     environment: *backend_env
     volumes:
-      - ./logs/backend:/app/logs
+      - ${FORUM_LOG_DIR:-../logs}/backend:/app/logs
     depends_on:
       mysql:
         condition: service_started
@@ -137,6 +137,8 @@ services:
       OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
       FORUM_FFMPEG_URL: http://ffmpeg:8099
       FORUM_BACKEND_BASE_URL: http://backend-1:8080
+    volumes:
+      - ${FORUM_LOG_DIR:-../logs}/ai-server:/var/log/forum
     depends_on:
       postgres:
         condition: service_healthy
@@ -158,6 +160,9 @@ services:
       FFMPEG_INTERNAL_KEY: ${FORUM_FFMPEG_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       FFMPEG_REQUIRE_INTERNAL_KEY: ${FFMPEG_REQUIRE_INTERNAL_KEY:-1}
       OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
+      FFMPEG_LOG_FILE: /var/log/forum/ffmpeg.log
+    volumes:
+      - ${FORUM_LOG_DIR:-../logs}/ffmpeg:/var/log/forum
     networks:
       - forum-net
 

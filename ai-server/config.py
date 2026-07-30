@@ -251,4 +251,3 @@ class Settings:
 
 
 settings = Settings(_load())
-logger.info("加载配置完成: %s", _CONFIG_PATH)

@@ -8,5 +8,4 @@ COPY server.py /app/server.py
 
 EXPOSE 8099
 
-CMD ["gunicorn","-b","0.0.0.0:8099","server:app","--workers","1","--threads","1","--timeout","3600"]
-
+CMD ["gunicorn","-b","0.0.0.0:8099","server:app","--workers","1","--threads","1","--timeout","3600","--log-level","warning"]

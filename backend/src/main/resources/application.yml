@@ -121,3 +121,16 @@ forum:
       turn-credential: ${FORUM_VOICE_TURN_CREDENTIAL:}
       turn-secret: ${FORUM_VOICE_TURN_SECRET:}
       turn-ttl-seconds: ${FORUM_VOICE_TURN_TTL_SECONDS:3600}
+
+logging:
+  level:
+    root: WARN
+    org.example.forumdemo: WARN
+  file:
+    name: ${LOG_FILE:../logs/backend/forum-backend.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE:../logs/backend/forum-backend.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 500MB

@@ -48,7 +48,6 @@ function Normalize-UnixLf {
 
 if (Test-Path $pkg) { Remove-Item -Recurse -Force $pkg }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $pkg "logs") | Out-Null
 
 Require-Path (Join-Path $nginxRoot "dist\user\index.html") "front dist index.html"
 Require-Path (Join-Path $nginxRoot "conf.d") "nginx conf.d"
@@ -144,6 +143,7 @@ $startSh = @'
 set -euo pipefail
 cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.prod.yml"
+LOG_ROOT="${FORUM_LOG_DIR:-../logs}"
 echo "Forum package release: 20260722-mq-healthcheck-v2"
 
 fix_crlf() {
@@ -153,7 +153,7 @@ fix_crlf() {
 }
 fix_crlf
 
-mkdir -p logs/backend
+mkdir -p "$LOG_ROOT"/backend "$LOG_ROOT"/ai-server "$LOG_ROOT"/ffmpeg "$LOG_ROOT"/nginx
 test -f .env || { echo "ERROR: missing .env in package/"; exit 1; }
 if grep -q 'CHANGE_ME' .env 2>/dev/null; then
   echo "WARN: .env still has CHANGE_ME placeholders (JWT_SECRET / PII_CRYPTO_SECRET must be real)"
@@ -167,11 +167,7 @@ if [[ -f ./verify-frontend-dist.sh ]]; then
   ./verify-frontend-dist.sh .
 fi
 chmod -R a+rX dist conf.d ssl 2>/dev/null || true
-if [[ -d logs ]]; then
-  chmod -R a+rX logs 2>/dev/null || sudo rm -rf logs
-fi
-mkdir -p logs/backend
-chown -R 1000:1000 logs/backend 2>/dev/null || chmod -R 777 logs/backend 2>/dev/null || true
+chmod -R u=rwX,go= "$LOG_ROOT"
 
 echo "==> docker load"
 docker load -i images/forum-backend.tar
@@ -180,6 +176,10 @@ docker load -i images/infra.tar
 for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx:1.30.1; do
   docker image inspect "$img" >/dev/null 2>&1 || { echo "ERROR: image missing after load: $img"; exit 1; }
 done
+docker run --rm --user 0 \
+  -v "$(cd "$LOG_ROOT/backend" && pwd):/app/logs" \
+  --entrypoint /bin/sh forum-backend:latest \
+  -c 'chown -R 1000:1000 /app/logs'
 
 read_env() {
   local k="$1" line v
@@ -317,7 +317,9 @@ $collectLogsSh = @'
 set -euo pipefail
 cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.prod.yml"
-OUT="logs-collect-$(date +%Y%m%d-%H%M%S).txt"
+LOG_ROOT="${FORUM_LOG_DIR:-../logs}"
+mkdir -p "$LOG_ROOT"
+OUT="$LOG_ROOT/logs-collect-$(date +%Y%m%d-%H%M%S).txt"
 {
   echo "=== $(date -Iseconds) compose ps ==="
   $COMPOSE ps -a
@@ -347,7 +349,7 @@ $deployTxt = @'
 【A】服务器 — 停旧栈并删数据卷（要重建库表时必做）
   cd ~/package
   docker compose -f docker-compose.yaml -f docker-compose.prod.yml down -v
-  sudo rm -rf logs
+  # 日志位于 ../logs，不随 package 替换或 down -v 删除。
   # 若整包替换：可先备份 ssl/ 与 .env
 
 【B】本机 — 打包（PowerShell）
@@ -377,7 +379,7 @@ $deployTxt = @'
 
 【F】线上排错（勿用 docker-compose.dev.yaml，package 内没有该文件）
   bash collect-logs.sh
-  # 把生成的 logs-collect-*.txt 发给开发排查
+  # 把 ../logs/logs-collect-*.txt 发给开发排查
 
 镜像均在 images/*.tar 内，含 forum-ffmpeg，勿依赖 docker pull。
 

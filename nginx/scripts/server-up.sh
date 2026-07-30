@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.prod.yml"
+LOG_ROOT="${FORUM_LOG_DIR:-../logs}"
 echo "Forum package release: 20260722-mq-healthcheck-v2"
 
 read_env() {
@@ -59,8 +60,8 @@ done
 test -f .env || { echo "ERROR: missing .env in package/"; exit 1; }
 
 chmod -R a+rX dist conf.d ssl 2>/dev/null || true
-mkdir -p logs/backend
-chmod -R a+rX logs 2>/dev/null || true
+mkdir -p "$LOG_ROOT"/backend "$LOG_ROOT"/ai-server "$LOG_ROOT"/ffmpeg "$LOG_ROOT"/nginx
+chmod -R u=rwX,go= "$LOG_ROOT"
 
 if [[ -f ./verify-frontend-dist.sh ]]; then
   chmod +x ./verify-frontend-dist.sh
@@ -85,6 +86,11 @@ for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx
     exit 1
   }
 done
+
+docker run --rm --user 0 \
+  -v "$(cd "$LOG_ROOT/backend" && pwd):/app/logs" \
+  --entrypoint /bin/sh forum-backend:latest \
+  -c 'chown -R 1000:1000 /app/logs'
 
 echo "==> compose middleware"
 $COMPOSE up -d mysql redis rabbitmq postgres ffmpeg

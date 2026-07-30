@@ -5,17 +5,38 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import shutil
 import subprocess
 import tempfile
 import threading
-import time
 from functools import wraps
 
 from flask import Flask, Response, abort, jsonify, request
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+_local_log_file = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "logs", "ffmpeg", "ffmpeg.log")
+)
+_log_file = os.getenv("FFMPEG_LOG_FILE", _local_log_file)
+_log_path = os.path.dirname(_log_file)
+if _log_path:
+    os.makedirs(_log_path, exist_ok=True)
+_log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_stream_handler = logging.StreamHandler()
+_stream_handler.setFormatter(_log_formatter)
+_file_handler = RotatingFileHandler(
+    _log_file,
+    maxBytes=20 * 1024 * 1024,
+    backupCount=14,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(_log_formatter)
+logging.basicConfig(
+    level=logging.WARNING,
+    handlers=[_stream_handler, _file_handler],
+    force=True,
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -206,19 +227,10 @@ def compress() -> Response:
     tmp_dir = tempfile.mkdtemp(prefix="ffmpeg-")
     in_path = os.path.join(tmp_dir, "in")
     out_path = os.path.join(tmp_dir, "out.mp4")
-    t0 = time.perf_counter()
     try:
         f.save(in_path)
-        in_mb = os.path.getsize(in_path) / 1024 / 1024
         probe = _probe(in_path)
         mode = "remux" if _can_remux_copy(probe) else "reencode"
-        logger.info(
-            "compress start name=%s in=%.1fMB mode=%s",
-            f.filename,
-            in_mb,
-            mode,
-        )
-
         _transcode(in_path, out_path, mode=mode, probe=probe)
 
         if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
@@ -227,15 +239,6 @@ def compress() -> Response:
 
         with open(out_path, "rb") as out_f:
             data = out_f.read()
-        out_mb = len(data) / 1024 / 1024
-        logger.info(
-            "compress done name=%s mode=%s in=%.1fMB out=%.1fMB elapsed=%.1fs",
-            f.filename,
-            mode,
-            in_mb,
-            out_mb,
-            time.perf_counter() - t0,
-        )
         return Response(data, mimetype="video/mp4")
     except subprocess.TimeoutExpired:
         logger.error("compress timeout name=%s", f.filename)
@@ -330,4 +333,3 @@ def extract_audit_frames() -> Response:
         return jsonify({"frames": frames_b64, "count": len(frames_b64)})
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-
