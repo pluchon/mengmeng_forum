@@ -1,0 +1,21 @@
+package org.pluchon.forum.service.interfaces.article;
+
+import org.pluchon.forum.entity.vo.article.ArticleListByLikeResponse;
+import org.pluchon.forum.entity.vo.common.PageResult;
+
+/**
+ * 帖子点赞模块
+ */
+public interface ArticleLikeService {
+
+    void likeArticle(Long articleId, Long userId);
+
+    void unlikeArticle(Long articleId, Long userId);
+
+    // 当前用户点赞过的帖子列表（分页）
+    PageResult<ArticleListByLikeResponse> queryArticleListForLikeWithPage(Long userId, Integer pageNum, Integer pageSize);
+
+    // 指定用户点赞过的公开帖子列表（分页）
+    PageResult<ArticleListByLikeResponse> queryUserArticleListForLikeWithPage(Long userId, Integer pageNum, Integer pageSize);
+
+}
