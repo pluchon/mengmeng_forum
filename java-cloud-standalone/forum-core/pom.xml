@@ -23,6 +23,30 @@
             <groupId>org.example.forum</groupId>
             <artifactId>forum-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-auth-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-content-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-economy-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-im-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-game-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.example.forum</groupId>
+            <artifactId>forum-ai-api</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

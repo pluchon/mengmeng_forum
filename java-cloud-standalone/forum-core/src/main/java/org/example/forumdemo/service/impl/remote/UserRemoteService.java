@@ -4,6 +4,7 @@ import org.example.forumdemo.cloud.feign.UserInternalFeignClient;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.converter.UserInternalConverter;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;
 import org.example.forumdemo.entity.dto.user.UserLoginRequest;
@@ -14,7 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-// 非 auth 域通过 Feign 访问用户查询与发帖计数
+// 非 auth 域通过 Feign 访问用户查询与发帖计数（契约为 UserInternalVO）
 @Service
 @ConditionalOnProperty(name = "forum.domain")
 @ConditionalOnExpression("!'auth'.equals('${forum.domain}') && !'monolith'.equals('${forum.domain}')")
@@ -25,12 +26,12 @@ public class UserRemoteService implements UserService {
 
     @Override
     public User queryUserByUserName(String userName) {
-        return userInternalFeignClient.getByUsername(userName);
+        return UserInternalConverter.toUserShell(userInternalFeignClient.getByUsername(userName));
     }
 
     @Override
     public User queryUserByUserId(Long userId) {
-        return userInternalFeignClient.getById(userId);
+        return UserInternalConverter.toUserShell(userInternalFeignClient.getById(userId));
     }
 
     @Override
@@ -60,7 +61,7 @@ public class UserRemoteService implements UserService {
 
     @Override
     public User getUserInfoById(Long userId) {
-        return userInternalFeignClient.getById(userId);
+        return UserInternalConverter.toUserShell(userInternalFeignClient.getById(userId));
     }
 
     @Override
