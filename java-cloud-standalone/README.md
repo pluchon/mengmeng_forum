@@ -22,13 +22,19 @@ Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025
 ## 边界约定
 
 - **HTTP**：各域 Controller 物理归属对应可启动模块。
-- **业务 Bean**：`DomainServicePruner` 按 `forum.domain` 只装载本域 `service.impl.*`；登录鉴权、WS Redis 推送、AiHub（Python 客户端）等基础设施跨进程保留。
-- **跨域写读**：
-  - 积分 → `PointsFeignClient` / `PointsFeignService` → `forum-economy`
-  - 用户查询/发帖计数 → `UserInternalFeignClient` / `UserRemoteService` → `forum-auth`
-  - 成长建档/正式用户校验 → `GrowthInternalFeignClient` / `GrowthRemoteService` → `forum-economy`
-  - 系统消息创建 → `SystemMessageInternalFeignClient` / `SystemMessageRemoteService` → `forum-im`
-- **共享库**：Entity / Mapper / Service 接口仍在 `forum-core`（同库策略）。
+- **业务 Bean**：`DomainServicePruner` 按 `forum.domain` 只装载本域 `service.impl.*`；另保留少量共享实现（登录鉴权、关注读、AiHub、FileService、热帖分、VipCenter、WS Redis 推送、Feign remote）。
+- **跨域写读（Feign）**：
+  - 积分 → `PointsFeignClient` → `forum-economy`
+  - 用户查询/发帖计数 → `UserInternalFeignClient` → `forum-auth`
+  - 成长建档/正式用户校验 → `GrowthInternalFeignClient` → `forum-economy`
+  - 系统消息创建 → `SystemMessageInternalFeignClient` → `forum-im`
+- **WebSocket**：`/ws/notify` 仅 `forum-im`；游戏 WS 由 `game-runtime` 独立装配。
+- **共享库**：Entity / Mapper / Service 接口仍在 `forum-core`（同库策略下不强制物理搬迁 Service 源码）。
+- **原 `backend/`**：完整保留，互不删除。
+
+## 冒烟（Gateway :10086）
+
+已验证：七服务端口监听、登录（验证码票据）、`/points/wallet`、`/growth/overview`、`/user/getUserByIdForLogin`、`/article/getHotArticleList`、`/search/article`、`/user/internal/{id}/exists`。
 
 ## 启动顺序
 
