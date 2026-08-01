@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>org.example.forum</groupId>
+    <groupId>org.pluchon.forum</groupId>
     <artifactId>java-cloud-standalone</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -26,15 +26,14 @@
         <module>forum-game-api</module>
         <module>forum-economy-api</module>
         <module>forum-ai-api</module>
-        <module>forum-api</module>
         <module>forum-platform</module>
         <module>forum-gateway</module>
-        <module>forum-auth</module>
-        <module>forum-content</module>
-        <module>forum-im</module>
-        <module>forum-game</module>
-        <module>forum-economy</module>
-        <module>forum-ai</module>
+        <module>f-auth</module>
+        <module>f-content</module>
+        <module>f-im</module>
+        <module>f-game</module>
+        <module>f-economy</module>
+        <module>f-ai</module>
     </modules>
 
     <properties>
@@ -74,47 +73,42 @@
             </dependency>
 
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-auth-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-content-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-im-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-game-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-economy-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-ai-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.example.forum</groupId>
-                <artifactId>forum-api</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.example.forum</groupId>
+                <groupId>org.pluchon.forum</groupId>
                 <artifactId>forum-platform</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -46,7 +46,7 @@ spring:
 
 mybatis-plus:
   mapper-locations: classpath:mapper/**/*.xml
-  type-aliases-package: org.example.forumdemo.common.db
+  type-aliases-package: org.pluchon.forum.common.db
   configuration:
     map-underscore-to-camel-case: true
   global-config:
@@ -103,7 +103,7 @@ captcha:
 logging:
   level:
     root: WARN
-    org.example.forumdemo: WARN
+    org.pluchon.forum: WARN
   file:
     name: ${LOG_FILE:/app/logs/forum-backend.log}
   logback:

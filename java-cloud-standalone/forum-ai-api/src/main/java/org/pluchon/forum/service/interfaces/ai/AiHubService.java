@@ -1,0 +1,48 @@
+package org.pluchon.forum.service.interfaces.ai;
+
+import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
+import org.pluchon.forum.entity.dto.ai.AiImageRequest;
+import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
+import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
+import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
+import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
+import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
+import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
+import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
+import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
+import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
+
+import java.util.List;
+import java.util.Map;
+
+public interface AiHubService {
+
+    AiHubPolishResultVO polish(Long userId, AiPolishRequest request);
+
+    AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest request);
+
+    AiHubImageResultVO image(Long userId, AiImageRequest request);
+
+    AiRecommendationFeatureResultVO generateRecommendationArticleFeature(AiRecommendationArticleFeatureRequest request);
+
+    AiRecommendationProfileResultVO generateRecommendationProfile(Long userId, AiRecommendationProfileRequest request);
+
+    String summarize(String content);
+
+    void indexArticleRag(RagArticleIndexDTO payload);
+
+    void indexUserRag(RagUserIndexDTO payload);
+
+    void removeArticleRag(Long articleId);
+
+    List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates);
+
+    List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates);
+
+    List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates);
+
+    List<RagUserVectorHitVO> ragUserVectorRanked(String query);
+}
