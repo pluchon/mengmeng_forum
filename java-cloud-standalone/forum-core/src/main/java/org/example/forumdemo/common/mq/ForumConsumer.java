@@ -40,7 +40,8 @@ public class ForumConsumer {
     @Lazy
     private ArticleService articleService;
 
-    @Autowired
+    // 游戏结束事件仅在 game 域有实现；content 消费其它队列时允许缺失
+    @Autowired(required = false)
     private GameMqEventService gameMqEventService;
 
     @Autowired
@@ -131,6 +132,11 @@ public class ForumConsumer {
             GameFinishedMqVO vo = objectMapper.readValue(message.getBody(), GameFinishedMqVO.class);
             log.debug("[MQ 消费者] 收到游戏结束事件 | gameCode={} | roomId={} | eventId={}",
                     vo.getGameCode(), vo.getRoomId(), vo.getEventId());
+            if (gameMqEventService == null) {
+                log.warn("[MQ 消费者] 当前进程无 GameMqEventService，跳过游戏结束事件 | roomId={}", vo.getRoomId());
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
             gameMqEventService.handleGameFinished(vo);
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {

@@ -14,18 +14,21 @@ public final class DomainServicePackages {
     private static final Set<String> SHARED_IMPL_PACKAGES = Set.of(
             "org.example.forumdemo.service.impl.common",
             "org.example.forumdemo.service.impl.websocket",
-            "org.example.forumdemo.service.impl.remote",
-            "org.example.forumdemo.service.impl.ai"
+            "org.example.forumdemo.service.impl.remote"
     );
 
-    // user 包内登录态相关实现，所有进程都需要（拦截器）
-    // 登录拦截 + 关注关系读（共享库下由各进程直连 DB，避免 Feign 传 Map 键类型问题）
-    private static final Set<String> SHARED_USER_CLASS_SIMPLE_NAMES = Set.of(
+    // 跨域共享的具体实现类（不全量放开所在包，避免拉入无关依赖）
+    private static final Set<String> SHARED_CLASS_SIMPLE_NAMES = Set.of(
             "UserAuthSnapshotServiceImpl",
             "AuthTokenService",
             "JwtTokenVersionService",
             "UserDerivedCacheInvalidator",
-            "UserFollowServiceImpl"
+            "UserFollowServiceImpl",
+            "AiHubServiceImpl",
+            "FileServiceImpl",
+            "ArticleHotRankingServiceImpl",
+            "HotArticleRedisOps",
+            "VipCenterServiceImpl"
     );
 
     private static final Map<String, Set<String>> DOMAIN_IMPL_PACKAGES = new HashMap<>();
@@ -60,9 +63,9 @@ public final class DomainServicePackages {
                 "org.example.forumdemo.service.impl.growth"
         ));
         DOMAIN_IMPL_PACKAGES.put(ForumDomainNames.AI, Set.of(
+                "org.example.forumdemo.service.impl.ai",
                 "org.example.forumdemo.service.impl.mascot",
                 "org.example.forumdemo.service.impl.driftbottle"
-                // ai 包在 SHARED：AiHub 等是 Python 客户端基础设施
         ));
     }
 
@@ -83,8 +86,8 @@ public final class DomainServicePackages {
         return allowed;
     }
 
-    public static boolean isSharedUserSecurityClass(String simpleClassName) {
-        return simpleClassName != null && SHARED_USER_CLASS_SIMPLE_NAMES.contains(simpleClassName);
+    public static boolean isSharedClass(String simpleClassName) {
+        return simpleClassName != null && SHARED_CLASS_SIMPLE_NAMES.contains(simpleClassName);
     }
 
     public static boolean isServiceImplClass(String className) {

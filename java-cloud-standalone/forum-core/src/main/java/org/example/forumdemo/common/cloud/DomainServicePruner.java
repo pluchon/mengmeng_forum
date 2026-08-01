@@ -66,7 +66,7 @@ public class DomainServicePruner implements BeanDefinitionRegistryPostProcessor,
             }
         }
 
-        if (DomainServicePackages.isSharedUserSecurityClass(simpleName)) {
+        if (DomainServicePackages.isSharedClass(simpleName)) {
             return true;
         }
 
