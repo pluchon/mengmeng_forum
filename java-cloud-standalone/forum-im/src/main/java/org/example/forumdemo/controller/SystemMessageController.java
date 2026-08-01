@@ -14,6 +14,7 @@ import org.example.forumdemo.service.interfaces.message.SystemMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -94,5 +95,17 @@ public class SystemMessageController {
         }
         systemMessageService.deleteOne(messageId, loginUser.getId());
         return Result.success("OK");
+    }
+
+    /** 内部：跨服务创建系统消息（如内容审核结果） */
+    @PostMapping("/internal/create")
+    public Long internalCreate(
+            @RequestParam("receiveUserId") Long receiveUserId,
+            @RequestParam("type") Byte type,
+            @RequestParam("title") String title,
+            @RequestParam("content") String content,
+            @RequestParam(value = "relatedId", required = false) Long relatedId,
+            @RequestParam(value = "payload", required = false) String payload) {
+        return systemMessageService.createMessage(receiveUserId, type, title, content, relatedId, payload);
     }
 }
