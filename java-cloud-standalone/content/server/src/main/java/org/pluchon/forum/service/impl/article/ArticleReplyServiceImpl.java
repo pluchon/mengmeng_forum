@@ -197,7 +197,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         UserBriefVO userBriefVO;
         try {
             User user = userService.queryUserByUserId(reply.getPostUserId());
-            userBriefVO = new UserBriefVO(user);
+            userBriefVO = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         } catch (ApplicationException e) {
             log.warn("回复 {} 的发表者 {} 已不存在", reply.getId(), reply.getPostUserId());
             userBriefVO = new UserBriefVO();

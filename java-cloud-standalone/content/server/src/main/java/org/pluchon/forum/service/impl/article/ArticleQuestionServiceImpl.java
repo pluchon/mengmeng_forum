@@ -221,7 +221,7 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
     private UserBriefVO loadAnswerUser(Long userId) {
         try {
             User user = userService.queryUserByUserId(userId);
-            return new UserBriefVO(user);
+            return org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         } catch (ApplicationException exception) {
             return new UserBriefVO();
         }

@@ -897,8 +897,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         GroupChatJoinRequestVO vo = new GroupChatJoinRequestVO();
         vo.setId(request.getId());
         vo.setGroup(refreshAndConvert(queryGroup(request.getGroupId()), request.getTargetUserId()));
-        vo.setTargetUser(new org.pluchon.forum.entity.vo.user.UserBriefVO(userService.queryUserByUserId(request.getTargetUserId())));
-        vo.setInitiatorUser(new org.pluchon.forum.entity.vo.user.UserBriefVO(userService.queryUserByUserId(request.getInitiatorUserId())));
+        vo.setTargetUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userService.queryUserByUserId(request.getTargetUserId())));
+        vo.setInitiatorUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userService.queryUserByUserId(request.getInitiatorUserId())));
         vo.setRequestType(request.getRequestType());
         vo.setStatus(request.getStatus());
         vo.setOwnerReadState(request.getOwnerReadState());

@@ -93,7 +93,7 @@ public class CategoryServiceImpl implements CategoryService {
             User user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
-            response.setUser(new UserBriefVO(user));
+            response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
             return response;
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());

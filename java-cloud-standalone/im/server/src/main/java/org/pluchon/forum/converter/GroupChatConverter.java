@@ -43,7 +43,7 @@ public final class GroupChatConverter {
         GroupChatMemberVO vo = new GroupChatMemberVO();
         vo.setId(member.getId());
         vo.setGroupId(member.getGroupId());
-        vo.setUser(user == null ? null : new UserBriefVO(user));
+        vo.setUser(ImUserBriefConverter.toBrief(user));
         vo.setRole(member.getRole());
         vo.setRemarkName(member.getRemarkName());
         vo.setNotifyMode(member.getNotifyMode());
@@ -61,7 +61,7 @@ public final class GroupChatConverter {
         GroupChatMessageVO vo = new GroupChatMessageVO();
         vo.setId(message.getId());
         vo.setGroupId(message.getGroupId());
-        vo.setSender(sender == null ? null : new UserBriefVO(sender));
+        vo.setSender(ImUserBriefConverter.toBrief(sender));
         vo.setMessageType(message.getMessageType());
         vo.setContent(message.getContent());
         vo.setReplyMessageId(message.getReplyMessageId());

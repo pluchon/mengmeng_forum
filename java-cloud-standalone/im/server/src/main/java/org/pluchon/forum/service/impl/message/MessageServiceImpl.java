@@ -357,7 +357,7 @@ public class MessageServiceImpl implements MessageService {
                 .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE).orderByDesc(Message::getCreateTime));
         List<MessageListResponse> records = result.getRecords().stream().map(msg -> {
             User user = userService.queryUserByUserId(msg.getPostUserId());
-            return new MessageListResponse(new UserBriefVO(user), msg);
+            return new MessageListResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(user), msg);
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -398,7 +398,7 @@ public class MessageServiceImpl implements MessageService {
         List<MessageDetailResponse> records = result.getRecords().stream().map(msg -> {
             boolean isSelf = Objects.equals(msg.getPostUserId(), userId);
             User fromUser = isSelf ? selfUser : otherUser;
-            return new MessageDetailResponse(new UserBriefVO(fromUser), msg, isSelf);
+            return new MessageDetailResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(fromUser), msg, isSelf);
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
@@ -411,7 +411,7 @@ public class MessageServiceImpl implements MessageService {
         }
         boolean isSelf = Objects.equals(msg.getPostUserId(), loginUserId);
         User fromUser = userService.queryUserByUserId(msg.getPostUserId());
-        return new MessageDetailResponse(new UserBriefVO(fromUser), msg, isSelf);
+        return new MessageDetailResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(fromUser), msg, isSelf);
     }
 
     // ============================================================
@@ -723,7 +723,7 @@ public class MessageServiceImpl implements MessageService {
                 User other = userService.queryUserByUserId(id);
                 MessageSessionResponse session = new MessageSessionResponse();
                 session.setUnReadMessage(0L);
-                session.setUser(new UserBriefVO(other));
+                session.setUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(other));
                 session.setLastMessage(sessionSummary(msg));
                 session.setLastMessageTime(msg.getUpdateTime());
                 return session;

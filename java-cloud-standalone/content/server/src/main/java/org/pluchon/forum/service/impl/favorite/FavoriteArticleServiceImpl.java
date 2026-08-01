@@ -271,7 +271,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             if (map.containsKey(uid)) continue;
             try {
                 User u = userService.getUserInfoById(uid);
-                if (u != null) map.put(uid, new UserBriefVO(u));
+                if (u != null) map.put(uid, org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u));
             } catch (ApplicationException e) {
                 log.warn("收藏夹列表中作者 {} 已不可用, 跳过", uid);
             }

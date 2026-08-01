@@ -546,7 +546,7 @@ public class SearchServiceImpl implements SearchService {
         vo.setArticle(article);
         try {
             User u = userService.getUserInfoById(article.getUserId());
-            if (u != null) vo.setUser(new UserBriefVO(u));
+            if (u != null) vo.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u));
         } catch (ApplicationException e) {
             log.warn("搜索结果中作者 {} 已不可用, 跳过用户信息", article.getUserId());
         }

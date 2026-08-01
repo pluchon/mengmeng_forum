@@ -149,7 +149,7 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         }
         ArticleSubReplyListResponse vo = new ArticleSubReplyListResponse();
         vo.setSubReply(sub);
-        vo.setPostUser(new UserBriefVO(postUser));
+        vo.setPostUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(postUser));
         vo.setReplyUserNickname(replyUserNickname);
         vo.setLiked(likedSubIds.contains(sub.getId()));
         vo.setMediaList(mediaMap.getOrDefault(sub.getId(), List.of()));

@@ -181,7 +181,7 @@ public class BoardServiceImpl implements BoardService {
             User user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
-            response.setUser(new UserBriefVO(user));
+            response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
             response.setFromFollowing(followingIds.contains(article.getUserId()));
             return response;
         }).collect(Collectors.toList());
