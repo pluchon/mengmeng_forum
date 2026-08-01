@@ -17,8 +17,10 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;
 import org.example.forumdemo.entity.dto.user.UserLoginRequest;
 import org.example.forumdemo.entity.dto.user.UserResigterRequest;
+import org.example.forumdemo.entity.db.UserMascotPreference;
 import org.example.forumdemo.mapper.ForumMascotModelMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.mapper.UserMascotPreferenceMapper;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.favorite.FavoriteFolderService;
 import org.example.forumdemo.service.interfaces.growth.GrowthService;
@@ -27,6 +29,7 @@ import org.example.forumdemo.service.interfaces.user.UserService;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,13 +55,16 @@ public class UserServiceImpl implements UserService {
     private ForumMascotModelMapper forumMascotModelMapper;
 
     @Autowired
+    private UserMascotPreferenceMapper userMascotPreferenceMapper;
+
+    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 注册后立刻给用户建一个默认收藏夹.
-     * @Lazy 打破潜在循环依赖 (FavoriteFolderService -> ArticleService -> UserService).
+     * auth 域走 FavoriteFolderRemoteService（Feign → content）；content 域为本地实现。
      */
-    @Autowired
+    @Autowired(required = false)
     @Lazy
     private FavoriteFolderService favoriteFolderService;
 
@@ -146,7 +152,11 @@ public class UserServiceImpl implements UserService {
             }
             storeUserNameMapping(newUserName, newUserId);
             try {
-                favoriteFolderService.ensureDefaultFolder(newUserId);
+                if (favoriteFolderService != null) {
+                    favoriteFolderService.ensureDefaultFolder(newUserId);
+                } else {
+                    log.warn("用户 {} 默认收藏夹跳过: FavoriteFolderService 未装配", newUserId);
+                }
             } catch (Exception e) {
                 log.warn("用户 {} 默认收藏夹创建失败, 留待懒加载补齐: {}", newUserId, e.getMessage());
             }
@@ -382,11 +392,20 @@ public class UserServiceImpl implements UserService {
         if (m.getShelfStatus() == null || m.getShelfStatus() != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅可选择已上架的看板娘"));
         }
-        int n = userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, userId).ne(User::getDeleteState, 1)
-                .set(User::getMascotModelId, mascotModelId));
-        if (n <= 0) {
+        User exists = userMapper.selectById(userId);
+        if (exists == null || (exists.getDeleteState() != null && exists.getDeleteState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+        // 偏好写入 ai 权威表，不再写 user.mascot_model_id
+        UserMascotPreference pref = userMascotPreferenceMapper.selectByUserId(userId);
+        if (pref == null) {
+            try {
+                userMascotPreferenceMapper.insertPreference(userId, mascotModelId);
+            } catch (DuplicateKeyException ex) {
+                userMascotPreferenceMapper.updatePreference(userId, mascotModelId);
+            }
+        } else {
+            userMascotPreferenceMapper.updatePreference(userId, mascotModelId);
         }
         // 删除用户信息，同步我们用户看板娘的最新状态
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);

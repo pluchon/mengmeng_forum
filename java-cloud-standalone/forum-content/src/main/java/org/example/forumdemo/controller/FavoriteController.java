@@ -142,4 +142,10 @@ public class FavoriteController {
         favoriteService.moveFavorite(req, loginUser.getId());
         return Result.success("已移动");
     }
+
+    /** 内部：注册后确保默认收藏夹（auth → content） */
+    @PostMapping("/internal/{userId}/ensure-default-folder")
+    public Long ensureDefaultFolderInternal(@PathVariable("userId") Long userId) {
+        return folderService.ensureDefaultFolder(userId);
+    }
 }

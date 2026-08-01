@@ -5,10 +5,13 @@ import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserVipSubscription;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.mapper.UserVipSubscriptionMapper;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.example.forumdemo.service.interfaces.vip.VipEntitlementService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +19,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
 
+// VIP 权益写入 user_vip_subscription，不再写 user.vip_*
 @Service
 public class VipEntitlementServiceImpl implements VipEntitlementService {
 
@@ -23,6 +27,9 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private UserVipSubscriptionMapper userVipSubscriptionMapper;
 
     @Autowired
     private UserDerivedCacheInvalidator userDerivedCacheInvalidator;
@@ -33,12 +40,15 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
         if (lockedUser == null || days <= 0) {
             return lockedUser != null ? lockedUser.getVipExpireAt() : null;
         }
-        Byte grantTier = resolveGrantTier(lockedUser, tier);
-        Date newExpire = computeNewExpire(lockedUser, days);
-        int affected = userMapper.updateVipSubscription(lockedUser.getId(), grantTier, newExpire);
+        UserVipSubscription sub = ensureSubscription(lockedUser.getId(), lockedUser);
+        Byte grantTier = resolveGrantTier(sub, tier);
+        Date newExpire = computeNewExpire(sub, days);
+        int affected = userVipSubscriptionMapper.updateSubscription(lockedUser.getId(), grantTier, newExpire);
         if (affected != 1) {
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
         }
+        lockedUser.setVipTier(grantTier);
+        lockedUser.setVipExpireAt(newExpire);
         userDerivedCacheInvalidator.invalidateUserCaches(lockedUser.getId());
         return newExpire;
     }
@@ -53,34 +63,54 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
         return extendVipDays(locked, tier, days);
     }
 
-    private Byte resolveGrantTier(User user, Byte requestedTier) {
+    private UserVipSubscription ensureSubscription(Long userId, User legacyUser) {
+        UserVipSubscription existing = userVipSubscriptionMapper.selectByUserId(userId);
+        if (existing != null) {
+            return existing;
+        }
+        Byte seedTier = legacyUser != null && legacyUser.getVipTier() != null
+                ? legacyUser.getVipTier() : Constant.VIP_TIER_FREE;
+        Date seedExpire = legacyUser != null ? legacyUser.getVipExpireAt() : null;
+        try {
+            userVipSubscriptionMapper.insertSubscription(userId, seedTier, seedExpire);
+        } catch (DuplicateKeyException ignored) {
+            // 并发建档
+        }
+        existing = userVipSubscriptionMapper.selectByUserId(userId);
+        if (existing == null) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        return existing;
+    }
+
+    private Byte resolveGrantTier(UserVipSubscription sub, Byte requestedTier) {
         Byte tier = requestedTier != null ? requestedTier : Constant.VIP_TIER_PRO;
-        if (!vipActive(user)) {
+        if (!vipActive(sub)) {
             return tier;
         }
-        Byte cur = user.getVipTier() == null ? Constant.VIP_TIER_FREE : user.getVipTier();
+        Byte cur = sub.getVipTier() == null ? Constant.VIP_TIER_FREE : sub.getVipTier();
         if (cur != null && cur > tier) {
             return cur;
         }
         return tier;
     }
 
-    private Date computeNewExpire(User user, int days) {
-        Date exp = user.getVipExpireAt();
+    private Date computeNewExpire(UserVipSubscription sub, int days) {
+        Date exp = sub.getVipExpireAt();
         Date now = new Date();
         ZonedDateTime base = ZonedDateTime.now(SHANGHAI);
-        if (vipActive(user) && exp != null && exp.after(now)) {
+        if (vipActive(sub) && exp != null && exp.after(now)) {
             base = exp.toInstant().atZone(SHANGHAI);
         }
         return Date.from(base.plusDays(days).toInstant());
     }
 
-    private boolean vipActive(User user) {
-        Byte tier = user.getVipTier();
+    private boolean vipActive(UserVipSubscription sub) {
+        Byte tier = sub.getVipTier();
         if (tier == null || tier == 0) {
             return false;
         }
-        Date exp = user.getVipExpireAt();
+        Date exp = sub.getVipExpireAt();
         if (exp == null) {
             return true;
         }

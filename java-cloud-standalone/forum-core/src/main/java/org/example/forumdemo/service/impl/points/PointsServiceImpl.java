@@ -9,6 +9,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CursorUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.entity.db.PointsLog;
+import org.example.forumdemo.entity.db.PointsWallet;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
@@ -16,6 +17,7 @@ import org.example.forumdemo.entity.vo.points.PointsDailyVO;
 import org.example.forumdemo.entity.vo.points.PointsLogVO;
 import org.example.forumdemo.entity.vo.points.PointsWalletVO;
 import org.example.forumdemo.mapper.PointsLogMapper;
+import org.example.forumdemo.mapper.PointsWalletMapper;
 import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.example.forumdemo.service.interfaces.points.PointsService;
@@ -45,6 +47,10 @@ public class PointsServiceImpl implements PointsService {
     private static final int MAX_DAYS = 365;
 
     @Autowired
+    private PointsWalletMapper pointsWalletMapper;
+
+    // 仅用于钱包缺失时从历史 user.points 回填；新余额权威在 points_wallet
+    @Autowired
     private UserMapper userMapper;
 
     @Autowired
@@ -69,14 +75,12 @@ public class PointsServiceImpl implements PointsService {
     @Transactional(rollbackFor = Exception.class)
     public int addPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark, String idempotencyKey) {
         validateAmount(userId, amount, sourceType);
-        if (StringUtils.hasText(idempotencyKey)) {
-            userMapper.selectByIdForUpdate(userId);
-        }
+        ensureWalletForUpdate(userId);
         Integer existingBalance = resolveExistingBalance(userId, idempotencyKey);
         if (existingBalance != null) {
             return existingBalance;
         }
-        int affected = userMapper.addPoints(userId, amount);
+        int affected = pointsWalletMapper.addBalance(userId, amount);
         if (affected != 1) {
             log.warn("加积分失败: userId={}, amount={}, affected={}", userId, amount, affected);
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
@@ -91,14 +95,12 @@ public class PointsServiceImpl implements PointsService {
     @Transactional(rollbackFor = Exception.class)
     public int deductPoints(Long userId, int amount, Byte sourceType, Long relatedId, String remark, String idempotencyKey) {
         validateAmount(userId, amount, sourceType);
-        if (StringUtils.hasText(idempotencyKey)) {
-            userMapper.selectByIdForUpdate(userId);
-        }
+        ensureWalletForUpdate(userId);
         Integer existingBalance = resolveExistingBalance(userId, idempotencyKey);
         if (existingBalance != null) {
             return existingBalance;
         }
-        int affected = userMapper.deductPoints(userId, amount);
+        int affected = pointsWalletMapper.deductBalance(userId, amount);
         if (affected != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_POINTS_NOT_ENOUGH));
         }
@@ -242,11 +244,42 @@ public class PointsServiceImpl implements PointsService {
     }
 
     private int selectBalance(Long userId) {
-        User user = userMapper.selectById(userId);
-        if (user == null) {
+        PointsWallet wallet = pointsWalletMapper.selectByUserId(userId);
+        if (wallet != null) {
+            return wallet.getBalance() == null ? 0 : wallet.getBalance();
+        }
+        ensureWalletExists(userId);
+        wallet = pointsWalletMapper.selectByUserId(userId);
+        if (wallet == null) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        return wallet.getBalance() == null ? 0 : wallet.getBalance();
+    }
+
+    // 无锁建档，供只读路径与写路径共用
+    private void ensureWalletExists(Long userId) {
+        if (pointsWalletMapper.selectByUserId(userId) != null) {
+            return;
+        }
+        User legacy = userMapper.selectById(userId);
+        if (legacy == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        return user.getPoints() == null ? 0 : user.getPoints();
+        int seed = legacy.getPoints() == null ? 0 : legacy.getPoints();
+        try {
+            pointsWalletMapper.insertWallet(userId, seed);
+        } catch (DuplicateKeyException ignored) {
+            // 并发建档忽略
+        }
+    }
+
+    private PointsWallet ensureWalletForUpdate(Long userId) {
+        ensureWalletExists(userId);
+        PointsWallet locked = pointsWalletMapper.selectByUserIdForUpdate(userId);
+        if (locked == null) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        return locked;
     }
 
     private void insertLog(Long userId, int delta, int balanceAfter, Byte sourceType, Long relatedId,
