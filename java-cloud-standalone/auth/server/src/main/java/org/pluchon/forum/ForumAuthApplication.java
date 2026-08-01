@@ -1,4 +1,4 @@
-package org.pluchon.forum.auth;
+package org.pluchon.forum;
 
 import org.pluchon.forum.common.utils.ForumDateTimes;
 import org.mybatis.spring.annotation.MapperScan;

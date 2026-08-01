@@ -3,19 +3,33 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/ai/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/ai/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/ai/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/ai/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/auth/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/auth/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/auth/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/auth/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/common/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/content/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/content/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/content/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/content/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/economy/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/economy/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/economy/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/economy/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/game/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/game/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/game/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/game/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/gateway/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/im/api/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/im/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/im/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/im/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java-cloud-standalone/platform/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/src/main/resources" charset="UTF-8" />
     <file url="file://$APPLICATION_HOME_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$APPLICATION_HOME_DIR$/src/main/resources" charset="UTF-8" />
     <file url="PROJECT" charset="UTF-8" />
