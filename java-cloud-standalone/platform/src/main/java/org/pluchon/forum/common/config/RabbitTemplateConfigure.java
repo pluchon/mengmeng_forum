@@ -4,12 +4,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 @Slf4j
 @Configuration
+@ConditionalOnProperty(name = "forum.features.mq", havingValue = "true")
 // 单独设置每一个业务逻辑的接口，防止冲突，也是毁了避免在处理回调的时候覆盖掉设置
 public class RabbitTemplateConfigure {
 

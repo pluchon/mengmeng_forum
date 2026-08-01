@@ -9,6 +9,10 @@ public class ForumFeaturesProperties {
     // 是否启用 @Scheduled 任务（需配合具体任务上的条件或仅在目标域打开）
     private boolean scheduling = false;
 
+    // 是否启用 RabbitMQ（拓扑声明、Template、Producer、自动装配前提）
+    // false 时本进程不应连接 Broker；与 mq-consumer 区分：后者只控制 @RabbitListener
+    private boolean mq = false;
+
     // 是否注册 RabbitMQ 消费者
     private boolean mqConsumer = false;
 
@@ -24,6 +28,14 @@ public class ForumFeaturesProperties {
 
     public void setScheduling(boolean scheduling) {
         this.scheduling = scheduling;
+    }
+
+    public boolean isMq() {
+        return mq;
+    }
+
+    public void setMq(boolean mq) {
+        this.mq = mq;
     }
 
     public boolean isMqConsumer() {

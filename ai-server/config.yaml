@@ -32,14 +32,14 @@ dashscope:
   model_image_premium: "wanx2.1-t2i-plus"             # 进阶生图（Dashscope 万相）
 
 redis:
-  host: localhost
+  host: 127.0.0.1
   port: 63790
   password: "123456"
   db: 0
   socket_timeout: 2
 
 rabbitmq:
-  host: localhost
+  host: 127.0.0.1
   port: 56720
   virtual_host: forum-demo
   username: nuonuo
@@ -185,7 +185,8 @@ ai_hub:
 
 # Java 论坛后端（看板娘站点帮助语料来源：公告中心已发布列表）
 forum:
-  base_url: "http://localhost:10086"
+  # 统一走网关；用 127.0.0.1 避免 Windows 上 localhost 解析到 ::1
+  base_url: "http://127.0.0.1:10086"
   notice_list_path: "/notice/center/list"
   request_timeout: 15
   site_help_cache_ttl: 600

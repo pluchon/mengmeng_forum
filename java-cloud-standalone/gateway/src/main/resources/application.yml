@@ -55,6 +55,14 @@ management:
     web:
       exposure:
         include: health,info
+  # 网关只做路由与服务发现，不连 MySQL / Redis / RabbitMQ
+  health:
+    db:
+      enabled: false
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
 
 logging:
   level:

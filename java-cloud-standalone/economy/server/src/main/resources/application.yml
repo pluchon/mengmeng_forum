@@ -14,15 +14,26 @@ spring:
     import:
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+  # economy 不使用 MQ
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
-    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_economy_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:forum_economy}
-    password: ${DB_PASSWORD:forum_economy_pass}
+    # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
+    url: ${FORUM_ECONOMY_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_economy_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${FORUM_ECONOMY_DB_USERNAME:forum_economy}
+    password: ${FORUM_ECONOMY_DB_PASSWORD:forum_economy_pass}
+
+management:
+  health:
+    rabbit:
+      enabled: false
 
 forum:
   domain: economy
   features:
     scheduling: false
+    mq: false
     mq-consumer: false
     websocket: false
     game-runtime: false

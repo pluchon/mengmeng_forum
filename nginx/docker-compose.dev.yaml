@@ -16,9 +16,10 @@
 # 宿主机连接（与 backend/application.yml、ai-server/config.yaml 默认一致）：
 #   MySQL       127.0.0.1:33306
 #   Redis       localhost:63790
-#   RabbitMQ    AMQP 56690（56720 在 Windows Hyper-V 保留段内），管理台 http://localhost:25672
+#   RabbitMQ    AMQP 56720，管理台 http://localhost:25672
 #   PostgreSQL  54320
 #   FFmpeg      http://localhost:8099  （Java 大文件压缩：FORUM_FFMPEG_URL=http://localhost:8099）
+# 注意：Rabbit/Redis 等请用 127.0.0.1，勿用 localhost（Windows 上易走 IPv6 连不上仅绑 IPv4 的映射端口）
 
 services:
 
@@ -67,7 +68,7 @@ services:
     container_name: forum-rabbitmq-dev
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56690}:5672"
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56720}:5672"
       - "127.0.0.1:${RABBITMQ_MGMT_PORT:-25672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}

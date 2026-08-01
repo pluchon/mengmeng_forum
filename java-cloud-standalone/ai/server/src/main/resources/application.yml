@@ -14,15 +14,26 @@ spring:
     import:
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+  # ai 域不使用 Java 侧 RabbitMQ（审核结果由 Python/content 链路承接）
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
-    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:forum_ai}
-    password: ${DB_PASSWORD:forum_ai_pass}
+    # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
+    url: ${FORUM_AI_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${FORUM_AI_DB_USERNAME:forum_ai}
+    password: ${FORUM_AI_DB_PASSWORD:forum_ai_pass}
+
+management:
+  health:
+    rabbit:
+      enabled: false
 
 forum:
   domain: ai
   features:
     scheduling: false
+    mq: false
     mq-consumer: false
     websocket: false
     game-runtime: false
