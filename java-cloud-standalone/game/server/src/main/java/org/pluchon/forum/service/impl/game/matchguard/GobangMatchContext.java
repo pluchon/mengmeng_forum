@@ -1,13 +1,13 @@
 package org.pluchon.forum.service.impl.game.matchguard;
 
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 
 public class GobangMatchContext {
 
     private final Long userId;
 
-    private final User user;
+    private final UserInternalVO user;
 
     private final GameUserProfile profile;
 
@@ -15,7 +15,7 @@ public class GobangMatchContext {
 
     private final boolean alreadyQueued;
 
-    public GobangMatchContext(Long userId, User user, GameUserProfile profile, int points, boolean alreadyQueued) {
+    public GobangMatchContext(Long userId, UserInternalVO user, GameUserProfile profile, int points, boolean alreadyQueued) {
         this.userId = userId;
         this.user = user;
         this.profile = profile;
@@ -27,7 +27,7 @@ public class GobangMatchContext {
         return userId;
     }
 
-    public User getUser() {
+    public UserInternalVO getUser() {
         return user;
     }
 

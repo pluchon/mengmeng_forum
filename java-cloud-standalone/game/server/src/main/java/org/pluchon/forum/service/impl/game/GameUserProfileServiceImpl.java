@@ -12,7 +12,7 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameJinziMatchRecord;
 import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GameMatchRecordVO;
 import org.pluchon.forum.entity.vo.game.GameUserProfileVO;
@@ -23,7 +23,7 @@ import org.pluchon.forum.mapper.GameGobangRoomMoveMapper;
 import org.pluchon.forum.mapper.GameJinziMatchRecordMapper;
 import org.pluchon.forum.mapper.GameJinziRoomMoveMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -52,7 +52,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     private GameJinziRoomMoveMapper gameJinziRoomMoveMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -90,7 +90,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     @Override
     public GameUserProfileVO getProfileVO(Long userId, String gameCode) {
         GameUserProfile profile = getOrCreateProfile(userId, gameCode);
-        User user = userInternalLookupService.getById(userId);
+        UserInternalVO user = gameUserLookupService.getById(userId);
         return GameConverter.toProfileVO(profile, user);
     }
 

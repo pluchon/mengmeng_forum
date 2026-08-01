@@ -6,7 +6,7 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameJinziMatchRecord;
 import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.service.impl.game.GameConstants;
 import org.pluchon.forum.entity.vo.game.GameDefinitionVO;
 import org.pluchon.forum.entity.vo.game.GameMatchRecordVO;
@@ -29,7 +29,7 @@ public class GameConverter {
         );
     }
 
-    public static GameUserProfileVO toProfileVO(GameUserProfile profile, User user) {
+    public static GameUserProfileVO toProfileVO(GameUserProfile profile, UserInternalVO user) {
         int total = value(profile.getTotalCount());
         int wins = value(profile.getWinCount());
         int winRate = total == 0 ? 0 : (int) Math.round(wins * 100.0 / total);
@@ -47,7 +47,7 @@ public class GameConverter {
                 rankInfo,
                 rankInfo.getRankName(),
                 rankInfo.getNextRankDistance(),
-                user == null ? 0 : value(user.getPoints()),
+                0,
                 total,
                 wins,
                 value(profile.getLoseCount()),

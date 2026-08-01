@@ -13,7 +13,7 @@ import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.TetrisChatRequest;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
 import org.pluchon.forum.entity.vo.game.TetrisActiveRoomVO;
@@ -23,7 +23,7 @@ import org.pluchon.forum.entity.vo.game.TetrisCurPieceVO;
 import org.pluchon.forum.entity.vo.game.TetrisRoomStateVO;
 import org.pluchon.forum.mapper.GameTetrisPkMatchRecordMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.impl.game.tetris.TetrisBlock;
 import org.pluchon.forum.service.impl.game.tetris.TetrisEngineConstants;
@@ -90,7 +90,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     @Autowired
     private PointsService pointsService;
@@ -308,7 +308,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             collectActiveUserId(userIds, room.getRedUserId());
             collectActiveUserId(userIds, room.getBlueUserId());
         }
-        Map<Long, User> userMap = loadActiveRoomUsers(userIds);
+        Map<Long, UserInternalVO> userMap = loadActiveRoomUsers(userIds);
         for (TetrisRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
@@ -336,16 +336,16 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         }
     }
 
-    private Map<Long, User> loadActiveRoomUsers(Set<Long> userIds) {
-        Map<Long, User> userMap = new HashMap<>();
+    private Map<Long, UserInternalVO> loadActiveRoomUsers(Set<Long> userIds) {
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
         if (userIds.isEmpty()) {
             return userMap;
         }
-        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        gameUserLookupService.loadActiveUsers(userIds).forEach(userMap::put);
         return userMap;
     }
 
-    private String activeRoomNickname(User user, Long userId) {
+    private String activeRoomNickname(UserInternalVO user, Long userId) {
         if (user == null) {
             return "用户 " + userId;
         }
@@ -560,7 +560,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     private TetrisRoomStateVO toStateVO(TetrisRoom room, Long userId) {
         boolean spectator = userId == null || !room.contains(userId);
-        Map<Long, User> userMap = loadRoomUsers(room);
+        Map<Long, UserInternalVO> userMap = loadRoomUsers(room);
         Map<Long, GameUserProfile> profileMap = loadRoomProfiles(room);
         GobangRoomParticipantVO player1 = toParticipant(room.getPlayer1UserId(), "PLAYER1", room.getStartedAt().getTime(), userMap, profileMap);
         GobangRoomParticipantVO player2 = toParticipant(room.getPlayer2UserId(), "PLAYER2", room.getStartedAt().getTime(), userMap, profileMap);
@@ -671,7 +671,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         return profileMap;
     }
 
-    private Map<Long, User> loadRoomUsers(TetrisRoom room) {
+    private Map<Long, UserInternalVO> loadRoomUsers(TetrisRoom room) {
         List<Long> userIds = new ArrayList<>();
         addRealUserId(userIds, room.getPlayer1UserId());
         addRealUserId(userIds, room.getPlayer2UserId());
@@ -679,8 +679,8 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, User> userMap = new HashMap<>();
-        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
+        gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -692,7 +692,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     private List<GobangRoomParticipantVO> buildSpectators(
             TetrisRoom room,
-            Map<Long, User> userMap,
+            Map<Long, UserInternalVO> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
         Set<Long> onlineIds = gameConnectionRegistry.roomUserIds(room.getRoomId());
@@ -716,10 +716,10 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             Long userId,
             String role,
             Long joinedAtMs,
-            Map<Long, User> userMap,
+            Map<Long, UserInternalVO> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
-        User user = userMap.get(userId);
+        UserInternalVO user = userMap.get(userId);
         GameUserProfile profile = profileMap.get(userId);
         int totalCount = profile == null || profile.getTotalCount() == null ? 0 : profile.getTotalCount();
         int winCount = profile == null || profile.getWinCount() == null ? 0 : profile.getWinCount();
@@ -729,8 +729,8 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 user == null ? null : user.getUsername(),
                 activeRoomNickname(user, userId),
                 user == null ? null : user.getAvatarUrl(),
-                user == null ? null : user.getVipTier(),
-                user != null && user.getVipTier() != null && user.getVipTier() > 0,
+                (byte) 0,
+                false,
                 role,
                 joinedAtMs,
                 false,

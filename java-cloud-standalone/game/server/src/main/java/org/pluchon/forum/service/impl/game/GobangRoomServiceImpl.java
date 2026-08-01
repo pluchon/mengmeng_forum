@@ -17,7 +17,7 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
@@ -33,7 +33,7 @@ import org.pluchon.forum.mapper.GameGobangRoomMoveMapper;
 import org.pluchon.forum.mapper.GameRoomPlayerMapper;
 import org.pluchon.forum.mapper.GameSettlementEventMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
 import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
@@ -135,7 +135,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private PointsService pointsService;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     @Autowired
     private GobangRuleEngine gobangRuleEngine;
@@ -406,7 +406,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             collectRealUserId(userIds, room.getBlackUserId());
             collectRealUserId(userIds, room.getWhiteUserId());
         }
-        Map<Long, User> userMap = loadActiveRoomUsers(userIds);
+        Map<Long, UserInternalVO> userMap = loadActiveRoomUsers(userIds);
         for (GobangRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
@@ -432,16 +432,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
     }
 
-    private Map<Long, User> loadActiveRoomUsers(Set<Long> userIds) {
-        Map<Long, User> userMap = new HashMap<>();
+    private Map<Long, UserInternalVO> loadActiveRoomUsers(Set<Long> userIds) {
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
         if (userIds.isEmpty()) {
             return userMap;
         }
-        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        gameUserLookupService.loadActiveUsers(userIds).forEach(userMap::put);
         return userMap;
     }
 
-    private String activeRoomNickname(User user, Long userId) {
+    private String activeRoomNickname(UserInternalVO user, Long userId) {
         if (user == null) {
             return "用户 " + userId;
         }
@@ -700,7 +700,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GobangRoomStateVO toStateVO(GobangRoom room, Long userId) {
         long now = System.currentTimeMillis();
         boolean spectator = userId == null || !room.contains(userId);
-        Map<Long, User> userMap = loadRoomUsers(room);
+        Map<Long, UserInternalVO> userMap = loadRoomUsers(room);
         Map<Long, GameUserProfile> profileMap = loadRoomProfiles(room);
         GobangRoomParticipantVO blackPlayer = toParticipant(
                 room.getBlackUserId(),
@@ -769,7 +769,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         return profileMap;
     }
 
-    private Map<Long, User> loadRoomUsers(GobangRoom room) {
+    private Map<Long, UserInternalVO> loadRoomUsers(GobangRoom room) {
         List<Long> userIds = new ArrayList<>();
         addRealUserId(userIds, room.getBlackUserId());
         addRealUserId(userIds, room.getWhiteUserId());
@@ -777,8 +777,8 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, User> userMap = new HashMap<>();
-        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
+        gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -790,7 +790,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private List<GobangRoomParticipantVO> buildSpectators(
             GobangRoom room,
-            Map<Long, User> userMap,
+            Map<Long, UserInternalVO> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
         Set<Long> onlineIds = gameConnectionRegistry.roomUserIds(room.getRoomId());
@@ -816,7 +816,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             String role,
             Long joinedAtMs,
             String aiModelName,
-            Map<Long, User> userMap,
+            Map<Long, UserInternalVO> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
         if (GameConstants.AI_USER_ID.equals(userId)) {
@@ -835,14 +835,13 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                     0
             );
         }
-        User user = userMap.get(userId);
+        UserInternalVO user = userMap.get(userId);
         String username = user == null ? null : user.getUsername();
         String nickname = user == null ? "用户 " + userId : (
                 user.getNickname() == null || user.getNickname().isBlank() ? user.getUsername() : user.getNickname()
         );
-        Byte vipTier = user == null || user.getVipTier() == null ? (byte) 0 : user.getVipTier();
-        boolean vip = user != null && vipTier > 0
-                && (user.getVipExpireAt() == null || user.getVipExpireAt().after(new Date()));
+        Byte vipTier = 0;
+        boolean vip = false;
         GameUserProfile profile = profileMap.get(userId);
         int total = profile == null || profile.getTotalCount() == null ? 0 : profile.getTotalCount();
         int wins = profile == null || profile.getWinCount() == null ? 0 : profile.getWinCount();
