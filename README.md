@@ -64,7 +64,7 @@ flowchart LR
 | --- | --- |
 | `forum-vue` | 用户端页面、编辑器、社区互动与看板娘界面 |
 | `backend` | 单体 Java 后端（账号、帖子、互动、推荐、游戏、权限与数据保存） |
-| `java-cloud-standalone` | 单机微服务线（Gateway + 分域服务，共享同一 MySQL；详见该目录 README） |
+| `java-cloud-standalone` | 单机微服务演进线（Gateway + 分域进程；**进程已切分，代码/数据所有权拆分进行中**；详见该目录 README 与 `docs/architecture-microservices.md`） |
 | `ai-server` | 发帖检查、摘要、写作、生图、站内检索与看板娘 |
 | `nginx` | 网站入口、容器配置、打包和发布脚本 |
 | `live2d` | 看板娘模型资源 |
