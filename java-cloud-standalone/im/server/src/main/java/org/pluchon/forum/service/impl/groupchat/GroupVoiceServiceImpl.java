@@ -394,7 +394,7 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
             return null;
         }
         GroupVoiceParticipantVO vo = new GroupVoiceParticipantVO();
-        vo.setUser(new UserBriefVO(user));
+        vo.setUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(user));
         vo.setConnectionId(participant.getConnectionId());
         vo.setJoinedAt(participant.getJoinedAt());
         return vo;

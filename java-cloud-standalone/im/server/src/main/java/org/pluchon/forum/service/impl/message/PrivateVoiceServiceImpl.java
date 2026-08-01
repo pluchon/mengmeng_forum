@@ -403,7 +403,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
             return null;
         }
         PrivateVoiceParticipantVO vo = new PrivateVoiceParticipantVO();
-        vo.setUser(new UserBriefVO(user));
+        vo.setUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(user));
         vo.setConnectionId(participant.getConnectionId());
         vo.setJoinedAt(participant.getJoinedAt());
         return vo;

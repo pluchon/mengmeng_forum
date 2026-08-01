@@ -284,7 +284,7 @@ public class UserFollowServiceImpl implements UserFollowService {
                 continue;
             }
             UserFollowListItemVO item = new UserFollowListItemVO();
-            item.setUser(new UserBriefVO(user));
+            item.setUser(toBrief(user));
             item.setFollowTime(row.getCreateTime());
             item.setIsFollowing(viewerFollowing.contains(uid));
             item.setFollowsProfileUser(followersList);
@@ -322,6 +322,15 @@ public class UserFollowServiceImpl implements UserFollowService {
             return Set.of();
         }
         return rows.stream().map(UserFollow::getFolloweeId).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private UserBriefVO toBrief(User user) {
+        if (user == null) {
+            return null;
+        }
+        return new UserBriefVO(
+                user.getId(), user.getNickname(), user.getAvatarUrl(), user.getIsAdmin(), user.getRemark(),
+                user.getBackgroundUrl(), user.getVipTier(), user.getVipExpireAt(), user.getIpRegion());
     }
 
     private void validateFollowPair(Long followerId, Long followeeId) {

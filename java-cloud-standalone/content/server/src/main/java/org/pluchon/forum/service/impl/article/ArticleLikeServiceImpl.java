@@ -154,7 +154,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
             User user = userService.queryUserByUserId(article.getUserId());
             ArticleListByLikeResponse item = new ArticleListByLikeResponse();
             item.setArticle(article);
-            item.setUser(new UserBriefVO(user));
+            item.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
             return item;
         } catch (ApplicationException e) {
             log.warn("点赞列表中帖子 {} 已不可用，跳过", like.getArticleId());

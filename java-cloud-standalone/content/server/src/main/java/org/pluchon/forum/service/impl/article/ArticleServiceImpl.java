@@ -249,7 +249,7 @@ public class ArticleServiceImpl implements ArticleService {
             isFavorited = favoriteArticleService.isFavorited(articleId, loginUserId);
         }
         ArticleDetailResponse resp = new ArticleDetailResponse(
-                new UserBriefVO(userInfo), articleInfo, boardInfo, isOwner, isLiked, isFavorited);
+                org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(userInfo), articleInfo, boardInfo, isOwner, isLiked, isFavorited);
         resp.setIsNotInterested(loginUserId != null && loginUserId > 0
                 && userRecommendFeedbackMapper.selectCount(new LambdaQueryWrapper<UserRecommendFeedback>()
                         .eq(UserRecommendFeedback::getUserId, loginUserId)
@@ -451,7 +451,7 @@ public class ArticleServiceImpl implements ArticleService {
         User user = userService.getUserInfoById(userId);
         PageResult<ArticleBriefVO> pageResult = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(),
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
-        UserBriefVO profileUser = new UserBriefVO(user);
+        UserBriefVO profileUser = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         if (!isOwner) {
             profileUser.setVipExpireAt(null);
             profileUser.setIpRegion(null);
@@ -541,7 +541,7 @@ public class ArticleServiceImpl implements ArticleService {
             HotArticleListItemVO item = new HotArticleListItemVO();
             item.setRank(rankBase + index + 1);
             item.setArticle(ArticleConverter.toBriefVO(article));
-            item.setUser(new UserBriefVO(author));
+            item.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
             item.setFromFollowing(followingIds.contains(article.getUserId()));
             item.setTrendDirection(trendDirections.getOrDefault(article.getId(), HotArticleTrendDirection.STABLE));
             records.add(item);

@@ -224,7 +224,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             }
             RecommendArticleVO response = new RecommendArticleVO();
             response.setArticle(article);
-            response.setUser(new UserBriefVO(author));
+            response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
             records.add(response);
         }
         return new PageResult<>(records, feedbackPage.getTotal(), validPageNum, validPageSize,
@@ -319,7 +319,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             }
             RecommendArticleVO response = new RecommendArticleVO();
             response.setArticle(candidate.getArticle());
-            response.setUser(new UserBriefVO(author));
+            response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
             result.add(response);
         }
         return result;
