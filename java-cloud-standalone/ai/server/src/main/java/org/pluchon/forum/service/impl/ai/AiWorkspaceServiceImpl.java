@@ -19,7 +19,6 @@ import org.pluchon.forum.entity.db.ForumAiCreationWorkspace;
 import org.pluchon.forum.entity.db.ForumAiLongTermMemory;
 import org.pluchon.forum.entity.db.ForumAiTaskSession;
 import org.pluchon.forum.entity.db.ForumCompanionSession;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.ai.AiMemoryCreateRequest;
 import org.pluchon.forum.entity.dto.ai.AiTaskHandoffRequest;
 import org.pluchon.forum.entity.dto.ai.AiWorkspaceArtifactRequest;
@@ -36,8 +35,9 @@ import org.pluchon.forum.mapper.ForumAiTaskSessionMapper;
 import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiWorkspaceService;
+import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,7 +76,7 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
     private ForumCompanionSessionMapper companionSessionMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private AiUserLookupService aiUserLookupService;
 
     @Autowired
     private AiVipInternalFeignClient vipInternalFeignClient;
@@ -434,19 +434,19 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
         }
     }
 
-    private User requireUser(Long userId) {
+    private AiUserContext requireUser(Long userId) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }
-        User user = userInternalLookupService.getById(userId);
+        AiUserContext user = aiUserLookupService.getById(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         return user;
     }
 
-    private User requireActiveVip(Long userId) {
-        User user = requireUser(userId);
+    private AiUserContext requireActiveVip(Long userId) {
+        AiUserContext user = requireUser(userId);
         VipTierSnapshotVO snapshot = vipInternalFeignClient.tierSnapshot(userId);
         if (snapshot == null || !snapshot.isVipActive()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "长期记忆仅向有效会员开放"));

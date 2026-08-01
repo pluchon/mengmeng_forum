@@ -5,9 +5,9 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.mapper.AiUsageDailyMapper;
 import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
+import org.pluchon.forum.service.security.AiUserContext;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -40,25 +40,17 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     /**
      * VIP 有效：tier&gt;0 且（未填到期时间视为运营不限期，或到期时间晚于当前）
      */
-    private boolean vipActive(User u) {
-        Byte tier = u.getVipTier();
-        if (tier == null || tier == 0) {
-            return false;
-        }
-        Date exp = u.getVipExpireAt();
-        if (exp == null) {
-            return true;
-        }
-        return exp.after(new Date());
+    private boolean vipActive(AiUserContext user) {
+        return user != null && user.isVipActive();
     }
 
-    private boolean isProOrMax(User u) {
-        return vipActive(u) && (Constant.VIP_TIER_PRO.equals(u.getVipTier())
-                || Constant.VIP_TIER_MAX.equals(u.getVipTier()));
+    private boolean isProOrMax(AiUserContext user) {
+        return vipActive(user) && (Constant.VIP_TIER_PRO.equals(user.getVipTier())
+                || Constant.VIP_TIER_MAX.equals(user.getVipTier()));
     }
 
-    private boolean isMax(User u) {
-        return vipActive(u) && Constant.VIP_TIER_MAX.equals(u.getVipTier());
+    private boolean isMax(AiUserContext user) {
+        return vipActive(user) && Constant.VIP_TIER_MAX.equals(user.getVipTier());
     }
 
     private void ensureRow(Long userId, LocalDate d) {
@@ -66,12 +58,12 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public boolean hasAdvancedQwenAccess(User user) {
+    public boolean hasAdvancedQwenAccess(AiUserContext user) {
         return isProOrMax(user);
     }
 
     @Override
-    public void consumeQwenFlash(User user) {
+    public void consumeQwenFlash(AiUserContext user) {
         if (isProOrMax(user)) {
             return;
         }
@@ -84,7 +76,7 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void consumeAdvancedLlm(User user) {
+    public void consumeAdvancedLlm(AiUserContext user) {
         if (!isProOrMax(user)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
         }
@@ -98,7 +90,7 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void consumeImageNormal(User user) {
+    public void consumeImageNormal(AiUserContext user) {
         if (!isProOrMax(user)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
         }
@@ -112,7 +104,7 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void consumeImagePremium(User user) {
+    public void consumeImagePremium(AiUserContext user) {
         if (!isProOrMax(user)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
         }
@@ -126,14 +118,14 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void recordCoverHint(User user) {
+    public void recordCoverHint(AiUserContext user) {
         LocalDate d = today();
         ensureRow(user.getId(), d);
         aiUsageDailyMapper.incrementCoverHint(user.getId(), d);
     }
 
     @Override
-    public void releaseQwenFlash(User user) {
+    public void releaseQwenFlash(AiUserContext user) {
         if (isProOrMax(user)) {
             return;
         }
@@ -141,17 +133,17 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void releaseAdvancedLlm(User user) {
+    public void releaseAdvancedLlm(AiUserContext user) {
         aiUsageDailyMapper.decrementAdvanced(user.getId(), today());
     }
 
     @Override
-    public void releaseImageNormal(User user) {
+    public void releaseImageNormal(AiUserContext user) {
         aiUsageDailyMapper.decrementImageNormal(user.getId(), today());
     }
 
     @Override
-    public void releaseImagePremium(User user) {
+    public void releaseImagePremium(AiUserContext user) {
         aiUsageDailyMapper.decrementImagePremium(user.getId(), today());
     }
 }
