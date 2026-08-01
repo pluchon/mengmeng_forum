@@ -29,7 +29,7 @@ import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.search.SearchService;
-import org.pluchon.forum.service.interfaces.user.UserFollowService;
+import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -89,7 +89,7 @@ public class SearchServiceImpl implements SearchService {
     private ArticleSearchIndexService articleSearchIndexService;
 
     @Autowired
-    private UserFollowService userFollowService;
+    private ContentFollowLookupService userFollowService;
 
     @Override
     public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {

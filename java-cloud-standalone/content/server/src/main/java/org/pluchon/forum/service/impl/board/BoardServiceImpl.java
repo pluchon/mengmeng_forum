@@ -25,7 +25,7 @@ import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
 import org.pluchon.forum.service.interfaces.board.BoardService;
-import org.pluchon.forum.service.interfaces.user.UserFollowService;
+import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -58,7 +58,7 @@ public class BoardServiceImpl implements BoardService {
     private UserService userService;
 
     @Autowired
-    private UserFollowService userFollowService;
+    private ContentFollowLookupService userFollowService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;

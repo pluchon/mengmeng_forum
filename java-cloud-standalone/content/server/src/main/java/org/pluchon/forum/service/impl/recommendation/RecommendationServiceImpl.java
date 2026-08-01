@@ -36,7 +36,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.pluchon.forum.service.interfaces.recommendation.UserInterestPreferenceService;
-import org.pluchon.forum.service.interfaces.user.UserFollowService;
+import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,7 +86,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private UserInterestPreferenceService preferenceService;
 
     @Autowired
-    private UserFollowService userFollowService;
+    private ContentFollowLookupService userFollowService;
 
     @Autowired
     private ArticleHotRankingService articleHotRankingService;

@@ -49,7 +49,7 @@ import org.pluchon.forum.service.interfaces.favorite.FavoriteArticleService;
 import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.user.UserService;
-import org.pluchon.forum.service.interfaces.user.UserFollowService;
+import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -83,7 +83,7 @@ public class ArticleServiceImpl implements ArticleService {
     private UserService userService;
 
     @Autowired
-    private UserFollowService userFollowService;
+    private ContentFollowLookupService userFollowService;
 
     @Autowired
     private ContentGrowthInternalFeignClient contentGrowthInternalFeignClient;
