@@ -18,6 +18,7 @@ forum:
   domain: game
   features:
     scheduling: true
+    # 内容侧 MQ 仍由 forum-content 消费；对局结束由 GameFinishedMqConsumer（本域）监听
     mq-consumer: false
     # IM 的 /ws/notify 仅由 forum-im 承载；游戏进程只用 game-runtime WebSocket
     websocket: false
