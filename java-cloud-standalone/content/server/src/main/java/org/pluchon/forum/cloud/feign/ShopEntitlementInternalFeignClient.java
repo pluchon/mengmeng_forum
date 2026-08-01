@@ -3,7 +3,7 @@ package org.pluchon.forum.cloud.feign;
 import org.pluchon.forum.api.economy.ShopEntitlementInternalApi;
 import org.springframework.cloud.openfeign.FeignClient;
 
-// 过渡：消费方 Feign，契约来自 forum-economy-api
+// 内容域消费经济表情权益内部契约的客户端
 @FeignClient(name = "forum-economy", contextId = "shopEntitlementInternalFeignClient")
 public interface ShopEntitlementInternalFeignClient extends ShopEntitlementInternalApi {
 }

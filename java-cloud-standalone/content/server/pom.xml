@@ -14,6 +14,26 @@
     <dependencies>
         <dependency>
             <groupId>org.pluchon.forum</groupId>
+            <artifactId>common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>content-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>auth-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>economy-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>im-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
             <artifactId>platform</artifactId>
         </dependency>
         <dependency>
