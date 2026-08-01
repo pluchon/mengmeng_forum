@@ -40,6 +40,14 @@ desktop.ini
 # --- Java / Maven (backend) ---
 target/
 backend/cloud/
+
+# --- 本地 Nacos 发行包（体积大，勿入库）---
+nacos-server-*/
+nacos/
+
+# --- java-cloud-standalone 本地运行产物 ---
+java-cloud-standalone/**/target/
+java-cloud-standalone/logs/
 .mvn/
 mvnw
 mvnw.cmd

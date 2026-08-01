@@ -1,0 +1,27 @@
+server:
+  port: 10101
+
+spring:
+  application:
+    name: forum-auth
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+  config:
+    import:
+      - optional:classpath:application-core-defaults.yml
+
+forum:
+  domain: auth
+  features:
+    scheduling: false
+    mq-consumer: false
+    websocket: false
+    game-runtime: false
+
+logging:
+  file:
+    name: ${LOG_FILE:../logs/forum-auth/forum-auth.log}

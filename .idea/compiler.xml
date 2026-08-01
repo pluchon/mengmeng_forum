@@ -3,21 +3,43 @@
   <component name="CompilerConfiguration">
     <annotationProcessing>
       <profile default="true" name="Default" enabled="true" />
-      <profile name="Annotation profile for forum-demo" enabled="true">
+      <profile name="Annotation profile for java-cloud-standalone" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
-        <module name="backend" />
+        <module name="forum-auth" />
+        <module name="forum-economy" />
+        <module name="forum-ai" />
+        <module name="forum-common" />
+        <module name="forum-api" />
+        <module name="forum-game" />
+        <module name="forum-im" />
+        <module name="forum-core" />
+        <module name="forum-gateway" />
+        <module name="forum-content" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="backend" target="17" />
+    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="backend" options="-parameters" />
+      <module name="forum-ai" options="-parameters" />
+      <module name="forum-api" options="-parameters" />
+      <module name="forum-auth" options="-parameters" />
+      <module name="forum-common" options="-parameters" />
+      <module name="forum-content" options="-parameters" />
+      <module name="forum-core" options="-parameters" />
+      <module name="forum-economy" options="-parameters" />
+      <module name="forum-game" options="-parameters" />
+      <module name="forum-gateway" options="-parameters" />
+      <module name="forum-im" options="-parameters" />
+      <module name="java-cloud-standalone" options="-parameters" />
     </option>
   </component>
 </project>
