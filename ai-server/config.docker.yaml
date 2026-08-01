@@ -1,4 +1,4 @@
-# Docker Compose 内网服务名（由 nginx/docker-compose 使用）
+﻿# Docker Compose 内网服务名（由 nginx/docker-compose 使用）
 server:
   host: 0.0.0.0
   port: 5000
@@ -154,7 +154,7 @@ ffmpeg:
   internal_key: ""
 
 forum:
-  base_url: "http://backend-1:8080"
+  base_url: "http://gateway:10086"
   notice_list_path: "/notice/center/list"
   request_timeout: 15
   site_help_cache_ttl: 600

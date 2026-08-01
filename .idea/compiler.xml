@@ -3,6 +3,11 @@
   <component name="CompilerConfiguration">
     <annotationProcessing>
       <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+      </profile>
       <profile name="Annotation profile for java-cloud-standalone" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
@@ -10,36 +15,66 @@
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
-        <module name="forum-auth" />
-        <module name="forum-economy" />
-        <module name="forum-ai" />
-        <module name="forum-common" />
-        <module name="forum-api" />
-        <module name="forum-game" />
-        <module name="forum-im" />
-        <module name="forum-core" />
-        <module name="forum-gateway" />
-        <module name="forum-content" />
+        <module name="common" />
+        <module name="platform" />
+        <module name="auth-api" />
+        <module name="auth-server" />
+        <module name="content-api" />
+        <module name="content-server" />
+        <module name="im-api" />
+        <module name="im-server" />
+        <module name="game-api" />
+        <module name="game-server" />
+        <module name="economy-api" />
+        <module name="economy-server" />
+        <module name="ai-api" />
+        <module name="ai-server" />
+        <module name="gateway" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="backend" target="17" />
+      <module name="ai-api" target="17" />
+      <module name="ai-server" target="17" />
+      <module name="auth-api" target="17" />
+      <module name="auth-server" target="17" />
+      <module name="common" target="17" />
+      <module name="content-api" target="17" />
+      <module name="content-server" target="17" />
+      <module name="economy-api" target="17" />
+      <module name="economy-server" target="17" />
+      <module name="game-api" target="17" />
+      <module name="game-server" target="17" />
+      <module name="gateway" target="17" />
+      <module name="im-api" target="17" />
+      <module name="im-server" target="17" />
+      <module name="java-cloud-standalone" target="17" />
+      <module name="platform" target="17" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="backend" options="-parameters" />
-      <module name="forum-ai" options="-parameters" />
-      <module name="forum-api" options="-parameters" />
-      <module name="forum-auth" options="-parameters" />
-      <module name="forum-common" options="-parameters" />
-      <module name="forum-content" options="-parameters" />
-      <module name="forum-core" options="-parameters" />
-      <module name="forum-economy" options="-parameters" />
-      <module name="forum-game" options="-parameters" />
-      <module name="forum-gateway" options="-parameters" />
-      <module name="forum-im" options="-parameters" />
+      <module name="ai" options="-parameters" />
+      <module name="ai-api" options="-parameters" />
+      <module name="ai-server" options="-parameters" />
+      <module name="auth" options="-parameters" />
+      <module name="auth-api" options="-parameters" />
+      <module name="auth-server" options="-parameters" />
+      <module name="common" options="-parameters" />
+      <module name="content" options="-parameters" />
+      <module name="content-api" options="-parameters" />
+      <module name="content-server" options="-parameters" />
+      <module name="economy" options="-parameters" />
+      <module name="economy-api" options="-parameters" />
+      <module name="economy-server" options="-parameters" />
+      <module name="game" options="-parameters" />
+      <module name="game-api" options="-parameters" />
+      <module name="game-server" options="-parameters" />
+      <module name="gateway" options="-parameters" />
+      <module name="im" options="-parameters" />
+      <module name="im-api" options="-parameters" />
+      <module name="im-server" options="-parameters" />
       <module name="java-cloud-standalone" options="-parameters" />
+      <module name="platform" options="-parameters" />
     </option>
   </component>
 </project>
