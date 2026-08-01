@@ -35,7 +35,7 @@ import org.pluchon.forum.mapper.ForumAiLongTermMemoryMapper;
 import org.pluchon.forum.mapper.ForumAiTaskSessionMapper;
 import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
-import org.pluchon.forum.cloud.feign.VipInternalFeignClient;
+import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
 import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiWorkspaceService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,7 +79,7 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
     private UserInternalLookupService userInternalLookupService;
 
     @Autowired
-    private VipInternalFeignClient vipInternalFeignClient;
+    private AiVipInternalFeignClient vipInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;

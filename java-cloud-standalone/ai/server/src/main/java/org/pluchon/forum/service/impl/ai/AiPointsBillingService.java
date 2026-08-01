@@ -13,7 +13,7 @@ import org.pluchon.forum.entity.db.ForumAiUsageLog;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
-import org.pluchon.forum.cloud.feign.VipInternalFeignClient;
+import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
 import org.pluchon.forum.mapper.ForumAiModelPriceMapper;
 import org.pluchon.forum.mapper.ForumAiModelUsageDailyMapper;
 import org.pluchon.forum.mapper.ForumAiUsageLogMapper;
@@ -55,7 +55,7 @@ public class AiPointsBillingService {
     private PointsService pointsService;
 
     @Resource
-    private VipInternalFeignClient vipInternalFeignClient;
+    private AiVipInternalFeignClient vipInternalFeignClient;
 
     @Resource
     private ForumMetrics forumMetrics;

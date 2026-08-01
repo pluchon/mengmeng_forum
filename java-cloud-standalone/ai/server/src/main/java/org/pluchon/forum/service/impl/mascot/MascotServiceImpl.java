@@ -47,7 +47,7 @@ import org.pluchon.forum.mapper.AiUsageDailyMapper;
 import org.pluchon.forum.api.content.ArticleInternalVO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
-import org.pluchon.forum.cloud.feign.VipInternalFeignClient;
+import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
 import org.pluchon.forum.common.utils.ArticleHotScoreUtils;
 import org.pluchon.forum.entity.db.AiUsageDaily;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
@@ -169,7 +169,7 @@ public class MascotServiceImpl implements MascotService {
     private AiUsageDailyMapper aiUsageDailyMapper;
 
     @Resource
-    private VipInternalFeignClient vipInternalFeignClient;
+    private AiVipInternalFeignClient vipInternalFeignClient;
 
     @Override
     public List<MascotModelPublicVO> listPublicModels() {
