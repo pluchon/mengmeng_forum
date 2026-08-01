@@ -19,7 +19,7 @@ import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Message;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserChatEmoji;
 import org.pluchon.forum.entity.dto.message.FavoriteEmojiRequest;
 import org.pluchon.forum.entity.dto.message.MessageReplyRequest;
@@ -39,7 +39,7 @@ import org.pluchon.forum.service.impl.message.guard.MessageSendContext;
 import org.pluchon.forum.service.impl.message.guard.MessageSendGuardChain;
 import org.pluchon.forum.service.impl.message.guard.MessageSendGuardResult;
 import org.pluchon.forum.service.interfaces.message.MessageService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -68,7 +68,7 @@ public class MessageServiceImpl implements MessageService {
     private UserChatEmojiMapper userChatEmojiMapper;
 
     @Autowired
-    private UserService userService;
+    private ImUserLookupService userService;
 
     @Autowired
     private ForumProducer forumProducer;
@@ -356,7 +356,7 @@ public class MessageServiceImpl implements MessageService {
         Page<Message> result = messageMapper.selectPage(page, new LambdaQueryWrapper<Message>().eq(Message::getReceiveUserId, userId)
                 .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE).orderByDesc(Message::getCreateTime));
         List<MessageListResponse> records = result.getRecords().stream().map(msg -> {
-            User user = userService.queryUserByUserId(msg.getPostUserId());
+            UserInternalVO user = userService.queryUserByUserId(msg.getPostUserId());
             return new MessageListResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(user), msg);
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
@@ -386,8 +386,8 @@ public class MessageServiceImpl implements MessageService {
                                                                         Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        User selfUser = userService.queryUserByUserId(userId);
-        User otherUser = userService.queryUserByUserId(receiveId);
+        UserInternalVO selfUser = userService.queryUserByUserId(userId);
+        UserInternalVO otherUser = userService.queryUserByUserId(receiveId);
         Page<Message> page = PageUtils.getPage(validPageNum, validPageSize);
         // MyBatis-Plus 注意：.or().and(...) 中 or() 会被吞掉，必须使用 or(lambda) 写法
         Page<Message> result = messageMapper.selectPage(page, new LambdaQueryWrapper<Message>().and(w -> w
@@ -397,7 +397,7 @@ public class MessageServiceImpl implements MessageService {
                 .orderByAsc(Message::getCreateTime));
         List<MessageDetailResponse> records = result.getRecords().stream().map(msg -> {
             boolean isSelf = Objects.equals(msg.getPostUserId(), userId);
-            User fromUser = isSelf ? selfUser : otherUser;
+            UserInternalVO fromUser = isSelf ? selfUser : otherUser;
             return new MessageDetailResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(fromUser), msg, isSelf);
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
@@ -410,7 +410,7 @@ public class MessageServiceImpl implements MessageService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
         boolean isSelf = Objects.equals(msg.getPostUserId(), loginUserId);
-        User fromUser = userService.queryUserByUserId(msg.getPostUserId());
+        UserInternalVO fromUser = userService.queryUserByUserId(msg.getPostUserId());
         return new MessageDetailResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(fromUser), msg, isSelf);
     }
 
@@ -575,7 +575,7 @@ public class MessageServiceImpl implements MessageService {
         if (safeSummary.length() > 50) {
             safeSummary = safeSummary.substring(0, 50);
         }
-        User sender = userService.getUserInfoById(sendUserId);
+        UserInternalVO sender = userService.getUserInfoById(sendUserId);
         String senderLabel = sender != null && StringUtils.hasLength(sender.getNickname())
                 ? sender.getNickname() : (sender != null ? sender.getUsername() : "用户");
         String eventId = "msg:" + messageId;
@@ -720,7 +720,7 @@ public class MessageServiceImpl implements MessageService {
         for (Message msg : allMessages) {
             Long otherId = msg.getPostUserId().equals(userId) ? msg.getReceiveUserId() : msg.getPostUserId();
             sessionMap.computeIfAbsent(otherId, id -> {
-                User other = userService.queryUserByUserId(id);
+                UserInternalVO other = userService.queryUserByUserId(id);
                 MessageSessionResponse session = new MessageSessionResponse();
                 session.setUnReadMessage(0L);
                 session.setUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(other));

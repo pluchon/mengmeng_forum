@@ -3,7 +3,7 @@ package org.pluchon.forum.converter;
 import org.pluchon.forum.entity.db.GroupChat;
 import org.pluchon.forum.entity.db.GroupChatMember;
 import org.pluchon.forum.entity.db.GroupChatMessage;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatDetailVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMemberVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMessageVO;
@@ -36,7 +36,7 @@ public final class GroupChatConverter {
         return vo;
     }
 
-    public static GroupChatMemberVO toMemberVO(GroupChatMember member, User user) {
+    public static GroupChatMemberVO toMemberVO(GroupChatMember member, UserInternalVO user) {
         if (member == null) {
             return null;
         }
@@ -54,7 +54,7 @@ public final class GroupChatConverter {
         return vo;
     }
 
-    public static GroupChatMessageVO toMessageVO(GroupChatMessage message, User sender, Long loginUserId) {
+    public static GroupChatMessageVO toMessageVO(GroupChatMessage message, UserInternalVO sender, Long loginUserId) {
         if (message == null) {
             return null;
         }

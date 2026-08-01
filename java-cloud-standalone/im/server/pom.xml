@@ -26,6 +26,10 @@
         </dependency>
         <dependency>
             <groupId>org.pluchon.forum</groupId>
+            <artifactId>economy-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
             <artifactId>platform</artifactId>
         </dependency>
         <dependency>

@@ -14,7 +14,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.ForumDateTimes;
 import org.pluchon.forum.entity.db.GroupChat;
 import org.pluchon.forum.entity.db.GroupChatMember;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.groupchat.GroupVoiceSignalRequest;
 import org.pluchon.forum.entity.vo.groupchat.GroupVoiceParticipantVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupVoiceSessionVO;
@@ -24,7 +24,7 @@ import org.pluchon.forum.mapper.GroupChatMemberMapper;
 import org.pluchon.forum.service.interfaces.groupchat.GroupChatService;
 import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
 import org.pluchon.forum.service.interfaces.groupchat.GroupVoiceService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.pluchon.forum.service.interfaces.voice.VoiceOccupancyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -66,7 +66,7 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
     private GroupChatMemberMapper groupChatMemberMapper;
 
     @Autowired
-    private UserService userService;
+    private ImUserLookupService userLookupService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -389,7 +389,7 @@ public class GroupVoiceServiceImpl implements GroupVoiceService {
     }
 
     private GroupVoiceParticipantVO toParticipantVO(ParticipantState participant) {
-        User user = userService.queryUserByUserId(participant.getUserId());
+        UserInternalVO user = userLookupService.queryUserByUserId(participant.getUserId());
         if (user == null) {
             return null;
         }
