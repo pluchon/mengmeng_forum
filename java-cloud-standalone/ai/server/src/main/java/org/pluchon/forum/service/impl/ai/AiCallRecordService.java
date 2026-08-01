@@ -8,8 +8,8 @@ import org.pluchon.forum.common.metrics.ForumMetrics;
 import org.pluchon.forum.entity.db.ForumAiCallRecord;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
+import org.pluchon.forum.cloud.feign.AiPointsInternalFeignClient;
 import org.pluchon.forum.mapper.ForumAiCallRecordMapper;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -37,7 +37,7 @@ public class AiCallRecordService {
     private AiPointsBillingService aiPointsBillingService;
 
     @Autowired
-    private PointsService pointsService;
+    private AiPointsInternalFeignClient aiPointsInternalFeignClient;
 
     @Autowired
     private ForumMetrics forumMetrics;
@@ -181,7 +181,8 @@ public class AiCallRecordService {
     }
 
     private Map<String, Object> duplicateBillingResult(AiUserContext user, int pointsCharged) {
-        int balanceAfter = pointsService.getWallet(user.getId()).getBalance();
+        Integer balance = aiPointsInternalFeignClient.getBalance(user.getId());
+        int balanceAfter = balance == null ? 0 : balance;
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("pointsCost", pointsCharged);
         out.put("balanceAfter", balanceAfter);

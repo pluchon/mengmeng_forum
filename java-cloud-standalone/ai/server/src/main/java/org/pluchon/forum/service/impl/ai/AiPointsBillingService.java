@@ -12,11 +12,11 @@ import org.pluchon.forum.entity.db.ForumAiModelPrice;
 import org.pluchon.forum.entity.db.ForumAiUsageLog;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
+import org.pluchon.forum.cloud.feign.AiPointsInternalFeignClient;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
 import org.pluchon.forum.mapper.ForumAiModelPriceMapper;
 import org.pluchon.forum.mapper.ForumAiModelUsageDailyMapper;
 import org.pluchon.forum.mapper.ForumAiUsageLogMapper;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +52,7 @@ public class AiPointsBillingService {
     private ForumAiModelUsageDailyMapper forumAiModelUsageDailyMapper;
 
     @Resource
-    private PointsService pointsService;
+    private AiPointsInternalFeignClient aiPointsInternalFeignClient;
 
     @Resource
     private AiVipInternalFeignClient vipInternalFeignClient;
@@ -199,7 +199,7 @@ public class AiPointsBillingService {
         if (pointsNeeded <= 0) {
             return;
         }
-        int bal = pointsService.getWallet(user.getId()).getBalance();
+        int bal = balanceOf(user.getId());
         if (bal < pointsNeeded) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_POINTS_NOT_ENOUGH));
         }
@@ -257,7 +257,7 @@ public class AiPointsBillingService {
                             .eq(ForumAiUsageLog::getRelatedId, relatedId.trim()));
             if (dupCount != null && dupCount > 0) {
                 forumMetrics.recordIdempotencyHit();
-                int balanceAfter = pointsService.getWallet(user.getId()).getBalance();
+                int balanceAfter = balanceOf(user.getId());
                 Map<String, Object> out = new LinkedHashMap<>();
                 out.put("pointsCost", 0);
                 out.put("balanceAfter", balanceAfter);
@@ -279,7 +279,7 @@ public class AiPointsBillingService {
             billingMode = "points";
         } else {
             recordUsageOnly(user, featureCode, u, relatedId, 0);
-            balanceAfter = pointsService.getWallet(user.getId()).getBalance();
+            balanceAfter = balanceOf(user.getId());
             billingMode = vipExemptPoints(user) ? "vip_quota" : "free_quota";
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -313,9 +313,19 @@ public class AiPointsBillingService {
         String idempotencyKey = relatedId != null && !relatedId.isBlank()
                 ? "ai_bill:" + user.getId() + ":" + relatedId.trim()
                 : null;
-        int balanceAfter = pointsService.deductPoints(user.getId(), cost, pointsSource, null, remark, idempotencyKey);
+        Integer balance = aiPointsInternalFeignClient.deductPoints(
+                user.getId(), cost, pointsSource == null ? 0 : pointsSource, null, remark, idempotencyKey);
+        if (balance == null) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        int balanceAfter = balance;
         persistUsageLog(user.getId(), featureCode, u, relatedId, cost);
         return balanceAfter;
+    }
+
+    private int balanceOf(Long userId) {
+        Integer balance = aiPointsInternalFeignClient.getBalance(userId);
+        return balance == null ? 0 : balance;
     }
 
     private void persistUsageLog(Long userId, String featureCode, AiModelUsageDTO u, String relatedId, int pointsCost) {
