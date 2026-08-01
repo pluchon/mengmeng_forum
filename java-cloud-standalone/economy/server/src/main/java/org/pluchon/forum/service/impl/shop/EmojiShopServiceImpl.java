@@ -12,7 +12,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.EconomyAiGatewayService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.EmojiItem;
@@ -52,8 +52,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * 表情包商城实现.
  * AI 审核:
- *   - 包名: AiAuditUtils.isTextAllowed
- *   - 单图: AiAuditUtils.isImageAllowed 已经在 /file/uploadEmojiShopImage 上传时跑过, 此处不再重复
+ *   - 包名: EconomyAiGatewayService.validateText
+ *   - 单图: 已在内容服务上传路径经 AI 域审核，此处不再重复
  *           (URL 校验确保图片来自本站上传通道, 用户无法伪造外链绕过审核)
  * 站长 (isAdmin=1) 创建跳过 AI 审核.
  */
@@ -92,6 +92,9 @@ public class EmojiShopServiceImpl implements EmojiShopService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private EconomyAiGatewayService economyAiGatewayService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createShop(Long operatorUserId, CreateEmojiShopRequest req) {
@@ -127,12 +130,12 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         }
         // 用户上传: 包名/说明走 AI 文本审核; 站长跳过(站长承担管理责任)
         if (!isAdmin) {
-            String reject = AiAuditUtils.isTextAllowed(name);
+            String reject = economyAiGatewayService.validateText(name);
             if (reject != null) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION));
             }
             if (StringUtils.hasLength(description)) {
-                reject = AiAuditUtils.isTextAllowed(description);
+                reject = economyAiGatewayService.validateText(description);
                 if (reject != null) {
                     throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION));
                 }

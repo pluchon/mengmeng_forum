@@ -5,6 +5,8 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.AiHubConverter;
+import org.pluchon.forum.api.ai.AiGobangMoveRequest;
+import org.pluchon.forum.api.ai.AiGobangMoveVO;
 import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
 import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
@@ -30,11 +32,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @Service
@@ -374,6 +379,82 @@ public class AiHubServiceImpl implements AiHubService {
             log.warn("RAG 用户向量检索失败 keyword={}: {}", query.trim(), e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    public String validateText(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("content", content);
+            Map<String, Object> data = invokeGateway("CONTENT_MODERATION", "TEXT_AUDIT", null, payload);
+            if (Boolean.TRUE.equals(data.get("allowed"))) {
+                return null;
+            }
+            Object reason = data.get("reason");
+            return reason != null ? String.valueOf(reason) : "内容审核未通过";
+        } catch (ApplicationException e) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_CONTENT_ERROR));
+        }
+    }
+
+    @Override
+    public boolean validateImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return false;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("contentBase64", Base64.getEncoder().encodeToString(file.getBytes()));
+            payload.put("filename", file.getOriginalFilename());
+            payload.put("contentType", file.getContentType());
+            Map<String, Object> data = invokeGateway("CONTENT_MODERATION", "IMAGE_AUDIT", null, payload);
+            return Boolean.TRUE.equals(data.get("allowed"));
+        } catch (Exception e) {
+            log.warn("图片 AI 审核不可用: {}", e.getMessage());
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_IMAGE_ERROR));
+        }
+    }
+
+    @Override
+    public AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request) {
+        if (request == null || request.getBoard() == null || request.getBoard().length == 0) {
+            return null;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("board", request.getBoard());
+            payload.put("aiChess", request.getAiChess());
+            payload.put("modelCode", request.getModelCode());
+            payload.put("useLlm", true);
+            Map<String, Object> data = invokeGateway("GAME", "GOBANG_MOVE", null, payload);
+            AiGobangMoveVO vo = new AiGobangMoveVO();
+            vo.setRow(integerValue(data.get("row")));
+            vo.setCol(integerValue(data.get("col")));
+            Object modelCode = data.get("modelCode") != null ? data.get("modelCode") : data.get("model");
+            vo.setModelCode(modelCode != null ? String.valueOf(modelCode) : null);
+            vo.setFallback(Boolean.TRUE.equals(data.get("fallback")));
+            return vo;
+        } catch (Exception e) {
+            log.warn("五子棋 AI 调用失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Integer integerValue(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.valueOf(String.valueOf(value).trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

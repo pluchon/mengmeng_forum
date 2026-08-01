@@ -13,7 +13,8 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableFeignClients(basePackages = {
         "org.pluchon.forum.api",
         "org.pluchon.forum.auth.client",
-        "org.pluchon.forum.cloud.feign"
+        "org.pluchon.forum.cloud.feign",
+        "org.pluchon.forum.auth.client"
 })
 public class ForumAuthApplication {
 

@@ -5,7 +5,6 @@ import org.pluchon.forum.api.content.ArticleInternalVO;
 import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
-import org.pluchon.forum.common.utils.AiAuditUtils;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.mascot.MascotRelatedArticleCandidate;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
@@ -90,10 +89,7 @@ public class MascotArticleRagHelper {
                 item.put("text", buildRagText(article));
                 payload.add(item);
             }
-            List<Map<String, Object>> ranked = AiAuditUtils.ragSearchArticlesRanked(query, payload);
-            if (ranked.isEmpty()) {
-                ranked = toRankedMaps(aiHubService.ragArticleVectorRanked(query, payload));
-            }
+            List<Map<String, Object>> ranked = toRankedMaps(aiHubService.ragArticleVectorRanked(query, payload));
             return enrichConfirmedCandidates(query, ranked, byId);
         } catch (Exception e) {
             log.warn("看板娘确认后的帖子 RAG 检索失败: {}", e.getMessage());

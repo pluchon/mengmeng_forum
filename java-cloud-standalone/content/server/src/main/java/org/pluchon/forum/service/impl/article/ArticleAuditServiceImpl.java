@@ -23,7 +23,7 @@ import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitConte
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardChain;
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardResult;
 import org.pluchon.forum.cloud.feign.ContentWebSocketInternalFeignClient;
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
@@ -87,7 +87,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private ArticleAuditService self;
 
     @Autowired
-    private AiHubService aiHubService;
+    private ContentAiHubInternalFeignClient aiHubService;
 
     @Autowired
     private RecommendationAiProfileService recommendationAiProfileService;

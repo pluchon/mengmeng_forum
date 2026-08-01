@@ -10,7 +10,7 @@ import org.pluchon.forum.common.enums.DanmakuMode;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.converter.DanmakuConverter;
 import org.pluchon.forum.entity.db.Article;
@@ -53,6 +53,9 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -142,7 +145,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
     // 全部长度走文本审核；审核服务异常时降级放行
     private void assertTextAllowed(String content) {
         try {
-            String violation = AiAuditUtils.isTextAllowed(content);
+            String violation = contentAiGatewayService.validateText(content);
             if (violation != null) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
             }

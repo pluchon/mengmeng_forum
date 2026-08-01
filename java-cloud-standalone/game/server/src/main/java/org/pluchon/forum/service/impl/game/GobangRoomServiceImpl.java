@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.common.config.AiHubUrls;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -18,7 +17,10 @@ import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.ai.AiGobangMoveRequest;
+import org.pluchon.forum.api.ai.AiGobangMoveVO;
 import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
+import org.pluchon.forum.game.client.GameAiHubInternalFeignClient;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
@@ -49,15 +51,10 @@ import org.pluchon.forum.service.impl.game.guard.GobangGuardResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -164,12 +161,8 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
 
-    @Value("${forum.ai.internal-key:}")
-    private String aiInternalKey;
-
     @Autowired
-    @Qualifier("gameAiRestTemplate")
-    private RestTemplate gameAiRestTemplate;
+    private GameAiHubInternalFeignClient gameAiHubInternalFeignClient;
 
     @Autowired(required = false)
     public void setGobangGuardChain(GobangGuardChain gobangGuardChain) {
@@ -989,46 +982,23 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         return gobangAiEngine.chooseMove(room.getBoard());
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     private int[] chooseRemoteAiMove(GobangRoom room) {
         try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            if (aiInternalKey != null && !aiInternalKey.isBlank()) {
-                headers.set("X-Internal-Key", aiInternalKey);
-            }
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("board", room.copyBoard());
-            payload.put("aiChess", 2);
-            payload.put("modelCode", room.getAiModelCode());
-            payload.put("useLlm", true);
-            Map<String, Object> body = new HashMap<>();
-            body.put("taskType", "GAME");
-            body.put("intent", "GOBANG_MOVE");
-            body.put("version", "v1");
-            body.put("userContext", Collections.emptyMap());
-            body.put("payload", payload);
-            ResponseEntity<Map> response = gameAiRestTemplate.postForEntity(
-                    AiHubUrls.gatewayInvokeUrl(),
-                    new HttpEntity<>(body, headers),
-                    Map.class
-            );
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            AiGobangMoveRequest request = new AiGobangMoveRequest();
+            request.setBoard(room.copyBoard());
+            request.setAiChess(2);
+            request.setModelCode(room.getAiModelCode());
+            AiGobangMoveVO move = gameAiHubInternalFeignClient.chooseGobangMove(request);
+            if (move == null || move.getRow() == null || move.getCol() == null) {
                 return null;
             }
-            Map resp = response.getBody();
-            if (parseInt(resp.get("code"), -1) != 200 || !(resp.get("data") instanceof Map gateway)
-                    || !Boolean.TRUE.equals(gateway.get("success"))
-                    || !(gateway.get("data") instanceof Map data)) {
-                return null;
-            }
-            int row = parseInt(data.get("row"), -1);
-            int col = parseInt(data.get("col"), -1);
+            int row = move.getRow();
+            int col = move.getCol();
             if (!inBoard(row, col) || room.getBoard()[row][col] != 0) {
                 return null;
             }
-            String modelCode = parseModelCode(data, room.getAiModelCode());
-            boolean fallback = Boolean.TRUE.equals(data.get("fallback"));
+            String modelCode = parseModelCode(move.getModelCode(), room.getAiModelCode());
+            boolean fallback = Boolean.TRUE.equals(move.getFallback());
             room.setAiModelCode(modelCode);
             room.setAiModelName(GameAiPlanner.formatModelLabel(modelCode, !fallback, fallback));
             return new int[] { row, col };
@@ -1038,12 +1008,8 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
     }
 
-    private String parseModelCode(Map data, String defaultModelCode) {
-        Object raw = data.get("modelCode");
-        if (raw == null) {
-            raw = data.get("model");
-        }
-        String modelCode = raw == null ? "" : String.valueOf(raw).trim();
+    private String parseModelCode(String raw, String defaultModelCode) {
+        String modelCode = raw == null ? "" : raw.trim();
         if (AI_MODEL_PRO.equals(modelCode)) {
             return AI_MODEL_PRO;
         }
@@ -1051,20 +1017,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return AI_MODEL_FLASH;
         }
         return AI_MODEL_PRO.equals(defaultModelCode) ? AI_MODEL_PRO : AI_MODEL_FLASH;
-    }
-
-    private int parseInt(Object value, int defaultValue) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value != null) {
-            try {
-                return Integer.parseInt(String.valueOf(value).trim());
-            } catch (NumberFormatException ignored) {
-                return defaultValue;
-            }
-        }
-        return defaultValue;
     }
 
     private boolean inBoard(int row, int col) {

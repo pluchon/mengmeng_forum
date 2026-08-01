@@ -1,6 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
@@ -31,7 +31,7 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
     private ArticleHotRankingService articleHotRankingService;
 
     @Autowired
-    private AiHubService aiHubService;
+    private ContentAiHubInternalFeignClient aiHubService;
 
     @Override
     public void rollbackPublishedExposure(Long articleId, Long boardId, Long userId) {

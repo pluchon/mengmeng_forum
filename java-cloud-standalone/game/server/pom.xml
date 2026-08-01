@@ -29,6 +29,10 @@
             <artifactId>economy-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>ai-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>

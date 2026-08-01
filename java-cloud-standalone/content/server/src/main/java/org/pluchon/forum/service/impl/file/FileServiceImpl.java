@@ -11,7 +11,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.LotteryImagePathUtils;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.common.utils.ImageCompressor;
 import org.pluchon.forum.common.utils.InMemoryMultipartFile;
 import org.pluchon.forum.service.interfaces.file.FileService;
@@ -43,7 +43,7 @@ import java.time.format.DateTimeFormatter;
  * 上传流水线 (uploadImage):
  *   1) validateImageFile : 基础校验 (非空 / 文件名 / 类型白名单 / 硬上限 / GIF 单独限尺寸)
  *   2) maybeCompress     : > 5MB 的静态图走 thumbnailator 压缩, GIF / 已达标图原样返回
- *   3) AiAuditUtils      : 用压缩后的字节做 AI 图片审核, 减小 AI 服务网络压力
+ *   3) ContentAiGatewayService：用压缩后的字节经 AI 域审核，减小网络压力
  *   4) putObject         : 写入 OSS 并返回外链 URL
  */
 @Service
@@ -52,6 +52,9 @@ public class FileServiceImpl implements FileService {
 
     @Autowired
     private OssConfig ossConfig;
+
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
 
     @Value("${forum.ffmpeg.internal-key:}")
     private String ffmpegInternalKey;
@@ -243,7 +246,7 @@ public class FileServiceImpl implements FileService {
         ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
-        if (!AiAuditUtils.isImageAllowed(uploadFile)) {
+        if (!contentAiGatewayService.validateImage(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
@@ -272,7 +275,7 @@ public class FileServiceImpl implements FileService {
         ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
-        if (!AiAuditUtils.isImageAllowed(uploadFile)) {
+        if (!contentAiGatewayService.validateImage(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
@@ -301,7 +304,7 @@ public class FileServiceImpl implements FileService {
         ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
-        if (!AiAuditUtils.isImageAllowed(uploadFile)) {
+        if (!contentAiGatewayService.validateImage(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
         String objectName = ossConfig.objectKey(
@@ -359,7 +362,7 @@ public class FileServiceImpl implements FileService {
         ensureOssReady();
         validateImageFile(file);
         MultipartFile uploadFile = maybeCompress(file);
-        if (!AiAuditUtils.isImageAllowed(uploadFile)) {
+        if (!contentAiGatewayService.validateImage(uploadFile)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
         }
         String objectName = ossConfig.objectKey(pathPrefix, buildObjectName(uploadFile, userId));

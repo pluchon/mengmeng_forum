@@ -9,7 +9,6 @@ import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.SearchUserConverter;
 import org.pluchon.forum.api.auth.UserInternalVO;
@@ -25,7 +24,8 @@ import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.api.ai.AiRagSearchRequest;
+import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.search.SearchService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
@@ -78,7 +78,7 @@ public class SearchServiceImpl implements SearchService {
     private ContentUserLookupService userInternalLookupService;
 
     @Autowired
-    private AiHubService aiHubService;
+    private ContentAiHubInternalFeignClient aiHubService;
 
     @Autowired
     private ArticleSearchIndexService articleSearchIndexService;
@@ -134,11 +134,13 @@ public class SearchServiceImpl implements SearchService {
                 item.put("text", buildRagCandidateText(a));
                 payload.add(item);
             }
-            rankedIds = extractRankedIds(AiAuditUtils.ragSearchArticlesRanked(kw, payload), ARTICLE_AI_HYBRID_MIN_SCORE);
+            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(ragRequest(kw, payload)),
+                    ARTICLE_AI_HYBRID_MIN_SCORE);
         }
 
         if (rankedIds.isEmpty()) {
-            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(kw, Collections.emptyList()),
+            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(
+                    ragRequest(kw, Collections.emptyList())),
                     ARTICLE_AI_VECTOR_MIN_SCORE);
         }
 
@@ -168,6 +170,13 @@ public class SearchServiceImpl implements SearchService {
         PageResult<ArticleListResponse> pageResult = new PageResult<>(
                 records, total, p, s, pages, toIdx < rankedIds.size());
         return new SearchArticleResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
+    }
+
+    private AiRagSearchRequest ragRequest(String query, List<Map<String, Object>> candidates) {
+        AiRagSearchRequest request = new AiRagSearchRequest();
+        request.setQuery(query);
+        request.setCandidates(candidates);
+        return request;
     }
 
     // 正文未命中时，只接受高相似度作者语义命中，避免把普通用户检索扩散为无关帖子。

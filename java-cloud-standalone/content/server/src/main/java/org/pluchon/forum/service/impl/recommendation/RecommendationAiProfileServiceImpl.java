@@ -29,7 +29,7 @@ import org.pluchon.forum.mapper.ForumArticleAiFeatureMapper;
 import org.pluchon.forum.mapper.ForumUserAiProfileSnapshotMapper;
 import org.pluchon.forum.mapper.UserInterestPreferenceMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -59,7 +59,7 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
     private static final String FEATURE_VERSION = "v1";
 
     @Autowired
-    private AiHubService aiHubService;
+    private ContentAiHubInternalFeignClient aiHubService;
 
     @Autowired
     private ArticleMapper articleMapper;

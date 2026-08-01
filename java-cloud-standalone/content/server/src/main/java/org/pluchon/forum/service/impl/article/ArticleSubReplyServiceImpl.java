@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.entity.db.ArticleSubReply;
@@ -60,6 +60,9 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     @Autowired
     private ArticleReplyMediaService articleReplyMediaService;
 
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void subReply(SubReplyRequest req, Long loginUserId) {
@@ -75,7 +78,7 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         String violation = null;
         if (plain.length() >= 25) {
             try {
-                violation = AiAuditUtils.isTextAllowed(req.getContent());
+                violation = contentAiGatewayService.validateText(req.getContent());
             } catch (ApplicationException ex) {
                 log.warn("楼中楼文本审核服务不可用，降级放行: {}", ex.getMessage());
             }

@@ -10,7 +10,11 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = "org.pluchon.forum")
 @MapperScan("org.pluchon.forum.mapper")
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = {"org.pluchon.forum.api", "org.pluchon.forum.cloud.feign"})
+@EnableFeignClients(basePackages = {
+        "org.pluchon.forum.api",
+        "org.pluchon.forum.cloud.feign",
+        "org.pluchon.forum.economy.client"
+})
 public class ForumEconomyApplication {
 
     public static void main(String[] args) {
