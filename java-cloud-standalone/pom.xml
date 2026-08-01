@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -27,7 +27,7 @@
         <module>forum-economy-api</module>
         <module>forum-ai-api</module>
         <module>forum-api</module>
-        <module>forum-core</module>
+        <module>forum-platform</module>
         <module>forum-gateway</module>
         <module>forum-auth</module>
         <module>forum-content</module>
@@ -115,7 +115,7 @@
             </dependency>
             <dependency>
                 <groupId>org.example.forum</groupId>
-                <artifactId>forum-core</artifactId>
+                <artifactId>forum-platform</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

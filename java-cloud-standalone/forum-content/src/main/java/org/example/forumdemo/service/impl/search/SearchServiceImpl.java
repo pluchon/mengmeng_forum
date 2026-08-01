@@ -23,7 +23,6 @@ import org.example.forumdemo.entity.vo.search.SearchUserResponse;
 import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
 import org.example.forumdemo.mapper.ArticleMapper;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
@@ -79,10 +78,6 @@ public class SearchServiceImpl implements SearchService {
 
     @Autowired
     private UserInternalLookupService userInternalLookupService;
-
-    // monolith 模式下用户字面/候选搜索仍走本地表；微服务模式不注入业务路径
-    @Autowired(required = false)
-    private UserMapper userMapper;
 
     @Autowired
     private UserService userService;
@@ -207,27 +202,11 @@ public class SearchServiceImpl implements SearchService {
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
 
-        if (userInternalLookupService.usesRemoteLookup()) {
-            if (!preferAiRag) {
-                return searchUsersByDbRemote(kw, p, s, viewerId);
-            }
-            return searchUsersByAiRagRemote(kw, p, s, viewerId);
-        }
-
+        // content 无 user 表：字面 / AI 用户搜索一律走 auth Feign（或向量 + Feign 回表）
         if (!preferAiRag) {
-            Page<User> page = PageUtils.getPage(p, s);
-            Page<User> dbResult = userMapper.selectPage(page, buildDbFuzzyUserQuery(kw));
-            if (dbResult.getRecords() != null && !dbResult.getRecords().isEmpty()) {
-                return new SearchUserResponse(
-                        Constant.SEARCH_SOURCE_DB,
-                        kw,
-                        wrapUsers(dbResult, p, s, kw, viewerId)
-                );
-            }
-            return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
+            return searchUsersByDbRemote(kw, p, s, viewerId);
         }
-
-        return searchUsersByAiRag(kw, p, s, viewerId);
+        return searchUsersByAiRagRemote(kw, p, s, viewerId);
     }
 
     /** 微服务模式：字面搜索走 auth Feign，再组装关注态 */
@@ -254,47 +233,6 @@ public class SearchServiceImpl implements SearchService {
     private SearchUserResponse searchUsersByAiRagRemote(String kw, int p, int s, Long viewerId) {
         List<Long> rankedIds = extractUserHitIds(
                 aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
-        if (rankedIds.isEmpty()) {
-            log.info("AI 用户语义搜索未命中 keyword={}", kw);
-            return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
-        }
-        if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
-            rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
-        }
-        long total = rankedIds.size();
-        int fromIdx = (p - 1) * s;
-        int toIdx = Math.min(fromIdx + s, rankedIds.size());
-        List<Long> pageSlice = fromIdx >= rankedIds.size() ? Collections.emptyList()
-                : rankedIds.subList(fromIdx, toIdx);
-        List<SearchUserItemVO> records = buildSearchUserListForRag(pageSlice, viewerId);
-        long pages = (total + s - 1) / s;
-        PageResult<SearchUserItemVO> pageResult = new PageResult<>(
-                records, total, p, s, pages, toIdx < rankedIds.size());
-        return new SearchUserResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
-    }
-
-    /** AI 用户搜索：字面候选 + hybrid_rank 打分；低分丢弃；无候选再走向量兜底。 */
-    private SearchUserResponse searchUsersByAiRag(String kw, int p, int s, Long viewerId) {
-        List<Long> rankedIds = new ArrayList<>();
-
-        List<User> candidates = userMapper.selectPage(
-                new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
-                buildRagCandidateUserQuery(kw)).getRecords();
-        if (candidates != null && !candidates.isEmpty()) {
-            List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
-            for (User u : candidates) {
-                Map<String, Object> item = new HashMap<>(2);
-                item.put("userId", u.getId());
-                item.put("text", buildRagCandidateUserText(u));
-                payload.add(item);
-            }
-            rankedIds = extractRankedIds(AiAuditUtils.ragSearchUsersRanked(kw, payload), USER_AI_HYBRID_MIN_SCORE);
-        }
-
-        if (rankedIds.isEmpty()) {
-            rankedIds = extractUserHitIds(aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
-        }
-
         if (rankedIds.isEmpty()) {
             log.info("AI 用户语义搜索未命中 keyword={}", kw);
             return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
