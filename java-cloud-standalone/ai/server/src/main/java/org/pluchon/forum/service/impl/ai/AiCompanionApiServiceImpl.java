@@ -8,6 +8,8 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.AiHubConverter;
+import org.pluchon.forum.api.content.AiGeneratedImageUploadRequest;
+import org.pluchon.forum.cloud.feign.AiFileInternalFeignClient;
 import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
@@ -25,7 +27,6 @@ import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiWorkspaceService;
-import org.pluchon.forum.service.interfaces.file.FileService;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     private CompanionMemoryService companionMemoryService;
 
     @Autowired
-    private FileService fileService;
+    private AiFileInternalFeignClient aiFileInternalFeignClient;
 
     @Autowired
     private AiWorkspaceService aiWorkspaceService;
@@ -259,14 +260,14 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             long ts = System.currentTimeMillis();
             if (req.getArticleId() != null && req.getArticleId() > 0) {
                 String base = user.getId() + "_" + req.getArticleId() + "_" + ts;
-                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
-                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_ARTICLE, base);
+                storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
+                        new AiGeneratedImageUploadRequest(user.getId(), url, Constant.OSS_PATH_AI_GENERATION_ARTICLE, base));
             } else {
                 String sid = (req.getSessionId() != null && !req.getSessionId().isBlank())
                         ? req.getSessionId().trim() : "session";
                 String base = user.getId() + "_" + sid + "_" + ts;
-                storedUrl = fileService.uploadAiGeneratedImageFromRemote(
-                        user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base);
+                storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
+                        new AiGeneratedImageUploadRequest(user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base));
             }
             if (!ephemeral && dbSessionId != null) {
                 companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
