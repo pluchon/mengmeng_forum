@@ -4,12 +4,18 @@ server:
 spring:
   application:
     name: forum-gateway
+  config:
+    import:
+      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
   cloud:
     nacos:
       discovery:
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
-        username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD:nacos}
+        namespace: ${NACOS_NAMESPACE:}
+      config:
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
     gateway:
       server:
         webflux:
