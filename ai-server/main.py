@@ -30,7 +30,10 @@ def _setup_logging() -> None:
     logging_cfg = settings.logging_cfg
     level_name = (logging_cfg.get("level") or "WARNING").upper()
     level = getattr(logging, level_name, logging.WARNING)
-    log_file = Path(logging_cfg.get("file") or "../logs/ai-server/ai-server.log")
+    log_file = Path(
+        logging_cfg.get("file")
+        or "../logs/python-backend/ai-server/ai-server.log"
+    )
     log_file.parent.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     stream_handler = logging.StreamHandler()

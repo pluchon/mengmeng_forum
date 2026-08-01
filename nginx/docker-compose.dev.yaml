@@ -1,9 +1,10 @@
 # 本地开发：仅 Docker 中间件（MySQL / Redis / RabbitMQ / PostgreSQL / FFmpeg）
 #
 # 以下在宿主机自行启动，本文件不包含：
-#   - Java 后端（backend）          http://localhost:10086
+#   - Java 微服务（java-cloud-standalone，经 Gateway :10086）
 #   - AI 服务（ai-server）             http://localhost:5000
 #   - 用户端 Vite                         dev 端口（如 5173）
+# 日志约定（仓库根）：logs/java-backend/  logs/python-backend/  logs/ffmpeg/
 #
 # 用法（在 nginx 目录下）：
 #   docker compose -f docker-compose.dev.yaml up -d

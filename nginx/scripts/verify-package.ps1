@@ -13,9 +13,14 @@ $required = @(
     "start.sh",
     "up.sh",
     "verify-frontend-dist.sh",
-    "sql\create.sql"
+    "sql\auth-create.sql",
+    "sql\content-create.sql",
+    "sql\im-create.sql",
+    "sql\game-create.sql",
+    "sql\economy-create.sql",
+    "sql\ai-create.sql"
 )
-$optional = @("sql\postgres_ai_session.sql", "ssl", "ffmpeg\Dockerfile")
+$optional = @("sql\postgres_ai_session.sql", "ssl", "ffmpeg\Dockerfile", "reset-db.sh", "collect-logs.sh")
 
 Write-Host "Verifying package: $PkgRoot" -ForegroundColor Cyan
 foreach ($rel in $required) {

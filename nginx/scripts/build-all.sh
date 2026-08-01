@@ -39,13 +39,29 @@ npm run build
 sync_dist dist "$NGINX_ROOT/dist/user"
 sync_live2d
 
+CLOUD_ROOT="$REPO_ROOT/java-cloud-standalone"
+[[ -f "$CLOUD_ROOT/pom.xml" ]] || { echo "ERROR: missing $CLOUD_ROOT/pom.xml"; exit 1; }
+
 if [[ "$SKIP_DOCKER" == true ]]; then
-  step "Maven 打包后端"
-  cd "$REPO_ROOT/backend"
+  step "Maven 打包 java-cloud-standalone"
+  cd "$CLOUD_ROOT"
   mvn -q -B package -DskipTests
 else
-  step "Docker 构建 forum-backend"
-  docker build -t forum-backend:latest "$REPO_ROOT/backend"
+  step "Maven 打包 java-cloud-standalone"
+  cd "$CLOUD_ROOT"
+  mvn -q -B package -DskipTests
+  if [[ -f "$CLOUD_ROOT/Dockerfile.backend" ]]; then
+    step "Docker 构建 forum-backend"
+    docker build -t forum-backend:latest "$CLOUD_ROOT" -f "$CLOUD_ROOT/Dockerfile.backend"
+  elif [[ -f "$REPO_ROOT/backend/Dockerfile" ]]; then
+    step "Docker 构建 forum-backend (legacy backend/)"
+    docker build -t forum-backend:latest "$REPO_ROOT/backend"
+  elif docker image inspect forum-backend:latest >/dev/null 2>&1; then
+    echo "WARN: no Dockerfile for forum-backend; reusing existing forum-backend:latest"
+  else
+    echo "ERROR: forum-backend:latest missing and no Dockerfile found"
+    exit 1
+  fi
   step "Docker 构建 ai-server"
   cd "$NGINX_ROOT"
   docker compose build ai-server

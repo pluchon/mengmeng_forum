@@ -35,6 +35,8 @@ services:
     environment: &backend_env
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       SERVER_PORT: 8080
+      # 容器内写 /app/logs/...，宿主机落在 ${FORUM_LOG_DIR}/java-backend/
+      LOG_FILE: ${LOG_FILE:-/app/logs/forum-backend/forum-backend.log}
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-forum_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-123456789}
       SPRING_DATA_REDIS_HOST: redis
@@ -74,7 +76,7 @@ services:
       retries: 12
       start_period: 90s
     volumes:
-      - ${FORUM_LOG_DIR:-../logs}/backend:/app/logs
+      - ${FORUM_LOG_DIR:-../logs}/java-backend:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -95,7 +97,7 @@ services:
     restart: unless-stopped
     environment: *backend_env
     volumes:
-      - ${FORUM_LOG_DIR:-../logs}/backend:/app/logs
+      - ${FORUM_LOG_DIR:-../logs}/java-backend:/app/logs
     depends_on:
       mysql:
         condition: service_started
@@ -137,7 +139,7 @@ services:
       FORUM_FFMPEG_URL: http://ffmpeg:8099
       FORUM_BACKEND_BASE_URL: http://backend-1:8080
     volumes:
-      - ${FORUM_LOG_DIR:-../logs}/ai-server:/var/log/forum
+      - ${FORUM_LOG_DIR:-../logs}:/var/log/forum
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,9 +161,9 @@ services:
       FFMPEG_INTERNAL_KEY: ${FORUM_FFMPEG_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       FFMPEG_REQUIRE_INTERNAL_KEY: ${FFMPEG_REQUIRE_INTERNAL_KEY:-1}
       OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
-      FFMPEG_LOG_FILE: /var/log/forum/ffmpeg.log
+      FFMPEG_LOG_FILE: /var/log/forum/ffmpeg/ffmpeg.log
     volumes:
-      - ${FORUM_LOG_DIR:-../logs}/ffmpeg:/var/log/forum
+      - ${FORUM_LOG_DIR:-../logs}/ffmpeg:/var/log/forum/ffmpeg
     networks:
       - forum-net
 

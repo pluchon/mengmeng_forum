@@ -22,7 +22,7 @@ import java.util.List;
 
 /** 本地消息表投递：防多实例重复执行 */
 @Slf4j
-@ConditionalOnProperty(name = "forum.domain", havingValue = "content")
+@ConditionalOnProperty(name = "forum.domain", havingValue = "im")
 @Component
 public class OutboxDispatchTask {
 

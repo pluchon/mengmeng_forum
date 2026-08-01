@@ -61,4 +61,11 @@ logging:
     root: WARN
     org.springframework.cloud.gateway: WARN
   file:
-    name: ${LOG_FILE:../logs/forum-gateway/forum-gateway.log}
+    # gateway 比 */server 少一层；滚动文件名使用 Boot 解析后的 LOG_FILE
+    name: ${FORUM_LOG_FILE:${FORUM_LOG_DIR:../../logs}/java-backend/${spring.application.name}/${spring.application.name}.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 500MB
