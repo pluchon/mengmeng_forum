@@ -5,12 +5,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import org.example.forum.api.auth.UserInternalVO;
 import org.example.forumdemo.common.captcha.CaptchaTicketPurpose;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.converter.UserInternalConverter;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;
 import org.example.forumdemo.entity.dto.user.UserLoginRequest;
@@ -21,8 +19,8 @@ import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
 import org.example.forumdemo.entity.vo.user.UserLoginLogVO;
 import org.example.forumdemo.entity.vo.user.UserSessionVO;
 import org.example.forumdemo.entity.vo.common.PageResult;
-import org.example.forumdemo.service.interfaces.captcha.CaptchaTicketService;
 import org.example.forumdemo.common.utils.OnlineUserManageUtil;
+import org.example.forumdemo.service.interfaces.captcha.CaptchaTicketService;
 import org.example.forumdemo.service.interfaces.user.UserAuthFlowService;
 import org.example.forumdemo.service.interfaces.user.UserFollowService;
 import org.example.forumdemo.service.interfaces.user.UserLoginLogService;
@@ -248,37 +246,6 @@ public class UserController {
         User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;
         return Result.success(userFollowService.listFollowersPage(userId, viewerId, keyword, pageNum, pageSize));
-    }
-
-    /** 内部服务调用：判断用户是否存在（经 Gateway/Feign，不对外暴露业务语义） */
-    @GetMapping("/internal/{userId}/exists")
-    public Boolean internalExists(@PathVariable("userId") Long userId) {
-        User user = userService.getUserInfoById(userId);
-        return user != null;
-    }
-
-    /** 内部服务调用：按 ID 取用户（返回契约 VO，不含敏感字段） */
-    @GetMapping("/internal/{userId}")
-    public UserInternalVO internalGetById(@PathVariable("userId") Long userId) {
-        return UserInternalConverter.toInternalVO(userService.queryUserByUserId(userId));
-    }
-
-    /** 内部服务调用：按用户名取用户 */
-    @GetMapping("/internal/by-username")
-    public UserInternalVO internalGetByUsername(@RequestParam("username") String username) {
-        return UserInternalConverter.toInternalVO(userService.queryUserByUserName(username));
-    }
-
-    /** 内部服务调用：发帖数 +1 */
-    @PostMapping("/internal/{userId}/article-count/increment")
-    public void internalIncrementArticleCount(@PathVariable("userId") Long userId) {
-        userService.addOneById(userId);
-    }
-
-    /** 内部服务调用：发帖数 -1 */
-    @PostMapping("/internal/{userId}/article-count/decrement")
-    public void internalDecrementArticleCount(@PathVariable("userId") Long userId) {
-        userService.deleteOneById(userId);
     }
 
     private static void applyAuthHeaders(HttpServletResponse response, AuthLoginResultVO login) {

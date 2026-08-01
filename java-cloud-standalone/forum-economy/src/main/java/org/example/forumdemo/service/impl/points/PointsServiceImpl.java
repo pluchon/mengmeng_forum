@@ -8,9 +8,9 @@ import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.CursorUtils;
 import org.example.forumdemo.common.utils.PageUtils;
+import org.example.forum.cloud.feign.UserInternalFeignClient;
 import org.example.forumdemo.entity.db.PointsLog;
 import org.example.forumdemo.entity.db.PointsWallet;
-import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.common.CursorPageResult;
 import org.example.forumdemo.entity.vo.common.PageResult;
 import org.example.forumdemo.entity.vo.points.PointsDailyVO;
@@ -18,11 +18,11 @@ import org.example.forumdemo.entity.vo.points.PointsLogVO;
 import org.example.forumdemo.entity.vo.points.PointsWalletVO;
 import org.example.forumdemo.mapper.PointsLogMapper;
 import org.example.forumdemo.mapper.PointsWalletMapper;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,9 +49,9 @@ public class PointsServiceImpl implements PointsService {
     @Autowired
     private PointsWalletMapper pointsWalletMapper;
 
-    // 仅用于钱包缺失时从历史 user.points 回填；新余额权威在 points_wallet
     @Autowired
-    private UserMapper userMapper;
+    @Lazy
+    private UserInternalFeignClient userInternalFeignClient;
 
     @Autowired
     private PointsLogMapper pointsLogMapper;
@@ -261,13 +261,12 @@ public class PointsServiceImpl implements PointsService {
         if (pointsWalletMapper.selectByUserId(userId) != null) {
             return;
         }
-        User legacy = userMapper.selectById(userId);
-        if (legacy == null) {
+        Boolean exists = userInternalFeignClient.existsById(userId);
+        if (!Boolean.TRUE.equals(exists)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        int seed = legacy.getPoints() == null ? 0 : legacy.getPoints();
         try {
-            pointsWalletMapper.insertWallet(userId, seed);
+            pointsWalletMapper.insertWallet(userId, 0);
         } catch (DuplicateKeyException ignored) {
             // 并发建档忽略
         }

@@ -3,12 +3,14 @@ package org.example.forumdemo.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.example.forum.api.content.AiGeneratedImageUploadRequest;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -145,5 +147,15 @@ public class FileController {
         }
         long aid = activityId != null ? activityId : 0L;
         return Result.successData(fileService.uploadLotteryActivityPicture(file, aid, loginUser.getId()));
+    }
+
+    /** 内部：AI 域生图结果转存 OSS（ai → content） */
+    @PostMapping("/internal/upload-ai-generated")
+    public String uploadAiGeneratedInternal(@RequestBody AiGeneratedImageUploadRequest request) {
+        return fileService.uploadAiGeneratedImageFromRemote(
+                request.getUserId(),
+                request.getSourceUrl(),
+                request.getOssPath(),
+                request.getBaseName());
     }
 }

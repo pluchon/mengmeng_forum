@@ -20,7 +20,7 @@ import org.example.forumdemo.entity.vo.game.TetrisReplayVO;
 import org.example.forumdemo.entity.vo.game.TetrisSettleResultVO;
 import org.example.forumdemo.mapper.GameTetrisRecordMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.TetrisService;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +46,7 @@ public class TetrisServiceImpl implements TetrisService {
     private GameUserProfileMapper gameUserProfileMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private TetrisScoreValidator tetrisScoreValidator;
@@ -60,7 +60,7 @@ public class TetrisServiceImpl implements TetrisService {
     @Override
     public TetrisProfileVO getProfile(Long userId) {
         GameUserProfile profile = ensureTetrisProfile(userId);
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         return TetrisConverter.toProfileVO(profile, user);
     }
 
@@ -105,10 +105,7 @@ public class TetrisServiceImpl implements TetrisService {
                 .orderByAsc(GameUserProfile::getId);
         Page<GameUserProfile> result = gameUserProfileMapper.selectPage(page, wrapper);
         List<Long> userIds = result.getRecords().stream().map(GameUserProfile::getUserId).toList();
-        Map<Long, User> userMap = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
-        }
+        Map<Long, User> userMap = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
         List<TetrisProfileVO> rows = new ArrayList<>(result.getRecords().size());
         for (GameUserProfile profile : result.getRecords()) {
             rows.add(TetrisConverter.toProfileVO(profile, userMap.get(profile.getUserId())));

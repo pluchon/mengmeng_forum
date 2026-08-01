@@ -1,6 +1,6 @@
 package org.example.forumdemo.service.interfaces.vip;
 
-import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserVipSubscription;
 
 import java.util.Date;
 
@@ -10,14 +10,19 @@ import java.util.Date;
 public interface VipEntitlementService {
 
     /**
-     * 在已 FOR UPDATE 锁定的用户行上延长 VIP。tier 为 null 时保持当前有效档或默认 PRO。
+     * 读取用户 VIP 订阅（无行锁，只读路径使用）。
+     */
+    UserVipSubscription getSubscription(Long userId);
+
+    /**
+     * 延长 VIP 天数；tier 为 null 时保持当前有效档或默认 PRO。
      *
      * @return 新的过期时间
      */
-    Date extendVipDays(User lockedUser, Byte tier, int days);
+    Date extendVipDays(Long userId, Byte tier, int days);
 
     /**
-     * 订阅扣款后升级/续费 VIP（内部会先锁用户行）。
+     * 订阅扣款后升级/续费 VIP（内部会先锁订阅行）。
      */
     Date subscribeTier(Long userId, Byte tier, int days);
 }

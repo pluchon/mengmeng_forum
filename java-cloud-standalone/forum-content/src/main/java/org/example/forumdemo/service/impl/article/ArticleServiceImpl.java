@@ -35,8 +35,8 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.mapper.ArticleImageMapper;
 import org.example.forumdemo.mapper.ArticleLikeMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.article.ArticleAuditService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.article.ArticleMediaService;
@@ -74,7 +74,7 @@ public class ArticleServiceImpl implements ArticleService {
     private ArticleMapper articleMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private UserRecommendFeedbackMapper userRecommendFeedbackMapper;
@@ -523,12 +523,7 @@ public class ArticleServiceImpl implements ArticleService {
                 .collect(Collectors.toSet());
         Map<Long, User> userMap = authorIds.isEmpty()
                 ? Map.of()
-                : userMapper.selectList(new LambdaQueryWrapper<User>()
-                                .in(User::getId, authorIds)
-                                .ne(User::getDeleteState, DELETE_TRUE)
-                                .ne(User::getState, STATE_FORBIDDEN))
-                        .stream()
-                        .collect(Collectors.toMap(User::getId, user -> user));
+                : userInternalLookupService.loadActiveUsers(authorIds);
         Set<Long> followingIds = loginUserId != null && loginUserId > 0
                 ? userFollowService.listFollowingIds(loginUserId)
                 : Set.of();

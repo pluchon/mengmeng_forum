@@ -9,7 +9,7 @@ import org.example.forumdemo.entity.bo.game.GameMatchPair;
 import org.example.forumdemo.entity.db.GameUserProfile;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.game.GameMatchSuccessVO;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.GameMatchQueueService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
@@ -58,7 +58,7 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     private GobangMatchGuardChain gobangMatchGuardChain = GobangMatchGuardChain.defaultChain();
 
@@ -72,7 +72,7 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     @Override
     public void startMatch(Long userId, String requestId, WebSocketSession session) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         int points = profile.getScore() == null ? 0 : profile.getScore();
         if (GameConstants.PROFILE_MATCHING.equals(profile.getCurrentStatus())
                 && !gameMatchQueueService.contains(GameConstants.GOBANG, userId)) {

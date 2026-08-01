@@ -10,7 +10,7 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
 import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.mapper.ForumAiCallRecordMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -37,7 +37,7 @@ public class AiCallRecordService {
     private AiPointsBillingService aiPointsBillingService;
 
     @Autowired
-    private UserMapper userMapper;
+    private PointsService pointsService;
 
     @Autowired
     private ForumMetrics forumMetrics;
@@ -181,8 +181,7 @@ public class AiCallRecordService {
     }
 
     private Map<String, Object> duplicateBillingResult(User user, int pointsCharged) {
-        User fresh = userMapper.selectById(user.getId());
-        int balanceAfter = fresh != null && fresh.getPoints() != null ? fresh.getPoints() : 0;
+        int balanceAfter = pointsService.getWallet(user.getId()).getBalance();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("pointsCost", pointsCharged);
         out.put("balanceAfter", balanceAfter);

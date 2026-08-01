@@ -30,8 +30,8 @@ import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.ArticleReplyMapper;
 import org.example.forumdemo.mapper.BoardMapper;
 import org.example.forumdemo.mapper.ForumArticleAiFeatureMapper;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.mapper.UserRecommendFeedbackMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.example.forumdemo.service.interfaces.recommendation.RecommendationService;
 import org.example.forumdemo.service.interfaces.recommendation.RecommendationAiProfileService;
@@ -74,7 +74,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private ArticleReplyMapper articleReplyMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private BoardMapper boardMapper;
@@ -214,12 +214,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(Article::getId, item -> item));
         Set<Long> authorIds = articles.values().stream().map(Article::getUserId).collect(java.util.stream.Collectors.toSet());
-        Map<Long, User> users = authorIds.isEmpty() ? Map.of() : userMapper.selectList(new LambdaQueryWrapper<User>()
-                        .in(User::getId, authorIds)
-                        .eq(User::getDeleteState, DELETE_FALSE)
-                        .eq(User::getState, STATE_ENABLED))
-                .stream()
-                .collect(java.util.stream.Collectors.toMap(User::getId, item -> item));
+        Map<Long, User> users = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
         List<RecommendArticleVO> records = new ArrayList<>();
         for (UserRecommendFeedback feedback : feedbackRecords) {
             Article article = articles.get(feedback.getArticleId());
@@ -300,14 +295,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             return List.of();
         }
         Set<Long> authorIds = candidates.stream().map(item -> item.getArticle().getUserId()).collect(java.util.stream.Collectors.toSet());
-        Set<Long> activeAuthorIds = userMapper.selectList(new LambdaQueryWrapper<User>()
-                        .in(User::getId, authorIds)
-                        .eq(User::getDeleteState, DELETE_FALSE)
-                        .eq(User::getState, STATE_ENABLED)
-                        .select(User::getId))
-                .stream()
-                .map(User::getId)
-                .collect(java.util.stream.Collectors.toSet());
+        Set<Long> activeAuthorIds = userInternalLookupService.filterActiveUserIds(authorIds);
         return candidates.stream().filter(item -> activeAuthorIds.contains(item.getArticle().getUserId())).toList();
     }
 
@@ -316,12 +304,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             return List.of();
         }
         Set<Long> authorIds = candidates.stream().map(item -> item.getArticle().getUserId()).collect(java.util.stream.Collectors.toSet());
-        Map<Long, User> users = userMapper.selectList(new LambdaQueryWrapper<User>()
-                        .in(User::getId, authorIds)
-                        .eq(User::getDeleteState, DELETE_FALSE)
-                        .eq(User::getState, STATE_ENABLED))
-                .stream()
-                .collect(java.util.stream.Collectors.toMap(User::getId, item -> item));
+        Map<Long, User> users = userInternalLookupService.loadActiveUsers(authorIds);
         Map<Long, String> boardNames = boardMapper.selectList(new LambdaQueryWrapper<Board>()
                         .in(Board::getId, candidates.stream().map(item -> item.getArticle().getBoardId()).distinct().toList())
                         .eq(Board::getDeleteState, DELETE_FALSE)

@@ -7,10 +7,9 @@ Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025
 > **原 `backend/` 目录完整保留**，可继续作为单体运行；本工程是并行的微服务演进线。
 >
 > **交付状态（务必读清）**
-> - 已完成：进程切分、Gateway/Nacos、六域 `*-api` 契约、按域物理搬迁 Service/Mapper/Entity、本地六库数据复制脚手架、关键跨域 Feign。
-> - **进行中 / 未完全收尾**：去掉对整包 `forum-core` 的 Maven 依赖、`DomainServicePruner` 删除、包名全面改为 `org.example.forum.*`、默认切读写到独立库并撤权。
-> - 默认数据源仍指向共享 `forum_db`（可用 `DB_*` 环境变量切到 `forum_*_db`）。
-> - 真拆分目标与阶段见 [`docs/architecture-microservices.md`](docs/architecture-microservices.md)。
+> - 已完成：进程切分、Gateway/Nacos、六域 `*-api` 契约、按域物理搬迁 Service/Mapper/Entity、**默认独立库 `forum_*_db` + 独立账号撤权**、关键跨域 Feign、本地主链路 E2E（`scripts/run-e2e.ps1` pass=62 fail=0）。
+> - **后续非阻塞**：去掉对整包 `forum-core` 的 Maven 依赖、删除 `DomainServicePruner`、包名全面改为 `org.example.forum.*`、收紧 `@MapperScan`。
+> - 真拆分目标与阶段见 [`docs/architecture-microservices.md`](docs/architecture-microservices.md)；验收证据见 [`docs/architecture-acceptance.md`](docs/architecture-acceptance.md)。
 
 ## 模块
 

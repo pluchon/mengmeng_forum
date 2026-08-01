@@ -11,6 +11,7 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.service.impl.user.JwtTokenVersionService;
 import org.example.forumdemo.service.interfaces.user.UserAuthSnapshotService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -20,6 +21,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class LoginInterceptor implements HandlerInterceptor {
 
     @Autowired
+    @Lazy
     private UserAuthSnapshotService userAuthSnapshotService;
 
     @Autowired

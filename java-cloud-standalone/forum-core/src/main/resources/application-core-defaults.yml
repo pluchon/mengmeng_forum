@@ -1,11 +1,14 @@
 spring:
+  main:
+    # Feign 客户端创建依赖 MVC，而 LoginInterceptor → AuthSnapshot → Feign 形成启动环；@Lazy + 本开关兜底
+    allow-circular-references: true
   config:
     import:
       - "optional:file:../../nginx/.env[.properties]"
       - "optional:file:../../nginx/.env[.properties]"
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 过渡默认仍指向共享 forum_db；拆库后各服务用 DB_URL/DB_USERNAME/DB_PASSWORD 覆盖
+    # 各服务 application.yml 已默认切到 forum_*_db；此处仅作未覆盖时的本地回退
     url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456789}
