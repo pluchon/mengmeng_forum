@@ -68,28 +68,40 @@ public class PointsController {
 
     /** 内部服务调用：查询余额 */
     @GetMapping("/internal/{userId}/balance")
-    public Long internalBalance(@PathVariable("userId") Long userId) {
+    public Integer internalBalance(@PathVariable("userId") Long userId) {
         PointsWalletVO wallet = pointsService.getWallet(userId);
-        return wallet == null || wallet.getBalance() == null ? 0L : wallet.getBalance().longValue();
+        return wallet == null || wallet.getBalance() == null ? 0 : wallet.getBalance();
     }
 
-    /** 内部服务调用：加积分 */
+    /** 内部服务调用：是否已有幂等成功流水 */
+    @GetMapping("/internal/{userId}/idempotency")
+    public Boolean internalHasIdempotency(
+            @PathVariable("userId") Long userId,
+            @RequestParam("idempotencyKey") String idempotencyKey) {
+        return pointsService.hasIdempotencyRecord(userId, idempotencyKey);
+    }
+
+    /** 内部服务调用：加积分，返回变动后余额 */
     @PostMapping("/internal/{userId}/add")
-    public Boolean internalAdd(
+    public Integer internalAdd(
             @PathVariable("userId") Long userId,
-            @RequestParam("delta") long delta,
-            @RequestParam("reason") String reason) {
-        int changed = pointsService.addPoints(userId, (int) delta, (byte) 0, null, reason);
-        return changed > 0;
+            @RequestParam("amount") int amount,
+            @RequestParam("sourceType") byte sourceType,
+            @RequestParam(value = "relatedId", required = false) Long relatedId,
+            @RequestParam(value = "remark", required = false) String remark,
+            @RequestParam(value = "idempotencyKey", required = false) String idempotencyKey) {
+        return pointsService.addPoints(userId, amount, sourceType, relatedId, remark, idempotencyKey);
     }
 
-    /** 内部服务调用：扣积分 */
+    /** 内部服务调用：扣积分，返回变动后余额 */
     @PostMapping("/internal/{userId}/deduct")
-    public Boolean internalDeduct(
+    public Integer internalDeduct(
             @PathVariable("userId") Long userId,
-            @RequestParam("delta") long delta,
-            @RequestParam("reason") String reason) {
-        int changed = pointsService.deductPoints(userId, (int) delta, (byte) 0, null, reason);
-        return changed > 0;
+            @RequestParam("amount") int amount,
+            @RequestParam("sourceType") byte sourceType,
+            @RequestParam(value = "relatedId", required = false) Long relatedId,
+            @RequestParam(value = "remark", required = false) String remark,
+            @RequestParam(value = "idempotencyKey", required = false) String idempotencyKey) {
+        return pointsService.deductPoints(userId, amount, sourceType, relatedId, remark, idempotencyKey);
     }
 }

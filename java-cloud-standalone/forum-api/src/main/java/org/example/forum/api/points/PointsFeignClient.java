@@ -11,19 +11,31 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface PointsFeignClient {
 
     @GetMapping("/points/internal/{userId}/balance")
-    Long getBalance(@PathVariable("userId") Long userId);
+    Integer getBalance(@PathVariable("userId") Long userId);
+
+    @GetMapping("/points/internal/{userId}/idempotency")
+    Boolean hasIdempotencyRecord(
+            @PathVariable("userId") Long userId,
+            @RequestParam("idempotencyKey") String idempotencyKey
+    );
 
     @PostMapping("/points/internal/{userId}/add")
-    Boolean addPoints(
+    Integer addPoints(
             @PathVariable("userId") Long userId,
-            @RequestParam("delta") long delta,
-            @RequestParam("reason") String reason
+            @RequestParam("amount") int amount,
+            @RequestParam("sourceType") byte sourceType,
+            @RequestParam(value = "relatedId", required = false) Long relatedId,
+            @RequestParam(value = "remark", required = false) String remark,
+            @RequestParam(value = "idempotencyKey", required = false) String idempotencyKey
     );
 
     @PostMapping("/points/internal/{userId}/deduct")
-    Boolean deductPoints(
+    Integer deductPoints(
             @PathVariable("userId") Long userId,
-            @RequestParam("delta") long delta,
-            @RequestParam("reason") String reason
+            @RequestParam("amount") int amount,
+            @RequestParam("sourceType") byte sourceType,
+            @RequestParam(value = "relatedId", required = false) Long relatedId,
+            @RequestParam(value = "remark", required = false) String remark,
+            @RequestParam(value = "idempotencyKey", required = false) String idempotencyKey
     );
 }
