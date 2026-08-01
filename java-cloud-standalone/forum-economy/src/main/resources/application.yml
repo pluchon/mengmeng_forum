@@ -13,6 +13,11 @@ spring:
   config:
     import:
       - optional:classpath:application-core-defaults.yml
+  # 拆库就绪后设置：DB_URL=.../forum_economy_db DB_USERNAME=forum_economy
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456789}
 
 forum:
   domain: economy

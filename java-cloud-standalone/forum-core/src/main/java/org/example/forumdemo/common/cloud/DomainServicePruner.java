@@ -56,14 +56,10 @@ public class DomainServicePruner implements BeanDefinitionRegistryPostProcessor,
         String packageName = beanClass.getPackageName();
         String simpleName = beanClass.getSimpleName();
 
-        // points：economy 保留本地实现，其它域保留 Feign 适配（若已装配）
-        if ("org.example.forumdemo.service.impl.points".equals(packageName)) {
-            if ("PointsFeignService".equals(simpleName)) {
-                return !ForumDomainNames.ECONOMY.equalsIgnoreCase(domain);
-            }
-            if ("PointsServiceImpl".equals(simpleName)) {
-                return ForumDomainNames.ECONOMY.equalsIgnoreCase(domain);
-            }
+        // points 本地实现仅 economy 保留（Feign 适配已在 service.impl.remote，走 SHARED 包）
+        if ("org.example.forumdemo.service.impl.points".equals(packageName)
+                && "PointsServiceImpl".equals(simpleName)) {
+            return ForumDomainNames.ECONOMY.equalsIgnoreCase(domain);
         }
 
         if (DomainServicePackages.isSharedClass(simpleName)) {
