@@ -35,7 +35,6 @@ services:
     environment: &backend_env
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       SERVER_PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-forum_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-123456789}
       SPRING_DATA_REDIS_HOST: redis
@@ -173,7 +172,6 @@ services:
     # 宿主机端口见 docker-compose.prod.yml（生产）或 docker-compose.dev.yaml（本地）
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
-      MYSQL_DATABASE: forum_db
       MYSQL_USER: ${MYSQL_USER:-forum_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
       TZ: Asia/Shanghai

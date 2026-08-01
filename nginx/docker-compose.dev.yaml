@@ -29,7 +29,6 @@ services:
       - "${MYSQL_HOST_PORT:-33306}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
-      MYSQL_DATABASE: forum_db
       MYSQL_USER: ${MYSQL_USER:-forum_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
       TZ: Asia/Shanghai
