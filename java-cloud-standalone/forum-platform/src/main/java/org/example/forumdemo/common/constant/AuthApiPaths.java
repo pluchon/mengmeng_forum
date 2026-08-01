@@ -85,6 +85,7 @@ public final class AuthApiPaths {
                 "/system-message/internal/**",
                 "/favorite/internal/**",
                 "/file/internal/**",
+                "/article/internal/**",
                 "/actuator/**"
         };
     }
