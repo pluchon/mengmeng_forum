@@ -12,6 +12,7 @@ import org.pluchon.forum.converter.TetrisConverter;
 import org.pluchon.forum.entity.db.GameTetrisRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
 import org.pluchon.forum.entity.dto.game.TetrisSettleRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.TetrisProfileVO;
@@ -22,7 +23,6 @@ import org.pluchon.forum.mapper.GameTetrisRecordMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
 import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.TetrisService;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -52,7 +52,7 @@ public class TetrisServiceImpl implements TetrisService {
     private TetrisScoreValidator tetrisScoreValidator;
 
     @Autowired
-    private PointsService pointsService;
+    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -152,7 +152,7 @@ public class TetrisServiceImpl implements TetrisService {
 
         gameUserProfileMapper.applyTetrisFinish(userId, TetrisConstants.GAME_CODE, request.getScore());
         if (forumPoints > 0) {
-            pointsService.addPoints(
+            gamePointsInternalFeignClient.addPoints(
                     userId,
                     forumPoints,
                     Constant.POINTS_SOURCE_TETRIS,
