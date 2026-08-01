@@ -19,7 +19,7 @@ import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.entity.vo.user.UserLoginLogVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.common.utils.OnlineUserManageUtil;
+import org.pluchon.forum.cloud.feign.AuthWebSocketInternalFeignClient;
 import org.pluchon.forum.service.interfaces.captcha.CaptchaTicketService;
 import org.pluchon.forum.service.interfaces.user.UserAuthFlowService;
 import org.pluchon.forum.service.interfaces.user.UserFollowService;
@@ -47,7 +47,7 @@ public class UserController {
     private CaptchaTicketService captchaTicketService;
 
     @Autowired
-    private OnlineUserManageUtil onlineUserManageUtil;
+    private AuthWebSocketInternalFeignClient authWebSocketInternalFeignClient;
 
     @Autowired
     private UserLoginLogService userLoginLogService;
@@ -169,7 +169,7 @@ public class UserController {
         if (userId == null) {
             return Result.successData(false);
         }
-        return Result.successData(onlineUserManageUtil.isOnline(userId));
+        return Result.successData(Boolean.TRUE.equals(authWebSocketInternalFeignClient.isOnline(userId)));
     }
 
     @Operation(summary = "登录日志", description = "查询当前用户最近登录记录")
