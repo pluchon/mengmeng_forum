@@ -11,6 +11,9 @@ import org.pluchon.forum.common.utils.PasswordUtils;
 import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.utils.UUIDUtils;
+import org.pluchon.forum.auth.client.FavoriteFolderInternalFeignClient;
+import org.pluchon.forum.auth.client.GrowthInternalFeignClient;
+import org.pluchon.forum.auth.client.PointsInternalFeignClient;
 import org.pluchon.forum.cloud.feign.MascotPreferenceInternalFeignClient;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.db.User;
@@ -19,9 +22,6 @@ import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
 import org.pluchon.forum.mapper.UserMapper;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
-import org.pluchon.forum.service.interfaces.favorite.FavoriteFolderService;
-import org.pluchon.forum.service.interfaces.growth.GrowthService;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.pluchon.forum.service.impl.user.UserDerivedCacheInvalidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,17 +53,15 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private MascotPreferenceInternalFeignClient mascotPreferenceInternalFeignClient;
 
-    /**
-     * 注册后立刻给用户建一个默认收藏夹.
-     * auth 域走 FavoriteFolderRemoteService（Feign → content）；content 域为本地实现。
-     */
-    @Autowired(required = false)
-    @Lazy
-    private FavoriteFolderService favoriteFolderService;
+    // 注册后通过 content 内部契约建立默认收藏夹
+    @Autowired
+    private FavoriteFolderInternalFeignClient favoriteFolderInternalFeignClient;
 
     @Autowired
-    @Lazy
-    private PointsService pointsService;
+    private PointsInternalFeignClient pointsInternalFeignClient;
+
+    @Autowired
+    private GrowthInternalFeignClient growthInternalFeignClient;
 
     @Autowired
     private AiHubService aiHubService;
@@ -76,9 +74,6 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
-
-    @Autowired
-    private GrowthService growthService;
 
     // ============================================================
     // 注册，使用事务保证原子性
@@ -132,24 +127,28 @@ public class UserServiceImpl implements UserService {
         final User ragSnapshot = register;
         Runnable afterCommitSideEffects = () -> {
             try {
-                growthService.createNewUserProfile(newUserId);
+                growthInternalFeignClient.createNewUserProfile(newUserId);
             } catch (Exception e) {
                 log.warn("用户 {} 成长档案创建失败(可补偿): {}", newUserId, e.getMessage());
             }
             try {
-                pointsService.addPoints(newUserId, Constant.POINTS_REGISTER_BONUS_AMOUNT,
-                        Constant.POINTS_SOURCE_REGISTER_BONUS, newUserId, "新用户注册赠送积分",
-                        "register:" + newUserId);
+                Integer balance = pointsInternalFeignClient.addPoints(
+                        newUserId,
+                        Constant.POINTS_REGISTER_BONUS_AMOUNT,
+                        Constant.POINTS_SOURCE_REGISTER_BONUS,
+                        newUserId,
+                        "新用户注册赠送积分",
+                        "register:" + newUserId
+                );
+                if (balance == null) {
+                    throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+                }
             } catch (Exception e) {
                 log.warn("用户 {} 注册赠分失败(可补偿): {}", newUserId, e.getMessage());
             }
             storeUserNameMapping(newUserName, newUserId);
             try {
-                if (favoriteFolderService != null) {
-                    favoriteFolderService.ensureDefaultFolder(newUserId);
-                } else {
-                    log.warn("用户 {} 默认收藏夹跳过: FavoriteFolderService 未装配", newUserId);
-                }
+                favoriteFolderInternalFeignClient.ensureDefaultFolder(newUserId);
             } catch (Exception e) {
                 log.warn("用户 {} 默认收藏夹创建失败, 留待懒加载补齐: {}", newUserId, e.getMessage());
             }
