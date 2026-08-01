@@ -24,11 +24,6 @@ public class RestTemplateConfig {
         return build(30_000, 1_800_000);
     }
 
-    @Bean("gameAiRestTemplate")
-    public RestTemplate gameAiRestTemplate() {
-        return build(3_000, 8_000);
-    }
-
     private static RestTemplate build(int connectTimeoutMs, int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeoutMs);

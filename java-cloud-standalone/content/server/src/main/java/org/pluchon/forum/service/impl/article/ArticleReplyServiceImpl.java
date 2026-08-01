@@ -10,7 +10,7 @@ import org.pluchon.forum.common.enums.QuestionStatus;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.mq.ForumProducer;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Article;
@@ -82,6 +82,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Autowired
     private ArticleQuestionService articleQuestionService;
 
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void replyArticle(ReplyArticleRequest req, Long loginUserId) {
@@ -99,7 +102,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         String violation = null;
         if (plain.length() >= 25) {
             try {
-                violation = AiAuditUtils.isTextAllowed(content);
+                violation = contentAiGatewayService.validateText(content);
             } catch (ApplicationException ex) {
                 log.warn("一级回复文本审核服务不可用，降级放行: {}", ex.getMessage());
             }

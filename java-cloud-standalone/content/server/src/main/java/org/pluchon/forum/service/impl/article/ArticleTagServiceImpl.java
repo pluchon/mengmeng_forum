@@ -6,7 +6,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.AiAuditUtils;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.ForumArticleTag;
@@ -21,6 +21,7 @@ import org.pluchon.forum.mapper.ForumArticleTagRequestMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -52,6 +53,8 @@ public class ArticleTagServiceImpl implements ArticleTagService {
     private BoardMapper boardMapper;
     @Resource
     private ContentSystemMessageInternalFeignClient contentSystemMessageInternalFeignClient;
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
 
     @Override
     public List<ArticleTagVO> listForBoard(Long boardId) {
@@ -164,7 +167,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "该标签已存在"));
         }
 
-        String audit = AiAuditUtils.isTextAllowed("论坛帖子标签：" + name);
+        String audit = contentAiGatewayService.validateText("论坛帖子标签：" + name);
         if (audit != null) {
             ForumArticleTagRequest req = new ForumArticleTagRequest();
             req.setUserId(userId);

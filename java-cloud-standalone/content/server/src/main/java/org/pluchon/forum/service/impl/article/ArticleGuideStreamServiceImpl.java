@@ -6,7 +6,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.article.ArticleGuideStreamService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
@@ -35,7 +35,7 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    private AiHubService aiHubService;
+    private ContentAiHubInternalFeignClient aiHubService;
 
     @Autowired
     private ContentUserLookupService userService;

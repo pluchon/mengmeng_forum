@@ -22,7 +22,7 @@ import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
 import org.pluchon.forum.mapper.UserMapper;
-import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.auth.client.AuthAiHubInternalFeignClient;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.pluchon.forum.service.impl.user.UserDerivedCacheInvalidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,7 +65,7 @@ public class UserServiceImpl implements UserService {
     private GrowthInternalFeignClient growthInternalFeignClient;
 
     @Autowired
-    private AiHubService aiHubService;
+    private AuthAiHubInternalFeignClient aiHubService;
 
     @Autowired
     private AuthTokenService authTokenService;

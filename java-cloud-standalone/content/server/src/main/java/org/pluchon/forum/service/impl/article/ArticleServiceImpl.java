@@ -12,7 +12,9 @@ import org.pluchon.forum.common.enums.QuestionStatus;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.*;
+import org.pluchon.forum.common.utils.PageUtils;
+import org.pluchon.forum.common.utils.RequestIpUtils;
+import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.converter.ArticleConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleImage;
@@ -38,6 +40,7 @@ import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
@@ -125,6 +128,9 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Autowired
     private ArticleAuditService articleAuditService;
+
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
 
     /** 状态 / 删除标记：1 表示禁用 / 已删除 */
     private static final byte STATE_FORBIDDEN = 1;
@@ -577,7 +583,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
         String summary;
         try {
-            summary = AiAuditUtils.getSummary(content);
+            summary = contentAiGatewayService.summarize(content);
         } catch (ApplicationException ex) {
             log.warn("帖子 {} AI 摘要调用失败: {}", articleId, ex.getMessage());
             return Constant.SUMMARY_AI_SERVICE_UNAVAILABLE;
@@ -615,7 +621,7 @@ public class ArticleServiceImpl implements ArticleService {
 
     @Override
     public String validateContent(String content) {
-        return AiAuditUtils.isTextAllowed(content);
+        return contentAiGatewayService.validateText(content);
     }
 
     @Override

@@ -14,9 +14,13 @@ import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
+import org.pluchon.forum.api.ai.AiGobangMoveRequest;
+import org.pluchon.forum.api.ai.AiGobangMoveVO;
 
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.web.multipart.MultipartFile;
 
 public interface AiHubService {
 
@@ -45,4 +49,10 @@ public interface AiHubService {
     List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates);
 
     List<RagUserVectorHitVO> ragUserVectorRanked(String query);
+
+    String validateText(String content);
+
+    boolean validateImage(MultipartFile file);
+
+    AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request);
 }
