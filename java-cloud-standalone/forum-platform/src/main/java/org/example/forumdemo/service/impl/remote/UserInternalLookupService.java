@@ -1,13 +1,11 @@
 package org.example.forumdemo.service.impl.remote;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.example.forum.api.auth.UserInternalVO;
 import org.example.forum.api.auth.UserSearchPageInternalVO;
 import org.example.forum.cloud.feign.UserInternalFeignClient;
 import org.example.forumdemo.common.cloud.ForumDomainNames;
 import org.example.forumdemo.converter.UserInternalConverter;
 import org.example.forumdemo.entity.db.User;
-import org.example.forumdemo.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -21,7 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-// 跨域用户批量/单条查询：auth/monolith 走本地 Mapper，其余走 Feign
+// 跨域用户查询：仅 Feign（UserMapper 已归属 auth，不在本模块 classpath）
 @Service
 public class UserInternalLookupService {
 
@@ -33,48 +31,33 @@ public class UserInternalLookupService {
     @Lazy
     private UserInternalFeignClient userInternalFeignClient;
 
-    @Autowired(required = false)
-    private UserMapper userMapper;
-
     @Value("${forum.domain:monolith}")
     private String forumDomain;
 
     public User getById(Long userId) {
-        if (userId == null || userId <= 0) {
+        if (userId == null || userId <= 0 || !useFeign()) {
             return null;
         }
-        if (useFeign()) {
-            return UserInternalConverter.toUserShell(userInternalFeignClient.getById(userId));
-        }
-        if (userMapper == null) {
-            return null;
-        }
-        return userMapper.selectById(userId);
+        return UserInternalConverter.toUserShell(userInternalFeignClient.getById(userId));
     }
 
     public List<User> listByIds(Collection<Long> ids) {
         List<Long> distinct = normalizeIds(ids);
-        if (distinct.isEmpty()) {
+        if (distinct.isEmpty() || !useFeign()) {
             return List.of();
         }
-        if (useFeign()) {
-            List<UserInternalVO> vos = new ArrayList<>(distinct.size());
-            for (int i = 0; i < distinct.size(); i += BATCH_MAX) {
-                List<Long> chunk = distinct.subList(i, Math.min(i + BATCH_MAX, distinct.size()));
-                List<UserInternalVO> batch = userInternalFeignClient.listByIds(chunk);
-                if (batch != null) {
-                    vos.addAll(batch);
-                }
+        List<UserInternalVO> vos = new ArrayList<>(distinct.size());
+        for (int i = 0; i < distinct.size(); i += BATCH_MAX) {
+            List<Long> chunk = distinct.subList(i, Math.min(i + BATCH_MAX, distinct.size()));
+            List<UserInternalVO> batch = userInternalFeignClient.listByIds(chunk);
+            if (batch != null) {
+                vos.addAll(batch);
             }
-            return vos.stream()
-                    .map(UserInternalConverter::toUserShell)
-                    .filter(Objects::nonNull)
-                    .toList();
         }
-        if (userMapper == null) {
-            return List.of();
-        }
-        return userMapper.selectList(new LambdaQueryWrapper<User>().in(User::getId, distinct));
+        return vos.stream()
+                .map(UserInternalConverter::toUserShell)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     public Map<Long, User> loadActiveUsers(Collection<Long> ids) {
@@ -102,6 +85,17 @@ public class UserInternalLookupService {
         return loadActiveUsers(ids).keySet();
     }
 
+    public boolean usesRemoteLookup() {
+        return useFeign();
+    }
+
+    public UserSearchPageInternalVO searchByKeyword(String keyword, int pageNum, int pageSize) {
+        if (!useFeign()) {
+            throw new UnsupportedOperationException("用户搜索仅通过 auth Feign 提供");
+        }
+        return userInternalFeignClient.searchByKeyword(keyword, pageNum, pageSize);
+    }
+
     private List<Long> normalizeIds(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return List.of();
@@ -113,24 +107,11 @@ public class UserInternalLookupService {
     }
 
     private boolean useFeign() {
-        if (forumDomain == null || forumDomain.isBlank()) {
+        if (userInternalFeignClient == null || forumDomain == null || forumDomain.isBlank()) {
             return false;
         }
         String domain = forumDomain.trim().toLowerCase();
         return !ForumDomainNames.MONOLITH.equals(domain)
-                && !ForumDomainNames.AUTH.equals(domain)
-                && userInternalFeignClient != null;
-    }
-
-    public boolean usesRemoteLookup() {
-        return useFeign();
-    }
-
-    /** 用户名/昵称字面搜索；远程走 auth Feign，本地走 UserMapper */
-    public UserSearchPageInternalVO searchByKeyword(String keyword, int pageNum, int pageSize) {
-        if (useFeign()) {
-            return userInternalFeignClient.searchByKeyword(keyword, pageNum, pageSize);
-        }
-        throw new UnsupportedOperationException("本地用户搜索请走 SearchServiceImpl 的 UserMapper 路径");
+                && !ForumDomainNames.AUTH.equals(domain);
     }
 }
