@@ -31,7 +31,12 @@ public class AiUserLookupService {
         if (userId == null || userId <= 0) {
             return null;
         }
-        return toContext(aiUserInternalFeignClient.getById(userId));
+        AiUserContext context = toContext(aiUserInternalFeignClient.getById(userId));
+        if (context == null) {
+            return null;
+        }
+        applyVipSnapshot(context);
+        return context;
     }
 
     public Map<Long, AiUserContext> loadActiveUsers(Collection<Long> userIds) {
@@ -72,12 +77,15 @@ public class AiUserLookupService {
         context.setIsAdmin(user.getIsAdmin());
         context.setCreatorState(user.getCreatorState());
         context.setState(user.getState());
-        VipTierSnapshotVO vip = aiVipInternalFeignClient.tierSnapshot(user.getId());
+        return context;
+    }
+
+    private void applyVipSnapshot(AiUserContext context) {
+        VipTierSnapshotVO vip = aiVipInternalFeignClient.tierSnapshot(context.getId());
         if (vip != null) {
             context.setVipTier(vip.getVipTier());
             context.setVipExpireAt(vip.getVipExpireAt());
             context.setVipActive(vip.isVipActive());
         }
-        return context;
     }
 }
