@@ -5,7 +5,6 @@ spring:
   config:
     import:
       - "optional:file:../../nginx/.env[.properties]"
-      - "optional:file:../../nginx/.env[.properties]"
   data:
     redis:
       host: localhost
@@ -119,15 +118,19 @@ forum:
       turn-secret: ${FORUM_VOICE_TURN_SECRET:}
       turn-ttl-seconds: ${FORUM_VOICE_TURN_TTL_SECONDS:3600}
 
+# 本地默认：以 */server 工作目录回到仓库根 logs/java-backend/
+# 勿在默认值里再写 ${LOG_FILE:...}，否则会与 Boot 写入的 LOG_FILE 互相抢占。
+# 覆盖优先级：环境变量 LOG_FILE（Boot 原生）> FORUM_LOG_FILE > 下方默认路径
+# 生产：application-core-prod-defaults.yml 或 Compose 注入 LOG_FILE=/app/logs/...
 logging:
   level:
     root: WARN
     org.pluchon.forum: WARN
   file:
-    name: ${LOG_FILE:../logs/forum-platform/forum-platform.log}
+    name: ${FORUM_LOG_FILE:${FORUM_LOG_DIR:../../../logs}/java-backend/${spring.application.name}/${spring.application.name}.log}
   logback:
     rollingpolicy:
-      file-name-pattern: ${LOG_FILE:../logs/forum-platform/forum-platform.log}.%d{yyyy-MM-dd}.%i.gz
+      file-name-pattern: ${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz
       max-file-size: 20MB
       max-history: 14
       total-size-cap: 500MB

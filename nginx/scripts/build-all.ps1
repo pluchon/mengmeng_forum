@@ -150,16 +150,44 @@ if (-not $SkipFront) {
     Sync-Live2dAssets
 }
 
+function Test-DockerImage {
+    param([string]$Name)
+    $prevEa = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    $null = docker image inspect $Name 2>&1
+    $ok = $LASTEXITCODE -eq 0
+    $ErrorActionPreference = $prevEa
+    return $ok
+}
+
 if (-not $SkipBackend) {
+    $cloudRoot = Join-Path $repoRoot "java-cloud-standalone"
+    if (-not (Test-Path (Join-Path $cloudRoot "pom.xml"))) {
+        throw "Missing java-cloud-standalone/pom.xml (old backend/ module was removed)"
+    }
+
+    Step "Maven package java-cloud-standalone"
+    Push-Location $cloudRoot
+    & $mavenCommand -B package -DskipTests
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "mvn package failed" }
+    Pop-Location
+    Write-Host "JARs under java-cloud-standalone/*/server/target/ and gateway/target/" -ForegroundColor Green
+
     if (-not $SkipDocker) {
-        Invoke-DockerBuild -Tag "forum-backend:latest" -Context (Join-Path $repoRoot "backend") -DisplayName "forum-backend:latest"
-    } else {
-        Step "Maven package backend"
-        Push-Location (Join-Path $repoRoot "backend")
-        & $mavenCommand -B package -DskipTests
-        if ($LASTEXITCODE -ne 0) { Pop-Location; throw "mvn package failed" }
-        Pop-Location
-        Write-Host "JAR in backend/target/" -ForegroundColor Green
+        $backendDockerfile = Join-Path $cloudRoot "Dockerfile.backend"
+        $legacyBackend = Join-Path $repoRoot "backend"
+        if (Test-Path $backendDockerfile) {
+            Invoke-DockerBuild -Tag "forum-backend:latest" -Context $cloudRoot -DisplayName "forum-backend:latest"
+        }
+        elseif (Test-Path (Join-Path $legacyBackend "Dockerfile")) {
+            Invoke-DockerBuild -Tag "forum-backend:latest" -Context $legacyBackend -DisplayName "forum-backend:latest"
+        }
+        elseif (Test-DockerImage "forum-backend:latest") {
+            Write-Host "WARN: no Dockerfile for forum-backend; reusing existing forum-backend:latest image" -ForegroundColor Yellow
+        }
+        else {
+            throw "forum-backend:latest image missing and no Dockerfile found. Add java-cloud-standalone/Dockerfile.backend or build/load the image before packaging."
+        }
     }
 }
 

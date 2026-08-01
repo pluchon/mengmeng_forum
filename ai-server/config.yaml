@@ -8,7 +8,7 @@ server:
 
 logging:
   level: WARNING
-  file: ../logs/ai-server/ai-server.log
+  file: ../logs/python-backend/ai-server/ai-server.log
   max_bytes: 20971520
   backup_count: 14
 

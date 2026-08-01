@@ -1,0 +1,19 @@
+# 仅 spring.profiles.active 含 prod 时生效（由各服务 optional import）
+# 容器内日志目录挂载到宿主机 ${FORUM_LOG_DIR}/java-backend
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    root: WARN
+    org.pluchon.forum: WARN
+  file:
+    name: ${FORUM_LOG_FILE:/app/logs/${spring.application.name}/${spring.application.name}.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 500MB

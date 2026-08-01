@@ -158,7 +158,7 @@ fix_crlf() {
 }
 fix_crlf
 
-mkdir -p "$LOG_ROOT"/backend "$LOG_ROOT"/ai-server "$LOG_ROOT"/ffmpeg "$LOG_ROOT"/nginx
+mkdir -p "$LOG_ROOT"/java-backend "$LOG_ROOT"/python-backend "$LOG_ROOT"/ffmpeg "$LOG_ROOT"/nginx
 test -f .env || { echo "ERROR: missing .env in package/"; exit 1; }
 if grep -q 'CHANGE_ME' .env 2>/dev/null; then
   echo "WARN: .env still has CHANGE_ME placeholders (JWT_SECRET / PII_CRYPTO_SECRET must be real)"
@@ -182,7 +182,7 @@ for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx
   docker image inspect "$img" >/dev/null 2>&1 || { echo "ERROR: image missing after load: $img"; exit 1; }
 done
 docker run --rm --user 0 \
-  -v "$(cd "$LOG_ROOT/backend" && pwd):/app/logs" \
+  -v "$(cd "$LOG_ROOT/java-backend" && pwd):/app/logs" \
   --entrypoint /bin/sh forum-backend:latest \
   -c 'chown -R 1000:1000 /app/logs'
 
@@ -360,7 +360,8 @@ $deployTxt = @'
 【A】服务器 — 停旧栈并删数据卷（要重建库表时必做）
   cd ~/package
   docker compose -f docker-compose.yaml -f docker-compose.prod.yml down -v
-  # 日志位于 ../logs，不随 package 替换或 down -v 删除。
+  # 日志位于 ../logs（java-backend / python-backend / ffmpeg / nginx），
+  # 不随 package 替换或 down -v 删除。
   # 若整包替换：可先备份 ssl/ 与 .env
 
 【B】本机 — 打包（PowerShell）

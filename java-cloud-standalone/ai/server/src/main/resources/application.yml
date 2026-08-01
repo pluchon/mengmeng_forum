@@ -13,6 +13,7 @@ spring:
   config:
     import:
       - optional:classpath:application-core-defaults.yml
+      - optional:classpath:application-core-prod-defaults.yml
   datasource:
     url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:forum_ai}
@@ -25,7 +26,3 @@ forum:
     mq-consumer: false
     websocket: false
     game-runtime: false
-
-logging:
-  file:
-    name: ${LOG_FILE:../logs/forum-ai/forum-ai.log}
