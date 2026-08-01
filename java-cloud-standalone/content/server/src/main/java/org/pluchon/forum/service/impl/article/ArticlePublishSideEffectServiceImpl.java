@@ -5,7 +5,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.cloud.feign.ContentUserInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
     private BoardService boardService;
 
     @Autowired
-    private UserService userService;
+    private ContentUserInternalFeignClient contentUserInternalFeignClient;
 
     @Autowired
     private ArticleSearchIndexService articleSearchIndexService;
@@ -37,7 +37,7 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
     public void rollbackPublishedExposure(Long articleId, Long boardId, Long userId) {
         articleHotRankingService.removeFromRanking(articleId);
         boardService.deleteOneById(boardId);
-        userService.deleteOneById(userId);
+        contentUserInternalFeignClient.decrementArticleCount(userId);
         stringRedisTemplate.delete(Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId);
         articleSearchIndexService.removeArticle(articleId);
         aiHubService.removeArticleRag(articleId);
@@ -45,7 +45,7 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
 
     @Override
     public void promotePublishedExposure(Long articleId, Long userId, Long boardId) {
-        userService.addOneById(userId);
+        contentUserInternalFeignClient.incrementArticleCount(userId);
         boardService.addOneById(boardId);
     }
 }
