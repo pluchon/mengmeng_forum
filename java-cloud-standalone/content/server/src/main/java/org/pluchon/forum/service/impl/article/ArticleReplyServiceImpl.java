@@ -17,7 +17,7 @@ import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleReplyLike;
 import org.pluchon.forum.entity.db.ArticleSubReply;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.ReplyArticleRequest;
 import org.pluchon.forum.entity.vo.article.ArticleReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -27,14 +27,14 @@ import org.pluchon.forum.mapper.ArticleReplyLikeMapper;
 import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.mapper.ArticleSubReplyMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
-import org.pluchon.forum.common.utils.UserMuteGuard;
+import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.common.utils.RequestIpUtils;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,7 +68,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     private ArticleService articleService;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private ForumProducer forumProducer;
@@ -85,8 +85,8 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void replyArticle(ReplyArticleRequest req, Long loginUserId) {
-        User loginUser = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(loginUser);
+        UserInternalVO loginUser = userService.queryUserByUserId(loginUserId);
+        ContentUserMuteGuard.assertCanPost(loginUser);
         Long articleId = req.getArticleId();
         String content = req.getContent();
         String raw = content == null ? "" : content;
@@ -196,7 +196,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap) {
         UserBriefVO userBriefVO;
         try {
-            User user = userService.queryUserByUserId(reply.getPostUserId());
+            UserInternalVO user = userService.queryUserByUserId(reply.getPostUserId());
             userBriefVO = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         } catch (ApplicationException e) {
             log.warn("回复 {} 的发表者 {} 已不存在", reply.getId(), reply.getPostUserId());

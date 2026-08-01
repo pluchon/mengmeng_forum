@@ -14,7 +14,7 @@ import org.pluchon.forum.common.utils.RequestIpUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
 import org.pluchon.forum.entity.vo.mq.ArticleAuditResultMqVO;
 import org.pluchon.forum.entity.vo.mq.ArticleAuditTaskMqVO;
@@ -34,7 +34,7 @@ import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -62,7 +62,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private ArticleMapper articleMapper;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private BoardService boardService;
@@ -125,7 +125,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         if (articleId == null || loginUserId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        User author = userService.queryUserByUserId(loginUserId);
+        UserInternalVO author = userService.queryUserByUserId(loginUserId);
         Article article = articleMapper.selectByIdForUpdate(articleId);
         checkArticleAuditSubmitGuard(new ArticleAuditSubmitContext(articleId, loginUserId, author, article));
         int curRetry = article.getAuditRetryCount() == null ? 0 : article.getAuditRetryCount();
@@ -245,7 +245,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         Long userId = article.getUserId();
         String fallbackRegion = article.getIpRegion();
         if (!StringUtils.hasText(fallbackRegion)) {
-            User author = userService.getUserInfoById(userId);
+            UserInternalVO author = userService.getUserInfoById(userId);
             if (author != null) {
                 fallbackRegion = author.getIpRegion();
             }
@@ -277,7 +277,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         }
         Article published = articleMapper.selectById(articleId);
         if (published != null) {
-            User author = userService.getUserInfoById(userId);
+            UserInternalVO author = userService.getUserInfoById(userId);
             RagArticleIndexDTO ragPayload = new RagArticleIndexDTO();
             ragPayload.setArticleId(articleId);
             ragPayload.setTitle(published.getTitle());

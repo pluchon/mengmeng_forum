@@ -1,7 +1,7 @@
 package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.db.ArticleVideoDanmaku;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.DanmakuItemVO;
 
 import java.util.ArrayList;
@@ -14,7 +14,7 @@ public final class DanmakuConverter {
     private DanmakuConverter() {
     }
 
-    public static DanmakuItemVO toItemVO(ArticleVideoDanmaku entity, User user) {
+    public static DanmakuItemVO toItemVO(ArticleVideoDanmaku entity, UserInternalVO user) {
         if (entity == null) {
             return null;
         }
@@ -34,13 +34,13 @@ public final class DanmakuConverter {
         return vo;
     }
 
-    public static List<DanmakuItemVO> toItemVOList(List<ArticleVideoDanmaku> entities, Map<Long, User> userMap) {
+    public static List<DanmakuItemVO> toItemVOList(List<ArticleVideoDanmaku> entities, Map<Long, UserInternalVO> userMap) {
         if (entities == null || entities.isEmpty()) {
             return List.of();
         }
         List<DanmakuItemVO> list = new ArrayList<>(entities.size());
         for (ArticleVideoDanmaku entity : entities) {
-            User user = userMap != null ? userMap.get(entity.getUserId()) : null;
+            UserInternalVO user = userMap != null ? userMap.get(entity.getUserId()) : null;
             list.add(toItemVO(entity, user));
         }
         return list;

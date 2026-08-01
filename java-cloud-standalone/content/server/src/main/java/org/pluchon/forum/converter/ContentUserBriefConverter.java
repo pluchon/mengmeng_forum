@@ -1,5 +1,6 @@
 package org.pluchon.forum.converter;
 
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
@@ -7,6 +8,10 @@ import org.pluchon.forum.entity.vo.user.UserBriefVO;
 public final class ContentUserBriefConverter {
 
     private ContentUserBriefConverter() {
+    }
+
+    public static UserBriefVO toBrief(UserInternalVO user) {
+        return UserBriefVO.from(user);
     }
 
     public static UserBriefVO toBrief(User user) {

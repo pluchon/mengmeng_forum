@@ -1,6 +1,6 @@
 package org.pluchon.forum.service.impl.article.auditguard;
 
-import org.pluchon.forum.common.utils.UserMuteGuard;
+import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,7 +13,7 @@ public class AuditUserCanPostGuard implements ArticleAuditSubmitGuard {
 
     @Override
     public ArticleAuditSubmitGuardResult check(ArticleAuditSubmitContext context) {
-        UserMuteGuard.assertCanPost(context.getAuthor());
+        ContentUserMuteGuard.assertCanPost(context.getAuthor());
         return ArticleAuditSubmitGuardResult.pass();
     }
 }
