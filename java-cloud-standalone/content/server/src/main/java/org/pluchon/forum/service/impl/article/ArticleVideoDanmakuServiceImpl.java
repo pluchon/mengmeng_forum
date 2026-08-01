@@ -11,18 +11,17 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.AiAuditUtils;
-import org.pluchon.forum.common.utils.UserMuteGuard;
+import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.converter.DanmakuConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleVideoDanmaku;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.SendDanmakuRequest;
 import org.pluchon.forum.entity.vo.article.DanmakuItemVO;
 import org.pluchon.forum.mapper.ArticleVideoDanmakuMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.article.ArticleVideoDanmakuService;
-import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -50,10 +49,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
     private ArticleService articleService;
 
     @Autowired
-    private UserService userService;
-
-    @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private ContentUserLookupService userInternalLookupService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -61,8 +57,8 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DanmakuItemVO sendDanmaku(SendDanmakuRequest req, Long loginUserId) {
-        User loginUser = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(loginUser);
+        UserInternalVO loginUser = userInternalLookupService.queryUserByUserId(loginUserId);
+        ContentUserMuteGuard.assertCanPost(loginUser);
         if (req == null || req.getArticleId() == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -139,7 +135,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
             return List.of();
         }
         Set<Long> userIds = rows.stream().map(ArticleVideoDanmaku::getUserId).collect(Collectors.toSet());
-        Map<Long, User> userMap = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
+        Map<Long, UserInternalVO> userMap = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
         return DanmakuConverter.toItemVOList(rows, userMap);
     }
 

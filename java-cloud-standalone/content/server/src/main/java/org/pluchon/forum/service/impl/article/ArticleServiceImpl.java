@@ -18,7 +18,7 @@ import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleImage;
 import org.pluchon.forum.entity.db.ArticleLike;
 import org.pluchon.forum.entity.db.Board;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
@@ -36,7 +36,8 @@ import org.pluchon.forum.mapper.ArticleImageMapper;
 import org.pluchon.forum.mapper.ArticleLikeMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
+import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
@@ -48,7 +49,6 @@ import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.service.interfaces.favorite.FavoriteArticleService;
 import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
-import org.pluchon.forum.service.interfaces.user.UserService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -74,13 +74,10 @@ public class ArticleServiceImpl implements ArticleService {
     private ArticleMapper articleMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private ContentUserLookupService userInternalLookupService;
 
     @Autowired
     private UserRecommendFeedbackMapper userRecommendFeedbackMapper;
-
-    @Autowired
-    private UserService userService;
 
     @Autowired
     private ContentFollowLookupService userFollowService;
@@ -150,11 +147,11 @@ public class ArticleServiceImpl implements ArticleService {
         if (articleType == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
         }
-        User user = userService.queryUserByUserId(userId);
+        UserInternalVO user = userInternalLookupService.queryUserByUserId(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        UserMuteGuard.assertCanPost(user);
+        ContentUserMuteGuard.assertCanPost(user);
         Article add = new Article();
         add.setUserId(userId);
         add.setTitle(req.getTitle());
@@ -231,7 +228,7 @@ public class ArticleServiceImpl implements ArticleService {
                 articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_VISIT);
             }
         }
-        User userInfo = userService.getUserInfoById(articleInfo.getUserId());
+        UserInternalVO userInfo = userInternalLookupService.getUserInfoById(articleInfo.getUserId());
         if (userInfo == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
@@ -283,8 +280,8 @@ public class ArticleServiceImpl implements ArticleService {
         if (!Objects.equals(article.getUserId(), loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UPDATE_ARTICLE));
         }
-        User editor = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(editor);
+        UserInternalVO editor = userInternalLookupService.queryUserByUserId(loginUserId);
+        ContentUserMuteGuard.assertCanPost(editor);
         if (ArticleStatus.isEditingLocked(article.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
         }
@@ -448,7 +445,7 @@ public class ArticleServiceImpl implements ArticleService {
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
         Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner));
-        User user = userService.getUserInfoById(userId);
+        UserInternalVO user = userInternalLookupService.getUserInfoById(userId);
         PageResult<ArticleBriefVO> pageResult = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(),
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
         UserBriefVO profileUser = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
@@ -521,7 +518,7 @@ public class ArticleServiceImpl implements ArticleService {
         Set<Long> authorIds = articleMap.values().stream()
                 .map(Article::getUserId)
                 .collect(Collectors.toSet());
-        Map<Long, User> userMap = authorIds.isEmpty()
+        Map<Long, UserInternalVO> userMap = authorIds.isEmpty()
                 ? Map.of()
                 : userInternalLookupService.loadActiveUsers(authorIds);
         Set<Long> followingIds = loginUserId != null && loginUserId > 0
@@ -534,7 +531,7 @@ public class ArticleServiceImpl implements ArticleService {
             if (article == null) {
                 continue;
             }
-            User author = userMap.get(article.getUserId());
+            UserInternalVO author = userMap.get(article.getUserId());
             if (author == null) {
                 continue;
             }

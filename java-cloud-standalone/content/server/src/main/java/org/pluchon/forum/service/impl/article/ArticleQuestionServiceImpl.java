@@ -13,7 +13,7 @@ import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleReplyLike;
 import org.pluchon.forum.entity.db.ArticleSubReply;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO;
 import org.pluchon.forum.entity.vo.article.QuestionAnswerVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
@@ -24,7 +24,7 @@ import org.pluchon.forum.mapper.ArticleSubReplyMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
 import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +61,7 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
 
     // 用户信息业务
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     // 用户成长权限业务
     @Autowired
@@ -220,7 +220,7 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
 
     private UserBriefVO loadAnswerUser(Long userId) {
         try {
-            User user = userService.queryUserByUserId(userId);
+            UserInternalVO user = userService.queryUserByUserId(userId);
             return org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         } catch (ApplicationException exception) {
             return new UserBriefVO();

@@ -12,7 +12,7 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleLike;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleListByLikeResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
@@ -22,7 +22,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleLikeService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -50,7 +50,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
@@ -151,7 +151,7 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     private ArticleListByLikeResponse buildLikeResponse(ArticleLike like) {
         try {
             Article article = articleService.selectArticleByArticleId(like.getArticleId());
-            User user = userService.queryUserByUserId(article.getUserId());
+            UserInternalVO user = userService.queryUserByUserId(article.getUserId());
             ArticleListByLikeResponse item = new ArticleListByLikeResponse();
             item.setArticle(article);
             item.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));

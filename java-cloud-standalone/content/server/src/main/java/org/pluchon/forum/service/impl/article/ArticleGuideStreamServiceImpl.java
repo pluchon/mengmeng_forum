@@ -5,11 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.interfaces.article.ArticleGuideStreamService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,7 +38,7 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
     private AiHubService aiHubService;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -119,7 +119,7 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
             return;
         }
         try {
-            User author = userService.getUserInfoById(published.getUserId());
+            UserInternalVO author = userService.getUserInfoById(published.getUserId());
             RagArticleIndexDTO ragPayload = new RagArticleIndexDTO();
             ragPayload.setArticleId(published.getId());
             ragPayload.setTitle(published.getTitle());

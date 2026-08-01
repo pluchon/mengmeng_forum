@@ -8,10 +8,10 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.AiAuditUtils;
 import org.pluchon.forum.common.utils.PageUtils;
-import org.pluchon.forum.common.utils.UserMuteGuard;
+import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.entity.db.ArticleSubReply;
 import org.pluchon.forum.entity.db.ArticleSubReplyLike;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.SubReplyRequest;
 import org.pluchon.forum.entity.vo.article.ArticleSubReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -23,7 +23,7 @@ import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticleSubReplyService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +52,7 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     private ArticleService articleService;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private IpRegionService ipRegionService;
@@ -63,8 +63,8 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void subReply(SubReplyRequest req, Long loginUserId) {
-        User loginUser = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(loginUser);
+        UserInternalVO loginUser = userService.queryUserByUserId(loginUserId);
+        ContentUserMuteGuard.assertCanPost(loginUser);
         // 楼中楼：极短内容不走远程审核；审核服务异常时降级放行，避免「一发就失败」
         String raw = req.getContent() == null ? "" : req.getContent();
         String plain = raw.replaceAll("<[^>]+>", "").trim();
@@ -135,11 +135,11 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     private ArticleSubReplyListResponse buildSubReplyResponse(
             ArticleSubReply sub, Set<Long> likedSubIds,
             Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap) {
-        User postUser = userService.queryUserByUserId(sub.getPostUserId());
+        UserInternalVO postUser = userService.queryUserByUserId(sub.getPostUserId());
         String replyUserNickname = "";
         if (sub.getReplyUserId() != null) {
             try {
-                User replyUser = userService.getUserInfoById(sub.getReplyUserId());
+                UserInternalVO replyUser = userService.getUserInfoById(sub.getReplyUserId());
                 if (replyUser != null) {
                     replyUserNickname = replyUser.getNickname();
                 }

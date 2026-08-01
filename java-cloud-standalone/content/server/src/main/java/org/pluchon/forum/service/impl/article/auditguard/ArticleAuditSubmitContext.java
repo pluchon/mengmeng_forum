@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.article.auditguard;
 
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 
 public class ArticleAuditSubmitContext {
 
@@ -9,11 +9,11 @@ public class ArticleAuditSubmitContext {
 
     private final Long loginUserId;
 
-    private final User author;
+    private final UserInternalVO author;
 
     private final Article article;
 
-    public ArticleAuditSubmitContext(Long articleId, Long loginUserId, User author, Article article) {
+    public ArticleAuditSubmitContext(Long articleId, Long loginUserId, UserInternalVO author, Article article) {
         this.articleId = articleId;
         this.loginUserId = loginUserId;
         this.author = author;
@@ -28,7 +28,7 @@ public class ArticleAuditSubmitContext {
         return loginUserId;
     }
 
-    public User getAuthor() {
+    public UserInternalVO getAuthor() {
         return author;
     }
 
