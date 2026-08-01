@@ -3,7 +3,7 @@ package org.pluchon.forum.service.impl.lottery;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.cloud.feign.UserInternalFeignClient;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -90,7 +90,7 @@ public class LotteryServiceImpl implements LotteryService {
     private PointsService pointsService;
 
     @Autowired
-    private UserInternalFeignClient userInternalFeignClient;
+    private EconomyUserInternalFeignClient userInternalFeignClient;
 
     @Autowired
     private UserLotteryPityMapper userLotteryPityMapper;

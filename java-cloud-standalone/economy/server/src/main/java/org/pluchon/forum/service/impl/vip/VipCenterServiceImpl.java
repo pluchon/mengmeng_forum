@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import org.pluchon.forum.api.ai.AiUsageDailyBucketsVO;
 import org.pluchon.forum.cloud.feign.AiUsageInternalFeignClient;
-import org.pluchon.forum.cloud.feign.UserInternalFeignClient;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -44,7 +44,7 @@ public class VipCenterServiceImpl implements VipCenterService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Resource
-    private UserInternalFeignClient userInternalFeignClient;
+    private EconomyUserInternalFeignClient userInternalFeignClient;
 
     @Resource
     private VipEntitlementService vipEntitlementService;

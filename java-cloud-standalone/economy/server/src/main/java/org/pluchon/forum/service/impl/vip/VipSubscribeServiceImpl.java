@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.vip;
 
 import jakarta.annotation.Resource;
-import org.pluchon.forum.cloud.feign.UserInternalFeignClient;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -23,7 +23,7 @@ import java.util.Date;
 public class VipSubscribeServiceImpl implements VipSubscribeService {
 
     @Resource
-    private UserInternalFeignClient userInternalFeignClient;
+    private EconomyUserInternalFeignClient userInternalFeignClient;
 
     @Resource
     private PointsService pointsService;
