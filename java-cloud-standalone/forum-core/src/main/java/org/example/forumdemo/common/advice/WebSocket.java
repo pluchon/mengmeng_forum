@@ -9,7 +9,7 @@ import org.example.forumdemo.entity.dto.message.PrivateVoiceSignalRequest;
 import org.example.forumdemo.service.interfaces.groupchat.GroupVoiceService;
 import org.example.forumdemo.service.interfaces.message.PrivateVoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 // 文本 WebSocket 处理器，userId 由 TokenHandshakeInterceptor 鉴权后存入 attributes，此处直接取用
 @Component
-@ConditionalOnProperty(name = "forum.features.websocket", havingValue = "true")
+@ConditionalOnExpression("'true'.equals('${forum.features.websocket:false}') && 'im'.equals('${forum.domain:}')")
 @Slf4j
 public class WebSocket extends TextWebSocketHandler {
 

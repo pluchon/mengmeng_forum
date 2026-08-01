@@ -4,7 +4,7 @@ import org.example.forumdemo.common.advice.WebSocket;
 import org.example.forumdemo.common.interceptor.TokenHandshakeInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -16,7 +16,7 @@ import java.util.Arrays;
 // IM 通知 WebSocket（/ws/notify）
 @Configuration
 @EnableWebSocket
-@ConditionalOnProperty(name = "forum.features.websocket", havingValue = "true")
+@ConditionalOnExpression("'true'.equals('${forum.features.websocket:false}') && 'im'.equals('${forum.domain:}')")
 public class ImWebSocketConfigure implements WebSocketConfigurer {
 
     @Autowired

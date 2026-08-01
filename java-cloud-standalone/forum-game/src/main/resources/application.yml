@@ -19,7 +19,8 @@ forum:
   features:
     scheduling: true
     mq-consumer: false
-    websocket: true
+    # IM 的 /ws/notify 仅由 forum-im 承载；游戏进程只用 game-runtime WebSocket
+    websocket: false
     game-runtime: true
 
 logging:
