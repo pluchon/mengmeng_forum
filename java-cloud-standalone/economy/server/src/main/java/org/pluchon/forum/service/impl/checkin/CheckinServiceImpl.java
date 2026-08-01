@@ -107,7 +107,7 @@ public class CheckinServiceImpl implements CheckinService {
             log.info("签到规则缓存加载完成: {} 个月份规则, {} 个连签奖励档", ruleCache.size(), rewardCache.size());
         } catch (Exception e) {
             log.warn("启动时加载签到规则缓存失败, 将在首次签到相关请求时重试. "
-                            + "请确认 MySQL(127.0.0.1:33306/forum_db) 已启动且 checkin_rule、checkin_streak_reward 表已初始化. 原因: {}",
+                            + "请确认 MySQL(127.0.0.1:33306/forum_economy_db) 已启动且 checkin_rule、checkin_streak_reward 表已初始化. 原因: {}",
                     e.getMessage());
         }
     }
