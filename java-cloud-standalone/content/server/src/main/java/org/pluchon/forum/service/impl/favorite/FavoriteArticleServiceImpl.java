@@ -12,7 +12,7 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.FavoriteConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleFavorite;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserFavoriteFolder;
 import org.pluchon.forum.entity.dto.favorite.MoveFavoriteRequest;
 import org.pluchon.forum.entity.dto.favorite.SaveFavoriteRequest;
@@ -27,7 +27,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.favorite.FavoriteArticleService;
 import org.pluchon.forum.service.interfaces.favorite.FavoriteFolderService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -64,7 +64,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
     private ArticleService articleService;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -270,7 +270,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             Long uid = a.getUserId();
             if (map.containsKey(uid)) continue;
             try {
-                User u = userService.getUserInfoById(uid);
+                UserInternalVO u = userService.getUserInfoById(uid);
                 if (u != null) map.put(uid, org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u));
             } catch (ApplicationException e) {
                 log.warn("收藏夹列表中作者 {} 已不可用, 跳过", uid);
