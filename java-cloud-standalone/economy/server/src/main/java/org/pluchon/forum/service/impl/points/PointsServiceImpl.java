@@ -8,7 +8,7 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.CursorUtils;
 import org.pluchon.forum.common.utils.PageUtils;
-import org.pluchon.forum.cloud.feign.UserInternalFeignClient;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.entity.db.PointsLog;
 import org.pluchon.forum.entity.db.PointsWallet;
 import org.pluchon.forum.entity.vo.common.CursorPageResult;
@@ -51,7 +51,7 @@ public class PointsServiceImpl implements PointsService {
 
     @Autowired
     @Lazy
-    private UserInternalFeignClient userInternalFeignClient;
+    private EconomyUserInternalFeignClient userInternalFeignClient;
 
     @Autowired
     private PointsLogMapper pointsLogMapper;
