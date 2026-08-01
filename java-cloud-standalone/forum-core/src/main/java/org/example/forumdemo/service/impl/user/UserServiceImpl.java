@@ -30,6 +30,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.Date;
@@ -124,21 +126,42 @@ public class UserServiceImpl implements UserService {
             register.setEmailHash(PiiUtils.hmac(req.getEmail()));
         }
         userMapper.insert(register);
-        growthService.createNewUserProfile(register.getId());
-        // 注册的新用户默认都给指定的初始积分
-        pointsService.addPoints(register.getId(), Constant.POINTS_REGISTER_BONUS_AMOUNT,
-                Constant.POINTS_SOURCE_REGISTER_BONUS, register.getId(), "新用户注册赠送积分",
-                "register:" + register.getId());
-        // 立即把用户信息存入缓存
-        storeUserNameMapping(register.getUsername(), register.getId());
-        // 注册成功后立刻为用户创建默认收藏夹; 失败仅记日志, 不影响注册主流程,
-        // 因为首次收藏时 ensureDefaultFolder 仍会兜底补创建
-        try {
-            favoriteFolderService.ensureDefaultFolder(register.getId());
-        } catch (Exception e) {
-            log.warn("用户 {} 默认收藏夹创建失败, 留待懒加载补齐: {}", register.getId(), e.getMessage());
+        // 跨服务 Feign（成长建档 / 注册赠分）必须在本地事务提交后再调用，
+        // 否则 economy 更新同一 user 行会与本事务互相等待，触发 Lock wait timeout。
+        final Long newUserId = register.getId();
+        final String newUserName = register.getUsername();
+        final User ragSnapshot = register;
+        Runnable afterCommitSideEffects = () -> {
+            try {
+                growthService.createNewUserProfile(newUserId);
+            } catch (Exception e) {
+                log.warn("用户 {} 成长档案创建失败(可补偿): {}", newUserId, e.getMessage());
+            }
+            try {
+                pointsService.addPoints(newUserId, Constant.POINTS_REGISTER_BONUS_AMOUNT,
+                        Constant.POINTS_SOURCE_REGISTER_BONUS, newUserId, "新用户注册赠送积分",
+                        "register:" + newUserId);
+            } catch (Exception e) {
+                log.warn("用户 {} 注册赠分失败(可补偿): {}", newUserId, e.getMessage());
+            }
+            storeUserNameMapping(newUserName, newUserId);
+            try {
+                favoriteFolderService.ensureDefaultFolder(newUserId);
+            } catch (Exception e) {
+                log.warn("用户 {} 默认收藏夹创建失败, 留待懒加载补齐: {}", newUserId, e.getMessage());
+            }
+            indexUserRagProfile(ragSnapshot);
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    afterCommitSideEffects.run();
+                }
+            });
+        } else {
+            afterCommitSideEffects.run();
         }
-        indexUserRagProfile(register);
     }
 
     // ============================================================
