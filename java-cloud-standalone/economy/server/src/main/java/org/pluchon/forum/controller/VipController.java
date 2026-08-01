@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.vip.VipSubscribeDTO;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaPanelVO;
@@ -34,28 +34,28 @@ public class VipController {
     @Operation(summary = "会员中心（方案 + 配额）")
     @GetMapping("/center")
     public Result<VipCenterVO> center(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(vipCenterService.center(loginUser.getId()));
     }
 
     @Operation(summary = "刷新配额面板", description = "按当前 PRO/MAX 档位返回本期用量，需手动刷新")
     @GetMapping("/quota")
     public Result<VipQuotaPanelVO> quota(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(vipCenterService.quota(loginUser.getId()));
     }
 
     @Operation(summary = "当前 VIP 与积分余额")
     @GetMapping("/status")
     public Result<VipStatusVO> status(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(vipSubscribeService.status(loginUser.getId()));
     }
 
     @Operation(summary = "积分订阅", description = "PRO=900 积分/30 天，MAX=2000 积分/30 天；续费从当前到期日起顺延")
     @PostMapping("/subscribe")
     public Result<VipSubscribeResultVO> subscribe(@RequestBody VipSubscribeDTO dto, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(vipSubscribeService.subscribe(loginUser.getId(), dto));
     }
 }

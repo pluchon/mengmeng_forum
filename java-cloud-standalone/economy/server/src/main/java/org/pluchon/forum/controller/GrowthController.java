@@ -8,7 +8,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.growth.GrowthChallengeSubmitRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.growth.GrowthChallengeDetailVO;
@@ -93,7 +93,7 @@ public class GrowthController {
     }
 
     private Long userId(HttpServletRequest request) {
-        User user = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser user = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }

@@ -7,9 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.AuthApiPaths;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.utils.JWTUtils;
-import org.pluchon.forum.entity.db.User;
-import org.pluchon.forum.service.impl.user.JwtTokenVersionService;
-import org.pluchon.forum.service.interfaces.user.UserAuthSnapshotService;
+import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.common.security.AuthSnapshotResolver;
+import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -22,7 +22,7 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Autowired
     @Lazy
-    private UserAuthSnapshotService userAuthSnapshotService;
+    private AuthSnapshotResolver authSnapshotResolver;
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
@@ -51,11 +51,13 @@ public class LoginInterceptor implements HandlerInterceptor {
             }
         }
         if (jwtClaims != null) {
-            User user = new User();
             Long userId = Long.valueOf(jwtClaims.get(Constant.JWT_USER_ID).toString());
-            user.setId(userId);
-            user.setUsername(jwtClaims.get(Constant.JWT_USER_NAME, String.class));
-            userAuthSnapshotService.enrichAuthFields(user);
+            AuthenticatedUser user = authSnapshotResolver.resolve(
+                    userId, jwtClaims.get(Constant.JWT_USER_NAME, String.class));
+            if (user == null) {
+                response.setStatus(401);
+                return false;
+            }
             if (user.getState() != null && user.getState().equals(Constant.STATE_BANNED)) {
                 response.setStatus(403);
                 return false;

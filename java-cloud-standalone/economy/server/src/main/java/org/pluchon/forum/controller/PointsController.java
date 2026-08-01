@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.points.PointsDailyVO;
@@ -33,7 +33,7 @@ public class PointsController {
     @Operation(summary = "钱包概览", description = "返回当前余额 + 累计签到入账 + 累计消费, 用于「我的积分」页头部")
     @GetMapping("/wallet")
     public Result<PointsWalletVO> getWallet(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getWallet(loginUser.getId()));
     }
 
@@ -43,7 +43,7 @@ public class PointsController {
                                                           @RequestParam(defaultValue = "10") Integer pageSize,
                                                           @RequestParam(required = false) Byte sourceType,
                                                           HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getLogWithPage(loginUser.getId(), pageNum, pageSize, sourceType));
     }
 
@@ -54,7 +54,7 @@ public class PointsController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) Byte sourceType,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getLogWithCursor(loginUser.getId(), cursor, pageSize, sourceType));
     }
 
@@ -62,7 +62,7 @@ public class PointsController {
     @GetMapping("/daily")
     public Result<List<PointsDailyVO>> getDaily(@RequestParam(required = false) Integer days,
                                                 HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getDailyAggregation(loginUser.getId(), days));
     }
 

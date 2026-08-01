@@ -5,8 +5,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.db.CheckinLog;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.checkin.CheckinResultResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinStatusResponse;
@@ -31,14 +31,14 @@ public class CheckinController {
     @Operation(summary = "执行签到", description = "同一用户当天重复签到会返回已签到状态码. 一次返回本次得分 + 签后最新状态")
     @PostMapping("/doCheckin")
     public Result<CheckinResultResponse> doCheckin(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(checkinService.doCheckin(sessionUser.getId()));
     }
 
     @Operation(summary = "查询签到状态", description = "用于进入签到页时展示日历高亮 / 是否已签 / 下一档奖励. 不会触发签到")
     @GetMapping("/info")
     public Result<CheckinStatusResponse> getStatus(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(checkinService.getStatus(sessionUser.getId()));
     }
 
@@ -46,7 +46,7 @@ public class CheckinController {
     @GetMapping("/log")
     public Result<PageResult<CheckinLog>> getLogWithPage(@RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(checkinService.getLogWithPage(sessionUser.getId(), pageNum, pageSize));
     }
 
@@ -62,7 +62,7 @@ public class CheckinController {
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(checkinService.getLogWithCursor(sessionUser.getId(), cursor, pageSize));
     }
 }

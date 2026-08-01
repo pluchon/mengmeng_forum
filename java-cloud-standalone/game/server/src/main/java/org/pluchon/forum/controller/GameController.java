@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GameCenterOverviewVO;
 import org.pluchon.forum.entity.vo.game.GameMatchRecordVO;
@@ -72,21 +72,21 @@ public class GameController {
     @Operation(summary = "游戏中心概览", description = "返回游戏卡片与当前用户五子棋资料")
     @GetMapping("/center/overview")
     public Result<GameCenterOverviewVO> overview(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameCenterService.getOverview(loginUser.getId()));
     }
 
     @Operation(summary = "五子棋资料", description = "返回当前用户五子棋积分、胜率和状态")
     @GetMapping("/gobang/profile")
     public Result<GameUserProfileVO> gobangProfile(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.getProfileVO(loginUser.getId(), GameConstants.GOBANG));
     }
 
     @Operation(summary = "井字棋资料", description = "返回当前用户井字棋积分、胜率和状态")
     @GetMapping("/jinzi/profile")
     public Result<GameUserProfileVO> jinziProfile(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.getProfileVO(loginUser.getId(), GameConstants.JINZI));
     }
 
@@ -96,7 +96,7 @@ public class GameController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.listGobangRecords(
                 loginUser.getId(),
                 pageNum,
@@ -110,7 +110,7 @@ public class GameController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.listJinziRecords(
                 loginUser.getId(),
                 pageNum,
@@ -129,7 +129,7 @@ public class GameController {
     public Result<GobangReplayVO> gobangReplay(
             @PathVariable Long recordId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.getGobangReplay(loginUser.getId(), recordId));
     }
 
@@ -138,7 +138,7 @@ public class GameController {
     public Result<GobangReplayVO> jinziReplay(
             @PathVariable Long recordId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gameUserProfileService.getJinziReplay(loginUser.getId(), recordId));
     }
 
@@ -147,7 +147,7 @@ public class GameController {
     public Result<GobangRoomStateVO> gobangRoom(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(gobangRoomService.getRoomState(roomId, loginUser.getId()));
     }
 
@@ -156,7 +156,7 @@ public class GameController {
     public Result<JinziRoomStateVO> jinziRoom(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(jinziRoomService.getRoomState(roomId, loginUser.getId()));
     }
 
@@ -165,7 +165,7 @@ public class GameController {
     public Result<Void> surrender(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         gobangRoomService.surrender(roomId, loginUser.getId(), null);
         return Result.success();
     }
@@ -175,7 +175,7 @@ public class GameController {
     public Result<Void> jinziSurrender(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         jinziRoomService.surrender(roomId, loginUser.getId(), null);
         return Result.success();
     }
@@ -183,7 +183,7 @@ public class GameController {
     /** 俄罗斯方块资料 */
     @GetMapping("/tetris/profile")
     public Result<TetrisProfileVO> tetrisProfile(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisService.getProfile(loginUser.getId()));
     }
 
@@ -193,7 +193,7 @@ public class GameController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisService.listRecords(loginUser.getId(), pageNum, pageSize));
     }
 
@@ -210,7 +210,7 @@ public class GameController {
     public Result<TetrisSettleResultVO> tetrisSettle(
             @RequestBody TetrisSettleRequest body,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisService.settle(loginUser.getId(), body));
     }
 
@@ -219,14 +219,14 @@ public class GameController {
     public Result<TetrisReplayVO> tetrisReplay(
             @PathVariable Long recordId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisService.getReplay(loginUser.getId(), recordId));
     }
 
     /** 俄罗斯方块 PK 资料 */
     @GetMapping("/tetris/pk/profile")
     public Result<GameUserProfileVO> tetrisPkProfile(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisPkService.getProfile(loginUser.getId()));
     }
 
@@ -236,7 +236,7 @@ public class GameController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisPkService.listRecords(loginUser.getId(), pageNum, pageSize));
     }
 
@@ -259,7 +259,7 @@ public class GameController {
     public Result<TetrisRoomStateVO> tetrisPkRoom(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisRoomService.getRoomState(roomId, loginUser.getId()));
     }
 
@@ -268,7 +268,7 @@ public class GameController {
     public Result<Void> tetrisPkSurrender(
             @PathVariable String roomId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         tetrisRoomService.surrender(roomId, loginUser.getId(), null);
         return Result.success();
     }
@@ -278,7 +278,7 @@ public class GameController {
     public Result<TetrisPkReplayVO> tetrisPkReplay(
             @PathVariable Long recordId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(tetrisPkService.getReplay(loginUser.getId(), recordId));
     }
 }

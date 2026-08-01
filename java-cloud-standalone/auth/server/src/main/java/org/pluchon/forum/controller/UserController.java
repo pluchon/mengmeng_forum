@@ -9,7 +9,7 @@ import org.pluchon.forum.common.captcha.CaptchaTicketPurpose;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
@@ -79,14 +79,14 @@ public class UserController {
     @Operation(summary = "获取当前登录用户信息", description = "从 Session 获取用户ID后查库返回")
     @GetMapping("/getUserByIdForLogin")
     public Result<UserSessionVO> getUserByIdForLogin(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(userAuthFlowService.getSessionUser(sessionUser.getId()));
     }
 
     @Operation(summary = "退出登录", description = "递增当前账号 token 版本，使当前 JWT 立即失效")
     @PostMapping("/logout")
     public Result<String> logout(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         userService.logout(sessionUser.getId());
         return Result.success("退出成功");
     }
@@ -94,14 +94,14 @@ public class UserController {
     @Operation(summary = "更新用户信息", description = "不包括密码、头像、背景图等需要单独流程的字段")
     @PutMapping("/modifyUser")
     public Result<UserSessionVO> modifyUser(@RequestBody ModifyUserRequest modifyUserRequest, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(userAuthFlowService.modifyUser(modifyUserRequest, sessionUser.getId()));
     }
 
     @Operation(summary = "修改密码", description = "已登录用户基于旧密码改新密码")
     @PutMapping("/modifyPassword")
     public Result<String> modifyPassword(String oldPassword, String newPassword, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         userService.updatePawssword(sessionUser.getId(), oldPassword, newPassword);
         return Result.success("密码修改成功");
     }
@@ -109,7 +109,7 @@ public class UserController {
     @Operation(summary = "设置当前用户看板娘模型", description = "modelId 须为 forum_mascot_model 已上架记录")
     @PostMapping("/setMascotModel")
     public Result<String> setMascotModel(@RequestParam Long modelId, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (sessionUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -120,7 +120,7 @@ public class UserController {
     @Operation(summary = "更新用户头像 URL", description = "前端先调 /file/uploadAvatar 拿到 URL，再调用此接口写入数据库")
     @PostMapping("/updateAvatarUrl")
     public Result<String> updateAvatarUrl(@RequestParam String url, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         userService.updateAvatarUrl(sessionUser.getId(), url);
         return Result.success("头像更新成功");
     }
@@ -128,7 +128,7 @@ public class UserController {
     @Operation(summary = "更新用户背景图 URL", description = "前端先调 /file/uploadBackground 拿到 URL，再调用此接口写入数据库")
     @PostMapping("/updateBackgroundUrl")
     public Result<String> updateBackgroundUrl(@RequestParam String url, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         userService.updateBackgroundUrl(sessionUser.getId(), url);
         return Result.success("背景图更新成功");
     }
@@ -154,7 +154,7 @@ public class UserController {
                                             @RequestParam(required = false) String newPassword,
                                             @RequestParam(required = false) String captchaTicket,
                                             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long sessionUserId = sessionUser != null ? sessionUser.getId() : null;
         if (!StringUtils.hasText(code)) {
             return Result.success(userAuthFlowService.sendResetCodeBySms(sessionUserId, phoneNumber, captchaTicket));
@@ -177,14 +177,14 @@ public class UserController {
     public Result<List<UserLoginLogVO>> loginLogs(
             @RequestParam(defaultValue = "20") Integer limit,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(userLoginLogService.listRecent(sessionUser.getId(), limit == null ? 20 : limit));
     }
 
     @Operation(summary = "关注用户")
     @PutMapping("/followUser")
     public Result<String> followUser(@RequestParam Long followeeId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -195,7 +195,7 @@ public class UserController {
     @Operation(summary = "取消关注")
     @PutMapping("/unfollowUser")
     public Result<String> unfollowUser(@RequestParam Long followeeId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -206,7 +206,7 @@ public class UserController {
     @Operation(summary = "关注统计", description = "返回关注数、粉丝数；登录且查看他人主页时附带 isFollowing")
     @GetMapping("/followStats")
     public Result<UserFollowStatsVO> followStats(@RequestParam Long userId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;
         return Result.success(userFollowService.getStats(userId, viewerId));
     }
@@ -214,7 +214,7 @@ public class UserController {
     @Operation(summary = "我关注的用户ID列表", description = "用于首页热帖等场景标注「你的关注」")
     @GetMapping("/followingIds")
     public Result<List<Long>> followingIds(HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -230,7 +230,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;
         return Result.success(userFollowService.listFollowingPage(userId, viewerId, keyword, pageNum, pageSize));
     }
@@ -243,7 +243,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;
         return Result.success(userFollowService.listFollowersPage(userId, viewerId, keyword, pageNum, pageSize));
     }
