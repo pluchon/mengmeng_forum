@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.SendDanmakuRequest;
 import org.pluchon.forum.entity.vo.article.DanmakuItemVO;
 import org.pluchon.forum.service.interfaces.article.ArticleVideoDanmakuService;
@@ -31,7 +31,7 @@ public class ArticleVideoDanmakuController {
     @Operation(summary = "发送弹幕")
     @PutMapping("/send")
     public Result<DanmakuItemVO> sendDanmaku(@RequestBody SendDanmakuRequest req, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         DanmakuItemVO vo = articleVideoDanmakuService.sendDanmaku(req, loginUser.getId());
         return Result.success(vo);
     }

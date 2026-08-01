@@ -6,7 +6,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.vo.search.SearchArticleResponse;
 import org.pluchon.forum.entity.vo.search.SearchUserResponse;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.service.interfaces.search.SearchService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,7 +37,7 @@ public class SearchController {
                                                        @RequestParam(defaultValue = "10") Integer pageSize,
                                                        @RequestParam(required = false) String ai,
                                                        HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         return Result.success(searchService.searchArticles(keyword, pageNum, pageSize, preferAiRag));
     }
@@ -50,7 +50,7 @@ public class SearchController {
                                                  @RequestParam(defaultValue = "10") Integer pageSize,
                                                  @RequestParam(required = false) String ai,
                                                  HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         Long viewerId = loginUser == null ? null : loginUser.getId();
         return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag, viewerId));

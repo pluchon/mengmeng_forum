@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.api.content.AiGeneratedImageUploadRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +27,7 @@ public class FileController {
     @Operation(summary = "上传帖子封面", description = "上传单张图片作为帖子封面，并返回OSS的URL")
     @PostMapping("/uploadCover")
     public Result<String> uploadCover(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -38,7 +38,7 @@ public class FileController {
     @Operation(summary = "上传用户头像", description = "上传图片到OSS返回URL，再调用 /user/updateAvatarUrl 写入数据库")
     @PostMapping("/uploadAvatar")
     public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail("您尚未登录");
         }
@@ -48,7 +48,7 @@ public class FileController {
     @Operation(summary = "上传用户主页背景图", description = "上传图片到OSS返回URL，再调用 /user/updateBackgroundUrl 写入数据库")
     @PostMapping("/uploadBackground")
     public Result<String> uploadBackground(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail("您尚未登录");
         }
@@ -58,7 +58,7 @@ public class FileController {
     @Operation(summary = "上传帖子内容图片", description = "上传图片到OSS返回URL，可直接嵌入富文本编辑器")
     @PostMapping("/uploadArticleImage")
     public Result<String> uploadArticleImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail("您尚未登录");
         }
@@ -68,7 +68,7 @@ public class FileController {
     @Operation(summary = "上传帖子视频", description = "上传单个视频到 OSS；大于100MB会触发压缩；返回 URL 后再调 /article/setArticleVideo 落库")
     @PostMapping("/uploadArticleVideo")
     public Result<String> uploadArticleVideo(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail("您尚未登录");
         }
@@ -78,7 +78,7 @@ public class FileController {
     @Operation(summary = "上传聊天图片消息", description = "发送方先上传图片获得OSS URL，再调 /message/sendImage 发送")
     @PostMapping("/uploadChatImage")
     public Result<String> uploadChatImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -88,7 +88,7 @@ public class FileController {
     @Operation(summary = "上传聊天表情", description = "用户自上传表情到收藏库, 返回URL后再调 /message/emoji/favorite 入库")
     @PostMapping("/uploadChatEmoji")
     public Result<String> uploadChatEmoji(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -98,7 +98,7 @@ public class FileController {
     @Operation(summary = "上传表情商城商品图", description = "封面 + 包内单图共用此接口, 返回URL后再调 /shop/createShop 落库")
     @PostMapping("/uploadEmojiShopImage")
     public Result<String> uploadEmojiShopImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -111,7 +111,7 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "noticeId", required = false) Long noticeId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -126,7 +126,7 @@ public class FileController {
             @RequestParam(value = "activityId", required = false) Long activityId,
             @RequestParam(value = "prizeId", required = false) Long prizeId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
@@ -141,7 +141,7 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "activityId", required = false) Long activityId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail("您尚未登录");
         }
