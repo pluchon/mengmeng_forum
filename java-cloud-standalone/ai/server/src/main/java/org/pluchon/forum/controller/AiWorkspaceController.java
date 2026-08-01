@@ -7,7 +7,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.ai.AiMemoryCreateRequest;
 import org.pluchon.forum.entity.dto.ai.AiWorkspaceArtifactRequest;
 import org.pluchon.forum.entity.dto.ai.AiWorkspaceCreateRequest;
@@ -115,8 +115,8 @@ public class AiWorkspaceController {
         return Result.success();
     }
 
-    private static User requireUser(HttpServletRequest request) {
-        User user = (User) request.getAttribute(Constant.USER_SESSION);
+    private static AuthenticatedUser requireUser(HttpServletRequest request) {
+        AuthenticatedUser user = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }

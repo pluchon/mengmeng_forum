@@ -6,7 +6,7 @@ import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.AcceptQuestionAnswerRequest;
 import org.pluchon.forum.entity.dto.article.CloseQuestionRequest;
 import org.pluchon.forum.entity.vo.article.QuestionAnswerVO;
@@ -34,7 +34,7 @@ public class ArticleQuestionController {
     public Result<String> acceptAnswer(
             @Valid @RequestBody AcceptQuestionAnswerRequest request,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -47,7 +47,7 @@ public class ArticleQuestionController {
     public Result<String> closeQuestion(
             @Valid @RequestBody CloseQuestionRequest request,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -60,7 +60,7 @@ public class ArticleQuestionController {
     public Result<QuestionAnswerVO> getAcceptedAnswer(
             @RequestParam Long articleId,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(articleQuestionService.queryAcceptedAnswer(articleId, loginUserId));
     }

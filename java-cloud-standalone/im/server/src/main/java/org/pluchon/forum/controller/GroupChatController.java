@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.groupchat.CreateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupMuteMemberRequest;
@@ -47,7 +47,7 @@ public class GroupChatController {
     @PostMapping("/create")
     public Result<GroupChatDetailVO> createGroup(@Valid @RequestBody CreateGroupChatRequest request,
                                                  HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.createGroup(request, sessionUser.getId()));
     }
 
@@ -56,7 +56,7 @@ public class GroupChatController {
     public Result<GroupChatDetailVO> updateGroup(@PathVariable Long groupId,
                                                  @RequestBody UpdateGroupChatRequest request,
                                                  HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.updateGroup(groupId, request, sessionUser.getId()));
     }
 
@@ -66,7 +66,7 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMySessions(sessionUser.getId(), pageNum, pageSize));
     }
 
@@ -76,7 +76,7 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryPublicGroups(sessionUser.getId(), pageNum, pageSize));
     }
 
@@ -87,7 +87,7 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryPublicGroupsByOwner(sessionUser.getId(), ownerUserId, pageNum, pageSize));
     }
 
@@ -98,7 +98,7 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMyOwnedGroups(sessionUser.getId(), keyword, pageNum, pageSize));
     }
 
@@ -106,7 +106,7 @@ public class GroupChatController {
     @PostMapping("/{groupId}/join")
     public Result<GroupChatJoinRequestVO> joinPublicGroup(@PathVariable Long groupId,
                                                           HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.joinPublicGroup(groupId, sessionUser.getId()));
     }
 
@@ -115,7 +115,7 @@ public class GroupChatController {
     public Result<GroupChatJoinRequestVO> inviteMember(@PathVariable Long groupId,
                                                        @Valid @RequestBody GroupInviteMemberRequest request,
                                                        HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.inviteMember(groupId, request, sessionUser.getId()));
     }
 
@@ -123,7 +123,7 @@ public class GroupChatController {
     @GetMapping("/requests/{requestId}")
     public Result<GroupChatJoinRequestVO> queryJoinRequest(@PathVariable Long requestId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryJoinRequest(requestId, sessionUser.getId()));
     }
 
@@ -133,14 +133,14 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryReceivedJoinRequests(sessionUser.getId(), pageNum, pageSize));
     }
 
     /** 标记入群申请已查看 */
     @PutMapping("/requests/received/read")
     public Result<String> markReceivedJoinRequestsRead(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.markReceivedJoinRequestsRead(sessionUser.getId());
         return Result.success("已查看入群申请");
     }
@@ -149,7 +149,7 @@ public class GroupChatController {
     @PutMapping("/requests/{requestId}/approve")
     public Result<GroupChatJoinRequestVO> approveJoinRequest(@PathVariable Long requestId,
                                                              HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.approveJoinRequest(requestId, sessionUser.getId()));
     }
 
@@ -157,7 +157,7 @@ public class GroupChatController {
     @PutMapping("/requests/{requestId}/reject")
     public Result<GroupChatJoinRequestVO> rejectJoinRequest(@PathVariable Long requestId,
                                                             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.rejectJoinRequest(requestId, sessionUser.getId()));
     }
 
@@ -165,7 +165,7 @@ public class GroupChatController {
     @PutMapping("/requests/{requestId}/accept")
     public Result<GroupChatJoinRequestVO> acceptInvitation(@PathVariable Long requestId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.acceptInvitation(requestId, sessionUser.getId()));
     }
 
@@ -173,14 +173,14 @@ public class GroupChatController {
     @PutMapping("/requests/{requestId}/decline")
     public Result<GroupChatJoinRequestVO> rejectInvitation(@PathVariable Long requestId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.rejectInvitation(requestId, sessionUser.getId()));
     }
 
     /** 退出群聊 */
     @PostMapping("/{groupId}/leave")
     public Result<String> leaveGroup(@PathVariable Long groupId, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.leaveGroup(groupId, sessionUser.getId());
         return Result.success("已退出群聊");
     }
@@ -190,7 +190,7 @@ public class GroupChatController {
     public Result<String> removeMember(@PathVariable Long groupId,
                                        @PathVariable Long targetUserId,
                                        HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.removeMember(groupId, targetUserId, sessionUser.getId());
         return Result.success("已移除成员");
     }
@@ -200,7 +200,7 @@ public class GroupChatController {
     public Result<String> muteMember(@PathVariable Long groupId,
                                      @Valid @RequestBody GroupMuteMemberRequest request,
                                      HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.muteMember(groupId, request, sessionUser.getId());
         return Result.success("成员禁言状态已更新");
     }
@@ -210,7 +210,7 @@ public class GroupChatController {
     public Result<String> updateMemberRole(@PathVariable Long groupId,
                                            @Valid @RequestBody UpdateGroupMemberRoleRequest request,
                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.updateMemberRole(groupId, request, sessionUser.getId());
         return Result.success("成员角色已更新");
     }
@@ -218,7 +218,7 @@ public class GroupChatController {
     /** 群主解散群聊 */
     @DeleteMapping("/{groupId}")
     public Result<String> dissolveGroup(@PathVariable Long groupId, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.dissolveGroup(groupId, sessionUser.getId());
         return Result.success("群聊已解散");
     }
@@ -227,7 +227,7 @@ public class GroupChatController {
     @PostMapping("/messages")
     public Result<GroupChatMessageVO> sendMessage(@Valid @RequestBody SendGroupChatMessageRequest request,
                                                   HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.sendMessage(request, sessionUser.getId()));
     }
 
@@ -238,7 +238,7 @@ public class GroupChatController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "100") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMessages(groupId, sessionUser.getId(), pageNum, pageSize));
     }
 
@@ -247,7 +247,7 @@ public class GroupChatController {
     public Result<String> markRead(@PathVariable Long groupId,
                                    @RequestParam(required = false) Long messageId,
                                    HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.markRead(groupId, messageId, sessionUser.getId());
         return Result.success("已标记群聊为已读");
     }
@@ -257,7 +257,7 @@ public class GroupChatController {
     public Result<String> reportMessage(@PathVariable Long groupId,
                                         @Valid @RequestBody ReportGroupChatMessageRequest request,
                                         HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         groupChatService.reportMessage(groupId, request, sessionUser.getId());
         return Result.success("举报已提交");
     }
@@ -266,7 +266,7 @@ public class GroupChatController {
     @GetMapping("/{groupId}/members")
     public Result<List<GroupChatMemberVO>> queryMembers(@PathVariable Long groupId,
                                                         HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMembers(groupId, sessionUser.getId()));
     }
 
@@ -275,7 +275,7 @@ public class GroupChatController {
     public Result<GroupChatMemberVO> updateMyRemark(@PathVariable Long groupId,
                                                     @RequestBody UpdateGroupMemberRemarkRequest request,
                                                     HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.updateMyRemark(groupId, request, sessionUser.getId()));
     }
 }

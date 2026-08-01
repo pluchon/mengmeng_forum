@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyLikeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -24,7 +24,7 @@ public class ArticleReplyLikeController {
     @Operation(summary = "点赞一级评论")
     @PutMapping("/likeReply")
     public Result<String> likeReply(Long replyId, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -35,7 +35,7 @@ public class ArticleReplyLikeController {
     @Operation(summary = "取消点赞一级评论")
     @PutMapping("/unlikeReply")
     public Result<String> unlikeReply(Long replyId, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -46,7 +46,7 @@ public class ArticleReplyLikeController {
     @Operation(summary = "点赞楼中楼回复")
     @PutMapping("/likeSubReply")
     public Result<String> likeSubReply(Long subReplyId, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -57,7 +57,7 @@ public class ArticleReplyLikeController {
     @Operation(summary = "取消点赞楼中楼回复")
     @PutMapping("/unlikeSubReply")
     public Result<String> unlikeSubReply(Long subReplyId, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }

@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.SubReplyRequest;
 import org.pluchon.forum.entity.vo.article.ArticleSubReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -24,7 +24,7 @@ public class ArticleSubReplyController {
     @Operation(summary = "发表楼中楼回复", description = "传入 articleId->帖子ID、replyId->楼层ID、replyUserId->被回复的用户ID、content->内容")
     @PutMapping("/subReply")
     public Result subReply(@RequestBody SubReplyRequest request, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         articleSubReplyService.subReply(request, loginUser.getId());
         return Result.success("楼中楼回复成功");
     }
@@ -34,7 +34,7 @@ public class ArticleSubReplyController {
     public Result<PageResult<ArticleSubReplyListResponse>> getSubReplyByReplyId(Long replyId,
             @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser != null ? loginUser.getId() : null;
         return Result.success(articleSubReplyService.querySubReplyByReplyId(
                 replyId, pageNum, pageSize, loginUserId));
