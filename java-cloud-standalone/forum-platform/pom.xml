@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -9,9 +9,9 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>forum-core</artifactId>
-    <name>forum-core</name>
-    <description>业务核心库：Service/Mapper/Entity/公共配置（不含各域 Controller 启动入口）</description>
+    <artifactId>forum-platform</artifactId>
+    <name>forum-platform</name>
+    <description>跨域平台支撑库：JWT/拦截器/Feign/远程适配/共享 VO（不含各域 Mapper 与启动入口）</description>
     <packaging>jar</packaging>
 
     <dependencies>

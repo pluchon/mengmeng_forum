@@ -24,6 +24,7 @@ import org.example.forumdemo.entity.dto.mascot.MascotChatRequest;
 import org.example.forumdemo.entity.dto.mascot.MascotHistoryTurn;
 import org.example.forumdemo.entity.dto.mascot.MascotRelatedRecommendationRequest;
 import org.example.forumdemo.converter.ArticleBriefConverter;
+import org.example.forumdemo.converter.ArticleInternalConverter;
 import org.example.forumdemo.converter.MascotConverter;
 import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
@@ -40,12 +41,14 @@ import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
 import org.example.forumdemo.mapper.ForumCompanionMessageMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationMapper;
-import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.mapper.UserMascotPreferenceMapper;
 import org.example.forumdemo.mapper.AiUsageDailyMapper;
+import org.example.forum.api.content.ArticleInternalVO;
 import org.example.forum.api.economy.VipTierSnapshotVO;
+import org.example.forum.cloud.feign.ArticleInternalFeignClient;
 import org.example.forum.cloud.feign.VipInternalFeignClient;
+import org.example.forumdemo.common.utils.ArticleHotScoreUtils;
 import org.example.forumdemo.entity.db.AiUsageDaily;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.springframework.dao.DuplicateKeyException;
@@ -56,8 +59,8 @@ import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
-import org.example.forumdemo.service.interfaces.article.ArticleHotRankingService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -152,14 +155,12 @@ public class MascotServiceImpl implements MascotService {
     @Resource
     private ForumMascotRelatedRecommendationItemMapper mascotRelatedRecommendationItemMapper;
 
+    @Lazy
     @Resource
-    private ArticleMapper articleMapper;
+    private ArticleInternalFeignClient articleInternalFeignClient;
 
     @Resource
     private UserInternalLookupService userInternalLookupService;
-
-    @Resource
-    private ArticleHotRankingService articleHotRankingService;
 
     @Resource
     private UserMascotPreferenceMapper userMascotPreferenceMapper;
@@ -342,11 +343,19 @@ public class MascotServiceImpl implements MascotService {
 
         Map<Long, Article> articlesById = new HashMap<>();
         if (!articleIds.isEmpty()) {
-            for (Article article : articleMapper.selectList(
-                    Wrappers.lambdaQuery(Article.class)
-                            .in(Article::getId, articleIds)
-                            .eq(Article::getDeleteState, (byte) 0))) {
-                articlesById.put(article.getId(), article);
+            List<ArticleInternalVO> vos = articleInternalFeignClient.listByIds(new ArrayList<>(articleIds));
+            if (vos != null) {
+                for (ArticleInternalVO vo : vos) {
+                    Article article = ArticleInternalConverter.toArticleShell(vo);
+                    if (article == null || article.getId() == null) {
+                        continue;
+                    }
+                    // Feign listByIds 已排除逻辑删除；壳对象仍按 deleteState 兜底
+                    if (article.getDeleteState() != null && article.getDeleteState() == 1) {
+                        continue;
+                    }
+                    articlesById.put(article.getId(), article);
+                }
             }
         }
         Set<Long> authorIds = new HashSet<>();
@@ -441,9 +450,9 @@ public class MascotServiceImpl implements MascotService {
         }
 
         List<MascotRelatedArticleCandidate> hot = unique.stream()
-                .filter(candidate -> articleHotRankingService.computeHotScore(candidate.getArticle()) > 0D)
+                .filter(candidate -> ArticleHotScoreUtils.computeHotScore(candidate.getArticle()) > 0D)
                 .sorted(Comparator.comparingDouble(
-                        (MascotRelatedArticleCandidate candidate) -> articleHotRankingService.computeHotScore(candidate.getArticle()))
+                        (MascotRelatedArticleCandidate candidate) -> ArticleHotScoreUtils.computeHotScore(candidate.getArticle()))
                         .reversed())
                 .toList();
         if (hot.isEmpty()) {

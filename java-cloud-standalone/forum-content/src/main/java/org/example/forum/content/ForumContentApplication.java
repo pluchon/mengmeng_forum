@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication(scanBasePackages = "org.example.forumdemo")
+@SpringBootApplication(scanBasePackages = {"org.example.forumdemo", "org.example.forum"})
 @MapperScan("org.example.forumdemo.mapper")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = {"org.example.forum.api", "org.example.forum.cloud.feign"})

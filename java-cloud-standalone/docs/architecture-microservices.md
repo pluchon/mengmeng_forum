@@ -2,16 +2,17 @@
 
 ## 1. 现状判定
 
-当前 `java-cloud-standalone` 处于**真拆分进行中**：
+当前 `java-cloud-standalone` 处于**真拆分主路径已完成**：
 
 - 六个业务进程 + Gateway/Nacos 已运行
-- 六域 `forum-*-api` 纯契约已建立；Feign 客户端在消费方
-- 各域 Service/Mapper/Entity 已物理 `git mv` 到对应服务模块（`forum-core` 仅残留共享/过渡实现）
-- 本地已建 `forum_*_db` 并完成表数据复制脚手架；**默认仍连 `forum_db`**，可用 `DB_*` 切库
-- `DomainServicePruner` 降级为兜底，目标删除
-- 业务代码包名大量仍为 `org.example.forumdemo.*`（启动类已是 `org.example.forum.*`）
+- 六域 `forum-*-api` 纯契约已建立；Feign 客户端在 `forum-platform`
+- 各域 Service/Mapper 已物理归属对应服务；`UserMapper`/`ArticleMapper` 仅在 auth/content fat jar
+- 默认连接 `forum_*_db` + 独立账号；跨库权限已撤销
+- `DomainServicePruner` **已删除**
+- 原 `forum-core` 已更名为 **`forum-platform`**（JWT/拦截器/Feign/远程适配/共享 VO，不含域 Mapper）
+- 业务代码包名大量仍为 `org.example.forumdemo.*`（启动类/Feign 为 `org.example.forum.*`；禁止脚本批量改名）
 
-结论：**进程切分 + 代码所有权主路径已完成；整包 core 依赖拆除与默认拆库撤权尚未完成。**
+结论：**六库 + Feign + 去 Pruner + 平台库收口已完成；存量 Java 包名手改演进。**
 
 ## 2. 官方依据
 
@@ -86,7 +87,7 @@ java-cloud-standalone/
 
 ## 6. 禁止事项
 
-- 宣称「迁移完成」但服务仍依赖整包 `forum-core`
+- 宣称「迁移完成」但服务仍依赖**他域业务实现 jar** 或仍嵌入他域 Mapper
 - 跨服务 compile 依赖他域业务实现 jar
 - Entity / Mapper / ServiceImpl 放入 `forum-common`
 - 把带 `@FeignClient` 的接口放进服务端也依赖的 `*-api`
@@ -102,19 +103,19 @@ java-cloud-standalone/
 | Phase 0 | 文档不再写「已收尾完成」；本 ADR 生效 |
 | Phase 1a | `points_wallet` 成为积分权威；注册默认收藏夹有跨域契约 |
 | Phase 1b | auth/economy/content 等 `*-api` 落地；Feign 客户端在消费方；不再 Feign 返回 Entity |
-| Phase 2 | 各服务不再依赖整包 core；无 `DomainServicePruner`；`@MapperScan` 仅本域 |
+| Phase 2 | 各服务不再依赖整包 core（现为 `forum-platform`）；无 `DomainServicePruner`；classpath 上仅本域 Mapper |
 | Phase 3 | 各服务独立库/账号；跨域只走 HTTP/MQ |
-| Phase 4 | 新代码与已搬迁代码使用 `org.example.forum.*` |
+| Phase 4 | 新代码与已搬迁代码使用 `org.example.forum.*`（存量 `forumdemo` 逐文件手改） |
 | Phase 5 | `-pl` 独立打包启动；依赖图与主链路验收通过 |
 
 ### 架构验收清单
 
 详见 [`architecture-acceptance.md`](architecture-acceptance.md)。
 
-- [x] 服务模块之间无业务实现级 Maven 依赖（均只依赖过渡 `forum-core`）
-- [x] 每服务可 `mvn -pl forum-xxx -am -DskipTests compile/package`（本轮已 compile 全绿）
-- [ ] 每服务默认只连接自己的数据库账号（脚手架就绪，默认仍 `forum_db`）
+- [x] 服务模块之间无业务实现级 Maven 依赖
+- [x] 每服务可 `mvn -pl forum-xxx -am -DskipTests package`
+- [x] 每服务默认只连接自己的数据库账号
 - [x] `*-api` 中不存在 `@FeignClient`
 - [x] Feign `name` / Gateway `lb://` / `spring.application.name` 一致
-- [ ] 主链路 E2E（切库后复跑）
+- [x] 主链路 E2E（切库后）
 - [x] 原 `backend/` 仍可独立运行（并行保留）

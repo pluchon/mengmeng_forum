@@ -1,16 +1,17 @@
 package org.example.forumdemo.service.impl.mascot;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.example.forum.api.content.ArticleInternalVO;
+import org.example.forum.cloud.feign.ArticleInternalFeignClient;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ArticleStatus;
 import org.example.forumdemo.common.utils.AiAuditUtils;
+import org.example.forumdemo.converter.ArticleInternalConverter;
 import org.example.forumdemo.entity.db.Article;
-import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.mascot.MascotRelatedArticleCandidate;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -43,8 +44,9 @@ public class MascotArticleRagHelper {
     /** 高于此分可免标题关键词校验 */
     private static final double HIGH_SCORE_BYPASS = 0.52;
 
+    @Lazy
     @Resource
-    private ArticleMapper articleMapper;
+    private ArticleInternalFeignClient articleInternalFeignClient;
 
     @Resource
     private AiHubService aiHubService;
@@ -68,9 +70,17 @@ public class MascotArticleRagHelper {
                 }
             }
 
-            List<Article> candidates = articleMapper.selectPage(
-                    new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
-                    buildCandidateQuery(query)).getRecords();
+            List<ArticleInternalVO> candidateVos = articleInternalFeignClient.searchCandidates(
+                    query, Constant.SEARCH_RAG_CANDIDATE_LIMIT);
+            List<Article> candidates = new ArrayList<>();
+            if (candidateVos != null) {
+                for (ArticleInternalVO vo : candidateVos) {
+                    Article article = ArticleInternalConverter.toArticleShell(vo);
+                    if (article != null) {
+                        candidates.add(article);
+                    }
+                }
+            }
             if (candidates.isEmpty()) {
                 return Collections.emptyList();
             }
@@ -110,12 +120,15 @@ public class MascotArticleRagHelper {
             return Collections.emptyMap();
         }
         Map<Long, Article> byId = new HashMap<>(ids.size() * 2);
-        List<Article> articles = articleMapper.selectList(new LambdaQueryWrapper<Article>()
-                .in(Article::getId, ids)
-                .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()));
-        for (Article article : articles) {
+        List<ArticleInternalVO> vos = articleInternalFeignClient.listByIds(ids);
+        if (vos == null || vos.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        for (ArticleInternalVO vo : vos) {
+            Article article = ArticleInternalConverter.toArticleShell(vo);
+            if (article == null || !isPublishedVisible(article)) {
+                continue;
+            }
             byId.put(article.getId(), article);
         }
         return byId;
@@ -196,21 +209,6 @@ public class MascotArticleRagHelper {
         return (del == null || del.byteValue() != DELETE_TRUE)
                 && (st == null || st.byteValue() != STATE_FORBIDDEN)
                 && ArticleStatus.isPublished(a.getStatus());
-    }
-
-    private com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Article> buildCandidateQuery(String kw) {
-        List<String> tokens = tokenizeKeyword(kw);
-        return new LambdaQueryWrapper<Article>()
-                .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .and(w -> {
-                    w.like(Article::getTitle, kw).or().like(Article::getContent, kw);
-                    for (String t : tokens) {
-                        w.or().like(Article::getTitle, t).or().like(Article::getContent, t);
-                    }
-                })
-                .orderByDesc(Article::getUpdateTime);
     }
 
     private List<String> tokenizeKeyword(String kw) {
