@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.constant.ForumBusinessConstants;
 import org.pluchon.forum.common.enums.AiCallState;
 import org.pluchon.forum.common.enums.MascotRelatedRecommendationState;
 import org.pluchon.forum.common.enums.MascotRelatedSelectionReason;
@@ -15,15 +16,12 @@ import org.pluchon.forum.entity.db.ForumCompanionSession;
 import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendation;
 import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendationItem;
 import org.pluchon.forum.entity.db.ForumCompanionMessage;
-import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.UserMascotPreference;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
 import org.pluchon.forum.entity.dto.mascot.MascotChatRequest;
 import org.pluchon.forum.entity.dto.mascot.MascotHistoryTurn;
 import org.pluchon.forum.entity.dto.mascot.MascotRelatedRecommendationRequest;
-import org.pluchon.forum.converter.ArticleBriefConverter;
-import org.pluchon.forum.converter.ArticleInternalConverter;
 import org.pluchon.forum.converter.MascotConverter;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
@@ -43,10 +41,10 @@ import org.pluchon.forum.mapper.ForumMascotRelatedRecommendationMapper;
 import org.pluchon.forum.mapper.UserMascotPreferenceMapper;
 import org.pluchon.forum.mapper.AiUsageDailyMapper;
 import org.pluchon.forum.api.content.ArticleInternalVO;
+import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
-import org.pluchon.forum.common.utils.ArticleHotScoreUtils;
 import org.pluchon.forum.entity.db.AiUsageDaily;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.springframework.dao.DuplicateKeyException;
@@ -81,6 +79,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -341,25 +340,24 @@ public class MascotServiceImpl implements MascotService {
             articleIds.add(savedItem.getArticleId());
         }
 
-        Map<Long, Article> articlesById = new HashMap<>();
+        Map<Long, ArticleInternalVO> articlesById = new HashMap<>();
         if (!articleIds.isEmpty()) {
             List<ArticleInternalVO> vos = articleInternalFeignClient.listByIds(new ArrayList<>(articleIds));
             if (vos != null) {
                 for (ArticleInternalVO vo : vos) {
-                    Article article = ArticleInternalConverter.toArticleShell(vo);
-                    if (article == null || article.getId() == null) {
+                    if (vo == null || vo.getId() == null) {
                         continue;
                     }
-                    // Feign listByIds 已排除逻辑删除；壳对象仍按 deleteState 兜底
-                    if (article.getDeleteState() != null && article.getDeleteState() == 1) {
+                    // Feign listByIds 已排除逻辑删除；内部视图仍按 deleteState 兜底
+                    if (vo.getDeleteState() != null && vo.getDeleteState() == 1) {
                         continue;
                     }
-                    articlesById.put(article.getId(), article);
+                    articlesById.put(vo.getId(), vo);
                 }
             }
         }
         Set<Long> authorIds = new HashSet<>();
-        for (Article article : articlesById.values()) {
+        for (ArticleInternalVO article : articlesById.values()) {
             authorIds.add(article.getUserId());
         }
         Map<Long, AiUserContext> usersById = authorIds.isEmpty() ? Map.of() : aiUserLookupService.loadActiveUsers(authorIds);
@@ -378,12 +376,12 @@ public class MascotServiceImpl implements MascotService {
             List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
             for (ForumMascotRelatedRecommendationItem savedItem : itemsByRecommendationId
                     .getOrDefault(recommendation.getId(), Collections.emptyList())) {
-                Article article = articlesById.get(savedItem.getArticleId());
+                ArticleInternalVO article = articlesById.get(savedItem.getArticleId());
                 if (article == null) {
                     continue;
                 }
                 MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
-                item.setArticle(ArticleBriefConverter.toBriefVO(article));
+                item.setArticle(toArticleBriefVO(article));
                 AiUserContext author = usersById.get(article.getUserId());
                 item.setAuthor(toUserBriefVO(author));
                 item.setSelectionReason(savedItem.getSelectionReason());
@@ -436,7 +434,7 @@ public class MascotServiceImpl implements MascotService {
         List<MascotRelatedArticleCandidate> unique = new ArrayList<>();
         Set<Long> seenIds = new HashSet<>();
         for (MascotRelatedArticleCandidate candidate : candidates) {
-            Article article = candidate.getArticle();
+            ArticleInternalVO article = candidate.getArticle();
             if (article != null && article.getId() != null && seenIds.add(article.getId())) {
                 unique.add(candidate);
             }
@@ -450,9 +448,9 @@ public class MascotServiceImpl implements MascotService {
         }
 
         List<MascotRelatedArticleCandidate> hot = unique.stream()
-                .filter(candidate -> ArticleHotScoreUtils.computeHotScore(candidate.getArticle()) > 0D)
+                .filter(candidate -> computeHotScore(candidate.getArticle()) > 0D)
                 .sorted(Comparator.comparingDouble(
-                        (MascotRelatedArticleCandidate candidate) -> ArticleHotScoreUtils.computeHotScore(candidate.getArticle()))
+                        (MascotRelatedArticleCandidate candidate) -> computeHotScore(candidate.getArticle()))
                         .reversed())
                 .toList();
         if (hot.isEmpty()) {
@@ -501,9 +499,9 @@ public class MascotServiceImpl implements MascotService {
         Map<Long, AiUserContext> usersById = userIds.isEmpty() ? Map.of() : aiUserLookupService.loadActiveUsers(userIds);
         List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
         for (RelatedArticleSelection selection : selections) {
-            Article article = selection.candidate().getArticle();
+            ArticleInternalVO article = selection.candidate().getArticle();
             MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
-            item.setArticle(ArticleBriefConverter.toBriefVO(article));
+            item.setArticle(toArticleBriefVO(article));
             AiUserContext author = usersById.get(article.getUserId());
             item.setAuthor(toUserBriefVO(author));
             item.setSelectionReason(selection.reason().name());
@@ -536,6 +534,56 @@ public class MascotServiceImpl implements MascotService {
         vo.setVipTier(user.getVipTier());
         vo.setVipExpireAt(user.getVipExpireAt());
         return vo;
+    }
+
+    private ArticleBriefVO toArticleBriefVO(ArticleInternalVO article) {
+        if (article == null) {
+            return null;
+        }
+        ArticleBriefVO vo = new ArticleBriefVO();
+        vo.setId(article.getId());
+        vo.setBoardId(article.getBoardId());
+        vo.setUserId(article.getUserId());
+        vo.setTitle(article.getTitle());
+        vo.setContent(article.getContent());
+        vo.setVisitCount(article.getVisitCount());
+        vo.setReplyCount(article.getReplyCount());
+        vo.setLikeCount(article.getLikeCount());
+        vo.setFavoriteCount(article.getFavoriteCount());
+        vo.setCoverImg(article.getCoverImg());
+        vo.setMediaType(article.getMediaType());
+        vo.setVideoUrl(article.getVideoUrl());
+        vo.setArticleType(article.getArticleType());
+        vo.setQuestionStatus(article.getQuestionStatus());
+        vo.setAcceptedReplyId(article.getAcceptedReplyId());
+        vo.setStatus(article.getStatus());
+        vo.setState(article.getState());
+        vo.setCreateTime(article.getCreateTime());
+        vo.setUpdateTime(article.getUpdateTime());
+        return vo;
+    }
+
+    private double computeHotScore(ArticleInternalVO article) {
+        if (article == null || article.getCreateTime() == null) {
+            return 0D;
+        }
+        long ageHours = Duration.between(article.getCreateTime().toInstant(), Instant.now()).toHours();
+        if (ageHours > ForumBusinessConstants.HOT_RANK_WINDOW_DAYS * 24L) {
+            return 0D;
+        }
+        int like = article.getLikeCount() == null ? 0 : article.getLikeCount();
+        int visit = article.getVisitCount() == null ? 0 : article.getVisitCount();
+        int favorite = article.getFavoriteCount() == null ? 0 : article.getFavoriteCount();
+        int reply = article.getReplyCount() == null ? 0 : article.getReplyCount();
+        int subReply = article.getSubReplyCount() == null ? 0 : article.getSubReplyCount();
+        double base = like * Constant.HOT_SCORE_WEIGHT_LIKE
+                + visit * Constant.HOT_SCORE_WEIGHT_VISIT
+                + favorite * Constant.HOT_SCORE_WEIGHT_FAVORITE
+                + (reply + subReply) * Constant.HOT_SCORE_WEIGHT_REPLY;
+        double decay = 1D / (1D + ageHours / 24D);
+        double boost = ageHours <= ForumBusinessConstants.HOT_RANK_NEW_POST_HOURS
+                ? ForumBusinessConstants.HOT_RANK_NEW_POST_BOOST : 1D;
+        return base * decay * boost;
     }
 
     private boolean isVip(AiUserContext user) {

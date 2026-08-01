@@ -6,8 +6,6 @@ import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.utils.AiAuditUtils;
-import org.pluchon.forum.converter.ArticleInternalConverter;
-import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.mascot.MascotRelatedArticleCandidate;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
@@ -72,21 +70,20 @@ public class MascotArticleRagHelper {
 
             List<ArticleInternalVO> candidateVos = articleInternalFeignClient.searchCandidates(
                     query, Constant.SEARCH_RAG_CANDIDATE_LIMIT);
-            List<Article> candidates = new ArrayList<>();
+            List<ArticleInternalVO> candidates = new ArrayList<>();
             if (candidateVos != null) {
                 for (ArticleInternalVO vo : candidateVos) {
-                    Article article = ArticleInternalConverter.toArticleShell(vo);
-                    if (article != null) {
-                        candidates.add(article);
+                    if (vo != null) {
+                        candidates.add(vo);
                     }
                 }
             }
             if (candidates.isEmpty()) {
                 return Collections.emptyList();
             }
-            Map<Long, Article> byId = new HashMap<>(candidates.size() * 2);
+            Map<Long, ArticleInternalVO> byId = new HashMap<>(candidates.size() * 2);
             List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
-            for (Article article : candidates) {
+            for (ArticleInternalVO article : candidates) {
                 byId.put(article.getId(), article);
                 Map<String, Object> item = new HashMap<>(2);
                 item.put("articleId", article.getId());
@@ -104,7 +101,7 @@ public class MascotArticleRagHelper {
         }
     }
 
-    private Map<Long, Article> loadVisibleArticles(List<Map<String, Object>> ranked) {
+    private Map<Long, ArticleInternalVO> loadVisibleArticles(List<Map<String, Object>> ranked) {
         List<Long> ids = new ArrayList<>();
         for (Map<String, Object> row : ranked) {
             try {
@@ -119,23 +116,22 @@ public class MascotArticleRagHelper {
         if (ids.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<Long, Article> byId = new HashMap<>(ids.size() * 2);
+        Map<Long, ArticleInternalVO> byId = new HashMap<>(ids.size() * 2);
         List<ArticleInternalVO> vos = articleInternalFeignClient.listByIds(ids);
         if (vos == null || vos.isEmpty()) {
             return Collections.emptyMap();
         }
         for (ArticleInternalVO vo : vos) {
-            Article article = ArticleInternalConverter.toArticleShell(vo);
-            if (article == null || !isPublishedVisible(article)) {
+            if (vo == null || !isPublishedVisible(vo)) {
                 continue;
             }
-            byId.put(article.getId(), article);
+            byId.put(vo.getId(), vo);
         }
         return byId;
     }
 
     private List<MascotRelatedArticleCandidate> enrichConfirmedCandidates(
-            String query, List<Map<String, Object>> ranked, Map<Long, Article> byId) {
+            String query, List<Map<String, Object>> ranked, Map<Long, ArticleInternalVO> byId) {
         if (ranked == null || ranked.isEmpty() || byId.isEmpty()) {
             return Collections.emptyList();
         }
@@ -151,7 +147,7 @@ public class MascotArticleRagHelper {
             } catch (NumberFormatException ignored) {
                 continue;
             }
-            Article article = byId.get(id);
+            ArticleInternalVO article = byId.get(id);
             if (article == null || !isPublishedVisible(article) || !StringUtils.hasText(article.getTitle())) {
                 continue;
             }
@@ -203,12 +199,12 @@ public class MascotArticleRagHelper {
         return false;
     }
 
-    private boolean isPublishedVisible(Article a) {
-        Byte del = a.getDeleteState();
-        Byte st = a.getState();
+    private boolean isPublishedVisible(ArticleInternalVO article) {
+        Byte del = article.getDeleteState();
+        Byte st = article.getState();
         return (del == null || del.byteValue() != DELETE_TRUE)
                 && (st == null || st.byteValue() != STATE_FORBIDDEN)
-                && ArticleStatus.isPublished(a.getStatus());
+                && ArticleStatus.isPublished(article.getStatus());
     }
 
     private List<String> tokenizeKeyword(String kw) {
@@ -250,9 +246,9 @@ public class MascotArticleRagHelper {
         return plain.substring(0, RAG_EXCERPT_HEAD) + "\n…\n" + plain.substring(plain.length() - RAG_EXCERPT_TAIL);
     }
 
-    private String buildRagText(Article a) {
-        String title = a.getTitle() == null ? "" : a.getTitle();
-        String body = buildExcerpt(stripHtml(a.getContent()), RAG_TEXT_TRUNCATE);
+    private String buildRagText(ArticleInternalVO article) {
+        String title = article.getTitle() == null ? "" : article.getTitle();
+        String body = buildExcerpt(stripHtml(article.getContent()), RAG_TEXT_TRUNCATE);
         StringBuilder sb = new StringBuilder();
         if (!title.isBlank()) {
             sb.append("标题: ").append(title).append('\n');
