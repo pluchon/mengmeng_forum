@@ -3,7 +3,6 @@ package org.pluchon.forum.controller;
 import org.pluchon.forum.api.economy.VipInternalApi;
 import org.pluchon.forum.api.economy.VipQuotaHintVO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
-import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
 import org.pluchon.forum.service.interfaces.vip.VipCenterService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
@@ -44,17 +43,6 @@ public class VipInternalController implements VipInternalApi {
     public VipQuotaHintVO quotaHintForLlmRoute(
             @PathVariable("userId") Long userId,
             @RequestParam(value = "llmRoute", required = false) String llmRoute) {
-        MascotQuotaHintVO hint = vipCenterService.quotaHintForLlmRoute(userId, llmRoute);
-        VipQuotaHintVO vo = new VipQuotaHintVO();
-        if (hint == null) {
-            vo.setPercent(0);
-            vo.setCanUsePointsPay(false);
-            vo.setQuotaLabel("");
-            return vo;
-        }
-        vo.setPercent(hint.getPercent());
-        vo.setCanUsePointsPay(hint.getCanUsePointsPay());
-        vo.setQuotaLabel(hint.getQuotaLabel());
-        return vo;
+        return vipCenterService.quotaHintForLlmRoute(userId, llmRoute);
     }
 }
