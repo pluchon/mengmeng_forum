@@ -11,7 +11,7 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.Category;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.board.CategoryWithBoards;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -20,7 +20,7 @@ import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.CategoryMapper;
 import org.pluchon.forum.service.interfaces.board.CategoryService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -42,7 +42,7 @@ public class CategoryServiceImpl implements CategoryService {
     private ArticleMapper articleMapper;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Override
     public List<Category> queryAllCategories() {
@@ -90,7 +90,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .orderByDesc(Article::getUpdateTime);
         Page<Article> result = articleMapper.selectPage(page, wrapper);
         List<ArticleListResponse> records = result.getRecords().stream().map(article -> {
-            User user = userService.getUserInfoById(article.getUserId());
+            UserInternalVO user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));

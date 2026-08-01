@@ -18,7 +18,7 @@ import org.pluchon.forum.entity.db.ArticleLike;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.ForumArticleAiFeature;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.dto.recommendation.NotInterestedArticleRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -31,7 +31,7 @@ import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.ForumArticleAiFeatureMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
@@ -74,7 +74,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private ArticleReplyMapper articleReplyMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private ContentUserLookupService userInternalLookupService;
 
     @Autowired
     private BoardMapper boardMapper;
@@ -214,11 +214,11 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(Article::getId, item -> item));
         Set<Long> authorIds = articles.values().stream().map(Article::getUserId).collect(java.util.stream.Collectors.toSet());
-        Map<Long, User> users = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
+        Map<Long, UserInternalVO> users = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
         List<RecommendArticleVO> records = new ArrayList<>();
         for (UserRecommendFeedback feedback : feedbackRecords) {
             Article article = articles.get(feedback.getArticleId());
-            User author = article == null ? null : users.get(article.getUserId());
+            UserInternalVO author = article == null ? null : users.get(article.getUserId());
             if (article == null || author == null) {
                 continue;
             }
@@ -304,7 +304,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             return List.of();
         }
         Set<Long> authorIds = candidates.stream().map(item -> item.getArticle().getUserId()).collect(java.util.stream.Collectors.toSet());
-        Map<Long, User> users = userInternalLookupService.loadActiveUsers(authorIds);
+        Map<Long, UserInternalVO> users = userInternalLookupService.loadActiveUsers(authorIds);
         Map<Long, String> boardNames = boardMapper.selectList(new LambdaQueryWrapper<Board>()
                         .in(Board::getId, candidates.stream().map(item -> item.getArticle().getBoardId()).distinct().toList())
                         .eq(Board::getDeleteState, DELETE_FALSE)
@@ -313,7 +313,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .collect(java.util.stream.Collectors.toMap(Board::getId, Board::getName));
         List<RecommendArticleVO> result = new ArrayList<>();
         for (Candidate candidate : candidates) {
-            User author = users.get(candidate.getArticle().getUserId());
+            UserInternalVO author = users.get(candidate.getArticle().getUserId());
             if (author == null) {
                 continue;
             }

@@ -15,7 +15,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.Board;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.board.BoardPublicVO;
@@ -26,7 +26,7 @@ import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -55,7 +55,7 @@ public class BoardServiceImpl implements BoardService {
     private UserRecommendFeedbackMapper userRecommendFeedbackMapper;
 
     @Autowired
-    private UserService userService;
+    private ContentUserLookupService userService;
 
     @Autowired
     private ContentFollowLookupService userFollowService;
@@ -178,7 +178,7 @@ public class BoardServiceImpl implements BoardService {
                 ? userFollowService.listFollowingIds(loginUserId)
                 : Set.of();
         List<ArticleListResponse> records = articleRecords.stream().map(article -> {
-            User user = userService.getUserInfoById(article.getUserId());
+            UserInternalVO user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
