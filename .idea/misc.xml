@@ -16,14 +16,8 @@
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>
-        <option value="$PROJECT_DIR$/backend/pom.xml" />
         <option value="$PROJECT_DIR$/java-cloud-standalone/pom.xml" />
       </list>
-    </option>
-    <option name="ignoredFiles">
-      <set>
-        <option value="$PROJECT_DIR$/backend/pom.xml" />
-      </set>
     </option>
   </component>
   <component name="ProjectInspectionProfilesVisibleTreeState">

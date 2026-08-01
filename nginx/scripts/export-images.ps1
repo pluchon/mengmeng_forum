@@ -130,7 +130,7 @@ if (Test-Path $envProd) {
 } else {
     Write-Host "WARN: nginx/.env missing - on server run: cp .env.example .env && nano .env" -ForegroundColor Yellow
 }
-$sqlSrc = Join-Path $repoRoot "backend\src\main\resources\sql"
+$sqlSrc = Join-Path $repoRoot "java-cloud-standalone\platform\src\main\resources\sql"
 $sqlDst = Join-Path $pkg "sql"
 if (Test-Path $sqlSrc) {
     New-Item -ItemType Directory -Force -Path $sqlDst | Out-Null
