@@ -2,6 +2,18 @@
 <project version="4">
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/backend/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-ai/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-auth/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-content/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-core/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-economy/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-game/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-gateway/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/forum-im/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-cloud-standalone/src/main/resources" charset="UTF-8" />
     <file url="PROJECT" charset="UTF-8" />
   </component>
 </project>

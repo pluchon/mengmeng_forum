@@ -1,0 +1,64 @@
+server:
+  port: 10086
+
+spring:
+  application:
+    name: forum-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+          routes:
+            - id: forum-auth
+              uri: lb://forum-auth
+              predicates:
+                - Path=/user/**,/captcha/**,/mail/**,/sms/**
+            - id: forum-content
+              uri: lb://forum-content
+              predicates:
+                - Path=/article/**,/articleReply/**,/articleSubReply/**,/like/**,/replyLike/**,/articleQuestion/**,/articleDanmaku/**,/board/**,/category/**,/favorite/**,/search/**,/recommend/**,/profile/interests/**,/file/**
+            - id: forum-im
+              uri: lb://forum-im
+              predicates:
+                - Path=/message/**,/group-chat/**,/voice/**,/system-message/**,/notice/**
+            - id: forum-game
+              uri: lb://forum-game
+              predicates:
+                - Path=/game/**
+            - id: forum-economy
+              uri: lb://forum-economy
+              predicates:
+                - Path=/points/**,/checkin/**,/vip/**,/lottery/**,/shop/**,/growth/**
+            - id: forum-ai
+              uri: lb://forum-ai
+              predicates:
+                - Path=/ai/**,/mascot/**,/drift-bottle/**
+            - id: forum-ws-im
+              uri: lb:ws://forum-im
+              predicates:
+                - Path=/ws/notify
+            - id: forum-ws-game
+              uri: lb:ws://forum-game
+              predicates:
+                - Path=/ws/game-center/**,/ws/games/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    root: WARN
+    org.springframework.cloud.gateway: WARN
+  file:
+    name: ${LOG_FILE:../logs/forum-gateway/forum-gateway.log}

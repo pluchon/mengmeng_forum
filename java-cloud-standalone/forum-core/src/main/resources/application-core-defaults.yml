@@ -1,0 +1,135 @@
+spring:
+  config:
+    import:
+      - "optional:file:../../nginx/.env[.properties]"
+      - "optional:file:../../nginx/.env[.properties]"
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: ${DB_PASSWORD:123456789}
+  data:
+    redis:
+      host: localhost
+      port: 63790
+      password: ${REDIS_PASSWORD:123456}
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 8
+          min-idle: 0
+          max-wait: 1000ms
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: ${MAIL_USERNAME:noreply@example.com}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          ssl:
+            enable: true
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: NON_NULL
+  servlet:
+    multipart:
+      max-file-size: 350MB
+      max-request-size: 350MB
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:56720}
+    virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:forum-demo}
+    username: ${SPRING_RABBITMQ_USERNAME:nuonuo}
+    password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:123456}}
+    listener:
+      simple:
+        acknowledge-mode: manual
+    publisher-confirm-type: correlated
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: org.example.forumdemo.common.db
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+springdoc:
+  swagger-ui:
+    path: /swagger
+sms:
+  access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
+  access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
+  sign-name: "速通互联验证码"
+
+oss:
+  endpoint: https://oss-cn-shenzhen.aliyuncs.com
+  access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
+  access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
+  bucket-name: ${OSS_BUCKET_NAME:item-for-picture-with-zhanglihong-local-develop}
+  url-prefix: ${OSS_URL_PREFIX:https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/}
+  # 对象 key 根前缀，默认空（与 OSS 控制台 forum_xxx/ 根目录对齐）；旧数据用 forum_db_item/ 时可设 OSS_ROOT_PREFIX=forum_db_item
+  root-prefix: ${OSS_ROOT_PREFIX:}
+  path: forum_db_item/forum_head_picture/
+
+jwt:
+  secret: ${JWT_SECRET:local_dev_jwt_secret_min_32_chars_change_me}
+
+pii:
+  secret: ${PII_CRYPTO_SECRET:local_dev_pii_secret_min_32_chars_change_me}
+
+captcha:
+  prefix: captcha
+  expire:
+    default: 120000
+    WORD_IMAGE_CLICK: 180000
+  init-default-resource: true
+  local-cache-enabled: false
+  local-cache-size: 20
+  local-cache-wait-time: 5000
+  local-cache-period: 2000
+  local-cache-ignored-cache-fields: ""
+  secondary:
+    enabled: false
+    expire: 120000
+    keyPrefix: "captcha:secondary"
+
+forum:
+  websocket:
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+  mascot:
+    ai-url: ${FORUM_MASCOT_AI_URL:http://localhost:5000/api/v1/gateway/invoke}
+    internal-key: ${FORUM_MASCOT_INTERNAL_KEY:${FORUM_AI_INTERNAL_KEY:}}
+    basic-daily-limit: ${FORUM_MASCOT_BASIC_DAILY_LIMIT:30}
+    treat-admin-as-vip: ${FORUM_MASCOT_TREAT_ADMIN_AS_VIP:true}
+  ai:
+    hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://localhost:5000}
+    internal-key: ${FORUM_AI_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
+  ffmpeg:
+    internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
+  voice:
+    ice:
+      stun-urls: ${FORUM_VOICE_STUN_URLS:stun:stun.l.google.com:19302}
+      turn-urls: ${FORUM_VOICE_TURN_URLS:}
+      turn-username: ${FORUM_VOICE_TURN_USERNAME:}
+      turn-credential: ${FORUM_VOICE_TURN_CREDENTIAL:}
+      turn-secret: ${FORUM_VOICE_TURN_SECRET:}
+      turn-ttl-seconds: ${FORUM_VOICE_TURN_TTL_SECONDS:3600}
+
+logging:
+  level:
+    root: WARN
+    org.example.forumdemo: WARN
+  file:
+    name: ${LOG_FILE:../logs/backend/forum-backend.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE:../logs/backend/forum-backend.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 20MB
+      max-history: 14
+      total-size-cap: 500MB
+
