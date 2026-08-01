@@ -12,7 +12,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.AiAuditUtils;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.SearchUserConverter;
-import org.pluchon.forum.converter.UserInternalConverter;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
@@ -23,14 +23,13 @@ import org.pluchon.forum.entity.vo.search.SearchUserResponse;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.mapper.ArticleMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.search.SearchService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
-import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -77,10 +76,7 @@ public class SearchServiceImpl implements SearchService {
     private ArticleMapper articleMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
-
-    @Autowired
-    private UserService userService;
+    private ContentUserLookupService userInternalLookupService;
 
     @Autowired
     private AiHubService aiHubService;
@@ -215,8 +211,7 @@ public class SearchServiceImpl implements SearchService {
         if (remote == null || remote.getRecords() == null || remote.getRecords().isEmpty()) {
             return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
         }
-        List<User> users = remote.getRecords().stream()
-                .map(UserInternalConverter::toUserShell)
+        List<UserInternalVO> users = remote.getRecords().stream()
                 .filter(u -> u != null)
                 .toList();
         PageResult<SearchUserItemVO> pageResult = new PageResult<>(
@@ -545,28 +540,12 @@ public class SearchServiceImpl implements SearchService {
         ArticleListResponse vo = new ArticleListResponse();
         vo.setArticle(article);
         try {
-            User u = userService.getUserInfoById(article.getUserId());
+            UserInternalVO u = userInternalLookupService.getUserInfoById(article.getUserId());
             if (u != null) vo.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u));
         } catch (ApplicationException e) {
             log.warn("搜索结果中作者 {} 已不可用, 跳过用户信息", article.getUserId());
         }
         return vo;
-    }
-
-    private PageResult<SearchUserItemVO> wrapUsers(Page<User> page, int p, int s, String kw, Long viewerId) {
-        List<String> terms = keywordTerms(kw);
-        List<User> sorted = new ArrayList<>(page.getRecords());
-        sorted.sort((a, b) -> Integer.compare(
-                userLiteralScore(b, terms),
-                userLiteralScore(a, terms)));
-        List<SearchUserItemVO> records = buildSearchUserItems(sorted, viewerId);
-        return new PageResult<>(records, page.getTotal(), p, s, page.getPages(), page.hasNext());
-    }
-
-    private static int userLiteralScore(User user, List<String> terms) {
-        String nickname = user.getNickname() == null ? "" : user.getNickname();
-        String username = user.getUsername() == null ? "" : user.getUsername();
-        return SearchKeywordHelper.literalRelevanceScore(nickname, username, terms);
     }
 
     private PageResult<SearchUserItemVO> emptyUserPage(int p, int s) {
@@ -577,17 +556,16 @@ public class SearchServiceImpl implements SearchService {
         if (ids.isEmpty()) {
             return Collections.emptyList();
         }
-        List<User> rows = userInternalLookupService.listByIds(ids).stream()
-                .filter(u -> u.getDeleteState() == null || u.getDeleteState() != DELETE_TRUE)
+        List<UserInternalVO> rows = userInternalLookupService.listByIds(ids).stream()
                 .filter(u -> u.getState() == null || u.getState() != STATE_FORBIDDEN)
                 .toList();
-        Map<Long, User> byId = new HashMap<>(rows.size() * 2);
-        for (User u : rows) {
+        Map<Long, UserInternalVO> byId = new HashMap<>(rows.size() * 2);
+        for (UserInternalVO u : rows) {
             byId.put(u.getId(), u);
         }
-        List<User> orderedUsers = new ArrayList<>(ids.size());
+        List<UserInternalVO> orderedUsers = new ArrayList<>(ids.size());
         for (Long id : ids) {
-            User u = byId.get(id);
+            UserInternalVO u = byId.get(id);
             if (u == null) {
                 continue;
             }
@@ -596,14 +574,14 @@ public class SearchServiceImpl implements SearchService {
         return buildSearchUserItems(orderedUsers, viewerId);
     }
 
-    private List<SearchUserItemVO> buildSearchUserItems(List<User> users, Long viewerId) {
+    private List<SearchUserItemVO> buildSearchUserItems(List<UserInternalVO> users, Long viewerId) {
         if (users == null || users.isEmpty()) {
             return Collections.emptyList();
         }
-        List<Long> userIds = users.stream().map(User::getId).toList();
+        List<Long> userIds = users.stream().map(UserInternalVO::getId).toList();
         Map<Long, UserFollowStatsVO> stats = userFollowService.getBatchStats(userIds, viewerId);
         List<SearchUserItemVO> out = new ArrayList<>(users.size());
-        for (User user : users) {
+        for (UserInternalVO user : users) {
             out.add(SearchUserConverter.toItem(user, stats.get(user.getId())));
         }
         return out;
