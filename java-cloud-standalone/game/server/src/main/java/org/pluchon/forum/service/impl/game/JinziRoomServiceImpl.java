@@ -19,6 +19,7 @@ import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
 import org.pluchon.forum.entity.vo.game.GameRoomSnapshotVO;
 import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
@@ -40,7 +41,6 @@ import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
 import org.pluchon.forum.service.interfaces.game.JinziRoomService;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -102,7 +102,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private GameSettlementEventMapper gameSettlementEventMapper;
 
     @Autowired
-    private PointsService pointsService;
+    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
 
     @Autowired
     private GameUserLookupService gameUserLookupService;
@@ -427,14 +427,15 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             return;
         }
         if (!GameConstants.AI_USER_ID.equals(winnerId)) {
-            pointsService.addPoints(winnerId, scoreDelta,
+            gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
                     Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "井字棋胜利奖励",
                     "game:jinzi:win:" + room.getRoomId());
         }
         if (!GameConstants.AI_USER_ID.equals(loserId)) {
-            int loserPoints = pointsService.getWallet(loserId).getBalance();
+            Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
+            int loserPoints = balance == null ? 0 : balance;
             if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                pointsService.deductPoints(loserId, loserPenalty,
+                gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
                         Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除",
                         "game:jinzi:lose:" + room.getRoomId());
             }

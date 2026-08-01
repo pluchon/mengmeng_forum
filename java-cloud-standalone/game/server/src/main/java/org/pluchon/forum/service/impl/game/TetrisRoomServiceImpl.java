@@ -14,6 +14,7 @@ import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
 import org.pluchon.forum.entity.dto.game.TetrisChatRequest;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
 import org.pluchon.forum.entity.vo.game.TetrisActiveRoomVO;
@@ -24,7 +25,6 @@ import org.pluchon.forum.entity.vo.game.TetrisRoomStateVO;
 import org.pluchon.forum.mapper.GameTetrisPkMatchRecordMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
 import org.pluchon.forum.service.security.GameUserLookupService;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.impl.game.tetris.TetrisBlock;
 import org.pluchon.forum.service.impl.game.tetris.TetrisEngineConstants;
 import org.pluchon.forum.service.impl.game.tetris.TetrisMatrixUtil;
@@ -93,7 +93,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     private GameUserLookupService gameUserLookupService;
 
     @Autowired
-    private PointsService pointsService;
+    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -482,12 +482,13 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             record.setDeleteState((byte) 0);
             gameTetrisPkMatchRecordMapper.insert(record);
             if (winnerId != null && loserId != null && scoreDelta > 0) {
-                pointsService.addPoints(winnerId, scoreDelta,
+                gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
                         Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励",
                         "game:tetrispk:win:" + room.getRoomId());
-                int loserPoints = pointsService.getWallet(loserId).getBalance();
+                Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
+                int loserPoints = balance == null ? 0 : balance;
                 if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                    pointsService.deductPoints(loserId, loserPenalty,
+                    gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
                             Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除",
                             "game:tetrispk:lose:" + room.getRoomId());
                 }

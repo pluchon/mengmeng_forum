@@ -18,6 +18,7 @@ import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
@@ -40,7 +41,6 @@ import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GobangRoomService;
-import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.impl.game.ai.GameAiPlanner;
 import org.pluchon.forum.service.impl.game.ai.GobangAiEngine;
 import org.pluchon.forum.service.impl.game.guard.GobangActionContext;
@@ -132,7 +132,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GameSettlementEventMapper gameSettlementEventMapper;
 
     @Autowired
-    private PointsService pointsService;
+    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
 
     @Autowired
     private GameUserLookupService gameUserLookupService;
@@ -518,15 +518,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             gameGobangMatchRecordMapper.insert(record);
             if (winnerId != null && loserId != null && scoreDelta > 0) {
                 if (!GameConstants.AI_USER_ID.equals(winnerId)) {
-                    pointsService.addPoints(winnerId, scoreDelta,
+                    gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
                             Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "五子棋胜利奖励",
                             "game:gobang:win:" + room.getRoomId());
                 }
                 if (!GameConstants.AI_USER_ID.equals(loserId)) {
-                    int loserPoints = pointsService.getWallet(loserId).getBalance();
+                    Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
+                    int loserPoints = balance == null ? 0 : balance;
                     int loserPenalty = Math.abs(loserDelta(rankResult));
                     if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                        pointsService.deductPoints(loserId, loserPenalty,
+                        gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
                                 Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "五子棋对局扣除",
                                 "game:gobang:lose:" + room.getRoomId());
                     }
