@@ -1,7 +1,6 @@
 package org.pluchon.forum.entity.vo.message;
 
 import lombok.Data;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 import java.util.Date;
