@@ -16,24 +16,24 @@
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>java-cloud-standalone</name>
-    <description>萌萌论坛单机微服务父子工程（共享库 + Nacos + Gateway + OpenFeign）</description>
+    <description>萌萌论坛单机微服务父子工程（域 api/server + 共享库 + Gateway）</description>
 
     <modules>
-        <module>forum-common</module>
-        <module>forum-auth-api</module>
-        <module>forum-content-api</module>
-        <module>forum-im-api</module>
-        <module>forum-game-api</module>
-        <module>forum-economy-api</module>
-        <module>forum-ai-api</module>
-        <module>forum-platform</module>
-        <module>forum-gateway</module>
-        <module>f-auth</module>
-        <module>f-content</module>
-        <module>f-im</module>
-        <module>f-game</module>
-        <module>f-economy</module>
-        <module>f-ai</module>
+        <module>common</module>
+        <module>auth/api</module>
+        <module>content/api</module>
+        <module>im/api</module>
+        <module>game/api</module>
+        <module>economy/api</module>
+        <module>ai/api</module>
+        <module>platform</module>
+        <module>auth/server</module>
+        <module>content/server</module>
+        <module>im/server</module>
+        <module>game/server</module>
+        <module>economy/server</module>
+        <module>ai/server</module>
+        <module>gateway</module>
     </modules>
 
     <properties>
@@ -74,42 +74,42 @@
 
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-common</artifactId>
+                <artifactId>common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-auth-api</artifactId>
+                <artifactId>auth-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-content-api</artifactId>
+                <artifactId>content-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-im-api</artifactId>
+                <artifactId>im-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-game-api</artifactId>
+                <artifactId>game-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-economy-api</artifactId>
+                <artifactId>economy-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-ai-api</artifactId>
+                <artifactId>ai-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.pluchon.forum</groupId>
-                <artifactId>forum-platform</artifactId>
+                <artifactId>platform</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
