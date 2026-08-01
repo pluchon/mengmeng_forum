@@ -4,25 +4,32 @@
 
 Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025.0.0.0**，与仓库原 `backend` 版本对齐。
 
+> **原 `backend/` 目录完整保留**，可继续作为单体运行；本工程是并行的微服务演进线。
+
 ## 模块
 
 | 模块 | 端口 | 说明 |
 |------|------|------|
 | forum-gateway | 10086 | 统一入口（前端继续打此端口） |
-| forum-auth | 10101 | 用户 / 登录 / 验证码 / 邮件短信 |
+| forum-auth | 10101 | 用户 / 登录 / 验证码 / 邮件短信（Controller 物理归属） |
 | forum-content | 10102 | 帖子 / 板块 / 搜索 / 推荐 / 文件；MQ 消费与内容定时任务 |
 | forum-im | 10103 | 私信 / 群聊 / 语音 / 通知；`/ws/notify` |
 | forum-game | 10104 | 游戏 REST + 游戏 WebSocket |
 | forum-economy | 10105 | 积分 / 签到 / VIP / 抽奖 / 商店 / 成长 |
 | forum-ai | 10106 | AI / 吉祥物 / 漂流瓶 |
-| forum-common / forum-api / forum-core | — | 公共库、Feign 契约、业务核心 |
-| forum-monolith | 10199 | 过渡兜底（默认不启能力开关；可删） |
+| forum-common / forum-api / forum-core | — | 公共库、Feign 契约、共享 Service/Mapper |
+
+## 边界约定（当前阶段）
+
+- **HTTP 入口**：各域 Controller 已物理迁入对应可启动模块，不再依赖运行时裁剪。
+- **业务实现**：Service / Mapper / Entity 暂仍在 `forum-core`（共享库 + 同库），后续按域继续抽出。
+- **积分写路径**：非 `economy` 进程通过 `PointsFeignClient` → `forum-economy` 内部接口落库；`economy` 本地走 `PointsServiceImpl`。
 
 ## 启动顺序
 
 1. Docker：MySQL / Redis / RabbitMQ（已有 `forum-*-dev` 即可）
 2. Nacos 3.2.3（仓库根目录 `nacos-server-3.2.3/nacos`）
-3. 业务服务（auth / content / im / game / economy / ai）
+3. 业务服务（auth / content / im / game / economy / ai）—— **economy 需先于依赖积分的跨域写操作**
 4. forum-gateway
 
 ### Nacos（Windows）
@@ -56,4 +63,4 @@ cd java-cloud-standalone
 ## Feign
 
 - `UserFeignClient` → `forum-auth`：`/user/internal/{id}/exists`
-- `PointsFeignClient` → `forum-economy`：余额 / 加减积分内部接口
+- `PointsFeignClient` → `forum-economy`：余额 / 幂等查询 / 加减积分（含 sourceType、idempotencyKey）

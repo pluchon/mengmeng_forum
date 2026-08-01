@@ -20,6 +20,7 @@ import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.impl.user.UserDerivedCacheInvalidator;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,8 +34,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+// 仅 economy 域本地落库；其他域走 PointsFeignService
 @Service
 @Slf4j
+@ConditionalOnProperty(name = "forum.domain", havingValue = "economy")
 public class PointsServiceImpl implements PointsService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
