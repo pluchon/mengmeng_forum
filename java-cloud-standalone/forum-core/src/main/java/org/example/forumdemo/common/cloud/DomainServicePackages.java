@@ -23,8 +23,6 @@ public final class DomainServicePackages {
             "AuthTokenService",
             "JwtTokenVersionService",
             "UserDerivedCacheInvalidator",
-            // Follow 归 auth 域；非 auth 进程通过本类白名单在过渡期本地读（待 Feign 化后删除）
-            "UserFollowServiceImpl",
             // AI Hub HTTP 客户端：无本域表写，可跨进程本地执行
             "AiHubServiceImpl",
             // 热帖 Redis：共享读缓存，实体 Article 仍在 core

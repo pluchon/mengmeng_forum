@@ -12,10 +12,11 @@ import org.example.forumdemo.entity.db.ForumAiModelPrice;
 import org.example.forumdemo.entity.db.ForumAiUsageLog;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.ai.AiModelUsageDTO;
+import org.example.forum.api.economy.VipTierSnapshotVO;
+import org.example.forum.cloud.feign.VipInternalFeignClient;
 import org.example.forumdemo.mapper.ForumAiModelPriceMapper;
 import org.example.forumdemo.mapper.ForumAiModelUsageDailyMapper;
 import org.example.forumdemo.mapper.ForumAiUsageLogMapper;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +55,7 @@ public class AiPointsBillingService {
     private PointsService pointsService;
 
     @Resource
-    private UserMapper userMapper;
+    private VipInternalFeignClient vipInternalFeignClient;
 
     @Resource
     private ForumMetrics forumMetrics;
@@ -187,26 +188,18 @@ public class AiPointsBillingService {
 
     /** 有效会员：vip_tier&gt;0 且未过期（不扣萌萌币，走日额度 + token 审计） */
     public boolean vipExemptPoints(User user) {
-        if (user == null) {
+        if (user == null || user.getId() == null) {
             return false;
         }
-        Byte tier = user.getVipTier();
-        if (tier == null || tier <= 0) {
-            return false;
-        }
-        Date exp = user.getVipExpireAt();
-        if (exp == null) {
-            return true;
-        }
-        return exp.after(new Date());
+        VipTierSnapshotVO snapshot = vipInternalFeignClient.tierSnapshot(user.getId());
+        return snapshot != null && snapshot.isVipActive();
     }
 
     public void ensureBalance(User user, int pointsNeeded) {
         if (pointsNeeded <= 0) {
             return;
         }
-        User fresh = userMapper.selectById(user.getId());
-        int bal = fresh != null && fresh.getPoints() != null ? fresh.getPoints() : 0;
+        int bal = pointsService.getWallet(user.getId()).getBalance();
         if (bal < pointsNeeded) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_POINTS_NOT_ENOUGH));
         }
@@ -264,8 +257,7 @@ public class AiPointsBillingService {
                             .eq(ForumAiUsageLog::getRelatedId, relatedId.trim()));
             if (dupCount != null && dupCount > 0) {
                 forumMetrics.recordIdempotencyHit();
-                User fresh = userMapper.selectById(user.getId());
-                int balanceAfter = fresh != null && fresh.getPoints() != null ? fresh.getPoints() : 0;
+                int balanceAfter = pointsService.getWallet(user.getId()).getBalance();
                 Map<String, Object> out = new LinkedHashMap<>();
                 out.put("pointsCost", 0);
                 out.put("balanceAfter", balanceAfter);
@@ -287,8 +279,7 @@ public class AiPointsBillingService {
             billingMode = "points";
         } else {
             recordUsageOnly(user, featureCode, u, relatedId, 0);
-            User fresh = userMapper.selectById(user.getId());
-            balanceAfter = fresh != null && fresh.getPoints() != null ? fresh.getPoints() : 0;
+            balanceAfter = pointsService.getWallet(user.getId()).getBalance();
             billingMode = vipExemptPoints(user) ? "vip_quota" : "free_quota";
         }
         Map<String, Object> out = new LinkedHashMap<>();

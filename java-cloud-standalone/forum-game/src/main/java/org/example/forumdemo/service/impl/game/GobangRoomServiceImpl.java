@@ -33,7 +33,7 @@ import org.example.forumdemo.mapper.GameGobangRoomMoveMapper;
 import org.example.forumdemo.mapper.GameRoomPlayerMapper;
 import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.GameRankService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
@@ -135,7 +135,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private PointsService pointsService;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private GobangRuleEngine gobangRuleEngine;
@@ -437,9 +437,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (userIds.isEmpty()) {
             return userMap;
         }
-        userMapper.selectList(new LambdaQueryWrapper<User>()
-                        .in(User::getId, userIds))
-                .forEach(user -> userMap.put(user.getId(), user));
+        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -525,8 +523,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                             "game:gobang:win:" + room.getRoomId());
                 }
                 if (!GameConstants.AI_USER_ID.equals(loserId)) {
-                    User loser = userMapper.selectByIdForUpdate(loserId);
-                    int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
+                    int loserPoints = pointsService.getWallet(loserId).getBalance();
                     int loserPenalty = Math.abs(loserDelta(rankResult));
                     if (loserPenalty > 0 && loserPoints >= loserPenalty) {
                         pointsService.deductPoints(loserId, loserPenalty,
@@ -781,7 +778,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return Map.of();
         }
         Map<Long, User> userMap = new HashMap<>();
-        userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 

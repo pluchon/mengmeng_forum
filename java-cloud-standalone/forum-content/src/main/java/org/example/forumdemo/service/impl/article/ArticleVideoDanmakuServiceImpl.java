@@ -19,7 +19,7 @@ import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.article.SendDanmakuRequest;
 import org.example.forumdemo.entity.vo.article.DanmakuItemVO;
 import org.example.forumdemo.mapper.ArticleVideoDanmakuMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
 import org.example.forumdemo.service.interfaces.article.ArticleVideoDanmakuService;
 import org.example.forumdemo.service.interfaces.user.UserService;
@@ -53,7 +53,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
     private UserService userService;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -139,15 +139,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
             return List.of();
         }
         Set<Long> userIds = rows.stream().map(ArticleVideoDanmaku::getUserId).collect(Collectors.toSet());
-        Map<Long, User> userMap = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectByIds(userIds);
-            if (users != null) {
-                for (User user : users) {
-                    userMap.put(user.getId(), user);
-                }
-            }
-        }
+        Map<Long, User> userMap = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
         return DanmakuConverter.toItemVOList(rows, userMap);
     }
 

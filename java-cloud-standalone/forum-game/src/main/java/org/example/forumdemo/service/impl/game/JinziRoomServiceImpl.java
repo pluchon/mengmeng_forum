@@ -33,7 +33,7 @@ import org.example.forumdemo.mapper.GameJinziRoomMoveMapper;
 import org.example.forumdemo.mapper.GameRoomPlayerMapper;
 import org.example.forumdemo.mapper.GameSettlementEventMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameRoomStateCacheService;
 import org.example.forumdemo.service.interfaces.game.GameRoomSnapshotService;
@@ -105,7 +105,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private PointsService pointsService;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private JinziRuleEngine jinziRuleEngine;
@@ -432,8 +432,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                     "game:jinzi:win:" + room.getRoomId());
         }
         if (!GameConstants.AI_USER_ID.equals(loserId)) {
-            User loser = userMapper.selectByIdForUpdate(loserId);
-            int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
+            int loserPoints = pointsService.getWallet(loserId).getBalance();
             if (loserPenalty > 0 && loserPoints >= loserPenalty) {
                 pointsService.deductPoints(loserId, loserPenalty,
                         Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除",
@@ -521,7 +520,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             return Map.of();
         }
         Map<Long, User> userMap = new HashMap<>();
-        userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 

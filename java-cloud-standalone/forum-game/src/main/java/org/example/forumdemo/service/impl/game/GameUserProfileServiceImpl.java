@@ -23,7 +23,7 @@ import org.example.forumdemo.mapper.GameGobangRoomMoveMapper;
 import org.example.forumdemo.mapper.GameJinziMatchRecordMapper;
 import org.example.forumdemo.mapper.GameJinziRoomMoveMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -52,7 +52,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     private GameJinziRoomMoveMapper gameJinziRoomMoveMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -90,7 +90,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     @Override
     public GameUserProfileVO getProfileVO(Long userId, String gameCode) {
         GameUserProfile profile = getOrCreateProfile(userId, gameCode);
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         return GameConverter.toProfileVO(profile, user);
     }
 

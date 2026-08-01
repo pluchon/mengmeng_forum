@@ -41,7 +41,7 @@ import org.example.forumdemo.mapper.ForumCompanionMessageMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.example.forumdemo.mapper.ForumMascotRelatedRecommendationMapper;
 import org.example.forumdemo.mapper.ArticleMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.mapper.UserMascotPreferenceMapper;
 import org.example.forumdemo.mapper.AiUsageDailyMapper;
 import org.example.forum.api.economy.VipTierSnapshotVO;
@@ -156,7 +156,7 @@ public class MascotServiceImpl implements MascotService {
     private ArticleMapper articleMapper;
 
     @Resource
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Resource
     private ArticleHotRankingService articleHotRankingService;
@@ -206,7 +206,7 @@ public class MascotServiceImpl implements MascotService {
         if (model.getShelfStatus() == null || model.getShelfStatus() != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅可选择已上架的看板娘"));
         }
-        User exists = userMapper.selectById(userId);
+        User exists = userInternalLookupService.getById(userId);
         if (exists == null || (exists.getDeleteState() != null && exists.getDeleteState() == 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
@@ -353,12 +353,7 @@ public class MascotServiceImpl implements MascotService {
         for (Article article : articlesById.values()) {
             authorIds.add(article.getUserId());
         }
-        Map<Long, User> usersById = new HashMap<>();
-        if (!authorIds.isEmpty()) {
-            for (User author : userMapper.selectByIds(authorIds)) {
-                usersById.put(author.getId(), author);
-            }
-        }
+        Map<Long, User> usersById = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
 
         List<MascotRelatedRecommendationVO> result = new ArrayList<>();
         Set<Long> loadedSourceMessageIds = new HashSet<>();
@@ -494,12 +489,7 @@ public class MascotServiceImpl implements MascotService {
         for (RelatedArticleSelection selection : selections) {
             userIds.add(selection.candidate().getArticle().getUserId());
         }
-        Map<Long, User> usersById = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            for (User author : userMapper.selectByIds(userIds)) {
-                usersById.put(author.getId(), author);
-            }
-        }
+        Map<Long, User> usersById = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
         List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
         for (RelatedArticleSelection selection : selections) {
             Article article = selection.candidate().getArticle();

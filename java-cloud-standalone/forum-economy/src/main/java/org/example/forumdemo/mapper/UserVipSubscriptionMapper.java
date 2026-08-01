@@ -17,6 +17,9 @@ public interface UserVipSubscriptionMapper extends BaseMapper<UserVipSubscriptio
     @Select("SELECT * FROM user_vip_subscription WHERE user_id = #{userId} AND delete_state = 0 LIMIT 1")
     UserVipSubscription selectByUserId(@Param("userId") Long userId);
 
+    @Select("SELECT * FROM user_vip_subscription WHERE user_id = #{userId} AND delete_state = 0 LIMIT 1 FOR UPDATE")
+    UserVipSubscription selectByUserIdForUpdate(@Param("userId") Long userId);
+
     @Insert("INSERT INTO user_vip_subscription (user_id, vip_tier, vip_expire_at, delete_state) "
             + "VALUES (#{userId}, #{tier}, #{expireAt}, 0)")
     int insertSubscription(@Param("userId") Long userId, @Param("tier") Byte tier, @Param("expireAt") Date expireAt);

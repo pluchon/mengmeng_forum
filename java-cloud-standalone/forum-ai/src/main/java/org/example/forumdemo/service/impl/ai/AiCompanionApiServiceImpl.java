@@ -20,7 +20,7 @@ import org.example.forumdemo.entity.vo.ai.AiCallBeginResult;
 import org.example.forumdemo.entity.vo.ai.AiImageResponseVO;
 import org.example.forumdemo.entity.vo.ai.AiPriceEstimateVO;
 import org.example.forumdemo.entity.vo.ai.AiPolishResponseVO;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.ai.AiCompanionApiService;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
 import org.example.forumdemo.service.interfaces.ai.AiQuotaService;
@@ -44,7 +44,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     private static final String K_QWEN_PRO = "qwen_pro";
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private AiQuotaService aiQuotaService;
@@ -298,7 +298,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }

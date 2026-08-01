@@ -34,7 +34,9 @@ import org.example.forumdemo.mapper.ForumAiCreationWorkspaceMapper;
 import org.example.forumdemo.mapper.ForumAiLongTermMemoryMapper;
 import org.example.forumdemo.mapper.ForumAiTaskSessionMapper;
 import org.example.forumdemo.mapper.ForumCompanionSessionMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forum.api.economy.VipTierSnapshotVO;
+import org.example.forum.cloud.feign.VipInternalFeignClient;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.ai.AiWorkspaceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -74,7 +76,10 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
     private ForumCompanionSessionMapper companionSessionMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
+
+    @Autowired
+    private VipInternalFeignClient vipInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -433,7 +438,7 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
@@ -442,9 +447,8 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
 
     private User requireActiveVip(Long userId) {
         User user = requireUser(userId);
-        Byte tier = user.getVipTier();
-        if (tier == null || Constant.VIP_TIER_FREE.equals(tier)
-                || (user.getVipExpireAt() != null && !user.getVipExpireAt().after(new Date()))) {
+        VipTierSnapshotVO snapshot = vipInternalFeignClient.tierSnapshot(userId);
+        if (snapshot == null || !snapshot.isVipActive()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "长期记忆仅向有效会员开放"));
         }
         return user;

@@ -18,7 +18,7 @@ import org.example.forumdemo.entity.vo.game.TetrisPkRecordVO;
 import org.example.forumdemo.entity.vo.game.TetrisPkReplayVO;
 import org.example.forumdemo.mapper.GameTetrisPkMatchRecordMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.TetrisPkService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,12 +44,12 @@ public class TetrisPkServiceImpl implements TetrisPkService {
     private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Override
     public GameUserProfileVO getProfile(Long userId) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.TETRIS_PK);
-        User user = userMapper.selectById(userId);
+        User user = userInternalLookupService.getById(userId);
         return GameConverter.toProfileVO(profile, user);
     }
 
@@ -111,7 +111,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         List<Long> userIds = pageProfiles.stream().map(GameUserProfile::getUserId).toList();
         Map<Long, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+            userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
         List<TetrisPkLeaderboardVO> rows = new ArrayList<>(pageProfiles.size());
         for (GameUserProfile profile : pageProfiles) {
@@ -137,7 +137,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         Long opponentId = userId.equals(record.getPlayer1UserId())
                 ? record.getPlayer2UserId()
                 : record.getPlayer1UserId();
-        User opponent = userMapper.selectById(opponentId);
+        User opponent = userInternalLookupService.getById(opponentId);
         TetrisPkRecordVO recordVO = TetrisPkConverter.toRecordVO(
                 record,
                 userId,
@@ -158,7 +158,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         }
         Map<Long, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+            userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
         return userMap;
     }

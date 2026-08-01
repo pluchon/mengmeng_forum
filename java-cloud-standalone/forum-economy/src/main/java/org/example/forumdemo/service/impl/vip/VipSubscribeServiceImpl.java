@@ -1,15 +1,16 @@
 package org.example.forumdemo.service.impl.vip;
 
 import jakarta.annotation.Resource;
+import org.example.forum.cloud.feign.UserInternalFeignClient;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
-import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserVipSubscription;
 import org.example.forumdemo.entity.dto.vip.VipSubscribeDTO;
+import org.example.forumdemo.entity.vo.points.PointsWalletVO;
 import org.example.forumdemo.entity.vo.vip.VipSubscribeResultVO;
 import org.example.forumdemo.entity.vo.vip.VipStatusVO;
-import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.vip.VipEntitlementService;
 import org.example.forumdemo.service.interfaces.vip.VipSubscribeService;
@@ -22,7 +23,7 @@ import java.util.Date;
 public class VipSubscribeServiceImpl implements VipSubscribeService {
 
     @Resource
-    private UserMapper userMapper;
+    private UserInternalFeignClient userInternalFeignClient;
 
     @Resource
     private PointsService pointsService;
@@ -30,16 +31,26 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
     @Resource
     private VipEntitlementService vipEntitlementService;
 
-    private boolean vipActive(User u) {
-        Byte tier = u.getVipTier();
+    private boolean vipActive(UserVipSubscription sub) {
+        if (sub == null) {
+            return false;
+        }
+        Byte tier = sub.getVipTier();
         if (tier == null || tier == 0) {
             return false;
         }
-        Date exp = u.getVipExpireAt();
+        Date exp = sub.getVipExpireAt();
         if (exp == null) {
             return true;
         }
         return exp.after(new Date());
+    }
+
+    private void requireUserExists(Long userId) {
+        Boolean exists = userInternalFeignClient.existsById(userId);
+        if (!Boolean.TRUE.equals(exists)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
     }
 
     @Override
@@ -49,13 +60,11 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         if (tier == null || (!Constant.VIP_TIER_PRO.equals(tier) && !Constant.VIP_TIER_MAX.equals(tier))) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        User user = userMapper.selectByIdForUpdate(userId);
-        if (user == null || user.getDeleteState() != null && user.getDeleteState() == 1) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
+        requireUserExists(userId);
 
-        Byte cur = user.getVipTier() == null ? Constant.VIP_TIER_FREE : user.getVipTier();
-        boolean active = vipActive(user);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        Byte cur = sub != null && sub.getVipTier() != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+        boolean active = vipActive(sub);
 
         int curOrd = cur == null ? 0 : cur.intValue();
         int wantOrd = tier.intValue();
@@ -71,13 +80,12 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         }
 
         pointsService.deductPoints(userId, price, Constant.POINTS_SOURCE_VIP_SUBSCRIBE, userId, remark, idempotencyKey);
-        Date newExpire = vipEntitlementService.extendVipDays(user, tier, 30);
+        Date newExpire = vipEntitlementService.extendVipDays(userId, tier, 30);
 
-        User fresh = userMapper.selectById(userId);
         VipSubscribeResultVO vo = new VipSubscribeResultVO();
         vo.setVipTier(tier);
         vo.setVipExpireAt(newExpire);
-        vo.setPointsBalance(fresh != null ? fresh.getPoints() : null);
+        vo.setPointsBalance(pointsService.getWallet(userId).getBalance());
         return vo;
     }
 
@@ -87,32 +95,29 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         if (days <= 0) {
             return;
         }
-        User user = userMapper.selectByIdForUpdate(userId);
-        if (user == null || user.getDeleteState() != null && user.getDeleteState() == 1) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        vipEntitlementService.extendVipDays(user, Constant.VIP_TIER_PRO, days);
+        requireUserExists(userId);
+        vipEntitlementService.extendVipDays(userId, Constant.VIP_TIER_PRO, days);
     }
 
     private VipSubscribeResultVO buildSubscribeResult(Long userId, Byte tier) {
-        User fresh = userMapper.selectById(userId);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        PointsWalletVO wallet = pointsService.getWallet(userId);
         VipSubscribeResultVO vo = new VipSubscribeResultVO();
-        vo.setVipTier(fresh != null && fresh.getVipTier() != null ? fresh.getVipTier() : tier);
-        vo.setVipExpireAt(fresh != null ? fresh.getVipExpireAt() : null);
-        vo.setPointsBalance(fresh != null ? fresh.getPoints() : null);
+        vo.setVipTier(sub != null && sub.getVipTier() != null ? sub.getVipTier() : tier);
+        vo.setVipExpireAt(sub != null ? sub.getVipExpireAt() : null);
+        vo.setPointsBalance(wallet.getBalance());
         return vo;
     }
 
     @Override
     public VipStatusVO status(Long userId) {
-        User user = userMapper.selectById(userId);
-        if (user == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
+        requireUserExists(userId);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        PointsWalletVO wallet = pointsService.getWallet(userId);
         VipStatusVO vo = new VipStatusVO();
-        vo.setVipTier(user.getVipTier());
-        vo.setVipExpireAt(user.getVipExpireAt());
-        vo.setPoints(user.getPoints());
+        vo.setVipTier(sub != null ? sub.getVipTier() : Constant.VIP_TIER_FREE);
+        vo.setVipExpireAt(sub != null ? sub.getVipExpireAt() : null);
+        vo.setPoints(wallet.getBalance());
         return vo;
     }
 

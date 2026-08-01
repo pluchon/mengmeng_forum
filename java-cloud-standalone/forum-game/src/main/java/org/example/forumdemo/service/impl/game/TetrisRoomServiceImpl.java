@@ -23,7 +23,8 @@ import org.example.forumdemo.entity.vo.game.TetrisCurPieceVO;
 import org.example.forumdemo.entity.vo.game.TetrisRoomStateVO;
 import org.example.forumdemo.mapper.GameTetrisPkMatchRecordMapper;
 import org.example.forumdemo.mapper.GameUserProfileMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
+import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.impl.game.tetris.TetrisBlock;
 import org.example.forumdemo.service.impl.game.tetris.TetrisEngineConstants;
 import org.example.forumdemo.service.impl.game.tetris.TetrisMatrixUtil;
@@ -33,7 +34,6 @@ import org.example.forumdemo.service.interfaces.game.GameRoomEventBusService;
 import org.example.forumdemo.service.interfaces.game.GameRoomStateCacheService;
 import org.example.forumdemo.service.interfaces.game.GameUserProfileService;
 import org.example.forumdemo.service.interfaces.game.TetrisRoomService;
-import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -90,7 +90,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserInternalLookupService userInternalLookupService;
 
     @Autowired
     private PointsService pointsService;
@@ -341,9 +341,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         if (userIds.isEmpty()) {
             return userMap;
         }
-        userMapper.selectList(new LambdaQueryWrapper<User>()
-                        .in(User::getId, userIds))
-                .forEach(user -> userMap.put(user.getId(), user));
+        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -487,8 +485,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 pointsService.addPoints(winnerId, scoreDelta,
                         Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励",
                         "game:tetrispk:win:" + room.getRoomId());
-                User loser = userMapper.selectByIdForUpdate(loserId);
-                int loserPoints = loser == null || loser.getPoints() == null ? 0 : loser.getPoints();
+                int loserPoints = pointsService.getWallet(loserId).getBalance();
                 if (loserPenalty > 0 && loserPoints >= loserPenalty) {
                     pointsService.deductPoints(loserId, loserPenalty,
                             Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除",
@@ -683,7 +680,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             return Map.of();
         }
         Map<Long, User> userMap = new HashMap<>();
-        userMapper.selectByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 

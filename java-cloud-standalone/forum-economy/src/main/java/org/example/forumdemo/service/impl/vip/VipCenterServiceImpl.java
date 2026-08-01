@@ -4,13 +4,14 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import org.example.forum.api.ai.AiUsageDailyBucketsVO;
 import org.example.forum.cloud.feign.AiUsageInternalFeignClient;
+import org.example.forum.cloud.feign.UserInternalFeignClient;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.ForumVipQuotaConfig;
-import org.example.forumdemo.entity.db.User;
+import org.example.forumdemo.entity.db.UserVipSubscription;
 import org.example.forumdemo.entity.vo.vip.VipCenterVO;
 import org.example.forumdemo.entity.vo.vip.VipPlanFeatureVO;
 import org.example.forumdemo.entity.vo.vip.VipPlanVO;
@@ -18,8 +19,9 @@ import org.example.forumdemo.entity.vo.vip.VipQuotaGroupVO;
 import org.example.forumdemo.entity.vo.vip.VipQuotaItemVO;
 import org.example.forumdemo.entity.vo.vip.VipQuotaPanelVO;
 import org.example.forumdemo.mapper.ForumVipQuotaConfigMapper;
-import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.interfaces.points.PointsService;
 import org.example.forumdemo.service.interfaces.vip.VipCenterService;
+import org.example.forumdemo.service.interfaces.vip.VipEntitlementService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -42,7 +44,13 @@ public class VipCenterServiceImpl implements VipCenterService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Resource
-    private UserMapper userMapper;
+    private UserInternalFeignClient userInternalFeignClient;
+
+    @Resource
+    private VipEntitlementService vipEntitlementService;
+
+    @Resource
+    private PointsService pointsService;
 
     @Resource
     private ForumVipQuotaConfigMapper forumVipQuotaConfigMapper;
@@ -50,12 +58,15 @@ public class VipCenterServiceImpl implements VipCenterService {
     @Resource
     private AiUsageInternalFeignClient aiUsageInternalFeignClient;
 
-    private boolean vipActive(User u) {
-        Byte tier = u.getVipTier();
+    private boolean vipActive(UserVipSubscription sub) {
+        if (sub == null) {
+            return false;
+        }
+        Byte tier = sub.getVipTier();
         if (tier == null || tier == 0) {
             return false;
         }
-        Date exp = u.getVipExpireAt();
+        Date exp = sub.getVipExpireAt();
         if (exp == null) {
             return true;
         }
@@ -68,18 +79,21 @@ public class VipCenterServiceImpl implements VipCenterService {
 
     @Override
     public VipCenterVO center(Long userId) {
-        User user = requireUser(userId);
-        boolean active = vipActive(user);
-        int cur = tierOrder(user.getVipTier());
+        requireUserExists(userId);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        Byte vipTier = sub != null && sub.getVipTier() != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+        Date vipExpireAt = sub != null ? sub.getVipExpireAt() : null;
+        boolean active = vipActive(sub);
+        int cur = tierOrder(vipTier);
 
         VipCenterVO vo = new VipCenterVO();
-        vo.setVipTier(user.getVipTier());
-        vo.setVipExpireAt(user.getVipExpireAt());
-        vo.setPoints(user.getPoints());
+        vo.setVipTier(vipTier);
+        vo.setVipExpireAt(vipExpireAt);
+        vo.setPoints(pointsService.getWallet(userId).getBalance());
         vo.setVipActive(active);
         vo.setPlans(buildPlans(cur, active));
-        if (active && (Constant.VIP_TIER_PRO.equals(user.getVipTier()) || Constant.VIP_TIER_MAX.equals(user.getVipTier()))) {
-            vo.setQuota(buildQuotaPanel(user));
+        if (active && (Constant.VIP_TIER_PRO.equals(vipTier) || Constant.VIP_TIER_MAX.equals(vipTier))) {
+            vo.setQuota(buildQuotaPanel(userId, vipTier, vipExpireAt));
         } else {
             VipQuotaPanelVO empty = new VipQuotaPanelVO();
             empty.setEmptyHint("开通 PRO 或 MAX 后可查看本期模型配额与用量");
@@ -94,13 +108,16 @@ public class VipCenterServiceImpl implements VipCenterService {
         out.put("percent", 0);
         out.put("canUsePointsPay", false);
         out.put("quotaLabel", "");
-        User user = requireUser(userId);
-        if (!vipActive(user) || (!Constant.VIP_TIER_PRO.equals(user.getVipTier())
-                && !Constant.VIP_TIER_MAX.equals(user.getVipTier()))) {
+        requireUserExists(userId);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        Byte vipTier = sub != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+        Date vipExpireAt = sub != null ? sub.getVipExpireAt() : null;
+        if (!vipActive(sub) || (!Constant.VIP_TIER_PRO.equals(vipTier)
+                && !Constant.VIP_TIER_MAX.equals(vipTier))) {
             return toQuotaHintVO(out);
         }
         String route = "qwen-deep";
-        VipQuotaPanelVO panel = buildQuotaPanel(user);
+        VipQuotaPanelVO panel = buildQuotaPanel(userId, vipTier, vipExpireAt);
         String modelCode = resolveModelCodeFromRoute(route);
         int percent = 0;
         String label = "";
@@ -175,26 +192,28 @@ public class VipCenterServiceImpl implements VipCenterService {
 
     @Override
     public VipQuotaPanelVO quota(Long userId) {
-        User user = requireUser(userId);
-        if (!vipActive(user)) {
+        requireUserExists(userId);
+        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
+        Byte vipTier = sub != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+        Date vipExpireAt = sub != null ? sub.getVipExpireAt() : null;
+        if (!vipActive(sub)) {
             VipQuotaPanelVO empty = new VipQuotaPanelVO();
             empty.setEmptyHint("开通 PRO 或 MAX 后可查看本期模型配额与用量");
             return empty;
         }
-        if (!Constant.VIP_TIER_PRO.equals(user.getVipTier()) && !Constant.VIP_TIER_MAX.equals(user.getVipTier())) {
+        if (!Constant.VIP_TIER_PRO.equals(vipTier) && !Constant.VIP_TIER_MAX.equals(vipTier)) {
             VipQuotaPanelVO empty = new VipQuotaPanelVO();
             empty.setEmptyHint("当前档位暂无配额面板");
             return empty;
         }
-        return buildQuotaPanel(user);
+        return buildQuotaPanel(userId, vipTier, vipExpireAt);
     }
 
-    private User requireUser(Long userId) {
-        User user = userMapper.selectById(userId);
-        if (user == null) {
+    private void requireUserExists(Long userId) {
+        Boolean exists = userInternalFeignClient.existsById(userId);
+        if (!Boolean.TRUE.equals(exists)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        return user;
     }
 
     private List<VipPlanVO> buildPlans(int curTier, boolean active) {
@@ -285,17 +304,16 @@ public class VipCenterServiceImpl implements VipCenterService {
         return f;
     }
 
-    private VipQuotaPanelVO buildQuotaPanel(User user) {
-        Byte tier = user.getVipTier();
+    private VipQuotaPanelVO buildQuotaPanel(Long userId, Byte tier, Date vipExpireAt) {
         VipQuotaPanelVO panel = new VipQuotaPanelVO();
         panel.setVipTier(tier);
         panel.setTierLabel(Constant.VIP_TIER_MAX.equals(tier) ? "MAX" : "PRO");
 
-        PeriodWindow window = resolvePeriod(user);
+        PeriodWindow window = resolvePeriod(vipExpireAt);
         panel.setPeriodStart(window.start);
         panel.setPeriodEnd(window.end);
 
-        AiUsageDailyBucketsVO usage = loadUsageSnapshot(user.getId(), window.start, window.end);
+        AiUsageDailyBucketsVO usage = loadUsageSnapshot(userId, window.start, window.end);
         Map<String, Long> tokenByModel = usage.getTokenByModel() == null
                 ? Collections.emptyMap()
                 : usage.getTokenByModel();
@@ -428,9 +446,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         return "周期重置于 " + end.format(DATE_FMT);
     }
 
-    private PeriodWindow resolvePeriod(User user) {
+    private PeriodWindow resolvePeriod(Date vipExpireAt) {
         Date now = new Date();
-        Date end = user.getVipExpireAt();
+        Date end = vipExpireAt;
         if (end == null) {
             ZonedDateTime z = ZonedDateTime.now(SHANGHAI);
             end = Date.from(z.plusDays(30).toInstant());

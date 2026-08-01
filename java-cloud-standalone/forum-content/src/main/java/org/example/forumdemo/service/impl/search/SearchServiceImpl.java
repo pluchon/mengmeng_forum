@@ -12,6 +12,7 @@ import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.common.utils.AiAuditUtils;
 import org.example.forumdemo.common.utils.PageUtils;
 import org.example.forumdemo.converter.SearchUserConverter;
+import org.example.forumdemo.converter.UserInternalConverter;
 import org.example.forumdemo.entity.db.Article;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.vo.article.ArticleListResponse;
@@ -23,6 +24,7 @@ import org.example.forumdemo.entity.vo.user.UserBriefVO;
 import org.example.forumdemo.entity.vo.user.UserFollowStatsVO;
 import org.example.forumdemo.mapper.ArticleMapper;
 import org.example.forumdemo.mapper.UserMapper;
+import org.example.forumdemo.service.impl.remote.UserInternalLookupService;
 import org.example.forumdemo.entity.vo.ai.RagArticleVectorHitVO;
 import org.example.forumdemo.entity.vo.ai.RagUserVectorHitVO;
 import org.example.forumdemo.service.interfaces.ai.AiHubService;
@@ -76,6 +78,10 @@ public class SearchServiceImpl implements SearchService {
     private ArticleMapper articleMapper;
 
     @Autowired
+    private UserInternalLookupService userInternalLookupService;
+
+    // monolith 模式下用户字面/候选搜索仍走本地表；微服务模式不注入业务路径
+    @Autowired(required = false)
     private UserMapper userMapper;
 
     @Autowired
@@ -201,6 +207,13 @@ public class SearchServiceImpl implements SearchService {
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
 
+        if (userInternalLookupService.usesRemoteLookup()) {
+            if (!preferAiRag) {
+                return searchUsersByDbRemote(kw, p, s, viewerId);
+            }
+            return searchUsersByAiRagRemote(kw, p, s, viewerId);
+        }
+
         if (!preferAiRag) {
             Page<User> page = PageUtils.getPage(p, s);
             Page<User> dbResult = userMapper.selectPage(page, buildDbFuzzyUserQuery(kw));
@@ -215,6 +228,49 @@ public class SearchServiceImpl implements SearchService {
         }
 
         return searchUsersByAiRag(kw, p, s, viewerId);
+    }
+
+    /** 微服务模式：字面搜索走 auth Feign，再组装关注态 */
+    private SearchUserResponse searchUsersByDbRemote(String kw, int p, int s, Long viewerId) {
+        var remote = userInternalLookupService.searchByKeyword(kw, p, s);
+        if (remote == null || remote.getRecords() == null || remote.getRecords().isEmpty()) {
+            return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
+        }
+        List<User> users = remote.getRecords().stream()
+                .map(UserInternalConverter::toUserShell)
+                .filter(u -> u != null)
+                .toList();
+        PageResult<SearchUserItemVO> pageResult = new PageResult<>(
+                buildSearchUserItems(users, viewerId),
+                remote.getTotal(),
+                p,
+                s,
+                remote.getPages(),
+                remote.isHasNext());
+        return new SearchUserResponse(Constant.SEARCH_SOURCE_DB, kw, pageResult);
+    }
+
+    /** 微服务模式：无 user 表，仅向量检索 + Feign 批量回表 */
+    private SearchUserResponse searchUsersByAiRagRemote(String kw, int p, int s, Long viewerId) {
+        List<Long> rankedIds = extractUserHitIds(
+                aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
+        if (rankedIds.isEmpty()) {
+            log.info("AI 用户语义搜索未命中 keyword={}", kw);
+            return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
+        }
+        if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
+            rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
+        }
+        long total = rankedIds.size();
+        int fromIdx = (p - 1) * s;
+        int toIdx = Math.min(fromIdx + s, rankedIds.size());
+        List<Long> pageSlice = fromIdx >= rankedIds.size() ? Collections.emptyList()
+                : rankedIds.subList(fromIdx, toIdx);
+        List<SearchUserItemVO> records = buildSearchUserListForRag(pageSlice, viewerId);
+        long pages = (total + s - 1) / s;
+        PageResult<SearchUserItemVO> pageResult = new PageResult<>(
+                records, total, p, s, pages, toIdx < rankedIds.size());
+        return new SearchUserResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
     }
 
     /** AI 用户搜索：字面候选 + hybrid_rank 打分；低分丢弃；无候选再走向量兜底。 */
@@ -583,10 +639,10 @@ public class SearchServiceImpl implements SearchService {
         if (ids.isEmpty()) {
             return Collections.emptyList();
         }
-        List<User> rows = userMapper.selectList(new LambdaQueryWrapper<User>()
-                .in(User::getId, ids)
-                .ne(User::getDeleteState, DELETE_TRUE)
-                .ne(User::getState, STATE_FORBIDDEN));
+        List<User> rows = userInternalLookupService.listByIds(ids).stream()
+                .filter(u -> u.getDeleteState() == null || u.getDeleteState() != DELETE_TRUE)
+                .filter(u -> u.getState() == null || u.getState() != STATE_FORBIDDEN)
+                .toList();
         Map<Long, User> byId = new HashMap<>(rows.size() * 2);
         for (User u : rows) {
             byId.put(u.getId(), u);
