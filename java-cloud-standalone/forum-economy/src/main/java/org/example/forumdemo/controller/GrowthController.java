@@ -80,6 +80,18 @@ public class GrowthController {
         return Result.success(growthService.submit(userId(request), challengeCode, body));
     }
 
+    /** 内部：校验正式用户（跨服务发帖等） */
+    @PostMapping("/internal/{userId}/require-formal")
+    public void internalRequireFormal(@PathVariable("userId") Long userId) {
+        growthService.requireFormalUser(userId);
+    }
+
+    /** 内部：新用户成长档案 */
+    @PostMapping("/internal/{userId}/create-profile")
+    public void internalCreateProfile(@PathVariable("userId") Long userId) {
+        growthService.createNewUserProfile(userId);
+    }
+
     private Long userId(HttpServletRequest request) {
         User user = (User) request.getAttribute(Constant.USER_SESSION);
         if (user == null) {

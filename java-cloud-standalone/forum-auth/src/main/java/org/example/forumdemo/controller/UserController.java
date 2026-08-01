@@ -255,6 +255,30 @@ public class UserController {
         return user != null;
     }
 
+    /** 内部服务调用：按 ID 取用户（密码等字段 JsonIgnore） */
+    @GetMapping("/internal/{userId}")
+    public User internalGetById(@PathVariable("userId") Long userId) {
+        return userService.queryUserByUserId(userId);
+    }
+
+    /** 内部服务调用：按用户名取用户 */
+    @GetMapping("/internal/by-username")
+    public User internalGetByUsername(@RequestParam("username") String username) {
+        return userService.queryUserByUserName(username);
+    }
+
+    /** 内部服务调用：发帖数 +1 */
+    @PostMapping("/internal/{userId}/article-count/increment")
+    public void internalIncrementArticleCount(@PathVariable("userId") Long userId) {
+        userService.addOneById(userId);
+    }
+
+    /** 内部服务调用：发帖数 -1 */
+    @PostMapping("/internal/{userId}/article-count/decrement")
+    public void internalDecrementArticleCount(@PathVariable("userId") Long userId) {
+        userService.deleteOneById(userId);
+    }
+
     private static void applyAuthHeaders(HttpServletResponse response, AuthLoginResultVO login) {
         if (login == null || login.getToken() == null) {
             return;
