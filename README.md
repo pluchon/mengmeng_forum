@@ -542,7 +542,7 @@ flowchart LR
 .\scripts\verify-package.ps1
 ```
 
-发布包以 [`create.sql`](java-cloud-standalone/platform/src/main/resources/sql/create.sql) 作为新环境初始化基线；已上线环境按已执行的发布变更维护，不再要求携带历史增量 SQL。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
+发布包以六个 server 模块各自的 `src/main/resources/db/create.sql` 作为独立数据库初始化基线；已上线环境按已执行的发布变更维护，不再要求携带历史增量 SQL。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
 
 ## 核心设计思路
 

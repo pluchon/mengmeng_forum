@@ -130,13 +130,18 @@ if (Test-Path $envProd) {
 } else {
     Write-Host "WARN: nginx/.env missing - on server run: cp .env.example .env && nano .env" -ForegroundColor Yellow
 }
-$sqlSrc = Join-Path $repoRoot "java-cloud-standalone\platform\src\main\resources\sql"
 $sqlDst = Join-Path $pkg "sql"
-if (Test-Path $sqlSrc) {
-    New-Item -ItemType Directory -Force -Path $sqlDst | Out-Null
-    Get-ChildItem $sqlSrc -Filter "*.sql" | ForEach-Object {
-        Copy-Item $_.FullName (Join-Path $sqlDst $_.Name) -Force
+New-Item -ItemType Directory -Force -Path $sqlDst | Out-Null
+foreach ($domain in @("auth", "content", "im", "game", "economy", "ai")) {
+    $createSql = Join-Path $repoRoot "java-cloud-standalone\$domain\server\src\main\resources\db\create.sql"
+    if (-not (Test-Path $createSql)) {
+        throw "Missing complete schema: $createSql"
     }
+    Copy-Item $createSql (Join-Path $sqlDst "$domain-create.sql") -Force
+}
+$postgresSql = Join-Path $repoRoot "java-cloud-standalone\platform\src\main\resources\sql\postgres_ai_session.sql"
+if (Test-Path $postgresSql) {
+    Copy-Item $postgresSql (Join-Path $sqlDst "postgres_ai_session.sql") -Force
 }
 $startSh = @'
 #!/bin/bash
@@ -245,9 +250,12 @@ sync_rabbitmq_credentials
 root_pw="$(read_env MYSQL_ROOT_PASSWORD)"
 wait_mysql "$root_pw" || true
 
-if [[ -f sql/create.sql ]] && [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
-  echo "==> init MySQL (sql/create.sql)"
-  docker exec -i forum-mysql mysql -uroot -p"${root_pw}" < sql/create.sql
+if [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
+  for domain in auth content im game economy ai; do
+    schema="sql/${domain}-create.sql"
+    echo "==> init MySQL (${schema})"
+    docker exec -i forum-mysql mysql -uroot -p"${root_pw}" < "${schema}"
+  done
   if [[ -f sql/postgres_ai_session.sql ]]; then
     pu="$(read_env POSTGRES_USER)"; pd="$(read_env POSTGRES_DB)"
     pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
@@ -298,8 +306,11 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 
-echo "==> MySQL create.sql (DROP + CREATE forum_db)"
-docker exec -i forum-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" < sql/create.sql
+for domain in auth content im game economy ai; do
+  schema="sql/${domain}-create.sql"
+  echo "==> MySQL ${schema}"
+  docker exec -i forum-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" < "${schema}"
+done
 
 if [[ -f sql/postgres_ai_session.sql ]]; then
   echo "==> Postgres postgres_ai_session.sql"
