@@ -2,7 +2,7 @@ package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.db.GameTetrisRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.game.TetrisProfileVO;
 import org.pluchon.forum.entity.vo.game.TetrisRecordVO;
 
@@ -12,7 +12,7 @@ public class TetrisConverter {
     private TetrisConverter() {
     }
 
-    public static TetrisProfileVO toProfileVO(GameUserProfile profile, User user) {
+    public static TetrisProfileVO toProfileVO(GameUserProfile profile, UserInternalVO user) {
         return new TetrisProfileVO(
                 profile.getUserId(),
                 user == null ? null : user.getUsername(),
@@ -20,7 +20,7 @@ public class TetrisConverter {
                 user == null ? null : user.getAvatarUrl(),
                 value(profile.getScore()),
                 value(profile.getTotalCount()),
-                user == null ? 0 : value(user.getPoints())
+                0
         );
     }
 

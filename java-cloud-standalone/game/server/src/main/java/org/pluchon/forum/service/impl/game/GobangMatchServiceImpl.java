@@ -7,9 +7,9 @@ import org.pluchon.forum.common.websocket.game.GameWsResponse;
 import org.pluchon.forum.entity.bo.game.GameMatchBucket;
 import org.pluchon.forum.entity.bo.game.GameMatchPair;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.game.GameMatchSuccessVO;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameMatchQueueService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
@@ -58,7 +58,7 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     private GobangMatchGuardChain gobangMatchGuardChain = GobangMatchGuardChain.defaultChain();
 
@@ -72,7 +72,7 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     @Override
     public void startMatch(Long userId, String requestId, WebSocketSession session) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
-        User user = userInternalLookupService.getById(userId);
+        UserInternalVO user = gameUserLookupService.getById(userId);
         int points = profile.getScore() == null ? 0 : profile.getScore();
         if (GameConstants.PROFILE_MATCHING.equals(profile.getCurrentStatus())
                 && !gameMatchQueueService.contains(GameConstants.GOBANG, userId)) {

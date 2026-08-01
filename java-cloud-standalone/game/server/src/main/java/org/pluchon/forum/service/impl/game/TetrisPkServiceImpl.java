@@ -10,7 +10,7 @@ import org.pluchon.forum.converter.GameConverter;
 import org.pluchon.forum.converter.TetrisPkConverter;
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GameUserProfileVO;
 import org.pluchon.forum.entity.vo.game.TetrisPkLeaderboardVO;
@@ -18,7 +18,7 @@ import org.pluchon.forum.entity.vo.game.TetrisPkRecordVO;
 import org.pluchon.forum.entity.vo.game.TetrisPkReplayVO;
 import org.pluchon.forum.mapper.GameTetrisPkMatchRecordMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.TetrisPkService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,12 +44,12 @@ public class TetrisPkServiceImpl implements TetrisPkService {
     private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     @Override
     public GameUserProfileVO getProfile(Long userId) {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.TETRIS_PK);
-        User user = userInternalLookupService.getById(userId);
+        UserInternalVO user = gameUserLookupService.getById(userId);
         return GameConverter.toProfileVO(profile, user);
     }
 
@@ -67,13 +67,13 @@ public class TetrisPkServiceImpl implements TetrisPkService {
                 .orderByDesc(GameTetrisPkMatchRecord::getEndedAt)
                 .orderByDesc(GameTetrisPkMatchRecord::getId);
         Page<GameTetrisPkMatchRecord> result = gameTetrisPkMatchRecordMapper.selectPage(page, wrapper);
-        Map<Long, User> userMap = loadUsers(result.getRecords(), userId);
+        Map<Long, UserInternalVO> userMap = loadUsers(result.getRecords(), userId);
         List<TetrisPkRecordVO> rows = new ArrayList<>(result.getRecords().size());
         for (GameTetrisPkMatchRecord record : result.getRecords()) {
             Long opponentId = userId.equals(record.getPlayer1UserId())
                     ? record.getPlayer2UserId()
                     : record.getPlayer1UserId();
-            User opponent = userMap.get(opponentId);
+            UserInternalVO opponent = userMap.get(opponentId);
             String opponentNickname = opponent == null ? null : opponent.getNickname();
             rows.add(TetrisPkConverter.toRecordVO(record, userId, opponentNickname));
         }
@@ -109,9 +109,9 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         int toIndex = Math.min(fromIndex + validPageSize, total);
         List<GameUserProfile> pageProfiles = profiles.subList(fromIndex, toIndex);
         List<Long> userIds = pageProfiles.stream().map(GameUserProfile::getUserId).toList();
-        Map<Long, User> userMap = new HashMap<>();
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+            gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
         List<TetrisPkLeaderboardVO> rows = new ArrayList<>(pageProfiles.size());
         for (GameUserProfile profile : pageProfiles) {
@@ -137,7 +137,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         Long opponentId = userId.equals(record.getPlayer1UserId())
                 ? record.getPlayer2UserId()
                 : record.getPlayer1UserId();
-        User opponent = userInternalLookupService.getById(opponentId);
+        UserInternalVO opponent = gameUserLookupService.getById(opponentId);
         TetrisPkRecordVO recordVO = TetrisPkConverter.toRecordVO(
                 record,
                 userId,
@@ -146,7 +146,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         return new TetrisPkReplayVO(recordVO, record.getReplayPayload());
     }
 
-    private Map<Long, User> loadUsers(List<GameTetrisPkMatchRecord> records, Long viewerUserId) {
+    private Map<Long, UserInternalVO> loadUsers(List<GameTetrisPkMatchRecord> records, Long viewerUserId) {
         List<Long> userIds = new ArrayList<>();
         for (GameTetrisPkMatchRecord record : records) {
             Long opponentId = viewerUserId.equals(record.getPlayer1UserId())
@@ -156,9 +156,9 @@ public class TetrisPkServiceImpl implements TetrisPkService {
                 userIds.add(opponentId);
             }
         }
-        Map<Long, User> userMap = new HashMap<>();
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+            gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         }
         return userMap;
     }

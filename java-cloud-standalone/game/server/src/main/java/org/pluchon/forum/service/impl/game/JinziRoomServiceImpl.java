@@ -18,7 +18,7 @@ import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
 import org.pluchon.forum.entity.vo.game.GameRoomSnapshotVO;
 import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
@@ -33,7 +33,7 @@ import org.pluchon.forum.mapper.GameJinziRoomMoveMapper;
 import org.pluchon.forum.mapper.GameRoomPlayerMapper;
 import org.pluchon.forum.mapper.GameSettlementEventMapper;
 import org.pluchon.forum.mapper.GameUserProfileMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
+import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
@@ -105,7 +105,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private PointsService pointsService;
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private GameUserLookupService gameUserLookupService;
 
     @Autowired
     private JinziRuleEngine jinziRuleEngine;
@@ -468,7 +468,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     private JinziRoomStateVO toStateVO(JinziRoom room, Long userId) {
         long now = System.currentTimeMillis();
-        Map<Long, User> userMap = loadRoomUsers(room);
+        Map<Long, UserInternalVO> userMap = loadRoomUsers(room);
         Map<Long, GameUserProfile> profileMap = loadRoomProfiles(room);
         GobangRoomParticipantVO blackPlayer = toParticipant(
                 room.getBlackUserId(),
@@ -512,15 +512,15 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         );
     }
 
-    private Map<Long, User> loadRoomUsers(JinziRoom room) {
+    private Map<Long, UserInternalVO> loadRoomUsers(JinziRoom room) {
         List<Long> userIds = new ArrayList<>();
         addRealUserId(userIds, room.getBlackUserId());
         addRealUserId(userIds, room.getWhiteUserId());
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, User> userMap = new HashMap<>();
-        userInternalLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+        Map<Long, UserInternalVO> userMap = new HashMap<>();
+        gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
         return userMap;
     }
 
@@ -544,17 +544,16 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             Long userId,
             String role,
             Long joinedAtMs,
-            Map<Long, User> userMap,
+            Map<Long, UserInternalVO> userMap,
             Map<Long, GameUserProfile> profileMap
     ) {
-        User user = userMap.get(userId);
+        UserInternalVO user = userMap.get(userId);
         String username = user == null ? null : user.getUsername();
         String nickname = user == null ? "用户 " + userId : (
                 user.getNickname() == null || user.getNickname().isBlank() ? user.getUsername() : user.getNickname()
         );
-        Byte vipTier = user == null || user.getVipTier() == null ? (byte) 0 : user.getVipTier();
-        boolean vip = user != null && vipTier > 0
-                && (user.getVipExpireAt() == null || user.getVipExpireAt().after(new Date()));
+        Byte vipTier = 0;
+        boolean vip = false;
         GameUserProfile profile = profileMap.get(userId);
         int total = profile == null || profile.getTotalCount() == null ? 0 : profile.getTotalCount();
         int wins = profile == null || profile.getWinCount() == null ? 0 : profile.getWinCount();
