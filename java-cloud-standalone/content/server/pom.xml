@@ -35,7 +35,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>org.pluchon.forum.content.ForumContentApplication</mainClass>
+                    <mainClass>org.pluchon.forum.ForumContentApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

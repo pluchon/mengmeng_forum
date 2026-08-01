@@ -15,41 +15,22 @@
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
-        <module name="common" />
-        <module name="platform" />
-        <module name="auth-api" />
-        <module name="auth-server" />
-        <module name="content-api" />
-        <module name="content-server" />
-        <module name="im-api" />
-        <module name="im-server" />
         <module name="game-api" />
-        <module name="game-server" />
-        <module name="economy-api" />
+        <module name="auth-server" />
         <module name="economy-server" />
-        <module name="ai-api" />
+        <module name="economy-api" />
         <module name="ai-server" />
+        <module name="platform" />
+        <module name="game-server" />
+        <module name="im-api" />
+        <module name="common" />
+        <module name="ai-api" />
+        <module name="content-server" />
+        <module name="auth-api" />
+        <module name="content-api" />
         <module name="gateway" />
       </profile>
     </annotationProcessing>
-    <bytecodeTargetLevel>
-      <module name="ai-api" target="17" />
-      <module name="ai-server" target="17" />
-      <module name="auth-api" target="17" />
-      <module name="auth-server" target="17" />
-      <module name="common" target="17" />
-      <module name="content-api" target="17" />
-      <module name="content-server" target="17" />
-      <module name="economy-api" target="17" />
-      <module name="economy-server" target="17" />
-      <module name="game-api" target="17" />
-      <module name="game-server" target="17" />
-      <module name="gateway" target="17" />
-      <module name="im-api" target="17" />
-      <module name="im-server" target="17" />
-      <module name="java-cloud-standalone" target="17" />
-      <module name="platform" target="17" />
-    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">

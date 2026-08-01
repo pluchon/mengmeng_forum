@@ -1,4 +1,4 @@
-package org.pluchon.forum.ai;
+package org.pluchon.forum;
 
 import org.pluchon.forum.common.utils.ForumDateTimes;
 import org.mybatis.spring.annotation.MapperScan;
@@ -11,10 +11,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @MapperScan("org.pluchon.forum.mapper")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = {"org.pluchon.forum.api", "org.pluchon.forum.cloud.feign"})
-public class ForumAiApplication {
+public class ForumImApplication {
 
     public static void main(String[] args) {
         ForumDateTimes.useShanghaiAsDefault();
-        SpringApplication.run(ForumAiApplication.class, args);
+        SpringApplication.run(ForumImApplication.class, args);
     }
 }
