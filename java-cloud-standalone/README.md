@@ -1,10 +1,16 @@
 # java-cloud-standalone
 
-萌萌论坛 **单机微服务** 父子工程（共享 MySQL `forum_db` + Nacos 注册发现 + Gateway + OpenFeign/LoadBalancer）。
+萌萌论坛 **单机微服务** 父子工程（Nacos 注册发现 + Gateway + OpenFeign/LoadBalancer）。
 
 Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025.0.0.0**，与仓库原 `backend` 版本对齐。
 
-> **原 `backend/` 目录完整保留**，可继续作为单体运行；本工程是并行的微服务演进线，交付状态：**本阶段已收尾完成**。
+> **原 `backend/` 目录完整保留**，可继续作为单体运行；本工程是并行的微服务演进线。
+>
+> **交付状态（务必读清）**
+> - 已完成：进程切分、Gateway 路由、Nacos 注册、少量内部 Feign。
+> - **未完成**：代码所有权拆分、每服务独立 API 契约、每服务独立数据库。
+> - 当前实质仍是「共享 `forum-core` + `DomainServicePruner` 条件裁剪 + 共享 `forum_db`」的多进程单体。
+> - 真拆分目标与阶段见 [`docs/architecture-microservices.md`](docs/architecture-microservices.md)。
 
 ## 模块
 
@@ -17,22 +23,23 @@ Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025
 | forum-game | 10104 | 游戏 REST + 游戏 WebSocket；消费 `q-game-finished` |
 | forum-economy | 10105 | 积分 / 签到 / VIP / 抽奖 / 商店 / 成长 |
 | forum-ai | 10106 | AI / 吉祥物 / 漂流瓶 |
-| forum-common / forum-api / forum-core | — | 公共库、Feign 契约、共享 Entity/Mapper/接口与基础设施 |
+| forum-common | — | 跨服务真正可复用的常量/工具（禁止放 Entity/Mapper/ServiceImpl） |
+| forum-*-api | — | 各域纯契约（接口 + DTO/VO，**无** `@FeignClient`） |
+| forum-core | — | **过渡期**共享实现库；目标是按域搬空后删除 |
 
-## 边界约定
+## 目标边界（真拆分）
 
 - **HTTP**：各域 Controller 物理归属对应可启动模块。
-- **业务 Bean**：`DomainServicePruner` 按 `forum.domain` 只装载本域 `service.impl.*`；另保留少量共享实现（登录鉴权、关注读、AiHub、FileService、热帖分、VipCenter、WS Redis 推送、Feign remote）。
-- **跨域写读（Feign）**：
-  - 积分 → `PointsFeignClient` → `forum-economy`
-  - 用户查询/发帖计数 → `UserInternalFeignClient` → `forum-auth`
-  - 成长建档/正式用户校验 → `GrowthInternalFeignClient` → `forum-economy`
-  - 系统消息创建 → `SystemMessageInternalFeignClient` → `forum-im`
-- **MQ**：内容审核/通知由 `forum-content`（`mq-consumer=true`）消费；对局结束结算由 `forum-game` 的 `GameFinishedMqConsumer` 消费。
-- **WebSocket**：`/ws/notify` 仅 `forum-im`；游戏 WS 由 `game-runtime` 独立装配。
-- **共享库**：Entity / Mapper / Service 接口仍在 `forum-core`（同库策略下不强制物理搬迁 Service 源码）。
-- **`forum.domain=monolith`**：仅作「不裁剪」兼容开关，**无**独立 monolith 启动模块。
-- **原 `backend/`**：完整保留，互不删除。
+- **代码所有权**：Service / Mapper / Entity 归属各服务模块，禁止再依赖整包 `forum-core`。
+- **契约**：每服务配套 `forum-{domain}-api`；共享层只有无 `@FeignClient` 的 API + DTO；消费方自有 Feign 客户端。
+- **数据**：每服务独立数据库（本地可先同一 MySQL 多库 + 独立账号，再生产拆实例）。
+- **跨域**：同步门禁走 HTTP；副作用走 Outbox/MQ；展示用快照，禁止跨库 Mapper。
+
+## 过渡期现状（将逐步拆除）
+
+- 业务 Bean 仍可能由 `DomainServicePruner` 按 `forum.domain` 裁剪。
+- 部分跨域仍靠同库 `UserMapper` / 共享白名单实现。
+- `forum.domain=monolith` 仅为不裁剪兼容开关，**禁止当作终态架构**。
 
 ## 启动顺序
 
@@ -56,19 +63,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-all.ps1
 
 建议启动顺序已内置在 `start-all.ps1`：auth → economy → im → content → game → ai → gateway。
 
-## 验收 E2E（多账号）
+## 验收
 
-前置：Gateway `:10086` 可达；Redis 容器名 `forum-redis-dev`（脚本用其注入一次性验证码票据）。
+### 架构验收（真拆分门禁）
+
+见 [`docs/architecture-microservices.md`](docs/architecture-microservices.md) 验收清单：独立打包、库隔离、契约形态、依赖图。
+
+### 功能 E2E（多账号）
+
+前置：Gateway `:10086` 可达；Redis 容器名 `forum-redis-dev`。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-e2e.ps1
 ```
 
-报告写入仓库忽略目录：`test-output/cloud-e2e/report.json`。
+报告：`test-output/cloud-e2e/report.json`。
 
-覆盖：Gateway 健康、验证码、注册/登录（3 账号）、关注、积分/签到/成长/VIP/抽奖、兴趣画像、收藏与标签、IM 会话/发信/系统消息/群/语音 ICE、游戏资料、漂流瓶、Feign 内部接口、登出。
-
-说明：私信内容审核依赖本机 AI Hub（默认 `127.0.0.1:5000`）；未启动时业务码 `1125` 记为环境依赖，不判为微服务拆分失败。
+说明：私信内容审核依赖本机 AI Hub；未启动时业务码 `1125` 记为环境依赖。
 
 ## 前端
 
