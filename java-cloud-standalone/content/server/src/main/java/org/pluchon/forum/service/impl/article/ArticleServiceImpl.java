@@ -46,7 +46,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.service.interfaces.favorite.FavoriteArticleService;
-import org.pluchon.forum.service.interfaces.growth.GrowthService;
+import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.pluchon.forum.service.interfaces.user.UserFollowService;
@@ -86,7 +86,7 @@ public class ArticleServiceImpl implements ArticleService {
     private UserFollowService userFollowService;
 
     @Autowired
-    private GrowthService growthService;
+    private ContentGrowthInternalFeignClient contentGrowthInternalFeignClient;
 
     @Autowired
     private BoardService boardService;
@@ -145,7 +145,7 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createDraft(PublishArticleRequest req, Long userId) {
-        growthService.requireFormalUser(userId);
+        contentGrowthInternalFeignClient.requireFormalUser(userId);
         ArticleType articleType = ArticleType.fromCode(req.getArticleType());
         if (articleType == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
@@ -181,7 +181,7 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishArticle(Long articleId, Long userId) {
-        growthService.requireFormalUser(userId);
+        contentGrowthInternalFeignClient.requireFormalUser(userId);
         Article article = selectArticleByArticleId(articleId);
         if (!Objects.equals(article.getUserId(), userId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));

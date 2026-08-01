@@ -32,7 +32,7 @@ import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectServ
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
-import org.pluchon.forum.service.interfaces.message.SystemMessageService;
+import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,7 +74,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private ForumProducer forumProducer;
 
     @Autowired
-    private SystemMessageService systemMessageService;
+    private ContentSystemMessageInternalFeignClient contentSystemMessageInternalFeignClient;
 
     @Autowired
     private WebSocketPushService webSocketPushService;
@@ -362,7 +362,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             } catch (Exception e) {
                 payloadJson = null;
             }
-            systemMsgId = systemMessageService.createMessage(userId, sysMsgType, title, truncate(content, 500),
+            systemMsgId = contentSystemMessageInternalFeignClient.createMessage(userId, sysMsgType, title, truncate(content, 500),
                     articleId, payloadJson);
         } catch (Exception e) {
             log.error("写入系统消息失败: userId={}, articleId={}", userId, articleId, e);

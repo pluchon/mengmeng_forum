@@ -19,7 +19,7 @@ import org.pluchon.forum.mapper.ForumArticleTagLinkMapper;
 import org.pluchon.forum.mapper.ForumArticleTagMapper;
 import org.pluchon.forum.mapper.ForumArticleTagRequestMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
-import org.pluchon.forum.service.interfaces.message.SystemMessageService;
+import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -51,7 +51,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
     @Resource
     private BoardMapper boardMapper;
     @Resource
-    private SystemMessageService systemMessageService;
+    private ContentSystemMessageInternalFeignClient contentSystemMessageInternalFeignClient;
 
     @Override
     public List<ArticleTagVO> listForBoard(Long boardId) {
@@ -199,7 +199,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         req.setDeleteState(NOT_DELETED);
         requestMapper.insert(req);
 
-        systemMessageService.createMessage(
+        contentSystemMessageInternalFeignClient.createMessage(
                 userId,
                 Constant.SYSTEM_MSG_TYPE_TAG_APPROVED,
                 Constant.SYSTEM_MSG_TITLE_TAG_APPROVED,
