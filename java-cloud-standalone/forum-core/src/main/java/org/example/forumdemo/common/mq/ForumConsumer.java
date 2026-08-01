@@ -8,11 +8,9 @@ import org.example.forumdemo.common.metrics.ForumMetrics;
 import org.example.forumdemo.common.utils.MqEventDedupHelper;
 import org.example.forumdemo.service.impl.websocket.WebSocketPushService;
 import org.example.forumdemo.entity.vo.mq.ArticleAuditResultMqVO;
-import org.example.forumdemo.entity.vo.mq.GameFinishedMqVO;
 import org.example.forumdemo.entity.vo.mq.MessageNotifyMqVO;
 import org.example.forumdemo.entity.vo.mq.ReplyNotifyMqVO;
 import org.example.forumdemo.service.interfaces.article.ArticleService;
-import org.example.forumdemo.service.interfaces.game.GameMqEventService;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +37,6 @@ public class ForumConsumer {
     @Autowired
     @Lazy
     private ArticleService articleService;
-
-    // 游戏结束事件仅在 game 域有实现；content 消费其它队列时允许缺失
-    @Autowired(required = false)
-    private GameMqEventService gameMqEventService;
 
     @Autowired
     private MqEventDedupHelper mqEventDedupHelper;
@@ -121,26 +115,6 @@ public class ForumConsumer {
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
             log.error("[MQ 消费者] 审核结果处理失败 | deliveryTag={} | error={}", deliveryTag, e.getMessage(), e);
-            channel.basicNack(deliveryTag, false, false);
-        }
-    }
-
-    @RabbitListener(queues = Constant.QUORUM_QUEUE_GAME_FINISHED, ackMode = "MANUAL")
-    public void handleGameFinished(Message message, Channel channel) throws IOException {
-        long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        try {
-            GameFinishedMqVO vo = objectMapper.readValue(message.getBody(), GameFinishedMqVO.class);
-            log.debug("[MQ 消费者] 收到游戏结束事件 | gameCode={} | roomId={} | eventId={}",
-                    vo.getGameCode(), vo.getRoomId(), vo.getEventId());
-            if (gameMqEventService == null) {
-                log.warn("[MQ 消费者] 当前进程无 GameMqEventService，跳过游戏结束事件 | roomId={}", vo.getRoomId());
-                channel.basicAck(deliveryTag, false);
-                return;
-            }
-            gameMqEventService.handleGameFinished(vo);
-            channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
-            log.error("[MQ 消费者] 游戏结束事件处理失败 | deliveryTag={} | error={}", deliveryTag, e.getMessage(), e);
             channel.basicNack(deliveryTag, false, false);
         }
     }
