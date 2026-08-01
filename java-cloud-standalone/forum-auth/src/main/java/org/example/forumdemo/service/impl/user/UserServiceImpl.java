@@ -11,7 +11,7 @@ import org.example.forumdemo.common.utils.PasswordUtils;
 import org.example.forumdemo.common.utils.PiiUtils;
 import org.example.forumdemo.common.utils.RegexUtil;
 import org.example.forumdemo.common.utils.UUIDUtils;
-import org.example.forumdemo.cloud.feign.MascotPreferenceInternalFeignClient;
+import org.example.forum.cloud.feign.MascotPreferenceInternalFeignClient;
 import org.example.forumdemo.entity.dto.ai.RagUserIndexDTO;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;

@@ -13,7 +13,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 
-// 按 forum.domain 裁剪 service.impl 业务 Bean，使各进程只装载本域实现
+/**
+ * 过渡裁剪器：按 forum.domain 删除非本域 service.impl Bean。
+ * Phase 2 后各域实现已物理离开 forum-core classpath，本类主要兜底残留共享包；
+ * 待 UserFollow/热帖/AiHub 等全部 Feign 化后删除本类与 DomainServicePrunerConfig。
+ */
 public class DomainServicePruner implements BeanDefinitionRegistryPostProcessor, EnvironmentAware, PriorityOrdered {
 
     private Environment environment;

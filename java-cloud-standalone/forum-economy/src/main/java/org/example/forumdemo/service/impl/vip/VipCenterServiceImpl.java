@@ -3,7 +3,7 @@ package org.example.forumdemo.service.impl.vip;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import org.example.forum.api.ai.AiUsageDailyBucketsVO;
-import org.example.forumdemo.cloud.feign.AiUsageInternalFeignClient;
+import org.example.forum.cloud.feign.AiUsageInternalFeignClient;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.example.forumdemo.common.enums.ResultCode;

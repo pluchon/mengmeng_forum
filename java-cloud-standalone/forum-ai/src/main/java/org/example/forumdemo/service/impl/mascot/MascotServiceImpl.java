@@ -45,7 +45,7 @@ import org.example.forumdemo.mapper.UserMapper;
 import org.example.forumdemo.mapper.UserMascotPreferenceMapper;
 import org.example.forumdemo.mapper.AiUsageDailyMapper;
 import org.example.forum.api.economy.VipTierSnapshotVO;
-import org.example.forumdemo.cloud.feign.VipInternalFeignClient;
+import org.example.forum.cloud.feign.VipInternalFeignClient;
 import org.example.forumdemo.entity.db.AiUsageDaily;
 import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.springframework.dao.DuplicateKeyException;

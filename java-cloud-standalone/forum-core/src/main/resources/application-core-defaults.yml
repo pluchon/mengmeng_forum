@@ -44,6 +44,7 @@ spring:
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:56720}
+    # 默认 vhost 与历史 forum-demo 兼容；新环境建议显式设置 SPRING_RABBITMQ_VIRTUAL_HOST=forum
     virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:forum-demo}
     username: ${SPRING_RABBITMQ_USERNAME:nuonuo}
     password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:123456}}
@@ -126,10 +127,10 @@ logging:
     root: WARN
     org.example.forumdemo: WARN
   file:
-    name: ${LOG_FILE:../logs/backend/forum-backend.log}
+    name: ${LOG_FILE:../logs/forum-core/forum-core.log}
   logback:
     rollingpolicy:
-      file-name-pattern: ${LOG_FILE:../logs/backend/forum-backend.log}.%d{yyyy-MM-dd}.%i.gz
+      file-name-pattern: ${LOG_FILE:../logs/forum-core/forum-core.log}.%d{yyyy-MM-dd}.%i.gz
       max-file-size: 20MB
       max-history: 14
       total-size-cap: 500MB

@@ -1,7 +1,7 @@
 package org.example.forumdemo.service.impl.remote;
 
 import org.example.forum.api.economy.VipQuotaHintVO;
-import org.example.forumdemo.cloud.feign.VipInternalFeignClient;
+import org.example.forum.cloud.feign.VipInternalFeignClient;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;

@@ -1,0 +1,58 @@
+﻿SET NAMES utf8mb4;
+USE forum_content_db;
+TRUNCATE TABLE user_favorite_folder;
+INSERT INTO user_favorite_folder (id, user_id, name, is_public, is_default, sort_order, item_count, delete_state, create_time, update_time)
+SELECT id, user_id, name, is_public, is_default, sort_order, item_count, delete_state, create_time, update_time FROM forum_db.user_favorite_folder;
+DROP TABLE IF EXISTS user_interest_preference, user_recommend_feedback;
+CREATE TABLE user_interest_preference LIKE forum_db.user_interest_preference; INSERT INTO user_interest_preference SELECT * FROM forum_db.user_interest_preference;
+CREATE TABLE user_recommend_feedback LIKE forum_db.user_recommend_feedback; INSERT INTO user_recommend_feedback SELECT * FROM forum_db.user_recommend_feedback;
+
+USE forum_im_db;
+DROP TABLE IF EXISTS message, system_message, forum_notice, forum_outbox_message, group_chat, group_chat_join_request, group_chat_member, group_chat_message, group_chat_report, user_chat_emoji;
+CREATE TABLE message LIKE forum_db.message; INSERT INTO message SELECT * FROM forum_db.message;
+CREATE TABLE system_message LIKE forum_db.system_message; INSERT INTO system_message SELECT * FROM forum_db.system_message;
+CREATE TABLE forum_notice LIKE forum_db.forum_notice; INSERT INTO forum_notice SELECT * FROM forum_db.forum_notice;
+CREATE TABLE forum_outbox_message LIKE forum_db.forum_outbox_message; INSERT INTO forum_outbox_message SELECT * FROM forum_db.forum_outbox_message;
+CREATE TABLE group_chat LIKE forum_db.group_chat; INSERT INTO group_chat SELECT * FROM forum_db.group_chat;
+CREATE TABLE group_chat_join_request LIKE forum_db.group_chat_join_request; INSERT INTO group_chat_join_request SELECT * FROM forum_db.group_chat_join_request;
+CREATE TABLE group_chat_member LIKE forum_db.group_chat_member; INSERT INTO group_chat_member SELECT * FROM forum_db.group_chat_member;
+CREATE TABLE group_chat_message LIKE forum_db.group_chat_message; INSERT INTO group_chat_message SELECT * FROM forum_db.group_chat_message;
+CREATE TABLE group_chat_report LIKE forum_db.group_chat_report; INSERT INTO group_chat_report SELECT * FROM forum_db.group_chat_report;
+CREATE TABLE user_chat_emoji LIKE forum_db.user_chat_emoji; INSERT INTO user_chat_emoji SELECT * FROM forum_db.user_chat_emoji;
+
+USE forum_game_db;
+DROP TABLE IF EXISTS game_definition, game_gobang_match_record, game_gobang_room_move, game_jinzi_match_record, game_jinzi_room_move, game_match_record, game_room_move, game_room_player, game_settlement_event, game_tetris_pk_match_record, game_tetris_record, game_user_profile;
+CREATE TABLE game_definition LIKE forum_db.game_definition; INSERT INTO game_definition SELECT * FROM forum_db.game_definition;
+CREATE TABLE game_gobang_match_record LIKE forum_db.game_gobang_match_record; INSERT INTO game_gobang_match_record SELECT * FROM forum_db.game_gobang_match_record;
+CREATE TABLE game_gobang_room_move LIKE forum_db.game_gobang_room_move; INSERT INTO game_gobang_room_move SELECT * FROM forum_db.game_gobang_room_move;
+CREATE TABLE game_jinzi_match_record LIKE forum_db.game_jinzi_match_record; INSERT INTO game_jinzi_match_record SELECT * FROM forum_db.game_jinzi_match_record;
+CREATE TABLE game_jinzi_room_move LIKE forum_db.game_jinzi_room_move; INSERT INTO game_jinzi_room_move SELECT * FROM forum_db.game_jinzi_room_move;
+CREATE TABLE game_match_record LIKE forum_db.game_match_record; INSERT INTO game_match_record SELECT * FROM forum_db.game_match_record;
+CREATE TABLE game_room_move LIKE forum_db.game_room_move; INSERT INTO game_room_move SELECT * FROM forum_db.game_room_move;
+CREATE TABLE game_room_player LIKE forum_db.game_room_player; INSERT INTO game_room_player SELECT * FROM forum_db.game_room_player;
+CREATE TABLE game_settlement_event LIKE forum_db.game_settlement_event; INSERT INTO game_settlement_event SELECT * FROM forum_db.game_settlement_event;
+CREATE TABLE game_tetris_pk_match_record LIKE forum_db.game_tetris_pk_match_record; INSERT INTO game_tetris_pk_match_record SELECT * FROM forum_db.game_tetris_pk_match_record;
+CREATE TABLE game_tetris_record LIKE forum_db.game_tetris_record; INSERT INTO game_tetris_record SELECT * FROM forum_db.game_tetris_record;
+CREATE TABLE game_user_profile LIKE forum_db.game_user_profile; INSERT INTO game_user_profile SELECT * FROM forum_db.game_user_profile;
+
+USE forum_ai_db;
+DROP TABLE IF EXISTS ai_usage_daily, forum_ai_call_record, forum_ai_creation_version, forum_ai_creation_workspace, forum_ai_long_term_memory, forum_ai_model_price, forum_ai_model_usage_daily, forum_ai_task_session, forum_ai_usage_log, forum_companion_message, forum_companion_session, forum_mascot_model, forum_mascot_related_recommendation, forum_mascot_related_recommendation_item, user_mascot_preference, drift_bottle, drift_bottle_comment, drift_bottle_pick_log, drift_bottle_report;
+CREATE TABLE ai_usage_daily LIKE forum_db.ai_usage_daily; INSERT INTO ai_usage_daily SELECT * FROM forum_db.ai_usage_daily;
+CREATE TABLE forum_ai_call_record LIKE forum_db.forum_ai_call_record; INSERT INTO forum_ai_call_record SELECT * FROM forum_db.forum_ai_call_record;
+CREATE TABLE forum_ai_creation_version LIKE forum_db.forum_ai_creation_version; INSERT INTO forum_ai_creation_version SELECT * FROM forum_db.forum_ai_creation_version;
+CREATE TABLE forum_ai_creation_workspace LIKE forum_db.forum_ai_creation_workspace; INSERT INTO forum_ai_creation_workspace SELECT * FROM forum_db.forum_ai_creation_workspace;
+CREATE TABLE forum_ai_long_term_memory LIKE forum_db.forum_ai_long_term_memory; INSERT INTO forum_ai_long_term_memory SELECT * FROM forum_db.forum_ai_long_term_memory;
+CREATE TABLE forum_ai_model_price LIKE forum_db.forum_ai_model_price; INSERT INTO forum_ai_model_price SELECT * FROM forum_db.forum_ai_model_price;
+CREATE TABLE forum_ai_model_usage_daily LIKE forum_db.forum_ai_model_usage_daily; INSERT INTO forum_ai_model_usage_daily SELECT * FROM forum_db.forum_ai_model_usage_daily;
+CREATE TABLE forum_ai_task_session LIKE forum_db.forum_ai_task_session; INSERT INTO forum_ai_task_session SELECT * FROM forum_db.forum_ai_task_session;
+CREATE TABLE forum_ai_usage_log LIKE forum_db.forum_ai_usage_log; INSERT INTO forum_ai_usage_log SELECT * FROM forum_db.forum_ai_usage_log;
+CREATE TABLE forum_companion_message LIKE forum_db.forum_companion_message; INSERT INTO forum_companion_message SELECT * FROM forum_db.forum_companion_message;
+CREATE TABLE forum_companion_session LIKE forum_db.forum_companion_session; INSERT INTO forum_companion_session SELECT * FROM forum_db.forum_companion_session;
+CREATE TABLE forum_mascot_model LIKE forum_db.forum_mascot_model; INSERT INTO forum_mascot_model SELECT * FROM forum_db.forum_mascot_model;
+CREATE TABLE forum_mascot_related_recommendation LIKE forum_db.forum_mascot_related_recommendation; INSERT INTO forum_mascot_related_recommendation SELECT * FROM forum_db.forum_mascot_related_recommendation;
+CREATE TABLE forum_mascot_related_recommendation_item LIKE forum_db.forum_mascot_related_recommendation_item; INSERT INTO forum_mascot_related_recommendation_item SELECT * FROM forum_db.forum_mascot_related_recommendation_item;
+CREATE TABLE user_mascot_preference LIKE forum_db.user_mascot_preference; INSERT INTO user_mascot_preference SELECT * FROM forum_db.user_mascot_preference;
+CREATE TABLE drift_bottle LIKE forum_db.drift_bottle; INSERT INTO drift_bottle SELECT * FROM forum_db.drift_bottle;
+CREATE TABLE drift_bottle_comment LIKE forum_db.drift_bottle_comment; INSERT INTO drift_bottle_comment SELECT * FROM forum_db.drift_bottle_comment;
+CREATE TABLE drift_bottle_pick_log LIKE forum_db.drift_bottle_pick_log; INSERT INTO drift_bottle_pick_log SELECT * FROM forum_db.drift_bottle_pick_log;
+CREATE TABLE drift_bottle_report LIKE forum_db.drift_bottle_report; INSERT INTO drift_bottle_report SELECT * FROM forum_db.drift_bottle_report;

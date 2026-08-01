@@ -2,14 +2,16 @@
 
 ## 1. 现状判定
 
-当前 `java-cloud-standalone` **不是**完整微服务，而是：
+当前 `java-cloud-standalone` 处于**真拆分进行中**：
 
-- Maven 多模块构建聚合（不等于运行时服务边界）
-- 六个业务进程各自依赖并内嵌完整 `forum-core`
-- `DomainServicePruner` 按 `forum.domain` 删除非本域 Service Bean
-- 全量 `@MapperScan` + 共享 `forum_db`
+- 六个业务进程 + Gateway/Nacos 已运行
+- 六域 `forum-*-api` 纯契约已建立；Feign 客户端在消费方
+- 各域 Service/Mapper/Entity 已物理 `git mv` 到对应服务模块（`forum-core` 仅残留共享/过渡实现）
+- 本地已建 `forum_*_db` 并完成表数据复制脚手架；**默认仍连 `forum_db`**，可用 `DB_*` 切库
+- `DomainServicePruner` 降级为兜底，目标删除
+- 业务代码包名大量仍为 `org.example.forumdemo.*`（启动类已是 `org.example.forum.*`）
 
-结论：**进程切分已完成，代码/数据所有权未拆分。**
+结论：**进程切分 + 代码所有权主路径已完成；整包 core 依赖拆除与默认拆库撤权尚未完成。**
 
 ## 2. 官方依据
 
@@ -107,10 +109,12 @@ java-cloud-standalone/
 
 ### 架构验收清单
 
-- [ ] 服务模块之间无业务实现级 Maven 依赖
-- [ ] 每服务可 `mvn -pl forum-xxx -am -DskipTests package` 独立产出可运行 jar
-- [ ] 每服务只连接自己的数据库账号
-- [ ] `*-api` 中不存在 `@FeignClient`
-- [ ] Feign `name` / Gateway `lb://` / `spring.application.name` 一致
-- [ ] 主链路：注册登录、发帖评论、私信/群、积分、游戏结算事件
-- [ ] 原 `backend/` 仍可独立运行（并行保留）
+详见 [`architecture-acceptance.md`](architecture-acceptance.md)。
+
+- [x] 服务模块之间无业务实现级 Maven 依赖（均只依赖过渡 `forum-core`）
+- [x] 每服务可 `mvn -pl forum-xxx -am -DskipTests compile/package`（本轮已 compile 全绿）
+- [ ] 每服务默认只连接自己的数据库账号（脚手架就绪，默认仍 `forum_db`）
+- [x] `*-api` 中不存在 `@FeignClient`
+- [x] Feign `name` / Gateway `lb://` / `spring.application.name` 一致
+- [ ] 主链路 E2E（切库后复跑）
+- [x] 原 `backend/` 仍可独立运行（并行保留）

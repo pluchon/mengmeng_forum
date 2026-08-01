@@ -1,7 +1,7 @@
 package org.example.forumdemo.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import org.example.forumdemo.cloud.feign.ShopEntitlementInternalFeignClient;
+import org.example.forum.cloud.feign.ShopEntitlementInternalFeignClient;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;

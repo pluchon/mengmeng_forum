@@ -1,6 +1,6 @@
 package org.example.forumdemo.service.impl.remote;
 
-import org.example.forumdemo.cloud.feign.FavoriteFolderInternalFeignClient;
+import org.example.forum.cloud.feign.FavoriteFolderInternalFeignClient;
 import org.example.forumdemo.entity.db.UserFavoriteFolder;
 import org.example.forumdemo.entity.dto.favorite.CreateFolderRequest;
 import org.example.forumdemo.entity.dto.favorite.UpdateFolderRequest;
