@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.message.PrivateVoiceSessionVO;
 import org.pluchon.forum.service.interfaces.message.PrivateVoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +27,7 @@ public class PrivateVoiceController {
     @GetMapping("/{peerUserId}")
     public Result<PrivateVoiceSessionVO> queryVoiceSession(@PathVariable Long peerUserId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(privateVoiceService.querySession(peerUserId, sessionUser.getId()));
     }
 
@@ -35,7 +35,7 @@ public class PrivateVoiceController {
     @PostMapping("/{peerUserId}/start")
     public Result<PrivateVoiceSessionVO> startVoiceSession(@PathVariable Long peerUserId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(privateVoiceService.startSession(peerUserId, sessionUser.getId()));
     }
 
@@ -43,7 +43,7 @@ public class PrivateVoiceController {
     @PostMapping("/{peerUserId}/accept")
     public Result<PrivateVoiceSessionVO> acceptVoiceSession(@PathVariable Long peerUserId,
                                                             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(privateVoiceService.acceptSession(peerUserId, sessionUser.getId()));
     }
 
@@ -51,7 +51,7 @@ public class PrivateVoiceController {
     @PostMapping("/{peerUserId}/decline")
     public Result<PrivateVoiceSessionVO> declineVoiceSession(@PathVariable Long peerUserId,
                                                              HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(privateVoiceService.declineSession(peerUserId, sessionUser.getId()));
     }
 
@@ -59,7 +59,7 @@ public class PrivateVoiceController {
     @PostMapping("/{peerUserId}/leave")
     public Result<PrivateVoiceSessionVO> leaveVoiceSession(@PathVariable Long peerUserId,
                                                            HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(privateVoiceService.leaveSession(peerUserId, sessionUser.getId()));
     }
 }

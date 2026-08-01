@@ -9,7 +9,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
 import org.pluchon.forum.entity.vo.article.ArticleValidateTextVO;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.ReplaceArticleImagesRequest;
 import org.pluchon.forum.entity.dto.article.SubmitForAuditRequest;
@@ -48,7 +48,7 @@ public class ArticleController {
     @Operation(summary = "创建帖子草稿", description = "文章内容先入库为草稿，返回帖子ID；封面上传和发布动作走独立接口")
     @PostMapping("/createDraft")
     public Result<Long> createDraft(@Valid @RequestBody PublishArticleRequest publishArticleRequest, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -62,7 +62,7 @@ public class ArticleController {
                     "通常用户无需手动调本接口, 因为审核通过会自动发布; 此接口给未来切手动模式预留.")
     @PutMapping("/publishArticle")
     public Result<String> publishArticle(@RequestParam Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -76,7 +76,7 @@ public class ArticleController {
     @PostMapping("/submitForAudit")
     public Result<String> submitForAudit(@Valid @RequestBody SubmitForAuditRequest req,
                                          HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -90,7 +90,7 @@ public class ArticleController {
     @GetMapping("/getAuditStatus")
     public Result<AuditStatusResponse> getAuditStatus(@RequestParam Long articleId,
                                                       HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -100,7 +100,7 @@ public class ArticleController {
     @Operation(summary = "根据帖子Id展示帖子详细内容", description = "传入帖子ID")
     @GetMapping("/selectArticleDetailByArticleId")
     public Result<ArticleDetailResponse> selectArticleDetailByArticleId(Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long userId = (loginUser == null) ? -1L : loginUser.getId();
         return Result.success(articleService.queryArticleDetailByArticleId(articleId, userId));
     }
@@ -108,7 +108,7 @@ public class ArticleController {
     @Operation(summary = "编辑帖子内容，只有作者本人才可以", description = "传入帖子ID，标题，以及正文")
     @PutMapping("/updateArticleByArticleId")
     public Result<String> updateArticleByArticleId(@RequestBody UpdateArticleRequest updateArticleRequest, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -119,7 +119,7 @@ public class ArticleController {
     @Operation(summary = "删除对应帖子", description = "传入帖子ID，注意只有作者本人才可以")
     @DeleteMapping("/deleteArticle")
     public Result<String> deleteArticle(Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -132,7 +132,7 @@ public class ArticleController {
     @GetMapping("/getArticleListByUserIdWithPage")
     public Result<PageResult<ArticleBriefVO>> getArticleListByUserIdWithPage(Long userId, @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = (loginUser != null) ? loginUser.getId() : -1L;
         return Result.success(articleService.queryArticleListByUserIdWithPage(userId, loginUserId, pageNum, pageSize));
     }
@@ -142,7 +142,7 @@ public class ArticleController {
     @GetMapping("/getArticleListByUserIdWithPageAndUserInfo")
     public Result<ArticleListByUserIdPageResponse> getArticleListByUserIdWithPageAndUserInfo(Long userId, @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = (loginUser != null) ? loginUser.getId() : -1L;
         return Result.success(articleService.queryArticleListByUserIdWithPageAndUserInfo(userId, loginUserId, pageNum, pageSize));
     }
@@ -160,7 +160,7 @@ public class ArticleController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(articleService.queryHotArticleListWithPage(pageNum, pageSize, loginUserId));
     }
@@ -172,7 +172,7 @@ public class ArticleController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -204,7 +204,7 @@ public class ArticleController {
     @Operation(summary = "通过URL直接更新帖子封面", description = "传入帖子ID和已上传的图片URL，直接写入数据库")
     @PostMapping("/updateCoverUrl")
     public Result<String> updateCoverUrl(@RequestParam Long articleId, @RequestParam String coverUrl, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -217,7 +217,7 @@ public class ArticleController {
                           "传空数组等同清空相册. 有图时正文必须 ≥ 10 字符, 否则返回 1146.")
     @PostMapping("/replaceArticleImages")
     public Result<String> replaceArticleImages(@RequestBody ReplaceArticleImagesRequest req, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -228,7 +228,7 @@ public class ArticleController {
     @Operation(summary = "设置帖子视频", description = "把帖子切换为视频帖并绑定视频URL；会自动清空相册图；封面仍需走图片封面接口")
     @PostMapping("/setArticleVideo")
     public Result<String> setArticleVideo(@RequestParam Long articleId, @RequestParam String videoUrl, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -239,7 +239,7 @@ public class ArticleController {
     @Operation(summary = "清空帖子视频", description = "把帖子切回图片帖并清空视频URL（不影响封面）；相册由 replaceArticleImages 再维护")
     @PostMapping("/clearArticleVideo")
     public Result<String> clearArticleVideo(@RequestParam Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }

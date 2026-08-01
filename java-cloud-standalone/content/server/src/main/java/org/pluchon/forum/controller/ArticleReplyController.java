@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.ReplyArticleRequest;
 import org.pluchon.forum.entity.vo.article.ArticleReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -24,7 +24,7 @@ public class ArticleReplyController {
     @Operation(summary = "回复帖子", description = "传入回复信息，包括帖子ID、内容")
     @PutMapping("/replyArticle")
     public Result<String> replyArticle(@RequestBody ReplyArticleRequest replyArticleRequest, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         articleReplyService.replyArticle(replyArticleRequest, loginUser.getId());
         return Result.success("回复成功");
     }
@@ -34,7 +34,7 @@ public class ArticleReplyController {
     public Result<PageResult<ArticleReplyListResponse>> getArticleReplyByArticleIdWithPage(Long articleId,
             @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser != null ? loginUser.getId() : null;
         return Result.success(articleReplyService.queryReplyByArticleIdWithPage(
                 articleId, pageNum, pageSize, loginUserId));
@@ -43,7 +43,7 @@ public class ArticleReplyController {
     @Operation(summary = "删除帖子回复", description = "传入回复ID，只有回复作者或帖子楼主可以删除")
     @DeleteMapping("/deleteReply")
     public Result<String> deleteReply(Long replyId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         articleReplyService.deleteReply(replyId, loginUser.getId());
         return Result.success("删除成功");
     }

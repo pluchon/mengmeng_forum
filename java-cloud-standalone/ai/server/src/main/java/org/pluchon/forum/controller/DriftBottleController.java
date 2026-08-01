@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.driftbottle.CreateDriftBottleCommentRequest;
 import org.pluchon.forum.entity.dto.driftbottle.CreateDriftBottleRequest;
 import org.pluchon.forum.entity.dto.driftbottle.ReportDriftBottleRequest;
@@ -37,14 +37,14 @@ public class DriftBottleController {
     @PostMapping("/create")
     public Result<DriftBottleDetailVO> createBottle(@Valid @RequestBody CreateDriftBottleRequest request,
                                                     HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.createBottle(request, sessionUser.getId()));
     }
 
     /** 随机捞一个漂流瓶 */
     @GetMapping("/pick")
     public Result<DriftBottleDetailVO> pickBottle(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.pickBottle(sessionUser.getId()));
     }
 
@@ -52,7 +52,7 @@ public class DriftBottleController {
     @GetMapping("/{bottleId}")
     public Result<DriftBottleDetailVO> queryDetail(@PathVariable Long bottleId,
                                                    HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.queryDetail(bottleId, sessionUser.getId()));
     }
 
@@ -61,7 +61,7 @@ public class DriftBottleController {
     public Result<DriftBottleDetailVO> commentBottle(@PathVariable Long bottleId,
                                                      @Valid @RequestBody CreateDriftBottleCommentRequest request,
                                                      HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.commentBottle(bottleId, request, sessionUser.getId()));
     }
 
@@ -71,14 +71,14 @@ public class DriftBottleController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.queryMine(sessionUser.getId(), pageNum, pageSize));
     }
 
     /** 删除自己的漂流瓶 */
     @DeleteMapping("/{bottleId}")
     public Result<String> deleteBottle(@PathVariable Long bottleId, HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         driftBottleService.deleteBottle(bottleId, sessionUser.getId());
         return Result.success("漂流瓶已删除");
     }
@@ -88,7 +88,7 @@ public class DriftBottleController {
     public Result<String> reportBottle(@PathVariable Long bottleId,
                                        @Valid @RequestBody ReportDriftBottleRequest request,
                                        HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         driftBottleService.reportBottle(bottleId, request, sessionUser.getId());
         return Result.success("举报已提交");
     }
@@ -98,7 +98,7 @@ public class DriftBottleController {
     public Result<String> reportComment(@PathVariable Long commentId,
                                         @Valid @RequestBody ReportDriftBottleRequest request,
                                         HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         driftBottleService.reportComment(commentId, request, sessionUser.getId());
         return Result.success("举报已提交");
     }
@@ -106,7 +106,7 @@ public class DriftBottleController {
     /** 查询今日漂流瓶额度 */
     @GetMapping("/quota")
     public Result<DriftBottleQuotaVO> queryQuota(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(driftBottleService.queryQuota(sessionUser.getId()));
     }
 }

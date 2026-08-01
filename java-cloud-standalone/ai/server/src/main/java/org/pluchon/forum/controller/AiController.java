@@ -7,7 +7,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
 import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
@@ -39,7 +39,7 @@ public class AiController {
             @RequestParam(required = false) String route,
             @RequestParam(required = false) String quality,
             HttpServletRequest request) {
-        User user = requireLoginUser(request);
+        AuthenticatedUser user = requireLoginUser(request);
         return Result.success(aiCompanionApiService.priceEstimate(user.getId(), skill, route, quality));
     }
 
@@ -47,26 +47,26 @@ public class AiController {
     @Operation(summary = "帖子正文一键润色", description = "模型与润色提示均由服务端确定")
     @PostMapping("/polish")
     public Result<AiPolishResponseVO> polish(@RequestBody AiPolishRequest req, HttpServletRequest request) {
-        User user = requireLoginUser(request);
+        AuthenticatedUser user = requireLoginUser(request);
         return Result.success(aiCompanionApiService.polish(user.getId(), req));
     }
 
     @Operation(summary = "封面推荐配图要点", description = "不计入文本写作日额，仅审计")
     @PostMapping("/cover-hints")
     public Result<AiHubCoverHintsResultVO> coverHints(@RequestBody AiCoverHintsRequest req, HttpServletRequest request) {
-        User user = requireLoginUser(request);
+        AuthenticatedUser user = requireLoginUser(request);
         return Result.success(aiCompanionApiService.coverHints(user.getId(), req));
     }
 
     @Operation(summary = "AI 生图", description = "quality: normal | premium")
     @PostMapping("/image")
     public Result<AiImageResponseVO> image(@RequestBody AiImageRequest req, HttpServletRequest request) {
-        User user = requireLoginUser(request);
+        AuthenticatedUser user = requireLoginUser(request);
         return Result.success(aiCompanionApiService.image(user.getId(), req));
     }
 
-    private static User requireLoginUser(HttpServletRequest request) {
-        User user = (User) request.getAttribute(Constant.USER_SESSION);
+    private static AuthenticatedUser requireLoginUser(HttpServletRequest request) {
+        AuthenticatedUser user = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }

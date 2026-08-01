@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.voice.VoiceIceConfigVO;
 import org.pluchon.forum.service.interfaces.voice.VoiceIceConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +24,7 @@ public class VoiceController {
     /** 查询 WebRTC ICE 配置 */
     @GetMapping("/ice-config")
     public Result<VoiceIceConfigVO> queryIceConfig(HttpServletRequest httpServletRequest) {
-        User sessionUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(voiceIceConfigService.queryIceConfig(sessionUser.getId()));
     }
 }

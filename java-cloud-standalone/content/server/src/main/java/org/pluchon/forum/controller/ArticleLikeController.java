@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.article.ArticleListByLikeResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.service.interfaces.article.ArticleLikeService;
@@ -24,7 +24,7 @@ public class ArticleLikeController {
     @Operation(summary = "点赞帖子", description = "传入帖子ID进行点赞")
     @PutMapping("/likeArticle")
     public Result<String> likeArticle(Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -35,7 +35,7 @@ public class ArticleLikeController {
     @Operation(summary = "取消点赞", description = "传入帖子ID取消点赞")
     @PutMapping("/unlikeArticle")
     public Result<String> unlikeArticle(Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -49,7 +49,7 @@ public class ArticleLikeController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
