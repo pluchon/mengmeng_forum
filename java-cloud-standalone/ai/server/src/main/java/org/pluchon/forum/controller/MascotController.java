@@ -8,7 +8,6 @@ import jakarta.validation.constraints.Positive;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.mascot.CompanionSessionRenameRequest;
 import org.pluchon.forum.entity.dto.mascot.MascotChatRequest;
 import org.pluchon.forum.entity.dto.mascot.MascotRelatedRecommendationRequest;
@@ -21,6 +20,8 @@ import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.mascot.MascotRelatedRecommendationVO;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
+import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -52,6 +53,9 @@ public class MascotController {
     private CompanionMemoryService companionMemoryService;
 
     @Autowired
+    private AiUserLookupService aiUserLookupService;
+
+    @Autowired
     @Qualifier("sseExecutor")
     private Executor sseExecutor;
 
@@ -60,7 +64,7 @@ public class MascotController {
     public Result<MascotQuotaHintVO> quotaHint(
             @RequestParam(required = false) String llmProvider,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -78,7 +82,7 @@ public class MascotController {
     public Result<MascotChatResponseVO> chat(
             @Valid @RequestBody MascotChatRequest request,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -90,7 +94,7 @@ public class MascotController {
     public SseEmitter chatStream(
             @Valid @RequestBody MascotChatRequest request,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         SseEmitter emitter = new SseEmitter(180_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError((e) -> emitter.complete());
@@ -114,7 +118,7 @@ public class MascotController {
     public Result<MascotRelatedRecommendationVO> relatedRecommendations(
             @Valid @RequestBody MascotRelatedRecommendationRequest request,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -127,7 +131,7 @@ public class MascotController {
     public Result<List<MascotRelatedRecommendationVO>> relatedRecommendationHistory(
             @RequestParam @Positive Long sessionId,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -140,7 +144,7 @@ public class MascotController {
             @RequestParam String skill,
             @RequestParam(defaultValue = "30") int limit,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -152,7 +156,7 @@ public class MascotController {
     public Result<List<CompanionMessageVO>> companionMessages(
             @PathVariable Long sessionId,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -164,7 +168,7 @@ public class MascotController {
     public Result<CompanionContextWindowVO> contextWindow(
             @PathVariable @Positive Long sessionId,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -176,7 +180,7 @@ public class MascotController {
     public Result<CompanionContextWindowVO> compressContext(
             @PathVariable @Positive Long sessionId,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -189,7 +193,7 @@ public class MascotController {
             @PathVariable @Positive Long sessionId,
             @Valid @RequestBody CompanionSessionRenameRequest request,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -202,7 +206,7 @@ public class MascotController {
     public Result<Void> deleteCompanionSession(
             @PathVariable Long sessionId,
             HttpServletRequest httpServletRequest) {
-        User user = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AiUserContext user = currentUser(httpServletRequest);
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -217,5 +221,13 @@ public class MascotController {
         }
         String forwarded = request.getHeader("X-Real-IP");
         return forwarded == null ? "" : forwarded.trim().split(",")[0].trim();
+    }
+
+    private AiUserContext currentUser(HttpServletRequest request) {
+        Object session = request.getAttribute(Constant.USER_SESSION);
+        if (!(session instanceof org.pluchon.forum.common.security.AuthenticatedUser user)) {
+            return null;
+        }
+        return aiUserLookupService.getById(user.getId());
     }
 }

@@ -10,7 +10,6 @@ import org.pluchon.forum.common.metrics.ForumMetrics;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.ForumAiModelPrice;
 import org.pluchon.forum.entity.db.ForumAiUsageLog;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
@@ -18,6 +17,7 @@ import org.pluchon.forum.mapper.ForumAiModelPriceMapper;
 import org.pluchon.forum.mapper.ForumAiModelUsageDailyMapper;
 import org.pluchon.forum.mapper.ForumAiUsageLogMapper;
 import org.pluchon.forum.service.interfaces.points.PointsService;
+import org.pluchon.forum.service.security.AiUserContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -187,7 +187,7 @@ public class AiPointsBillingService {
     }
 
     /** 有效会员：vip_tier&gt;0 且未过期（不扣萌萌币，走日额度 + token 审计） */
-    public boolean vipExemptPoints(User user) {
+    public boolean vipExemptPoints(AiUserContext user) {
         if (user == null || user.getId() == null) {
             return false;
         }
@@ -195,7 +195,7 @@ public class AiPointsBillingService {
         return snapshot != null && snapshot.isVipActive();
     }
 
-    public void ensureBalance(User user, int pointsNeeded) {
+    public void ensureBalance(AiUserContext user, int pointsNeeded) {
         if (pointsNeeded <= 0) {
             return;
         }
@@ -247,7 +247,7 @@ public class AiPointsBillingService {
      * @return pointsCost, balanceAfter, billingMode, usageStats
      */
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> bill(User user, String featureCode, AiModelUsageDTO usage, String relatedId,
+    public Map<String, Object> bill(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId,
                                     Byte pointsSource, boolean usePointsBilling) {
         if (relatedId != null && !relatedId.isBlank()) {
             Long dupCount = forumAiUsageLogMapper.selectCount(
@@ -291,22 +291,22 @@ public class AiPointsBillingService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> bill(User user, String featureCode, AiModelUsageDTO usage, String relatedId,
+    public Map<String, Object> bill(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId,
                                     Byte pointsSource) {
         return bill(user, featureCode, usage, relatedId, pointsSource, false);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public int charge(User user, String featureCode, AiModelUsageDTO usage, String relatedId, Byte pointsSource) {
+    public int charge(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId, Byte pointsSource) {
         Map<String, Object> r = bill(user, featureCode, usage, relatedId, pointsSource);
         return (int) r.get("balanceAfter");
     }
 
-    private void recordUsageOnly(User user, String featureCode, AiModelUsageDTO u, String relatedId, int pointsCost) {
+    private void recordUsageOnly(AiUserContext user, String featureCode, AiModelUsageDTO u, String relatedId, int pointsCost) {
         persistUsageLog(user.getId(), featureCode, u, relatedId, pointsCost);
     }
 
-    private int chargePointsAndLog(User user, String featureCode, AiModelUsageDTO u, String relatedId,
+    private int chargePointsAndLog(AiUserContext user, String featureCode, AiModelUsageDTO u, String relatedId,
                                    Byte pointsSource, int cost) {
         ensureBalance(user, cost);
         String remark = featureRemark(featureCode, u.getModelCode(), cost);

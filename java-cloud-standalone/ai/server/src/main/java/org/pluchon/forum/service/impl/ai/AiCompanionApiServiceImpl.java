@@ -8,7 +8,6 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.AiHubConverter;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
@@ -20,10 +19,11 @@ import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiPriceEstimateVO;
 import org.pluchon.forum.entity.vo.ai.AiPolishResponseVO;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
+import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiWorkspaceService;
 import org.pluchon.forum.service.interfaces.file.FileService;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
@@ -44,7 +44,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     private static final String K_QWEN_PRO = "qwen_pro";
 
     @Autowired
-    private UserInternalLookupService userInternalLookupService;
+    private AiUserLookupService aiUserLookupService;
 
     @Autowired
     private AiQuotaService aiQuotaService;
@@ -84,7 +84,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             out = 0;
             img = 1;
         } else {
-            User user = requireUser(userId);
+            AiUserContext user = requireUser(userId);
             model = aiQuotaService.hasAdvancedQwenAccess(user)
                     ? Constant.AI_MODEL_QWEN_DEEP : "qwen3.6-flash";
         }
@@ -98,7 +98,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiPolishResponseVO polish(Long userId, AiPolishRequest req) {
-        User user = requireUser(userId);
+        AiUserContext user = requireUser(userId);
         if (req == null || !StringUtils.hasText(req.getContent())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -171,7 +171,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
     @Override
     public AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest req) {
-        User user = requireUser(userId);
+        AiUserContext user = requireUser(userId);
         if (req == null || !StringUtils.hasText(req.getArticleText())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -196,7 +196,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
     @Override
     public AiImageResponseVO image(Long userId, AiImageRequest req) {
-        User user = requireUser(userId);
+        AiUserContext user = requireUser(userId);
         if (req == null || !StringUtils.hasText(req.getPrompt()) || !StringUtils.hasText(req.getQuality())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -294,18 +294,18 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
-    private User requireUser(Long userId) {
+    private AiUserContext requireUser(Long userId) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
         }
-        User user = userInternalLookupService.getById(userId);
+        AiUserContext user = aiUserLookupService.getById(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         return user;
     }
 
-    private void releasePolishReservation(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
+    private void releasePolishReservation(AiUserContext user, boolean reservedQwenFlash, boolean reservedAdvanced) {
         if (reservedQwenFlash) {
             aiQuotaService.releaseQwenFlash(user);
         }
@@ -314,7 +314,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
-    private void releaseImageReservation(User user, boolean reservedNormal, boolean reservedPremium) {
+    private void releaseImageReservation(AiUserContext user, boolean reservedNormal, boolean reservedPremium) {
         if (reservedNormal) {
             aiQuotaService.releaseImageNormal(user);
         }

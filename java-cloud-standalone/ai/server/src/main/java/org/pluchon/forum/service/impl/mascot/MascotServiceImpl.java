@@ -16,7 +16,6 @@ import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendation;
 import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendationItem;
 import org.pluchon.forum.entity.db.ForumCompanionMessage;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.db.UserMascotPreference;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.entity.dto.ai.AiImageRequest;
@@ -41,7 +40,6 @@ import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
 import org.pluchon.forum.mapper.ForumCompanionMessageMapper;
 import org.pluchon.forum.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.pluchon.forum.mapper.ForumMascotRelatedRecommendationMapper;
-import org.pluchon.forum.service.impl.remote.UserInternalLookupService;
 import org.pluchon.forum.mapper.UserMascotPreferenceMapper;
 import org.pluchon.forum.mapper.AiUsageDailyMapper;
 import org.pluchon.forum.api.content.ArticleInternalVO;
@@ -59,6 +57,8 @@ import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
+import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Value;
@@ -160,7 +160,7 @@ public class MascotServiceImpl implements MascotService {
     private ArticleInternalFeignClient articleInternalFeignClient;
 
     @Resource
-    private UserInternalLookupService userInternalLookupService;
+    private AiUserLookupService aiUserLookupService;
 
     @Resource
     private UserMascotPreferenceMapper userMascotPreferenceMapper;
@@ -207,8 +207,8 @@ public class MascotServiceImpl implements MascotService {
         if (model.getShelfStatus() == null || model.getShelfStatus() != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅可选择已上架的看板娘"));
         }
-        User exists = userInternalLookupService.getById(userId);
-        if (exists == null || (exists.getDeleteState() != null && exists.getDeleteState() == 1)) {
+        AiUserContext exists = aiUserLookupService.getById(userId);
+        if (exists == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         UserMascotPreference pref = userMascotPreferenceMapper.selectByUserId(userId);
@@ -262,7 +262,7 @@ public class MascotServiceImpl implements MascotService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MascotRelatedRecommendationVO recommendRelatedArticles(
-            User user, MascotRelatedRecommendationRequest request) {
+            AiUserContext user, MascotRelatedRecommendationRequest request) {
         Long sessionId = request.getSessionId();
         requireOwnedSession(user.getId(), sessionId);
         requireOwnedAssistantMessage(sessionId, request.getSourceMessageId());
@@ -311,7 +311,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     @Override
-    public List<MascotRelatedRecommendationVO> listRelatedRecommendations(User user, Long sessionId) {
+    public List<MascotRelatedRecommendationVO> listRelatedRecommendations(AiUserContext user, Long sessionId) {
         requireOwnedSession(user.getId(), sessionId);
         List<ForumMascotRelatedRecommendation> recommendations = mascotRelatedRecommendationMapper.selectList(
                 Wrappers.lambdaQuery(ForumMascotRelatedRecommendation.class)
@@ -362,7 +362,7 @@ public class MascotServiceImpl implements MascotService {
         for (Article article : articlesById.values()) {
             authorIds.add(article.getUserId());
         }
-        Map<Long, User> usersById = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
+        Map<Long, AiUserContext> usersById = authorIds.isEmpty() ? Map.of() : aiUserLookupService.loadActiveUsers(authorIds);
 
         List<MascotRelatedRecommendationVO> result = new ArrayList<>();
         Set<Long> loadedSourceMessageIds = new HashSet<>();
@@ -384,8 +384,8 @@ public class MascotServiceImpl implements MascotService {
                 }
                 MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
                 item.setArticle(ArticleBriefConverter.toBriefVO(article));
-                User author = usersById.get(article.getUserId());
-                item.setAuthor(author == null ? null : new UserBriefVO(author));
+                AiUserContext author = usersById.get(article.getUserId());
+                item.setAuthor(toUserBriefVO(author));
                 item.setSelectionReason(savedItem.getSelectionReason());
                 items.add(item);
             }
@@ -498,14 +498,14 @@ public class MascotServiceImpl implements MascotService {
         for (RelatedArticleSelection selection : selections) {
             userIds.add(selection.candidate().getArticle().getUserId());
         }
-        Map<Long, User> usersById = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
+        Map<Long, AiUserContext> usersById = userIds.isEmpty() ? Map.of() : aiUserLookupService.loadActiveUsers(userIds);
         List<MascotRelatedRecommendationItemVO> items = new ArrayList<>();
         for (RelatedArticleSelection selection : selections) {
             Article article = selection.candidate().getArticle();
             MascotRelatedRecommendationItemVO item = new MascotRelatedRecommendationItemVO();
             item.setArticle(ArticleBriefConverter.toBriefVO(article));
-            User author = usersById.get(article.getUserId());
-            item.setAuthor(author == null ? null : new UserBriefVO(author));
+            AiUserContext author = usersById.get(article.getUserId());
+            item.setAuthor(toUserBriefVO(author));
             item.setSelectionReason(selection.reason().name());
             items.add(item);
         }
@@ -524,13 +524,23 @@ public class MascotServiceImpl implements MascotService {
             MascotRelatedSelectionReason reason) {
     }
 
-    private boolean isVip(User user) {
-        Byte tier = user.getVipTier();
-        if (tier != null && tier > 0) {
-            Date exp = user.getVipExpireAt();
-            if (exp == null || exp.after(new Date())) {
-                return true;
-            }
+    private UserBriefVO toUserBriefVO(AiUserContext user) {
+        if (user == null) {
+            return null;
+        }
+        UserBriefVO vo = new UserBriefVO();
+        vo.setId(user.getId());
+        vo.setNickname(user.getNickname());
+        vo.setAvatarUrl(user.getAvatarUrl());
+        vo.setIsAdmin(user.getIsAdmin());
+        vo.setVipTier(user.getVipTier());
+        vo.setVipExpireAt(user.getVipExpireAt());
+        return vo;
+    }
+
+    private boolean isVip(AiUserContext user) {
+        if (user.isVipActive()) {
+            return true;
         }
         if (treatAdminAsVip) {
             return user.getIsAdmin() != null && user.getIsAdmin() == 1;
@@ -571,7 +581,7 @@ public class MascotServiceImpl implements MascotService {
         return "qwen-deep".equals(route) ? "qwen-deep" : "qwen-flash";
     }
 
-    private int effectiveVipTier(User user) {
+    private int effectiveVipTier(AiUserContext user) {
         Byte tier = user.getVipTier();
         int t = tier != null ? tier.intValue() : 0;
         if (treatAdminAsVip && user.getIsAdmin() != null && user.getIsAdmin() == 1) {
@@ -583,7 +593,7 @@ public class MascotServiceImpl implements MascotService {
         return Math.max(t, Constant.VIP_TIER_PRO.intValue());
     }
 
-    private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, User user) {
+    private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, AiUserContext user) {
         if ("help".equals(skill) || !vip) {
             return "qwen-flash";
         }
@@ -621,7 +631,7 @@ public class MascotServiceImpl implements MascotService {
         };
     }
 
-    private void reserveAiQuota(User user, String route, boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
+    private void reserveAiQuota(AiUserContext user, String route, boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
         if (route.startsWith("qwen-deep")) {
             aiQuotaService.consumeAdvancedLlm(user);
             reservedAdvanced[0] = true;
@@ -631,7 +641,7 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
-    private void releaseAiQuota(User user, boolean reservedQwenFlash, boolean reservedAdvanced) {
+    private void releaseAiQuota(AiUserContext user, boolean reservedQwenFlash, boolean reservedAdvanced) {
         if (reservedQwenFlash) {
             aiQuotaService.releaseQwenFlash(user);
         }
@@ -700,7 +710,7 @@ public class MascotServiceImpl implements MascotService {
         return aiPointsBillingService.normalizeUsage(dto, fallbackModel);
     }
 
-    private Map<String, Object> billMascotUsage(AiCallBeginResult begin, User user, String skill,
+    private Map<String, Object> billMascotUsage(AiCallBeginResult begin, AiUserContext user, String skill,
                                                 AiModelUsageDTO usage, String relatedId,
                                                 boolean usePointsBilling, long latencyMs) {
         return aiCallRecordService.settleSuccess(
@@ -733,7 +743,7 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
-    private void reserveUsageQuota(User user, String skill, String route,
+    private void reserveUsageQuota(AiUserContext user, String skill, String route,
                                  boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
         if ("writing".equals(skill) || "chat".equals(skill) || "help".equals(skill)) {
             reserveAiQuota(user, route, reservedQwenFlash, reservedAdvanced);
@@ -741,7 +751,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private AiImageResponseVO delegateMascotImage(
-            User user,
+            AiUserContext user,
             MascotChatRequest request,
             String imagePrompt,
             String sessionKey,
@@ -763,7 +773,7 @@ public class MascotServiceImpl implements MascotService {
         return image;
     }
 
-    private String resolveImageQuality(MascotChatRequest request, User user) {
+    private String resolveImageQuality(MascotChatRequest request, AiUserContext user) {
         if ("premium".equalsIgnoreCase(request.getImageQuality()) && isVip(user)) {
             return "premium";
         }
@@ -797,7 +807,7 @@ public class MascotServiceImpl implements MascotService {
 
     @Override
     @SuppressWarnings("rawtypes")
-    public MascotChatResponseVO chat(User user, MascotChatRequest request, String clientIp) {
+    public MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request, String clientIp) {
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
 
@@ -1014,13 +1024,13 @@ public class MascotServiceImpl implements MascotService {
     }
 
     @Override
-    public CompanionContextWindowVO getContextWindow(User user, Long sessionId) {
+    public CompanionContextWindowVO getContextWindow(AiUserContext user, Long sessionId) {
         return companionMemoryService.getContextWindow(user.getId(), sessionId);
     }
 
     @Override
     @SuppressWarnings("rawtypes")
-    public CompanionContextWindowVO compressContext(User user, Long sessionId) {
+    public CompanionContextWindowVO compressContext(AiUserContext user, Long sessionId) {
         List<MascotHistoryTurn> history = companionMemoryService.loadCompressibleHistory(user.getId(), sessionId);
         if (history.isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "没有可压缩的会话内容"));
@@ -1112,7 +1122,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     @Override
-    public void streamChat(User user, MascotChatRequest request, String clientIp, SseEmitter emitter) {
+    public void streamChat(AiUserContext user, MascotChatRequest request, String clientIp, SseEmitter emitter) {
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
         boolean vip = isVip(user);

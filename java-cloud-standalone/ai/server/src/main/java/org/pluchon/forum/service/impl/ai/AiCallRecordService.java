@@ -6,11 +6,11 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.AiCallState;
 import org.pluchon.forum.common.metrics.ForumMetrics;
 import org.pluchon.forum.entity.db.ForumAiCallRecord;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.mapper.ForumAiCallRecordMapper;
 import org.pluchon.forum.service.interfaces.points.PointsService;
+import org.pluchon.forum.service.security.AiUserContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -100,7 +100,7 @@ public class AiCallRecordService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> settleSuccess(AiCallBeginResult begin, User user, String featureCode,
+    public Map<String, Object> settleSuccess(AiCallBeginResult begin, AiUserContext user, String featureCode,
                                              AiModelUsageDTO usage, String relatedId, Byte pointsSource,
                                              boolean usePointsBilling, long latencyMs) {
         if (begin == null) {
@@ -142,7 +142,7 @@ public class AiCallRecordService {
      * 流式停止或断网但有部分输出：按实际输出 token 计费；无输出则不扣费。
      */
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> settlePartialOutput(AiCallBeginResult begin, User user, String featureCode,
+    public Map<String, Object> settlePartialOutput(AiCallBeginResult begin, AiUserContext user, String featureCode,
                                                    String modelCode, int outputCharCount, String relatedId,
                                                    Byte pointsSource, boolean usePointsBilling) {
         if (begin == null) {
@@ -180,7 +180,7 @@ public class AiCallRecordService {
                         usage.getOutputTokens() != null ? usage.getOutputTokens() : 0));
     }
 
-    private Map<String, Object> duplicateBillingResult(User user, int pointsCharged) {
+    private Map<String, Object> duplicateBillingResult(AiUserContext user, int pointsCharged) {
         int balanceAfter = pointsService.getWallet(user.getId()).getBalance();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("pointsCost", pointsCharged);

@@ -1,6 +1,5 @@
 package org.pluchon.forum.service.interfaces.mascot;
 
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.mascot.MascotChatRequest;
 import org.pluchon.forum.entity.dto.mascot.MascotRelatedRecommendationRequest;
 import org.pluchon.forum.entity.vo.mascot.MascotChatResponseVO;
@@ -8,6 +7,7 @@ import org.pluchon.forum.entity.vo.mascot.MascotModelPublicVO;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.mascot.MascotRelatedRecommendationVO;
 import org.pluchon.forum.entity.vo.mascot.CompanionContextWindowVO;
+import org.pluchon.forum.service.security.AiUserContext;
 
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -18,21 +18,21 @@ public interface MascotService {
     /**
      * 转发 Python 看板娘接口；普通用户受每日次数限制.
      */
-    MascotChatResponseVO chat(User user, MascotChatRequest request, String clientIp);
+    MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request, String clientIp);
 
     /** 流式对话（SSE），积分在流结束后结算 */
-    void streamChat(User user, MascotChatRequest request, String clientIp, SseEmitter emitter);
+    void streamChat(AiUserContext user, MascotChatRequest request, String clientIp, SseEmitter emitter);
 
-    CompanionContextWindowVO getContextWindow(User user, Long sessionId);
+    CompanionContextWindowVO getContextWindow(AiUserContext user, Long sessionId);
 
-    CompanionContextWindowVO compressContext(User user, Long sessionId);
+    CompanionContextWindowVO compressContext(AiUserContext user, Long sessionId);
 
     /** 用户确认后执行相关帖子检索，并保存本次展示结果。 */
     MascotRelatedRecommendationVO recommendRelatedArticles(
-            User user, MascotRelatedRecommendationRequest request);
+            AiUserContext user, MascotRelatedRecommendationRequest request);
 
     /** 读取当前用户在指定会话中已保存的相关帖子检索结果。 */
-    List<MascotRelatedRecommendationVO> listRelatedRecommendations(User user, Long sessionId);
+    List<MascotRelatedRecommendationVO> listRelatedRecommendations(AiUserContext user, Long sessionId);
 
     List<MascotModelPublicVO> listPublicModels();
 
