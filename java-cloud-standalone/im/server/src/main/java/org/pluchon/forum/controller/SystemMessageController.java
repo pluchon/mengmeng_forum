@@ -8,7 +8,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.SystemMessage;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.service.interfaces.message.SystemMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +38,7 @@ public class SystemMessageController {
     public Result<PageResult<SystemMessage>> list(@RequestParam(required = false) Integer pageNum,
                                                   @RequestParam(required = false) Integer pageSize,
                                                   HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -55,7 +55,7 @@ public class SystemMessageController {
             description = "返回当前登录用户未读条数; 未登录返回 0.")
     @GetMapping("/unreadCount")
     public Result<Long> unreadCount(HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.success(0L);
         }
@@ -66,7 +66,7 @@ public class SystemMessageController {
             description = "仅消息接收方本人可调用; 已读再次调用幂等(直接返回成功).")
     @PutMapping("/markOneRead")
     public Result<String> markOneRead(@RequestParam Long messageId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -78,7 +78,7 @@ public class SystemMessageController {
             description = "把当前登录用户所有未读系统消息批量置为已读.")
     @PutMapping("/markAllRead")
     public Result<Integer> markAllRead(HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
@@ -89,7 +89,7 @@ public class SystemMessageController {
             description = "delete_state 置 1; 仅接收方本人可调用.")
     @DeleteMapping("/delete")
     public Result<String> delete(@RequestParam Long messageId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }

@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.recommendation.NotInterestedArticleRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.recommendation.RecommendArticleVO;
@@ -37,7 +37,7 @@ public class RecommendationController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(recommendationService.getFeed(loginUserId, pageNum, pageSize));
     }
@@ -47,7 +47,7 @@ public class RecommendationController {
     @PostMapping("/feedback/not-interested")
     public Result<String> markNotInterested(@Valid @RequestBody NotInterestedArticleRequest request,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         recommendationService.markNotInterested(loginUser.getId(), request);
         return Result.success("已减少这篇帖子的推荐");
     }
@@ -59,7 +59,7 @@ public class RecommendationController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "12") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(recommendationService.getNotInterestedArticles(loginUser.getId(), pageNum, pageSize));
     }
 
@@ -67,7 +67,7 @@ public class RecommendationController {
     @Operation(summary = "恢复推荐帖子兴趣")
     @DeleteMapping("/feedback/not-interested/{articleId}")
     public Result<String> restoreInterested(@PathVariable Long articleId, HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         recommendationService.restoreInterested(loginUser.getId(), articleId);
         return Result.success("已恢复兴趣");
     }

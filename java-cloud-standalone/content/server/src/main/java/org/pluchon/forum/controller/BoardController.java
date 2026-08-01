@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.board.BoardPublicVO;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -60,7 +60,7 @@ public class BoardController {
     public Result<PageResult<ArticleListResponse>> selectBoardListByBoardIdWithPage(Long boardId,
             @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser != null ? loginUser.getId() : null;
         return Result.success(boardService.selectBoardListWithPage(boardId, pageNum, pageSize, loginUserId));
     }

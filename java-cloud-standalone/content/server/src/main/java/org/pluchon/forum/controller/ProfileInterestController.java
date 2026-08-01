@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.recommendation.SaveInterestPreferenceRequest;
 import org.pluchon.forum.entity.vo.recommendation.UserInterestPreferenceVO;
 import org.pluchon.forum.service.interfaces.recommendation.UserInterestPreferenceService;
@@ -52,7 +52,7 @@ public class ProfileInterestController {
     }
 
     private Long currentUserId(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return loginUser == null ? null : loginUser.getId();
     }
 }

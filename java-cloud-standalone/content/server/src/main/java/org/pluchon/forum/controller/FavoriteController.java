@@ -7,7 +7,7 @@ import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.favorite.CreateFolderRequest;
 import org.pluchon.forum.entity.dto.favorite.MoveFavoriteRequest;
 import org.pluchon.forum.entity.dto.favorite.SaveFavoriteRequest;
@@ -36,7 +36,7 @@ public class FavoriteController {
     @PostMapping("/folder/create")
     public Result<Long> createFolder(@Valid @RequestBody CreateFolderRequest req,
                                      HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -47,7 +47,7 @@ public class FavoriteController {
     @PutMapping("/folder/update")
     public Result<String> updateFolder(@Valid @RequestBody UpdateFolderRequest req,
                                        HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -59,7 +59,7 @@ public class FavoriteController {
     @DeleteMapping("/folder/{folderId}")
     public Result<String> deleteFolder(@PathVariable("folderId") Long folderId,
                                        HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -73,7 +73,7 @@ public class FavoriteController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "5") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -86,7 +86,7 @@ public class FavoriteController {
                                               @RequestParam(defaultValue = "1") Integer pageNum,
                                               @RequestParam(defaultValue = "5") Integer pageSize,
                                               HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? -1L : loginUser.getId();
         return Result.success(folderService.queryUserPublicFolders(userId, loginUserId, pageNum, pageSize));
     }
@@ -99,7 +99,7 @@ public class FavoriteController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? -1L : loginUser.getId();
         return Result.success(favoriteService.queryFolderArticles(folderId, loginUserId, pageNum, pageSize));
     }
@@ -112,7 +112,7 @@ public class FavoriteController {
     @PostMapping("/article/save")
     public Result<Long> saveFavorite(@Valid @RequestBody SaveFavoriteRequest req,
                                      HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -123,7 +123,7 @@ public class FavoriteController {
     @DeleteMapping("/article/cancel")
     public Result<String> cancelFavorite(@RequestParam Long articleId,
                                          HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
@@ -135,7 +135,7 @@ public class FavoriteController {
     @PutMapping("/article/move")
     public Result<String> moveFavorite(@Valid @RequestBody MoveFavoriteRequest req,
                                        HttpServletRequest httpServletRequest) {
-        User loginUser = (User) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
