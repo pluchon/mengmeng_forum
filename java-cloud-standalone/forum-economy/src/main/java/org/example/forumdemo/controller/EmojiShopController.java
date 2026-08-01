@@ -3,6 +3,7 @@ package org.example.forumdemo.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.example.forum.api.economy.ShopEntitlementInternalApi;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.result.Result;
 import org.example.forumdemo.entity.db.User;
@@ -15,6 +16,7 @@ import org.example.forumdemo.service.interfaces.shop.EmojiShopService;
 import org.example.forumdemo.service.interfaces.shop.UserEmojiService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +29,7 @@ import java.util.List;
 @Tag(name = "表情包商城", description = "商品上下架 / 购买 / 我的已购")
 @RestController
 @RequestMapping("/shop")
-public class EmojiShopController {
+public class EmojiShopController implements ShopEntitlementInternalApi {
 
     @Autowired
     private EmojiShopService emojiShopService;
@@ -92,5 +94,14 @@ public class EmojiShopController {
     public Result<List<UserEmojiPackVO>> queryMyPacks(HttpServletRequest request) {
         User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
         return Result.success(userEmojiService.queryMyPacks(loginUser.getId()));
+    }
+
+    /** 内部：content 发帖/回复媒体校验商店表情 entitlement */
+    @Override
+    public Boolean ownsShopEmojiUrl(
+            @PathVariable("userId") Long userId,
+            @RequestParam("shopId") Long shopId,
+            @RequestParam("url") String url) {
+        return emojiShopService.ownsShopEmojiUrl(userId, shopId, url);
     }
 }

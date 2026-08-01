@@ -5,8 +5,9 @@ spring:
       - "optional:file:../../nginx/.env[.properties]"
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
+    # 过渡默认仍指向共享 forum_db；拆库后各服务用 DB_URL/DB_USERNAME/DB_PASSWORD 覆盖
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456789}
   data:
     redis:

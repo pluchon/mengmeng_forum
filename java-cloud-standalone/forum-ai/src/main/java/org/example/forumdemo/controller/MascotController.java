@@ -21,7 +21,6 @@ import org.example.forumdemo.entity.vo.mascot.MascotQuotaHintVO;
 import org.example.forumdemo.entity.vo.mascot.MascotRelatedRecommendationVO;
 import org.example.forumdemo.service.interfaces.mascot.CompanionMemoryService;
 import org.example.forumdemo.service.interfaces.mascot.MascotService;
-import org.example.forumdemo.service.interfaces.vip.VipCenterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -53,9 +52,6 @@ public class MascotController {
     private CompanionMemoryService companionMemoryService;
 
     @Autowired
-    private VipCenterService vipCenterService;
-
-    @Autowired
     @Qualifier("sseExecutor")
     private Executor sseExecutor;
 
@@ -68,7 +64,7 @@ public class MascotController {
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
-        return Result.success(vipCenterService.quotaHintForLlmRoute(user.getId(), llmProvider));
+        return Result.success(mascotService.quotaHintForLlmRoute(user.getId(), llmProvider));
     }
 
     @Operation(summary = "上架中的看板娘模型列表", description = "无需登录；前端用于 Live2D 选择与展示")
