@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.lottery.LotteryDrawDTO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.lottery.LotteryActivityInfoVO;
@@ -42,7 +42,7 @@ public class LotteryController {
     public Result<LotteryActivityInfoVO> info(
             @RequestParam(required = false) Long activityId,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(lotteryService.getActivityInfo(loginUser.getId(), activityId));
     }
 
@@ -53,14 +53,14 @@ public class LotteryController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "12") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(lotteryService.queryDrawRecords(loginUser.getId(), activityId, pageNum, pageSize));
     }
 
     @Operation(summary = "抽奖", description = "times=1 单抽 times=10 十连; 先扣积分再开奖")
     @PostMapping("/draw")
     public Result<LotteryDrawResultVO> draw(@RequestBody LotteryDrawDTO dto, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(lotteryService.draw(loginUser.getId(), dto));
     }
 

@@ -7,6 +7,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.pluchon.forum.common.utils.PasswordUtils;
 import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.common.utils.RegexUtil;

@@ -7,7 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.user.AuthLoginResultVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
 import org.pluchon.forum.service.interfaces.user.SMSCodeService;
@@ -46,7 +46,7 @@ public class SMSController {
     @Operation(summary = "绑定/修改手机号", description = "code 为空时向新号码发送验证码；code 非空时校验并绑定")
     @PostMapping("/verifyAndBind")
     public Result<String> verifyAndBind(@RequestParam String phoneNumber, @RequestParam(required = false) String code, HttpServletRequest request) {
-        User sessionUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser sessionUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (sessionUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }

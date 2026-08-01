@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.shop.CreateEmojiShopRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.shop.EmojiShopDetailVO;
@@ -41,7 +41,7 @@ public class EmojiShopController {
                           "图片必须先调 /file/uploadEmojiShopImage 拿到本站 URL")
     @PostMapping("/createShop")
     public Result<Long> createShop(@RequestBody CreateEmojiShopRequest req, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(emojiShopService.createShop(loginUser.getId(), req));
     }
 
@@ -49,7 +49,7 @@ public class EmojiShopController {
     @PutMapping("/updateStatus")
     public Result<Void> updateStatus(@RequestParam Long shopId, @RequestParam Byte status,
                                      HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         emojiShopService.updateStatus(loginUser.getId(), shopId, status);
         return Result.success();
     }
@@ -63,7 +63,7 @@ public class EmojiShopController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "12") Integer pageSize,
             HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(emojiShopService.queryShopList(loginUserId, sort, keyword, pageNum, pageSize));
     }
@@ -74,7 +74,7 @@ public class EmojiShopController {
                                                      @RequestParam(defaultValue = "1") Integer itemPageNum,
                                                      @RequestParam(defaultValue = "9") Integer itemPageSize,
                                                      HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(emojiShopService.queryShopDetail(shopId, loginUserId, itemPageNum, itemPageSize));
     }
@@ -83,7 +83,7 @@ public class EmojiShopController {
             description = "余额不足返回 1140; 重复购买返回 1139; 已下架返回 1138. 返回购买后余额, 前端可直接刷新顶部")
     @PostMapping("/purchase")
     public Result<Integer> purchase(@RequestParam Long shopId, HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(userEmojiService.purchase(loginUser.getId(), shopId));
     }
 
@@ -91,7 +91,7 @@ public class EmojiShopController {
             description = "聊天面板「我的已购」选项卡使用, 每个包带完整 imageUrls; 不分页, 已购数量不会很大")
     @GetMapping("/myPacks")
     public Result<List<UserEmojiPackVO>> queryMyPacks(HttpServletRequest request) {
-        User loginUser = (User) request.getAttribute(Constant.USER_SESSION);
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(userEmojiService.queryMyPacks(loginUser.getId()));
     }
 }

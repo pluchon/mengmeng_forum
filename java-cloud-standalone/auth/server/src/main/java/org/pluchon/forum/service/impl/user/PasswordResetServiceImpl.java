@@ -15,7 +15,7 @@ import org.pluchon.forum.mapper.UserMapper;
 import org.pluchon.forum.service.interfaces.user.MailCodeService;
 import org.pluchon.forum.service.interfaces.user.PasswordResetService;
 import org.pluchon.forum.service.interfaces.user.SMSCodeService;
-import org.pluchon.forum.service.impl.user.JwtTokenVersionService;
+import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;

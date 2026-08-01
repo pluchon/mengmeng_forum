@@ -4,7 +4,7 @@ import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.utils.JWTUtils;
-import org.pluchon.forum.service.impl.user.JwtTokenVersionService;
+import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
