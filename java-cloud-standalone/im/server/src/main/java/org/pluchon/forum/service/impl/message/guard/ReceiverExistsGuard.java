@@ -1,15 +1,15 @@
 package org.pluchon.forum.service.impl.message.guard;
 
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ReceiverExistsGuard implements MessageSendGuard {
 
-    private final UserService userService;
+    private final ImUserLookupService userLookupService;
 
-    public ReceiverExistsGuard(UserService userService) {
-        this.userService = userService;
+    public ReceiverExistsGuard(ImUserLookupService userLookupService) {
+        this.userLookupService = userLookupService;
     }
 
     @Override
@@ -24,7 +24,7 @@ public class ReceiverExistsGuard implements MessageSendGuard {
 
     @Override
     public MessageSendGuardResult check(MessageSendContext context) {
-        userService.queryUserByUserId(context.getReceiverUserId());
+        userLookupService.queryUserByUserId(context.getReceiverUserId());
         return MessageSendGuardResult.pass();
     }
 }

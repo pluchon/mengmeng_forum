@@ -5,6 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.economy.VipTierSnapshotVO;
+import org.pluchon.forum.cloud.feign.ImVipInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.enums.GroupChatJoinRequestReadState;
@@ -24,14 +27,12 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.ForumDateTimes;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
-import org.pluchon.forum.common.utils.UserMuteGuard;
 import org.pluchon.forum.converter.GroupChatConverter;
 import org.pluchon.forum.entity.db.GroupChat;
 import org.pluchon.forum.entity.db.GroupChatJoinRequest;
 import org.pluchon.forum.entity.db.GroupChatMember;
 import org.pluchon.forum.entity.db.GroupChatMessage;
 import org.pluchon.forum.entity.db.GroupChatReport;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.groupchat.CreateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupMuteMemberRequest;
@@ -53,9 +54,10 @@ import org.pluchon.forum.mapper.GroupChatMemberMapper;
 import org.pluchon.forum.mapper.GroupChatMessageMapper;
 import org.pluchon.forum.mapper.GroupChatReportMapper;
 import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
+import org.pluchon.forum.service.impl.remote.ImUserMuteGuard;
 import org.pluchon.forum.service.interfaces.groupchat.GroupChatService;
 import org.pluchon.forum.service.interfaces.message.MessageService;
-import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,9 +101,13 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Autowired
     private GroupChatReportMapper groupChatReportMapper;
 
-    // 用户服务
+    // 认证用户查询服务
     @Autowired
-    private UserService userService;
+    private ImUserLookupService userLookupService;
+
+    // 会员权益内部客户端
+    @Autowired
+    private ImVipInternalFeignClient imVipInternalFeignClient;
 
     // 私信服务
     @Autowired
@@ -122,7 +128,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public GroupChatDetailVO createGroup(CreateGroupChatRequest request, Long loginUserId) {
-        User owner = userService.queryUserByUserId(loginUserId);
+        UserInternalVO owner = userLookupService.queryUserByUserId(loginUserId);
         assertCertifiedCreator(owner);
         Byte type = normalizeGroupType(request.getGroupType());
         String name = normalizeName(request.getName());
@@ -189,7 +195,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     public PageResult<GroupChatSessionVO> queryMySessions(Long loginUserId, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         List<GroupChatMember> members = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
@@ -207,7 +213,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     public PageResult<GroupChatDetailVO> queryPublicGroups(Long loginUserId, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GroupChat> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -228,8 +234,8 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     public PageResult<GroupChatDetailVO> queryPublicGroupsByOwner(Long loginUserId, Long ownerUserId, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
-        userService.queryUserByUserId(ownerUserId);
+        userLookupService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(ownerUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GroupChat> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -251,7 +257,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     public PageResult<GroupChatDetailVO> queryMyOwnedGroups(Long loginUserId, String keyword, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GroupChat> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -278,7 +284,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public GroupChatJoinRequestVO joinPublicGroup(Long groupId, Long loginUserId) {
-        User user = userService.queryUserByUserId(loginUserId);
+        UserInternalVO user = userLookupService.queryUserByUserId(loginUserId);
         GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
         if (!GroupChatType.PUBLIC.getCode().equals(group.getGroupType())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "私有群只能由群主邀请加入"));
@@ -298,7 +304,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
         assertOwner(group, loginUserId);
         assertJoinable(group);
-        User invitee = userService.queryUserByUserId(request.getInviteeUserId());
+        UserInternalVO invitee = userLookupService.queryUserByUserId(request.getInviteeUserId());
         if (Objects.equals(invitee.getId(), loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能邀请自己"));
         }
@@ -324,7 +330,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     @Override
     public PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GroupChatJoinRequest> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -343,7 +349,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void markReceivedJoinRequestsRead(Long loginUserId) {
-        userService.queryUserByUserId(loginUserId);
+        userLookupService.queryUserByUserId(loginUserId);
         groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
                 .eq(GroupChatJoinRequest::getOwnerUserId, loginUserId)
                 .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
@@ -366,7 +372,7 @@ public class GroupChatServiceImpl implements GroupChatService {
             return toJoinRequestVO(queryJoinRequestEntity(requestId));
         }
         assertJoinable(group);
-        User target = userService.queryUserByUserId(request.getTargetUserId());
+        UserInternalVO target = userLookupService.queryUserByUserId(request.getTargetUserId());
         upsertActiveMember(group, target, GroupChatMemberRole.MEMBER.getCode());
         updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.APPROVED.getCode(), loginUserId);
         return toJoinRequestVO(queryJoinRequestEntity(requestId));
@@ -399,7 +405,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         assertPendingJoinRequest(request);
         GroupChat group = refreshGroupLimitStatus(queryGroup(request.getGroupId()));
         assertJoinable(group);
-        User target = userService.queryUserByUserId(loginUserId);
+        UserInternalVO target = userLookupService.queryUserByUserId(loginUserId);
         upsertActiveMember(group, target, GroupChatMemberRole.MEMBER.getCode());
         updateJoinRequestStatus(request.getId(), GroupChatJoinRequestStatus.APPROVED.getCode(), loginUserId);
         return toJoinRequestVO(queryJoinRequestEntity(requestId));
@@ -504,8 +510,8 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public GroupChatMessageVO sendMessage(SendGroupChatMessageRequest request, Long loginUserId) {
-        User sender = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(sender);
+        UserInternalVO sender = userLookupService.queryUserByUserId(loginUserId);
+        ImUserMuteGuard.assertCanPost(sender);
         GroupChat group = refreshGroupLimitStatus(queryGroup(request.getGroupId()));
         assertChatAvailable(group);
         GroupChatMember member = assertActiveMember(group.getId(), loginUserId);
@@ -544,7 +550,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public GroupChatMessageVO appendVoiceCallSummary(Long groupId, Long senderUserId, String durationText) {
-        User sender = userService.queryUserByUserId(senderUserId);
+        UserInternalVO sender = userLookupService.queryUserByUserId(senderUserId);
         GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
         assertChatAvailable(group);
         assertActiveMember(group.getId(), senderUserId);
@@ -644,7 +650,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .stream()
                 .sorted(Comparator.comparingInt(member -> roleSortWeight(member.getRole())))
                 .map(member -> {
-                    GroupChatMemberVO vo = GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(member.getUserId()));
+                    GroupChatMemberVO vo = GroupChatConverter.toMemberVO(member, userLookupService.queryUserByUserId(member.getUserId()));
                     if (vo != null && !Objects.equals(member.getUserId(), loginUserId)) {
                         vo.setRemarkName(null);
                         vo.setNotifyMode(null);
@@ -673,7 +679,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         member.setRemarkName(remarkName);
         member.setNotifyMode(notifyMode);
         member.setUpdateTime(ForumDateTimes.now());
-        return GroupChatConverter.toMemberVO(member, userService.queryUserByUserId(loginUserId));
+        return GroupChatConverter.toMemberVO(member, userLookupService.queryUserByUserId(loginUserId));
     }
 
     private GroupChat queryGroup(Long groupId) {
@@ -738,13 +744,13 @@ public class GroupChatServiceImpl implements GroupChatService {
         return 2;
     }
 
-    private void assertCertifiedCreator(User user) {
+    private void assertCertifiedCreator(UserInternalVO user) {
         if (user == null || !Constant.CREATOR_STATE_CERTIFIED.equals(user.getCreatorState())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "只有认证创作者可以创建群聊"));
         }
     }
 
-    private void assertCreateQuota(User owner) {
+    private void assertCreateQuota(UserInternalVO owner) {
         Long count = groupChatMapper.selectCount(new LambdaQueryWrapper<GroupChat>()
                 .eq(GroupChat::getOwnerUserId, owner.getId())
                 .in(GroupChat::getStatus, List.of(
@@ -788,7 +794,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                 || GroupChatStatus.BANNED.getCode().equals(group.getStatus())) {
             return group;
         }
-        User owner = userService.queryUserByUserId(group.getOwnerUserId());
+        UserInternalVO owner = userLookupService.queryUserByUserId(group.getOwnerUserId());
         int limit = memberLimitFor(owner);
         int count = group.getMemberCount() == null ? 0 : group.getMemberCount();
         Byte status = GroupChatStatus.NORMAL.getCode();
@@ -897,8 +903,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         GroupChatJoinRequestVO vo = new GroupChatJoinRequestVO();
         vo.setId(request.getId());
         vo.setGroup(refreshAndConvert(queryGroup(request.getGroupId()), request.getTargetUserId()));
-        vo.setTargetUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userService.queryUserByUserId(request.getTargetUserId())));
-        vo.setInitiatorUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userService.queryUserByUserId(request.getInitiatorUserId())));
+        vo.setTargetUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userLookupService.queryUserByUserId(request.getTargetUserId())));
+        vo.setInitiatorUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userLookupService.queryUserByUserId(request.getInitiatorUserId())));
         vo.setRequestType(request.getRequestType());
         vo.setStatus(request.getStatus());
         vo.setOwnerReadState(request.getOwnerReadState());
@@ -941,7 +947,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         messageService.send(messageRequest, inviterUserId);
     }
 
-    private void upsertActiveMember(GroupChat group, User user, Byte role) {
+    private void upsertActiveMember(GroupChat group, UserInternalVO user, Byte role) {
         GroupChatMember existed = groupChatMemberMapper.selectOne(new LambdaQueryWrapper<GroupChatMember>()
                 .eq(GroupChatMember::getGroupId, group.getId())
                 .eq(GroupChatMember::getUserId, user.getId())
@@ -1141,15 +1147,15 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (content.contains("@所有人")) {
             return true;
         }
-        User user = userService.queryUserByUserId(member.getUserId());
+        UserInternalVO user = userLookupService.queryUserByUserId(member.getUserId());
         return user != null && StringUtils.hasText(user.getNickname()) && content.contains("@" + user.getNickname());
     }
 
-    private User queryUserNullable(Long userId) {
+    private UserInternalVO queryUserNullable(Long userId) {
         if (userId == null) {
             return null;
         }
-        return userService.queryUserByUserId(userId);
+        return userLookupService.queryUserByUserId(userId);
     }
 
     private Byte normalizeGroupType(Byte groupType) {
@@ -1202,7 +1208,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (message == null || message.getSenderUserId() == null) {
             return "系统";
         }
-        return displayName(userService.queryUserByUserId(message.getSenderUserId()));
+        return displayName(userLookupService.queryUserByUserId(message.getSenderUserId()));
     }
 
     private String replyContent(GroupChatMessage message) {
@@ -1292,8 +1298,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         return value.isEmpty() ? null : value;
     }
 
-    private int createLimitFor(User user) {
-        Byte tier = activeVipTier(user);
+    private int createLimitFor(UserInternalVO user) {
+        Byte tier = activeVipTier(user == null ? null : user.getId());
         if (Constant.VIP_TIER_MAX.equals(tier)) {
             return Constant.GROUP_CHAT_CREATE_LIMIT_MAX;
         }
@@ -1303,8 +1309,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         return Constant.GROUP_CHAT_CREATE_LIMIT_FREE;
     }
 
-    private int memberLimitFor(User user) {
-        Byte tier = activeVipTier(user);
+    private int memberLimitFor(UserInternalVO user) {
+        Byte tier = activeVipTier(user == null ? null : user.getId());
         if (Constant.VIP_TIER_MAX.equals(tier)) {
             return Constant.GROUP_CHAT_MEMBER_LIMIT_MAX;
         }
@@ -1314,18 +1320,18 @@ public class GroupChatServiceImpl implements GroupChatService {
         return Constant.GROUP_CHAT_MEMBER_LIMIT_FREE;
     }
 
-    private Byte activeVipTier(User user) {
-        if (user == null || user.getVipTier() == null || Constant.VIP_TIER_FREE.equals(user.getVipTier())) {
+    private Byte activeVipTier(Long userId) {
+        if (userId == null || userId <= 0) {
             return Constant.VIP_TIER_FREE;
         }
-        Date expireAt = user.getVipExpireAt();
-        if (expireAt == null || expireAt.after(ForumDateTimes.now())) {
-            return user.getVipTier();
+        VipTierSnapshotVO snapshot = imVipInternalFeignClient.tierSnapshot(userId);
+        if (snapshot != null && snapshot.isVipActive() && snapshot.getVipTier() != null) {
+            return snapshot.getVipTier();
         }
         return Constant.VIP_TIER_FREE;
     }
 
-    private String displayName(User user) {
+    private String displayName(UserInternalVO user) {
         if (user == null) {
             return "用户";
         }

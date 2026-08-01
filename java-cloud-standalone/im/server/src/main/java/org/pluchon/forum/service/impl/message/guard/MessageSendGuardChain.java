@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.message.guard;
 
 import org.pluchon.forum.common.config.OssConfig;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -18,13 +18,13 @@ public class MessageSendGuardChain {
                 .toList();
     }
 
-    public static MessageSendGuardChain defaultChain(UserService userService, OssConfig ossConfig) {
+    public static MessageSendGuardChain defaultChain(ImUserLookupService userLookupService, OssConfig ossConfig) {
         return new MessageSendGuardChain(List.of(
                 new TextContentGuard(),
                 new ImagePayloadGuard(),
                 new NotSendToSelfGuard(),
-                new SenderCanPostGuard(userService),
-                new ReceiverExistsGuard(userService),
+                new SenderCanPostGuard(userLookupService),
+                new ReceiverExistsGuard(userLookupService),
                 new ChatMediaUrlGuard(ossConfig)
         ));
     }

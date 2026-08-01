@@ -7,7 +7,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.ForumDateTimes;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.message.PrivateVoiceSignalRequest;
 import org.pluchon.forum.entity.vo.message.PrivateVoiceParticipantVO;
 import org.pluchon.forum.entity.vo.message.PrivateVoiceSessionVO;
@@ -15,7 +15,7 @@ import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
 import org.pluchon.forum.service.interfaces.message.MessageService;
 import org.pluchon.forum.service.interfaces.message.PrivateVoiceService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.pluchon.forum.service.interfaces.voice.VoiceOccupancyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -51,7 +51,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
     private final Object voiceLock = new Object();
 
     @Autowired
-    private UserService userService;
+    private ImUserLookupService userLookupService;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -246,7 +246,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
         if (Objects.equals(peerUserId, loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SEND_MESSAGE_BY_MYSELF));
         }
-        User peer = userService.queryUserByUserId(peerUserId);
+        UserInternalVO peer = userLookupService.queryUserByUserId(peerUserId);
         if (peer == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
@@ -398,7 +398,7 @@ public class PrivateVoiceServiceImpl implements PrivateVoiceService {
     }
 
     private PrivateVoiceParticipantVO toParticipantVO(ParticipantState participant) {
-        User user = userService.queryUserByUserId(participant.getUserId());
+        UserInternalVO user = userLookupService.queryUserByUserId(participant.getUserId());
         if (user == null) {
             return null;
         }
