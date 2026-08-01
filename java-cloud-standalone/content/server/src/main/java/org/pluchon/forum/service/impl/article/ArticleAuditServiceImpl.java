@@ -22,7 +22,7 @@ import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitContext;
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardChain;
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardResult;
-import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
+import org.pluchon.forum.cloud.feign.ContentWebSocketInternalFeignClient;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
@@ -77,7 +77,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private ContentSystemMessageInternalFeignClient contentSystemMessageInternalFeignClient;
 
     @Autowired
-    private WebSocketPushService webSocketPushService;
+    private ContentWebSocketInternalFeignClient contentWebSocketInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -385,7 +385,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             auditWs.put("status", statusAfter);
             auditWs.put("resultMessage", truncate(content, 500));
             auditWs.put("title", title);
-            webSocketPushService.push(userId, objectMapper.writeValueAsString(auditWs));
+            contentWebSocketInternalFeignClient.push(userId, objectMapper.writeValueAsString(auditWs));
             Map<String, Object> sysWs = new LinkedHashMap<>();
             sysWs.put("type", "system_message");
             sysWs.put("messageId", systemMsgId);
@@ -393,7 +393,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             sysWs.put("title", title);
             sysWs.put("content", truncate(content, 500));
             sysWs.put("finalStatus", result.getFinalStatus());
-            webSocketPushService.push(userId, objectMapper.writeValueAsString(sysWs));
+            contentWebSocketInternalFeignClient.push(userId, objectMapper.writeValueAsString(sysWs));
         } catch (Exception e) {
             log.warn("审核结果 WebSocket 推送失败 userId={}, articleId={}", userId, articleId, e);
         }

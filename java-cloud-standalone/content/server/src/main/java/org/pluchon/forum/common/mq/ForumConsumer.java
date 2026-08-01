@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.metrics.ForumMetrics;
 import org.pluchon.forum.common.utils.MqEventDedupHelper;
-import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
+import org.pluchon.forum.cloud.feign.ContentWebSocketInternalFeignClient;
 import org.pluchon.forum.entity.vo.mq.MessageNotifyMqVO;
 import org.pluchon.forum.entity.vo.mq.ReplyNotifyMqVO;
 import org.springframework.amqp.core.Message;
@@ -26,7 +26,7 @@ import java.util.Map;
 public class ForumConsumer {
 
     @Autowired
-    private WebSocketPushService webSocketPushService;
+    private ContentWebSocketInternalFeignClient contentWebSocketInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -57,7 +57,7 @@ public class ForumConsumer {
             payload.put("fromUser", vo.getPostUsername());
             payload.put("summary", vo.getContentSummary());
             String pushPayload = objectMapper.writeValueAsString(payload);
-            webSocketPushService.push(vo.getNotifyUserId(), pushPayload);
+            contentWebSocketInternalFeignClient.push(vo.getNotifyUserId(), pushPayload);
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
             forumMetrics.recordMqConsumeFailure();
@@ -88,7 +88,7 @@ public class ForumConsumer {
             payload.put("senderNickname", vo.getSendUsername());
             payload.put("summary", vo.getContentSummary());
             String pushPayload = objectMapper.writeValueAsString(payload);
-            webSocketPushService.push(vo.getReceiveUserId(), pushPayload);
+            contentWebSocketInternalFeignClient.push(vo.getReceiveUserId(), pushPayload);
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
             forumMetrics.recordMqConsumeFailure();
