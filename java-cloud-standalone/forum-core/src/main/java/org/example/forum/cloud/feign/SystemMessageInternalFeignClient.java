@@ -1,4 +1,4 @@
-package org.example.forumdemo.cloud.feign;
+package org.example.forum.cloud.feign;
 
 import org.example.forum.api.im.SystemMessageInternalApi;
 import org.springframework.cloud.openfeign.FeignClient;

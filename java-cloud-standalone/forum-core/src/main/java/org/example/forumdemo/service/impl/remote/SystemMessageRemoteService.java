@@ -1,7 +1,7 @@
 package org.example.forumdemo.service.impl.remote;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.example.forumdemo.cloud.feign.SystemMessageInternalFeignClient;
+import org.example.forum.cloud.feign.SystemMessageInternalFeignClient;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;

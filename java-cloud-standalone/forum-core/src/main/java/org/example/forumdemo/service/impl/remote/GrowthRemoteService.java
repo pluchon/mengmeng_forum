@@ -1,6 +1,6 @@
 package org.example.forumdemo.service.impl.remote;
 
-import org.example.forumdemo.cloud.feign.GrowthInternalFeignClient;
+import org.example.forum.cloud.feign.GrowthInternalFeignClient;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.exception.ApplicationException;
 import org.example.forumdemo.common.result.Result;

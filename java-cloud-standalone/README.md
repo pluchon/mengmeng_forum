@@ -7,9 +7,9 @@ Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025
 > **原 `backend/` 目录完整保留**，可继续作为单体运行；本工程是并行的微服务演进线。
 >
 > **交付状态（务必读清）**
-> - 已完成：进程切分、Gateway 路由、Nacos 注册、少量内部 Feign。
-> - **未完成**：代码所有权拆分、每服务独立 API 契约、每服务独立数据库。
-> - 当前实质仍是「共享 `forum-core` + `DomainServicePruner` 条件裁剪 + 共享 `forum_db`」的多进程单体。
+> - 已完成：进程切分、Gateway/Nacos、六域 `*-api` 契约、按域物理搬迁 Service/Mapper/Entity、本地六库数据复制脚手架、关键跨域 Feign。
+> - **进行中 / 未完全收尾**：去掉对整包 `forum-core` 的 Maven 依赖、`DomainServicePruner` 删除、包名全面改为 `org.example.forum.*`、默认切读写到独立库并撤权。
+> - 默认数据源仍指向共享 `forum_db`（可用 `DB_*` 环境变量切到 `forum_*_db`）。
 > - 真拆分目标与阶段见 [`docs/architecture-microservices.md`](docs/architecture-microservices.md)。
 
 ## 模块
@@ -37,8 +37,9 @@ Spring Boot **3.5.11** / Spring Cloud **2025.0.0** / Spring Cloud Alibaba **2025
 
 ## 过渡期现状（将逐步拆除）
 
-- 业务 Bean 仍可能由 `DomainServicePruner` 按 `forum.domain` 裁剪。
-- 部分跨域仍靠同库 `UserMapper` / 共享白名单实现。
+- `forum-core` 仍为过渡共享库（JWT/拦截器/少量共享实现）；各域业务实现已主要落在对应服务模块。
+- `DomainServicePruner` 仅兜底残留共享 Bean，目标删除。
+- 部分身份读仍依赖 core 内 `UserMapper`；拆库撤权前需继续 Feign 化。
 - `forum.domain=monolith` 仅为不裁剪兼容开关，**禁止当作终态架构**。
 
 ## 启动顺序

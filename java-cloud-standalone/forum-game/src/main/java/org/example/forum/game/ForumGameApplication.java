@@ -10,7 +10,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = "org.example.forumdemo")
 @MapperScan("org.example.forumdemo.mapper")
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = {"org.example.forum.api", "org.example.forumdemo.cloud.feign"})
+@EnableFeignClients(basePackages = {"org.example.forum.api", "org.example.forum.cloud.feign"})
 public class ForumGameApplication {
 
     public static void main(String[] args) {

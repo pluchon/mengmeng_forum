@@ -29,3 +29,33 @@ DB_PASSWORD=...
 ```
 
 未切换前仍默认连接共享 `forum_db`（兼容过渡）。
+
+## 已落地（本地 MySQL `forum-mysql-dev`）
+
+1. 六库 + 六账号：`V20260801010__create_service_databases.sql`
+2. 表归属清单：`table-ownership.md`
+3. 从 `forum_db` 复制结构与数据：
+   - `copy-tables-from-forum-db.sql`（economy/auth/content 主体）
+   - `copy-tables-remaining.sql`（content 补齐 + im/game/ai；`user_favorite_folder` 排除虚拟列 `default_marker`）
+
+校验抽样（复制后本地实测）：`forum_economy_db.points_wallet`、`forum_auth_db.user`、`forum_content_db.article` 行数与共享库一致量级。
+
+## 切读写
+
+各服务设置环境变量后重启即可切到独立库（示例 economy）：
+
+```powershell
+$env:DB_URL = "jdbc:mysql://127.0.0.1:33306/forum_economy_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+$env:DB_USERNAME = "forum_economy"
+$env:DB_PASSWORD = "forum_economy_pass"
+```
+
+**注意**：过渡期仍有部分服务进程通过 `forum-core` 访问 `UserMapper` 等共享表；完全撤销跨库权限前，须确认该服务 classpath 上不再有他域 Mapper，且身份/资料读已全部 Feign 化。回滚时把 `DB_*` 指回 `forum_db`。
+
+## 跨域一致性（已/待）
+
+| 模式 | 现状 |
+|------|------|
+| 同步 Feign | Points / Growth / UserInternal / FavoriteFolder / ShopEntitlement / VipTier / AiUsage / MascotPreference |
+| Outbox + MQ | im `forum_outbox_message`；game `game_settlement_event` 由 game 消费后投递积分 |
+| 快照 | 帖子/消息等展示字段继续写入时固化；禁止新增长期跨库 JOIN |
