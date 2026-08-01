@@ -12,13 +12,11 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.ForumDateTimes;
 import org.pluchon.forum.common.utils.PageUtils;
-import org.pluchon.forum.common.utils.UserMuteGuard;
 import org.pluchon.forum.converter.DriftBottleConverter;
 import org.pluchon.forum.entity.db.DriftBottle;
 import org.pluchon.forum.entity.db.DriftBottleComment;
 import org.pluchon.forum.entity.db.DriftBottlePickLog;
 import org.pluchon.forum.entity.db.DriftBottleReport;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.driftbottle.CreateDriftBottleCommentRequest;
 import org.pluchon.forum.entity.dto.driftbottle.CreateDriftBottleRequest;
 import org.pluchon.forum.entity.dto.driftbottle.ReportDriftBottleRequest;
@@ -32,7 +30,8 @@ import org.pluchon.forum.mapper.DriftBottleMapper;
 import org.pluchon.forum.mapper.DriftBottlePickLogMapper;
 import org.pluchon.forum.mapper.DriftBottleReportMapper;
 import org.pluchon.forum.service.interfaces.driftbottle.DriftBottleService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,15 +76,15 @@ public class DriftBottleServiceImpl implements DriftBottleService {
     @Autowired
     private DriftBottleReportMapper driftBottleReportMapper;
 
-    // 用户服务
+    // AI 域用户读取服务
     @Autowired
-    private UserService userService;
+    private AiUserLookupService aiUserLookupService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DriftBottleDetailVO createBottle(CreateDriftBottleRequest request, Long loginUserId) {
-        User user = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(user);
+        AiUserContext user = aiUserLookupService.getById(loginUserId);
+        assertCanPost(user);
         assertDailyLimit(countTodayBottles(loginUserId), CREATE_DAILY_LIMIT, "今日扔瓶次数已用完");
         String content = normalizeContent(request.getContent(), 20, 500);
         String moodType = normalizeMood(request.getMoodType());
@@ -110,7 +109,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DriftBottleDetailVO pickBottle(Long loginUserId) {
-        userService.queryUserByUserId(loginUserId);
+        aiUserLookupService.getById(loginUserId);
         assertDailyLimit(countTodayPicks(loginUserId), PICK_DAILY_LIMIT, "今日捞瓶次数已用完");
         DriftBottle bottle = pickCandidate(loginUserId, true);
         if (bottle == null) {
@@ -139,15 +138,15 @@ public class DriftBottleServiceImpl implements DriftBottleService {
 
     @Override
     public DriftBottleDetailVO queryDetail(Long bottleId, Long loginUserId) {
-        userService.queryUserByUserId(loginUserId);
+        aiUserLookupService.getById(loginUserId);
         return buildDetail(queryVisibleOrOwnedBottle(bottleId, loginUserId), loginUserId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DriftBottleDetailVO commentBottle(Long bottleId, CreateDriftBottleCommentRequest request, Long loginUserId) {
-        User user = userService.queryUserByUserId(loginUserId);
-        UserMuteGuard.assertCanPost(user);
+        AiUserContext user = aiUserLookupService.getById(loginUserId);
+        assertCanPost(user);
         assertDailyLimit(countTodayComments(loginUserId), COMMENT_DAILY_LIMIT, "今日评论次数已用完");
         DriftBottle bottle = queryVisibleBottle(bottleId);
         assertNotLatestCommenter(bottleId, loginUserId);
@@ -175,7 +174,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
 
     @Override
     public PageResult<DriftBottleListItemVO> queryMine(Long loginUserId, Integer pageNum, Integer pageSize) {
-        userService.queryUserByUserId(loginUserId);
+        aiUserLookupService.getById(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<DriftBottle> page = PageUtils.getPage(validPageNum, validPageSize);
@@ -232,7 +231,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
 
     @Override
     public DriftBottleQuotaVO queryQuota(Long loginUserId) {
-        userService.queryUserByUserId(loginUserId);
+        aiUserLookupService.getById(loginUserId);
         DriftBottleQuotaVO vo = new DriftBottleQuotaVO();
         vo.setCreateRemaining(Math.max(0, CREATE_DAILY_LIMIT - countTodayBottles(loginUserId).intValue()));
         vo.setPickRemaining(Math.max(0, PICK_DAILY_LIMIT - countTodayPicks(loginUserId).intValue()));
@@ -446,6 +445,12 @@ public class DriftBottleServiceImpl implements DriftBottleService {
     private void assertDailyLimit(Long used, int limit, String message) {
         if (used != null && used >= limit) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, message));
+        }
+    }
+
+    private void assertCanPost(AiUserContext user) {
+        if (user != null && user.getState() != null && user.getState() == 1) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_BANNED));
         }
     }
 
