@@ -4,10 +4,15 @@ spring:
     allow-circular-references: true
   config:
     import:
+      # file: 相对进程 CWD；兼容从仓库根 / nginx / */server 启动
+      - "optional:file:./nginx/.env[.properties]"
+      - "optional:file:../nginx/.env[.properties]"
       - "optional:file:../../nginx/.env[.properties]"
+      - "optional:file:../../../nginx/.env[.properties]"
   data:
     redis:
-      host: localhost
+      # Windows 上 localhost 常解析到 ::1，而 Docker 端口仅绑 127.0.0.1
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
       port: 63790
       password: ${REDIS_PASSWORD:123456}
       database: 0
@@ -38,7 +43,7 @@ spring:
       max-file-size: 350MB
       max-request-size: 350MB
   rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
+    host: ${SPRING_RABBITMQ_HOST:127.0.0.1}
     port: ${SPRING_RABBITMQ_PORT:56720}
     # 默认 vhost 与历史 forum-demo 兼容；新环境建议显式设置 SPRING_RABBITMQ_VIRTUAL_HOST=forum
     virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:forum-demo}
@@ -100,12 +105,13 @@ forum:
   websocket:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
   mascot:
-    ai-url: ${FORUM_MASCOT_AI_URL:http://localhost:5000/api/v1/gateway/invoke}
+    # Flask 只监听 IPv4；localhost 在 Windows 会先解析 ::1 导致连接被拒
+    ai-url: ${FORUM_MASCOT_AI_URL:http://127.0.0.1:5000/api/v1/gateway/invoke}
     internal-key: ${FORUM_MASCOT_INTERNAL_KEY:${FORUM_AI_INTERNAL_KEY:}}
     basic-daily-limit: ${FORUM_MASCOT_BASIC_DAILY_LIMIT:30}
     treat-admin-as-vip: ${FORUM_MASCOT_TREAT_ADMIN_AS_VIP:true}
   ai:
-    hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://localhost:5000}
+    hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://127.0.0.1:5000}
     internal-key: ${FORUM_AI_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
   ffmpeg:
     internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}

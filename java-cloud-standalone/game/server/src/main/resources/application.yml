@@ -15,14 +15,17 @@ spring:
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
   datasource:
-    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:forum_game}
-    password: ${DB_PASSWORD:forum_game_pass}
+    # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
+    url: ${FORUM_GAME_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${FORUM_GAME_DB_USERNAME:forum_game}
+    password: ${FORUM_GAME_DB_PASSWORD:forum_game_pass}
 
 forum:
   domain: game
   features:
     scheduling: true
-    mq-consumer: false
+    # 对局结束事件：本域既生产也消费
+    mq: true
+    mq-consumer: true
     websocket: false
     game-runtime: true

@@ -15,14 +15,16 @@ spring:
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
   datasource:
-    url: ${DB_URL:jdbc:mysql://127.0.0.1:33306/forum_content_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:forum_content}
-    password: ${DB_PASSWORD:forum_content_pass}
+    # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
+    url: ${FORUM_CONTENT_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_content_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${FORUM_CONTENT_DB_USERNAME:forum_content}
+    password: ${FORUM_CONTENT_DB_PASSWORD:forum_content_pass}
 
 forum:
   domain: content
   features:
     scheduling: true
+    mq: true
     mq-consumer: true
     websocket: false
     game-runtime: false

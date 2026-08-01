@@ -2,10 +2,13 @@ package org.pluchon.forum.common.config;
 
 import org.pluchon.forum.common.constant.Constant;
 import org.springframework.amqp.core.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+// 仅在需要 MQ 的域装配交换机/队列；auth 等无 MQ 服务不得声明拓扑
 @Configuration
+@ConditionalOnProperty(name = "forum.features.mq", havingValue = "true")
 public class RabbitMQConfigure {
 
     // ========================= 交换机 =========================
