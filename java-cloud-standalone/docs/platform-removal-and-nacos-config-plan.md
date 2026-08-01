@@ -1,5 +1,7 @@
 # 移除 platform 与接入 Nacos 配置中心计划
 
+> 实施状态（2026-08-01）：`platform` 已从 Maven reactor、依赖管理与全部 server POM 移除；其业务代码已迁入所属服务，通用默认配置与验证码资源迁入 `common`，AI PostgreSQL 会话脚本迁入 `ai-server`。全量 15 模块 Maven 编译已通过。
+
 ## 1. 结论与目标
 
 本计划确认移除 `platform` 模块。业务域保持两层结构：
@@ -43,10 +45,10 @@ flowchart LR
 ## 3. 当前代码事实
 
 1. 六个业务域均已存在 `api + server`：`auth`、`content`、`im`、`game`、`economy`、`ai`。
-2. 六个 `server` POM 当前都直接依赖 `platform`；`platform` 又依赖全部六个 `xxx-api`。
-3. `platform` 同时包含 12 个 Feign Client、远程适配、领域 Entity、领域 Service、领域 DTO/VO/Converter 和多种中间件配置。因此它不是基础设施库，而是单体代码被重新打包后的聚合点。
-4. 已确认的跨域直接实现依赖包括：`content`、`im`、`game`、`economy`、`ai` 中直接引用了 `platform` 内的用户、积分、成长等 Service 或 Entity。这些调用必须先补齐或复用对应 API 契约，不能通过移动文件保持原调用。
-5. 当前已接入 `spring-cloud-starter-alibaba-nacos-discovery`；尚未引入 `spring-cloud-starter-alibaba-nacos-config`，各服务也没有 Nacos 的 `spring.config.import`。
+2. 根 POM 与所有 `server` POM 已不再声明 `platform`；各服务改为直接依赖其实际使用的 `xxx-api` 与 Spring Boot Starter。
+3. 用户 Entity、用户服务与内部转换器归属 `auth-server`；消费方分别保有认证用户 Feign Client。IM 群聊会员额度通过 `economy-api` 的 VIP 快照读取，不再经用户实体跨域传递。
+4. 默认配置、验证码图片分别归属 `common`，AI PostgreSQL 会话脚本归属 `ai-server`；它们不再由业务聚合模块承载。
+5. 已接入 Nacos Discovery 与 Config，并通过 `spring.config.import` 加载共享及服务级 Data ID；Nacos 服务端认证和内部 HTTP 身份认证仍按范围延后。
 
 ## 4. 最终模块规则
 
@@ -114,6 +116,8 @@ flowchart LR
 3. 删除未被引用的适配与代码后，移除根 POM 的 `platform` module 和 `dependencyManagement` 条目。
 4. 以全仓库搜索确认不存在 `artifactId>platform`、`org.pluchon.forum.cloud.feign`、跨域 Entity/Service 导入，再删除目录。
 
+实施结果：已完成。根 Maven reactor 已在无 `platform` 模块的条件下完成全量编译；源码树中的平台业务文件均已迁走或删除。
+
 ### 阶段 D：接入 Nacos 配置中心
 
 这一步独立于 `platform` 删除，安排在阶段 A 的直接依赖已经稳定后执行，避免同时排查依赖错误与配置加载错误。
@@ -136,10 +140,10 @@ flowchart LR
 ### platform 删除验收
 
 - 根 POM 和所有 server POM 不再声明 `platform`。
-- `platform` 目录已删除，且没有 `org.pluchon.forum.cloud.feign`、跨域 Entity、跨域 Service 实现导入残留。
+- Git 源码树不再包含 `platform` 模块，且没有平台 Feign、跨域 Entity 或跨域 Service 实现导入残留。
 - 每个服务只依赖其实际使用的 `xxx-api`；任意 `xxx-api` 不依赖另一个业务 API 或 server。
 - 每个内部 Controller 仅委托本域 Service；所有写操作仍保持事务、授权和原有状态流转。
-- 根 Maven reactor 编译通过；本地中间件可用时，逐个启动服务并验证 Nacos 注册和至少一条跨服务调用。
+- 已验证：无 `platform` 模块的根 Maven reactor 编译通过。待运行时验证：逐个启动服务，验证 Nacos 注册、配置加载与至少一条跨服务调用。
 
 ### Nacos 配置中心验收
 

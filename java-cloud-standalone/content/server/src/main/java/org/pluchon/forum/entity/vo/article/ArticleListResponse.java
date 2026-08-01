@@ -2,7 +2,6 @@ package org.pluchon.forum.entity.vo.article;
 
 import lombok.Data;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 /**

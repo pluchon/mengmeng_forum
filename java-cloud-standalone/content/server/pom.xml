@@ -30,11 +30,11 @@
         </dependency>
         <dependency>
             <groupId>org.pluchon.forum</groupId>
-            <artifactId>im-api</artifactId>
+            <artifactId>ai-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.pluchon.forum</groupId>
-            <artifactId>platform</artifactId>
+            <artifactId>im-api</artifactId>
         </dependency>
         <dependency>
             <groupId>com.alibaba.cloud</groupId>

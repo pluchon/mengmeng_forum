@@ -14,7 +14,6 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.SearchUserConverter;
 import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.search.SearchArticleResponse;
@@ -394,46 +393,6 @@ public class SearchServiceImpl implements SearchService {
                 .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .and(w -> applyTextLike(w, terms, Article::getTitle, Article::getContent))
                 .orderByDesc(Article::getUpdateTime);
-    }
-
-    /** AI 搜索候选：昵称或用户名包含关键词 */
-    private LambdaQueryWrapper<User> buildRagCandidateUserQuery(String kw) {
-        List<String> terms = keywordTerms(kw);
-        return new LambdaQueryWrapper<User>()
-                .ne(User::getDeleteState, DELETE_TRUE)
-                .ne(User::getState, STATE_FORBIDDEN)
-                .and(w -> applyTextLike(w, terms, User::getUsername, User::getNickname))
-                .orderByDesc(User::getUpdateTime);
-    }
-
-    private String buildRagCandidateUserText(User user) {
-        String nickname = user.getNickname() == null ? "" : user.getNickname().trim();
-        String username = user.getUsername() == null ? "" : user.getUsername().trim();
-        String remark = user.getRemark() == null ? "" : user.getRemark().trim();
-        if (remark.length() > 400) {
-            remark = remark.substring(0, 400);
-        }
-        StringBuilder sb = new StringBuilder();
-        if (!nickname.isBlank()) {
-            sb.append("昵称: ").append(nickname).append('\n');
-        }
-        if (!username.isBlank()) {
-            sb.append("用户名: ").append(username).append('\n');
-        }
-        if (!remark.isBlank()) {
-            sb.append("简介: ").append(remark);
-        }
-        return sb.toString().trim();
-    }
-
-    /** 普通搜索：用户名或昵称包含关键词 */
-    private LambdaQueryWrapper<User> buildDbFuzzyUserQuery(String kw) {
-        List<String> terms = keywordTerms(kw);
-        return new LambdaQueryWrapper<User>()
-                .ne(User::getDeleteState, DELETE_TRUE)
-                .ne(User::getState, STATE_FORBIDDEN)
-                .and(w -> applyTextLike(w, terms, User::getUsername, User::getNickname))
-                .orderByDesc(User::getUpdateTime);
     }
 
     @SafeVarargs

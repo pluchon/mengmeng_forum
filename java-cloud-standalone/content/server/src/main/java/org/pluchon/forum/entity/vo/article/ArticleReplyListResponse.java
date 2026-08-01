@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.pluchon.forum.entity.db.ArticleReply;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 /**

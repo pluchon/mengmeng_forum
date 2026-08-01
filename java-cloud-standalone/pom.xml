@@ -26,7 +26,6 @@
         <module>game/api</module>
         <module>economy/api</module>
         <module>ai/api</module>
-        <module>platform</module>
         <module>auth/server</module>
         <module>content/server</module>
         <module>im/server</module>
@@ -107,12 +106,6 @@
                 <artifactId>ai-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>org.pluchon.forum</groupId>
-                <artifactId>platform</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

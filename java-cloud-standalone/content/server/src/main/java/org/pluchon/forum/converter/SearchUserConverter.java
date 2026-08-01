@@ -1,7 +1,6 @@
 package org.pluchon.forum.converter;
 
 import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.vo.search.SearchUserItemVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 
@@ -27,16 +26,5 @@ public class SearchUserConverter {
                 followerCount,
                 isFollowing
         );
-    }
-
-    public static SearchUserItemVO toItem(User user, UserFollowStatsVO stats) {
-        long followingCount = stats == null || stats.getFollowingCount() == null
-                ? 0L : stats.getFollowingCount();
-        long followerCount = stats == null || stats.getFollowerCount() == null
-                ? 0L : stats.getFollowerCount();
-        boolean isFollowing = stats != null && Boolean.TRUE.equals(stats.getIsFollowing());
-        return new SearchUserItemVO(
-                user.getId(), user.getNickname(), user.getAvatarUrl(), user.getVipTier(), user.getVipExpireAt(),
-                followingCount, followerCount, isFollowing);
     }
 }

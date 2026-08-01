@@ -30,25 +30,4 @@ public final class UserInternalConverter {
         return vo;
     }
 
-    // 仅用于过渡期：远程 VO 填入本地 User 壳，供仍依赖 User 的调用方
-    public static User toUserShell(UserInternalVO vo) {
-        if (vo == null) {
-            return null;
-        }
-        User user = new User();
-        user.setId(vo.getId());
-        user.setUsername(vo.getUsername());
-        user.setNickname(vo.getNickname());
-        user.setAvatarUrl(vo.getAvatarUrl());
-        user.setBackgroundUrl(vo.getBackgroundUrl());
-        user.setArticleCount(vo.getArticleCount());
-        user.setIsAdmin(vo.getIsAdmin());
-        user.setCreatorState(vo.getCreatorState());
-        user.setState(vo.getState());
-        user.setGender(vo.getGender());
-        user.setRemark(vo.getRemark());
-        user.setIpRegion(vo.getIpRegion());
-        user.setCreateTime(vo.getCreateTime());
-        return user;
-    }
 }
