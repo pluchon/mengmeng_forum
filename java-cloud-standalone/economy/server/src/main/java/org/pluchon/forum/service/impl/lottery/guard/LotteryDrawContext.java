@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.lottery.guard;
 
 import org.pluchon.forum.entity.db.LotteryActivity;
-import org.pluchon.forum.entity.db.User;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.dto.lottery.LotteryDrawDTO;
 
 public class LotteryDrawContext {
@@ -12,7 +12,7 @@ public class LotteryDrawContext {
 
     private final LotteryActivity activity;
 
-    private final User lockedUser;
+    private final UserInternalVO lockedUser;
 
     private final boolean resourcesResolved;
 
@@ -20,7 +20,7 @@ public class LotteryDrawContext {
             Long userId,
             LotteryDrawDTO request,
             LotteryActivity activity,
-            User lockedUser,
+            UserInternalVO lockedUser,
             boolean resourcesResolved
     ) {
         this.userId = userId;
@@ -38,7 +38,7 @@ public class LotteryDrawContext {
             Long userId,
             LotteryDrawDTO request,
             LotteryActivity activity,
-            User lockedUser
+            UserInternalVO lockedUser
     ) {
         return new LotteryDrawContext(userId, request, activity, lockedUser, true);
     }
@@ -55,7 +55,7 @@ public class LotteryDrawContext {
         return activity;
     }
 
-    public User getLockedUser() {
+    public UserInternalVO getLockedUser() {
         return lockedUser;
     }
 
