@@ -3,6 +3,7 @@ package org.pluchon.forum.service.impl.lottery;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -10,12 +11,10 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
-import org.pluchon.forum.converter.UserInternalConverter;
 import org.pluchon.forum.entity.db.LotteryActivity;
 import org.pluchon.forum.entity.db.LotteryDrawRecord;
 import org.pluchon.forum.entity.db.LotteryDrawRequest;
 import org.pluchon.forum.entity.db.LotteryPrizeMysteryItem;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.db.UserLotteryPity;
 import org.pluchon.forum.entity.dto.lottery.LotteryDrawDTO;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -204,8 +203,8 @@ public class LotteryServiceImpl implements LotteryService {
         }
 
         LotteryActivity activity = resolveActivity(dto.getActivityId());
-        User userShell = UserInternalConverter.toUserShell(userInternalFeignClient.getById(userId));
-        checkLotteryDrawGuard(LotteryDrawContext.resolved(userId, dto, activity, userShell));
+        UserInternalVO user = userInternalFeignClient.getById(userId);
+        checkLotteryDrawGuard(LotteryDrawContext.resolved(userId, dto, activity, user));
         int times = dto.getTimes() == null ? 0 : dto.getTimes();
         UserLotteryPity pityLocked = ensurePityForUpdate(userId);
         int pity = pityLocked.getPityDraws() == null ? 0 : pityLocked.getPityDraws();

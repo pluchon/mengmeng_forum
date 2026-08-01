@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -16,7 +17,6 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.EmojiItem;
 import org.pluchon.forum.entity.db.EmojiShop;
-import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.db.UserEmoji;
 import org.pluchon.forum.entity.dto.shop.CreateEmojiShopRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -25,8 +25,10 @@ import org.pluchon.forum.entity.vo.shop.EmojiShopListItemVO;
 import org.pluchon.forum.mapper.EmojiItemMapper;
 import org.pluchon.forum.mapper.EmojiShopMapper;
 import org.pluchon.forum.mapper.UserEmojiMapper;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.service.interfaces.shop.EmojiShopService;
-import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.entity.vo.vip.VipStatusVO;
+import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -76,7 +78,10 @@ public class EmojiShopServiceImpl implements EmojiShopService {
     private UserEmojiMapper userEmojiMapper;
 
     @Autowired
-    private UserService userService;
+    private EconomyUserInternalFeignClient userInternalFeignClient;
+
+    @Autowired
+    private VipSubscribeService vipSubscribeService;
 
     @Autowired
     private OssConfig ossConfig;
@@ -93,7 +98,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (operatorUserId == null || operatorUserId <= 0 || req == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        User operator = userService.queryUserByUserId(operatorUserId);
+        UserInternalVO operator = userInternalFeignClient.getById(operatorUserId);
         boolean isAdmin = operator != null && operator.getIsAdmin() != null && operator.getIsAdmin() == 1;
 
         String name = req.getName() == null ? "" : req.getName().trim();
@@ -186,7 +191,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (!Constant.SHOP_STATUS_ONLINE.equals(status) && !Constant.SHOP_STATUS_OFFLINE.equals(status)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "status 仅允许 1 / 2"));
         }
-        User operator = userService.queryUserByUserId(operatorUserId);
+        UserInternalVO operator = userInternalFeignClient.getById(operatorUserId);
         if (operator == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NO_PERMISSION));
         }
@@ -298,7 +303,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 canView = true;
             }
             if (!canView && loginUserId != null) {
-                User operator = userService.queryUserByUserId(loginUserId);
+                UserInternalVO operator = userInternalFeignClient.getById(loginUserId);
                 canView = operator != null && operator.getIsAdmin() != null && operator.getIsAdmin() == 1;
             }
             if (!canView) {
@@ -324,12 +329,15 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         Byte uploaderVipTier = null;
         Date uploaderVipExpire = null;
         if (shop.getUploadUserId() != null) {
-            User uploader = userService.queryUserByUserId(shop.getUploadUserId());
+            UserInternalVO uploader = userInternalFeignClient.getById(shop.getUploadUserId());
             if (uploader != null) {
                 uploaderName = uploader.getNickname();
                 uploaderAvatar = uploader.getAvatarUrl();
-                uploaderVipTier = uploader.getVipTier();
-                uploaderVipExpire = uploader.getVipExpireAt();
+                VipStatusVO vipStatus = vipSubscribeService.status(shop.getUploadUserId());
+                if (vipStatus != null) {
+                    uploaderVipTier = vipStatus.getVipTier();
+                    uploaderVipExpire = vipStatus.getVipExpireAt();
+                }
             }
         }
         boolean isAuthor = loginUserId != null && shop.getUploadUserId() != null
@@ -358,7 +366,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         Map<Long, String> uploaderNames = new HashMap<>();
         if (!uploaderIds.isEmpty()) {
             for (Long uid : uploaderIds) {
-                User u = userService.queryUserByUserId(uid);
+                UserInternalVO u = userInternalFeignClient.getById(uid);
                 if (u != null) uploaderNames.put(uid, u.getNickname());
             }
         }
