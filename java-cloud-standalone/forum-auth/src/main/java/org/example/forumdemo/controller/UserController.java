@@ -5,10 +5,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.example.forum.api.auth.UserInternalVO;
 import org.example.forumdemo.common.captcha.CaptchaTicketPurpose;
 import org.example.forumdemo.common.constant.Constant;
 import org.example.forumdemo.common.enums.ResultCode;
 import org.example.forumdemo.common.result.Result;
+import org.example.forumdemo.converter.UserInternalConverter;
 import org.example.forumdemo.entity.db.User;
 import org.example.forumdemo.entity.dto.user.ModifyUserRequest;
 import org.example.forumdemo.entity.dto.user.UserLoginRequest;
@@ -255,16 +257,16 @@ public class UserController {
         return user != null;
     }
 
-    /** 内部服务调用：按 ID 取用户（密码等字段 JsonIgnore） */
+    /** 内部服务调用：按 ID 取用户（返回契约 VO，不含敏感字段） */
     @GetMapping("/internal/{userId}")
-    public User internalGetById(@PathVariable("userId") Long userId) {
-        return userService.queryUserByUserId(userId);
+    public UserInternalVO internalGetById(@PathVariable("userId") Long userId) {
+        return UserInternalConverter.toInternalVO(userService.queryUserByUserId(userId));
     }
 
     /** 内部服务调用：按用户名取用户 */
     @GetMapping("/internal/by-username")
-    public User internalGetByUsername(@RequestParam("username") String username) {
-        return userService.queryUserByUserName(username);
+    public UserInternalVO internalGetByUsername(@RequestParam("username") String username) {
+        return UserInternalConverter.toInternalVO(userService.queryUserByUserName(username));
     }
 
     /** 内部服务调用：发帖数 +1 */

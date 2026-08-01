@@ -20,6 +20,12 @@
 
     <modules>
         <module>forum-common</module>
+        <module>forum-auth-api</module>
+        <module>forum-content-api</module>
+        <module>forum-im-api</module>
+        <module>forum-game-api</module>
+        <module>forum-economy-api</module>
+        <module>forum-ai-api</module>
         <module>forum-api</module>
         <module>forum-core</module>
         <module>forum-gateway</module>
@@ -70,6 +76,36 @@
             <dependency>
                 <groupId>org.example.forum</groupId>
                 <artifactId>forum-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-auth-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-content-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-im-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-game-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-economy-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.example.forum</groupId>
+                <artifactId>forum-ai-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
