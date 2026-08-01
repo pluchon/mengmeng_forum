@@ -3,10 +3,10 @@ package org.pluchon.forum.service.impl.vip;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import org.pluchon.forum.api.ai.AiUsageDailyBucketsVO;
+import org.pluchon.forum.api.economy.VipQuotaHintVO;
 import org.pluchon.forum.cloud.feign.AiUsageInternalFeignClient;
 import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
-import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -103,7 +103,7 @@ public class VipCenterServiceImpl implements VipCenterService {
     }
 
     @Override
-    public MascotQuotaHintVO quotaHintForLlmRoute(Long userId, String llmRoute) {
+    public VipQuotaHintVO quotaHintForLlmRoute(Long userId, String llmRoute) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("percent", 0);
         out.put("canUsePointsPay", false);
@@ -165,8 +165,8 @@ public class VipCenterServiceImpl implements VipCenterService {
         return toQuotaHintVO(out);
     }
 
-    private static MascotQuotaHintVO toQuotaHintVO(Map<String, Object> raw) {
-        MascotQuotaHintVO vo = new MascotQuotaHintVO();
+    private static VipQuotaHintVO toQuotaHintVO(Map<String, Object> raw) {
+        VipQuotaHintVO vo = new VipQuotaHintVO();
         Object percent = raw.get("percent");
         vo.setPercent(percent instanceof Number n ? n.intValue() : 0);
         vo.setCanUsePointsPay(Boolean.TRUE.equals(raw.get("canUsePointsPay")));
