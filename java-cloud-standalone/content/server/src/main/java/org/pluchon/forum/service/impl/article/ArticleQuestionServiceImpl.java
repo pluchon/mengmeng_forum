@@ -23,7 +23,7 @@ import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.mapper.ArticleSubReplyMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
-import org.pluchon.forum.service.interfaces.growth.GrowthService;
+import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -65,14 +65,14 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
 
     // 用户成长权限业务
     @Autowired
-    private GrowthService growthService;
+    private ContentGrowthInternalFeignClient contentGrowthInternalFeignClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void acceptAnswer(Long articleId, Long replyId, Long loginUserId) {
         validatePositiveId(articleId);
         validatePositiveId(replyId);
-        growthService.requireFormalUser(loginUserId);
+        contentGrowthInternalFeignClient.requireFormalUser(loginUserId);
         Article article = requireQuestion(articleId);
         requireQuestionOwner(article, loginUserId);
         requirePublished(article);
@@ -115,7 +115,7 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
     @Transactional(rollbackFor = Exception.class)
     public void closeQuestion(Long articleId, Long loginUserId) {
         validatePositiveId(articleId);
-        growthService.requireFormalUser(loginUserId);
+        contentGrowthInternalFeignClient.requireFormalUser(loginUserId);
         Article article = requireQuestion(articleId);
         requireQuestionOwner(article, loginUserId);
         requirePublished(article);
