@@ -48,6 +48,8 @@ nacos/
 # --- java-cloud-standalone 本地运行产物 ---
 java-cloud-standalone/**/target/
 java-cloud-standalone/logs/
+java-cloud-standalone/*/logs/
+java-cloud-standalone/test-output/
 .mvn/
 mvnw
 mvnw.cmd
@@ -58,12 +60,8 @@ mvnw.cmd
 **/application-secret.properties
 **/application-*.local.yml
 **/application-*.local.properties
-backend/log.txt
-backend/details.txt
-backend/cp.txt
-backend/editor.ps1
-backend/pushout.txt
 *.hprof
+.jbeval/
 
 # --- Node / Vue (forum-vue) ---
 node_modules/
@@ -197,6 +195,7 @@ known_hosts
 nginx/package/
 nginx/dist/
 nginx/logs/
+nginx/conf.d.local/
 output/
 test-output/
 .playwright-cli/
@@ -211,3 +210,4 @@ logs-collect-*.txt
 docker-compose.override.yml
 docker-compose.override.yaml
 forum-vue/front/.env.production
+forum-vue/**/.codex/
