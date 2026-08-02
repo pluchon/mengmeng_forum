@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Date;
+
 /**
  * MQ 本地消息表：与业务同事务写入，由 {@link org.pluchon.forum.task.OutboxDispatchTask} 异步投递。
  */
@@ -36,6 +38,9 @@ public class LocalMessageOutboxService {
             row.setMessageState(OutboxMessageState.PENDING.getCode());
             row.setRetryCount(0);
             row.setDeleteState((byte) 0);
+            Date now = new Date();
+            row.setCreateTime(now);
+            row.setUpdateTime(now);
             forumOutboxMessageMapper.insert(row);
         } catch (Exception e) {
             log.error("写入 Outbox 失败 eventId={}", eventId, e);
