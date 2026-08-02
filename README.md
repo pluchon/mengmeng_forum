@@ -44,50 +44,96 @@
 flowchart LR
   U["用户"] --> V["用户端"]
   V -->|页面、接口、WebSocket| N["Nginx 统一入口"]
-  N -->|社区接口| J["Java 社区后端"]
+  N -->|反向代理| GW["Spring Cloud Gateway"]
   N -->|静态资源| V
-  J -->|账号、帖子、互动、游戏| M[("MySQL")]
-  J -->|缓存、验证码、排行榜| R[("Redis")]
-  J -->|审核、通知、房间事件| Q["RabbitMQ"]
-  J -->|内部鉴权请求| G["AI 服务"]
-  G -->|LangGraph 状态| P[("PostgreSQL")]
-  G -->|模型、检索、MCP 工具| X["外部 AI 能力"]
-  Q --> W["异步消费者"]
-  W --> J
+  GW -->|服务发现转发| AUTH["auth 账号域"]
+  GW --> CONTENT["content 内容域"]
+  GW --> IM["im 消息域"]
+  GW --> GAME["game 游戏域"]
+  GW --> ECO["economy 成长域"]
+  GW --> AIJAVA["ai 业务域"]
+  AUTH & CONTENT & IM & GAME & ECO & AIJAVA --> NACOS["Nacos<br/>注册与配置"]
+  AUTH --> M1[("forum_auth_db")]
+  CONTENT --> M2[("forum_content_db")]
+  IM --> M3[("forum_im_db")]
+  GAME --> M4[("forum_game_db")]
+  ECO --> M5[("forum_economy_db")]
+  AIJAVA --> M6[("forum_ai_db")]
+  AUTH & CONTENT & IM & GAME & ECO & AIJAVA --> R[("Redis")]
+  CONTENT & IM & GAME & AIJAVA --> Q["RabbitMQ"]
+  AIJAVA -->|内部鉴权| PY["Python AI 服务"]
+  PY --> PG[("PostgreSQL<br/>LangGraph 状态")]
+  PY --> X["外部 AI 能力"]
 ```
 
-整体思路很简单：用户端负责操作和展示；Java 后端负责社区规则、账号和数据；AI 服务负责理解、检索和生成。普通社区功能不依赖某个具体模型，因此 AI 能力以后单独调整时，不会影响发帖、聊天等基础体验。
+整体思路：用户端负责操作和展示；Nginx 只暴露入口；Gateway 按路径把请求转发到六个业务域；每个域各自持有契约（`api`）与实现（`server`），并通过 Nacos 完成注册发现。AI 能力集中在 Python 服务，Java 的 `ai` 域负责额度、会话与业务落库，普通社区功能不依赖某一具体模型。
 
 ## 项目结构
 
 | 目录 | 负责什么 |
 | --- | --- |
 | `forum-vue` | 用户端页面、编辑器、社区互动与看板娘界面 |
-| `backend` | 单体 Java 后端（账号、帖子、互动、推荐、游戏、权限与数据保存） |
-| `java-cloud-standalone` | 单机微服务演进线（Gateway + 分域进程；**进程已切分，代码/数据所有权拆分进行中**；详见该目录 README 与 `docs/architecture-microservices.md`） |
+| `java-cloud-standalone` | 单机微服务：Gateway + 六域 `api`/`server` + 公共 `common` |
 | `ai-server` | 发帖检查、摘要、写作、生图、站内检索与看板娘 |
-| `nginx` | 网站入口、容器配置、打包和发布脚本 |
+| `nginx` | 网站入口、Compose、打包和发布脚本 |
 | `live2d` | 看板娘模型资源 |
+| `migrate-online-db.sh` | 线上/本地 MySQL 从旧单库拆到六域库的迁移脚本 |
+
+### 微服务模块边界
+
+```mermaid
+flowchart TB
+  subgraph gateway["入口层"]
+    NGX["Nginx"]
+    GW["forum-gateway"]
+  end
+  subgraph domains["业务域（各自 api + server）"]
+    AUTH["auth<br/>登录、账号、权限快照"]
+    CONTENT["content<br/>帖子、板块、推荐"]
+    IM["im<br/>私信、群聊、通知"]
+    GAME["game<br/>大厅、对局、排行"]
+    ECO["economy<br/>积分、签到、抽奖、会员"]
+    AI["ai<br/>额度、会话、漂流瓶、看板娘业务"]
+  end
+  subgraph shared["共享与中间件"]
+    COMMON["common<br/>无业务依赖的基础能力"]
+    NACOS["Nacos"]
+    MYSQL[("六域 MySQL")]
+    REDIS[("Redis")]
+    MQ["RabbitMQ"]
+    PY["ai-server"]
+  end
+  NGX --> GW
+  GW --> AUTH & CONTENT & IM & GAME & ECO & AI
+  AUTH & CONTENT & IM & GAME & ECO & AI --> NACOS
+  AUTH & CONTENT & IM & GAME & ECO & AI --> COMMON
+  AUTH & CONTENT & IM & GAME & ECO & AI --> MYSQL & REDIS
+  CONTENT & IM & GAME & AI --> MQ
+  AI --> PY
+```
+
+域与域之间只依赖对方的 `xxx-api` 契约，通过本地 Feign 客户端调用；不再使用跨域共享的 Entity / Mapper / Service 实现。
 
 ## Java 业务模块
 
 ```mermaid
 flowchart LR
-  U["页面或客户端"] --> C["Controller<br/>接收请求与返回结果"]
-  C --> S["Service<br/>权限、状态与业务规则"]
-  S --> MP["Mapper<br/>数据库持久化"]
-  MP --> DB[("社区数据库")]
-  S --> USER["账号与成长<br/>登录、会员、积分、签到"]
-  S --> ARTICLE["内容社区<br/>帖子、板块、标签、评论、弹幕"]
-  S --> SOCIAL["互动社交<br/>收藏、私信、群聊、漂流瓶"]
-  S --> DISCOVER["内容发现<br/>搜索、热帖、推荐、兴趣"]
-  S --> GAME["游戏中心<br/>大厅、房间、对局、排行"]
-  S --> AI["AI 接入<br/>写作、审核、看板娘"]
+  U["页面或客户端"] --> GW["Gateway"]
+  GW --> C["各域 Controller<br/>接收请求与返回结果"]
+  C --> S["各域 Service<br/>权限、状态与业务规则"]
+  S --> MP["Mapper<br/>本域数据库持久化"]
+  MP --> DB[("本域 MySQL")]
+  S --> AUTH["auth<br/>登录、权限快照"]
+  S --> CONTENT["content<br/>帖子、板块、标签、评论、弹幕"]
+  S --> IM["im<br/>私信、群聊、通知"]
+  S --> ECO["economy<br/>会员、积分、签到、抽奖"]
+  S --> GAME["game<br/>大厅、房间、对局、排行"]
+  S --> AI["ai<br/>写作接入、看板娘业务、漂流瓶"]
   S --> R[("缓存层")]
   S --> MQ["异步消息队列"]
 ```
 
-Java 模块按社区中的真实业务划分，而不是按页面拆分。同一条帖子无论从首页、搜索、收藏夹、个人主页还是看板娘对话进入，最终都回到同一份帖子和互动数据。
+Java 模块按社区中的真实业务域划分，每个域是独立进程。同一条帖子无论从首页、搜索、收藏夹、个人主页还是看板娘对话进入，最终都回到 `content` 域同一份帖子与互动数据；账号身份由 `auth` 域提供快照，其他域按需调用。
 
 ### 帖子发布与审核
 
@@ -462,31 +508,43 @@ flowchart LR
 | 服务 | 镜像版本 | 用途 |
 | --- | --- | --- |
 | Nginx | 1.30.1 | 反向代理、HTTPS 终止、静态资源分发 |
-| MySQL | 9.7.0 | 主数据库 |
+| Nacos | 3.1.1 | 服务注册发现与配置中心 |
+| MySQL | 9.7.0 | 六个业务域独立库 |
 | Redis | 8.0 | 缓存与排行榜，allkeys-lru 策略，限 256 MB |
 | RabbitMQ | 4.3-management | 审核任务的异步消息队列 |
 | PostgreSQL | 17 | LangGraph checkpoint 持久化存储 |
 
 ## 本地启动
 
-准备 Java 17、Python 3.11、Node.js、Docker Desktop，以及 MySQL、Redis、RabbitMQ、PostgreSQL。
+准备 Java 17、Python 3.11、Node.js、Docker Desktop，以及 MySQL、Redis、RabbitMQ、PostgreSQL、Nacos。
 
 ```powershell
+# 中间件（开发 Compose）
+cd nginx
+docker compose -f docker-compose.dev.yaml up -d
+
 # 用户端
-cd forum-vue\front
+cd ..\forum-vue\front
 npm install
 npm run dev
 
-# 社区后端
-cd ..\..\backend
-mvn spring-boot:run
+# Java 微服务（IDEA 推荐按模块启动，或根目录 reactor 打包后分别启动）
+cd ..\..\java-cloud-standalone
+mvn -DskipTests package
+# 依次启动：gateway、auth、content、im、game、economy、ai
 
 # AI 服务
 cd ..\ai-server
 python main.py
 ```
 
-本地构建和 Docker 构建会通过本机 `7897` 代理访问外部依赖。密钥和环境差异只放在环境变量或被忽略的本地配置中，不放入仓库。
+若本地仍是旧的单库 `forum_db`，可先执行：
+
+```bash
+bash migrate-online-db.sh migrate-data
+```
+
+本地构建和 Docker 构建会通过本机 `7897` 代理访问外部依赖。密钥和环境差异只放在环境变量或本地配置中，不放入仓库。
 
 ### 环境变量说明
 
@@ -496,7 +554,9 @@ python main.py
 | --- | --- |
 | `JWT_SECRET` | JWT 签名密钥，生产必须替换 |
 | `PII_CRYPTO_SECRET` | 手机号等敏感字段对称加密密钥 |
-| `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` | 数据库密码 |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
+| `FORUM_*_DB_USERNAME` / `FORUM_*_DB_PASSWORD` | 六个业务域数据库账号 |
+| `NACOS_ADDR` | Nacos 地址，生产默认 `nacos:8848` |
 | `REDIS_PASSWORD` | Redis 认证密码 |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` / `RABBITMQ_VHOST` | MQ 账号与虚拟主机 |
 | `DASHSCOPE_API_KEY` | 通义大模型 API Key |
@@ -542,11 +602,11 @@ flowchart LR
 .\scripts\verify-package.ps1
 ```
 
-发布包以六个 server 模块各自的 `src/main/resources/db/create.sql` 作为独立数据库初始化基线；已上线环境按已执行的发布变更维护，不再要求携带历史增量 SQL。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
+发布包以六个 server 模块各自的 `src/main/resources/db/create.sql` 作为独立数据库初始化基线。已有旧单库 `forum_db` 的环境，上线前用包内 `migrate-online-db.sh migrate-data` 建六域结构并搬迁数据，默认保留 `forum_db`。旧会话清理默认关闭，只有明确把脚本中的开关改为 `1` 才会执行清理。
 
 ## 核心设计思路
 
-权限边界放在 Java 这侧。前端的登录拦截只是减少无效请求，身份校验和授权判断统一在 Service 层完成，AI 服务也只接受附带内部密钥的请求。
+权限边界放在各 Java 业务域的 Service 层。前端的登录拦截只是减少无效请求；跨域调用通过 `auth-api` 等契约获取身份快照，AI 服务也只接受附带内部密钥的请求。
 
 帖子有一套严格的状态流转：草稿 → 待审核 → 已发布，每一步只能由 Java Service 推进。审核期间字段锁定，前端拿不到直接改状态的入口。每次提交审核都会生成一个任务 ID 写入 `article.audit_task_id`，和 AI 侧 LangGraph 的 `thread_id` 对应，审核过程可以完整追溯。
 
@@ -560,7 +620,7 @@ AI 服务只管生成，不管写入。审核结论、摘要、推荐特征都�
 
 ## 数据表概览
 
-84 张表按业务分组，每张表都有 `create_time`、`update_time`、`delete_state` 三个基础字段，主键统一用 `BIGINT AUTO_INCREMENT`。
+业务表按六个独立库拆分：`forum_auth_db`、`forum_content_db`、`forum_im_db`、`forum_game_db`、`forum_economy_db`、`forum_ai_db`。每张表都有 `create_time`、`update_time`、`delete_state` 三个基础字段，主键统一用 `BIGINT AUTO_INCREMENT`。
 
 | 分组 | 主要表 |
 | --- | --- |
@@ -577,7 +637,7 @@ AI 服务只管生成，不管写入。审核结论、摘要、推荐特征都�
 
 ## 容器服务说明
 
-生产栈由 `nginx/docker-compose.yaml` 定义。所有服务在 `forum-net` 网络里用服务名互通，只有 Nginx 的 80 和 443 端口对外开放。
+生产栈由 `nginx/docker-compose.yaml` 定义。所有服务在 `forum-net` 网络里用服务名互通，只有 Nginx 的 80 和 443 端口对外开放；Nacos 不对外暴露。
 
 ```mermaid
 flowchart LR
@@ -587,10 +647,16 @@ flowchart LR
   end
   subgraph containers["forum-net 内部"]
     NGX["nginx"]
-    BE1["backend-1"]
-    BE2["backend-2\n(dual profile)"]
-    AI["ai-server"]
+    GW["gateway"]
+    AUTH["auth"]
+    CONTENT["content"]
+    IM["im"]
+    GAME["game"]
+    ECO["economy"]
+    AIJ["ai"]
+    PY["ai-server"]
     FF["ffmpeg"]
+    NACOS["nacos"]
     MY[("mysql")]
     RD[("redis")]
     RMQ["rabbitmq"]
@@ -598,19 +664,22 @@ flowchart LR
   end
   HTTPS --> NGX
   HTTP --> NGX
-  NGX --> BE1
-  NGX --> BE2
-  BE1 --> MY & RD & RMQ & AI & FF
-  BE2 --> MY & RD & RMQ & AI
-  AI --> PG & RD & RMQ
-  FF --> AI
+  NGX --> GW
+  GW --> AUTH & CONTENT & IM & GAME & ECO & AIJ
+  AUTH & CONTENT & IM & GAME & ECO & AIJ --> NACOS
+  AUTH & CONTENT & IM & GAME & ECO & AIJ --> MY & RD
+  CONTENT & IM & GAME & AIJ --> RMQ
+  AIJ --> PY
+  PY --> PG & RD & RMQ
+  CONTENT --> FF
+  FF --> PY
 ```
 
-`backend-2` 只在 `--profile dual` 时启动，用于不中断服务的滚动发布。`ffmpeg` 容器处理视频转码任务，通过内部密钥与 Java 和 AI 服务通信。
+六个 Java 业务容器与 Gateway 共用同一份 `forum-backend` 镜像，启动时通过不同 jar 入口区分进程。`ffmpeg` 处理视频转码，通过内部密钥与 Java / AI 服务通信。
 
 ## 开发约定
 
-- 内容、权限和数据由社区后端统一决定，页面只负责展示和提交操作。
+- 内容、权限和数据由对应业务域的 Java 服务决定，页面只负责展示和提交操作。
 - AI 只通过统一入口接入，页面不直接调用具体模型。
 - 新的数据库变更只追加新脚本，不修改已经执行过的历史脚本。
 - 密码、密钥、验证码或本地环境配置不提交仓库。
