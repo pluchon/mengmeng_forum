@@ -79,7 +79,7 @@ public final class MascotConverter {
             }
             CompanionImageGalleryItemVO galleryItem = new CompanionImageGalleryItemVO();
             galleryItem.setUrl(url);
-            galleryItem.setTitle(stringVal(item.get("title")));
+            galleryItem.setTitle(trimTitle(item.get("title")));
             galleryItem.setSource(stringVal(item.get("source")));
             out.add(galleryItem);
             if (out.size() >= 5) {
@@ -112,6 +112,15 @@ public final class MascotConverter {
 
     private static String stringVal(Object raw) {
         return raw == null ? null : String.valueOf(raw);
+    }
+
+    private static String trimTitle(Object raw) {
+        String title = stringVal(raw);
+        if (title == null) {
+            return "";
+        }
+        title = title.trim();
+        return title.substring(0, Math.min(10, title.length()));
     }
 
     private static Integer intVal(Object raw) {
