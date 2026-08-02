@@ -5,7 +5,9 @@ import io.jsonwebtoken.JwtParserBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
+import org.pluchon.forum.common.result.Result;
 import org.springframework.util.StringUtils;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -79,7 +81,7 @@ public class JWTUtils {
         //预校验格式：合法JWT必须恰好含2个'.'
         //拦截"null"等非JWT字符串
         if (jwt.chars().filter(c -> c == '.').count() != 2) {
-            log.warn("令牌格式非法，不是 JWT：{}", jwt);
+            log.warn("令牌格式非法，不是 JWT");
             return null;
         }
         //创建我们的令牌解析器，并把我们的安全密钥加入
@@ -91,8 +93,8 @@ public class JWTUtils {
             claims = jwtParserBuilder.build().parseClaimsJws(jwt).getBody();
         } catch (Exception e) {
             //说明我们的令牌解析失败了
-            log.error("令牌解析失败：{}", jwt);
-            throw new ApplicationException(e.getMessage());
+            log.warn("令牌解析失败: type={}", e.getClass().getSimpleName());
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
         return claims;
     }
