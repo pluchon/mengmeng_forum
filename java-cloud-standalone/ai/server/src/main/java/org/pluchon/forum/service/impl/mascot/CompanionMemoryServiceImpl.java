@@ -279,13 +279,29 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     @Override
     public List<MascotHistoryTurn> loadCompressibleHistory(Long userId, Long sessionId) {
         requireOwnedSession(userId, sessionId);
-        List<ForumCompanionMessage> rows = companionMessageMapper.selectList(
+        List<MascotHistoryTurn> out = new ArrayList<>();
+        ForumCompanionMessage latestSummary = companionMessageMapper.selectOne(
                 new LambdaQueryWrapper<ForumCompanionMessage>()
                         .eq(ForumCompanionMessage::getSessionId, sessionId)
+                        .eq(ForumCompanionMessage::getMsgType, "context_summary")
                         .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
-                        .ne(ForumCompanionMessage::getMsgType, "context_summary")
-                        .orderByAsc(ForumCompanionMessage::getId));
-        List<MascotHistoryTurn> out = new ArrayList<>();
+                        .orderByDesc(ForumCompanionMessage::getId)
+                        .last("LIMIT 1"));
+        if (latestSummary != null && latestSummary.getContent() != null && !latestSummary.getContent().isBlank()) {
+            MascotHistoryTurn summary = new MascotHistoryTurn();
+            summary.setRole("assistant");
+            summary.setContent("【已压缩的先前上下文】\n" + latestSummary.getContent().trim());
+            out.add(summary);
+        }
+        LambdaQueryWrapper<ForumCompanionMessage> query = new LambdaQueryWrapper<ForumCompanionMessage>()
+                .eq(ForumCompanionMessage::getSessionId, sessionId)
+                .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
+                .ne(ForumCompanionMessage::getMsgType, "context_summary")
+                .orderByAsc(ForumCompanionMessage::getId);
+        if (latestSummary != null) {
+            query.gt(ForumCompanionMessage::getId, latestSummary.getId());
+        }
+        List<ForumCompanionMessage> rows = companionMessageMapper.selectList(query);
         for (ForumCompanionMessage row : rows) {
             if (row.getContent() == null || row.getContent().isBlank()) {
                 continue;
@@ -343,7 +359,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
             }
             CompanionImageGalleryItemVO accepted = new CompanionImageGalleryItemVO();
             accepted.setUrl(url);
-            accepted.setTitle(item.getTitle() == null ? "" : item.getTitle().trim().substring(0, Math.min(120, item.getTitle().trim().length())));
+            accepted.setTitle(item.getTitle() == null ? "" : item.getTitle().trim().substring(0, Math.min(10, item.getTitle().trim().length())));
             accepted.setSource(item.getSource() == null ? "" : item.getSource().trim().substring(0, Math.min(160, item.getSource().trim().length())));
             out.add(accepted);
             if (out.size() >= 5) {
