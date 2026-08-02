@@ -63,6 +63,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
 
     private static final int DEFAULT_SHOP_PAGE_SIZE = 12;
     private static final int DEFAULT_SHOP_ITEM_PAGE_SIZE = 9;
+    private static final int SEMANTIC_SEARCH_CANDIDATE_LIMIT = 120;
     private static final TypeReference<PageResult<EmojiShopListItemVO>> SHOP_LIST_PAGE_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<PageResult<String>> SHOP_ITEM_PAGE_TYPE = new TypeReference<>() {
@@ -284,9 +285,64 @@ public class EmojiShopServiceImpl implements EmojiShopService {
 
         Page<EmojiShop> page = new Page<>(validPageNum, validPageSize);
         Page<EmojiShop> result = emojiShopMapper.selectPage(page, qw);
+        if ((result.getRecords() == null || result.getRecords().isEmpty()) && StringUtils.hasText(validKeyword)) {
+            return querySemanticShopList(validSort, validKeyword, validPageNum, validPageSize);
+        }
         List<EmojiShopListItemVO> records = enrichPublicListItems(result.getRecords());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
+    }
+
+    // 普通名称匹配无结果时，AI 仅对本域已筛出的上架候选排序，最终可见性仍由本服务复查。
+    private PageResult<EmojiShopListItemVO> querySemanticShopList(String validSort, String keyword,
+                                                                   int pageNum, int pageSize) {
+        LambdaQueryWrapper<EmojiShop> candidateWrapper = new LambdaQueryWrapper<EmojiShop>()
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
+                .ne(EmojiShop::getDeleteState, 1);
+        applySort(candidateWrapper, validSort);
+        List<EmojiShop> candidates = emojiShopMapper.selectPage(
+                new Page<>(1, SEMANTIC_SEARCH_CANDIDATE_LIMIT, false), candidateWrapper).getRecords();
+        if (candidates == null || candidates.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false);
+        }
+        List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
+        for (EmojiShop candidate : candidates) {
+            Map<String, Object> item = new HashMap<>(2);
+            item.put("candidateId", candidate.getId());
+            item.put("text", candidate.getName() + "\n" + (candidate.getDescription() == null ? "" : candidate.getDescription()));
+            payload.add(item);
+        }
+        List<Long> rankedIds;
+        try {
+            rankedIds = economyAiGatewayService.rankSemanticCandidates(keyword, payload);
+        } catch (RuntimeException exception) {
+            log.warn("表情包 AI 语义检索失败: {}", exception.getMessage());
+            rankedIds = Collections.emptyList();
+        }
+        if (rankedIds == null || rankedIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false);
+        }
+        List<EmojiShop> verified = emojiShopMapper.selectList(new LambdaQueryWrapper<EmojiShop>()
+                .in(EmojiShop::getId, rankedIds)
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
+                .ne(EmojiShop::getDeleteState, 1));
+        Map<Long, EmojiShop> verifiedById = new HashMap<>();
+        for (EmojiShop shop : verified) {
+            verifiedById.put(shop.getId(), shop);
+        }
+        List<EmojiShop> ranked = new ArrayList<>();
+        for (Long shopId : rankedIds) {
+            EmojiShop shop = verifiedById.get(shopId);
+            if (shop != null) {
+                ranked.add(shop);
+            }
+        }
+        long total = ranked.size();
+        int fromIndex = Math.min((pageNum - 1) * pageSize, ranked.size());
+        int toIndex = Math.min(fromIndex + pageSize, ranked.size());
+        long pages = total == 0 ? 0L : (total + pageSize - 1) / pageSize;
+        List<EmojiShopListItemVO> records = enrichPublicListItems(ranked.subList(fromIndex, toIndex));
+        return new PageResult<>(records, total, pageNum, pageSize, pages, toIndex < ranked.size());
     }
 
     @Override

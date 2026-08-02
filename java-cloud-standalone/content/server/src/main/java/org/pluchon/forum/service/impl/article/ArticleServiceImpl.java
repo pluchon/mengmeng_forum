@@ -60,6 +60,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -136,6 +137,7 @@ public class ArticleServiceImpl implements ArticleService {
     private static final byte STATE_FORBIDDEN = 1;
     private static final byte DELETE_TRUE = 1;
     private static final byte DELETE_FALSE = 0;
+    private static final int SEMANTIC_SEARCH_CANDIDATE_LIMIT = 120;
 
     // ============================================================
     // 草稿 / 发布
@@ -442,7 +444,59 @@ public class ArticleServiceImpl implements ArticleService {
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
         Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner, status, keyword));
+        if (isOwner && StringUtils.hasText(keyword)
+                && (result.getRecords() == null || result.getRecords().isEmpty())) {
+            return querySemanticUserArticles(userId, status, keyword.trim(), validPageNum, validPageSize);
+        }
         return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
+    }
+
+    // 创作中心仅在标题/正文模糊匹配为空时请求 AI 对本人的候选帖子排序，状态与归属仍由本域复查。
+    private PageResult<ArticleBriefVO> querySemanticUserArticles(Long userId, Integer status, String keyword,
+                                                                  int pageNum, int pageSize) {
+        List<Article> candidates = articleMapper.selectPage(
+                new Page<>(1, SEMANTIC_SEARCH_CANDIDATE_LIMIT, false),
+                buildUserArticleWrapper(userId, true, status, null)).getRecords();
+        if (candidates == null || candidates.isEmpty()) {
+            return ArticleConverter.toBriefPage(new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false));
+        }
+        List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
+        for (Article candidate : candidates) {
+            Map<String, Object> item = new HashMap<>(2);
+            item.put("candidateId", candidate.getId());
+            item.put("text", (candidate.getTitle() == null ? "" : candidate.getTitle())
+                    + "\n" + (candidate.getContent() == null ? "" : candidate.getContent()));
+            payload.add(item);
+        }
+        List<Long> rankedIds;
+        try {
+            rankedIds = contentAiGatewayService.rankSemanticCandidates(keyword, payload);
+        } catch (RuntimeException exception) {
+            log.warn("创作中心 AI 语义检索失败: {}", exception.getMessage());
+            rankedIds = Collections.emptyList();
+        }
+        if (rankedIds == null || rankedIds.isEmpty()) {
+            return ArticleConverter.toBriefPage(new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false));
+        }
+        List<Article> verified = articleMapper.selectList(buildUserArticleWrapper(userId, true, status, null)
+                .in(Article::getId, rankedIds));
+        Map<Long, Article> verifiedById = new HashMap<>();
+        for (Article article : verified) {
+            verifiedById.put(article.getId(), article);
+        }
+        List<Article> ranked = new ArrayList<>();
+        for (Long articleId : rankedIds) {
+            Article article = verifiedById.get(articleId);
+            if (article != null) {
+                ranked.add(article);
+            }
+        }
+        long total = ranked.size();
+        int fromIndex = Math.min((pageNum - 1) * pageSize, ranked.size());
+        int toIndex = Math.min(fromIndex + pageSize, ranked.size());
+        long pages = total == 0 ? 0L : (total + pageSize - 1) / pageSize;
+        return ArticleConverter.toBriefPage(new PageResult<>(ranked.subList(fromIndex, toIndex), total,
+                pageNum, pageSize, pages, toIndex < ranked.size()));
     }
 
     @Override
