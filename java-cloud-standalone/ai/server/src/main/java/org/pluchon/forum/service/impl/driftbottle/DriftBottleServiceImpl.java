@@ -33,6 +33,8 @@ import org.pluchon.forum.service.interfaces.driftbottle.DriftBottleService;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,7 @@ import java.util.stream.Collectors;
 // 漂流瓶业务实现
 public class DriftBottleServiceImpl implements DriftBottleService {
 
+    private static final Logger log = LoggerFactory.getLogger(DriftBottleServiceImpl.class);
     private static final int CREATE_DAILY_LIMIT = 5;
     private static final int PICK_DAILY_LIMIT = 20;
     private static final int COMMENT_DAILY_LIMIT = 50;
@@ -92,6 +95,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
         assertCanPost(user);
         assertDailyLimit(countTodayBottles(loginUserId), CREATE_DAILY_LIMIT, "今日扔瓶次数已用完");
         String content = normalizeContent(request.getContent(), 20, 500);
+        assertAiContentAllowed("漂流瓶内容：" + content);
         String moodType = normalizeMood(request.getMoodType());
         Date now = ForumDateTimes.now();
 
@@ -221,6 +225,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能举报自己的瓶子"));
         }
         createReport(DriftBottleReportTargetType.BOTTLE.getCode(), bottleId, request, loginUserId);
+        hideTargetIfAiRejected(DriftBottleReportTargetType.BOTTLE.getCode(), bottleId, "漂流瓶内容：" + bottle.getContent());
         hideTargetIfNeeded(DriftBottleReportTargetType.BOTTLE.getCode(), bottleId);
     }
 
@@ -232,6 +237,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能举报自己的评论"));
         }
         createReport(DriftBottleReportTargetType.COMMENT.getCode(), commentId, request, loginUserId);
+        hideTargetIfAiRejected(DriftBottleReportTargetType.COMMENT.getCode(), commentId, "漂流瓶评论：" + comment.getContent());
         hideTargetIfNeeded(DriftBottleReportTargetType.COMMENT.getCode(), commentId);
     }
 
@@ -376,6 +382,20 @@ public class DriftBottleServiceImpl implements DriftBottleService {
         if (count == null || count < REPORT_HIDE_THRESHOLD) {
             return;
         }
+        hideTarget(targetType, targetId);
+    }
+
+    private void hideTargetIfAiRejected(Byte targetType, Long targetId, String content) {
+        try {
+            if (StringUtils.hasText(aiHubService.validateText(content))) {
+                hideTarget(targetType, targetId);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("漂流瓶举报 AI 复核失败 targetType={}, targetId={}", targetType, targetId, exception);
+        }
+    }
+
+    private void hideTarget(Byte targetType, Long targetId) {
         Date now = ForumDateTimes.now();
         if (DriftBottleReportTargetType.BOTTLE.getCode().equals(targetType)) {
             driftBottleMapper.update(null, new LambdaUpdateWrapper<DriftBottle>()
