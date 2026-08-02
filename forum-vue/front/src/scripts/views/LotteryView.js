@@ -199,6 +199,16 @@ function formatOutcome(row) {
   return '谢谢参与'
 }
 
+function notifyActivityPoints(results) {
+  const totalPoints = (results || []).reduce(
+    (sum, item) => sum + Math.max(0, Number(item?.grantPoints) || 0),
+    0,
+  )
+  if (totalPoints > 0) {
+    ElMessage.success(`本次活动额外获得 ${totalPoints} 积分`)
+  }
+}
+
 function formatDrawTime(value) {
   if (!value) return '—'
   const date = new Date(value)
@@ -316,6 +326,7 @@ async function onSingle() {
     if (singleOutcome.value?.rewardDetail || singleOutcome.value?.grantPoints > 0) {
       ElMessage.success(`恭喜获得：${text}`)
     }
+    notifyActivityPoints([singleOutcome.value])
     if (singleOutcome.value?.jackpot) {
       jackpotOverlayText.value = text
       jackpotOverlay.value = true
@@ -346,6 +357,7 @@ async function onTen() {
     tenResults.value = res.data.results
     await syncAfterDraw(res)
     phase.value = 'ten_result'
+    notifyActivityPoints(tenResults.value)
     setTimeout(() => maybeJackpot(res.data.results), 300)
   } finally {
     busy.value = false
