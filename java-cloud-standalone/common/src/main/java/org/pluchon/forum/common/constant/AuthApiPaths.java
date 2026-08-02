@@ -83,6 +83,7 @@ public final class AuthApiPaths {
                 "/mascot/internal/**",
                 "/ai/internal/**",
                 "/system-message/internal/**",
+                "/websocket/internal/**",
                 "/favorite/internal/**",
                 "/file/internal/**",
                 "/article/internal/**",
