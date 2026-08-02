@@ -462,15 +462,19 @@ public class ArticleServiceImpl implements ArticleService {
         }
         List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
         for (Article candidate : candidates) {
-            Map<String, Object> item = new HashMap<>(2);
+            Map<String, Object> item = new HashMap<>(3);
             item.put("candidateId", candidate.getId());
+            item.put("articleId", candidate.getId());
             item.put("text", (candidate.getTitle() == null ? "" : candidate.getTitle())
                     + "\n" + (candidate.getContent() == null ? "" : candidate.getContent()));
             payload.add(item);
         }
         List<Long> rankedIds;
         try {
-            rankedIds = contentAiGatewayService.rankSemanticCandidates(keyword, payload);
+            rankedIds = contentAiGatewayService.ragVectorSearchArticles(keyword, payload);
+            if (rankedIds == null || rankedIds.isEmpty()) {
+                rankedIds = contentAiGatewayService.rankSemanticCandidates(keyword, payload);
+            }
         } catch (RuntimeException exception) {
             log.warn("创作中心 AI 语义检索失败: {}", exception.getMessage());
             rankedIds = Collections.emptyList();

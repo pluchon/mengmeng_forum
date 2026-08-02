@@ -7,6 +7,7 @@ import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
@@ -53,6 +54,9 @@ public interface AiHubInternalApi {
     @PostMapping("/ai/internal/hub/rag/article-index")
     void indexArticleRag(@Valid @RequestBody RagArticleIndexDTO payload);
 
+    @PostMapping("/ai/internal/hub/rag/emoji-index")
+    void indexEmojiRag(@Valid @RequestBody RagEmojiIndexDTO payload);
+
     @PostMapping("/ai/internal/hub/rag/user-index")
     void indexUserRag(@Valid @RequestBody RagUserIndexDTO payload);
 
@@ -61,6 +65,9 @@ public interface AiHubInternalApi {
 
     @PostMapping("/ai/internal/hub/rag/article-search")
     List<Long> ragVectorSearchArticles(@Valid @RequestBody AiRagSearchRequest request);
+
+    @PostMapping("/ai/internal/hub/rag/emoji-search")
+    List<Long> ragVectorSearchEmojis(@Valid @RequestBody AiRagSearchRequest request);
 
     @PostMapping("/ai/internal/hub/rag/article-ranked")
     List<RagArticleVectorHitVO> ragArticleVectorRanked(@Valid @RequestBody AiRagSearchRequest request);

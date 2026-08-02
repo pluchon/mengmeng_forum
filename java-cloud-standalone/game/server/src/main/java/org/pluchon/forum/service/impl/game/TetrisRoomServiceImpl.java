@@ -138,7 +138,8 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             room.getDisconnectDeadlines().remove(userId);
             broadcast(roomId, GameWsResponse.ok("peer_reconnected", null, toStateVO(room, userId)));
         } else {
-            room.getSpectatorJoinedAt().put(userId, System.currentTimeMillis());
+            room.getSpectatorJoinedAt().putIfAbsent(userId, System.currentTimeMillis());
+            broadcastState(room, "room_state_updated", null);
         }
         return toStateVO(room, userId);
     }

@@ -1,7 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatDotRound, Flag, HomeFilled, MoreFilled } from '@element-plus/icons-vue'
+import { ChatDotRound, Flag, HomeFilled, MoreFilled, UserFilled } from '@element-plus/icons-vue'
 import { getTetrisPkRoom, surrenderTetrisPkRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
@@ -70,6 +70,9 @@ function useTetrisPkRoom() {
   const surrendering = ref(false)
   const playerStatsVisible = ref(false)
   const selectedPlayer = ref(null)
+  const spectatorDialogVisible = ref(false)
+  const spectatorPage = ref(1)
+  const spectatorPageSize = 10
   const chatMessages = ref([])
   const chatText = ref('')
   const chatListRef = ref(null)
@@ -111,6 +114,13 @@ function useTetrisPkRoom() {
   const isFinished = computed(() => room.roomStatus === 'FINISHED')
   const isSpectator = computed(() => Boolean(room.spectator))
   const isPlayer = computed(() => !isSpectator.value)
+  const spectators = computed(() => Array.isArray(room.spectators) ? room.spectators : [])
+  const visibleSpectators = computed(() => spectators.value.slice(0, 6))
+  const hiddenSpectatorCount = computed(() => Math.max(0, spectators.value.length - visibleSpectators.value.length))
+  const spectatorRows = computed(() => {
+    const start = (spectatorPage.value - 1) * spectatorPageSize
+    return spectators.value.slice(start, start + spectatorPageSize)
+  })
   const canChat = computed(() => room.roomStatus === 'PLAYING' || room.roomStatus === 'FINISHED')
 
   function scrollChatToBottom() {
@@ -439,11 +449,18 @@ function useTetrisPkRoom() {
     room,
     roomSocket,
     selectedPlayer,
+    spectatorDialogVisible,
+    spectatorPage,
+    spectatorPageSize,
+    spectatorRows,
+    spectators,
     sendChat,
     sendChatEmoji,
     sendChatText,
     surrender,
     surrendering,
+    visibleSpectators,
+    hiddenSpectatorCount,
     winnerText,
   }
 }
@@ -481,10 +498,17 @@ const {
   room,
   roomSocket,
   selectedPlayer,
+  spectatorDialogVisible,
+  spectatorPage,
+  spectatorPageSize,
+  spectatorRows,
+  spectators,
   sendChat,
   sendChatEmoji,
   sendChatText,
   surrender,
   surrendering,
+  visibleSpectators,
+  hiddenSpectatorCount,
   winnerText,
 } = useTetrisPkRoom()

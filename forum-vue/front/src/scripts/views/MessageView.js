@@ -83,6 +83,7 @@ import {
   canFavoriteChatMediaMessage,
   validateChatImageMime,
   readImageNaturalSize,
+  isEmojiShopMediaUrl,
   isUserUploadedChatEmoji,
 } from '@/utils/chatMedia'
 import { isVipActive } from '@/utils/vip'
@@ -215,7 +216,7 @@ export function useMessageView() {
       session: s,
       name: s.user?.nickname || '用户',
       time: s.lastMessageTime,
-      preview: s.lastMessage || '暂无消息',
+      preview: previewForPrivateMessage(s.lastMessage),
       unread: Number(s.unReadMessage) || 0,
       user: s.user,
     }))
@@ -2388,6 +2389,10 @@ const GROUP_NOTIFY_OPTIONS = [
     return t === 1 || t === 2
   }
 
+  function isEmojiShopGroupMedia(msgRow) {
+    return isEmojiShopMediaUrl(msgRow?.message?.mediaUrl)
+  }
+
   function isVoiceCallMessage(msg) {
     return Number(msg?.message?.messageType) === 3
   }
@@ -2518,6 +2523,7 @@ const GROUP_NOTIFY_OPTIONS = [
     isMemberMuted,
     isPrivateChat,
     isMediaMessage,
+    isEmojiShopGroupMedia,
     isVoiceCallMessage,
     isGroupInviteCard,
     leaveCurrentGroup,

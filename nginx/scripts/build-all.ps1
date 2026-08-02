@@ -41,13 +41,22 @@ function Invoke-DockerBuild {
     param(
         [string]$Tag,
         [string]$Context,
-        [string]$DisplayName
+        [string]$DisplayName,
+        [string]$Dockerfile
     )
     Step "Docker build $DisplayName"
     if ($ShowBuildDetails) {
-        & docker build --pull=false --progress=plain @dockerBuildProxyArgs -t $Tag $Context
+        if ($Dockerfile) {
+            & docker build --pull=false --progress=plain @dockerBuildProxyArgs -f $Dockerfile -t $Tag $Context
+        } else {
+            & docker build --pull=false --progress=plain @dockerBuildProxyArgs -t $Tag $Context
+        }
     } else {
-        & docker build --pull=false -q @dockerBuildProxyArgs -t $Tag $Context
+        if ($Dockerfile) {
+            & docker build --pull=false -q @dockerBuildProxyArgs -f $Dockerfile -t $Tag $Context
+        } else {
+            & docker build --pull=false -q @dockerBuildProxyArgs -t $Tag $Context
+        }
     }
     if ($LASTEXITCODE -ne 0) { throw "$DisplayName image build failed" }
     Write-Host "Image $Tag ready" -ForegroundColor Green
@@ -175,18 +184,11 @@ if (-not $SkipBackend) {
 
     if (-not $SkipDocker) {
         $backendDockerfile = Join-Path $cloudRoot "Dockerfile.backend"
-        $legacyBackend = Join-Path $repoRoot "backend"
         if (Test-Path $backendDockerfile) {
-            Invoke-DockerBuild -Tag "forum-backend:latest" -Context $cloudRoot -DisplayName "forum-backend:latest"
-        }
-        elseif (Test-Path (Join-Path $legacyBackend "Dockerfile")) {
-            Invoke-DockerBuild -Tag "forum-backend:latest" -Context $legacyBackend -DisplayName "forum-backend:latest"
-        }
-        elseif (Test-DockerImage "forum-backend:latest") {
-            Write-Host "WARN: no Dockerfile for forum-backend; reusing existing forum-backend:latest image" -ForegroundColor Yellow
+            Invoke-DockerBuild -Tag "forum-backend:latest" -Context $cloudRoot -DisplayName "forum-backend:latest" -Dockerfile $backendDockerfile
         }
         else {
-            throw "forum-backend:latest image missing and no Dockerfile found. Add java-cloud-standalone/Dockerfile.backend or build/load the image before packaging."
+            throw "Missing java-cloud-standalone/Dockerfile.backend. Refusing to package a stale forum-backend image."
         }
     }
 }

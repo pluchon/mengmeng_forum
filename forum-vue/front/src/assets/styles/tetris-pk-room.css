@@ -390,6 +390,34 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.tetris-pk-room-page .gobang-spectator-card {
+  position: relative;
+  padding-bottom: 42px;
+}
+
+.tetris-spectator-count {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #d9f4ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tetris-spectator-count:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 @media (max-width: 1100px) {
   .tetris-pk-room-page .tetris-pk-stage {
     grid-template-columns: 1fr;

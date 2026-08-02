@@ -12,6 +12,7 @@ $required = @(
     ".env",
     "start.sh",
     "up.sh",
+    "migrate-online-db.sh",
     "verify-frontend-dist.sh",
     "sql\auth-create.sql",
     "sql\content-create.sql",
@@ -35,7 +36,7 @@ foreach ($rel in $optional) {
     else { Write-Host "  WARN optional missing: $rel" -ForegroundColor Yellow }
 }
 
-foreach ($shName in @("start.sh", "reset-db.sh", "verify-frontend-dist.sh")) {
+foreach ($shName in @("start.sh", "up.sh", "reset-db.sh", "migrate-online-db.sh", "verify-frontend-dist.sh")) {
     $sh = Join-Path $PkgRoot $shName
     if (-not (Test-Path $sh)) { continue }
     $raw = [System.IO.File]::ReadAllBytes($sh)

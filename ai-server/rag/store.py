@@ -18,6 +18,8 @@ IDS_KEY = _RAG.get("redis_article_ids_key", "forum_rag:article:ids")
 DOC_KEY_PREFIX = _RAG.get("redis_article_doc_prefix", "forum_rag:article:")
 _USER_IDS_KEY = _RAG.get("redis_user_ids_key", "forum_rag:user:ids")
 _USER_DOC_PREFIX = _RAG.get("redis_user_doc_prefix", "forum_rag:user:")
+_EMOJI_IDS_KEY = _RAG.get("redis_emoji_ids_key", "forum_rag:emoji:ids")
+_EMOJI_DOC_PREFIX = _RAG.get("redis_emoji_doc_prefix", "forum_rag:emoji:")
 VECTOR_SCAN_LIMIT = int(_RAG.get("vector_scan_limit", 800))
 
 
@@ -27,6 +29,10 @@ def _doc_key(article_id: int | str) -> str:
 
 def _user_doc_key(user_id: int | str) -> str:
     return f"{_USER_DOC_PREFIX}{user_id}"
+
+
+def _emoji_doc_key(shop_id: int | str) -> str:
+    return f"{_EMOJI_DOC_PREFIX}{shop_id}"
 
 
 def save_article_index(
@@ -80,6 +86,16 @@ def remove_user_index(user_id: int) -> None:
     pipe = redis_client.pipeline()
     pipe.delete(_user_doc_key(user_id))
     pipe.srem(_USER_IDS_KEY, str(user_id))
+    pipe.execute()
+
+
+def save_emoji_index(shop_id: int, *, doc: str, embedding: list[float]) -> None:
+    pipe = redis_client.pipeline()
+    pipe.hset(_emoji_doc_key(shop_id), mapping={
+        "doc": doc[: int(_RAG.get("doc_truncate", 1200))],
+        "embedding": json.dumps(embedding),
+    })
+    pipe.sadd(_EMOJI_IDS_KEY, str(shop_id))
     pipe.execute()
 
 
@@ -257,3 +273,33 @@ def vector_search_users(
     scored.sort(key=lambda x: x[0], reverse=True)
     top_k = min(top_k, int(_RAG.get("embedding_top_k", 80)))
     return [{"userId": uid, "score": round(sim, 4)} for sim, uid in scored[:top_k]]
+
+
+def vector_search_emojis(query_vec: list[float], *, top_k: int = 80) -> list[dict[str, Any]]:
+    if not query_vec:
+        return []
+    try:
+        ids = list(redis_client.smembers(_EMOJI_IDS_KEY))[:VECTOR_SCAN_LIMIT]
+    except Exception:
+        logger.exception("读取表情包 RAG 索引失败")
+        return []
+    scored: list[tuple[float, int]] = []
+    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
+    for raw_id in ids:
+        try:
+            shop_id = int(raw_id)
+            emb_raw = redis_client.hget(_emoji_doc_key(shop_id), "embedding")
+            if isinstance(emb_raw, bytes):
+                emb_raw = emb_raw.decode("utf-8", errors="ignore")
+            vec = json.loads(emb_raw) if emb_raw else []
+            if not isinstance(vec, list):
+                continue
+            similarity = _cosine(query_vec, [float(item) for item in vec])
+            if similarity >= min_sim:
+                scored.append((similarity, shop_id))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        except Exception:
+            logger.debug("读取表情包 RAG 条目失败 shopId=%s", raw_id)
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [{"shopId": shop_id, "score": round(score, 4)} for score, shop_id in scored[:top_k]]

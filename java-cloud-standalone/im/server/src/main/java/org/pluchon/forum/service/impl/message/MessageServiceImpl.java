@@ -19,6 +19,8 @@ import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Message;
+import org.pluchon.forum.entity.db.GroupChat;
+import org.pluchon.forum.entity.db.GroupChatJoinRequest;
 import org.pluchon.forum.api.auth.UserInternalVO;
 import org.pluchon.forum.entity.db.UserChatEmoji;
 import org.pluchon.forum.entity.dto.message.FavoriteEmojiRequest;
@@ -34,6 +36,8 @@ import org.pluchon.forum.entity.vo.message.UserChatEmojiResponse;
 import org.pluchon.forum.entity.vo.mq.MessageNotifyMqVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.MessageMapper;
+import org.pluchon.forum.mapper.GroupChatMapper;
+import org.pluchon.forum.mapper.GroupChatJoinRequestMapper;
 import org.pluchon.forum.mapper.UserChatEmojiMapper;
 import org.pluchon.forum.service.impl.message.guard.MessageSendContext;
 import org.pluchon.forum.service.impl.message.guard.MessageSendGuardChain;
@@ -55,17 +59,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class MessageServiceImpl implements MessageService {
 
+    // 私信群邀请卡片内容格式
+    private static final Pattern GROUP_INVITE_CARD_PATTERN = Pattern.compile("^\\[\\[GROUP_INVITE:(\\d+)]]$");
+
     @Autowired
     private MessageMapper messageMapper;
 
     @Autowired
     private UserChatEmojiMapper userChatEmojiMapper;
+
+    @Autowired
+    private GroupChatMapper groupChatMapper;
+
+    @Autowired
+    private GroupChatJoinRequestMapper groupChatJoinRequestMapper;
 
     @Autowired
     private ImUserLookupService userService;
@@ -643,7 +658,21 @@ public class MessageServiceImpl implements MessageService {
         if (Constant.MESSAGE_TYPE_VOICE.equals(msg.getMessageType())) {
             return "[语音聊天] " + (msg.getContent() == null ? "" : msg.getContent());
         }
-        return msg.getContent() == null ? "" : msg.getContent();
+        String content = msg.getContent() == null ? "" : msg.getContent().trim();
+        Matcher inviteMatcher = GROUP_INVITE_CARD_PATTERN.matcher(content);
+        if (!inviteMatcher.matches()) {
+            return content;
+        }
+        try {
+            GroupChatJoinRequest request = groupChatJoinRequestMapper.selectById(Long.valueOf(inviteMatcher.group(1)));
+            GroupChat group = request == null ? null : groupChatMapper.selectById(request.getGroupId());
+            if (group != null && StringUtils.hasText(group.getName())) {
+                return "进群邀请：（" + group.getName().trim() + "）";
+            }
+        } catch (Exception e) {
+            log.warn("解析进群邀请会话摘要失败 messageId={}", msg.getId(), e);
+        }
+        return "进群邀请";
     }
 
     private boolean isChatMediaUnderPrefix(String mediaUrl, String allowedPathPrefix) {

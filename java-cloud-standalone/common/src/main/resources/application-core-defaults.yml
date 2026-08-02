@@ -70,13 +70,13 @@ sms:
   sign-name: "速通互联验证码"
 
 oss:
-  endpoint: https://oss-cn-shenzhen.aliyuncs.com
-  access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
-  access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
-  bucket-name: ${OSS_BUCKET_NAME:item-for-picture-with-zhanglihong-local-develop}
-  url-prefix: ${OSS_URL_PREFIX:https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/}
-  # 对象 key 根前缀，默认空（与 OSS 控制台 forum_xxx/ 根目录对齐）；旧数据用 forum_db_item/ 时可设 OSS_ROOT_PREFIX=forum_db_item
-  root-prefix: ${OSS_ROOT_PREFIX:}
+  endpoint: ${OSS_LOCAL_ENDPOINT:https://oss-cn-shenzhen.aliyuncs.com}
+  access-key-id: ${OSS_LOCAL_ACCESS_KEY_ID:${ALIYUN_ACCESS_KEY_ID:}}
+  access-key-secret: ${OSS_LOCAL_ACCESS_KEY_SECRET:${ALIYUN_ACCESS_KEY_SECRET:}}
+  bucket-name: ${OSS_LOCAL_BUCKET_NAME:item-for-picture-with-zhanglihong-local-develop}
+  url-prefix: ${OSS_LOCAL_URL_PREFIX:https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/}
+  # 本地对象 key 根前缀；留空时与 OSS 控制台 forum_xxx/ 根目录对齐。
+  root-prefix: ${OSS_LOCAL_ROOT_PREFIX:}
   path: forum_db_item/forum_head_picture/
 
 jwt:
@@ -140,4 +140,3 @@ logging:
       max-file-size: 20MB
       max-history: 14
       total-size-cap: 500MB
-

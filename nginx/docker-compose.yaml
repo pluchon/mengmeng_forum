@@ -1,8 +1,65 @@
-# 萌萌论坛 — Docker Compose 生产/本地栈
-# 使用前：构建前端 dist、后端镜像，见 README.md
+# 萌萌论坛单机微服务部署：Nginx -> Gateway -> 六个业务域服务。
+# Nacos 只暴露在 forum-net 内，服务通过 NACOS_ADDR 进行发现与配置读取。
+
+x-java-env: &java-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+  FORUM_LOG_DIR: /app/logs
+  NACOS_ADDR: ${NACOS_ADDR:-nacos:8848}
+  NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
+  FORUM_MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}
+  FORUM_AI_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
+  FORUM_FFMPEG_INTERNAL_KEY: ${FORUM_FFMPEG_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
+  FORUM_AI_HUB_BASE_URL: http://ai-server:5000
+  FORUM_MASCOT_AI_URL: http://ai-server:5000/api/v1/gateway/invoke
+  FORUM_FFMPEG_URL: http://ffmpeg:8099
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: 6379
+  SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: 5672
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-}
+  SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-forum-demo}
+  PII_CRYPTO_SECRET: ${PII_CRYPTO_SECRET:-}
+  JWT_SECRET: ${JWT_SECRET:-}
+  ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
+  ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
+  FORUM_OSS_PROFILE: server
+  OSS_SERVER_ENDPOINT: ${OSS_SERVER_ENDPOINT:-https://oss-cn-shenzhen.aliyuncs.com}
+  OSS_SERVER_ACCESS_KEY_ID: ${OSS_SERVER_ACCESS_KEY_ID:-${ALIYUN_ACCESS_KEY_ID:-}}
+  OSS_SERVER_ACCESS_KEY_SECRET: ${OSS_SERVER_ACCESS_KEY_SECRET:-${ALIYUN_ACCESS_KEY_SECRET:-}}
+  OSS_SERVER_BUCKET_NAME: ${OSS_SERVER_BUCKET_NAME:-item-for-picture-with-zhanglihong}
+  OSS_SERVER_URL_PREFIX: ${OSS_SERVER_URL_PREFIX:-https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/}
+  OSS_SERVER_ROOT_PREFIX: ${OSS_SERVER_ROOT_PREFIX:-}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  FORUM_VOICE_STUN_URLS: ${FORUM_VOICE_STUN_URLS:-}
+  FORUM_VOICE_TURN_URLS: ${FORUM_VOICE_TURN_URLS:-}
+  FORUM_VOICE_TURN_USERNAME: ${FORUM_VOICE_TURN_USERNAME:-}
+  FORUM_VOICE_TURN_CREDENTIAL: ${FORUM_VOICE_TURN_CREDENTIAL:-}
+  FORUM_VOICE_TURN_SECRET: ${FORUM_VOICE_TURN_SECRET:-}
+  FORUM_VOICE_TURN_TTL_SECONDS: ${FORUM_VOICE_TURN_TTL_SECONDS:-3600}
+  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
+
+x-java-service: &java-service
+  image: ${FORUM_BACKEND_IMAGE:-forum-backend:latest}
+  restart: unless-stopped
+  environment: *java-env
+  volumes:
+    - ${FORUM_LOG_DIR:-../logs}/java-backend:/app/logs
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    nacos:
+      condition: service_started
+  networks:
+    - forum-net
 
 services:
-
   nginx:
     image: nginx:1.30.1
     container_name: forum-nginx
@@ -16,10 +73,9 @@ services:
       - ./dist/user:/usr/share/nginx/user:ro
       - ${FORUM_LOG_DIR:-../logs}/nginx:/var/log/nginx
     depends_on:
-      backend-1:
+      gateway:
         condition: service_healthy
     healthcheck:
-      # 官方 nginx 镜像无 wget/curl，用进程检测（/healthz 仍由 conf.d 提供）
       test: ["CMD-SHELL", "test -f /var/run/nginx.pid && kill -0 $(cat /var/run/nginx.pid)"]
       interval: 15s
       timeout: 5s
@@ -28,92 +84,78 @@ services:
     networks:
       - forum-net
 
-  backend-1:
-    image: ${FORUM_BACKEND_IMAGE:-forum-backend:latest}
-    container_name: forum-backend-1
-    restart: unless-stopped
-    environment: &backend_env
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
-      SERVER_PORT: 8080
-      # 容器内写 /app/logs/...，宿主机落在 ${FORUM_LOG_DIR}/java-backend/
-      LOG_FILE: ${LOG_FILE:-/app/logs/forum-backend/forum-backend.log}
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-forum_user}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-123456789}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-nuonuo}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-123456}
-      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-forum-demo}
-      FORUM_AI_HUB_BASE_URL: http://ai-server:5000
-      FORUM_MASCOT_AI_URL: http://ai-server:5000/api/v1/gateway/invoke
-      FORUM_MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}
-      FORUM_AI_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
-      FORUM_FFMPEG_INTERNAL_KEY: ${FORUM_FFMPEG_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
-      FORUM_VOICE_STUN_URLS: ${FORUM_VOICE_STUN_URLS:-stun:turn.nuonuoya.cn:3478}
-      FORUM_VOICE_TURN_URLS: ${FORUM_VOICE_TURN_URLS:-}
-      FORUM_VOICE_TURN_USERNAME: ${FORUM_VOICE_TURN_USERNAME:-}
-      FORUM_VOICE_TURN_CREDENTIAL: ${FORUM_VOICE_TURN_CREDENTIAL:-}
-      FORUM_VOICE_TURN_SECRET: ${FORUM_VOICE_TURN_SECRET:-}
-      FORUM_VOICE_TURN_TTL_SECONDS: ${FORUM_VOICE_TURN_TTL_SECONDS:-3600}
-      PII_CRYPTO_SECRET: ${PII_CRYPTO_SECRET:-local_dev_pii_secret_change_before_prod_deploy}
-      JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_before_prod_deploy}
-      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
-      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
-      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-}
-      OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
-      OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
-      FORUM_FFMPEG_URL: http://ffmpeg:8099
-      MAIL_USERNAME: ${MAIL_USERNAME:-}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
+  gateway:
+    <<: *java-service
+    container_name: forum-gateway
+    command: ["/app/gateway.jar"]
     healthcheck:
-      test: ["CMD-SHELL", "/bin/busybox nc -z 127.0.0.1 8080"]
+      test: ["CMD-SHELL", "/bin/busybox nc -z 127.0.0.1 10086"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 90s
-    volumes:
-      - ${FORUM_LOG_DIR:-../logs}/java-backend:/app/logs
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      ffmpeg:
-        condition: service_started
-    networks:
-      - forum-net
 
-  backend-2:
-    profiles:
-      - dual
-    image: ${FORUM_BACKEND_IMAGE:-forum-backend:latest}
-    container_name: forum-backend-2
-    restart: unless-stopped
-    environment: *backend_env
-    volumes:
-      - ${FORUM_LOG_DIR:-../logs}/java-backend:/app/logs
-    depends_on:
-      mysql:
-        condition: service_started
-      redis:
-        condition: service_started
-      rabbitmq:
-        condition: service_started
-      ai-server:
-        condition: service_started
-    networks:
-      - forum-net
+  auth:
+    <<: *java-service
+    container_name: forum-auth
+    command: ["/app/auth-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_AUTH_DB_URL: jdbc:mysql://mysql:3306/forum_auth_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_AUTH_DB_USERNAME: ${FORUM_AUTH_DB_USERNAME:-forum_auth}
+      FORUM_AUTH_DB_PASSWORD: ${FORUM_AUTH_DB_PASSWORD:-}
+
+  content:
+    <<: *java-service
+    container_name: forum-content
+    command: ["/app/content-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_CONTENT_DB_URL: jdbc:mysql://mysql:3306/forum_content_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_CONTENT_DB_USERNAME: ${FORUM_CONTENT_DB_USERNAME:-forum_content}
+      FORUM_CONTENT_DB_PASSWORD: ${FORUM_CONTENT_DB_PASSWORD:-}
+
+  im:
+    <<: *java-service
+    container_name: forum-im
+    command: ["/app/im-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_IM_DB_URL: jdbc:mysql://mysql:3306/forum_im_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_IM_DB_USERNAME: ${FORUM_IM_DB_USERNAME:-forum_im}
+      FORUM_IM_DB_PASSWORD: ${FORUM_IM_DB_PASSWORD:-}
+
+  game:
+    <<: *java-service
+    container_name: forum-game
+    command: ["/app/game-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_GAME_DB_URL: jdbc:mysql://mysql:3306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_GAME_DB_USERNAME: ${FORUM_GAME_DB_USERNAME:-forum_game}
+      FORUM_GAME_DB_PASSWORD: ${FORUM_GAME_DB_PASSWORD:-}
+
+  economy:
+    <<: *java-service
+    container_name: forum-economy
+    command: ["/app/economy-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_ECONOMY_DB_URL: jdbc:mysql://mysql:3306/forum_economy_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_ECONOMY_DB_USERNAME: ${FORUM_ECONOMY_DB_USERNAME:-forum_economy}
+      FORUM_ECONOMY_DB_PASSWORD: ${FORUM_ECONOMY_DB_PASSWORD:-}
+
+  ai:
+    <<: *java-service
+    container_name: forum-ai
+    command: ["/app/ai-server.jar"]
+    environment:
+      <<: *java-env
+      FORUM_AI_DB_URL: jdbc:mysql://mysql:3306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      FORUM_AI_DB_USERNAME: ${FORUM_AI_DB_USERNAME:-forum_ai}
+      FORUM_AI_DB_PASSWORD: ${FORUM_AI_DB_PASSWORD:-}
 
   ai-server:
-    build:
-      context: ../ai-server
-      dockerfile: Dockerfile
     image: ${FORUM_AI_IMAGE:-forum-ai-server:latest}
     container_name: forum-ai-server
     restart: unless-stopped
@@ -124,20 +166,24 @@ services:
       MASCOT_INTERNAL_KEY: ${FORUM_MASCOT_INTERNAL_KEY:-}
       AI_HUB_INTERNAL_KEY: ${FORUM_AI_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       AI_REQUIRE_INTERNAL_KEY: ${AI_REQUIRE_INTERNAL_KEY:-1}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: ${RABBITMQ_USER:-nuonuo}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-123456}
+      RABBITMQ_USERNAME: ${RABBITMQ_USER:-}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-}
       RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-forum-demo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
       ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
-      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-}
-      OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
-      OSS_ROOT_PREFIX: ${OSS_ROOT_PREFIX:-}
+      FORUM_OSS_PROFILE: server
+      OSS_SERVER_ENDPOINT: ${OSS_SERVER_ENDPOINT:-https://oss-cn-shenzhen.aliyuncs.com}
+      OSS_SERVER_ACCESS_KEY_ID: ${OSS_SERVER_ACCESS_KEY_ID:-${ALIYUN_ACCESS_KEY_ID:-}}
+      OSS_SERVER_ACCESS_KEY_SECRET: ${OSS_SERVER_ACCESS_KEY_SECRET:-${ALIYUN_ACCESS_KEY_SECRET:-}}
+      OSS_SERVER_BUCKET_NAME: ${OSS_SERVER_BUCKET_NAME:-item-for-picture-with-zhanglihong}
+      OSS_SERVER_URL_PREFIX: ${OSS_SERVER_URL_PREFIX:-https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/}
+      OSS_SERVER_ROOT_PREFIX: ${OSS_SERVER_ROOT_PREFIX:-}
       FORUM_FFMPEG_URL: http://ffmpeg:8099
-      FORUM_BACKEND_BASE_URL: http://backend-1:8080
+      FORUM_BACKEND_BASE_URL: http://gateway:10086
     volumes:
       - ${FORUM_LOG_DIR:-../logs}:/var/log/forum
     depends_on:
@@ -151,19 +197,33 @@ services:
       - forum-net
 
   ffmpeg:
-    build:
-      context: ./ffmpeg
-      dockerfile: Dockerfile
     image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
     container_name: forum-ffmpeg
     restart: unless-stopped
     environment:
       FFMPEG_INTERNAL_KEY: ${FORUM_FFMPEG_INTERNAL_KEY:-${FORUM_MASCOT_INTERNAL_KEY:-}}
       FFMPEG_REQUIRE_INTERNAL_KEY: ${FFMPEG_REQUIRE_INTERNAL_KEY:-1}
-      OSS_URL_PREFIX: ${OSS_URL_PREFIX:-}
+      FORUM_OSS_PROFILE: server
+      OSS_SERVER_URL_PREFIX: ${OSS_SERVER_URL_PREFIX:-https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/}
       FFMPEG_LOG_FILE: /var/log/forum/ffmpeg/ffmpeg.log
     volumes:
       - ${FORUM_LOG_DIR:-../logs}/ffmpeg:/var/log/forum/ffmpeg
+    networks:
+      - forum-net
+
+  nacos:
+    image: nacos/nacos-server:v3.1.1
+    container_name: forum-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      # 仅满足 Nacos 3.x 镜像的启动要求；保持客户端鉴权关闭。
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-}
+    volumes:
+      - forum_nacos_data:/home/nacos/data
     networks:
       - forum-net
 
@@ -171,17 +231,16 @@ services:
     image: mysql:9.7.0
     container_name: forum-mysql
     restart: unless-stopped
-    # 宿主机端口见 docker-compose.prod.yml（生产）或 docker-compose.dev.yaml（本地）
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
       MYSQL_USER: ${MYSQL_USER:-forum_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
       TZ: Asia/Shanghai
     command: ["--default-time-zone=+08:00"]
     volumes:
       - forum_mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123456789}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -193,11 +252,11 @@ services:
     image: redis:8.0
     container_name: forum-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD:-} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - forum_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-123456}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -210,8 +269,8 @@ services:
     hostname: forum-rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-123456}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-forum-demo}
     volumes:
       - forum_rabbitmq_data:/var/lib/rabbitmq
@@ -230,7 +289,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-langgraph}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-langgraph_db}
     volumes:
       - forum_postgres_data:/var/lib/postgresql/data
@@ -243,6 +302,7 @@ services:
       - forum-net
 
 volumes:
+  forum_nacos_data:
   forum_mysql_data:
   forum_redis_data:
   forum_rabbitmq_data:

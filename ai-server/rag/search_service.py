@@ -5,7 +5,7 @@ from typing import Any
 
 from clients.dashscope_embedding import embed_query
 from config import settings
-from rag.store import vector_search_articles, vector_search_users
+from rag.store import vector_search_articles, vector_search_emojis, vector_search_users
 from utils.rag_enhance import hybrid_rank
 
 _RAG = settings.rag
@@ -86,3 +86,15 @@ def search_users_by_vector(query: str) -> tuple[list[dict[str, Any]], str]:
     min_vec = float(_RAG.get("vector_min_score_user", 0.32))
     vector_hits = [h for h in vector_hits if float(h.get("score") or 0) >= min_vec]
     return vector_hits, "vector_only"
+
+
+def search_emojis_by_vector(query: str) -> tuple[list[dict[str, Any]], str]:
+    q = clean_query(query)
+    if not q:
+        return [], "empty query"
+    qvec = embed_query(q)
+    if not qvec:
+        return [], "embedding unavailable"
+    hits = vector_search_emojis(qvec, top_k=int(_RAG.get("embedding_top_k", 80)))
+    min_score = float(_RAG.get("vector_min_score", 0.12))
+    return [item for item in hits if float(item.get("score") or 0) >= min_score], "vector_only"

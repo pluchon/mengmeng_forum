@@ -19,6 +19,7 @@ import org.pluchon.forum.entity.db.EmojiItem;
 import org.pluchon.forum.entity.db.EmojiShop;
 import org.pluchon.forum.entity.db.UserEmoji;
 import org.pluchon.forum.entity.dto.shop.CreateEmojiShopRequest;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.shop.EmojiShopDetailVO;
 import org.pluchon.forum.entity.vo.shop.EmojiShopListItemVO;
@@ -147,7 +148,8 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         shop.setDescription(StringUtils.hasLength(description) ? description : null);
         shop.setCoverUrl(req.getCoverUrl().trim());
         shop.setPrice(price);
-        shop.setUploadUserId(isAdmin ? null : operatorUserId);
+        // 无论上传者是否具有管理身份，作品的作者归属都必须保留，才能在上架后自动授予作者。
+        shop.setUploadUserId(operatorUserId);
         shop.setSalesCount(0);
         shop.setStatus(Constant.SHOP_STATUS_ONLINE);
         emojiShopMapper.insert(shop);
@@ -162,6 +164,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (shop.getUploadUserId() != null) {
             grantAuthorPackQuietly(shop.getUploadUserId(), shop.getId());
         }
+        TransactionHooks.afterCommit(() -> indexEmojiRagQuietly(shop));
         invalidateShopListCacheAfterCommit();
         log.info("创建表情包商品成功: shopId={}, operatorUserId={}, isAdmin={}", shop.getId(), operatorUserId, isAdmin);
         return shop.getId();
@@ -183,6 +186,19 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             userEmojiMapper.insert(record);
         } catch (DuplicateKeyException ignored) {
             // 并发重复忽略
+        }
+    }
+
+    private void indexEmojiRagQuietly(EmojiShop shop) {
+        try {
+            RagEmojiIndexDTO payload = new RagEmojiIndexDTO();
+            payload.setShopId(shop.getId());
+            payload.setName(shop.getName());
+            payload.setDescription(shop.getDescription());
+            payload.setCoverUrl(shop.getCoverUrl());
+            economyAiGatewayService.indexEmojiRag(payload);
+        } catch (Exception e) {
+            log.warn("表情包发布后 RAG 索引失败 shopId={}: {}", shop.getId(), e.getMessage());
         }
     }
 
@@ -276,10 +292,22 @@ public class EmojiShopServiceImpl implements EmojiShopService {
 
     private PageResult<EmojiShopListItemVO> queryPublicShopList(String validSort, String validKeyword,
                                                                 int validPageNum, int validPageSize) {
-        LambdaQueryWrapper<EmojiShop> qw = new LambdaQueryWrapper<>();
-        qw.eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE).ne(EmojiShop::getDeleteState, 1);
         if (StringUtils.hasText(validKeyword)) {
-            qw.like(EmojiShop::getName, validKeyword);
+            LambdaQueryWrapper<EmojiShop> exactQuery = newPublicShopQuery();
+            exactQuery.eq(EmojiShop::getName, validKeyword);
+            applySort(exactQuery, validSort);
+            Page<EmojiShop> exactResult = emojiShopMapper.selectPage(new Page<>(validPageNum, validPageSize), exactQuery);
+            if (exactResult.getRecords() != null && !exactResult.getRecords().isEmpty()) {
+                List<EmojiShopListItemVO> records = enrichPublicListItems(exactResult.getRecords());
+                return new PageResult<>(records, exactResult.getTotal(), validPageNum, validPageSize,
+                        exactResult.getPages(), exactResult.hasNext());
+            }
+        }
+        LambdaQueryWrapper<EmojiShop> qw = newPublicShopQuery();
+        if (StringUtils.hasText(validKeyword)) {
+            qw.and(wrapper -> wrapper.like(EmojiShop::getName, validKeyword)
+                    .or()
+                    .like(EmojiShop::getDescription, validKeyword));
         }
         applySort(qw, validSort);
 
@@ -293,9 +321,20 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 result.getPages(), result.hasNext());
     }
 
+    private LambdaQueryWrapper<EmojiShop> newPublicShopQuery() {
+        return new LambdaQueryWrapper<EmojiShop>()
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
+                .ne(EmojiShop::getDeleteState, 1);
+    }
+
     // 普通名称匹配无结果时，AI 仅对本域已筛出的上架候选排序，最终可见性仍由本服务复查。
     private PageResult<EmojiShopListItemVO> querySemanticShopList(String validSort, String keyword,
                                                                    int pageNum, int pageSize) {
+        PageResult<EmojiShopListItemVO> vectorPage = querySemanticShopListByIds(
+                economyAiGatewayService.ragVectorSearchEmojis(keyword), pageNum, pageSize);
+        if (vectorPage != null) {
+            return vectorPage;
+        }
         LambdaQueryWrapper<EmojiShop> candidateWrapper = new LambdaQueryWrapper<EmojiShop>()
                 .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
                 .ne(EmojiShop::getDeleteState, 1);
@@ -341,6 +380,36 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         int fromIndex = Math.min((pageNum - 1) * pageSize, ranked.size());
         int toIndex = Math.min(fromIndex + pageSize, ranked.size());
         long pages = total == 0 ? 0L : (total + pageSize - 1) / pageSize;
+        List<EmojiShopListItemVO> records = enrichPublicListItems(ranked.subList(fromIndex, toIndex));
+        return new PageResult<>(records, total, pageNum, pageSize, pages, toIndex < ranked.size());
+    }
+
+    private PageResult<EmojiShopListItemVO> querySemanticShopListByIds(List<Long> rankedIds, int pageNum, int pageSize) {
+        if (rankedIds == null || rankedIds.isEmpty()) {
+            return null;
+        }
+        List<EmojiShop> verified = emojiShopMapper.selectList(new LambdaQueryWrapper<EmojiShop>()
+                .in(EmojiShop::getId, rankedIds)
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
+                .ne(EmojiShop::getDeleteState, 1));
+        Map<Long, EmojiShop> byId = new HashMap<>();
+        for (EmojiShop shop : verified) {
+            byId.put(shop.getId(), shop);
+        }
+        List<EmojiShop> ranked = new ArrayList<>();
+        for (Long shopId : rankedIds) {
+            EmojiShop shop = byId.get(shopId);
+            if (shop != null) {
+                ranked.add(shop);
+            }
+        }
+        if (ranked.isEmpty()) {
+            return null;
+        }
+        int fromIndex = Math.min((pageNum - 1) * pageSize, ranked.size());
+        int toIndex = Math.min(fromIndex + pageSize, ranked.size());
+        long total = ranked.size();
+        long pages = (total + pageSize - 1) / pageSize;
         List<EmojiShopListItemVO> records = enrichPublicListItems(ranked.subList(fromIndex, toIndex));
         return new PageResult<>(records, total, pageNum, pageSize, pages, toIndex < ranked.size());
     }

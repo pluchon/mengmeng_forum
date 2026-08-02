@@ -213,6 +213,7 @@ export function useCreativeCenter() {
           ? rawList.map((item) => (item.article ? item : { article: item }))
           : []
         listTotal.value = Number(res.data.total) || articles.value.length
+        refreshTrendChart()
       }
     } finally {
       loading.value = false
@@ -282,8 +283,9 @@ export function useCreativeCenter() {
     router.push('/article/create')
   }
 
-  onMounted(() => {
-    fetchArticles()
+  onMounted(async () => {
+    await fetchArticles()
+    refreshTrendChart()
   })
 
   return {

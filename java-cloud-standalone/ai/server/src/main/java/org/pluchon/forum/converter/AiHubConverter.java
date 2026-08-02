@@ -2,6 +2,7 @@ package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
@@ -188,6 +189,18 @@ public final class AiHubConverter {
         map.put("nickname", dto.getNickname());
         map.put("username", dto.getUsername());
         map.put("remark", dto.getRemark());
+        return map;
+    }
+
+    public static Map<String, Object> ragEmojiIndexToMap(RagEmojiIndexDTO dto) {
+        Map<String, Object> map = new HashMap<>();
+        if (dto == null) {
+            return map;
+        }
+        map.put("shopId", dto.getShopId());
+        map.put("name", dto.getName());
+        map.put("description", dto.getDescription());
+        map.put("coverUrl", dto.getCoverUrl());
         return map;
     }
 

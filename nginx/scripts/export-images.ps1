@@ -68,7 +68,8 @@ $images = @(
     "mysql:9.7.0",
     "redis:8.0",
     "rabbitmq:4.3-management",
-    "postgres:17"
+    "postgres:17",
+    "nacos/nacos-server:v3.1.1"
 )
 
 Write-Host "Checking / pulling images ..."
@@ -81,7 +82,7 @@ if ($LASTEXITCODE -ne 0) { throw "docker save failed: forum-backend:latest" }
 docker save -o (Join-Path $outDir "forum-ai-server.tar") forum-ai-server:latest
 if ($LASTEXITCODE -ne 0) { throw "docker save failed: forum-ai-server:latest" }
 
-docker save -o (Join-Path $outDir "infra.tar") nginx:1.30.1 mysql:9.7.0 redis:8.0 rabbitmq:4.3-management postgres:17 forum-ffmpeg:latest
+docker save -o (Join-Path $outDir "infra.tar") nginx:1.30.1 mysql:9.7.0 redis:8.0 rabbitmq:4.3-management postgres:17 nacos/nacos-server:v3.1.1 forum-ffmpeg:latest
 if ($LASTEXITCODE -ne 0) { throw "docker save failed: infra.tar" }
 
 $ffmpegDir = Join-Path $nginxRoot "ffmpeg"
@@ -116,6 +117,12 @@ if (Test-Path $serverUpSh) {
     Copy-Item $serverUpSh (Join-Path $pkg "up.sh") -Force
     Normalize-UnixLf (Join-Path $pkg "up.sh")
 }
+$onlineMigrationSh = Join-Path $repoRoot "migrate-online-db.sh"
+if (-not (Test-Path $onlineMigrationSh)) {
+    throw "Missing online migration script: $onlineMigrationSh"
+}
+Copy-Item $onlineMigrationSh (Join-Path $pkg "migrate-online-db.sh") -Force
+Normalize-UnixLf (Join-Path $pkg "migrate-online-db.sh")
 
 Copy-Item (Join-Path $nginxRoot "docker-compose.yaml") $pkg -Force
 Copy-Item (Join-Path $nginxRoot "docker-compose.prod.yml") $pkg -Force
@@ -153,7 +160,7 @@ LOG_ROOT="${FORUM_LOG_DIR:-../logs}"
 echo "Forum package release: 20260722-mq-healthcheck-v2"
 
 fix_crlf() {
-  for f in .env start.sh verify-frontend-dist.sh reset-db.sh; do
+  for f in .env start.sh migrate-online-db.sh verify-frontend-dist.sh reset-db.sh; do
     [[ -f "$f" ]] && sed -i 's/\r$//' "$f"
   done
 }
@@ -179,7 +186,7 @@ echo "==> docker load"
 docker load -i images/forum-backend.tar
 docker load -i images/forum-ai-server.tar
 docker load -i images/infra.tar
-for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx:1.30.1; do
+for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx:1.30.1 nacos/nacos-server:v3.1.1; do
   docker image inspect "$img" >/dev/null 2>&1 || { echo "ERROR: image missing after load: $img"; exit 1; }
 done
 docker run --rm --user 0 \
@@ -205,6 +212,31 @@ wait_mysql() {
     sleep 2
   done
   echo "ERROR: MySQL not ready"; return 1
+}
+
+sql_escape() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+ensure_domain_users() {
+  local root_pw="$1" domain upper user password escaped_user escaped_password
+  for domain in auth content im game economy ai; do
+    upper="$(printf '%s' "$domain" | tr '[:lower:]' '[:upper:]')"
+    user="$(read_env "FORUM_${upper}_DB_USERNAME")"
+    password="$(read_env "FORUM_${upper}_DB_PASSWORD")"
+    [[ -n "$user" && -n "$password" ]] || {
+      echo "ERROR: missing FORUM_${upper}_DB_USERNAME or FORUM_${upper}_DB_PASSWORD in .env"
+      return 1
+    }
+    escaped_user="$(sql_escape "$user")"
+    escaped_password="$(sql_escape "$password")"
+    docker exec -i forum-mysql mysql -uroot -p"${root_pw}" <<SQL
+CREATE USER IF NOT EXISTS '${escaped_user}'@'%' IDENTIFIED BY '${escaped_password}';
+ALTER USER '${escaped_user}'@'%' IDENTIFIED BY '${escaped_password}';
+GRANT ALL PRIVILEGES ON \`forum_${domain}_db\`.* TO '${escaped_user}'@'%';
+SQL
+  done
+  docker exec forum-mysql mysql -uroot -p"${root_pw}" -e "FLUSH PRIVILEGES;" >/dev/null
 }
 
 wait_postgres() {
@@ -256,7 +288,7 @@ sync_rabbitmq_credentials() {
 }
 
 echo "==> compose middleware"
-$COMPOSE up -d mysql redis rabbitmq postgres ffmpeg
+$COMPOSE up -d mysql redis rabbitmq postgres ffmpeg nacos
 sync_rabbitmq_credentials
 
 root_pw="$(read_env MYSQL_ROOT_PASSWORD)"
@@ -278,6 +310,8 @@ if [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
     echo "Existing MySQL schemas detected; baseline SQL skipped."
   fi
 
+  ensure_domain_users "$root_pw"
+
   pu="$(read_env POSTGRES_USER)"; pd="$(read_env POSTGRES_DB)"
   pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
   wait_postgres "$pu" "$pd"
@@ -286,12 +320,12 @@ if [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
 fi
 
 echo "==> compose application"
-$COMPOSE up -d --force-recreate --no-deps ai-server backend-1 nginx
+$COMPOSE up -d --force-recreate --no-deps ai-server auth content im game economy ai gateway nginx
 
 echo "--- middleware ---"
 $COMPOSE ps
 sleep 15
-curl -sf http://127.0.0.1/healthz && echo " healthz OK" || echo " healthz FAIL (see: docker logs forum-backend-1 --tail 50)"
+curl -sf http://127.0.0.1/healthz && echo " healthz OK" || echo " healthz FAIL (see: docker logs forum-gateway --tail 50)"
 echo ""
 echo "For an intentionally destructive rebuild, run: CONFIRM_RESET_DB=1 bash reset-db.sh"
 '@
@@ -409,8 +443,8 @@ $deployTxt = @'
 
 【C】服务器 — 启动（.env 若有 Windows 换行必须先 sed）
   cd ~/package
-  sed -i 's/\r$//' .env start.sh up.sh verify-frontend-dist.sh reset-db.sh
-  chmod +x start.sh up.sh verify-frontend-dist.sh reset-db.sh
+  sed -i 's/\r$//' .env start.sh up.sh migrate-online-db.sh verify-frontend-dist.sh reset-db.sh
+  chmod +x start.sh up.sh migrate-online-db.sh verify-frontend-dist.sh reset-db.sh
 
   首次部署（仅空库初始化）： bash start.sh
   仅更新包后重启（推荐）： bash up.sh
@@ -421,12 +455,18 @@ $deployTxt = @'
   CONFIRM_RESET_DB=1 bash reset-db.sh
   # 已有数据的版本升级只能执行已审核的向前迁移，不能运行本重建脚本。
 
-【E】验证
+【E】已有数据的线上库
+  bash migrate-online-db.sh status
+  # 仅创建或校正六域账号：bash migrate-online-db.sh users
+  # 旧单库 forum_db 的一次性搬迁：bash migrate-online-db.sh migrate-data
+  # init / reset-db.sh 会清空数据，已有数据的线上库禁止执行。
+
+【F】验证
   docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
   curl -s http://127.0.0.1/healthz
   浏览器访问 https://你的域名
 
-【F】线上排错（勿用 docker-compose.dev.yaml，package 内没有该文件）
+【G】线上排错（勿用 docker-compose.dev.yaml，package 内没有该文件）
   bash collect-logs.sh
   # 把 ../logs/logs-collect-*.txt 发给开发排查
 

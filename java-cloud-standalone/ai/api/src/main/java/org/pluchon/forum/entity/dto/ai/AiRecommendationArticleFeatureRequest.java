@@ -6,15 +6,11 @@ import lombok.Data;
 @Data
 public class AiRecommendationArticleFeatureRequest {
 
-    // 帖子ID
     private Long articleId;
 
-    // 标题
     private String title;
 
-    // 正文
     private String content;
 
-    // 所属板块名称
     private String boardName;
 }
