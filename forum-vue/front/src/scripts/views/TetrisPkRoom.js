@@ -42,6 +42,8 @@ function emptyRoom() {
     opponentPlayer: null,
     player1: null,
     player2: null,
+    spectators: [],
+    spectatorCount: 0,
   }
 }
 
@@ -198,6 +200,8 @@ function useTetrisPkRoom() {
       opponentPlayer: data.opponentPlayer || null,
       player1: data.player1 || null,
       player2: data.player2 || null,
+      spectators: Array.isArray(data.spectators) ? data.spectators : [],
+      spectatorCount: Number(data.spectatorCount) || 0,
     })
     if (room.roomStatus === 'FINISHED') {
       void pointsWalletStore.refresh()

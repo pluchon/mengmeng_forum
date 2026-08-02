@@ -84,6 +84,12 @@ export function useBasicInfo() {
     return '保密'
   }
 
+  function maskPhone(value) {
+    const phone = String(value || '').trim()
+    if (phone.length < 7) return phone
+    return `${phone.slice(0, 3)}****${phone.slice(-4)}`
+  }
+
   function startEdit(field) {
     editing[field] = true
   }
@@ -172,6 +178,7 @@ export function useBasicInfo() {
     editing,
     genderLabel,
     handleAvatarUpload,
+    maskPhone,
     profileForm,
     saveSingleField,
     saveGender,

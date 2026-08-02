@@ -123,6 +123,11 @@ export const useMessageStore = defineStore('message', () => {
       return
     }
     showTip.value = true
+    if (payload?.mentioned) {
+      const sender = String(payload?.senderNickname || '群成员').trim() || '群成员'
+      tipText.value = `${sender} 提到了你`
+      return
+    }
     tipText.value = payload?.summary ? `群聊：${payload.summary}` : '你收到一条新的群聊消息'
   }
 

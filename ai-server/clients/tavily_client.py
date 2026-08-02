@@ -30,7 +30,7 @@ _IMAGE_REVIEW_PROMPT = """你是联网图片审核器。请仅依据图片内容
 拒绝条件：仅有数字、Logo、网站图标、无关人物或角色、泛用插画、拼贴封面、无法确认主体的图片。
 不要因为图片来源网页标题相关就放行，必须看图片本身。
 
-只返回 JSON：{{"accepted":[{{"index":候选编号,"score":0到100的整数,"title":"不超过20字的图片说明"}}]}}。
+只返回 JSON：{{"accepted":[{{"index":候选编号,"score":0到100的整数,"title":"不超过10字的图片说明"}}]}}。
 按 score 降序，最多 5 张；不确定时不要加入 accepted。"""
 
 
@@ -125,7 +125,7 @@ class TavilySearchClient:
             if not url or url in seen or len(gallery) >= max_images:
                 return
             seen.add(url)
-            gallery.append({"url": url, "title": item_title[:120], "source": item_source[:160]})
+            gallery.append({"url": url, "title": item_title[:10], "source": item_source[:160]})
 
         images = data.get("images")
         if isinstance(images, list):
@@ -189,7 +189,7 @@ class TavilySearchClient:
             title = str(item.get("title") or candidate.get("title") or "").strip()
             reviewed.append({
                 "url": url,
-                "title": title[:120],
+                "title": title[:10],
                 "source": candidate.get("source", "")[:160],
             })
             if len(reviewed) >= 5:

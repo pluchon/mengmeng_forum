@@ -1030,6 +1030,8 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatMember::getGroupId, group.getId())
                 .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
                 .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
+        UserInternalVO sender = queryUserNullable(senderUserId);
+        String senderNickname = sender == null ? "群成员" : sender.getNickname();
         TransactionHooks.afterCommit(() -> {
             for (GroupChatMember member : members) {
                 boolean isSender = Objects.equals(member.getUserId(), senderUserId);
@@ -1042,7 +1044,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                     payload.put("groupId", group.getId());
                     payload.put("dbMessageId", message.getId());
                     payload.put("fromUserId", senderUserId);
+                    payload.put("senderNickname", senderNickname);
                     payload.put("summary", messageSummary(message));
+                    payload.put("mentioned", !isSender && isMemberMentioned(message, member));
                     payload.put("notify", !isSender && shouldNotifyMember(message, member));
                     webSocketPushService.push(member.getUserId(), objectMapper.writeValueAsString(payload));
                 } catch (Exception e) {
@@ -1140,6 +1144,10 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (GroupChatNotifyMode.NORMAL.getCode().equals(notifyMode)) {
             return true;
         }
+        return isMemberMentioned(message, member);
+    }
+
+    private boolean isMemberMentioned(GroupChatMessage message, GroupChatMember member) {
         if (!GroupChatMessageType.TEXT.getCode().equals(message.getMessageType())) {
             return false;
         }

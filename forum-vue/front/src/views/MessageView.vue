@@ -330,7 +330,7 @@
                       撤回
                     </button>
                     <button
-                      v-if="currentGroupSession && !row.msg.isOwner && Number(row.msg.message?.messageType) !== 9"
+                      v-if="currentGroupSession && !row.msg.isOwner && Number(row.msg.message?.messageType) !== 9 && !isMediaMessage(row.msg)"
                       type="button"
                       class="mc-recall-btn"
                       @click="reportGroupMessage(row.msg)"
@@ -348,6 +348,14 @@
                   </div>
                   <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
                     <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
+                    <button
+                      v-if="currentGroupSession && !row.msg.isOwner && isMediaMessage(row.msg)"
+                      type="button"
+                      class="mc-media-meta-action"
+                      @click="reportGroupMessage(row.msg)"
+                    >
+                      举报
+                    </button>
                     <span
                       v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       class="mc-read"

@@ -131,10 +131,12 @@ public class ArticleController {
     @Operation(summary = "查询用户帖子列表->分页", description = "传入用户ID和分页参数")
     @GetMapping("/getArticleListByUserIdWithPage")
     public Result<PageResult<ArticleBriefVO>> getArticleListByUserIdWithPage(Long userId, @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize, HttpServletRequest httpServletRequest) {
+            @RequestParam(defaultValue = "10") Integer pageSize, Integer status, String keyword,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long loginUserId = (loginUser != null) ? loginUser.getId() : -1L;
-        return Result.success(articleService.queryArticleListByUserIdWithPage(userId, loginUserId, pageNum, pageSize));
+        return Result.success(articleService.queryArticleListByUserIdWithPage(userId, loginUserId, pageNum, pageSize,
+                status, keyword));
     }
 
     // 根据用户ID查询该用户的帖子列表->带分页，包含用户信息

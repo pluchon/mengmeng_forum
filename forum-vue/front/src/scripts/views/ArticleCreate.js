@@ -43,7 +43,6 @@ export function useArticleCreate() {
   const isEdit = computed(() => !!route.params.id)
   const submitting = ref(false)
   const editorMode = ref('rich')
-  const aiWorkspaceId = ref(null)
   const aiWriting = ref(false)
   const selectedBoard = ref([])
 
@@ -345,27 +344,6 @@ export function useArticleCreate() {
 
   function setAiWriting(value) {
     aiWriting.value = Boolean(value)
-  }
-
-  function handleAiWorkspaceReady(payload) {
-    const workspaceId = Number(payload?.workspaceId)
-    aiWorkspaceId.value = Number.isFinite(workspaceId) && workspaceId > 0 ? workspaceId : null
-  }
-
-  function applyAiWorkspaceVersion(version) {
-    try {
-      const artifact = JSON.parse(version?.artifactJson || '{}')
-      const payload = artifact?.payload || artifact
-      const text = payload?.text || payload?.content || ''
-      if (!text) {
-        ElMessage.warning('该版本不包含可填入的正文')
-        return
-      }
-      applyAiContent(text)
-      ElMessage.success('已切换到所选版本')
-    } catch (error) {
-      ElMessage.error('版本内容解析失败')
-    }
   }
 
   // 封面处理
@@ -729,10 +707,8 @@ export function useArticleCreate() {
     Picture,
     Plus,
     WangEditor,
-    aiWorkspaceId,
     aiWriting,
     applyAiContent,
-    applyAiWorkspaceVersion,
     cascaderOptions,
     coverPreview,
     editorMode,
@@ -753,7 +729,6 @@ export function useArticleCreate() {
     galleryUploading,
     videoInputRef,
     handleBoardChange,
-    handleAiWorkspaceReady,
     handleCancel,
     handleCoverChange,
     handleMdFileSelected,

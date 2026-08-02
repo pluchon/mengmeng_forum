@@ -9,7 +9,6 @@ import {
   ShoppingCart,
   Trophy,
   User,
-  ArrowDown,
   Medal,
 } from '@element-plus/icons-vue'
 import { clientOssUrl } from '@/utils/clientOss'
@@ -280,7 +279,7 @@ export function usePointsWallet() {
     return `-${Math.abs(n)}`
   })
 
-  const hasMoreLogs = computed(() => logRows.value.length < logTotal.value)
+  const logPageCount = computed(() => Math.max(1, Math.ceil(logTotal.value / logPageSize.value)))
 
   function getFilledRowsForChart() {
     const { year, month } = chartMonth.value
@@ -351,7 +350,6 @@ export function usePointsWallet() {
   async function loadLog({ reset = false } = {}) {
     if (reset) {
       logPage.value = 1
-      logRows.value = []
     }
     logLoading.value = true
     try {
@@ -361,18 +359,17 @@ export function usePointsWallet() {
       if (res.code === 0 && res.data) {
         const rows = unwrapPageRecords(res.data)
         logTotal.value = Number(res.data.total) || 0
-        if (reset) logRows.value = rows
-        else logRows.value = [...logRows.value, ...rows]
+        logRows.value = rows
       }
     } finally {
       logLoading.value = false
     }
   }
 
-  function loadMoreLogs() {
-    if (!hasMoreLogs.value || logLoading.value) return
-    logPage.value += 1
-    loadLog({ reset: false })
+  function onLogPageChange(page) {
+    if (logLoading.value || page === logPage.value) return
+    logPage.value = page
+    loadLog()
   }
 
   function applyFilter(sourceType) {
@@ -392,7 +389,6 @@ export function usePointsWallet() {
   })
 
   return {
-    ArrowDown,
     CHART_TYPES,
     DataLine,
     Filter,
@@ -414,15 +410,18 @@ export function usePointsWallet() {
     filterSourceType,
     filterVisible,
     formatLogTime,
-    hasMoreLogs,
     iconNextUrl,
     iconPrevUrl,
-    loadMoreLogs,
     logIconMeta,
     logLoading,
+    logPage,
+    logPageCount,
+    logPageSize,
     logRowClass,
     logRows,
+    logTotal,
     nextChartMonth,
+    onLogPageChange,
     periodInTotal,
     periodOutTotal,
     prevChartMonth,

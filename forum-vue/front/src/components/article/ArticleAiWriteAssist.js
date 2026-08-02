@@ -20,7 +20,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['apply', 'workspaceReady', 'generating'])
+const emit = defineEmits(['apply', 'generating'])
 
 const userStore = useUserStore()
 const loading = ref(false)
@@ -58,12 +58,6 @@ async function runPolish() {
       return
     }
     emit('apply', text)
-    if (res.data?.workspaceId) {
-      emit('workspaceReady', {
-        workspaceId: Number(res.data.workspaceId),
-        versionId: Number(res.data.workspaceVersionId) || null,
-      })
-    }
     ElMessage.success('已完成润色，可继续编辑')
   } catch (error) {
     ElMessage.error(error?.message || 'AI 写作请求失败')

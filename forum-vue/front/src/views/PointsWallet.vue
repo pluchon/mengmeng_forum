@@ -145,16 +145,16 @@
 
           <p v-if="!logLoading && logRows.length === 0" class="points-log-empty">暂无积分明细</p>
 
-          <div v-if="hasMoreLogs" class="points-log-more">
-            <button
-              type="button"
-              class="points-log-more-btn"
-              :disabled="logLoading"
-              aria-label="加载更多"
-              @click="loadMoreLogs"
-            >
-              <el-icon><ArrowDown /></el-icon>
-            </button>
+          <div v-if="logTotal > logPageSize" class="points-log-more">
+            <el-pagination
+              v-model:current-page="logPage"
+              background
+              layout="prev, pager, next"
+              :page-count="logPageCount"
+              :page-size="logPageSize"
+              :total="logTotal"
+              @current-change="onLogPageChange"
+            />
           </div>
         </div>
       </section>
@@ -167,7 +167,6 @@ import EChart from '@/components/common/EChart.vue'
 import { usePointsWallet } from '@scripts/views/PointsWallet'
 
 const {
-  ArrowDown,
   CHART_TYPES,
   DataLine,
   Filter,
@@ -184,15 +183,18 @@ const {
   filterSourceType,
   filterVisible,
   formatLogTime,
-  hasMoreLogs,
   iconNextUrl,
   iconPrevUrl,
-  loadMoreLogs,
   logIconMeta,
   logLoading,
+  logPage,
+  logPageCount,
+  logPageSize,
   logRowClass,
   logRows,
+  logTotal,
   nextChartMonth,
+  onLogPageChange,
   periodInTotal,
   periodOutTotal,
   prevChartMonth,
