@@ -109,6 +109,11 @@ public class AiHubInternalController implements AiHubInternalApi {
     }
 
     @Override
+    public List<Long> rankSemanticCandidates(@Valid @RequestBody AiRagSearchRequest request) {
+        return aiHubService.rankSemanticCandidates(request.getQuery(), request.getCandidates());
+    }
+
+    @Override
     public String validateText(@RequestParam("content") String content) {
         return aiHubService.validateText(content);
     }

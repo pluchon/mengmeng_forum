@@ -382,6 +382,35 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public List<Long> rankSemanticCandidates(String query, List<Map<String, Object>> candidates) {
+        if (query == null || query.trim().isEmpty() || candidates == null || candidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("query", query.trim());
+            payload.put("candidates", candidates);
+            Map<String, Object> data = invokeGateway("SEARCH", "QUERY", null, payload);
+            Object results = data.get("candidateResults");
+            if (!(results instanceof List<?> list)) {
+                return Collections.emptyList();
+            }
+            List<Long> ranked = new ArrayList<>();
+            for (Object item : list) {
+                Long id = parseVectorHitId(item, "candidateId", "candidate_id");
+                if (id != null && !ranked.contains(id)) {
+                    ranked.add(id);
+                }
+            }
+            return ranked;
+        } catch (Exception e) {
+            log.warn("AI 候选语义排序失败: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
     public String validateText(String content) {
         if (content == null || content.isBlank()) {
             return null;

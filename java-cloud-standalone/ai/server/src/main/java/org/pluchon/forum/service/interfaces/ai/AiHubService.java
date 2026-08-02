@@ -50,6 +50,8 @@ public interface AiHubService {
 
     List<RagUserVectorHitVO> ragUserVectorRanked(String query);
 
+    List<Long> rankSemanticCandidates(String query, List<Map<String, Object>> candidates);
+
     String validateText(String content);
 
     boolean validateImage(MultipartFile file);

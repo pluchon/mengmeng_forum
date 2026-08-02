@@ -71,6 +71,9 @@ public interface AiHubInternalApi {
     @PostMapping("/ai/internal/hub/rag/user-ranked")
     List<RagUserVectorHitVO> ragUserVectorRanked(@RequestParam("query") String query);
 
+    @PostMapping("/ai/internal/hub/rag/candidate-ranked")
+    List<Long> rankSemanticCandidates(@Valid @RequestBody AiRagSearchRequest request);
+
     @PostMapping("/ai/internal/hub/moderation/text")
     String validateText(@RequestParam("content") String content);
 
