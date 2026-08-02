@@ -26,12 +26,15 @@ from clients.dashscope_chat_client import (
 )
 from config import settings
 from mcp.registry import invoke_tool
-from utils.mascot_intent_router import decide_mascot_action
-from utils.mascot_mcp_orchestrator import prepare_mascot_mcp_bundle
+from utils.mascot_article_rag import fetch_related_articles
+from utils.mcp_routing import local_kb_covers_writing
 from utils.mascot_skill_router import route_mascot_skill
 from utils.site_help import get_site_help_snippet
 
 logger = logging.getLogger(__name__)
+
+_AGENT_TOOL_NAMES = {"rag", "web_search", "image_generation"}
+_MAX_TOOL_ROUNDS = 2
 
 
 class MascotState(TypedDict, total=False):
@@ -64,6 +67,9 @@ class MascotState(TypedDict, total=False):
     live2d: dict[str, Any]
     suggested_appearance: str | None
     usage: dict[str, Any]
+    planned_tools: list[dict[str, Any]]
+    completed_tools: list[str]
+    tool_round: int
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:
@@ -120,27 +126,98 @@ def node_route_skill(state: MascotState) -> MascotState:
 
 
 def node_supervisor(state: MascotState) -> MascotState:
-    """只做受控动作分派；业务执行仍由 Java 和具体模块负责。"""
-    action, image_prompt, complexity, search_offer, search_query, need_search_images, usage = decide_mascot_action(
-        (state.get("message") or "").strip(),
-        state.get("history") or [],
-    )
-    if _vip_tier_num(state) < 1 and action == "IMAGE":
-        action = "CHAT"
-        image_prompt = ""
+    """初始化自主工具循环；工具选择由后续 Planner 模型决定。"""
     return {
-        "action": action,
-        "image_prompt": image_prompt,
-        "complexity": complexity,
-        "related_search_offer": search_offer,
-        "related_search_query": search_query,
-        "need_search_images": need_search_images,
-        "supervisor_usage": usage,
+        "action": "CHAT",
+        "image_prompt": "",
+        "complexity": "SIMPLE",
+        "related_search_offer": False,
+        "related_search_query": "",
+        "need_search_images": False,
+        "planned_tools": [],
+        "completed_tools": [],
+        "tool_round": 0,
+        "supervisor_usage": {},
     }
 
 
-def _route_after_supervisor(state: MascotState) -> Literal["assess"]:
-    return "assess"
+def _route_after_supervisor(state: MascotState) -> Literal["tool_planner"]:
+    return "tool_planner"
+
+
+def _plan_tool_calls(state: MascotState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """让模型选择本轮可组合的只读工具，服务端仍执行与约束每一个调用。"""
+    if _effective_skill(state) == "help" or int(state.get("tool_round") or 0) >= _MAX_TOOL_ROUNDS:
+        return [], {}
+    message = (state.get("message") or "").strip()
+    if not message:
+        return [], {}
+    completed = {str(name) for name in state.get("completed_tools") or []}
+    prior = (state.get("mcp_context") or "")[-1800:]
+    system = """你是论坛看板娘的工具规划器。你可以在一轮中组合多个工具，并会在每轮工具结果后再次决定是否继续。
+只从以下工具中选择直接回答用户所必需的工具：
+- rag：检索公开的站内知识与帖子索引；
+- web_search：查询会变化的外部事实或用户明确要求联网的信息；
+- image_generation：按用户明确要求新生成一张图片。
+普通聊天、改写、已有上下文可回答的问题不要调用工具。不能调用已经完成的工具；普通用户不能使用 image_generation。
+图片检索和图片生成不同：只有“新生成一张图”才选 image_generation。工具失败不应阻断后续回答。
+只输出 JSON：{"tool_calls":[{"name":"rag|web_search|image_generation","query":"检索词或空","include_images":false,"prompt":"仅生图时填写"}],"complexity":"SIMPLE|COMPLEX"}。最多三个 tool_calls。"""
+    user = (
+        f"用户档位：{'vip' if _vip_tier_num(state) >= 1 else 'basic'}\n"
+        f"已完成工具：{','.join(sorted(completed)) or '无'}\n"
+        f"已有工具结果：{prior or '无'}\n"
+        f"用户请求：{message[:2000]}"
+    )
+    model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash")
+    try:
+        raw, usage = dashscope_chat_completion(
+            model,
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.0,
+        )
+    except Exception:
+        logger.exception("看板娘工具规划失败")
+        return [], {"model_code": model, "estimated": True}
+    data = _parse_json_object(raw)
+    if not isinstance(data, dict):
+        return [], usage
+    calls: list[dict[str, Any]] = []
+    raw_calls = data.get("tool_calls")
+    if not isinstance(raw_calls, list):
+        raw_calls = []
+    for raw_call in raw_calls:
+        if not isinstance(raw_call, dict):
+            continue
+        name = str(raw_call.get("name") or "").strip().lower()
+        if name not in _AGENT_TOOL_NAMES or name in completed or any(x["name"] == name for x in calls):
+            continue
+        if name == "image_generation" and _vip_tier_num(state) < 1:
+            continue
+        query = str(raw_call.get("query") or message).strip()[:500]
+        prompt = str(raw_call.get("prompt") or "").strip()[:1600]
+        if name == "image_generation" and not prompt:
+            prompt = message[:1600]
+        calls.append({
+            "name": name,
+            "query": query,
+            "prompt": prompt,
+            "include_images": bool(raw_call.get("include_images")),
+        })
+        if len(calls) >= 3:
+            break
+    return calls, usage
+
+
+def node_tool_planner(state: MascotState) -> MascotState:
+    calls, usage = _plan_tool_calls(state)
+    complexity = "SIMPLE"
+    if calls and any(call["name"] in {"rag", "web_search"} for call in calls):
+        complexity = "COMPLEX"
+    return {
+        "planned_tools": calls,
+        "complexity": complexity,
+        "supervisor_usage": _merge_usage(usage, state.get("supervisor_usage")),
+    }
 
 
 def node_image_action(state: MascotState) -> MascotState:
@@ -261,11 +338,11 @@ def _prepare_mascot_context(
     }
     state.update(node_route_skill(state))
     state.update(node_supervisor(state))
-    if state.get("action") == "IMAGE":
-        return state
-    state.update(node_assess(state))
-    if state.get("need_mcp_search") and (state.get("mcp_query") or "").strip():
-        state.update(node_tavily_search(state))
+    for _ in range(_MAX_TOOL_ROUNDS):
+        state.update(node_tool_planner(state))
+        if not state.get("planned_tools"):
+            break
+        state.update(node_execute_tools(state))
     return state
 
 
@@ -332,8 +409,6 @@ def stream_mascot_chat(
         yield ("status", status)
     if ctx.get("action") == "IMAGE":
         yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
-        yield ("usage", ctx.get("supervisor_usage") or {})
-        return
     if ctx.get("related_search_offer") and ctx.get("related_search_query"):
         yield ("meta", {
             "relatedSearchOffer": True,
@@ -400,9 +475,11 @@ def _stream_mascot_context(
             if node_name == "route_skill":
                 yield "supervising", state
             elif node_name == "supervisor":
-                yield "drawing" if state.get("action") == "IMAGE" else "assessing", state
-            elif node_name == "assess":
-                yield "searching" if state.get("need_mcp_search") else "composing", state
+                yield "planning", state
+            elif node_name == "tool_planner":
+                yield "using_tools" if state.get("planned_tools") else "composing", state
+            elif node_name == "execute_tools":
+                yield "drawing" if state.get("action") == "IMAGE" else "composing", state
             elif node_name == "tavily_search":
                 yield "composing", state
 
@@ -487,43 +564,85 @@ reply 先回应用户真正关心的内容，不要描述自己的工作流程�
 basic 用户若要求重度能力，礼貌说明 VIP 功能；live2d.suggested_appearance 仅 legacy: standard|keyboard|gamepad 或 null。"""
 
 
-def node_assess(state: MascotState) -> MascotState:
-    skill = _effective_skill(state)
-    message = (state.get("message") or "").strip()
-    history = state.get("history") or []
-    client_dt = str(state.get("client_datetime") or "").strip()
+def _run_rag_tool(query: str) -> tuple[str, str]:
+    """RAG 只注入公开站点知识；帖子索引仅作为受 Java 复查的线索。"""
+    covered, snippet = local_kb_covers_writing(query)
+    if covered and snippet:
+        return snippet[:2500], "站内知识库"
+    try:
+        related = fetch_related_articles(query)
+    except Exception:
+        logger.exception("看板娘 RAG 检索失败")
+        return "", ""
+    if not related:
+        return "", ""
+    ids = ", ".join(str(item.get("articleId")) for item in related if item.get("articleId") is not None)
+    # 不向模型泄露未经 Java 可见性复查的帖子正文或标题。
+    return f"【站内帖子检索线索】命中公开索引候选 #{ids}；仅可作为相关帖子推荐线索，不能据此断言帖子内容。", "站内帖子索引"
 
-    bundle = prepare_mascot_mcp_bundle(
-        message=message,
-        history=history,
-        skill=skill,
-        client_datetime=client_dt or None,
-        client_location=str(state.get("client_location") or "").strip() or None,
-    )
 
-    need_search_images = bool(state.get("need_search_images")) or bool(bundle.get("need_search_images"))
-    out: MascotState = {
-        "need_mcp_search": bool(bundle.get("need_mcp_search")) or need_search_images,
+def node_execute_tools(state: MascotState) -> MascotState:
+    """执行模型选出的工具；单个失败被隔离，其他工具与最终回答继续。"""
+    calls = state.get("planned_tools") or []
+    context_parts = [part for part in (state.get("mcp_context") or "").split("\n\n") if part.strip()]
+    local_kb = state.get("local_kb_snippet") or ""
+    gallery = list(state.get("search_image_gallery") or [])
+    completed = list(state.get("completed_tools") or [])
+    image_prompt = state.get("image_prompt") or ""
+    action = state.get("action") or "CHAT"
+    need_search_images = False
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        name = str(call.get("name") or "")
+        query = str(call.get("query") or state.get("message") or "").strip()
+        try:
+            if name == "rag":
+                rag_context, source = _run_rag_tool(query)
+                if rag_context:
+                    local_kb = "\n\n".join(part for part in (local_kb, rag_context) if part)[:4000]
+                    context_parts.append(f"【{source}】\n{rag_context}")
+            elif name == "web_search":
+                web_state: MascotState = dict(state)
+                web_state["mcp_query"] = query
+                web_state["need_search_images"] = bool(call.get("include_images"))
+                result = node_tavily_search(web_state)
+                web_context = str(result.get("mcp_context") or "").strip()
+                if web_context:
+                    context_parts.append(web_context)
+                found_gallery = result.get("search_image_gallery") or []
+                if isinstance(found_gallery, list):
+                    gallery = found_gallery[:5]
+                need_search_images = bool(call.get("include_images"))
+            elif name == "image_generation":
+                image_state: MascotState = dict(state)
+                image_state["image_prompt"] = str(call.get("prompt") or query).strip()
+                image_state["local_kb_snippet"] = local_kb
+                image_state["mcp_context"] = "\n\n".join(context_parts)[-4000:]
+                image_prompt = str(node_image_action(image_state).get("image_prompt") or "")
+                action = "IMAGE"
+            else:
+                continue
+            completed.append(name)
+        except Exception:
+            logger.exception("看板娘工具执行失败 tool=%s", name)
+    return {
+        "mcp_context": "\n\n".join(context_parts)[-6000:],
+        "local_kb_snippet": local_kb[:4000],
+        "search_image_gallery": gallery[:5],
         "need_search_images": need_search_images,
-        "mcp_query": bundle.get("mcp_query") or (message if need_search_images else ""),
-        "mcp_context": bundle.get("mcp_context") or "",
-        "local_kb_snippet": bundle.get("local_kb_snippet") or "",
-        "datetime_context": bundle.get("datetime_context") or "",
-        "mcp_used": bool(bundle.get("mcp_used")),
+        "mcp_used": bool(completed),
+        "completed_tools": completed,
+        "tool_round": int(state.get("tool_round") or 0) + 1,
+        "action": action,
+        "image_prompt": image_prompt[:4000],
     }
-    return out
 
 
-def _route_after_assess(state: MascotState) -> Literal["tavily_search", "image", "agent"]:
-    if state.get("need_mcp_search") and (state.get("mcp_query") or "").strip():
-        return "tavily_search"
-    if state.get("action") == "IMAGE":
-        return "image"
+def _route_after_execute_tools(state: MascotState) -> Literal["tool_planner", "agent"]:
+    if state.get("planned_tools") and int(state.get("tool_round") or 0) < _MAX_TOOL_ROUNDS:
+        return "tool_planner"
     return "agent"
-
-
-def _route_after_tavily_search(state: MascotState) -> Literal["image", "agent"]:
-    return "image" if state.get("action") == "IMAGE" else "agent"
 
 
 def node_tavily_search(state: MascotState) -> MascotState:
@@ -648,16 +767,15 @@ def build_mascot_graph() -> Any:
     g = StateGraph(MascotState)
     g.add_node("route_skill", node_route_skill)
     g.add_node("supervisor", node_supervisor)
-    g.add_node("image", node_image_action)
-    g.add_node("assess", node_assess)
+    g.add_node("tool_planner", node_tool_planner)
+    g.add_node("execute_tools", node_execute_tools)
     g.add_node("tavily_search", node_tavily_search)
     g.add_node("agent", node_agent)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"assess": "assess"})
-    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "image": "image", "agent": "agent"})
-    g.add_conditional_edges("tavily_search", _route_after_tavily_search, {"image": "image", "agent": "agent"})
-    g.add_edge("image", END)
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"tool_planner": "tool_planner"})
+    g.add_edge("tool_planner", "execute_tools")
+    g.add_conditional_edges("execute_tools", _route_after_execute_tools, {"tool_planner": "tool_planner", "agent": "agent"})
     g.add_edge("agent", END)
     return g.compile()
 
@@ -667,15 +785,13 @@ def build_mascot_prepare_graph() -> Any:
     g = StateGraph(MascotState)
     g.add_node("route_skill", node_route_skill)
     g.add_node("supervisor", node_supervisor)
-    g.add_node("image", node_image_action)
-    g.add_node("assess", node_assess)
-    g.add_node("tavily_search", node_tavily_search)
+    g.add_node("tool_planner", node_tool_planner)
+    g.add_node("execute_tools", node_execute_tools)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"assess": "assess"})
-    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "image": "image", "agent": END})
-    g.add_conditional_edges("tavily_search", _route_after_tavily_search, {"image": "image", "agent": END})
-    g.add_edge("image", END)
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"tool_planner": "tool_planner"})
+    g.add_edge("tool_planner", "execute_tools")
+    g.add_conditional_edges("execute_tools", _route_after_execute_tools, {"tool_planner": "tool_planner", "agent": END})
     return g.compile()
 
 
@@ -714,7 +830,7 @@ def run_mascot_chat(
         }
     )
     # route_skill / assess 在图内执行；invoke 后补全 routed_skill 供调试
-    mcp_used = bool(out.get("need_mcp_search")) or bool(out.get("mcp_used"))
+    mcp_used = bool(out.get("mcp_used")) or bool(out.get("completed_tools"))
     return {
         "reply": out.get("reply", ""),
         "live2d": out.get("live2d") or {},

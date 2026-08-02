@@ -1716,9 +1716,7 @@ export function useMascotDock() {
                 }
               }
               if (meta?.imageUrl && isSafeMascotImageUrl(meta.imageUrl)) {
-                if (assistantIdx >= 0) {
-                  messages.value.splice(assistantIdx, 1)
-                }
+                // 工具可组合：保留同一轮的文字回答，再追加 Java 已授权并生成的图片。
                 messages.value.push({
                   role: 'assistant',
                   type: 'image',
@@ -1726,7 +1724,6 @@ export function useMascotDock() {
                   at: Date.now(),
                   usageStats: usageStatsFromApi(meta),
                 })
-                assistantIdx = -1
                 persistCurrentMessages()
                 scrollFsToBottom()
               }
