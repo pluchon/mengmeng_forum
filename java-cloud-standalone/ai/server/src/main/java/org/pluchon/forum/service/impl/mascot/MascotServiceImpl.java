@@ -1142,7 +1142,8 @@ public class MascotServiceImpl implements MascotService {
             vo.setUrl(url);
             Object rawTitle = item.get("title");
             Object rawSource = item.get("source");
-            vo.setTitle(rawTitle == null ? "" : String.valueOf(rawTitle).trim());
+            String title = rawTitle == null ? "" : String.valueOf(rawTitle).trim();
+            vo.setTitle(title.substring(0, Math.min(10, title.length())));
             vo.setSource(rawSource == null ? "" : String.valueOf(rawSource).trim());
             gallery.add(vo);
             if (gallery.size() >= 5) {
