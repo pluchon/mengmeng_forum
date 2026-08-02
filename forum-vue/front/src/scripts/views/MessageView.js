@@ -268,7 +268,7 @@ export function useMessageView() {
       group: s,
       name: s.name || '群聊',
       time: s.lastMessageTime,
-      preview: s.lastMessage || '暂无消息',
+      preview: previewForPrivateMessage(s.lastMessage),
       unread: Number(s.unreadCount) || 0,
       listIcon: UserFilled,
     }))
@@ -719,6 +719,14 @@ const GROUP_NOTIFY_OPTIONS = [
         && !currentGroupSession.value
     }
     return false
+  }
+
+  function previewForPrivateMessage(content) {
+    const text = String(content || '').replace(/\s+/g, ' ').trim()
+    if (text.startsWith(GROUP_INVITE_CARD_PREFIX) && text.endsWith(']]')) {
+      return '进群邀请'
+    }
+    return text || '暂无消息'
   }
 
   function openGroupMemberProfile(member) {
@@ -1988,8 +1996,27 @@ const GROUP_NOTIFY_OPTIONS = [
     if (mentionMembersPage.value < mentionMembersTotalPages.value) mentionMembersPage.value += 1
   }
 
-  function setGroupNotifyMode(mode) {
-    groupRemarkForm.value.notifyMode = Number(mode)
+  async function setGroupNotifyMode(mode) {
+    const nextMode = Number(mode)
+    const gid = Number(currentGroupSession.value?.groupId)
+    if (!Number.isFinite(gid) || gid <= 0 || nextMode === Number(groupRemarkForm.value.notifyMode)) return
+    groupRemarkForm.value.notifyMode = nextMode
+    try {
+      const res = await updateMyGroupRemark(gid, {
+        // 切换提醒模式不应顺带提交尚未保存的群备注。
+        remarkName: undefined,
+        notifyMode: nextMode,
+      })
+      if (res.code !== 0) throw new Error(res.message || '消息提醒模式更新失败')
+      const actualMode = Number(res.data?.notifyMode) || 0
+      groupRemarkForm.value.notifyMode = actualMode
+      if (myGroupMember.value) myGroupMember.value.notifyMode = actualMode
+      setGroupMemberSettingsSnapshot()
+      await refreshCurrentGroupSession()
+    } catch (error) {
+      groupRemarkForm.value.notifyMode = Number(myGroupMember.value?.notifyMode) || 0
+      ElMessage.error(error?.message || '消息提醒模式更新失败')
+    }
   }
 
   function startReply(msgRow) {

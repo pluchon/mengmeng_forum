@@ -37,7 +37,8 @@ public interface ArticleService {
     void deleteArticle(Long articleId, Long loginUserId);
 
     // 用户主页帖子列表（分页）
-    PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum, Integer pageSize);
+    PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum,
+                                                                 Integer pageSize, Integer status, String keyword);
 
     // 用户主页帖子列表（分页，附带用户信息与 owner 标志）
     ArticleListByUserIdPageResponse queryArticleListByUserIdWithPageAndUserInfo(Long userId, Long loginUserId,

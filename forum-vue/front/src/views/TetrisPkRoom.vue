@@ -30,6 +30,8 @@
         </div>
       </div>
 
+      <div class="tetris-pk-spectator-count">观战人数 {{ room.spectatorCount || 0 }}</div>
+
       <main class="tetris-stage tetris-pk-stage">
         <aside class="tetris-rail tetris-rail--left">
           <div v-if="isPlayer" class="tetris-rail-card tetris-piece-card">

@@ -100,7 +100,6 @@
                 :content="form.content"
                 @apply="applyAiContent"
                 @generating="setAiWriting"
-                @workspace-ready="handleAiWorkspaceReady"
               />
             </div>
             <div class="editor-content-head-tools">
@@ -125,10 +124,6 @@
               </button>
               <span class="editor-media-toggle__thumb" :class="{ 'is-right': mediaMode === 'video' }" />
             </div>
-            <AiWorkspaceHistory
-              :workspace-id="aiWorkspaceId"
-              @selected="applyAiWorkspaceVersion"
-            />
             <div class="editor-mode-seg" role="tablist" aria-label="编辑器模式">
               <button
                 type="button"

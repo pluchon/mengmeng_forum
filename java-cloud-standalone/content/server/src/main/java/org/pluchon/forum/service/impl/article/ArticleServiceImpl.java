@@ -435,12 +435,13 @@ public class ArticleServiceImpl implements ArticleService {
     // 用户主页帖子列表
     // ============================================================
     @Override
-    public PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum, Integer pageSize) {
+    public PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum,
+                                                                        Integer pageSize, Integer status, String keyword) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
-        Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner));
+        Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner, status, keyword));
         return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
     }
 
@@ -450,7 +451,7 @@ public class ArticleServiceImpl implements ArticleService {
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
-        Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner));
+        Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner, null, null));
         UserInternalVO user = userInternalLookupService.getUserInfoById(userId);
         PageResult<ArticleBriefVO> pageResult = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(),
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
@@ -469,11 +470,19 @@ public class ArticleServiceImpl implements ArticleService {
         return PageUtils.getPage(pageNum, pageSize);
     }
 
-    private LambdaQueryWrapper<Article> buildUserArticleWrapper(Long userId, boolean isOwner) {
+    private LambdaQueryWrapper<Article> buildUserArticleWrapper(Long userId, boolean isOwner, Integer status, String keyword) {
         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Article::getUserId, userId).ne(Article::getDeleteState, DELETE_TRUE).ne(Article::getState, STATE_FORBIDDEN);
         if (!isOwner) {
             wrapper.eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode());
+        } else if (status != null) {
+            wrapper.eq(Article::getStatus, status);
+        }
+        if (isOwner && StringUtils.hasText(keyword)) {
+            String normalizedKeyword = keyword.trim();
+            wrapper.and(item -> item.like(Article::getTitle, normalizedKeyword)
+                    .or()
+                    .like(Article::getContent, normalizedKeyword));
         }
         wrapper.orderByDesc(Article::getUpdateTime);
         return wrapper;

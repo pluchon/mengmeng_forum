@@ -128,10 +128,6 @@ def node_supervisor(state: MascotState) -> MascotState:
     if _vip_tier_num(state) < 1 and action == "IMAGE":
         action = "CHAT"
         image_prompt = ""
-    if action == "IMAGE":
-        search_offer = False
-        search_query = ""
-        need_search_images = False
     return {
         "action": action,
         "image_prompt": image_prompt,
@@ -143,13 +139,20 @@ def node_supervisor(state: MascotState) -> MascotState:
     }
 
 
-def _route_after_supervisor(state: MascotState) -> Literal["image", "assess"]:
-    return "image" if state.get("action") == "IMAGE" else "assess"
+def _route_after_supervisor(state: MascotState) -> Literal["assess"]:
+    return "assess"
 
 
 def node_image_action(state: MascotState) -> MascotState:
-    """声明生图委派；Java 将执行鉴权、计费和真正的生图调用。"""
-    return {"action": "IMAGE", "image_prompt": state.get("image_prompt") or ""}
+    """在允许工具完成后再声明生图委派，保留检索/RAG 等组合上下文。"""
+    prompt = (state.get("image_prompt") or state.get("message") or "").strip()
+    context = "\n\n".join(part for part in (
+        state.get("local_kb_snippet") or "",
+        state.get("mcp_context") or "",
+    ) if part).strip()
+    if context:
+        prompt = f"{prompt}\n\n参考素材：\n{context[:2400]}"
+    return {"action": "IMAGE", "image_prompt": prompt[:4000]}
 
 
 def _lc_to_openai_messages(msgs: list[Any]) -> list[dict[str, str]]:
@@ -511,10 +514,16 @@ def node_assess(state: MascotState) -> MascotState:
     return out
 
 
-def _route_after_assess(state: MascotState) -> Literal["tavily_search", "agent"]:
+def _route_after_assess(state: MascotState) -> Literal["tavily_search", "image", "agent"]:
     if state.get("need_mcp_search") and (state.get("mcp_query") or "").strip():
         return "tavily_search"
+    if state.get("action") == "IMAGE":
+        return "image"
     return "agent"
+
+
+def _route_after_tavily_search(state: MascotState) -> Literal["image", "agent"]:
+    return "image" if state.get("action") == "IMAGE" else "agent"
 
 
 def node_tavily_search(state: MascotState) -> MascotState:
@@ -645,10 +654,10 @@ def build_mascot_graph() -> Any:
     g.add_node("agent", node_agent)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"image": "image", "assess": "assess"})
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"assess": "assess"})
+    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "image": "image", "agent": "agent"})
+    g.add_conditional_edges("tavily_search", _route_after_tavily_search, {"image": "image", "agent": "agent"})
     g.add_edge("image", END)
-    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "agent": "agent"})
-    g.add_edge("tavily_search", "agent")
     g.add_edge("agent", END)
     return g.compile()
 
@@ -663,10 +672,10 @@ def build_mascot_prepare_graph() -> Any:
     g.add_node("tavily_search", node_tavily_search)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"image": "image", "assess": "assess"})
+    g.add_conditional_edges("supervisor", _route_after_supervisor, {"assess": "assess"})
+    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "image": "image", "agent": END})
+    g.add_conditional_edges("tavily_search", _route_after_tavily_search, {"image": "image", "agent": END})
     g.add_edge("image", END)
-    g.add_conditional_edges("assess", _route_after_assess, {"tavily_search": "tavily_search", "agent": END})
-    g.add_edge("tavily_search", END)
     return g.compile()
 
 

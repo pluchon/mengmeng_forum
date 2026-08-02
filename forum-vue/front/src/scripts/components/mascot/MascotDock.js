@@ -885,9 +885,8 @@ export function useMascotDock() {
         contextWindow.value = res.data
       }
       await loadMessagesForNav(activeNav.value)
-      if (!res.data || typeof res.data !== 'object') {
-        await refreshContextWindow({ autoCompress: false })
-      }
+      // 压缩后始终从服务端回读，避免只刷新消息列表而上下文进度条仍是旧值。
+      await refreshContextWindow({ autoCompress: false })
       if (!automatic) ElMessage.success('上下文已压缩')
     } catch (error) {
       ElMessage.error(error?.message || '上下文压缩失败')

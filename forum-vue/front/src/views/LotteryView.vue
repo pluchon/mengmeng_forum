@@ -105,7 +105,7 @@
                   :class="{ 'is-jackpot': item.jackpot }"
                 >
                   <span class="lottery-ten-result-chip__name">{{ formatOutcome(item) }}</span>
-                  <span v-if="item.grantPoints > 0" class="lottery-ten-result-chip__pts">+{{ item.grantPoints }}</span>
+                  <span v-if="item.grantPoints > 0" class="lottery-ten-result-chip__pts">+{{ item.grantPoints }} 积分</span>
                 </div>
               </div>
               <button type="button" class="lottery-draw-confirm-btn" @click="resetRound">确定</button>

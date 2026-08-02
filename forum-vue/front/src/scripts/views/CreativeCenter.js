@@ -13,7 +13,6 @@ import editIconUrl from '@/assets/svg/编辑.svg?url'
 import deleteIconUrl from '@/assets/svg/删除.svg?url'
 import { formatForumDateOnlyShanghai } from '@/utils/datetime'
 
-const FETCH_PAGE_SIZE = 200
 const LIST_PAGE_SIZE = 10
 
 const STATUS_FILTER_OPTIONS = [
@@ -190,26 +189,8 @@ export function useCreativeCenter() {
       ),
   )
 
-  const filteredArticles = computed(() => {
-    const kw = keyword.value.trim().toLowerCase()
-    const sf = statusFilter.value
-    return articles.value.filter((row) => {
-      const a = row.article
-      if (sf !== '' && String(a.status) !== sf) return false
-      if (kw) {
-        const title = (a.title || '').toLowerCase()
-        if (!title.includes(kw)) return false
-      }
-      return true
-    })
-  })
-
-  const listTotal = computed(() => filteredArticles.value.length)
-
-  const pagedArticles = computed(() => {
-    const start = (pageNum.value - 1) * LIST_PAGE_SIZE
-    return filteredArticles.value.slice(start, start + LIST_PAGE_SIZE)
-  })
+  const listTotal = ref(0)
+  const pagedArticles = computed(() => articles.value)
 
   function refreshTrendChart() {
     trendChartOption.value = buildTrendChartOption(buildTrendFromArticles(articles.value))
@@ -221,15 +202,17 @@ export function useCreativeCenter() {
     try {
       const res = await getArticleListByUser({
         userId: userStore.id,
-        pageNum: 1,
-        pageSize: FETCH_PAGE_SIZE,
+        pageNum: pageNum.value,
+        pageSize: LIST_PAGE_SIZE,
+        status: statusFilter.value === '' ? undefined : Number(statusFilter.value),
+        keyword: keyword.value.trim() || undefined,
       })
       if (res.code === 0) {
         const rawList = res.data.records || res.data.list || res.data || []
         articles.value = Array.isArray(rawList)
           ? rawList.map((item) => (item.article ? item : { article: item }))
           : []
-        refreshTrendChart()
+        listTotal.value = Number(res.data.total) || articles.value.length
       }
     } finally {
       loading.value = false
@@ -238,7 +221,10 @@ export function useCreativeCenter() {
 
   watch([statusFilter, keyword], () => {
     pageNum.value = 1
+    fetchArticles()
   })
+
+  watch(pageNum, () => fetchArticles())
 
   const handleDelete = (id) => {
     ElMessageBox.confirm('确定要删除这篇帖子吗？该操作不可撤销', '提示', {

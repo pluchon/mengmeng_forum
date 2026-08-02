@@ -30,6 +30,7 @@ import org.pluchon.forum.mapper.DriftBottleMapper;
 import org.pluchon.forum.mapper.DriftBottlePickLogMapper;
 import org.pluchon.forum.mapper.DriftBottleReportMapper;
 import org.pluchon.forum.service.interfaces.driftbottle.DriftBottleService;
+import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +80,10 @@ public class DriftBottleServiceImpl implements DriftBottleService {
     // AI 域用户读取服务
     @Autowired
     private AiUserLookupService aiUserLookupService;
+
+    // AI 内容审核服务
+    @Autowired
+    private AiHubService aiHubService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -151,6 +156,7 @@ public class DriftBottleServiceImpl implements DriftBottleService {
         DriftBottle bottle = queryVisibleBottle(bottleId);
         assertNotLatestCommenter(bottleId, loginUserId);
         String content = normalizeContent(request.getContent(), 1, 200);
+        assertAiContentAllowed("漂流瓶评论：" + content);
         Date now = ForumDateTimes.now();
 
         DriftBottleComment comment = new DriftBottleComment();
@@ -480,6 +486,13 @@ public class DriftBottleServiceImpl implements DriftBottleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "举报原因不能为空"));
         }
         return value;
+    }
+
+    private void assertAiContentAllowed(String content) {
+        String rejectReason = aiHubService.validateText(content);
+        if (StringUtils.hasText(rejectReason)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, rejectReason));
+        }
     }
 
     private String normalizeOptional(String raw, int maxLen) {

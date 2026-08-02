@@ -969,6 +969,20 @@
   color: #86909c;
 }
 
+.mc-media-meta-action {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #86909c;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.mc-media-meta-action:hover {
+  color: #ff2442;
+}
+
 .mc-date-divider {
   display: flex;
   justify-content: center;

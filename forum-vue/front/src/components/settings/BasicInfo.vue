@@ -112,7 +112,7 @@
       <div class="setting-item">
         <div class="setting-label setting-label--text">手机号码</div>
         <div class="setting-content">
-          <span class="value-text">{{ profileForm.phoneNum || '未绑定手机' }}</span>
+          <span class="value-text">{{ maskPhone(profileForm.phoneNum) || '未绑定手机' }}</span>
           <el-button class="edit-btn" @click="emit('open-phone')">
             {{ profileForm.phoneNum ? '修改' : '绑定' }}
           </el-button>
@@ -134,7 +134,8 @@ const {
   cancelEdit,
   editing,
   genderLabel,
-  handleAvatarUpload,
+    handleAvatarUpload,
+    maskPhone,
   profileForm,
   saveSingleField,
   saveGender,

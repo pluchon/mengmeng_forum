@@ -212,7 +212,8 @@ export function useDriftBottle() {
         activeBottle.value = res.data
         commentContent.value = ''
         ElMessage.success('回应已送达')
-        await Promise.all([loadQuota(), loadMine(myPage.value)])
+        // 评论别人的瓶子不会改变当前用户的“我的瓶子”列表，避免把当前打捞对象误渲染为我的记录。
+        await loadQuota()
       }
     } finally {
       commentSubmitting.value = false
