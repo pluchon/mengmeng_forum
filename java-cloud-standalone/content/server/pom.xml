@@ -17,6 +17,11 @@
             <artifactId>common</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>org.pluchon.forum</groupId>
             <artifactId>content-api</artifactId>
         </dependency>
