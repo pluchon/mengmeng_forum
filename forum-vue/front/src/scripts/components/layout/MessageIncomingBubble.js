@@ -9,7 +9,9 @@ const AUTO_HIDE_MS = 8000
 const messageStore = useMessageStore()
 const messageCenterUi = useMessageCenterUiStore()
 
-const visible = computed(() => messageStore.showTip && !!messageStore.incomingPreview)
+const visible = computed(() =>
+  messageStore.showTip && !!messageStore.incomingPreview && !messageCenterUi.visible,
+)
 const preview = computed(() => messageStore.incomingPreview)
 const unread = computed(() => Number(messageStore.unreadCount) || 0)
 

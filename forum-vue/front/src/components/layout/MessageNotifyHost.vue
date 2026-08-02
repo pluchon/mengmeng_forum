@@ -18,6 +18,7 @@ watch(
   (seq) => {
     if (!seq || seq === lastSeq) return
     lastSeq = seq
+    if (messageCenterUi.visible) return
     const sig = messageStore.incomingSignal
     const sender = (sig?.sender || '新私信').toString()
     const raw = (sig?.preview || '').toString().trim()
