@@ -139,10 +139,11 @@ foreach ($domain in @("auth", "content", "im", "game", "economy", "ai")) {
     }
     Copy-Item $createSql (Join-Path $sqlDst "$domain-create.sql") -Force
 }
-$postgresSql = Join-Path $repoRoot "java-cloud-standalone\platform\src\main\resources\sql\postgres_ai_session.sql"
-if (Test-Path $postgresSql) {
-    Copy-Item $postgresSql (Join-Path $sqlDst "postgres_ai_session.sql") -Force
+$postgresSql = Join-Path $repoRoot "java-cloud-standalone\ai\server\src\main\resources\sql\postgres_ai_session.sql"
+if (-not (Test-Path $postgresSql)) {
+    throw "Missing PostgreSQL migration: $postgresSql"
 }
+Copy-Item $postgresSql (Join-Path $sqlDst "postgres_ai_session.sql") -Force
 $startSh = @'
 #!/bin/bash
 set -euo pipefail
@@ -206,6 +207,17 @@ wait_mysql() {
   echo "ERROR: MySQL not ready"; return 1
 }
 
+wait_postgres() {
+  local user="$1" database="$2" i
+  for i in $(seq 1 90); do
+    if docker exec forum-postgres pg_isready -U "$user" -d "$database" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: PostgreSQL not ready"; return 1
+}
+
 wait_rabbitmq() {
   local i
   for i in $(seq 1 90); do
@@ -248,19 +260,29 @@ $COMPOSE up -d mysql redis rabbitmq postgres ffmpeg
 sync_rabbitmq_credentials
 
 root_pw="$(read_env MYSQL_ROOT_PASSWORD)"
-wait_mysql "$root_pw" || true
+wait_mysql "$root_pw"
 
 if [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
-  for domain in auth content im game economy ai; do
-    schema="sql/${domain}-create.sql"
-    echo "==> init MySQL (${schema})"
-    docker exec -i forum-mysql mysql -uroot -p"${root_pw}" < "${schema}"
-  done
-  if [[ -f sql/postgres_ai_session.sql ]]; then
-    pu="$(read_env POSTGRES_USER)"; pd="$(read_env POSTGRES_DB)"
-    pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
-    docker exec -i forum-postgres psql -U "${pu}" -d "${pd}" < sql/postgres_ai_session.sql || true
+  schema_count="$(docker exec forum-mysql mysql -Nse "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name IN ('forum_auth_db', 'forum_content_db', 'forum_im_db', 'forum_game_db', 'forum_economy_db', 'forum_ai_db')" -uroot -p"${root_pw}")"
+  if [[ "$schema_count" == "0" ]]; then
+    for domain in auth content im game economy ai; do
+      schema="sql/${domain}-create.sql"
+      echo "==> initialize empty MySQL (${schema})"
+      docker exec -i forum-mysql mysql -uroot -p"${root_pw}" < "${schema}"
+    done
+  elif [[ "$schema_count" != "6" ]]; then
+    echo "ERROR: detected a partially initialized MySQL schema set; refusing destructive baseline SQL"
+    echo "Resolve the partial deployment and apply a reviewed forward migration before restarting."
+    exit 1
+  else
+    echo "Existing MySQL schemas detected; baseline SQL skipped."
   fi
+
+  pu="$(read_env POSTGRES_USER)"; pd="$(read_env POSTGRES_DB)"
+  pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
+  wait_postgres "$pu" "$pd"
+  echo "==> apply PostgreSQL idempotent schema"
+  docker exec -i forum-postgres psql -v ON_ERROR_STOP=1 -U "${pu}" -d "${pd}" < sql/postgres_ai_session.sql
 fi
 
 echo "==> compose application"
@@ -271,7 +293,7 @@ $COMPOSE ps
 sleep 15
 curl -sf http://127.0.0.1/healthz && echo " healthz OK" || echo " healthz FAIL (see: docker logs forum-backend-1 --tail 50)"
 echo ""
-echo "Re-init DB only: SKIP_DB_INIT=0 bash start.sh   or: bash reset-db.sh"
+echo "For an intentionally destructive rebuild, run: CONFIRM_RESET_DB=1 bash reset-db.sh"
 '@
 Write-UnixShellFile -Path (Join-Path $pkg "start.sh") -Content $startSh
 
@@ -281,6 +303,11 @@ $resetDbSh = @'
 set -euo pipefail
 cd "$(dirname "$0")"
 sed -i 's/\r$//' .env 2>/dev/null || true
+
+if [[ "${CONFIRM_RESET_DB:-}" != "1" ]]; then
+  echo "Refusing destructive database reset. Run: CONFIRM_RESET_DB=1 bash reset-db.sh"
+  exit 2
+fi
 
 read_env() {
   local k="$1" line v
@@ -306,6 +333,8 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 
+docker exec forum-mysql mysqladmin ping -h 127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent >/dev/null
+
 for domain in auth content im game economy ai; do
   schema="sql/${domain}-create.sql"
   echo "==> MySQL ${schema}"
@@ -313,9 +342,16 @@ for domain in auth content im game economy ai; do
 done
 
 if [[ -f sql/postgres_ai_session.sql ]]; then
+  echo "Waiting for PostgreSQL..."
+  for _ in $(seq 1 90); do
+    if docker exec forum-postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+  docker exec forum-postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null
   echo "==> Postgres postgres_ai_session.sql"
-  export PGPASSWORD="${POSTGRES_PASSWORD}"
-  docker exec -i forum-postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" < sql/postgres_ai_session.sql
+  docker exec -i forum-postgres psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" < sql/postgres_ai_session.sql
 fi
 
 echo "Database init done. Restart backend: docker compose -f docker-compose.yaml -f docker-compose.prod.yml restart backend-1 nginx"
@@ -376,13 +412,14 @@ $deployTxt = @'
   sed -i 's/\r$//' .env start.sh up.sh verify-frontend-dist.sh reset-db.sh
   chmod +x start.sh up.sh verify-frontend-dist.sh reset-db.sh
 
-  首次部署 / 要初始化库：  bash start.sh
+  首次部署（仅空库初始化）： bash start.sh
   仅更新包后重启（推荐）： bash up.sh
   勿单独用： docker compose up -d --build
     （不会 docker load 离线镜像，也不会 chmod dist，易导致前端 403）
 
-【D】服务器 — 初始化 MySQL + Postgres 表（空库 / 重建）
-  bash reset-db.sh
+【D】服务器 — 销毁并重建 MySQL + Postgres 表（会清空全部业务数据）
+  CONFIRM_RESET_DB=1 bash reset-db.sh
+  # 已有数据的版本升级只能执行已审核的向前迁移，不能运行本重建脚本。
 
 【E】验证
   docker compose -f docker-compose.yaml -f docker-compose.prod.yml ps
