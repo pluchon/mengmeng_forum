@@ -124,24 +124,18 @@ export const useMessageStore = defineStore('message', () => {
     }
     showTip.value = true
     const sender = String(payload?.senderNickname || '群成员').trim() || '群成员'
-    const mentioned = payload?.mentioned === true
-    const preview = mentioned
-      ? `${sender} 提到了你`
-      : (payload?.summary ? `群聊：${payload.summary}` : '你收到一条新的群聊消息')
-    incomingPreview.value = { sender: '群消息', preview }
+    const preview = String(payload?.summary || payload?.content || '你收到一条新的群聊消息').trim()
+      || '你收到一条新的群聊消息'
+    incomingPreview.value = { sender, preview }
     const signal = {
-      sender: '群消息',
+      sender,
       preview,
       fromUserId: payload?.fromUserId != null ? Number(payload.fromUserId) : null,
       seq: Date.now(),
     }
     incomingSignal.value = signal
     showMessageIncomingToast(signal)
-    if (payload?.mentioned) {
-      tipText.value = `${sender} 提到了你`
-      return
-    }
-    tipText.value = preview
+    tipText.value = `${sender}：${preview}`
   }
 
   return {

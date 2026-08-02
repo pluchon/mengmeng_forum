@@ -5,6 +5,14 @@ spring:
     activate:
       on-profile: prod
 
+oss:
+  endpoint: ${OSS_SERVER_ENDPOINT:https://oss-cn-shenzhen.aliyuncs.com}
+  access-key-id: ${OSS_SERVER_ACCESS_KEY_ID:${ALIYUN_ACCESS_KEY_ID:}}
+  access-key-secret: ${OSS_SERVER_ACCESS_KEY_SECRET:${ALIYUN_ACCESS_KEY_SECRET:}}
+  bucket-name: ${OSS_SERVER_BUCKET_NAME:item-for-picture-with-zhanglihong}
+  url-prefix: ${OSS_SERVER_URL_PREFIX:https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/}
+  root-prefix: ${OSS_SERVER_ROOT_PREFIX:}
+
 logging:
   level:
     root: WARN

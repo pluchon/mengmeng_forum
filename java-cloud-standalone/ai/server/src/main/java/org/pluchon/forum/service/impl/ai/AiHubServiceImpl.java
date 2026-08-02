@@ -13,6 +13,7 @@ import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
@@ -298,6 +299,33 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
+    public List<Long> ragVectorSearchEmojis(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("query", query.trim());
+            Object results = searchResults("EMOJI", body);
+            if (!(results instanceof List<?> list)) {
+                return Collections.emptyList();
+            }
+            List<Long> ranked = new ArrayList<>();
+            for (Object item : list) {
+                Long id = parseVectorHitId(item, "shopId", "shop_id");
+                if (id != null && !ranked.contains(id)) {
+                    ranked.add(id);
+                }
+            }
+            return ranked;
+        } catch (Exception e) {
+            log.warn("RAG 表情包向量检索失败 keyword={}: {}", query.trim(), e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates) {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
@@ -411,6 +439,15 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
+    public void indexEmojiRag(RagEmojiIndexDTO payload) {
+        try {
+            invokeGateway("RAG", "INDEX_EMOJI", null, AiHubConverter.ragEmojiIndexToMap(payload));
+        } catch (Exception e) {
+            log.warn("RAG 表情包索引失败 shopId={}: {}", payload != null ? payload.getShopId() : null, e.getMessage());
+        }
+    }
+
+    @Override
     public String validateText(String content) {
         if (content == null || content.isBlank()) {
             return null;
@@ -490,6 +527,12 @@ public class AiHubServiceImpl implements AiHubService {
     private Object searchResults(String scope, Map<String, Object> payload) {
         payload.put("scope", scope);
         Map<String, Object> data = invokeGateway("SEARCH", "QUERY", null, payload);
-        return "ARTICLE".equals(scope) ? data.get("articleResults") : data.get("userResults");
+        if ("ARTICLE".equals(scope)) {
+            return data.get("articleResults");
+        }
+        if ("EMOJI".equals(scope)) {
+            return data.get("emojiResults");
+        }
+        return data.get("userResults");
     }
 }

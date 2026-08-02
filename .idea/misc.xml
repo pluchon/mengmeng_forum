@@ -17,6 +17,26 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/java-cloud-standalone/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/ai/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/auth/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/common/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/content/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/economy/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/game/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/gateway/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/im/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/ai/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/ai/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/auth/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/auth/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/content/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/content/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/economy/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/economy/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/game/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/game/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/im/api/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/im/server/pom.xml" />
       </list>
     </option>
   </component>

@@ -1,7 +1,4 @@
-# Production overlay: bind middleware to 127.0.0.1 on host + memory limits
-# Usage: docker compose -f docker-compose.yaml -f docker-compose.prod.yml up -d
-#
-# 宿主机（SSH 隧道）默认端口：MySQL 33061  Redis 63790  Postgres 54320  RabbitMQ 56720/15672
+# 生产覆盖：中间件仅绑定本机，Java 域服务按职责设置内存上限。
 
 services:
   mysql:
@@ -24,16 +21,56 @@ services:
   nginx:
     pull_policy: never
 
-  backend-1:
-    image: ${FORUM_BACKEND_IMAGE:-forum-backend:latest}
+  gateway:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  auth:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  content:
     pull_policy: never
     deploy:
       resources:
         limits:
           memory: 1024M
 
+  im:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  game:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  economy:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  ai:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
   ai-server:
-    image: ${FORUM_AI_IMAGE:-forum-ai-server:latest}
     pull_policy: never
     build: !reset null
     deploy:
@@ -42,6 +79,12 @@ services:
           memory: 768M
 
   ffmpeg:
-    image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
     pull_policy: never
     build: !reset null
+
+  nacos:
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M

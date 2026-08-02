@@ -1,0 +1,19 @@
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+RUN adduser -D -u 1000 appuser \
+    && mkdir -p /app/logs \
+    && chown -R appuser:appuser /app
+
+COPY auth/server/target/auth-server-0.0.1-SNAPSHOT.jar /app/auth-server.jar
+COPY content/server/target/content-server-0.0.1-SNAPSHOT.jar /app/content-server.jar
+COPY im/server/target/im-server-0.0.1-SNAPSHOT.jar /app/im-server.jar
+COPY game/server/target/game-server-0.0.1-SNAPSHOT.jar /app/game-server.jar
+COPY economy/server/target/economy-server-0.0.1-SNAPSHOT.jar /app/economy-server.jar
+COPY ai/server/target/ai-server-0.0.1-SNAPSHOT.jar /app/ai-server.jar
+COPY gateway/target/gateway-0.0.1-SNAPSHOT.jar /app/gateway.jar
+
+USER appuser
+
+ENTRYPOINT ["java", "-jar"]

@@ -929,6 +929,7 @@
 }
 
 .mc-media-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -967,6 +968,28 @@
 .mc-read {
   font-size: 10px;
   color: #86909c;
+}
+
+.mc-media-corner-actions {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.mc-media-corner-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: rgba(31, 35, 41, 0.72);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mc-media-corner-actions button:hover {
+  background: rgba(212, 83, 126, 0.9);
 }
 
 .mc-media-meta-action {

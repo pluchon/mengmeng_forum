@@ -43,7 +43,6 @@ public class AiController {
         return Result.success(aiCompanionApiService.priceEstimate(user.getId(), skill, route, quality));
     }
 
-    /** 帖子正文一键润色 */
     @Operation(summary = "帖子正文一键润色", description = "模型与润色提示均由服务端确定")
     @PostMapping("/polish")
     public Result<AiPolishResponseVO> polish(@RequestBody AiPolishRequest req, HttpServletRequest request) {

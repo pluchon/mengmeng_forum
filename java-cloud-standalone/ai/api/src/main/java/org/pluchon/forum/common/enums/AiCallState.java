@@ -1,8 +1,11 @@
 package org.pluchon.forum.common.enums;
 
+import lombok.Getter;
+
 /**
  * AI 调用预记录状态：调用前写入，结算时更新。
  */
+@Getter
 public enum AiCallState {
 
     PENDING(0, "待调用"),
@@ -18,14 +21,6 @@ public enum AiCallState {
     AiCallState(int code, String label) {
         this.code = code;
         this.label = label;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public String getLabel() {
-        return label;
     }
 
     public static AiCallState fromCode(int code) {

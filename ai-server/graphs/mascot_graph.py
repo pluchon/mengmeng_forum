@@ -145,6 +145,13 @@ def _route_after_supervisor(state: MascotState) -> Literal["tool_planner"]:
     return "tool_planner"
 
 
+def _request_wants_image_gallery(message: str) -> bool:
+    normalized = message.lower()
+    return any(token in normalized for token in (
+        "图集", "配图", "图片搜索", "搜图", "看图", "图片", "图像", "image", "picture",
+    ))
+
+
 def _plan_tool_calls(state: MascotState) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """让模型选择本轮可组合的只读工具，服务端仍执行与约束每一个调用。"""
     if _effective_skill(state) == "help" or int(state.get("tool_round") or 0) >= _MAX_TOOL_ROUNDS:
@@ -157,10 +164,10 @@ def _plan_tool_calls(state: MascotState) -> tuple[list[dict[str, Any]], dict[str
     system = """你是论坛看板娘的工具规划器。你可以在一轮中组合多个工具，并会在每轮工具结果后再次决定是否继续。
 只从以下工具中选择直接回答用户所必需的工具：
 - rag：检索公开的站内知识与帖子索引；
-- web_search：查询会变化的外部事实或用户明确要求联网的信息；
-- image_generation：按用户明确要求新生成一张图片。
-普通聊天、改写、已有上下文可回答的问题不要调用工具。不能调用已经完成的工具；普通用户不能使用 image_generation。
-图片检索和图片生成不同：只有“新生成一张图”才选 image_generation。工具失败不应阻断后续回答。
+ - web_search：查询会变化的外部事实；生成图片时，如果请求涉及陌生角色、作品、地点或视觉特征不足，也应同时检索可靠参考，并设置 include_images=true；
+ - image_generation：按用户明确要求新生成一张图片，仅会员可调用。
+ 普通聊天、改写、已有上下文可回答的问题不要调用工具。不能调用已经完成的工具；普通用户不能使用 image_generation。
+ 图片检索和图片生成不同：只有“新生成一张图”才选 image_generation。若同轮包含 web_search 与 image_generation，web_search 必须先用于补全生图提示词。工具失败不应阻断后续回答。
 只输出 JSON：{"tool_calls":[{"name":"rag|web_search|image_generation","query":"检索词或空","include_images":false,"prompt":"仅生图时填写"}],"complexity":"SIMPLE|COMPLEX"}。最多三个 tool_calls。"""
     user = (
         f"用户档位：{'vip' if _vip_tier_num(state) >= 1 else 'basic'}\n"
@@ -185,6 +192,7 @@ def _plan_tool_calls(state: MascotState) -> tuple[list[dict[str, Any]], dict[str
     raw_calls = data.get("tool_calls")
     if not isinstance(raw_calls, list):
         raw_calls = []
+    gallery_requested = _request_wants_image_gallery(message)
     for raw_call in raw_calls:
         if not isinstance(raw_call, dict):
             continue
@@ -201,7 +209,7 @@ def _plan_tool_calls(state: MascotState) -> tuple[list[dict[str, Any]], dict[str
             "name": name,
             "query": query,
             "prompt": prompt,
-            "include_images": bool(raw_call.get("include_images")),
+            "include_images": bool(raw_call.get("include_images")) or (name == "web_search" and gallery_requested),
         })
         if len(calls) >= 3:
             break
@@ -517,7 +525,7 @@ def _skill_system_stream(
         tail = """
 你正在「对话」模式：可协助写帖、解答站点问题、聊聊地点和天气等生活话题。回复直接给用户可用的内容。
 若普通用户明确要求生图，请简短说明该能力仅向会员开放，不要声称已经生成图片。
-若系统已展示联网配图，正文无需再插入多张图片；不要说自己无法联网或无法展示图片。
+若系统已展示联网配图，正文无需再插入多张图片，也不得输出图片 URL、来源 URL 或 Markdown 图片；不要说自己无法联网或无法展示图片。
 不要主动宣称已经检索过部落内容；是否检索由用户确认后由系统单独处理。
 若有用户所在城市的生活参考，只在当前外出话题确实相关时自然带一句；不要提及 IP、定位过程或精确地址。普通对话用自然短文即可。"""
         return base + tail + extra
@@ -591,7 +599,14 @@ def node_execute_tools(state: MascotState) -> MascotState:
     image_prompt = state.get("image_prompt") or ""
     action = state.get("action") or "CHAT"
     need_search_images = False
-    for call in calls:
+    ordered_calls = sorted(calls, key=lambda call: {
+        "rag": 0,
+        "web_search": 1,
+        "image_generation": 2,
+    }.get(str(call.get("name") or ""), 9))
+    has_image_generation = any(call.get("name") == "image_generation" for call in ordered_calls)
+    gallery_requested = _request_wants_image_gallery(str(state.get("message") or ""))
+    for call in ordered_calls:
         if not isinstance(call, dict):
             continue
         name = str(call.get("name") or "")
@@ -605,7 +620,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
             elif name == "web_search":
                 web_state: MascotState = dict(state)
                 web_state["mcp_query"] = query
-                web_state["need_search_images"] = bool(call.get("include_images"))
+                web_state["need_search_images"] = bool(call.get("include_images")) or has_image_generation or gallery_requested
                 result = node_tavily_search(web_state)
                 web_context = str(result.get("mcp_context") or "").strip()
                 if web_context:
@@ -613,7 +628,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
                 found_gallery = result.get("search_image_gallery") or []
                 if isinstance(found_gallery, list):
                     gallery = found_gallery[:5]
-                need_search_images = bool(call.get("include_images"))
+                need_search_images = bool(call.get("include_images")) or has_image_generation or gallery_requested
             elif name == "image_generation":
                 image_state: MascotState = dict(state)
                 image_state["image_prompt"] = str(call.get("prompt") or query).strip()

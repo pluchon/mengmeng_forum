@@ -214,8 +214,13 @@ class TavilySearchClient:
                 if len(data) > _VISION_IMAGE_MAX_BYTES:
                     return ""
             with Image.open(io.BytesIO(data)) as image:
-                image.thumbnail((_VISION_IMAGE_MAX_SIDE, _VISION_IMAGE_MAX_SIDE))
-                normalized = image.convert("RGB")
+                if image.mode == "P" and image.info.get("transparency") is not None:
+                    normalized = image.convert("RGBA")
+                else:
+                    normalized = image.copy()
+                normalized.thumbnail((_VISION_IMAGE_MAX_SIDE, _VISION_IMAGE_MAX_SIDE))
+                if normalized.mode != "RGB":
+                    normalized = normalized.convert("RGB")
                 output = io.BytesIO()
                 normalized.save(output, format="JPEG", quality=82, optimize=True)
             return to_data_url(output.getvalue(), "jpeg")
@@ -261,13 +266,10 @@ class TavilySearchClient:
                 if not isinstance(item, dict):
                     continue
                 title = str(item.get("title") or "").strip()
-                url = str(item.get("url") or "").strip()
                 content = str(item.get("content") or "").strip()
                 if not title and not content:
                     continue
                 block = f"{i}. {title}"
-                if url:
-                    block += f" ({url})"
                 if content:
                     block += f"\n   {content[:500]}"
                 lines.append(block)

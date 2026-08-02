@@ -134,13 +134,20 @@ class Settings:
         raw["baidu_map"] = bm
 
         oss = raw.get("oss", {}) or {}
-        oss["access_key_id"] = os.environ.get("ALIYUN_ACCESS_KEY_ID", oss.get("access_key_id", ""))
-        oss["access_key_secret"] = os.environ.get(
-            "ALIYUN_ACCESS_KEY_SECRET", oss.get("access_key_secret", "")
+        oss_profile = os.environ.get("FORUM_OSS_PROFILE", "local").strip().lower()
+        oss_prefix = "OSS_SERVER" if oss_profile in {"server", "prod", "production"} else "OSS_LOCAL"
+        oss["endpoint"] = os.environ.get(f"{oss_prefix}_ENDPOINT", oss.get("endpoint", ""))
+        oss["access_key_id"] = os.environ.get(
+            f"{oss_prefix}_ACCESS_KEY_ID",
+            os.environ.get("ALIYUN_ACCESS_KEY_ID", oss.get("access_key_id", "")),
         )
-        oss["bucket_name"] = os.environ.get("OSS_BUCKET_NAME", oss.get("bucket_name", ""))
-        oss["url_prefix"] = os.environ.get("OSS_URL_PREFIX", oss.get("url_prefix", ""))
-        oss["root_prefix"] = os.environ.get("OSS_ROOT_PREFIX", oss.get("root_prefix", ""))
+        oss["access_key_secret"] = os.environ.get(
+            f"{oss_prefix}_ACCESS_KEY_SECRET",
+            os.environ.get("ALIYUN_ACCESS_KEY_SECRET", oss.get("access_key_secret", "")),
+        )
+        oss["bucket_name"] = os.environ.get(f"{oss_prefix}_BUCKET_NAME", oss.get("bucket_name", ""))
+        oss["url_prefix"] = os.environ.get(f"{oss_prefix}_URL_PREFIX", oss.get("url_prefix", ""))
+        oss["root_prefix"] = os.environ.get(f"{oss_prefix}_ROOT_PREFIX", oss.get("root_prefix", ""))
         raw["oss"] = oss
 
         ff = raw.get("ffmpeg", {}) or {}

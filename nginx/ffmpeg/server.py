@@ -82,7 +82,9 @@ def _internal_protected(view):
 
 def _allowed_url_prefixes() -> list[str]:
     prefixes: list[str] = []
-    oss_prefix = (os.environ.get("OSS_URL_PREFIX") or "").strip().rstrip("/")
+    oss_profile = (os.environ.get("FORUM_OSS_PROFILE") or "local").strip().lower()
+    oss_env_prefix = "OSS_SERVER_URL_PREFIX" if oss_profile in {"server", "prod", "production"} else "OSS_LOCAL_URL_PREFIX"
+    oss_prefix = (os.environ.get(oss_env_prefix) or "").strip().rstrip("/")
     if oss_prefix:
         prefixes.append(oss_prefix.lower())
     extra = (os.environ.get("FFMPEG_ALLOWED_URL_PREFIXES") or "").strip()

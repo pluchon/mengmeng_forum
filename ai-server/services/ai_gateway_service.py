@@ -14,7 +14,7 @@ from modules.creation import CoverHintsModule, ImageGenerationModule, PostPolish
 from modules.game import GobangMoveModule
 from modules.search import SearchModule
 from modules.summary import PostSummaryModule
-from modules.rag import RagIndexArticleModule, RagIndexUserModule, RagRemoveArticleModule
+from modules.rag import RagIndexArticleModule, RagIndexEmojiModule, RagIndexUserModule, RagRemoveArticleModule
 from modules.recommendation import ArticleFeatureModule, UserProfileModule
 from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError
 from runtime.module_registry import ModuleRegistry
@@ -32,6 +32,7 @@ _registry.register("IMAGE_GENERATION", "GENERATE", "v1", ImageGenerationModule()
 _registry.register("GAME", "GOBANG_MOVE", "v1", GobangMoveModule())
 _registry.register("SEARCH", "QUERY", "v1", SearchModule())
 _registry.register("RAG", "INDEX_ARTICLE", "v1", RagIndexArticleModule())
+_registry.register("RAG", "INDEX_EMOJI", "v1", RagIndexEmojiModule())
 _registry.register("RAG", "INDEX_USER", "v1", RagIndexUserModule())
 _registry.register("RAG", "REMOVE_ARTICLE", "v1", RagRemoveArticleModule())
 _registry.register("RECOMMENDATION", "ARTICLE_FEATURE", "v1", ArticleFeatureModule())

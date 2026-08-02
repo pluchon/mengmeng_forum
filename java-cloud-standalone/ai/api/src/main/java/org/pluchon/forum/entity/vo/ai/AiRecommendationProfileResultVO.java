@@ -9,18 +9,13 @@ import java.util.Map;
 @Data
 public class AiRecommendationProfileResultVO {
 
-    // 协议版本
     private String featureVersion;
 
-    // 主题及权重
     private List<Map<String, Object>> topics;
 
-    // 画像摘要
     private String summary;
 
-    // 应减少展示的主题及权重
     private List<Map<String, Object>> avoidTopics;
 
-    // 生成来源
     private String generatedBy;
 }

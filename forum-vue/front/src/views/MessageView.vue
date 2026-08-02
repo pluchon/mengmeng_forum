@@ -301,6 +301,16 @@
                             {{ row.msg.message?.replySenderName || '成员' }}:
                             {{ row.msg.message?.replyContent || '消息' }}
                           </div>
+                          <div v-if="currentGroupSession" class="mc-media-corner-actions">
+                            <button
+                              v-if="!row.msg.isOwner && !isEmojiShopGroupMedia(row.msg)"
+                              type="button"
+                              @click="reportGroupMessage(row.msg)"
+                            >
+                              举报
+                            </button>
+                            <button type="button" @click="startReply(row.msg)">回复</button>
+                          </div>
                         </div>
                       </template>
                       <template v-else-if="isVoiceCallMessage(row.msg)">
@@ -338,7 +348,7 @@
                       举报
                     </button>
                     <button
-                      v-if="currentGroupSession && Number(row.msg.message?.messageType) !== 9"
+                      v-if="currentGroupSession && Number(row.msg.message?.messageType) !== 9 && !isMediaMessage(row.msg)"
                       type="button"
                       class="mc-reply-btn"
                       @click="startReply(row.msg)"
@@ -348,14 +358,6 @@
                   </div>
                   <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
                     <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
-                    <button
-                      v-if="currentGroupSession && !row.msg.isOwner && isMediaMessage(row.msg)"
-                      type="button"
-                      class="mc-media-meta-action"
-                      @click="reportGroupMessage(row.msg)"
-                    >
-                      举报
-                    </button>
                     <span
                       v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
                       class="mc-read"
@@ -1177,6 +1179,7 @@ const {
   isCurrentGroupManager,
   isMemberMuted,
   isMediaMessage,
+  isEmojiShopGroupMedia,
   isVoiceCallMessage,
   isGroupInviteCard,
   isPrivateChat,

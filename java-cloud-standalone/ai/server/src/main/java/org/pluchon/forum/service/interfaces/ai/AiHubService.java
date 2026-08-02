@@ -6,6 +6,7 @@ import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
@@ -38,11 +39,15 @@ public interface AiHubService {
 
     void indexArticleRag(RagArticleIndexDTO payload);
 
+    void indexEmojiRag(RagEmojiIndexDTO payload);
+
     void indexUserRag(RagUserIndexDTO payload);
 
     void removeArticleRag(Long articleId);
 
     List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates);
+
+    List<Long> ragVectorSearchEmojis(String query);
 
     List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates);
 

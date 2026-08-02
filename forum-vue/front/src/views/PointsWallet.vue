@@ -147,7 +147,7 @@
 
           <div v-if="logTotal > logPageSize" class="points-log-more">
             <el-pagination
-              v-model:current-page="logPage"
+              :current-page="logPage"
               background
               layout="prev, pager, next"
               :page-count="logPageCount"

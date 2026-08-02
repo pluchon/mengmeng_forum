@@ -30,8 +30,6 @@
         </div>
       </div>
 
-      <div class="tetris-pk-spectator-count">观战人数 {{ room.spectatorCount || 0 }}</div>
-
       <main class="tetris-stage tetris-pk-stage">
         <aside class="tetris-rail tetris-rail--left">
           <div v-if="isPlayer" class="tetris-rail-card tetris-piece-card">
@@ -62,6 +60,33 @@
             <span class="tetris-rail-label">时间</span>
             <strong>{{ elapsedText }}</strong>
           </div>
+
+          <section class="gobang-spectator-card">
+            <div v-if="visibleSpectators.length" class="gobang-spectator-list">
+              <div v-for="viewer in visibleSpectators" :key="viewer.userId" class="gobang-mini-user">
+                <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
+                  <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
+                  <b v-else>{{ avatarText(viewer) }}</b>
+                </span>
+                <em>{{ viewer.nickname || viewer.username }}</em>
+              </div>
+              <button v-if="hiddenSpectatorCount" type="button" class="gobang-more-users" @click="spectatorDialogVisible = true">
+                <el-icon><MoreFilled /></el-icon>
+                还有 {{ hiddenSpectatorCount }} 人
+              </button>
+            </div>
+            <div v-else class="gobang-side-empty">暂无观战玩家</div>
+            <button
+              type="button"
+              class="tetris-spectator-count"
+              title="查看观战席"
+              aria-label="查看观战席"
+              @click="spectatorDialogVisible = true"
+            >
+              <el-icon><UserFilled /></el-icon>
+              {{ room.spectatorCount || 0 }}
+            </button>
+          </section>
 
           <section
             v-if="isPlayer && opponentProfile"
@@ -248,6 +273,28 @@
           <span>胜率</span>
           <strong>{{ selectedPlayer.winRate ?? 0 }}%</strong>
         </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="spectatorDialogVisible" title="观战玩家" width="460px" destroy-on-close>
+      <div class="gobang-spectator-dialog-list">
+        <div v-for="viewer in spectatorRows" :key="viewer.userId" class="gobang-dialog-user">
+          <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
+            <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
+            <b v-else>{{ avatarText(viewer) }}</b>
+          </span>
+          <strong>{{ viewer.nickname || viewer.username }}</strong>
+        </div>
+        <div v-if="!spectatorRows.length" class="gobang-side-empty">暂无观战玩家</div>
+      </div>
+      <div v-if="spectators.length > spectatorPageSize" class="gobang-dialog-pager">
+        <el-pagination
+          v-model:current-page="spectatorPage"
+          size="small"
+          layout="prev, pager, next"
+          :page-size="spectatorPageSize"
+          :total="spectators.length"
+        />
       </div>
     </el-dialog>
   </div>

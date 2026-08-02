@@ -11,6 +11,7 @@ import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
 import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
 import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
 import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
@@ -79,6 +80,11 @@ public class AiHubInternalController implements AiHubInternalApi {
     }
 
     @Override
+    public void indexEmojiRag(@Valid @RequestBody RagEmojiIndexDTO payload) {
+        aiHubService.indexEmojiRag(payload);
+    }
+
+    @Override
     public void indexUserRag(@Valid @RequestBody RagUserIndexDTO payload) {
         aiHubService.indexUserRag(payload);
     }
@@ -91,6 +97,11 @@ public class AiHubInternalController implements AiHubInternalApi {
     @Override
     public List<Long> ragVectorSearchArticles(@Valid @RequestBody AiRagSearchRequest request) {
         return aiHubService.ragVectorSearchArticles(request.getQuery(), request.getCandidates());
+    }
+
+    @Override
+    public List<Long> ragVectorSearchEmojis(@Valid @RequestBody AiRagSearchRequest request) {
+        return aiHubService.ragVectorSearchEmojis(request.getQuery());
     }
 
     @Override

@@ -33,4 +33,11 @@ public class ContentAiGatewayService {
         request.setCandidates(candidates);
         return contentAiHubInternalFeignClient.rankSemanticCandidates(request);
     }
+
+    public List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates) {
+        org.pluchon.forum.api.ai.AiRagSearchRequest request = new org.pluchon.forum.api.ai.AiRagSearchRequest();
+        request.setQuery(query);
+        request.setCandidates(candidates);
+        return contentAiHubInternalFeignClient.ragVectorSearchArticles(request);
+    }
 }
