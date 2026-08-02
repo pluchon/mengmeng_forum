@@ -314,10 +314,14 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
     const type = payload?.type === 'private_voice_signal' ? 'private' : 'group'
     if (type === voiceKind.value && joined.value) {
       if (type === 'group' && Number(payload?.groupId) === Number(currentGroupId.value)) {
-        return true
+        if (isSignalForCurrentConnection(payload)) return true
+        const refreshed = await fetchSession(Number(payload.groupId))
+        return refreshed?.active === true && refreshed.currentUserJoined === true
       }
       if (type === 'private' && payload?.sessionId === session.value?.sessionId) {
-        return true
+        if (isSignalForCurrentConnection(payload)) return true
+        const refreshed = await fetchPrivateSession(Number(payload.peerUserId))
+        return refreshed?.active === true && refreshed.currentUserJoined === true
       }
     }
     if (type === 'group') {
@@ -407,6 +411,7 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
       connectionId: peerConnectionId,
       makingOffer: false,
       ignoreOffer: false,
+      iceRestarted: false,
       pendingCandidates: [],
     }
     if (localStream.value) {
@@ -427,6 +432,9 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
       refreshConnectionStatus()
     }
     pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed') {
+        void restartPeerIce(record)
+      }
       refreshConnectionStatus()
     }
     pc.ontrack = (event) => {
@@ -448,6 +456,23 @@ export const useGroupVoiceStore = defineStore('groupVoice', () => {
       const offer = await record.pc.createOffer()
       await record.pc.setLocalDescription(offer)
       sendSignal(record.peerId, 'offer', record.pc.localDescription)
+    } finally {
+      record.makingOffer = false
+    }
+  }
+
+  async function restartPeerIce(record) {
+    if (record.iceRestarted || !joined.value || !shouldInitiateOffer(participantByUserId(record.peerId))) return
+    if (record.makingOffer || record.pc.signalingState !== 'stable') return
+    record.iceRestarted = true
+    record.makingOffer = true
+    try {
+      const offer = await record.pc.createOffer({ iceRestart: true })
+      await record.pc.setLocalDescription(offer)
+      sendSignal(record.peerId, 'offer', record.pc.localDescription)
+    } catch (error) {
+      record.iceRestarted = false
+      throw error
     } finally {
       record.makingOffer = false
     }
