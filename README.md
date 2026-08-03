@@ -2,6 +2,8 @@
 
 # <div align="center">萌部落社区</div>
 
+<div align="center">
+
 <strong>内容交流 · 同好互动 · AI 陪伴</strong>
 
 [![在线社区](https://img.shields.io/badge/在线社区-nuonuoya.cn-ff6b9b?style=for-the-badge)](https://www.nuonuoya.cn)
@@ -11,9 +13,9 @@
 
 [访问社区](https://www.nuonuoya.cn) · [项目结构](#项目结构) · [Java 业务](#java-业务模块) · [AI 模块](#ai-模块) · [本地启动](#本地启动)
 
-</div>
+萌部落是一个前后端分离的兴趣社区，把发帖、评论、收藏、聊天、成长、游戏和 AI 陪伴放在一套体系里
 
-萌部落是一个前后端分离的兴趣社区，把发帖、评论、收藏、聊天、成长、游戏和 AI 陪伴放在一套体系里。
+</div>
 
 ## 核心功能展示
 
