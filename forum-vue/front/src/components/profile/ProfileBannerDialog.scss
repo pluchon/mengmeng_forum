@@ -1,0 +1,51 @@
+.profile-banner-dialog__crop-viewport {
+  position: relative;
+  width: 100%;
+  height: min(52vh, 420px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #111;
+  touch-action: none;
+}
+
+.profile-banner-dialog__crop-image {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+.profile-banner-dialog__crop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58);
+  cursor: move;
+  touch-action: none;
+}
+
+.profile-banner-dialog__crop-grid {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px)),
+    linear-gradient(to right, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.33% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.66% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px));
+  opacity: 0.75;
+}
+
+.profile-banner-dialog__preview-wrap {
+  width: 100%;
+  aspect-ratio: 25 / 6;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f2f3f5;
+}
+
+.profile-banner-dialog__preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

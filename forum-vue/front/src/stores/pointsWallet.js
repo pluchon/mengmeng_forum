@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getPointsWallet } from '@/api/points'
 
-/** 积分钱包（与签到共用余额；不持久化，进入相关页刷新） */
+// 积分钱包 权威余额在 points_wallet；勿改 user.points 期望顶栏同步
 export const usePointsWalletStore = defineStore('pointsWallet', () => {
   const balance = ref(0)
   const totalCheckinPoints = ref(0)

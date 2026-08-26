@@ -6,7 +6,7 @@ import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
-import org.pluchon.forum.entity.vo.mascot.MascotRelatedArticleCandidate;
+import org.pluchon.forum.entity.vo.MascotRelatedArticleCandidate;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -21,9 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 看板娘对话：站内帖子 RAG（优先 qwen3-vl-embedding 向量库，最多 5 条，按相关度降序）.
- */
+// 看板娘对话：站内帖子 RAG 优先 qwen3 vl embedding 向量库，最多 5 条，按相关度降序 .
 @Slf4j
 @Component
 public class MascotArticleRagHelper {
@@ -34,11 +32,11 @@ public class MascotArticleRagHelper {
     private static final int RAG_EXCERPT_HEAD = 700;
     private static final int RAG_EXCERPT_TAIL = 400;
     private static final int MAX_CONFIRMED_CANDIDATES = 40;
-    /** 向量相关度阈值（与 ai-server rag.mascot_min_score 对齐） */
+    // 向量相关度阈值 与 ai server rag.mascot_min_score 对齐
     private static final double MIN_SCORE = 0.42;
-    /** 最高分不足则整批不展示（避免泛语义误召回） */
+    // 最高分不足则整批不展示 避免泛语义误召回
     private static final double TOP_MIN_TO_SHOW = 0.46;
-    /** 高于此分可免标题关键词校验 */
+    // 高于此分可免标题关键词校验
     private static final double HIGH_SCORE_BYPASS = 0.52;
 
     @Lazy
@@ -48,9 +46,7 @@ public class MascotArticleRagHelper {
     @Resource
     private AiHubService aiHubService;
 
-    /**
-     * 用户明确同意后才执行的候选召回：保留足够多的高相似候选，交由业务层按热度和发布时间选出最终五条。
-     */
+    // 用户明确同意后才执行的候选召回：保留足够多的高相似候选，交由业务层按热度和发布时间选出最终五条
     public List<MascotRelatedArticleCandidate> findConfirmedRelatedCandidates(String userMessage) {
         if (!StringUtils.hasText(userMessage) || userMessage.trim().length() < 2) {
             return Collections.emptyList();
@@ -174,7 +170,7 @@ public class MascotArticleRagHelper {
         return result;
     }
 
-    /** 低分时要求查询词与标题有字面重叠，过滤泛向量误匹配 */
+    // 低分时要求查询词与标题有字面重叠，过滤泛向量误匹配
     private boolean passesSemanticGate(String query, String title, double score) {
         if (score >= HIGH_SCORE_BYPASS) {
             return true;
@@ -198,8 +194,8 @@ public class MascotArticleRagHelper {
     private boolean isPublishedVisible(ArticleInternalVO article) {
         Byte del = article.getDeleteState();
         Byte st = article.getState();
-        return (del == null || del.byteValue() != DELETE_TRUE)
-                && (st == null || st.byteValue() != STATE_FORBIDDEN)
+        return (del == null || del != DELETE_TRUE)
+                && (st == null || st != STATE_FORBIDDEN)
                 && ArticleStatus.isPublished(article.getStatus());
     }
 
@@ -229,22 +225,19 @@ public class MascotArticleRagHelper {
         return html.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
     }
 
-    private static String buildExcerpt(String plain, int maxLen) {
+    private static String buildExcerpt(String plain) {
         if (plain == null || plain.isEmpty()) {
             return "";
         }
-        if (plain.length() <= maxLen) {
+        if (plain.length() <= MascotArticleRagHelper.RAG_TEXT_TRUNCATE) {
             return plain;
-        }
-        if (maxLen <= RAG_EXCERPT_HEAD + RAG_EXCERPT_TAIL + 8) {
-            return plain.substring(0, maxLen);
         }
         return plain.substring(0, RAG_EXCERPT_HEAD) + "\n…\n" + plain.substring(plain.length() - RAG_EXCERPT_TAIL);
     }
 
     private String buildRagText(ArticleInternalVO article) {
         String title = article.getTitle() == null ? "" : article.getTitle();
-        String body = buildExcerpt(stripHtml(article.getContent()), RAG_TEXT_TRUNCATE);
+        String body = buildExcerpt(stripHtml(article.getContent()));
         StringBuilder sb = new StringBuilder();
         if (!title.isBlank()) {
             sb.append("标题: ").append(title).append('\n');

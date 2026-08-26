@@ -4,39 +4,42 @@ import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
+import org.pluchon.forum.entity.vo.user.UserSecurityAssessmentVO;
 
-/**
- * 用户核心账户操作
- * 注意：本接口不持有任何 MultipartFile 参数；图片上传走 FileService，业务侧仅接收 URL
- *      找回密码走 PasswordResetService，避免循环依赖
- */
+import jakarta.servlet.http.HttpServletRequest;
+
+// 用户核心账户操作 注意：本接口不持有任何 MultipartFile 参数；图片上传走 FileService，业务侧仅接收 URL 找回密码走 PasswordResetService，避免循环依赖
 public interface UserService {
 
-    // ============ 内部共用查询 ============
+    
 
     User queryUserByUserName(String userName);
 
     User queryUserByUserId(Long userId);
 
-    // ============ 帖子计数维护（被 ArticleService 反向调用）============
+    
 
     void addOneById(Long userId);
 
     void deleteOneById(Long userId);
 
-    // ============ 注册 / 登录 / 信息查询 ============
+    
 
     void resigter(UserResigterRequest userResigterRequest);
 
-    User login(UserLoginRequest userLoginRequest);
+    User login(UserLoginRequest userLoginRequest, HttpServletRequest httpRequest);
 
     void logout(Long userId);
 
     User getUserInfoById(Long userId);
 
-    // ============ 信息修改 ============
+    UserSecurityAssessmentVO assessSecurity(Long userId);
+
+    
 
     User modifyUser(ModifyUserRequest modifyUserRequest, Long userId);
+
+    void applyReviewedProfileChange(Long userId, String fieldType, String content);
 
     void setMascotModel(Long userId, Long mascotModelId);
 

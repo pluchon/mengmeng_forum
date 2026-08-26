@@ -1,14 +1,18 @@
 package org.pluchon.forum.converter;
 
+import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.enums.GroupChatMessageStatus;
 import org.pluchon.forum.entity.db.GroupChat;
 import org.pluchon.forum.entity.db.GroupChatMember;
 import org.pluchon.forum.entity.db.GroupChatMessage;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.entity.db.GroupChatMessageAlbumImage;
+import org.pluchon.forum.entity.vo.groupchat.GroupChatAlbumImageVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatDetailVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMemberVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMessageVO;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
+import java.util.List;
 import java.util.Objects;
 
 // 群聊实体转换
@@ -68,9 +72,38 @@ public final class GroupChatConverter {
         vo.setReplySenderName(message.getReplySenderName());
         vo.setReplyContent(message.getReplyContent());
         vo.setStatus(message.getStatus());
+        vo.setAuditFailed(GroupChatMessageStatus.AUDIT_FAILED.getCode().equals(message.getStatus()));
+        if (Boolean.TRUE.equals(vo.getAuditFailed())) {
+            vo.setContent("");
+        }
         vo.setIsOwner(Objects.equals(message.getSenderUserId(), loginUserId));
+        if (message.getCreateTime() != null) {
+            long recallWindowMillis = Constant.MESSAGE_RECALL_WINDOW_SECONDS * 1000L;
+            vo.setRecallDeadline(new java.util.Date(message.getCreateTime().getTime() + recallWindowMillis));
+        }
         vo.setCreateTime(message.getCreateTime());
         vo.setUpdateTime(message.getUpdateTime());
+        return vo;
+    }
+
+    public static GroupChatMessageVO toMessageVO(GroupChatMessage message, UserInternalVO sender, Long loginUserId,
+                                                 List<GroupChatMessageAlbumImage> albumImages) {
+        GroupChatMessageVO vo = toMessageVO(message, sender, loginUserId);
+        if (vo != null && albumImages != null && !albumImages.isEmpty()) {
+            vo.setAlbumImages(albumImages.stream().map(GroupChatConverter::toAlbumImageVO).toList());
+        }
+        return vo;
+    }
+
+    private static GroupChatAlbumImageVO toAlbumImageVO(GroupChatMessageAlbumImage image) {
+        GroupChatAlbumImageVO vo = new GroupChatAlbumImageVO();
+        vo.setId(image.getId());
+        vo.setMediaUrl(image.getMediaUrl());
+        vo.setMediaMime(image.getMediaMime());
+        vo.setMediaSize(image.getMediaSize());
+        vo.setMediaWidth(image.getMediaWidth());
+        vo.setMediaHeight(image.getMediaHeight());
+        vo.setSortOrder(image.getSortOrder());
         return vo;
     }
 }

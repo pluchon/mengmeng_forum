@@ -15,4 +15,7 @@ public class AiGobangMoveRequest {
 
     @NotBlank
     private String modelCode;
+
+    // 局面摘要：候选点 + 威胁，供 Python LLM 仅在候选中选点
+    private AiGobangBoardInsight insight;
 }

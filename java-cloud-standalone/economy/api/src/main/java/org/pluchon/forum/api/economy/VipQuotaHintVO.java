@@ -1,6 +1,6 @@
 package org.pluchon.forum.api.economy;
 
-// 跨服务 VIP 配额提示（纯契约 VO，无业务依赖）
+// 跨服务 VIP 配额提示 纯契约 VO，无业务依赖
 public class VipQuotaHintVO {
 
     private Integer percent;

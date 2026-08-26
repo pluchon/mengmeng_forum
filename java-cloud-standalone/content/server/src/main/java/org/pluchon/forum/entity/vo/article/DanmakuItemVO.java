@@ -26,5 +26,9 @@ public class DanmakuItemVO {
 
     private Byte fontSize;
 
+    private Integer likeCount;
+
+    private Boolean liked;
+
     private Date createTime;
 }

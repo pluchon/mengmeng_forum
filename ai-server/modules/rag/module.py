@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from rag.indexer import index_published_article
 from rag.emoji_indexer import index_emoji_shop
+from rag.indexer import index_published_article
+from rag.music_indexer import index_music_track
 from rag.store import remove_article_index
 from rag.user_indexer import index_user_profile
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
@@ -27,6 +28,12 @@ class RagIndexUserModule:
 class RagIndexEmojiModule:
     async def run(self, request: ModuleRequest) -> ModuleResult:
         result = await asyncio.to_thread(index_emoji_shop, request.payload)
+        return ModuleResult(success=True, data=_as_data(result))
+
+
+class RagIndexMusicModule:
+    async def run(self, request: ModuleRequest) -> ModuleResult:
+        result = await asyncio.to_thread(index_music_track, request.payload)
         return ModuleResult(success=True, data=_as_data(result))
 
 

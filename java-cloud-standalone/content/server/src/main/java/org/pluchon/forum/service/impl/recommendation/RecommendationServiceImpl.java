@@ -5,6 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.ai.AiRagSearchRequest;
+import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.enums.RecommendationReasonType;
 import org.pluchon.forum.common.enums.RecommendationFeedbackReason;
@@ -18,12 +21,12 @@ import org.pluchon.forum.entity.db.ArticleLike;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.ForumArticleAiFeature;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.dto.recommendation.NotInterestedArticleRequest;
+import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.recommendation.RecommendArticleVO;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleFavoriteMapper;
 import org.pluchon.forum.mapper.ArticleLikeMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
@@ -33,10 +36,12 @@ import org.pluchon.forum.mapper.ForumArticleAiFeatureMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
+import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
-import org.pluchon.forum.service.interfaces.recommendation.UserInterestPreferenceService;
+import org.pluchon.forum.service.interfaces.recommendation.UserRecommendationSettingService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,8 +56,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 // 为你推荐的可解释规则混排实现
+@Slf4j
 @Service
 public class RecommendationServiceImpl implements RecommendationService {
 
@@ -60,6 +67,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_ENABLED = 0;
     private static final int INTERACTION_HISTORY_LIMIT = 60;
+    private static final double VECTOR_MIN_SCORE = 0.30D;
 
     @Autowired
     private ArticleMapper articleMapper;
@@ -83,19 +91,25 @@ public class RecommendationServiceImpl implements RecommendationService {
     private UserRecommendFeedbackMapper feedbackMapper;
 
     @Autowired
-    private UserInterestPreferenceService preferenceService;
-
-    @Autowired
     private ContentFollowLookupService userFollowService;
 
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
 
     @Autowired
+    private ArticleMediaService articleMediaService;
+
+    @Autowired
     private RecommendationAiProfileService recommendationAiProfileService;
 
     @Autowired
+    private UserRecommendationSettingService userRecommendationSettingService;
+
+    @Autowired
     private ForumArticleAiFeatureMapper articleFeatureMapper;
+
+    @Autowired
+    private ContentAiGatewayService contentAiGatewayService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -107,13 +121,15 @@ public class RecommendationServiceImpl implements RecommendationService {
         int expectedSize = Math.max(validPageSize * (validPageNum + 1), validPageSize);
         int candidateLimit = Math.max(expectedSize * 4, 80);
         Set<Long> feedbackArticleIds = loginUserId == null ? Set.of() : listFeedbackArticleIds(loginUserId);
-        Set<Long> explicitBoardIds = loginUserId == null ? Set.of() : preferenceService.listActiveBoardIds(loginUserId);
+        Set<Long> explicitBoardIds = loginUserId == null
+                ? Set.of()
+                : userRecommendationSettingService.getInterestBoardIds(loginUserId);
         Map<Long, Double> interactionBoardScores = loginUserId == null
                 ? Map.of()
                 : listInteractionBoardScores(loginUserId);
         Set<Long> followingIds = loginUserId == null ? Set.of() : userFollowService.listFollowingIds(loginUserId);
         boolean personalized = loginUserId != null
-                && preferenceService.isPersonalizationEnabled(loginUserId)
+                && userRecommendationSettingService.isPersonalizedEnabled(loginUserId)
                 && (!explicitBoardIds.isEmpty() || !interactionBoardScores.isEmpty() || !followingIds.isEmpty());
 
         Set<Long> relatedBoardIds = new LinkedHashSet<>(explicitBoardIds);
@@ -128,6 +144,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                     listArticlesByAuthors(followingIds, loginUserId, feedbackArticleIds, candidateLimit),
                     RecommendationReasonType.FOLLOWING,
                     30D);
+            addVectorCandidates(candidateMap, loginUserId, feedbackArticleIds, candidateLimit);
         }
         addFreshCandidates(candidateMap,
                 listFreshArticles(loginUserId, feedbackArticleIds, candidateLimit),
@@ -198,7 +215,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 new LambdaQueryWrapper<UserRecommendFeedback>()
                         .eq(UserRecommendFeedback::getUserId, loginUserId)
                         .eq(UserRecommendFeedback::getDeleteState, DELETE_FALSE)
-                        .orderByDesc(UserRecommendFeedback::getUpdateTime)
+                        .orderByDesc(UserRecommendFeedback::getCreateTime)
                         .orderByDesc(UserRecommendFeedback::getId));
         List<UserRecommendFeedback> feedbackRecords = feedbackPage.getRecords();
         if (feedbackRecords.isEmpty()) {
@@ -215,6 +232,8 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .collect(java.util.stream.Collectors.toMap(Article::getId, item -> item));
         Set<Long> authorIds = articles.values().stream().map(Article::getUserId).collect(java.util.stream.Collectors.toSet());
         Map<Long, UserInternalVO> users = authorIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(authorIds);
+        Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(articleIds);
+        Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(articleIds);
         List<RecommendArticleVO> records = new ArrayList<>();
         for (UserRecommendFeedback feedback : feedbackRecords) {
             Article article = articles.get(feedback.getArticleId());
@@ -225,6 +244,8 @@ public class RecommendationServiceImpl implements RecommendationService {
             RecommendArticleVO response = new RecommendArticleVO();
             response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
+            response.setImageCount(imageCounts.getOrDefault(article.getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(article.getId()));
             records.add(response);
         }
         return new PageResult<>(records, feedbackPage.getTotal(), validPageNum, validPageSize,
@@ -311,6 +332,10 @@ public class RecommendationServiceImpl implements RecommendationService {
                         .eq(Board::getState, STATE_ENABLED))
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(Board::getId, Board::getName));
+        Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(
+                candidates.stream().map(item -> item.getArticle().getId()).toList());
+        Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(
+                candidates.stream().map(item -> item.getArticle().getId()).toList());
         List<RecommendArticleVO> result = new ArrayList<>();
         for (Candidate candidate : candidates) {
             UserInternalVO author = users.get(candidate.getArticle().getUserId());
@@ -320,6 +345,12 @@ public class RecommendationServiceImpl implements RecommendationService {
             RecommendArticleVO response = new RecommendArticleVO();
             response.setArticle(candidate.getArticle());
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
+            response.setImageCount(imageCounts.getOrDefault(candidate.getArticle().getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(candidate.getArticle().getId()));
+            if (candidate.getReason() != null) {
+                response.setReasonCode(candidate.getReason().getCode());
+                response.setReasonMessage(candidate.getReason().getMessage());
+            }
             result.add(response);
         }
         return result;
@@ -381,12 +412,78 @@ public class RecommendationServiceImpl implements RecommendationService {
         return switch (reason) {
             case INTEREST -> 6;
             case FOLLOWING -> 5;
-            case AI_PROFILE -> 4;
+            case VECTOR, AI_PROFILE -> 4;
             case INTERACTION -> 3;
             case HOT -> 2;
             case FRESH -> 1;
             case COMMUNITY -> 0;
         };
+    }
+
+    private void addVectorCandidates(Map<Long, Candidate> candidateMap, Long userId,
+            Set<Long> feedbackArticleIds, int limit) {
+        String preferenceQuery = resolvePreferenceQuery(userId);
+        if (preferenceQuery.isBlank()) {
+            return;
+        }
+        List<RagArticleVectorHitVO> hits;
+        try {
+            AiRagSearchRequest request = new AiRagSearchRequest();
+            request.setQuery(preferenceQuery);
+            request.setCandidates(List.of());
+            hits = contentAiGatewayService.ragArticleVectorRanked(request);
+        } catch (Exception e) {
+            log.warn("推荐向量召回失败 userId={}: {}", userId, e.getMessage());
+            return;
+        }
+        if (hits == null || hits.isEmpty()) {
+            return;
+        }
+        Map<Long, Double> similarityById = new LinkedHashMap<>();
+        for (RagArticleVectorHitVO hit : hits) {
+            if (hit == null || hit.getArticleId() == null) {
+                continue;
+            }
+            double similarity = hit.getScore() == null ? 0D : hit.getScore();
+            if (similarity < VECTOR_MIN_SCORE) {
+                continue;
+            }
+            similarityById.putIfAbsent(hit.getArticleId(), Math.min(similarity, 1D));
+            if (similarityById.size() >= Constant.SEARCH_RAG_CANDIDATE_LIMIT) {
+                break;
+            }
+        }
+        if (similarityById.isEmpty()) {
+            return;
+        }
+        List<Article> articles = articleMapper.selectList(visibleArticleWrapper(userId, feedbackArticleIds)
+                .in(Article::getId, similarityById.keySet()));
+        Map<Long, Article> articleMap = articles.stream().collect(Collectors.toMap(Article::getId, item -> item));
+        int added = 0;
+        for (Map.Entry<Long, Double> entry : similarityById.entrySet()) {
+            if (added >= limit) {
+                break;
+            }
+            Article article = articleMap.get(entry.getKey());
+            if (article == null) {
+                continue;
+            }
+            mergeCandidate(candidateMap, article, RecommendationReasonType.VECTOR, 10D + entry.getValue() * 28D);
+            added++;
+        }
+    }
+
+    private String resolvePreferenceQuery(Long userId) {
+        String fromProfile = recommendationAiProfileService.getPreferenceQuery(userId);
+        if (fromProfile != null && !fromProfile.isBlank()) {
+            return fromProfile.trim();
+        }
+        List<String> boardNames = userRecommendationSettingService.getInterestBoardNames(userId);
+        if (boardNames.isEmpty()) {
+            return "";
+        }
+        String joined = String.join(" ", boardNames);
+        return joined.length() > 200 ? joined.substring(0, 200) : joined;
     }
 
     private void applyAiProfileScores(Map<Long, Candidate> candidateMap, Long userId) {
@@ -413,7 +510,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             }
             double avoidOverlap = calculateTopicOverlap(avoidTopics, feature.getFeatureJson());
             if (avoidOverlap > 0D) {
-                candidate.addScore(-avoidOverlap * 20D);
+                candidate.addScore(-avoidOverlap * 35D);
             }
         }
     }

@@ -69,6 +69,19 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
                 bucketOf(ladderScoreOf(profile))
         );
         if (!enqueued) {
+            String matchingGameCode = gameMatchQueueService.matchingGameCode(userId);
+            if (matchingGameCode != null && !GameConstants.TETRIS_PK.equals(matchingGameCode)) {
+                sendToSession(session, GameWsResponse.fail(
+                        "match_failed",
+                        requestId,
+                        "一次只能匹配一个游戏"
+                ));
+                return;
+            }
+            if (gameMatchQueueService.contains(GameConstants.TETRIS_PK, userId)) {
+                sendToSession(session, GameWsResponse.ok("match_started", requestId, null));
+                return;
+            }
             sendToSession(session, GameWsResponse.fail("match_failed", requestId, "匹配服务暂时不可用，请稍后再试"));
             return;
         }

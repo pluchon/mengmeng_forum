@@ -32,12 +32,16 @@ public class ForumProducer {
     @Qualifier("gameRabbitTemplate")
     private RabbitTemplate gameRabbitTemplate;
 
-    // 发送帖子回复通知，路由到 q-queue_1
+    @Autowired
+    @Qualifier("aiAsyncRabbitTemplate")
+    private RabbitTemplate aiAsyncRabbitTemplate;
+
+    // 发送帖子回复通知，路由到 q queue_1
     public void sendReplyNotify(Object message) {
         send(replyRabbitTemplate, Constant.ROUTING_KEY_QUEUE_1, message);
     }
 
-    // 发送私信通知，路由到 q-queue_2
+    // 发送私信通知，路由到 q queue_2
     public void sendMessageNotify(Object message) {
         send(messageRabbitTemplate, Constant.ROUTING_KEY_QUEUE_2, message);
     }
@@ -50,6 +54,11 @@ public class ForumProducer {
     // 发送游戏对局结束事件，后续异步处理通知、统计、榜单和棋谱归档
     public void sendGameFinished(Object message) {
         send(gameRabbitTemplate, Constant.ROUTING_KEY_GAME_FINISHED, message);
+    }
+
+    // 发送帖子总结、评论审核和举报审核等通用AI任务
+    public void sendAiAsyncTask(Object task) {
+        send(aiAsyncRabbitTemplate, Constant.ROUTING_KEY_AI_ASYNC_TASK, task);
     }
 
     // 公共发送，每条消息携带唯一 messageId 便于追踪

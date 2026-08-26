@@ -1,4 +1,4 @@
-// 表情包商店上架状态（与后端 shop 状态码一致）
+// 表情包商店上架状态 与后端 shop 状态码一致
 export const EMOJI_SHOP_STATUS = {
   PENDING: 0,
   ON_SHELF: 1,

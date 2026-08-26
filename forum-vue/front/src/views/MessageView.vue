@@ -14,37 +14,11 @@
     <button type="button" class="mc-dialog-close" aria-label="关闭" @click="handleClose">
       <el-icon><Close /></el-icon>
     </button>
-    <div v-if="showPrivateVoiceAnswerActions" class="mc-voice-answer">
-      <el-icon><Phone /></el-icon>
-      <button type="button" class="mc-voice-answer-accept" @click="handleAcceptPrivateVoice">接听 ✓</button>
-      <button type="button" class="mc-voice-answer-decline" @click="handleDeclinePrivateVoice">拒绝 ✕</button>
-    </div>
-    <button
-      v-else-if="showVoiceEntry"
-      type="button"
-      class="mc-voice-entry"
-      :class="{ 'is-active': voiceEntryActive, 'is-waiting': voiceEntryText === '等待对方回应...' }"
-      @click="handleVoiceEntry"
-    >
-      <el-icon><Phone /></el-icon>
-      <span>{{ voiceEntryText }}</span>
-    </button>
-
     <div class="mc" @focusout="onDialogBlurRoot">
       <aside class="mc-left">
         <div class="mc-left-top">
           <div class="mc-left-title-row">
             <div class="mc-left-title">消息中心</div>
-            <div v-if="activeTab === 'group'" class="mc-left-title-actions">
-              <button
-                type="button"
-                class="mc-create-group-btn"
-                title="创建群聊"
-                @click="openCreateGroup"
-              >
-                <el-icon><Plus /></el-icon>
-              </button>
-            </div>
           </div>
           <div class="mc-tabs" role="tablist">
             <button
@@ -75,29 +49,53 @@
               <span v-if="tabBadges.notif > 0" class="mc-tab-badge">{{ tabBadges.notif > 99 ? '99+' : tabBadges.notif }}</span>
             </button>
           </div>
-          <div class="mc-search">
-            <el-icon class="mc-search-icon"><Search /></el-icon>
-            <input
-              v-model="searchQuery"
-              type="search"
-              class="mc-search-input"
-              placeholder="搜索消息…"
+          <div v-if="activeTab !== 'notif'" class="mc-search-row">
+            <div class="mc-search">
+              <el-icon class="mc-search-icon"><Search /></el-icon>
+              <input
+                v-model="searchQuery"
+                type="search"
+                class="mc-search-input"
+                placeholder="搜昵称或文本消息内容..."
+              >
+            </div>
+            <button
+              v-if="activeTab === 'pm'"
+              type="button"
+              class="mc-hidden-manage-btn"
+              :title="hiddenManagementMode ? '返回普通聊天列表' : '管理已删除聊天'"
+              @click="toggleHiddenManagement"
             >
+              <el-icon><Back v-if="hiddenManagementMode" /><Delete v-else /></el-icon>
+              <span>{{ hiddenManagementMode ? '返回聊天' : '管理已删除聊天' }}</span>
+            </button>
+            <button
+              v-if="activeTab === 'group'"
+              type="button"
+              class="mc-hidden-manage-btn"
+              title="创建群聊"
+              @click="openCreateGroup"
+            >
+              <el-icon><Plus /></el-icon>
+              <span>创建群聊</span>
+            </button>
           </div>
         </div>
 
         <el-scrollbar class="mc-list-scroll">
-          <button
+          <div
             v-for="item in listItems"
             :key="item.key"
-            type="button"
             class="mc-conv"
+            role="button"
+            tabindex="0"
             :class="{
               'is-on': isActiveItem(item),
               'is-focus-ring': focusedConvKey === item.key,
               'is-group-private': item.kind === 'group' && Number(item.group?.groupType) === 1,
             }"
             @click="selectListItem(item)"
+            @keydown.enter.prevent="selectListItem(item)"
             @focus="onConvFocus(item)"
             @blur="onConvBlur(item)"
           >
@@ -121,19 +119,40 @@
             </div>
             <div class="mc-conv-body">
               <div class="mc-conv-row">
-                <span class="mc-conv-name mc-conv-name--link" @click.stop="openPeerProfile(item)">{{ item.name }}</span>
+                <span class="mc-conv-name mc-conv-name--link" @click.stop="openPeerProfile(item)">
+                  <template v-for="(segment, index) in highlightSegments(item.name)" :key="index">
+                    <mark v-if="['pm', 'group'].includes(item.kind) && item.nameMatched && segment.matched" class="mc-search-mark">{{ segment.text }}</mark>
+                    <span v-else>{{ segment.text }}</span>
+                  </template>
+                </span>
                 <span class="mc-conv-time">{{ formatSessionTime(item.time) }}</span>
               </div>
               <div class="mc-conv-prev" :class="{ 'is-unread': item.unread > 0 }">
-                {{ item.preview }}
-              </div>
-              <div v-if="item.kind === 'group'" class="mc-conv-meta-row">
-                <span class="mc-group-type-badge" :class="{ 'is-private': Number(item.group?.groupType) === 1 }">
+                <span class="mc-conv-prev-text">
+                  <template v-for="(segment, index) in highlightSegments(item.preview)" :key="index">
+                    <mark v-if="['pm', 'group'].includes(item.kind) && item.previewMatched && segment.matched" class="mc-search-mark">{{ segment.text }}</mark>
+                    <span v-else>{{ segment.text }}</span>
+                  </template>
+                </span>
+                <span
+                  v-if="item.kind === 'group'"
+                  class="mc-group-type-badge"
+                  :class="{ 'is-private': Number(item.group?.groupType) === 1 }"
+                >
                   {{ groupTypeLabel(item.group?.groupType) }}
                 </span>
               </div>
+              <button
+                v-if="item.kind === 'pm'"
+                type="button"
+                class="mc-conv-visibility-action"
+                :title="item.hidden ? '恢复聊天' : '隐藏聊天'"
+                @click.stop="item.hidden ? restorePrivateSession(item) : hidePrivateSession(item)"
+              >
+                <el-icon><RefreshLeft v-if="item.hidden" /><Delete v-else /></el-icon>
+              </button>
             </div>
-          </button>
+          </div>
           <div v-if="activeTab === 'group' && groupListLoading" class="mc-list-empty mc-list-loading">
             正在加载群聊
           </div>
@@ -144,7 +163,13 @@
             v-if="listItems.length === 0 && !(activeTab === 'group' && (groupListLoading || groupListError))"
             class="mc-list-empty"
           >
-            <el-icon :size="48" color="#dcdfe6"><ChatLineSquare /></el-icon>
+            <template v-if="privateSearchEmpty">
+              <img :src="searchChatEmptyUrl" alt="搜索不到" class="mc-search-empty-img">
+              <span>搜索不到啊喵......</span>
+            </template>
+            <template v-else>
+              <el-icon :size="48" color="#dcdfe6"><ChatLineSquare /></el-icon>
+            </template>
           </div>
         </el-scrollbar>
 
@@ -181,10 +206,6 @@
               <div class="mc-rtitle-stack">
                 <span class="mc-rname">
                   {{ activeChatTitle }}
-                  <span v-if="currentSession" class="mc-online mc-online--inline" :class="{ 'is-offline': !peerOnline }">
-                    <span class="mc-online-dot" />
-                    <span>{{ peerOnline ? '在线' : '离线' }}</span>
-                  </span>
                   <button
                     v-if="currentGroupSession"
                     type="button"
@@ -197,6 +218,10 @@
                 </span>
                 <span v-if="currentGroupSession" class="mc-rmeta">{{ activeChatSubtitle }}</span>
               </div>
+            </div>
+            <div v-if="currentSession" class="mc-online mc-online--header" :class="{ 'is-offline': !peerOnline }">
+              <span class="mc-online-dot" />
+              <span>{{ peerOnline ? '在线' : '离线' }}</span>
             </div>
           </header>
 
@@ -215,7 +240,7 @@
               <div
                 v-else
                 class="mc-mrow"
-                :class="row.msg.isOwner ? 'is-me' : 'is-other'"
+                :class="[row.msg.isOwner ? 'is-me' : 'is-other', { 'is-group': currentGroupSession }]"
               >
                 <div
                   class="mc-mrow-ava"
@@ -241,16 +266,46 @@
                     {{ row.msg.user?.nickname || '群成员' }}
                   </button>
                   <div class="mc-bubble-action">
+                    <span
+                      v-if="currentSession
+                        && row.msg.isOwner
+                        && !row.msg.pendingAlbumState
+                        && !isRecalledMessage(row.msg)
+                        && !(row.msg.message?.auditFailed || row.msg.auditFailed)
+                        && !isGroupInviteCard(row.msg)"
+                      class="mc-read mc-read--side"
+                    >
+                      {{ Number(row.msg.message?.state) === 1 ? '已读' : '未读' }}
+                    </span>
+                    <div
+                      v-if="currentGroupSession && row.msg.isOwner && canShowGroupMessageActions(row.msg)"
+                      class="mc-group-message-actions is-left"
+                    >
+                      <button
+                        v-if="canRecallGroupMessage(row.msg)"
+                        type="button"
+                        @click="handleRecall(row.msg)"
+                      >
+                        撤回
+                      </button>
+                      <button type="button" @click="startReply(row.msg)">回复</button>
+                    </div>
+                    <span
+                      v-if="row.msg.isOwner && (row.msg.message?.auditFailed || row.msg.auditFailed)"
+                      class="mc-audit-fail-icon"
+                      title="消息未通过审核"
+                      aria-label="消息未通过审核"
+                    >!</span>
                     <div
                       class="mc-bbl"
                       :class="{
-                        'is-me': row.msg.isOwner && !isMediaMessage(row.msg) && Number(row.msg.message?.state) !== 2,
-                        'is-recalled': Number(row.msg.message?.state) === 2,
-                        'is-media': isMediaMessage(row.msg) && Number(row.msg.message?.state) !== 2,
+                        'is-me': row.msg.isOwner && !isMediaMessage(row.msg) && !isRecalledMessage(row.msg),
+                        'is-recalled': isRecalledMessage(row.msg),
+                        'is-media': isMediaMessage(row.msg) && !isRecalledMessage(row.msg),
                       }"
                     >
-                      <span v-if="Number(row.msg.message?.state) === 2" class="mc-recalled">
-                        {{ row.msg.isOwner ? '你撤回了一条消息' : '对方撤回了一条消息' }}
+                      <span v-if="isRecalledMessage(row.msg)" class="mc-recalled">
+                        {{ row.msg.isOwner ? '你撤回了一条消息' : (currentGroupSession ? '群成员撤回了一条消息' : '对方撤回了一条消息') }}
                       </span>
                       <template v-else-if="isGroupInviteCard(row.msg)">
                         <div class="mc-group-invite-card">
@@ -277,50 +332,97 @@
                           </div>
                         </div>
                       </template>
-                      <template v-else-if="isMediaMessage(row.msg)">
-                        <div class="mc-media-stack">
-                          <el-image
-                            :src="row.msg.message.mediaUrl"
-                            :preview-src-list="[row.msg.message.mediaUrl]"
-                            preview-teleported
-                            :z-index="10050"
-                            fit="contain"
-                            class="mc-chat-img"
-                            :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
-                            :style="bubbleImageStyle(row.msg.message)"
-                          />
+                      <template v-else-if="isAlbumMessage(row.msg)">
+                        <div class="mc-album-stack">
+                          <p v-if="row.msg.message?.content" class="mc-album-caption">
+                            {{ row.msg.message.content }}
+                          </p>
                           <button
-                            v-if="!row.msg.isOwner && canFavoriteChatImage(row.msg)"
+                            v-if="row.msg.message.albumImages?.length"
                             type="button"
-                            class="mc-fav-img-btn"
-                            @click="favoriteChatImage(row.msg)"
+                            class="mc-album-cover"
+                            @click="openAlbumPreview(row.msg, 0)"
                           >
-                            添加到表情
+                            <img :src="row.msg.message.albumImages[0].mediaUrl" alt="图集封面">
+                            <span class="mc-album-cover-mask">查看图集</span>
                           </button>
+                          <div v-if="!row.msg.isOwner" class="mc-album-meta">
+                            <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
+                          </div>
                           <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote mc-reply-quote--media">
                             {{ row.msg.message?.replySenderName || '成员' }}:
                             {{ row.msg.message?.replyContent || '消息' }}
                           </div>
-                          <div v-if="currentGroupSession" class="mc-media-corner-actions">
-                            <button
-                              v-if="!row.msg.isOwner && !isEmojiShopGroupMedia(row.msg)"
-                              type="button"
-                              @click="reportGroupMessage(row.msg)"
-                            >
-                              举报
-                            </button>
-                            <button type="button" @click="startReply(row.msg)">回复</button>
+                          <div v-if="row.msg.pendingAlbumState" class="mc-album-pending-status">
+                            <LoaderCircle
+                              v-if="row.msg.pendingAlbumState === 'auditing'"
+                              :size="18"
+                              class="mc-album-pending-spinner"
+                            />
+                            <div v-else class="mc-album-pending-failed">
+                              <span>{{ row.msg.pendingAlbumError || '发送失败' }}</span>
+                              <button type="button" title="重试" @click="retryPendingAlbum(row.msg)">
+                                <RotateCcw :size="15" />
+                              </button>
+                              <button type="button" title="删除" @click="deletePendingAlbum(row.msg)">
+                                <Trash2 :size="15" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </template>
-                      <template v-else-if="isVoiceCallMessage(row.msg)">
-                        <span class="mc-voice-call-msg">
-                          <el-icon><Phone /></el-icon>
-                          <span>{{ voiceCallDurationText(row.msg) }}</span>
-                        </span>
-                        <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote">
-                          {{ row.msg.message?.replySenderName || '成员' }}:
-                          {{ row.msg.message?.replyContent || '消息' }}
+                      <template v-else-if="isMediaMessage(row.msg)">
+                        <div class="mc-media-stack">
+                          <div class="mc-media-visual">
+                            <el-image
+                              v-if="!isEmojiShopMessage(row.msg)"
+                              :src="row.msg.message.mediaUrl"
+                              :preview-src-list="[row.msg.message.mediaUrl]"
+                              preview-teleported
+                              :z-index="10050"
+                              fit="contain"
+                              class="mc-chat-img"
+                              :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
+                              :style="bubbleImageStyle(row.msg.message)"
+                              @load="rememberBubbleNaturalSize(row.msg.message, $event)"
+                            />
+                            <img
+                              v-else
+                              :src="row.msg.message.mediaUrl"
+                              alt="表情商城表情"
+                              class="mc-chat-img mc-chat-img--shop"
+                              :class="{ 'is-gif': Number(row.msg.message?.messageType) === 2 }"
+                              :style="bubbleImageStyle(row.msg.message)"
+                              @load="rememberBubbleNaturalSize(row.msg.message, $event)"
+                            >
+                            <button
+                              v-if="isEmojiShopMessage(row.msg)"
+                              type="button"
+                              class="mc-shop-emoji-badge"
+                              title="前往表情商城"
+                              @click.stop="openEmojiShopFromMessage(row.msg)"
+                            >
+                              <img :src="emojiPackIconUrl" alt="表情">
+                            </button>
+                          </div>
+                          <div
+                            v-if="!row.msg.isOwner"
+                            class="mc-media-meta"
+                          >
+                            <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
+                            <button
+                              v-if="canFavoriteChatImage(row.msg)"
+                              type="button"
+                              class="mc-fav-img-btn"
+                              @click="favoriteChatImage(row.msg)"
+                            >
+                              收藏
+                            </button>
+                          </div>
+                          <div v-if="row.msg.message?.replyMessageId" class="mc-reply-quote mc-reply-quote--media">
+                            {{ row.msg.message?.replySenderName || '成员' }}:
+                            {{ row.msg.message?.replyContent || '消息' }}
+                          </div>
                         </div>
                       </template>
                       <template v-else>
@@ -331,39 +433,41 @@
                         </div>
                       </template>
                     </div>
-                    <button
-                      v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
-                      type="button"
-                      class="mc-recall-btn"
-                      @click="handleRecall(row.msg)"
+                    <div
+                      v-if="!row.msg.isOwner && (canShowGroupMessageActions(row.msg) || canReportChatMessage(row.msg))"
+                      class="mc-group-message-actions is-right"
                     >
-                      撤回
-                    </button>
-                    <button
-                      v-if="currentGroupSession && !row.msg.isOwner && Number(row.msg.message?.messageType) !== 9 && !isMediaMessage(row.msg)"
-                      type="button"
-                      class="mc-recall-btn"
-                      @click="reportGroupMessage(row.msg)"
-                    >
-                      举报
-                    </button>
-                    <button
-                      v-if="currentGroupSession && Number(row.msg.message?.messageType) !== 9 && !isMediaMessage(row.msg)"
-                      type="button"
-                      class="mc-reply-btn"
-                      @click="startReply(row.msg)"
-                    >
-                      回复
-                    </button>
+                      <button
+                        v-if="canRecallGroupMessage(row.msg)"
+                        type="button"
+                        @click="handleRecall(row.msg)"
+                      >
+                        撤回
+                      </button>
+                      <button v-if="currentGroupSession" type="button" @click="startReply(row.msg)">回复</button>
+                      <button v-if="canReportChatMessage(row.msg)" type="button" @click="submitChatMessageReport(row.msg)">举报</button>
+                    </div>
                   </div>
-                  <div class="mc-meta-row" :class="{ 'is-me': row.msg.isOwner }">
-                    <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
-                    <span
-                      v-if="currentSession && row.msg.isOwner && Number(row.msg.message?.state) !== 2"
-                      class="mc-read"
-                    >
-                      {{ Number(row.msg.message?.state) === 1 ? '已读' : '未读' }}
-                    </span>
+                  <div
+                    v-if="!row.msg.pendingAlbumState
+                      && !isRecalledMessage(row.msg)
+                      && !(currentGroupSession && row.msg.isOwner)
+                      && !((currentSession || currentGroupSession) && !row.msg.isOwner && isMediaMessage(row.msg))
+                      && (!(row.msg.isOwner && (currentSession || currentGroupSession)) || canRecallMessage(row.msg))"
+                    class="mc-meta-row"
+                    :class="{ 'is-me': row.msg.isOwner }"
+                  >
+                    <template v-if="currentSession && row.msg.isOwner">
+                      <button
+                        v-if="canRecallMessage(row.msg)"
+                        type="button"
+                        class="mc-recall-btn mc-recall-btn--meta"
+                        @click="handleRecall(row.msg)"
+                      >
+                        撤回
+                      </button>
+                    </template>
+                    <span v-else class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
                   </div>
                 </div>
               </div>
@@ -378,6 +482,7 @@
               type="file"
               class="mc-hidden-file"
               accept="image/jpeg,image/jpg,image/png,image/gif"
+              multiple
               @change="onChatImageFileChange"
             >
             <input
@@ -386,6 +491,7 @@
               type="file"
               class="mc-hidden-file"
               accept="image/jpeg,image/jpg,image/png,image/gif"
+              multiple
               @change="onEmojiStickerFileChange"
             >
             <div class="mc-itools">
@@ -394,9 +500,10 @@
                 type="button"
                 class="mc-itbtn"
                 title="发送图片"
+                :disabled="sending"
                 @click="triggerChatImagePick"
               >
-                <el-icon><Picture /></el-icon>
+                <ImageIcon :size="18" :stroke-width="1.8" />
               </button>
               <el-popover
                 v-if="currentGroupSession"
@@ -407,7 +514,7 @@
               >
                 <template #reference>
                   <button type="button" class="mc-itbtn mc-at-btn" title="@群成员" @click.stop="toggleMentionPicker">
-                    @
+                    <AtSign :size="18" :stroke-width="1.8" />
                   </button>
                 </template>
                 <div class="mc-mention-panel">
@@ -424,6 +531,7 @@
                     type="search"
                     class="mc-mention-search"
                     placeholder="搜索群成员"
+                    @input="onMentionSearchInput"
                   >
                   <div v-if="!filteredMentionMembers.length" class="mc-mention-empty">
                     暂无成员
@@ -443,18 +551,16 @@
                     />
                     <span>{{ memberDisplayName(member) }}</span>
                   </button>
-                  <div v-if="mentionMembersTotalPages > 1" class="mc-mention-pager">
-                    <button type="button" :disabled="mentionMembersPage <= 1" @click="goMentionMembersPrev">
-                      上页
-                    </button>
-                    <span>{{ mentionMembersPage }}/{{ mentionMembersTotalPages }}</span>
-                    <button
-                      type="button"
-                      :disabled="mentionMembersPage >= mentionMembersTotalPages"
-                      @click="goMentionMembersNext"
-                    >
-                      下页
-                    </button>
+                  <div class="mc-mention-pager">
+                    <AppPagination
+                      v-model:current-page="mentionMembersPage"
+                      size="small"
+                      :total="mentionMembersTotal"
+                      :page-size="MENTION_PAGE_SIZE"
+                      :pager-count="5"
+                      :show-jumper="false"
+                      @current-change="onMentionMembersPageChange"
+                    />
                   </div>
                 </div>
               </el-popover>
@@ -468,7 +574,7 @@
               >
                 <template #reference>
                   <button type="button" class="mc-itbtn" title="表情">
-                    <img :src="emojiPackIconUrl" alt="" class="mc-emoji-pack-icon">
+                    <Smile :size="18" :stroke-width="1.8" />
                   </button>
                 </template>
                 <div
@@ -478,7 +584,8 @@
                   <el-tabs v-model="emojiPanelTab" class="mc-emoji-tabs" @tab-change="onEmojiTabChange">
                     <el-tab-pane label="收藏" name="favorites">
                       <div v-if="!favoriteEmojis.length" class="mc-emoji-empty">
-                        <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
+                        <img :src="emojiPersonEmptyUrl" alt="暂无收藏表情" class="mc-emoji-empty-img">
+                        <span class="mc-emoji-empty-text">暂无表情</span>
                       </div>
                       <div v-else class="mc-emoji-favorites">
                         <div class="mc-emoji-grid mc-emoji-grid--favorites">
@@ -497,25 +604,22 @@
                               type="button"
                               class="mc-emoji-del"
                               aria-label="删除"
-                              @click.stop="removeEmojiKeepPopover(em.id)"
+                              @click.stop="removeEmojiKeepPopover(em.id, 'favorite')"
                             >
                               <el-icon><Close /></el-icon>
                             </button>
                           </div>
                         </div>
-                        <div v-if="favoriteTotalPages > 1" class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
-                          <button type="button" class="mc-emoji-fav-pager-btn" @click="goFavoriteFirst">首页</button>
-                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="favoritePage <= 1" @click="goFavoritePrev">上页</button>
-                          <input
-                            v-model="favoritePageInput"
-                            type="number"
-                            min="1"
-                            :max="favoriteTotalPages"
-                            class="mc-emoji-fav-pager-input"
-                            @keyup.enter="jumpFavoritePage"
-                          >
-                          <span class="mc-emoji-fav-pager-sep">/ {{ favoriteTotalPages }}</span>
-                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="favoritePage >= favoriteTotalPages" @click="goFavoriteNext">下页</button>
+                        <div class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
+                          <AppPagination
+                            v-model:current-page="favoritePage"
+                            size="small"
+                            :total="favoritePagerTotal"
+                            :page-size="FAVORITES_PAGE_SIZE"
+                            :show-jumper="false"
+                            :pager-count="5"
+                            @current-change="onFavoritePageChange"
+                          />
                         </div>
                       </div>
                     </el-tab-pane>
@@ -537,10 +641,20 @@
                               type="button"
                               class="mc-emoji-del"
                               aria-label="删除"
-                              @click.stop="removeEmojiKeepPopover(em.id)"
+                              @click.stop="removeEmojiKeepPopover(em.id, 'uploaded')"
                             >
                               <el-icon><Close /></el-icon>
                             </button>
+                          </div>
+                          <div
+                            v-for="slot in uploadedPendingSlots"
+                            :key="slot.id"
+                            class="mc-emoji-cell mc-emoji-cell--pending"
+                          >
+                            <img :src="slot.previewUrl" alt="" class="mc-emoji-thumb">
+                            <div class="mc-emoji-pending-mask" aria-hidden="true">
+                              <span class="mc-emoji-pending-dot" />
+                            </div>
                           </div>
                           <button
                             v-if="isPrivateChat && showUploadOnCurrentPage"
@@ -552,25 +666,23 @@
                             <el-icon :size="20"><Plus /></el-icon>
                           </button>
                         </div>
-                        <div v-if="uploadedTotalPages > 1" class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
-                          <button type="button" class="mc-emoji-fav-pager-btn" @click="goUploadedFirst">首页</button>
-                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="uploadedPage <= 1" @click="goUploadedPrev">上页</button>
-                          <input
-                            v-model="uploadedPageInput"
-                            type="number"
-                            min="1"
-                            :max="uploadedTotalPages"
-                            class="mc-emoji-fav-pager-input"
-                            @keyup.enter="jumpUploadedPage"
-                          >
-                          <span class="mc-emoji-fav-pager-sep">/ {{ uploadedTotalPages }}</span>
-                          <button type="button" class="mc-emoji-fav-pager-btn" :disabled="uploadedPage >= uploadedTotalPages" @click="goUploadedNext">下页</button>
+                        <div class="mc-emoji-fav-pager mc-emoji-fav-pager--solo">
+                          <AppPagination
+                            v-model:current-page="uploadedPage"
+                            size="small"
+                            :total="uploadedPagerTotal"
+                            :page-size="FAVORITES_PAGE_SIZE"
+                            :show-jumper="false"
+                            :pager-count="5"
+                            @current-change="onUploadedPageChange"
+                          />
                         </div>
                       </div>
                     </el-tab-pane>
                     <el-tab-pane label="已购" name="purchased">
                       <div v-if="!visiblePacks.length" class="mc-emoji-empty">
-                        <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
+                        <img :src="emojiPersonEmptyUrl" alt="暂无已购表情" class="mc-emoji-empty-img">
+                        <span class="mc-emoji-empty-text">暂无表情</span>
                       </div>
                       <div v-else class="mc-emoji-purchased-layout">
                         <div class="mc-emoji-pack-body">
@@ -635,6 +747,62 @@
                 </div>
               </el-popover>
               <el-popover
+                v-if="currentGroupSession && isCurrentGroupOwner"
+                v-model:visible="groupAdminVisible"
+                placement="top-start"
+                :width="320"
+                trigger="manual"
+              >
+                <template #reference>
+                  <button type="button" class="mc-itbtn" title="管理员设置" @click.stop="toggleGroupAdminPicker">
+                    <ShieldCheck :size="18" :stroke-width="1.8" />
+                  </button>
+                </template>
+                <div v-loading="groupAdminLoading" class="mc-group-admin-panel">
+                  <input
+                    v-model="groupAdminSearch"
+                    type="search"
+                    class="mc-mention-search"
+                    placeholder="搜索群成员昵称"
+                    @input="onGroupAdminSearchInput"
+                  >
+                  <div class="mc-group-admin-list">
+                    <div v-for="member in groupAdminMembers" :key="member.id" class="mc-group-admin-item">
+                      <UserAvatarVip
+                        :size="28"
+                        :src="member.user?.avatarUrl || defaultAvatar"
+                        :vip-tier="Number(member.user?.vipTier) || 0"
+                        :vip-expire-at="member.user?.vipExpireAt"
+                      />
+                      <span class="mc-group-admin-name">{{ memberDisplayName(member) }}</span>
+                      <span v-if="Number(member.role) === 0" class="mc-group-admin-role is-owner">群主</span>
+                      <button
+                        v-else
+                        type="button"
+                        class="mc-group-admin-role"
+                        :class="Number(member.role) === 2 ? 'is-admin' : 'is-member'"
+                        :disabled="Number(groupAdminUpdatingId) === Number(member.user?.id)"
+                        @click="toggleGroupAdminRole(member)"
+                      >
+                        {{ Number(member.role) === 2 ? '撤销管理员' : '设为管理员' }}
+                      </button>
+                    </div>
+                    <div v-if="!groupAdminLoading && !groupAdminMembers.length" class="mc-mention-empty">暂无成员</div>
+                  </div>
+                  <div class="mc-mention-pager">
+                    <AppPagination
+                      v-model:current-page="groupAdminPage"
+                      size="small"
+                      :total="groupAdminTotal"
+                      :page-size="5"
+                      :pager-count="5"
+                      :show-jumper="false"
+                      @current-change="onGroupAdminPageChange"
+                    />
+                  </div>
+                </div>
+              </el-popover>
+              <el-popover
                 v-if="isPrivateChat"
                 v-model:visible="ownedGroupInviteVisible"
                 placement="top-start"
@@ -653,31 +821,63 @@
                     class="mc-mention-search"
                     placeholder="搜索我的群聊"
                   >
-                  <button
-                    v-for="group in ownedGroups"
-                    :key="group.id"
-                    type="button"
-                    class="mc-owned-group-item"
-                    :disabled="Number(invitingGroupId) === Number(group.id)"
-                    @click="sendGroupInviteFromPm(group)"
-                  >
-                    <div class="mc-group-avatar mc-group-avatar--mini">
-                      <img v-if="groupAvatarUrl(group)" :src="groupAvatarUrl(group)" alt="">
-                      <span v-else>{{ groupAvatarText(group) }}</span>
+                  <div class="mc-owned-group-list">
+                    <button
+                      v-for="group in ownedGroups"
+                      :key="group.id"
+                      type="button"
+                      class="mc-owned-group-item"
+                      :disabled="Number(invitingGroupId) === Number(group.id)"
+                      @click="sendGroupInviteFromPm(group)"
+                    >
+                      <div class="mc-group-avatar mc-group-avatar--mini">
+                        <img v-if="groupAvatarUrl(group)" :src="groupAvatarUrl(group)" alt="">
+                        <span v-else>{{ groupAvatarText(group) }}</span>
+                      </div>
+                      <span class="mc-owned-group-name">{{ group.name }}</span>
+                      <span class="mc-owned-group-count">{{ ownedGroupMemberText(group) }}</span>
+                    </button>
+                    <div v-if="!ownedGroupsLoading && ownedGroups.length === 0" class="mc-mention-empty">
+                      暂无可邀请的群聊
                     </div>
-                    <span class="mc-owned-group-name">{{ group.name }}</span>
-                    <span class="mc-owned-group-count">{{ ownedGroupMemberText(group) }}</span>
-                  </button>
-                  <div v-if="!ownedGroupsLoading && ownedGroups.length === 0" class="mc-mention-empty">
-                    暂无可邀请的群聊
                   </div>
-                  <div v-if="ownedGroupTotalPages > 1" class="mc-mention-pager">
-                    <button type="button" :disabled="ownedGroupPage <= 1" @click="goOwnedGroupPrev">上页</button>
-                    <span>{{ ownedGroupPage }}/{{ ownedGroupTotalPages }}</span>
-                    <button type="button" :disabled="ownedGroupPage >= ownedGroupTotalPages" @click="goOwnedGroupNext">下页</button>
+                  <div class="mc-mention-pager">
+                    <AppPagination
+                      v-model:current-page="ownedGroupPage"
+                      size="small"
+                      :total="ownedGroupTotal"
+                      :page-size="5"
+                      :pager-count="5"
+                      :show-jumper="false"
+                      @current-change="onOwnedGroupPageChange"
+                    />
                   </div>
                 </div>
               </el-popover>
+            </div>
+            <div v-if="(currentSession || currentGroupSession) && pendingAlbumFiles.length" class="mc-album-compose">
+              <div class="mc-album-compose-head">
+                <span>待发送图片</span>
+                <span>{{ pendingAlbumFiles.length }}/10</span>
+              </div>
+              <div class="mc-album-compose-list">
+                <div v-for="item in pendingAlbumFiles" :key="item.id" class="mc-album-compose-item">
+                  <img :src="item.previewUrl" :alt="item.file.name">
+                  <button type="button" aria-label="移除图片" :disabled="sending" @click="removePendingAlbumFile(item.id)">
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
+                <button
+                  v-if="pendingAlbumFiles.length < 10"
+                  type="button"
+                  class="mc-album-compose-add"
+                  title="继续添加图片"
+                  :disabled="sending"
+                  @click="triggerChatImagePick"
+                >
+                  <el-icon><Plus /></el-icon>
+                </button>
+              </div>
             </div>
             <div v-if="replyTarget" class="mc-reply-draft">
               <span>回复 {{ replyTarget.senderName }}: {{ replyTarget.content }}</span>
@@ -691,9 +891,11 @@
                 rows="1"
                 placeholder="在此输入消息内容…"
                 @input="autoResizeInput"
+                @keydown="onComposerKeydown"
               />
               <button type="button" class="mc-sbtn" :disabled="sending" @click="sendMsg">
-                {{ sending ? '发送中' : '发送' }}
+                <el-icon><Promotion /></el-icon>
+                <span>{{ sending ? '发送中' : '发送' }}</span>
               </button>
             </div>
           </footer>
@@ -707,40 +909,71 @@
               </div>
               <span class="mc-rname">进群申请</span>
             </div>
+            <el-input
+              v-model="notificationSearch"
+              class="mc-notification-search"
+              clearable
+              placeholder="搜索群或群主"
+              :prefix-icon="Search"
+            />
           </header>
-          <el-scrollbar class="mc-rbody-scroll">
-            <div class="mc-rbody mc-rbody--notify">
-              <article
-                v-for="item in activeJoinRequests"
-                :key="item.id"
-                class="mc-join-request-row"
-              >
-                <UserAvatarVip
-                  :size="34"
-                  :src="item.targetUser?.avatarUrl || defaultAvatar"
-                  :vip-tier="Number(item.targetUser?.vipTier) || 0"
-                  :vip-expire-at="item.targetUser?.vipExpireAt"
-                />
-                <span class="mc-join-request-name">{{ item.targetUser?.nickname || '用户' }}</span>
-                <div class="mc-join-request-group">
-                  <div class="mc-group-avatar mc-group-avatar--mini">
-                    <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
-                    <span v-else>{{ groupAvatarText(item.group) }}</span>
+          <div class="mc-notify-shell">
+            <el-scrollbar class="mc-rbody-scroll">
+              <div class="mc-rbody mc-rbody--notify">
+                <article
+                  v-for="item in activeJoinRequests"
+                  :key="item.id"
+                  class="mc-join-request-row"
+                >
+                  <UserAvatarVip
+                    :size="34"
+                    :src="(item.viewerSide === 'applicant' ? item.ownerUser?.avatarUrl : item.targetUser?.avatarUrl) || defaultAvatar"
+                    :vip-tier="Number(item.viewerSide === 'applicant' ? item.ownerUser?.vipTier : item.targetUser?.vipTier) || 0"
+                    :vip-expire-at="item.viewerSide === 'applicant' ? item.ownerUser?.vipExpireAt : item.targetUser?.vipExpireAt"
+                  />
+                  <span class="mc-join-request-name">
+                    {{ item.viewerSide === 'applicant' ? (item.ownerUser?.nickname || '群主') : (item.targetUser?.nickname || '用户') }}
+                  </span>
+                  <div class="mc-join-request-group">
+                    <div class="mc-group-avatar mc-group-avatar--mini">
+                      <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
+                      <span v-else>{{ groupAvatarText(item.group) }}</span>
+                    </div>
+                    <span>{{ item.group?.name || '群聊' }}</span>
                   </div>
-                  <span>{{ item.group?.name || '群聊' }}</span>
-                </div>
-                <span class="mc-join-request-time">{{ formatJoinRequestTime(item.createTime) }}</span>
-                <div class="mc-join-request-actions">
-                  <template v-if="Number(item.status) === 0">
-                    <button type="button" @click="approveJoinRequestItem(item)">批准</button>
-                    <button type="button" class="is-plain" @click="rejectJoinRequestItem(item)">拒绝</button>
-                  </template>
-                  <span v-else>{{ Number(item.status) === 1 ? '已批准' : Number(item.status) === 3 ? '已作废' : '已拒绝' }}</span>
-                </div>
-              </article>
-              <div v-if="!activeJoinRequests.length" class="mc-public-empty">暂无进群申请</div>
+                  <span class="mc-join-request-time">{{ formatJoinRequestTime(item.createTime) }}</span>
+                  <div class="mc-join-request-actions">
+                    <template v-if="item.viewerSide === 'owner' && Number(item.status) === 0">
+                      <button type="button" @click="approveJoinRequestItem(item)">批准</button>
+                      <button type="button" class="is-plain" @click="rejectJoinRequestItem(item)">拒绝</button>
+                    </template>
+                    <span
+                      v-else-if="item.viewerSide === 'applicant'"
+                      :class="Number(item.status) === 1 ? 'is-approved' : 'is-rejected'"
+                    >
+                      {{ Number(item.status) === 1 ? '已通过' : '被拒绝' }}
+                    </span>
+                    <span
+                      v-else
+                      :class="Number(item.status) === 1 ? 'is-approved' : Number(item.status) === 2 ? 'is-rejected' : ''"
+                    >{{ Number(item.status) === 1 ? '已批准' : Number(item.status) === 3 ? '已作废' : '已拒绝' }}</span>
+                  </div>
+                </article>
+                <div v-if="!activeJoinRequests.length" class="mc-public-empty">暂无进群申请</div>
+              </div>
+            </el-scrollbar>
+            <div class="mc-notification-pager">
+              <AppPagination
+                v-model:current-page="notificationPage"
+                size="small"
+                :total="notificationTotal"
+                :page-size="JOIN_REQUEST_PAGE_SIZE"
+                :pager-count="5"
+                :show-jumper="false"
+                @current-change="onNotificationPageChange"
+              />
             </div>
-          </el-scrollbar>
+          </div>
         </template>
 
         <template v-else-if="currentSystemGroup">
@@ -751,66 +984,121 @@
               </div>
               <span class="mc-rname">{{ currentSystemGroup.name }}</span>
             </div>
+            <el-input
+              v-model="notificationSearch"
+              class="mc-notification-search"
+              clearable
+              :placeholder="currentSystemGroup.groupId === 'audit' ? '搜索帖子标题' : currentSystemGroup.groupId === 'musicAudit' ? '搜索歌曲' : currentSystemGroup.groupId === 'tag' ? '搜索标签内容' : '搜索举报内容'"
+              :prefix-icon="Search"
+            />
           </header>
-          <el-scrollbar class="mc-rbody-scroll">
-            <div class="mc-rbody mc-rbody--notify">
-              <article
-                v-for="msg in activeSystemMessages"
-                :key="msg.id"
-                class="mc-ncard"
-                :class="{ 'mc-ncard--audit': [1, 2, 3].includes(Number(msg.type)) }"
-              >
-                <div class="mc-ncard-head">
-                  <span :class="sysTagClass(msg.type)" class="mc-tag">{{ sysTagLabel(msg.type) }}</span>
-                  <span class="mc-ncard-time">{{ formatSessionTime(msg.createTime) }}</span>
-                </div>
-                <p class="mc-ncard-body">
-                  <template v-if="parseSystemMessageContent(msg).articleTitle">
-                    <span>{{ parseSystemMessageContent(msg).before }}</span>
-                    <button
-                      type="button"
-                      class="mc-article-link"
-                      @click="openArticleFromSystem(msg)"
-                    >
-                      《{{ parseSystemMessageContent(msg).articleTitle }}》
-                    </button>
-                    <span>{{ parseSystemMessageContent(msg).after }}</span>
-                  </template>
-                  <template v-else>
-                    {{ parseSystemMessageContent(msg).plain }}
-                  </template>
-                </p>
-              </article>
+          <div class="mc-notify-shell">
+            <el-scrollbar class="mc-rbody-scroll">
+              <div class="mc-rbody mc-rbody--notify">
+                <article
+                  v-for="msg in activeSystemMessages"
+                  :key="msg.id"
+                  class="mc-ncard"
+                  :class="{ 'mc-ncard--audit': [1, 2, 3].includes(Number(msg.type)) }"
+                >
+                  <div class="mc-ncard-head">
+                    <div class="mc-ncard-title-row">
+                      <span :class="sysTagClass(msg.type)" class="mc-tag">{{ sysTagLabel(msg.type) }}</span>
+                      <strong class="mc-ncard-title">{{ systemNotifyCardTitle(msg) }}</strong>
+                    </div>
+                    <span class="mc-ncard-time">{{ formatSessionTime(msg.createTime) }}</span>
+                  </div>
+                  <p class="mc-ncard-body">
+                    <template v-if="parseSystemMessageContent(msg).articleTitle">
+                      <span>{{ parseSystemMessageContent(msg).before }}</span>
+                      <button
+                        type="button"
+                        class="mc-article-link"
+                        @click="openArticleFromSystem(msg)"
+                      >
+                        《{{ parseSystemMessageContent(msg).articleTitle }}》
+                      </button>
+                      <span>{{ parseSystemMessageContent(msg).after }}</span>
+                    </template>
+                    <template v-else>
+                      {{ parseSystemMessageContent(msg).plain }}
+                    </template>
+                  </p>
+                </article>
+              </div>
+            </el-scrollbar>
+            <div
+              v-if="['audit', 'tag', 'musicAudit'].includes(currentSystemGroup.groupId)"
+              class="mc-notification-pager"
+            >
+              <AppPagination
+                v-model:current-page="notificationPage"
+                size="small"
+                :total="notificationTotal"
+                :page-size="SYSTEM_NOTIFY_PAGE_SIZE"
+                :pager-count="5"
+                :show-jumper="false"
+                @current-change="onNotificationPageChange"
+              />
             </div>
-          </el-scrollbar>
+          </div>
         </template>
 
         <div v-else class="mc-welcome">
-          <el-icon :size="80" color="#e5e6eb"><ChatLineRound /></el-icon>
+          <img :src="chatUnselectUrl" alt="选择会话" class="mc-welcome-img">
+          <span>选择左侧的会话......</span>
         </div>
       </section>
     </div>
   </el-dialog>
 
   <el-dialog
+    v-model="albumPreviewVisible"
+    class="mc-album-preview-dialog"
+    width="min(760px, 88vw)"
+    append-to-body
+    align-center
+    :title="`查看图集 · ${albumPreviewImages.length} 张`"
+  >
+    <el-carousel
+      v-if="albumPreviewImages.length"
+      :key="`${albumPreviewImages.length}-${albumPreviewIndex}`"
+      :initial-index="albumPreviewIndex"
+      height="min(66vh, 620px)"
+      indicator-position="outside"
+      arrow="always"
+    >
+      <el-carousel-item v-for="(image, index) in albumPreviewImages" :key="image.id || index">
+        <img :src="image.mediaUrl" :alt="`图集第 ${index + 1} 张图片`" class="mc-album-preview-image">
+      </el-carousel-item>
+    </el-carousel>
+  </el-dialog>
+
+  <el-dialog
     v-model="groupCreateVisible"
     title="创建群聊"
-    width="360px"
+    width="460px"
     append-to-body
+    class="mc-group-create-dialog"
+    :show-close="false"
   >
     <div class="mc-group-form">
-      <el-input
-        v-model="groupCreateForm.name"
-        maxlength="24"
-        show-word-limit
-        placeholder="群名称"
-      />
-      <el-select v-model="groupCreateForm.groupType" class="mc-group-form-control">
-        <el-option label="公开群" :value="0" />
-        <el-option label="私有群" :value="1" />
-      </el-select>
+      <div class="mc-group-create-row">
+        <el-input
+          v-model="groupCreateForm.name"
+          maxlength="10"
+          show-word-limit
+          placeholder="群名称"
+        />
+        <el-select v-model="groupCreateForm.groupType" class="mc-group-form-control">
+          <el-option label="公开群" :value="0" />
+          <el-option label="私有群" :value="1" />
+        </el-select>
+      </div>
       <el-input
         v-model="groupCreateForm.intro"
+        type="textarea"
+        :rows="4"
         maxlength="120"
         show-word-limit
         placeholder="群简介"
@@ -818,7 +1106,12 @@
     </div>
     <template #footer>
       <div class="mc-group-dialog-footer">
-        <button type="button" class="mc-dialog-action" @click="groupCreateVisible = false">
+        <button
+          type="button"
+          class="mc-dialog-action"
+          :disabled="creatingGroup"
+          @click="groupCreateVisible = false"
+        >
           取消
         </button>
         <button
@@ -833,51 +1126,79 @@
     </template>
   </el-dialog>
 
-  <el-dialog
-    v-model="groupSettingsVisible"
-    width="640px"
-    append-to-body
-    class="mc-group-settings-dialog"
-    :before-close="beforeCloseGroupSettings"
-  >
-    <div class="mc-group-settings">
-      <div class="mc-group-profile-title">
-        群资料
-        <span v-if="groupEditDirty" class="mc-group-save-hint">保存后生效</span>
+  <Teleport v-if="groupSettingsPortalReady" to=".mc-right">
+    <Transition name="mc-group-drawer">
+      <div
+        v-if="groupSettingsVisible"
+        class="mc-group-settings-layer"
+        @click.self="requestCloseGroupSettings"
+      >
+        <aside class="mc-group-settings-drawer" aria-label="群资料">
+          <button type="button" class="mc-group-settings-close" title="关闭群资料" @click="requestCloseGroupSettings">
+            <el-icon><Close /></el-icon>
+          </button>
+          <div class="mc-group-settings">
+      <div class="mc-group-profile-head">
+        <input
+          v-if="isCurrentGroupOwner"
+          ref="groupAvatarInputRef"
+          type="file"
+          class="mc-hidden-file"
+          accept="image/jpeg,image/png,image/gif"
+          @change="onGroupAvatarFileChange"
+        >
+        <button
+          v-if="isCurrentGroupOwner"
+          type="button"
+          class="mc-group-profile-avatar is-editable"
+          :disabled="uploadingGroupAvatar"
+          title="修改群头像"
+          @click="triggerGroupAvatarUpload"
+        >
+          <img v-if="groupEditForm.avatarUrl" :src="groupEditForm.avatarUrl" alt="群头像">
+          <span v-else>{{ groupAvatarText(groupEditForm) }}</span>
+          <span class="mc-group-profile-avatar-mask">{{ uploadingGroupAvatar ? '上传中' : '修改' }}</span>
+        </button>
+        <div v-else class="mc-group-profile-avatar">
+          <img v-if="groupAvatarUrl(currentGroupSession)" :src="groupAvatarUrl(currentGroupSession)" alt="群头像">
+          <span v-else>{{ groupAvatarText(currentGroupSession) }}</span>
+        </div>
+        <el-input
+          v-if="isCurrentGroupOwner"
+          v-model="groupEditForm.name"
+          class="mc-group-profile-name-input"
+          maxlength="10"
+          show-word-limit
+          placeholder="群名称"
+        />
+        <strong v-else class="mc-group-profile-name">
+          {{ currentGroupSession?.groupName || currentGroupSession?.name || '群聊' }}
+        </strong>
+        <span class="mc-group-profile-count">{{ Number(currentGroupSession?.memberCount) || groupMembersTotal || 0 }} 人</span>
       </div>
+      <span v-if="groupEditDirty" class="mc-group-save-hint">保存后生效</span>
 
       <section class="mc-group-settings-section">
         <div class="mc-group-settings-head">
           <div class="mc-group-settings-title">群成员</div>
           <div class="mc-group-settings-head-right">
-            <button
-              v-if="isCurrentGroupOwner"
-              type="button"
-              class="mc-group-admin-switch"
-              :class="{ 'is-on': groupAdminManageMode }"
-              :title="groupAdminManageMode ? '关闭管理员设置' : '设置管理员'"
-              aria-label="设置管理员"
-              @click="toggleGroupAdminManageMode"
+            <input
+              v-model="groupMemberSearch"
+              type="search"
+              class="mc-group-member-search"
+              placeholder="搜索昵称"
+              @input="onGroupMemberSearchInput"
             >
-              <span class="mc-group-admin-switch-track">
-                <span class="mc-group-admin-switch-thumb">
-                  <el-icon><UserFilled /></el-icon>
-                </span>
-              </span>
-            </button>
-            <div class="mc-group-settings-subtitle">{{ groupMembers.length }} 人</div>
-            <div v-if="groupMembersTotalPages > 1" class="mc-group-member-pager">
-              <button type="button" :disabled="groupMembersPage <= 1" @click="goGroupMembersPrev">
-                上一页
-              </button>
-              <span>{{ groupMembersPage }}/{{ groupMembersTotalPages }}</span>
-              <button
-                type="button"
-                :disabled="groupMembersPage >= groupMembersTotalPages"
-                @click="goGroupMembersNext"
-              >
-                下一页
-              </button>
+            <div class="mc-group-member-pager">
+              <AppPagination
+                v-model:current-page="groupMembersPage"
+                size="small"
+                :total="groupMembersTotal"
+                :page-size="4"
+                :pager-count="5"
+                :show-jumper="false"
+                @current-change="onGroupMembersPageChange"
+              />
             </div>
           </div>
         </div>
@@ -915,14 +1236,6 @@
               class="mc-member-actions"
             >
               <button
-                v-if="groupAdminManageMode"
-                type="button"
-                class="mc-member-action"
-                @click.stop="toggleGroupAdminRole(member)"
-              >
-                {{ Number(member.role) === 2 ? '下管' : '设管' }}
-              </button>
-              <button
                 type="button"
                 class="mc-member-action mc-member-action--icon"
                 :class="{ 'is-muted': isMemberMuted(member) }"
@@ -932,8 +1245,14 @@
                 <span v-if="isMemberMuted(member)">🚫</span>
                 <el-icon v-else><ChatLineRound /></el-icon>
               </button>
-              <button type="button" class="mc-member-action is-danger" @click.stop="removeMember(member)">
-                移除
+              <button
+                type="button"
+                class="mc-member-action mc-member-action--trash"
+                title="移除成员"
+                aria-label="移除成员"
+                @click.stop="removeMember(member)"
+              >
+                <Trash2 :size="16" />
               </button>
             </div>
           </div>
@@ -945,32 +1264,6 @@
 
       <section v-if="isCurrentGroupOwner" class="mc-group-settings-section">
         <div class="mc-group-form">
-          <div class="mc-group-field">
-            <span class="mc-group-field-label">群昵称：</span>
-            <div class="mc-group-name-row">
-              <el-input
-                v-model="groupEditForm.name"
-                maxlength="24"
-                show-word-limit
-                placeholder="群名称"
-              />
-              <input
-                ref="groupAvatarInputRef"
-                type="file"
-                class="mc-hidden-file"
-                accept="image/jpeg,image/png,image/gif"
-                @change="onGroupAvatarFileChange"
-              >
-              <button
-                type="button"
-                class="mc-group-avatar-upload-btn"
-                :disabled="uploadingGroupAvatar"
-                @click="triggerGroupAvatarUpload"
-              >
-                {{ uploadingGroupAvatar ? '上传中' : '修改群头像' }}
-              </button>
-            </div>
-          </div>
           <div class="mc-group-field">
             <span class="mc-group-field-label">免打扰：</span>
             <div class="mc-group-notify-toggle">
@@ -1018,24 +1311,26 @@
             />
             <span class="mc-group-intro-count">{{ groupEditForm.intro.length }} / 120</span>
           </div>
-          <button
-            type="button"
-            class="mc-dialog-action mc-dialog-action--primary mc-group-save-btn"
-            :disabled="savingGroupEdit"
-            @click="submitGroupEdit"
-          >
-            {{ savingGroupEdit ? '保存中' : '保存' }}
-          </button>
+          <div class="mc-group-owner-actions">
+            <button type="button" class="mc-group-danger-btn" @click="dissolveCurrentGroup">解散群聊</button>
+            <button
+              type="button"
+              class="mc-dialog-action mc-dialog-action--primary mc-group-save-btn"
+              :disabled="savingGroupEdit"
+              @click="submitGroupEdit"
+            >
+              {{ savingGroupEdit ? '保存中' : '保存' }}
+            </button>
+          </div>
+          <p class="mc-group-created-at">
+            此群建立于 {{ formatGroupCreatedDate(currentGroupSession?.createTime) }}
+          </p>
         </div>
       </section>
 
       <section v-else class="mc-group-settings-section">
         <div class="mc-group-readonly-profile">
           <div class="mc-group-readonly-grid">
-            <div class="mc-group-readonly-row">
-              <span>群名称：</span>
-              <strong>{{ currentGroupSession?.groupName || currentGroupSession?.name || '群聊' }}</strong>
-            </div>
             <div class="mc-group-readonly-row">
               <span>公开性：</span>
               <strong>{{ groupTypeLabel(currentGroupSession?.groupType) }}</strong>
@@ -1080,41 +1375,60 @@
         </div>
       </section>
 
-      <section class="mc-group-danger-zone">
+      <section v-if="!isCurrentGroupOwner" class="mc-group-danger-zone">
         <button
-          v-if="isCurrentGroupOwner"
-          type="button"
-          class="mc-group-danger-btn"
-          @click="dissolveCurrentGroup"
-        >
-          解散群聊
-        </button>
-        <button
-          v-else
           type="button"
           class="mc-group-danger-btn"
           @click="leaveCurrentGroup"
         >
           退出群聊
         </button>
+        <p class="mc-group-created-at">
+          此群建立于 {{ formatGroupCreatedDate(currentGroupSession?.createTime) }}
+        </p>
       </section>
-    </div>
-  </el-dialog>
+          </div>
+        </aside>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <ReportReasonDialog
+    v-model:visible="chatReportDialogVisible"
+    title="举报消息"
+    :submitting="chatReportSubmitting"
+    @submit="confirmChatMessageReport"
+  />
 </template>
 
 <script setup>
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import ReportReasonDialog from '@/components/common/ReportReasonDialog.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useMessageView } from '@scripts/views/MessageView'
 
 const {
+  AtSign,
   ArrowLeft,
   ArrowRight,
+  albumGridColumns,
+  albumPreviewImages,
+  albumPreviewIndex,
+  albumPreviewVisible,
   ChatLineRound,
   ChatLineSquare,
+  Delete,
+  RefreshLeft,
+  Back,
   Close,
   Document,
-  Picture,
-  Phone,
+  ImageIcon,
+  LoaderCircle,
+  RotateCcw,
+  ShieldCheck,
+  Smile,
+  Trash2,
+  Promotion,
   Plus,
   Search,
   Setting,
@@ -1122,14 +1436,30 @@ const {
   activeJoinRequests,
   activeSystemMessages,
   activeTab,
+  notificationSearch,
+  notificationPage,
+  notificationTotal,
+  JOIN_REQUEST_PAGE_SIZE,
+  SYSTEM_NOTIFY_PAGE_SIZE,
+  onNotificationPageChange,
+  onComposerKeydown,
+  enterToSendEnabled,
   activeChatSubtitle,
   activeChatTitle,
+  emojiPersonEmptyUrl,
+  chatUnselectUrl,
+  chatReportDialogVisible,
+  chatReportSubmitting,
+  searchChatEmptyUrl,
   autoResizeInput,
   bubbleAvatar,
   bubbleImageStyle,
   bubbleVipExpireAt,
   bubbleVipTier,
   canFavoriteChatImage,
+  canRecallMessage,
+  canRecallGroupMessage,
+  canShowGroupMessageActions,
   canRespondGroupInvite,
   chatEmojiStore,
   chatImageInput,
@@ -1147,31 +1477,29 @@ const {
   favoriteChatImage,
   favoriteEmojis,
   favoritePage,
-  favoritePageInput,
-  favoriteTotalPages,
+  FAVORITES_PAGE_SIZE,
+  favoritePagerTotal,
   filteredMentionMembers,
-  goGroupMembersNext,
-  goGroupMembersPrev,
-  goMentionMembersNext,
-  goMentionMembersPrev,
-  goOwnedGroupNext,
-  goOwnedGroupPrev,
+  onGroupMembersPageChange,
+  onGroupAdminPageChange,
+  onMentionMembersPageChange,
+  onOwnedGroupPageChange,
   focusedConvKey,
+  formatGroupCreatedDate,
   formatSessionTime,
   formatJoinRequestTime,
   formatTime,
-  goFavoriteFirst,
-  goFavoriteNext,
-  goFavoritePrev,
-  groupAdminManageMode,
+  onFavoritePageChange,
+  groupAdminVisible,
+  groupAdminMembers,
+  groupAdminSearch,
+  groupAdminPage,
+  groupAdminTotal,
+  groupAdminLoading,
+  groupAdminUpdatingId,
   groupAvatarText,
   groupAvatarUrl,
-  groupVoiceEntryText,
-  handleAcceptPrivateVoice,
   handleClose,
-  handleDeclinePrivateVoice,
-  handleGroupVoiceEntry,
-  handleVoiceEntry,
   handleRecall,
   inputBoxRef,
   isActiveItem,
@@ -1179,19 +1507,24 @@ const {
   isCurrentGroupManager,
   isMemberMuted,
   isMediaMessage,
+  isAlbumMessage,
   isEmojiShopGroupMedia,
-  isVoiceCallMessage,
+  isEmojiShopMessage,
   isGroupInviteCard,
+  isRecalledMessage,
   isPrivateChat,
   leaveCurrentGroup,
   listItems,
+  privateSearchEmpty,
+  hiddenManagementMode,
+  textSearchLoading,
   memberDisplayName,
   memberMuteLabel,
   memberRoleLabel,
   ownedGroupInviteVisible,
   ownedGroupSearch,
   ownedGroupPage,
-  ownedGroupTotalPages,
+  ownedGroupTotal,
   ownedGroups,
   ownedGroupsLoading,
   ownedGroupMemberText,
@@ -1207,21 +1540,28 @@ const {
   onDialogOpened,
   onEmojiPopoverShow,
   onEmojiTabChange,
-  jumpFavoritePage,
-  jumpUploadedPage,
   onPackBarScroll,
   onEmojiStickerFileChange,
   onGroupAvatarFileChange,
   onGroupIntroInput,
+  onGroupAdminSearchInput,
+  onGroupMemberSearchInput,
+  onMentionSearchInput,
   openMentionPicker,
   openOwnedGroupInvitePicker,
   toggleMentionPicker,
-  toggleGroupAdminManageMode,
+  toggleGroupAdminPicker,
   toggleGroupAdminRole,
   openArticleFromSystem,
   openGroupMemberProfile,
   openMessageSenderProfile,
   openPeerProfile,
+  openEmojiShopFromMessage,
+  openAlbumPreview,
+  hidePrivateSession,
+  restorePrivateSession,
+  toggleHiddenManagement,
+  highlightSegments,
   openGroupSettings,
   packBarCanScrollLeft,
   packBarCanScrollRight,
@@ -1230,15 +1570,15 @@ const {
   paginatedGroupMembers,
   paginatedMentionMembers,
   paginatedUploaded,
+  pendingAlbumFiles,
+  retryPendingAlbum,
+  deletePendingAlbum,
+  removePendingAlbumFile,
   removeEmojiKeepPopover,
+  rememberBubbleNaturalSize,
   showUploadOnCurrentPage,
-  showGroupVoiceEntry,
-  showPrivateVoiceAnswerActions,
-  showVoiceEntry,
-  voiceEntryActive,
-  voiceEntryText,
-  voiceCallDurationText,
   parseSystemMessageContent,
+  systemNotifyCardTitle,
   peerOnline,
   groupAvatarInputRef,
   groupCreateForm,
@@ -1249,21 +1589,22 @@ const {
   groupListError,
   groupListLoading,
   groupMembers,
+  groupMembersTotal,
+  groupMemberSearch,
   groupMembersPage,
   groupMembersLoading,
-  groupMembersTotalPages,
   groupNotifyOptions,
   groupRemarkForm,
   groupInviteInfo,
   groupInviteStatusText,
   groupSettingsVisible,
+  groupSettingsPortalReady,
   groupTypeSwitchLocked,
   removeMember,
   approveJoinRequestItem,
   rejectJoinRequestItem,
   acceptInviteCard,
   declineInviteCard,
-  reportGroupMessage,
   replyTarget,
   savingGroupEdit,
   savingGroupRemark,
@@ -1283,6 +1624,9 @@ const {
   submitGroupEdit,
   submitGroupRemark,
   startReply,
+  canReportChatMessage,
+  submitChatMessageReport,
+  confirmChatMessageReport,
   switchGroupType,
   setGroupNotifyMode,
   sendContent,
@@ -1301,18 +1645,18 @@ const {
   triggerChatImagePick,
   triggerEmojiStickerPick,
   beforeCloseGroupSettings,
+  requestCloseGroupSettings,
   clearReplyTarget,
   mentionMembersPage,
-  mentionMembersTotalPages,
+  mentionMembersTotal,
+  MENTION_PAGE_SIZE,
   mentionPopoverVisible,
   mentionSearch,
   uploadedEmojis,
   uploadedPage,
-  uploadedPageInput,
-  uploadedTotalPages,
-  goUploadedFirst,
-  goUploadedNext,
-  goUploadedPrev,
+  uploadedPendingSlots,
+  uploadedPagerTotal,
+  onUploadedPageChange,
   userStore,
   uploadingGroupAvatar,
   viewerIsVip,

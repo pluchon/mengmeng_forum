@@ -1,0 +1,54 @@
+/* append-to-body 弹窗：非 scoped；不要动 margin/定位，否则会破坏居中 */
+.checkin-log-dialog.el-dialog {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
+}
+
+.checkin-log-dialog .el-dialog__header {
+  margin-right: 0;
+  padding: 16px 20px 8px;
+  text-align: center;
+}
+
+.checkin-log-dialog .el-dialog__title {
+  color: #584653;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.checkin-log-dialog .el-dialog__body {
+  padding: 8px 20px 16px;
+  box-sizing: border-box;
+}
+
+.checkin-log-dialog .checkin-log-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 固定 10 行高度，少页时分页位置不变 */
+.checkin-log-dialog .checkin-log-table-wrap {
+  height: 420px;
+  overflow: hidden;
+}
+
+.checkin-log-dialog .checkin-log-table {
+  width: 100%;
+  height: 420px !important;
+}
+
+.checkin-log-dialog .checkin-log-pager {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding-top: 8px;
+}
+
+.checkin-log-dialog .checkin-log-table .el-table__header th .cell,
+.checkin-log-dialog .checkin-log-table .el-table__body td .cell {
+  text-align: center;
+  justify-content: center;
+}

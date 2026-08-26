@@ -15,4 +15,7 @@ public class LotteryDrawDTO {
 
     @Schema(description = "客户端幂等键，同一抽奖请求重试必须复用")
     private String requestId;
+
+    @Schema(description = "是否自动使用抵扣券，默认 true")
+    private Boolean useVoucher;
 }

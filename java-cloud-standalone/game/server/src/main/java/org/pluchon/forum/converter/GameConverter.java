@@ -6,7 +6,7 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameJinziMatchRecord;
 import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.service.impl.game.GameConstants;
 import org.pluchon.forum.entity.vo.game.GameDefinitionVO;
 import org.pluchon.forum.entity.vo.game.GameMatchRecordVO;

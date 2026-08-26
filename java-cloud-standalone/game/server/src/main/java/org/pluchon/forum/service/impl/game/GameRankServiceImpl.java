@@ -21,8 +21,12 @@ import org.pluchon.forum.mapper.GameUserProfileMapper;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.Duration;
 
 // 游戏排位结算服务，统一处理真人对局与五子棋人机对局的段位分变化
 @Service
@@ -43,6 +47,9 @@ public class GameRankServiceImpl implements GameRankService {
     @Autowired
     private GameTetrisPkMatchRecordMapper gameTetrisPkMatchRecordMapper;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public GameRankInfoVO buildRankInfo(String gameCode, Integer score) {
         return GameRankRules.buildRankInfo(gameCode, score);
@@ -52,6 +59,10 @@ public class GameRankServiceImpl implements GameRankService {
     @Transactional(rollbackFor = Exception.class)
     public GameRankSettlementResult settleRank(GameRankSettlementCommand command) {
         validateCommand(command);
+        if (!claimSettlementOnce(command)) {
+            // 同房间已结算过：返回空变化，避免重复加减分
+            return new GameRankSettlementResult(false, false, null, null);
+        }
         if (isAiMatch(command)) {
             return settleGobangAiRank(command);
         }
@@ -88,6 +99,16 @@ public class GameRankServiceImpl implements GameRankService {
         }
     }
 
+    // 同房间排位只结算一次；无 roomId 时跳过（兼容旧调用）
+    private boolean claimSettlementOnce(GameRankSettlementCommand command) {
+        if (!StringUtils.hasText(command.getRoomId())) {
+            return true;
+        }
+        String key = "forum:game:rank-settle:" + command.getGameCode().trim() + ":" + command.getRoomId().trim();
+        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofDays(7));
+        return Boolean.TRUE.equals(first);
+    }
+
     private boolean isAiMatch(GameRankSettlementCommand command) {
         return GameConstants.AI_USER_ID.equals(command.getPlayerAUserId())
                 || GameConstants.AI_USER_ID.equals(command.getPlayerBUserId());
@@ -110,16 +131,16 @@ public class GameRankServiceImpl implements GameRankService {
         boolean humanWon = humanUserId.equals(command.getWinnerUserId());
         boolean effective = Boolean.TRUE.equals(command.getEffectiveForRank());
         if (humanWon) {
-            int normalDelta = baseWinDelta(human.getScore(), human.getScore())
-                    + streakBonus(GameConstants.GOBANG, humanUserId);
-            int delta = effective ? GameRankRules.gobangAiWeighted(normalDelta) : 0;
+            // 人机胜：固定 +12，不计连胜加成、不按 baseWin×0.8
+            int delta = effective ? 12 : 0;
             GameRankPlayerChange change = updateWinProfile(human, GameConstants.GOBANG, delta);
             return new GameRankSettlementResult(effective, false, change, null);
         }
-        int normalPenalty = isEscapeReason(command.getEndReason())
-                ? 12
-                : baseLosePenalty(human.getScore(), human.getScore());
-        int delta = effective ? -GameRankRules.gobangAiWeighted(normalPenalty) : 0;
+        // 人机负：正常失败 0；逃跑/断线/超时 -10
+        int delta = 0;
+        if (effective && isEscapeReason(command.getEndReason())) {
+            delta = -10;
+        }
         GameRankPlayerChange change = updateLoseProfile(human, GameConstants.GOBANG, delta);
         return new GameRankSettlementResult(effective, false, null, change);
     }
@@ -127,15 +148,20 @@ public class GameRankServiceImpl implements GameRankService {
     private int computeWinnerDelta(GameRankSettlementCommand command, GameUserProfile winner, GameUserProfile loser) {
         int delta = weighted(baseWinDelta(winner.getScore(), loser.getScore()), command.getGameCode());
         delta += streakBonus(command.getGameCode(), winner.getUserId());
-        return Math.min(20, Math.max(1, delta));
+        return Math.min(40, Math.max(1, delta));
     }
 
     private int computeLoserDelta(GameRankSettlementCommand command, GameUserProfile loser, GameUserProfile winner) {
+        int loserScore = GameRankRules.normalizeScore(loser.getScore());
         if (isEscapeReason(command.getEndReason())) {
-            return -12;
+            return loserScore < 1300 ? -5 : -15;
         }
-        int penalty = weighted(baseLosePenalty(loser.getScore(), winner.getScore()), command.getGameCode());
-        return -Math.min(15, Math.max(1, penalty));
+        if (loserScore < 1300) {
+            // 青铜段位保护：正常失败不扣分
+            return 0;
+        }
+        int penalty = weighted(baseLosePenalty(loserScore, winner.getScore()), command.getGameCode());
+        return -Math.min(20, Math.max(1, penalty));
     }
 
     private int weighted(int value, String gameCode) {
@@ -145,51 +171,51 @@ public class GameRankServiceImpl implements GameRankService {
     private int baseWinDelta(Integer winnerScore, Integer loserScore) {
         int diff = GameRankRules.segment(loserScore) - GameRankRules.segment(winnerScore);
         if (diff >= 2) {
-            return 16;
+            return 30;
         }
         if (diff == 1) {
-            return 14;
+            return 28;
         }
         if (diff == -1) {
-            return 10;
+            return 22;
         }
         if (diff <= -2) {
-            return 8;
+            return 18;
         }
-        return 12;
+        return 22;
     }
 
     private int baseLosePenalty(Integer loserScore, Integer winnerScore) {
         int diff = GameRankRules.segment(winnerScore) - GameRankRules.segment(loserScore);
         if (diff >= 2) {
-            return 5;
+            return 12;
         }
         if (diff == 1) {
-            return 6;
-        }
-        if (diff == -1) {
-            return 9;
-        }
-        if (diff <= -2) {
             return 11;
         }
-        return 8;
+        if (diff == -1) {
+            return 8;
+        }
+        if (diff <= -2) {
+            return 6;
+        }
+        return 10;
     }
 
     private int streakBonus(String gameCode, Long userId) {
         int previousWins = consecutiveWins(gameCode, userId);
         int currentStreak = previousWins + 1;
         if (currentStreak >= 5) {
-            return 4;
+            return 8;
         }
         if (currentStreak == 4) {
-            return 3;
+            return 6;
         }
         if (currentStreak == 3) {
-            return 2;
+            return 4;
         }
         if (currentStreak == 2) {
-            return 1;
+            return 2;
         }
         return 0;
     }
@@ -254,7 +280,7 @@ public class GameRankServiceImpl implements GameRankService {
                 .eq(GameUserProfile::getId, id)
                 .eq(GameUserProfile::getUserId, userId)
                 .eq(GameUserProfile::getGameCode, gameCode)
-                .eq(GameUserProfile::getDeleteState, (byte) 0);
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED);
         if (update.getCurrentRoomId() == null) {
             wrapper.set(GameUserProfile::getCurrentRoomId, null);
         }
@@ -276,7 +302,7 @@ public class GameRankServiceImpl implements GameRankService {
         if (GameConstants.GOBANG.equals(gameCode)) {
             Page<GameGobangMatchRecord> result = gameGobangMatchRecordMapper.selectPage(new Page<>(1, 20),
                     new LambdaQueryWrapper<GameGobangMatchRecord>()
-                            .eq(GameGobangMatchRecord::getDeleteState, (byte) 0)
+                            .eq(GameGobangMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                             .and(w -> w.eq(GameGobangMatchRecord::getBlackUserId, userId)
                                     .or()
                                     .eq(GameGobangMatchRecord::getWhiteUserId, userId))
@@ -284,6 +310,10 @@ public class GameRankServiceImpl implements GameRankService {
                             .orderByDesc(GameGobangMatchRecord::getId));
             int wins = 0;
             for (GameGobangMatchRecord record : result.getRecords()) {
+                // 人机对局不计入连胜
+                if (isGobangAiMatch(record)) {
+                    continue;
+                }
                 if (!userId.equals(record.getWinnerUserId())) {
                     break;
                 }
@@ -294,7 +324,7 @@ public class GameRankServiceImpl implements GameRankService {
         if (GameConstants.JINZI.equals(gameCode)) {
             Page<GameJinziMatchRecord> result = gameJinziMatchRecordMapper.selectPage(new Page<>(1, 20),
                     new LambdaQueryWrapper<GameJinziMatchRecord>()
-                            .eq(GameJinziMatchRecord::getDeleteState, (byte) 0)
+                            .eq(GameJinziMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                             .and(w -> w.eq(GameJinziMatchRecord::getBlackUserId, userId)
                                     .or()
                                     .eq(GameJinziMatchRecord::getWhiteUserId, userId))
@@ -311,7 +341,7 @@ public class GameRankServiceImpl implements GameRankService {
         }
         Page<GameTetrisPkMatchRecord> result = gameTetrisPkMatchRecordMapper.selectPage(new Page<>(1, 20),
                 new LambdaQueryWrapper<GameTetrisPkMatchRecord>()
-                        .eq(GameTetrisPkMatchRecord::getDeleteState, (byte) 0)
+                        .eq(GameTetrisPkMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                         .and(w -> w.eq(GameTetrisPkMatchRecord::getPlayer1UserId, userId)
                                 .or()
                                 .eq(GameTetrisPkMatchRecord::getPlayer2UserId, userId))
@@ -319,12 +349,27 @@ public class GameRankServiceImpl implements GameRankService {
                         .orderByDesc(GameTetrisPkMatchRecord::getId));
         int wins = 0;
         for (GameTetrisPkMatchRecord record : result.getRecords()) {
+            // 双方最高分未达 300 的对局不计入连胜
+            if (tetrisPkMaxScore(record) < 300) {
+                continue;
+            }
             if (!userId.equals(record.getWinnerUserId())) {
                 break;
             }
             wins++;
         }
         return wins;
+    }
+
+    private boolean isGobangAiMatch(GameGobangMatchRecord record) {
+        return GameConstants.AI_USER_ID.equals(record.getBlackUserId())
+                || GameConstants.AI_USER_ID.equals(record.getWhiteUserId());
+    }
+
+    private int tetrisPkMaxScore(GameTetrisPkMatchRecord record) {
+        int score1 = value(record.getPlayer1Score());
+        int score2 = value(record.getPlayer2Score());
+        return Math.max(score1, score2);
     }
 
     private int value(Integer n) {

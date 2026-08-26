@@ -23,6 +23,9 @@ public class LotteryPrizeLineVO {
 
     private Boolean jackpot;
 
-    /** 活动关联权重（加权随机）；前台用于动态概率饼图 */
+    // 活动关联权重 加权随机 ；前台用于动态概率饼图
     private Integer weight;
+
+    // 奖品封面相对路径，可空
+    private String imagePath;
 }

@@ -9,10 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * @author pluchon
- * 楼中楼回复表实体类，对应 article_sub_reply
- */
+// 楼中楼回复表实体类，对应 article_sub_reply
 @Data
 @TableName("article_sub_reply")
 @Schema(description = "楼中楼回复实体")

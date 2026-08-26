@@ -20,7 +20,7 @@ import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleImage;
 import org.pluchon.forum.entity.db.ArticleLike;
 import org.pluchon.forum.entity.db.Board;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
@@ -49,8 +49,8 @@ import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
+import org.pluchon.forum.service.interfaces.creator.CreatorDashboardService;
 import org.pluchon.forum.service.interfaces.favorite.FavoriteArticleService;
-import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,7 +87,7 @@ public class ArticleServiceImpl implements ArticleService {
     private ContentFollowLookupService userFollowService;
 
     @Autowired
-    private ContentGrowthInternalFeignClient contentGrowthInternalFeignClient;
+    private CreatorDashboardService creatorDashboardService;
 
     @Autowired
     private BoardService boardService;
@@ -101,10 +101,7 @@ public class ArticleServiceImpl implements ArticleService {
     @Autowired
     private ArticleImageMapper articleImageMapper;
 
-    /**
-     * 用 @Lazy 是为了打破 ArticleService ↔ FavoriteArticleService 之间的潜在循环依赖
-     * (后者依赖 ArticleService.selectArticleByArticleId 校验帖子合法性)
-     */
+    // 用 @Lazy 是为了打破 ArticleService ↔ FavoriteArticleService 之间的潜在循环依赖 后者依赖 ArticleService.selectArticleByArticleId 校验帖子合法性
     @Autowired
     @org.springframework.context.annotation.Lazy
     private FavoriteArticleService favoriteArticleService;
@@ -133,24 +130,19 @@ public class ArticleServiceImpl implements ArticleService {
     @Autowired
     private ContentAiGatewayService contentAiGatewayService;
 
-    /** 状态 / 删除标记：1 表示禁用 / 已删除 */
+    // 状态 / 删除标记：1 表示禁用 / 已删除
     private static final byte STATE_FORBIDDEN = 1;
     private static final byte DELETE_TRUE = 1;
     private static final byte DELETE_FALSE = 0;
     private static final int SEMANTIC_SEARCH_CANDIDATE_LIMIT = 120;
 
-    // ============================================================
+    
     // 草稿 / 发布
-    // ============================================================
-    /**
-     * 创建草稿. 异步审核版本: 此处不再调用同步 AI 文本审核,
-     * 内容合规检查统一推迟到 submitForAudit 时由 LangGraph 集中完成,
-     * 避免 createDraft -> submitForAudit 走两次 LLM 调用浪费.
-     */
+    
+    // 创建草稿. 异步审核版本: 此处不再调用同步 AI 文本审核, 内容合规检查统一推迟到 submitForAudit 时由 LangGraph 集中完成, 避免 createDraft > submitForAudit 走两次 LLM 调用浪费.
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createDraft(PublishArticleRequest req, Long userId) {
-        contentGrowthInternalFeignClient.requireFormalUser(userId);
         ArticleType articleType = ArticleType.fromCode(req.getArticleType());
         if (articleType == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
@@ -178,15 +170,10 @@ public class ArticleServiceImpl implements ArticleService {
         return add.getId();
     }
 
-    /**
-     * 异步审核版本的发布:
-     *  - 仅允许 APPROVED 状态 -> PUBLISHED (即"审核通过后用户手动点发布")
-     *  - 若想直接发布草稿, 请改用 submitForAudit (内部默认自动发布)
-     */
+    // 异步审核版本的发布: 仅允许 APPROVED 状态 > PUBLISHED 即 审核通过后用户手动点发布 若想直接发布草稿, 请改用 submitForAudit 内部默认自动发布
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publishArticle(Long articleId, Long userId) {
-        contentGrowthInternalFeignClient.requireFormalUser(userId);
         Article article = selectArticleByArticleId(articleId);
         if (!Objects.equals(article.getUserId(), userId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
@@ -217,9 +204,9 @@ public class ArticleServiceImpl implements ArticleService {
         articleSearchIndexService.syncPublishedArticle(articleId);
     }
 
-    // ============================================================
+    
     // 详情
-    // ============================================================
+    
     @Override
     public ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId) {
         if (articleId == null || articleId <= 0) {
@@ -230,10 +217,13 @@ public class ArticleServiceImpl implements ArticleService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
         if (articleMapper.update(null, new LambdaUpdateWrapper<Article>()
-                .eq(Article::getId, articleId).setSql("visit_count = visit_count + 1")) > 0) {
+                .eq(Article::getId, articleId)
+                // 显式锁住 update_time，避免 ON UPDATE CURRENT_TIMESTAMP 把浏览当成内容更新
+                .setSql("visit_count = visit_count + 1, update_time = update_time")) > 0) {
             articleInfo.setVisitCount(articleInfo.getVisitCount() + 1);
             if (ArticleStatus.isPublished(articleInfo.getStatus())) {
                 articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_VISIT);
+                creatorDashboardService.recordRead(articleInfo.getUserId());
             }
         }
         UserInternalVO userInfo = userInternalLookupService.getUserInfoById(articleInfo.getUserId());
@@ -277,9 +267,9 @@ public class ArticleServiceImpl implements ArticleService {
         return info;
     }
 
-    // ============================================================
+    
     // 修改
-    // ============================================================
+    
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateArticle(UpdateArticleRequest req, Long loginUserId) {
@@ -334,9 +324,9 @@ public class ArticleServiceImpl implements ArticleService {
         }
     }
 
-    // ============================================================
+    
     // 删除
-    // ============================================================
+    
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteArticle(Long articleId, Long loginUserId) {
@@ -370,9 +360,9 @@ public class ArticleServiceImpl implements ArticleService {
         log.info("帖子 {} 已逻辑删除并从热帖榜单移除", articleId);
     }
 
-    // ============================================================
+    
     // 回复数维护
-    // ============================================================
+    
     @Override
     public void addReply(Long articleId) {
         selectArticleByArticleId(articleId);
@@ -433,9 +423,9 @@ public class ArticleServiceImpl implements ArticleService {
         articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_REPLY);
     }
 
-    // ============================================================
+    
     // 用户主页帖子列表
-    // ============================================================
+    
     @Override
     public PageResult<ArticleBriefVO> queryArticleListByUserIdWithPage(Long userId, Long loginUserId, Integer pageNum,
                                                                         Integer pageSize, Integer status, String keyword) {
@@ -451,7 +441,7 @@ public class ArticleServiceImpl implements ArticleService {
         return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
     }
 
-    // 创作中心仅在标题/正文模糊匹配为空时请求 AI 对本人的候选帖子排序，状态与归属仍由本域复查。
+    // 创作中心仅在标题/正文模糊匹配为空时请求 AI 对本人的候选帖子排序，状态与归属仍由本域复查
     private PageResult<ArticleBriefVO> querySemanticUserArticles(Long userId, Integer status, String keyword,
                                                                   int pageNum, int pageSize) {
         List<Article> candidates = articleMapper.selectPage(
@@ -509,7 +499,10 @@ public class ArticleServiceImpl implements ArticleService {
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<Article> page = buildUserArticlePage(userId, validPageNum, validPageSize);
         boolean isOwner = Objects.equals(userId, loginUserId);
-        Page<Article> result = articleMapper.selectPage(page, buildUserArticleWrapper(userId, isOwner, null, null));
+        // 个人主页笔记区只展示已发布；草稿/编辑中帖子归创作中心
+        Page<Article> result = articleMapper.selectPage(
+                page,
+                buildUserArticleWrapper(userId, isOwner, (int) ArticleStatus.PUBLISHED.getCode(), null));
         UserInternalVO user = userInternalLookupService.getUserInfoById(userId);
         PageResult<ArticleBriefVO> pageResult = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(),
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
@@ -542,7 +535,7 @@ public class ArticleServiceImpl implements ArticleService {
                     .or()
                     .like(Article::getContent, normalizedKeyword));
         }
-        wrapper.orderByDesc(Article::getUpdateTime);
+        wrapper.orderByDesc(Article::getCreateTime).orderByDesc(Article::getId);
         return wrapper;
     }
 
@@ -563,9 +556,9 @@ public class ArticleServiceImpl implements ArticleService {
         return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
     }
 
-    // ============================================================
+    
     // 热帖榜
-    // ============================================================
+    
     @Override
     public List<Long> getHotArticleList(Integer topN) {
         return articleHotRankingService.getHotArticleList(topN);
@@ -581,6 +574,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
         List<Long> rankedIds = idPage.getRecords();
         Map<Long, HotArticleTrendDirection> trendDirections = articleHotRankingService.getTrendDirections(rankedIds);
+        Map<Long, Double> hotScores = articleHotRankingService.getHotScores(rankedIds);
         Map<Long, Article> articleMap = articleMapper.selectList(new LambdaQueryWrapper<Article>()
                         .in(Article::getId, rankedIds)
                         .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
@@ -613,6 +607,11 @@ public class ArticleServiceImpl implements ArticleService {
             item.setArticle(ArticleConverter.toBriefVO(article));
             item.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
             item.setFromFollowing(followingIds.contains(article.getUserId()));
+            Double score = hotScores.get(article.getId());
+            if (score == null) {
+                score = articleHotRankingService.computeHotScore(article);
+            }
+            item.setHotScore(score);
             item.setTrendDirection(trendDirections.getOrDefault(article.getId(), HotArticleTrendDirection.STABLE));
             records.add(item);
         }
@@ -625,9 +624,9 @@ public class ArticleServiceImpl implements ArticleService {
         articleHotRankingService.rebuildHotArticleRanking();
     }
 
-    // ============================================================
+    
     // AI 摘要 + 内容审核
-    // ============================================================
+    
     @Override
     public String getArticleSummary(Long articleId) {
         String cacheKey = Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId;
@@ -704,9 +703,9 @@ public class ArticleServiceImpl implements ArticleService {
         return validateContentResult(content);
     }
 
-    // ============================================================
-    // 封面 / 相册 / 视频（委托 ArticleMediaService）
-    // ============================================================
+    
+    // 封面 / 相册 / 视频 委托 ArticleMediaService
+    
     @Override
     public void updateArticleCoverByUrl(Long articleId, String coverUrl, Long loginUserId) {
         articleMediaService.updateArticleCoverByUrl(articleId, coverUrl, loginUserId);
@@ -728,13 +727,26 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
+    public void setArticleMusic(Long articleId, Long loginUserId,
+                                String musicKey, String musicTitle,
+                                String musicCoverUrl, String musicAudioUrl, String musicLrcUrl) {
+        articleMediaService.setArticleMusic(articleId, loginUserId,
+                musicKey, musicTitle, musicCoverUrl, musicAudioUrl, musicLrcUrl);
+    }
+
+    @Override
+    public void clearArticleMusic(Long articleId, Long loginUserId) {
+        articleMediaService.clearArticleMusic(articleId, loginUserId);
+    }
+
+    @Override
     public List<String> queryArticleImageUrls(Long articleId) {
         return articleMediaService.queryArticleImageUrls(articleId);
     }
 
-    // ============================================================
-    // 异步审核（委托 ArticleAuditService）
-    // ============================================================
+    
+    // 异步审核 委托 ArticleAuditService
+    
     @Override
     public String submitForAudit(Long articleId, Long loginUserId) {
         return articleAuditService.submitForAudit(articleId, loginUserId);

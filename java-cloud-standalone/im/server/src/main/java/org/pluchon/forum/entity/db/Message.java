@@ -8,9 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 站内信表实体类，对应 message
- */
+// 站内信表实体类，对应 message
 @Data
 @TableName("message")
 @Schema(description = "站内信实体")
@@ -26,10 +24,10 @@ public class Message {
     @Schema(description = "接收者用户ID", example = "20")
     private Long receiveUserId;
 
-    @Schema(description = "消息类型: 0文本 1图片 2GIF 3语音通话摘要", example = "0")
+    @Schema(description = "消息类型: 0文本 1图片 2GIF 4图集", example = "0")
     private Byte messageType;
 
-    @Schema(description = "文本内容(图片/GIF 消息为 null)", example = "你好，欢迎来到论坛！")
+    @Schema(description = "文本内容；单图/GIF 为空，图集可保存说明文字", example = "你好，欢迎来到论坛！")
     private String content;
 
     @Schema(description = "媒体URL(OSS); 文本消息为 null", example = "https://oss/.../xxx.jpg")

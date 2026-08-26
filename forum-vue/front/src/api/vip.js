@@ -12,7 +12,6 @@ export function getVipQuota() {
   return request({ url: '/vip/quota', method: 'get' })
 }
 
-/** @param {{ tier: 1 | 2 }} data */
-export function vipSubscribe(data) {
-  return request({ url: '/vip/subscribe', method: 'post', data })
+export function getVipPurchaseRecords(params) {
+  return request({ url: '/vip/purchase-records', method: 'get', params })
 }

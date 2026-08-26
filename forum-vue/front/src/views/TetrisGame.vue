@@ -50,6 +50,14 @@
               <strong>本局结束</strong>
               <el-button class="tetris-btn-star" :icon="RefreshRight" @click="restartGame">再来一局</el-button>
             </div>
+            <div
+              v-if="engine.comboFlash.value >= 2"
+              class="tetris-combo-flash"
+              :class="{ 'is-triple': engine.comboFlash.value >= 3 }"
+              aria-hidden="true"
+            >
+              ×{{ engine.comboFlash.value }}
+            </div>
           </div>
         </section>
 
@@ -71,7 +79,7 @@
             >
               {{ engine.pause.value ? '继续' : '暂停' }}
             </el-button>
-            <el-button size="large" :icon="RefreshRight" @click="restartGame">重开</el-button>
+            <el-button class="tetris-btn-star" size="large" :icon="RefreshRight" @click="restartGame">重开</el-button>
           </div>
 
           <div class="tetris-rail-card tetris-keys tetris-keys--relaxed">
@@ -105,7 +113,7 @@
 
     <el-dialog
       v-model="gameOverVisible"
-      width="400px"
+      width="440px"
       align-center
       :show-close="false"
       :close-on-click-modal="false"
@@ -113,23 +121,26 @@
     >
       <div class="tetris-over-card">
         <h2 class="tetris-over-title">游戏结束</h2>
+        
         <div class="tetris-over-body">
-          <div class="tetris-over-row">
-            <span>本局得分</span>
-            <span class="tetris-over-row-value">{{ engine.points.value }}</span>
+          <div v-if="settleResult && settleResult.newBest" class="tetris-over-best-tag">
+            <span class="best-shimmer" />
+            ★ NEW 刷新个人纪录
+          </div>
+          <div class="tetris-over-score-center">
+            <span class="tetris-over-score-label">本局得分</span>
+            <strong class="tetris-over-score-number">{{ engine.points.value }}</strong>
           </div>
           <p v-if="settling" class="tetris-over-saving">成绩保存中…</p>
-          <template v-else-if="settleResult">
-            <div class="tetris-over-row">
-              <span>论坛积分</span>
-              <span class="tetris-over-row-value">+{{ settleResult.forumPointsAwarded ?? 0 }}</span>
-            </div>
-            <p v-if="settleResult.newBest" class="tetris-over-best">刷新个人最高分！</p>
-          </template>
         </div>
+
         <div class="tetris-over-actions">
-          <el-button class="tetris-btn-star" type="primary" @click="restartGame">再来一局</el-button>
-          <el-button class="tetris-over-close" @click="backCenter">返回游戏中心</el-button>
+          <el-button class="tetris-btn-star tetris-action-btn primary-btn" type="primary" @click="restartGame">
+            再来一局
+          </el-button>
+          <el-button class="tetris-over-close tetris-action-btn ghost-btn" @click="backCenter">
+            返回游戏中心
+          </el-button>
         </div>
       </div>
     </el-dialog>

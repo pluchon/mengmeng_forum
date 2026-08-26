@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { useRouter } from 'vue-router'
 import { Plus, Lock, Unlock, Delete, Edit } from '@element-plus/icons-vue'
 import {
@@ -93,7 +94,7 @@ export function useFavorites() {
   async function removeFolder(folder) {
     if (!folder?.id) return
     if (Number(folder.isDefault) === 1) return
-    await ElMessageBox.confirm(`确定删除收藏夹「${folder.name || ''}」吗？（夹内收藏也会一起移除）`, '提示', {
+    await confirmDialog(`确定删除收藏夹「${folder.name || ''}」吗？（夹内收藏也会一起移除）`, '提示', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消',

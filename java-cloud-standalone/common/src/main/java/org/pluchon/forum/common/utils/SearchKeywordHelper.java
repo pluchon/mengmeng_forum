@@ -9,17 +9,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 轻量检索词扩展：分词 + 同义/近义联动（与 ai-server/rag/keyword_expand.py 主题表保持一致）.
- * 轻量检索词扩展：分词 + 同义/近义联动（与 ai-server/rag/keyword_expand.py 主题表保持一致）.
- * 站内倒排索引与 MySQL 回退检索共用本工具类.
- */
+// 检索词扩展与同义词映射工具
 public final class SearchKeywordHelper {
 
     private static final int MAX_QUERY_TERMS = 12;
     private static final int MAX_INDEX_TERMS = 14;
 
-    // 主题 → 扩展短语（双向联动：搜「川西」也会带上「四川」等）
+    // 主题与扩展短语映射
     private static final Map<String, List<String>> TOPIC_EXPANSIONS = Map.ofEntries(
             Map.entry("四川", List.of("四川", "川西", "四川西部", "川西高原", "甘孜", "阿坝")),
             Map.entry("川西", List.of("四川", "四川西部", "川西高原", "甘孜", "阿坝")),
@@ -42,9 +38,7 @@ public final class SearchKeywordHelper {
     private SearchKeywordHelper() {
     }
 
-    /**
-     * 生成用于 LIKE 检索的词表：原词、标点分词、同义扩展，去重且限长.
-     */
+    // 生成检索词表
     public static List<String> expandTerms(String keyword) {
         if (!StringUtils.hasText(keyword)) {
             return List.of();
@@ -71,9 +65,7 @@ public final class SearchKeywordHelper {
         return out;
     }
 
-    /**
-     * 入库倒排用词：标题分词 + 同义扩展 + 标签，限长.
-     */
+    // 构建倒排索引词表
     public static List<String> buildIndexTerms(String title, List<String> tagNames) {
         Set<String> raw = new LinkedHashSet<>();
         if (StringUtils.hasText(title)) {
@@ -108,6 +100,7 @@ public final class SearchKeywordHelper {
         return out;
     }
 
+    // 归一化词条
     public static String normalizeTerm(String term) {
         if (!StringUtils.hasText(term)) {
             return "";
@@ -115,7 +108,19 @@ public final class SearchKeywordHelper {
         return term.trim().toLowerCase(Locale.ROOT);
     }
 
-    /** 字面相关度：标题命中权重高于正文，用于普通搜索页内排序 */
+    // AI 检索轻清洗：去掉尾部纯数字噪声（如「饿了66666」→「饿了」），避免向量/分词被噪声拖偏
+    public static String sanitizeAiSearchQuery(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return "";
+        }
+        String q = keyword.trim();
+        String cleaned = q.replaceAll("(?<=[\\u4e00-\\u9fa5A-Za-z])\\d{3,}$", "");
+        cleaned = cleaned.replaceAll("[\\s_~`!@#$%^&*+=|\\\\/;:\"'<>,.?。！？～]{2,}$", "");
+        cleaned = cleaned.trim();
+        return cleaned.isEmpty() ? q : cleaned;
+    }
+
+    // 计算字面相关度得分
     public static int literalRelevanceScore(String title, String plainContent, List<String> terms) {
         if (terms == null || terms.isEmpty()) {
             return 0;
@@ -138,6 +143,7 @@ public final class SearchKeywordHelper {
         return score;
     }
 
+    // 按标点拆分
     private static List<String> splitByPunctuation(String kw) {
         String[] parts = kw.split("[\\s,，、；;|/\\\\]+");
         List<String> out = new ArrayList<>();
@@ -153,6 +159,7 @@ public final class SearchKeywordHelper {
         return out;
     }
 
+    // 追加同义词
     private static void appendSynonyms(String query, Set<String> terms) {
         String lower = query.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, List<String>> entry : TOPIC_EXPANSIONS.entrySet()) {

@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.remote;
 
 import org.pluchon.forum.economy.client.EconomyAiHubInternalFeignClient;
-import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
+import org.pluchon.forum.entity.dto.RagEmojiIndexDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

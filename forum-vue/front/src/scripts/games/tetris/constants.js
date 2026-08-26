@@ -24,7 +24,28 @@ export const speeds = [800, 650, 500, 370, 250, 160]
 
 export const clearPoints = [100, 300, 700, 1500]
 
+// 四消固定加分，与 PK 服务端 TetrisEngineConstants 一致
+export const tetrisBonus = 200
+
 export const eachLines = 20
+
+/** 连击加成百分比：第 2 次 +10%，第 3 次 +15%，第 4 次起 +20%（封顶） */
+export function comboBonusPercent(comboCount) {
+  if (comboCount >= 4) return 20
+  if (comboCount === 3) return 15
+  if (comboCount === 2) return 10
+  return 0
+}
+
+/** 单次消行得分（含连击与四消奖励），comboCount 为本次消行后的连击数 */
+export function calcClearScore(lineCount, comboCount) {
+  if (lineCount <= 0 || lineCount > clearPoints.length) return 0
+  const base = clearPoints[lineCount - 1]
+  const bonus = Math.floor((base * comboBonusPercent(comboCount)) / 100)
+  let score = base + bonus
+  if (lineCount === 4) score += tetrisBonus
+  return score
+}
 
 export const blankLine = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 

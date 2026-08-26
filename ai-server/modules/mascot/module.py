@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Iterator
 from typing import Any
 
+from pydantic import BaseModel, Field
+
+from clients.dashscope_chat_client import json_chat_completion
+from clients.llm import flash_model_name
 from config import settings
 from graphs.mascot_graph import run_mascot_chat, stream_mascot_chat
 from graphs.mascot_context_graph import compress_mascot_context
@@ -34,7 +39,9 @@ class MascotChatModule:
                 "complexity": result.get("complexity") or "SIMPLE",
                 "relatedSearchOffer": bool(result.get("related_search_offer")),
                 "relatedSearchQuery": result.get("related_search_query") or "",
+                "askConfirmOffer": result.get("ask_offer") or {},
                 "searchImageGallery": result.get("search_image_gallery") or [],
+                "memoryWrite": result.get("memory_write") or {},
             },
             usage=result.get("usage") or {},
         )
@@ -67,6 +74,52 @@ class MascotContextCompressModule:
         return ModuleResult(success=True, data={"summary": summary}, usage=result.get("usage") or {})
 
 
+class MascotMemoryEditPayload(BaseModel):
+    summary: str = Field(default="", max_length=240)
+    facts: list[str] = Field(default_factory=list, max_length=10)
+
+
+class MascotMemoryEditModule:
+    """看板娘长期记忆编辑；持久化仍由 Java 负责。"""
+
+    async def run(self, request: ModuleRequest) -> ModuleResult:
+        summary = str(request.payload.get("memory_summary") or "").strip()[:240]
+        facts = _string_list(request.payload.get("memory_facts"), 10, 40)
+        instruction = str(request.payload.get("memory_edit_instruction") or "").strip()[:200]
+        if not instruction:
+            raise ModuleRequestError("INVALID_MASCOT_MEMORY", "记忆修改内容不能为空")
+        prompt = (
+            "你是论坛看板娘的长期记忆编辑节点。只根据用户的修改指令更新一份简短长期记忆。"
+            "summary 保留稳定偏好和长期有效信息，最多 240 字；facts 最多 10 条，每条不超过 40 字。"
+            "不要写寒暄，不要把临时情绪、一次性任务、联网资料、猜测内容写进记忆。只输出合法 JSON。"
+            f"\n当前 summary：{summary or '（空）'}"
+            f"\n当前 facts：{json.dumps(facts, ensure_ascii=False)}"
+            f"\n用户指令：{instruction}"
+        )
+        raw, usage = await asyncio.to_thread(
+            json_chat_completion,
+            flash_model_name(),
+            [
+                {"role": "system", "content": "你是受控工作流节点。必须只输出一个合法 JSON 对象。"},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            timeout=120,
+        )
+        try:
+            parsed = MascotMemoryEditPayload.model_validate_json(raw)
+        except Exception as exc:
+            raise ModuleRequestError("MASCOT_MEMORY_INVALID", "记忆更新结果无效") from exc
+        return ModuleResult(
+            success=True,
+            data={
+                "summary": parsed.summary.strip()[:240],
+                "facts": _string_list(parsed.facts, 10, 40),
+            },
+            usage=usage or {},
+        )
+
+
 def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
     message = str(raw.get("message") or "").strip()
     max_length = int(settings.mascot.get("max_user_message_len", 2000))
@@ -76,19 +129,21 @@ def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
         raise ModuleRequestError("INVALID_MASCOT_PAYLOAD", f"message 不能超过 {max_length} 字符")
     skill = str(raw.get("skill") or "chat").strip().lower()
     tier = str(raw.get("tier") or "basic").strip().lower()
-    appearance = re.sub(r"[^a-z0-9_-]", "", str(raw.get("appearance") or "snow_miku").lower())
-    client_location = _resolve_client_location(raw)
+    appearance = re.sub(r"[^a-z0-9_-]", "", str(raw.get("appearance") or "xiaomeng").lower())
     return {
         "message": message,
         "session_id": str(raw.get("sessionId") or raw.get("session_id") or ""),
-        "appearance": (appearance or "snow_miku")[:64],
+        "appearance": (appearance or "xiaomeng")[:64],
         "tier": tier if tier in _ALLOWED_TIERS else "basic",
         "history": _clean_history(raw.get("history"), max_length),
         "llm_provider": str(raw.get("llmProvider") or raw.get("llm_provider") or "").strip(),
         "skill": skill if skill in _ALLOWED_SKILLS else "chat",
         "vip_tier": _parse_vip_tier(raw.get("vipTier", raw.get("vip_tier", 0))),
         "client_datetime": str(raw.get("clientDatetime") or raw.get("client_datetime") or "").strip()[:64],
-        "client_location": client_location,
+        "memory_summary": str(raw.get("memorySummary") or raw.get("memory_summary") or "").strip()[:240],
+        "memory_facts": _string_list(raw.get("memoryFacts") or raw.get("memory_facts"), 10, 40),
+        "liked_titles": _string_list(raw.get("likedTitles") or raw.get("liked_titles"), 6, 80),
+        "favorite_songs": _string_list(raw.get("favoriteSongs") or raw.get("favorite_songs"), 6, 80),
     }
 
 
@@ -113,16 +168,14 @@ def _parse_vip_tier(raw: Any) -> int:
         return 0
 
 
-def _resolve_client_location(raw: dict[str, Any]) -> str:
-    explicit = str(raw.get("clientLocation") or raw.get("client_location") or "").strip()
-    if explicit:
-        return explicit[:80]
-    client_ip = str(raw.get("clientIp") or raw.get("client_ip") or "").strip()
-    if not client_ip:
-        return ""
-    try:
-        from clients.baidu_map_client import locate_ip
-
-        return locate_ip(client_ip)
-    except Exception:
-        return ""
+def _string_list(raw: Any, limit: int, item_len: int) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        text = str(item or "").strip()[:item_len]
+        if text and text not in out:
+            out.append(text)
+        if len(out) >= limit:
+            break
+    return out

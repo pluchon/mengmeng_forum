@@ -6,7 +6,13 @@ import asyncio
 from typing import Any
 
 from clients.dashscope_embedding import embedding_similarities
-from rag.search_service import clean_query, search_articles_by_vector, search_emojis_by_vector, search_users_by_vector
+from rag.search_service import (
+    clean_query,
+    search_articles_by_vector,
+    search_emojis_by_vector,
+    search_musics_by_vector,
+    search_users_by_vector,
+)
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from utils.rag_enhance import hybrid_rank
 
@@ -17,13 +23,14 @@ class SearchModule:
         query = clean_query(request.payload.get("query"))
         if not query:
             raise ModuleRequestError("INVALID_SEARCH_PAYLOAD", "query 不能为空")
-        if scope not in {"ARTICLE", "EMOJI", "USER", "MIXED", "CANDIDATE"}:
-            raise ModuleRequestError("INVALID_SEARCH_PAYLOAD", "scope 必须为 ARTICLE、EMOJI、USER、MIXED 或 CANDIDATE")
+        if scope not in {"ARTICLE", "EMOJI", "USER", "MUSIC", "MIXED", "CANDIDATE"}:
+            raise ModuleRequestError("INVALID_SEARCH_PAYLOAD", "scope 必须为 ARTICLE、EMOJI、USER、MUSIC、MIXED 或 CANDIDATE")
         candidates = request.payload.get("candidates")
         candidate_list = candidates if isinstance(candidates, list) else []
         article_results = await self._articles(query, candidate_list) if scope in {"ARTICLE", "MIXED"} else []
         emoji_results = await self._emojis(query) if scope == "EMOJI" else []
         user_results = await self._users(query, candidate_list) if scope in {"USER", "MIXED"} else []
+        music_results = await self._musics(query) if scope == "MUSIC" else []
         candidate_results = await self._candidates(query, candidate_list) if scope == "CANDIDATE" else []
         return ModuleResult(
             success=True,
@@ -33,6 +40,7 @@ class SearchModule:
                 "articleResults": article_results,
                 "emojiResults": emoji_results,
                 "userResults": user_results,
+                "musicResults": music_results,
                 "candidateResults": candidate_results,
                 "requiresJavaPermissionFilter": True,
             },
@@ -40,6 +48,9 @@ class SearchModule:
 
     @staticmethod
     async def _articles(query: str, candidates: list[Any]) -> list[dict[str, Any]]:
+        field_results = await _rank_article_fields(query, candidates)
+        if field_results:
+            return field_results
         results, _ = await asyncio.to_thread(search_articles_by_vector, query, candidates)
         if results:
             return results
@@ -55,6 +66,11 @@ class SearchModule:
     @staticmethod
     async def _emojis(query: str) -> list[dict[str, Any]]:
         results, _ = await asyncio.to_thread(search_emojis_by_vector, query)
+        return results
+
+    @staticmethod
+    async def _musics(query: str) -> list[dict[str, Any]]:
+        results, _ = await asyncio.to_thread(search_musics_by_vector, query)
         return results
 
     @staticmethod
@@ -97,3 +113,61 @@ def _keyword_rank(query: str, candidates: list[Any], id_key: str) -> list[dict[s
         ids.append(identity)
         docs.append(text[:1200])
     return hybrid_rank(query, docs, ids, id_key=id_key, light=True)
+
+
+async def _rank_article_fields(query: str, candidates: list[Any]) -> list[dict[str, Any]]:
+    """分别计算标题、公共总结和作者昵称相似度，再按可用字段重新归一化。"""
+    valid: list[dict[str, Any]] = []
+    for item in candidates[:150]:
+        if not isinstance(item, dict) or item.get("articleId") is None:
+            continue
+        title = str(item.get("title") or "").strip()
+        summary = str(item.get("summary") or "").strip()
+        author = str(item.get("authorNickname") or "").strip()
+        if not title and not summary and not author:
+            continue
+        valid.append({
+            "articleId": item.get("articleId"),
+            "title": title[:300],
+            "summary": summary[:800],
+            "author": author[:80],
+        })
+    if not valid:
+        return []
+
+    async def similarities(field: str) -> list[float]:
+        documents = [row[field] for row in valid]
+        return await asyncio.to_thread(embedding_similarities, query, documents)
+
+    title_scores, summary_scores, author_scores = await asyncio.gather(
+        similarities("title"), similarities("summary"), similarities("author")
+    )
+    if not title_scores:
+        return []
+
+    ranked: list[dict[str, Any]] = []
+    normalized_query = query.casefold()
+    for index, row in enumerate(valid):
+        weighted = 0.0
+        available_weight = 0.0
+        for field, weight, scores in (
+            ("title", 0.60, title_scores),
+            ("summary", 0.30, summary_scores),
+            ("author", 0.10, author_scores),
+        ):
+            if not row[field] or index >= len(scores):
+                continue
+            weighted += weight * max(0.0, float(scores[index]))
+            available_weight += weight
+        if available_weight <= 0:
+            continue
+        score = weighted / available_weight
+        title_exact = row["title"].casefold() == normalized_query
+        if score >= 0.22 or title_exact:
+            ranked.append({
+                "articleId": row["articleId"],
+                "score": round(score, 6),
+                "titleExact": title_exact,
+            })
+    ranked.sort(key=lambda item: (bool(item["titleExact"]), float(item["score"])), reverse=True)
+    return ranked

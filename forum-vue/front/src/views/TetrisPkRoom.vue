@@ -9,26 +9,11 @@
           <h1>俄罗斯方块<span class="tetris-mode-tag"> · 在线PK模式</span></h1>
           <span>房间号：{{ room.roomId || roomId }}</span>
         </div>
-        <div class="tetris-room-conn" :class="{ 'is-online': roomSocket.connected.value }">
+        <div class="tetris-room-conn" :class="{ 'is-online': roomSocket.connected.value, 'is-warning': Boolean(peerStateText) }">
           <span />
-          {{ roomSocket.connected.value ? '已连接' : '连接中' }}
+          {{ peerStateText || (roomSocket.connected.value ? '已连接' : '连接中') }}
         </div>
       </header>
-
-      <div class="tetris-pk-bar">
-        <div class="tetris-pk-bar-red" :style="{ width: `${pkBarLeftPercent}%` }">
-          <span>{{ room.redScore ?? 0 }}</span>
-        </div>
-        <div class="tetris-pk-bar-seam" aria-hidden="true">
-          <span class="tetris-pk-bar-seam-core" />
-          <span class="tetris-pk-bar-seam-shimmer" />
-          <span class="tetris-pk-bar-seam-spark" />
-          <span class="tetris-pk-bar-seam-flare" />
-        </div>
-        <div class="tetris-pk-bar-blue">
-          <span>{{ room.blueScore ?? 0 }}</span>
-        </div>
-      </div>
 
       <main class="tetris-stage tetris-pk-stage">
         <aside class="tetris-rail tetris-rail--left">
@@ -153,16 +138,44 @@
         </aside>
 
         <section class="tetris-board-shell tetris-pk-board-shell">
+          <div class="tetris-pk-bar-container">
+            <div class="tetris-pk-bar">
+              <div class="tetris-pk-bar-red" :style="{ width: `${pkBarLeftPercent}%` }">
+                <span class="pk-team-tag">RED</span>
+                <span class="pk-score-num">{{ room.redScore ?? 0 }}</span>
+              </div>
+              <div class="tetris-pk-bar-seam" :style="{ left: `${pkBarLeftPercent}%` }" aria-hidden="true">
+                <span class="tetris-pk-bar-seam-core" />
+                <span class="tetris-pk-bar-seam-shimmer" />
+                <span class="tetris-pk-bar-seam-spark" />
+              </div>
+              <div class="tetris-pk-vs-badge" aria-hidden="true">VS</div>
+              <div class="tetris-pk-bar-blue" :style="{ width: `${100 - pkBarLeftPercent}%` }">
+                <span class="pk-score-num">{{ room.blueScore ?? 0 }}</span>
+                <span class="pk-team-tag">BLUE</span>
+              </div>
+            </div>
+          </div>
           <div class="tetris-pk-duel">
             <div class="tetris-pk-board-col">
               <span class="tetris-pk-board-label is-red">{{ leftLabel }}</span>
-              <canvas
-                ref="myBoardRef"
-                class="tetris-board-canvas"
-                :width="BOARD_WIDTH"
-                :height="BOARD_HEIGHT"
-                aria-label="左侧棋盘"
-              />
+              <div class="tetris-pk-board-wrap">
+                <canvas
+                  ref="myBoardRef"
+                  class="tetris-board-canvas"
+                  :width="BOARD_WIDTH"
+                  :height="BOARD_HEIGHT"
+                  aria-label="左侧棋盘"
+                />
+                <div
+                  v-if="isPlayer && comboFlash >= 2"
+                  class="tetris-combo-flash"
+                  :class="{ 'is-triple': comboFlash >= 3 }"
+                  aria-hidden="true"
+                >
+                  ×{{ comboFlash }}
+                </div>
+              </div>
             </div>
             <div class="tetris-pk-board-col">
               <span class="tetris-pk-board-label is-blue">{{ rightLabel }}</span>
@@ -288,12 +301,13 @@
         <div v-if="!spectatorRows.length" class="gobang-side-empty">暂无观战玩家</div>
       </div>
       <div v-if="spectators.length > spectatorPageSize" class="gobang-dialog-pager">
-        <el-pagination
+        <AppPagination
           v-model:current-page="spectatorPage"
           size="small"
-          layout="prev, pager, next"
           :page-size="spectatorPageSize"
           :total="spectators.length"
+          :pager-count="5"
+          :show-jumper="false"
         />
       </div>
     </el-dialog>

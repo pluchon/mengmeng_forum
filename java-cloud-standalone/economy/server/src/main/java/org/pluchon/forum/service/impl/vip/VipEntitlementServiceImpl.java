@@ -21,7 +21,7 @@ import java.util.Date;
 @Service
 public class VipEntitlementServiceImpl implements VipEntitlementService {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
     @Autowired
     private UserVipSubscriptionMapper userVipSubscriptionMapper;
@@ -40,13 +40,49 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Date extendVipDays(Long userId, Byte tier, int days) {
-        if (userId == null || days <= 0) {
+        return extendVipHours(userId, tier, Math.multiplyExact(days, 24));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserVipSubscription ensureCurrentBaseQuotaPeriod(Long userId) {
+        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
+        Date nowDate = new Date();
+        if (sub.getQuotaPeriodStart() != null && sub.getQuotaPeriodEnd() != null
+                && sub.getQuotaPeriodEnd().after(nowDate)) {
+            return sub;
+        }
+        ZonedDateTime now = ZonedDateTime.now(TAIPEI);
+        Byte baseTier = vipActive(sub) && sub.getVipTier() != null
+                ? sub.getVipTier()
+                : Constant.VIP_TIER_FREE;
+        Date start;
+        Date end;
+        if (Constant.VIP_TIER_FREE.equals(baseTier)) {
+            start = Date.from(now.withDayOfMonth(1).toLocalDate().atStartOfDay(TAIPEI).toInstant());
+            end = Date.from(now.plusMonths(1).withDayOfMonth(1).toLocalDate()
+                    .atStartOfDay(TAIPEI).toInstant());
+        } else {
+            start = Date.from(now.toInstant());
+            end = Date.from(now.plusDays(30).toInstant());
+        }
+        userVipSubscriptionMapper.updateBaseQuotaPeriod(userId, baseTier, start, end);
+        sub.setBaseQuotaTier(baseTier);
+        sub.setQuotaPeriodStart(start);
+        sub.setQuotaPeriodEnd(end);
+        return sub;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Date extendVipHours(Long userId, Byte tier, int hours) {
+        if (userId == null || hours <= 0) {
             UserVipSubscription current = getSubscription(userId);
             return current != null ? current.getVipExpireAt() : null;
         }
         UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
         Byte grantTier = resolveGrantTier(sub, tier);
-        Date newExpire = computeNewExpire(sub, days);
+        Date newExpire = computeNewExpire(sub, hours);
         int affected = userVipSubscriptionMapper.updateSubscription(userId, grantTier, newExpire);
         if (affected != 1) {
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
@@ -58,7 +94,32 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Date subscribeTier(Long userId, Byte tier, int days) {
-        return extendVipDays(userId, tier, days);
+        if (userId == null || tier == null || days <= 0) {
+            return getSubscription(userId) == null ? null : getSubscription(userId).getVipExpireAt();
+        }
+        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
+        boolean sameActiveTier = vipActive(sub) && tier.equals(sub.getVipTier());
+        ZonedDateTime now = ZonedDateTime.now(TAIPEI);
+        Date expireAt;
+        Date periodStart = sub.getQuotaPeriodStart();
+        Date periodEnd = sub.getQuotaPeriodEnd();
+        if (sameActiveTier) {
+            ZonedDateTime expiry = sub.getVipExpireAt() == null
+                    ? now
+                    : sub.getVipExpireAt().toInstant().atZone(TAIPEI);
+            expireAt = Date.from(expiry.plusDays(days).toInstant());
+        } else {
+            expireAt = Date.from(now.plusDays(days).toInstant());
+            periodStart = Date.from(now.toInstant());
+            periodEnd = Date.from(now.plusDays(30).toInstant());
+        }
+        int affected = userVipSubscriptionMapper.updatePaidSubscription(
+                userId, tier, expireAt, tier, periodStart, periodEnd);
+        if (affected != 1) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        userDerivedCacheInvalidator.invalidateUserCaches(userId);
+        return expireAt;
     }
 
     private UserVipSubscription ensureSubscriptionForUpdate(Long userId) {
@@ -93,14 +154,14 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
         return tier;
     }
 
-    private Date computeNewExpire(UserVipSubscription sub, int days) {
+    private Date computeNewExpire(UserVipSubscription sub, int hours) {
         Date exp = sub.getVipExpireAt();
         Date now = new Date();
-        ZonedDateTime base = ZonedDateTime.now(SHANGHAI);
+        ZonedDateTime base = ZonedDateTime.now(TAIPEI);
         if (vipActive(sub) && exp != null && exp.after(now)) {
-            base = exp.toInstant().atZone(SHANGHAI);
+            base = exp.toInstant().atZone(TAIPEI);
         }
-        return Date.from(base.plusDays(days).toInstant());
+        return Date.from(base.plusHours(hours).toInstant());
     }
 
     private boolean vipActive(UserVipSubscription sub) {

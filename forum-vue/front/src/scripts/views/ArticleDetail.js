@@ -1,35 +1,71 @@
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatDotRound, Share, PictureFilled, CollectionTag, Close, MagicStick, Picture, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import {
+  ChatDotRound,
+  Share,
+  PictureFilled,
+  CollectionTag,
+  Close,
+  MagicStick,
+  Picture,
+  ArrowLeft,
+  ArrowRight,
+  RefreshRight,
+  ArrowUp,
+  Promotion,
+  Flag,
+  Download,
+  Compass,
+  VideoPlay,
+  VideoPause,
+  Headset,
+  View,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
-import { getArticleDetail, streamArticleGuide, getAuditStatus } from '@/api/article'
+import {
+  getArticleDetail,
+  getArticleSummaryState,
+  getAuditStatus,
+  reportArticleContent,
+  regenerateArticleSummary,
+} from '@/api/article'
 import {
   acceptQuestionAnswer,
-  closeQuestion,
+  setQuestionResolved,
 } from '@/api/articleQuestion'
 import { captureFeedScroll, restoreFeedScroll } from '@/utils/feedScrollRestore'
 import {
+  animateDetailDialogFromCard,
   animateDetailDialogToCard,
+  captureVideoFirstFrame,
   clearFeedNavigationState,
   getFeedCardOrigin,
+  getFeedReturnPath,
+  notifyFeedVisitCountUpdate,
+  preloadFeedOpenImage,
+  removeFeedOpenMorphLayers,
   shouldReturnBackToFeed,
+  shouldReturnBackToSearch,
 } from '@/utils/feedNavigation'
 import { getReplyList, submitReply as apiSubmitReply, submitSubReply, likeReply, unlikeReply } from '@/api/reply'
 import { likeArticle, unlikeArticle } from '@/api/like'
 import { cancelArticleFavorite, getMyFavoriteFolders, saveArticleFavorite } from '@/api/favorite'
 import SubReplyArea from '@/components/article/SubReplyArea.vue'
+import CommentExpandableText from '@/components/article/CommentExpandableText.vue'
 import ArticleDetailVideo from '@/components/article/ArticleDetailVideo.vue'
+import BorderGlow from '@/components/common/BorderGlow.vue'
 import { marked } from 'marked'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ARTICLE_STATUS } from '@/utils/articleStatus'
-import { formatForumDateTimeShanghai } from '@/utils/datetime'
+import { formatCommentTimeShanghai, formatForumDateTimeShanghai } from '@/utils/datetime'
 import {
   QUESTION_STATUS,
   isQuestionArticle,
+  isQuestionResolved,
   questionStatusClass,
   questionStatusLabel,
 } from '@/utils/articleQuestion'
@@ -39,10 +75,11 @@ import { markRecommendationNotInterested } from '@/api/recommendation'
 import { useNotInterestedArticleStore } from '@/stores/notInterestedArticle'
 import { uploadChatImage } from '@/api/message'
 import { useEmojiShopStore } from '@/stores/emojiShop'
-import { validateLocalImageFile, openImageUploadLoading, getBatchImageUploadLoadingText } from '@/utils/imageUploadFeedback'
+import { validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { validateChatImageMime } from '@/utils/chatMedia'
 import emojiPackIconUrl from '@/assets/svg/表情包.svg?url'
 import emptyCommentIconUrl from '@/assets/svg/空评论.svg?url'
+import articleNotFoundImageUrl from '@/assets/images/article_not_found.png'
 import '@/assets/styles/article.css'
 
 export function useArticleDetail() {
@@ -57,6 +94,12 @@ export function useArticleDetail() {
   const author = ref(null)
   const board = ref(null)
   const isLiked = ref(false)
+  const triplePressActive = ref(false)
+  const triplePressProgress = ref(0)
+  let triplePressFrame = null
+  let triplePressStartedAt = 0
+  let triplePointerId = null
+  const engagementSubmitting = ref(false)
   const isOwner = ref(false)
   const isFavorited = ref(false)
   const notInterestedSaving = ref(false)
@@ -75,14 +118,23 @@ export function useArticleDetail() {
   const aiSummary = ref('')
   const aiSummaryIsHint = ref(false)
   const aiLoading = ref(false)
+  const aiSummaryCollapsed = ref(true)
   const aiSummaryAreaRef = ref(null)
-  let guideStreamAbort = null
+  const aiSummaryStatus = ref('NOT_READY')
+  const aiSummaryCanExpand = ref(false)
+  const aiSummaryCanRegenerate = ref(false)
+  const contentReportDialogVisible = ref(false)
+  const contentReportDialogTitle = ref('举报内容')
+  const contentReportSubmitting = ref(false)
+  const pendingContentReport = ref(null)
+  let aiSummaryPollTimer = null
+  let aiSummaryPollStartedAt = 0
 
   function resizeAiSummaryArea() {
     const el = aiSummaryAreaRef.value
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.max(72, el.scrollHeight)}px`
+    el.style.height = `${Math.max(0, el.scrollHeight)}px`
   }
 
   function isAiSummaryHintMessage(text) {
@@ -104,6 +156,14 @@ export function useArticleDetail() {
     return s === plain || (plain.length > 40 && (s.includes(plain) || plain.includes(s)))
   }
   const replies = ref([])
+  const replyPageNum = ref(1)
+  const replyPageSize = ref(10)
+  const replyTotal = ref(0)
+  const replyLoadingMore = ref(false)
+  const replyLoadMoreSentinelRef = ref(null)
+  const articleContentScrollRef = ref(null)
+  let replyLoadObserver = null
+  const replyHasMore = computed(() => replies.value.length < Number(replyTotal.value || 0))
   const replyContent = ref('')
   const replyTarget = ref(null)
   const replyImageInput = ref(null)
@@ -115,29 +175,40 @@ export function useArticleDetail() {
   const replyPackBarRef = ref(null)
   const replyPackBarCanScrollLeft = ref(false)
   const replyPackBarCanScrollRight = ref(false)
+  const replySubmitting = ref(false)
   const subReplyRefreshTokens = ref({})
 
   const REPLY_MEDIA_TYPE_IMAGE = 1
   const REPLY_MEDIA_TYPE_SHOP_EMOJI = 2
-  const REPLY_IMAGE_MAX = 6
-  const REPLY_EMOJI_MAX = 5
+  // 图片 + 表情包合计上限，与一行 8 槽位对齐
+  const REPLY_MEDIA_MAX = 8
+
+  function replyPendingMediaCount() {
+    return replyPendingImages.value.length + replyPendingEmojis.value.length
+  }
+
+  function replyPendingMediaRemaining() {
+    return Math.max(0, REPLY_MEDIA_MAX - replyPendingMediaCount())
+  }
 
   const isQuestion = computed(() => isQuestionArticle(article.value))
   const isNotInterested = computed(() => notInterestedArticleStore.isNotInterested(article.value?.id))
-  const isQuestionClosed = computed(() =>
-    isQuestion.value && Number(article.value?.questionStatus) === QUESTION_STATUS.CLOSED,
+  // 关闭问题已移除；历史 CLOSED 不再拦截回答
+  const canAcceptAnswer = computed(() => isQuestion.value && isOwner.value)
+  const canToggleQuestionResolved = computed(() => isQuestion.value && isOwner.value)
+  const questionResolved = computed(() => isQuestionResolved(article.value))
+  const questionResolveHint = computed(() =>
+    questionResolved.value ? '该问题未解决？' : '该问题解决了吗？',
   )
-  const canCloseQuestion = computed(() =>
-    isQuestion.value
-      && isOwner.value
-      && Number(article.value?.questionStatus) === QUESTION_STATUS.WAITING,
-  )
-  const canAcceptAnswer = computed(() => canCloseQuestion.value)
 
   const canSubmitReply = computed(() => {
-    if (isQuestionClosed.value) return false
+    if (replySubmitting.value) return false
+    if (replyPendingImages.value.some((img) => img?.pending)) return false
     const text = replyContent.value.trim()
-    return !!text || replyPendingImages.value.length > 0 || replyPendingEmojis.value.length > 0
+    const readyImages = replyPendingImages.value.filter(
+      (img) => img && !img.pending && !img.failed && img.mediaUrl,
+    )
+    return !!text || readyImages.length > 0 || replyPendingEmojis.value.length > 0
   })
 
   const replyVisiblePacks = computed(() => emojiShopStore.myPacks)
@@ -156,6 +227,7 @@ export function useArticleDetail() {
   function buildReplyMediaList() {
     const list = []
     for (const img of replyPendingImages.value) {
+      if (img?.pending || img?.failed || !img?.mediaUrl) continue
       list.push({ mediaType: REPLY_MEDIA_TYPE_IMAGE, mediaUrl: img.mediaUrl })
     }
     for (const em of replyPendingEmojis.value) {
@@ -165,16 +237,85 @@ export function useArticleDetail() {
   }
 
   function clearReplyPendingMedia() {
+    replyPendingImages.value.forEach((img) => {
+      if (img?.previewUrl) URL.revokeObjectURL(img.previewUrl)
+    })
     replyPendingImages.value = []
     replyPendingEmojis.value = []
   }
 
   function removePendingImage(idx) {
+    const target = replyPendingImages.value[idx]
+    if (!target) return
+    if (target.previewUrl) URL.revokeObjectURL(target.previewUrl)
     replyPendingImages.value = replyPendingImages.value.filter((_, i) => i !== idx)
   }
 
   function removePendingEmoji(idx) {
     replyPendingEmojis.value = replyPendingEmojis.value.filter((_, i) => i !== idx)
+  }
+
+  function markReplyImageFailed(placeholder) {
+    const slotIndex = replyPendingImages.value.findIndex((item) => item.id === placeholder.id)
+    if (slotIndex < 0) return
+    const current = replyPendingImages.value[slotIndex]
+    replyPendingImages.value.splice(slotIndex, 1, {
+      pending: false,
+      failed: true,
+      id: current.id,
+      previewUrl: current.previewUrl || '',
+      mediaUrl: current.previewUrl || current.mediaUrl || '',
+      file: current.file || placeholder.file,
+    })
+  }
+
+  async function uploadOneReplyImage(placeholder, file) {
+    const slotIndex = replyPendingImages.value.findIndex((item) => item.id === placeholder.id)
+    if (slotIndex < 0) return false
+    replyPendingImages.value.splice(slotIndex, 1, {
+      ...replyPendingImages.value[slotIndex],
+      pending: true,
+      failed: false,
+      mediaUrl: replyPendingImages.value[slotIndex].previewUrl
+        || replyPendingImages.value[slotIndex].mediaUrl
+        || '',
+      file,
+    })
+    try {
+      const res = await uploadChatImage(file, { silentBizCodes: [] })
+      const url = typeof res?.data === 'string' ? res.data.trim() : ''
+      const latestIndex = replyPendingImages.value.findIndex((item) => item.id === placeholder.id)
+      if (latestIndex < 0) return false
+      const latest = replyPendingImages.value[latestIndex]
+      if (url) {
+        if (latest.previewUrl) URL.revokeObjectURL(latest.previewUrl)
+        replyPendingImages.value.splice(latestIndex, 1, {
+          pending: false,
+          failed: false,
+          id: latest.id,
+          previewUrl: '',
+          mediaUrl: url,
+        })
+        return true
+      }
+      markReplyImageFailed({ ...latest, file })
+      return false
+    } catch {
+      markReplyImageFailed({
+        id: placeholder.id,
+        previewUrl: replyPendingImages.value.find((item) => item.id === placeholder.id)?.previewUrl,
+        mediaUrl: '',
+        file,
+      })
+      return false
+    }
+  }
+
+  async function retryPendingImage(idx) {
+    const target = replyPendingImages.value[idx]
+    if (!target?.failed || !target.file || target.pending) return
+    const ok = await uploadOneReplyImage(target, target.file)
+    if (!ok) ElMessage.warning('图片重试失败，请稍后再试')
   }
 
   async function triggerReplyImagePick() {
@@ -188,17 +329,17 @@ export function useArticleDetail() {
     if (!files.length) return
     if (!(await ensureLoggedIn())) return
 
-    const current = replyPendingImages.value.length
-    const remaining = REPLY_IMAGE_MAX - current
+    const remaining = replyPendingMediaRemaining()
     if (remaining <= 0) {
-      ElMessage.warning(`最多上传 ${REPLY_IMAGE_MAX} 张图片`)
+      ElMessage.warning(`图片和表情合计最多 ${REPLY_MEDIA_MAX} 个`)
       return
     }
     if (files.length > remaining) {
-      ElMessage.warning(`最多还能上传 ${remaining} 张，请重新选择`)
+      ElMessage.warning(`图片和表情合计最多 ${REPLY_MEDIA_MAX} 个，还能添加 ${remaining} 个`)
       return
     }
 
+    const validFiles = []
     for (const file of files) {
       const mimeOk = validateChatImageMime(file)
       if (!mimeOk.ok) {
@@ -210,23 +351,42 @@ export function useArticleDetail() {
         ElMessage.warning(`${file.name}：${sizeOk.message}`)
         return
       }
+      validFiles.push(file)
     }
+    if (!validFiles.length) return
 
-    const uploadTip = getBatchImageUploadLoadingText(files, '正在上传评论图片…')
-    const tipMsg = ElMessage.info({ message: uploadTip, duration: 0, showClose: false, grouping: true })
-    const batchLoading = openImageUploadLoading(files[0], uploadTip)
-    try {
-      for (const file of files) {
-        const up = await uploadChatImage(file)
-        if (up.code === 0 && up.data) {
-          replyPendingImages.value.push({ mediaUrl: up.data })
-        }
+    const placeholders = validFiles.map((file) => ({
+      pending: true,
+      failed: false,
+      id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      previewUrl: URL.createObjectURL(file),
+      mediaUrl: '',
+      file,
+    }))
+    placeholders.forEach((item) => {
+      item.mediaUrl = item.previewUrl
+    })
+    replyPendingImages.value.push(...placeholders)
+
+    // 逐张并行上传：每张独立完成/失败，避免整批卡在「上传中」且发送键长期灰掉
+    const CONCURRENCY = 3
+    let cursor = 0
+    let failCount = 0
+    const workers = Array.from({ length: Math.min(CONCURRENCY, placeholders.length) }, async () => {
+      while (cursor < placeholders.length) {
+        const index = cursor
+        cursor += 1
+        const placeholder = placeholders[index]
+        const file = validFiles[index]
+        const ok = await uploadOneReplyImage(placeholder, file)
+        if (!ok) failCount += 1
       }
-    } catch {
-      /* 拦截器已提示 */
-    } finally {
-      tipMsg.close()
-      batchLoading.close()
+    })
+    await Promise.all(workers)
+    if (failCount > 0 && failCount === placeholders.length) {
+      ElMessage.error('图片上传失败，可点图片重试')
+    } else if (failCount > 0) {
+      ElMessage.warning(`有 ${failCount} 张图片上传失败，可点图片重试`)
     }
   }
 
@@ -241,7 +401,7 @@ export function useArticleDetail() {
       await nextTick()
       updateReplyPackBarScrollState()
     } catch {
-      /* 已提示 */
+      // 已提示
     }
   }
 
@@ -277,8 +437,8 @@ export function useArticleDetail() {
   function addReplyShopEmoji(url) {
     const pack = replySelectedPack.value
     if (!pack || !url) return
-    if (replyPendingEmojis.value.length >= REPLY_EMOJI_MAX) {
-      ElMessage.warning(`最多添加 ${REPLY_EMOJI_MAX} 个表情`)
+    if (replyPendingMediaRemaining() <= 0) {
+      ElMessage.warning(`图片和表情合计最多 ${REPLY_MEDIA_MAX} 个`)
       return
     }
     if (replyPendingEmojis.value.some((item) => item.mediaUrl === url)) return
@@ -310,18 +470,98 @@ export function useArticleDetail() {
   const dialogOpen = ref(true)
   let detailClosing = false
   let skipDialogClosedNav = false
+  // 从首页卡片进入时先隐藏弹窗；等详情拿到帖内首图/视频首帧后再展开
+  const expandFromCardPrep = ref(
+    shouldReturnBackToFeed() && !!getFeedCardOrigin(route.params.id),
+  )
+  let openFromCardAnimStarted = false
+  // 视频贴：展开/首帧就绪前只展示静帧，完成后再挂载播放器并自动播
+  const videoPlayerReady = ref(false)
+  const videoPosterUrl = ref('')
 
-  /** 笔记相册 URL（与 article 正文独立） */
-  const articleTags = ref([])
-  const tagsExpanded = ref(false)
-  const visibleArticleTags = computed(() => (
-    tagsExpanded.value ? articleTags.value : articleTags.value.slice(0, 2)
-  ))
-  const hiddenArticleTagCount = computed(() => Math.max(0, articleTags.value.length - 2))
-
-  function toggleArticleTags() {
-    tagsExpanded.value = !tagsExpanded.value
+  function resolveOpenMorphImageUrl() {
+    const firstGallery = String(articleGalleryUrls.value?.[0] || '').trim()
+    if (firstGallery) return firstGallery
+    return String(article.value?.coverImg || '').trim()
   }
+
+  async function resolveVideoStillUrl(fallback = '') {
+    const videoUrl = String(article.value?.videoUrl || '').trim()
+    // 只接受真实截取的首帧；不要退回封面 封面会在交接时闪一下
+    if (videoUrl) {
+      const frame = await captureVideoFirstFrame(videoUrl)
+      if (frame) return frame
+    }
+    return ''
+  }
+
+  let detailVideoPlayingWait = null
+
+  function onDetailVideoPlaying() {
+    if (detailVideoPlayingWait) {
+      detailVideoPlayingWait()
+      detailVideoPlayingWait = null
+    }
+  }
+
+  function waitDetailVideoPlaying(timeoutMs = 2200) {
+    return new Promise((resolve) => {
+      let settled = false
+      const done = () => {
+        if (settled) return
+        settled = true
+        detailVideoPlayingWait = null
+        resolve()
+      }
+      detailVideoPlayingWait = done
+      setTimeout(done, timeoutMs)
+    })
+  }
+
+  async function runOpenFromCardAnimation() {
+    if (!expandFromCardPrep.value || openFromCardAnimStarted) return
+    openFromCardAnimStarted = true
+    const articleId = route.params.id
+    const origin = getFeedCardOrigin(articleId)
+    if (!origin) {
+      expandFromCardPrep.value = false
+      return
+    }
+    try {
+      const isVideoOpen = isVideoArticle.value && !!articleVideoUrl.value
+      if (isVideoOpen) {
+        videoPlayerReady.value = false
+        videoPosterUrl.value = ''
+        resolveVideoStillUrl().then((frame) => {
+          if (frame) videoPosterUrl.value = frame
+        })
+      } else {
+        const heroUrl = resolveOpenMorphImageUrl() || origin.coverUrl || ''
+        if (heroUrl) await preloadFeedOpenImage(heroUrl)
+      }
+      await nextTick()
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      })
+      await animateDetailDialogFromCard(origin)
+      if (isVideoOpen) {
+        expandFromCardPrep.value = false
+        await nextTick()
+        videoPlayerReady.value = true
+        await nextTick()
+        await waitDetailVideoPlaying()
+      }
+    } finally {
+      expandFromCardPrep.value = false
+      if (isVideoArticle.value && articleVideoUrl.value && !videoPlayerReady.value) {
+        videoPlayerReady.value = true
+      }
+      removeFeedOpenMorphLayers()
+    }
+  }
+
+  // 笔记相册 URL 与 article 正文独立
+  const articleTags = ref([])
 
   const replyTargetLabel = computed(() => {
     if (!replyTarget.value) return ''
@@ -331,11 +571,14 @@ export function useArticleDetail() {
 
   const articleGalleryUrls = ref([])
   const activeGalleryIndex = ref(0)
+  const galleryAutoplayStopped = ref(false)
   const galleryStripRef = ref(null)
   const galleryStripOverflow = ref(false)
   const galleryStripFadeLeft = ref(false)
   const galleryStripFadeRight = ref(false)
   let galleryResizeObserver = null
+  let galleryAutoplayTimer = null
+  const GALLERY_AUTOPLAY_MS = 5000
 
   const activeGalleryUrl = computed(() => {
     const urls = articleGalleryUrls.value
@@ -344,7 +587,7 @@ export function useArticleDetail() {
     return urls[i] || ''
   })
 
-  /** 主图：相册优先，否则用封面（与首页瀑布流卡片一致） */
+  // 主图：相册优先，否则用封面 与首页瀑布流卡片一致
   const mainDisplayImageUrl = computed(() => {
     const gallery = activeGalleryUrl.value
     if (gallery) return gallery
@@ -358,6 +601,11 @@ export function useArticleDetail() {
   })
 
   const articleVideoUrl = computed(() => String(article.value?.videoUrl || '').trim())
+  const articleHlsUrl = computed(() => String(article.value?.hlsUrl || '').trim())
+  const articleVideoTranscodeStatus = computed(() => {
+    const status = Number(article.value?.videoTranscodeStatus)
+    return Number.isFinite(status) ? status : 0
+  })
   const detailVideoRef = ref(null)
 
   function replayDetailVideo(e) {
@@ -367,20 +615,238 @@ export function useArticleDetail() {
     v.play().catch(() => {})
   }
 
-  watch([articleVideoUrl, dialogOpen], () => {
-    if (!dialogOpen.value || !articleVideoUrl.value) return
-    nextTick(() => {
-      const v = detailVideoRef.value
-      if (!v) return
-      v.currentTime = 0
-      v.play().catch(() => {})
-    })
-  })
-
   const isVideoArticle = computed(() => {
     if (Number(article.value?.mediaType) === 1) return true
     return !!articleVideoUrl.value && !articleGalleryUrls.value.length
   })
+
+  const articleMusic = computed(() => {
+    const a = article.value
+    if (!a?.musicAudioUrl || isVideoArticle.value) return null
+    return {
+      title: a.musicTitle || a.musicKey || '帖子配乐',
+      coverUrl: a.musicCoverUrl || '',
+      audioUrl: a.musicAudioUrl,
+    }
+  })
+  const musicPlaying = ref(false)
+  const musicAudioRef = ref(null)
+  const musicEqBars = [0, 1, 2, 3]
+
+  function pauseDetailVideoForMusic() {
+    detailVideoRef.value?.pausePlayback?.()
+  }
+
+  async function startArticleMusicPlayback() {
+    const el = musicAudioRef.value
+    if (!el || !articleMusic.value?.audioUrl) return false
+    pauseDetailVideoForMusic()
+    const url = articleMusic.value.audioUrl
+    if (el.src !== url) {
+      el.src = url
+      el.load()
+    }
+    try {
+      await el.play()
+      musicPlaying.value = true
+      return true
+    } catch {
+      musicPlaying.value = false
+      return false
+    }
+  }
+
+  function toggleArticleMusic() {
+    const el = musicAudioRef.value
+    if (!el || !articleMusic.value?.audioUrl) return
+    if (musicPlaying.value) {
+      el.pause()
+      musicPlaying.value = false
+      return
+    }
+    startArticleMusicPlayback()
+  }
+
+  async function autoPlayArticleMusic() {
+    if (!articleMusic.value?.audioUrl) return
+    await nextTick()
+    await startArticleMusicPlayback()
+  }
+
+  function onMusicEnded() {
+    musicPlaying.value = false
+  }
+
+  watch(articleMusic, () => {
+    const el = musicAudioRef.value
+    if (el) {
+      el.pause()
+      el.removeAttribute('src')
+      el.load()
+    }
+    musicPlaying.value = false
+  })
+
+  // 图文详情页作者行：发布时间 · IP 属地
+  const authorMetaText = computed(() => {
+    const time = formatForumDateTimeShanghai(article.value?.createTime)
+    const region = String(article.value?.ipRegion || '').trim()
+    if (time && region) return `${time} · ${region}`
+    return time || region || ''
+  })
+
+  function formatCommentMeta(createTime, ipRegion) {
+    const time = formatCommentTimeShanghai(createTime)
+    const region = String(ipRegion || '').trim()
+    if (time && region) return `${time} · ${region}`
+    return time || region || ''
+  }
+
+  function isOwnComment(item) {
+    const uid = item?.user?.id
+    const me = userStore.userInfo?.id
+    if (uid == null || me == null) return false
+    return Number(uid) === Number(me)
+  }
+
+  // 楼主自己发的一级回答不可采纳
+  function isArticleAuthorReply(item) {
+    const uid = item?.user?.id
+    const authorId = author.value?.id
+    if (uid == null || authorId == null) return false
+    return Number(uid) === Number(authorId)
+  }
+
+  async function openContentReportDialog(title, targetType, targetId) {
+    if (!(await ensureLoggedIn('举报需要登录')) || !targetId) return
+    contentReportDialogTitle.value = title
+    pendingContentReport.value = { targetType, targetId }
+    contentReportDialogVisible.value = true
+  }
+
+  function reportArticle() {
+    return openContentReportDialog('举报帖子', 'ARTICLE', article.value?.id)
+  }
+
+  function reportReply(item) {
+    if (isOwnComment(item) || isArticleAuthorReply(item)) return
+    return openContentReportDialog('举报评论', 'REPLY', item?.articleReply?.id)
+  }
+
+  function reportSubReply(payload) {
+    return openContentReportDialog(
+      '举报回复',
+      'SUB_REPLY',
+      payload?.subReplyId || payload?.subReply?.id || payload?.id,
+    )
+  }
+
+  function reportDanmaku(item) {
+    return openContentReportDialog('举报弹幕', 'DANMAKU', item?.id)
+  }
+
+  async function submitContentReport(reason) {
+    if (!pendingContentReport.value || contentReportSubmitting.value) return
+    contentReportSubmitting.value = true
+    try {
+      const response = await reportArticleContent({
+        ...pendingContentReport.value,
+        reason,
+      })
+      if (response.code !== 0) {
+        ElMessage.error(response.message || '举报提交失败')
+        return
+      }
+      contentReportDialogVisible.value = false
+      pendingContentReport.value = null
+      ElMessage.success('已收到举报，结果会通过消息中心通知')
+    } finally {
+      contentReportSubmitting.value = false
+    }
+  }
+
+  const galleryPageLabel = computed(() => {
+    const total = articleGalleryUrls.value.length
+    if (total <= 0) return ''
+    const current = Math.min(Math.max(0, activeGalleryIndex.value), total - 1) + 1
+    return `${current} / ${total}`
+  })
+
+  const showGalleryNavArrows = computed(() => (
+    !isVideoArticle.value && articleGalleryUrls.value.length >= 2
+  ))
+
+  const galleryCanGoPrev = computed(() => activeGalleryIndex.value > 0)
+
+  const galleryCanGoNext = computed(() => (
+    activeGalleryIndex.value < articleGalleryUrls.value.length - 1
+  ))
+
+  function formatCompactNumber(value) {
+    const number = Math.max(0, Number(value) || 0)
+    if (number >= 10000) return `${(number / 10000).toFixed(number >= 100000 ? 0 : 1)}万`
+    if (number >= 1000) return `${(number / 1000).toFixed(1)}k`
+    if (!Number.isInteger(number)) return number.toFixed(1)
+    return String(number)
+  }
+
+  function stopGalleryAutoplay() {
+    if (galleryAutoplayTimer) {
+      clearInterval(galleryAutoplayTimer)
+      galleryAutoplayTimer = null
+    }
+  }
+
+  function stopGalleryAutoplayByUser() {
+    galleryAutoplayStopped.value = true
+    stopGalleryAutoplay()
+  }
+
+  function tickGalleryAutoplay() {
+    const total = articleGalleryUrls.value.length
+    if (total < 2 || isVideoArticle.value) return
+    const next = activeGalleryIndex.value + 1
+    activeGalleryIndex.value = next >= total ? 0 : next
+  }
+
+  function startGalleryAutoplay() {
+    stopGalleryAutoplay()
+    if (
+      galleryAutoplayStopped.value
+      || isVideoArticle.value
+      || articleGalleryUrls.value.length < 2
+      || document.hidden
+    ) {
+      return
+    }
+    galleryAutoplayTimer = window.setInterval(tickGalleryAutoplay, GALLERY_AUTOPLAY_MS)
+  }
+
+  function onGalleryVisibilityChange() {
+    if (document.hidden) {
+      stopGalleryAutoplay()
+      return
+    }
+    startGalleryAutoplay()
+  }
+
+  function galleryThumbIndexLabel(index) {
+    return String(Number(index) + 1).padStart(2, '0')
+  }
+
+  function scrollGalleryStripBy(deltaPx) {
+    const el = galleryStripRef.value
+    if (!el) return
+    el.scrollBy({ left: deltaPx, behavior: 'smooth' })
+  }
+
+  function toggleAiSummaryCollapsed() {
+    if (!aiSummaryCanExpand.value) return
+    aiSummaryCollapsed.value = !aiSummaryCollapsed.value
+    if (!aiSummaryCollapsed.value) {
+      loadAiSummary()
+    }
+  }
 
   function updateGalleryStripState() {
     const el = galleryStripRef.value
@@ -397,8 +863,154 @@ export function useArticleDetail() {
     updateGalleryStripState()
   }
 
-  function setActiveGalleryIndex(index) {
+  function setActiveGalleryIndex(index, byUser = false) {
     activeGalleryIndex.value = index
+    if (byUser) stopGalleryAutoplayByUser()
+  }
+
+  function shiftGalleryIndex(delta) {
+    const total = articleGalleryUrls.value.length
+    if (total <= 0) return
+    const next = activeGalleryIndex.value + delta
+    if (next < 0 || next >= total) return
+    activeGalleryIndex.value = next
+    stopGalleryAutoplayByUser()
+  }
+
+  const mainImagePreviewVisible = ref(false)
+
+  function openMainImagePreview() {
+    if (!imagePreviewList.value.length) return
+    mainImagePreviewVisible.value = true
+  }
+
+  function closeMainImagePreview() {
+    mainImagePreviewVisible.value = false
+  }
+
+  function guessImageFileName(url, articleId, index) {
+    const base = `article-${articleId || 'image'}-${index}`
+    try {
+      const path = new URL(url, window.location.origin).pathname
+      const last = path.split('/').pop() || ''
+      const extMatch = last.match(/\.(jpe?g|png|webp|gif|bmp)$/i)
+      if (extMatch) return `${base}.${extMatch[1].toLowerCase()}`
+    } catch {
+      // 忽略
+    }
+    return `${base}.jpg`
+  }
+
+  // 开发态 / 生产同源代理：把阿里云 OSS 地址改写到 /oss dl/，避免浏览器 CORS
+  function toDownloadFetchUrl(url) {
+    try {
+      const u = new URL(url, window.location.origin)
+      if (!/\.aliyuncs\.com$/i.test(u.hostname)) return url
+      return `/oss-dl/${u.hostname}${u.pathname}${u.search}`
+    } catch {
+      return url
+    }
+  }
+
+  function triggerBlobDownload(href, fileName, shouldRevoke) {
+    const a = document.createElement('a')
+    a.href = href
+    a.download = fileName
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    if (shouldRevoke && href.startsWith('blob:')) {
+      URL.revokeObjectURL(href)
+    }
+  }
+
+  async function fetchBlobFromUrl(url) {
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store' })
+    if (!res.ok) throw new Error(`download status ${res.status}`)
+    return res.blob()
+  }
+
+  // OSS 开启跨域时，用 canvas 导出为 blob 不新开标签
+  function blobFromCrossOriginImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth || img.width
+          canvas.height = img.naturalHeight || img.height
+          if (!canvas.width || !canvas.height) {
+            reject(new Error('empty image'))
+            return
+          }
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0)
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob)
+            else reject(new Error('toBlob failed'))
+          }, 'image/jpeg', 0.92)
+        } catch (err) {
+          reject(err)
+        }
+      }
+      img.onerror = () => reject(new Error('image load failed'))
+      // 强制走带 CORS 头的新请求，避开无 CORS 的缓存副本
+      try {
+        const u = new URL(url, window.location.origin)
+        u.searchParams.set('_dl', String(Date.now()))
+        img.src = u.toString()
+      } catch {
+        img.src = url
+      }
+    })
+  }
+
+  async function downloadCurrentGalleryImage() {
+    const url = mainDisplayImageUrl.value
+    if (!url || isVideoArticle.value) return
+    const name = guessImageFileName(url, article.value?.id, activeGalleryIndex.value + 1)
+    try {
+      if (url.startsWith('blob:') || url.startsWith('data:')) {
+        triggerBlobDownload(url, name, false)
+        return
+      }
+
+      const candidates = []
+      const proxied = toDownloadFetchUrl(url)
+      if (proxied !== url) candidates.push(proxied)
+      if (/^https?:\/\//i.test(url) || url.startsWith('/')) candidates.push(url)
+
+      let blob = null
+      for (const candidate of candidates) {
+        try {
+          blob = await fetchBlobFromUrl(candidate)
+          break
+        } catch {
+          // 尝试下一候选
+        }
+      }
+      if (!blob && /^https?:\/\//i.test(url)) {
+        blob = await blobFromCrossOriginImage(url)
+      }
+      if (!blob) throw new Error('no blob')
+
+      const objectUrl = URL.createObjectURL(blob)
+      triggerBlobDownload(objectUrl, name, true)
+    } catch {
+      ElMessage.error('下载失败：图片跨域受限，请稍后重试或联系管理员配置 OSS 跨域')
+    }
+  }
+
+  function reloadArticleDetail() {
+    const id = route.params.id
+    if (id) loadArticleDetail(id)
+  }
+
+  function browseOtherArticles() {
+    // 关闭当前帖子详情，回到列表继续逛 不是重新加载
+    closeDetailDialog()
   }
 
   function bindGalleryStripObserver() {
@@ -414,21 +1026,32 @@ export function useArticleDetail() {
     nextTick(() => {
       updateGalleryStripState()
       bindGalleryStripObserver()
+      startGalleryAutoplay()
     })
     if (!urls?.length) {
       galleryStripOverflow.value = false
       galleryStripFadeLeft.value = false
       galleryStripFadeRight.value = false
+      stopGalleryAutoplay()
     }
   })
 
+  onMounted(() => {
+    document.addEventListener('visibilitychange', onGalleryVisibilityChange)
+  })
+
   onUnmounted(() => {
+    document.removeEventListener('visibilitychange', onGalleryVisibilityChange)
+    stopGalleryAutoplay()
     galleryResizeObserver?.disconnect()
     galleryResizeObserver = null
+    unbindReplyLoadObserver()
     if (shareCopiedTimer) {
       clearTimeout(shareCopiedTimer)
       shareCopiedTimer = null
     }
+    stopAiSummaryPolling()
+    stopTriplePressAnimation()
   })
 
   const renderedContent = computed(() => {
@@ -461,7 +1084,6 @@ export function useArticleDetail() {
   const shouldCollapseContent = computed(() => plainContentLength.value > 280)
 
   const replyPlaceholder = computed(() => {
-    if (isQuestionClosed.value) return '问题已关闭，暂不接受新回答'
     if (replyTarget.value) return ''
     return isQuestion.value ? '写下你的回答…' : '说点什么…'
   })
@@ -479,20 +1101,23 @@ export function useArticleDetail() {
 
   const replyCountDisplay = computed(() => {
     if (!article.value) return 0
-    return Math.max(Number(article.value.replyCount) || 0, replies.value.length)
+    return Math.max(Number(article.value.replyCount) || 0, Number(replyTotal.value) || 0)
   })
 
   const ownerAuditNotice = computed(() => {
     if (!isOwner.value || !article.value?.id) return null
     const s = Number(article.value.status)
     const id = article.value.id
+    const shellBack =
+      route.query.from === 'creative'
+        ? { buttonText: '返回创作中心', path: '/creative' }
+        : { buttonText: '返回首页', path: '/community' }
     if (s === ARTICLE_STATUS.APPROVED) {
       return {
         type: 'success',
         title: '审核通过',
         description: '帖子正在发布，请稍候刷新页面。',
-        buttonText: '返回首页',
-        path: '/',
+        ...shellBack,
       }
     }
     if (s === ARTICLE_STATUS.PENDING_AUDIT) {
@@ -500,8 +1125,7 @@ export function useArticleDetail() {
         type: 'warning',
         title: '审核中',
         description: '内容正在由系统异步审核，通过后帖子会自动发布，结果将通过站内信通知。',
-        buttonText: '返回首页',
-        path: '/',
+        ...shellBack,
       }
     }
     if (s === ARTICLE_STATUS.REJECTED) {
@@ -534,19 +1158,57 @@ export function useArticleDetail() {
     return null
   })
 
+  function resetDetailTransientState() {
+    stopGalleryAutoplay()
+    stopAiSummaryPolling()
+    aiLoading.value = false
+    detailVideoRef.value?.resetDanmakuEngine?.()
+    const musicEl = musicAudioRef.value
+    if (musicEl && !musicEl.paused) {
+      try {
+        musicEl.pause()
+      } catch {
+        // 忽略
+      }
+    }
+    musicPlaying.value = false
+    replyContent.value = ''
+    replyTarget.value = null
+    replyEmojiPanelOpen.value = false
+    replySubmitting.value = false
+    clearReplyPendingMedia()
+    replyPageNum.value = 1
+    replyTotal.value = 0
+    replyLoadingMore.value = false
+    replies.value = []
+    unbindReplyLoadObserver()
+    subReplyRefreshTokens.value = {}
+  }
+
+  function syncVisitCountToFeed() {
+    const id = article.value?.id
+    if (id == null) return
+    notifyFeedVisitCountUpdate(id, article.value?.visitCount)
+  }
+
   async function loadArticleDetail(articleId) {
     if (articleId == null || articleId === '') return
     loading.value = true
+    resetDetailTransientState()
     article.value = null
-    replies.value = []
-    replyTarget.value = null
     contentExpanded.value = false
     aiSummary.value = ''
     aiSummaryIsHint.value = false
+    aiSummaryCollapsed.value = true
+    aiSummaryStatus.value = 'NOT_READY'
+    aiSummaryCanExpand.value = false
+    aiSummaryCanRegenerate.value = false
+    galleryAutoplayStopped.value = false
     articleGalleryUrls.value = []
     articleTags.value = []
-    tagsExpanded.value = false
     activeGalleryIndex.value = 0
+    videoPlayerReady.value = false
+    videoPosterUrl.value = ''
     try {
       const res = await getArticleDetail(articleId)
       if (res.code === 0) {
@@ -564,11 +1226,29 @@ export function useArticleDetail() {
         await nextTick()
         updateGalleryStripState()
         bindGalleryStripObserver()
+        await refreshAiSummaryState()
+        // 详情首图/视频静帧就绪后再从封面位展开，避免闪切
+        if (expandFromCardPrep.value) {
+          await runOpenFromCardAnimation()
+        } else if (isVideoArticle.value && articleVideoUrl.value) {
+          // 非首页卡片进入：先备好海报/首帧，再挂载播放器自动播
+          videoPosterUrl.value = await resolveVideoStillUrl()
+          videoPlayerReady.value = true
+        }
+        if (!isVideoArticle.value && articleMusic.value?.audioUrl) {
+          await autoPlayArticleMusic()
+        }
+      } else if (expandFromCardPrep.value) {
+        expandFromCardPrep.value = false
+      }
+    } catch {
+      if (expandFromCardPrep.value) {
+        expandFromCardPrep.value = false
       }
     } finally {
       loading.value = false
     }
-    await loadReplies()
+    await loadReplies(1)
   }
 
   watch(
@@ -601,12 +1281,24 @@ export function useArticleDetail() {
         }
       }
     } catch {
-      /* ignore */
+      // 忽略
     }
   }
 
   function shouldReturnToProfile() {
     return route.query.from === 'profile'
+  }
+
+  function shouldReturnToCreative() {
+    return route.query.from === 'creative'
+  }
+
+  function shouldReturnToHotSource() {
+    return route.query.from === 'hot'
+  }
+
+  function shouldReturnToShellSource() {
+    return shouldReturnToProfile() || shouldReturnToCreative() || shouldReturnToHotSource()
   }
 
   function getProfileReturnPath() {
@@ -617,9 +1309,15 @@ export function useArticleDetail() {
         if (state.profileUserId) return `/profile/${state.profileUserId}`
       }
     } catch {
-      /* ignore */
+      // 忽略
     }
     return '/profile'
+  }
+
+  function getShellSourceReturnPath() {
+    if (shouldReturnToProfile()) return getProfileReturnPath()
+    if (shouldReturnToCreative()) return '/creative'
+    return getFeedReturnPath()
   }
 
   async function handleBeforeClose(done) {
@@ -630,33 +1328,53 @@ export function useArticleDetail() {
     detailClosing = true
 
     const articleId = route.params.id
-    const fromHome = shouldReturnBackToFeed()
+    const fromHome = shouldReturnBackToFeed() && !shouldReturnToShellSource()
+    const fromSearch = shouldReturnBackToSearch() && !shouldReturnToShellSource()
     const origin = fromHome ? getFeedCardOrigin(articleId) : null
 
     try {
       if (origin) {
-        await animateDetailDialogToCard(origin)
+        const heroUrl =
+          resolveOpenMorphImageUrl() ||
+          videoPosterUrl.value ||
+          String(article.value?.coverImg || '').trim() ||
+          origin.coverUrl ||
+          ''
+        await animateDetailDialogToCard(
+          {
+            ...origin,
+            coverUrl: heroUrl,
+          },
+          {
+            articleId,
+            heroUrl,
+            restoreCoverUrl: origin.restoreCoverUrl || String(article.value?.coverImg || '').trim(),
+          },
+        )
       }
     } catch {
-      /* ignore */
+      // 忽略
     } finally {
       done()
       detailClosing = false
-      if (shouldReturnToProfile()) {
+      if (shouldReturnToShellSource()) {
         skipDialogClosedNav = true
         if (window.history.length > 1) {
           router.back()
         } else {
-          router.replace(getProfileReturnPath())
+          router.replace(getShellSourceReturnPath())
         }
         return
       }
-      if (fromHome && window.history.length > 1) {
+      if ((fromHome || fromSearch) && window.history.length > 1) {
         skipDialogClosedNav = true
         clearFeedNavigationState()
-        router.back().then(() => {
+        const removeAfterEach = router.afterEach(() => {
+          removeAfterEach()
+          syncVisitCountToFeed()
           nextTick(() => restoreFeedScroll())
         })
+        router.back()
       }
     }
   }
@@ -667,12 +1385,21 @@ export function useArticleDetail() {
       return
     }
     if (/^\/article\//.test(route.path)) {
-      if (shouldReturnToProfile()) {
-        router.replace(getProfileReturnPath())
+      if (shouldReturnToShellSource()) {
+        router.replace(getShellSourceReturnPath())
         return
       }
+      if (shouldReturnBackToSearch()) {
+        const returnPath = getFeedReturnPath()
+        clearFeedNavigationState()
+        router.replace(returnPath)
+        return
+      }
+      const returnPath = getFeedReturnPath()
       clearFeedNavigationState()
-      router.replace('/').then(() => restoreFeedScroll())
+      router.replace(returnPath).then(() => {
+        if (returnPath === '/community') restoreFeedScroll()
+      })
     }
   }
 
@@ -683,58 +1410,110 @@ export function useArticleDetail() {
   }
 
   function goAuthorProfile() {
-    const uid = author.value?.id
-    if (!uid) return
-    skipDialogClosedNav = true
-    clearFeedNavigationState()
-    closeDetailDialog()
-    router.push(`/profile/${uid}`)
+    goUserProfile(author.value?.id)
   }
 
   function goUserProfile(userId) {
-    const uid = Number(userId)
-    if (!Number.isFinite(uid) || uid <= 0) return
+    const uid = String(userId ?? '').trim()
+    if (!/^\d+$/.test(uid) || /^0+$/.test(uid)) return
     skipDialogClosedNav = true
     clearFeedNavigationState()
-    closeDetailDialog()
-    router.push(`/profile/${uid}`)
+    // 个人主页跳转不是 关闭详情并返回来源页 ，不能复用带返回动画的 closeDetailDialog
+    dialogOpen.value = false
+    router.push({ name: 'profile', params: { id: uid } })
   }
 
-  async function loadReplies() {
-    const res = await getReplyList({ articleId: route.params.id, pageNum: 1, pageSize: 50 })
-    if (res.code === 0) {
-      replies.value = unwrapPageRecords(res.data).map((row) => ({
+  function unbindReplyLoadObserver() {
+    replyLoadObserver?.disconnect()
+    replyLoadObserver = null
+  }
+
+  function resolveArticleScrollRoot() {
+    const scrollbar = articleContentScrollRef.value
+    if (!scrollbar) return null
+    const wrap = scrollbar.wrapRef
+    if (wrap?.value instanceof HTMLElement) return wrap.value
+    if (wrap instanceof HTMLElement) return wrap
+    return scrollbar.$el?.querySelector?.('.el-scrollbar__wrap') || null
+  }
+
+  function bindReplyLoadObserver() {
+    unbindReplyLoadObserver()
+    if (!replyHasMore.value) return
+    const sentinel = replyLoadMoreSentinelRef.value
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return
+    const root = resolveArticleScrollRoot()
+    replyLoadObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreReplies()
+        }
+      },
+      { root, rootMargin: '160px 0px', threshold: 0 },
+    )
+    replyLoadObserver.observe(sentinel)
+  }
+
+  async function loadReplies(page = 1, { append = false } = {}) {
+    const articleId = route.params.id
+    if (articleId == null || articleId === '') return
+    if (append) {
+      if (replyLoadingMore.value || !replyHasMore.value) return
+      replyLoadingMore.value = true
+    }
+    const pageNum = Math.max(1, Number(page) || 1)
+    try {
+      const res = await getReplyList({
+        articleId,
+        pageNum,
+        pageSize: replyPageSize.value,
+      })
+      if (res.code !== 0) return
+      const raw = res.data
+      const rows = unwrapPageRecords(raw).map((row) => ({
         ...row,
         liked: !!row.liked,
         subReplyCount: row.subReplyCount ?? 0,
       }))
-      if (article.value) {
-        article.value.replyCount = Math.max(Number(article.value.replyCount) || 0, replies.value.length)
+      replyTotal.value = raw?.total != null ? Number(raw.total) : (append
+        ? Math.max(Number(replyTotal.value) || 0, replies.value.length + rows.length)
+        : rows.length)
+      replyPageNum.value = pageNum
+      if (append) {
+        const seen = new Set(replies.value.map((item) => Number(item?.articleReply?.id)))
+        const extra = rows.filter((item) => !seen.has(Number(item?.articleReply?.id)))
+        replies.value = [...replies.value, ...extra]
+      } else {
+        replies.value = rows
       }
+      if (article.value) {
+        article.value.replyCount = Math.max(
+          Number(article.value.replyCount) || 0,
+          replyTotal.value,
+        )
+      }
+    } finally {
+      if (append) replyLoadingMore.value = false
+      await nextTick()
+      bindReplyLoadObserver()
     }
   }
 
+  async function loadMoreReplies() {
+    if (!replyHasMore.value || replyLoadingMore.value) return
+    await loadReplies(replyPageNum.value + 1, { append: true })
+  }
+
   function isAcceptedReply(item) {
-    return Number(item?.articleReply?.id) === Number(article.value?.acceptedReplyId)
+    return !!item?.accepted
   }
 
   async function acceptAnswer(item) {
     if (!canAcceptAnswer.value || questionActionSaving.value) return
+    if (isArticleAuthorReply(item)) return
     const replyId = item?.articleReply?.id
     if (!replyId || !article.value?.id) return
-    try {
-      await ElMessageBox.confirm(
-        '采纳后问题将标记为已解决，P0 暂不支持改选其他回答。',
-        '采纳为最佳答案',
-        {
-          type: 'warning',
-          confirmButtonText: '确认采纳',
-          cancelButtonText: '再看看',
-        },
-      )
-    } catch {
-      return
-    }
+    if (item.accepted) return
     questionActionSaving.value = true
     try {
       const res = await acceptQuestionAnswer({
@@ -742,43 +1521,59 @@ export function useArticleDetail() {
         replyId,
       })
       if (res.code === 0) {
-        article.value.questionStatus = QUESTION_STATUS.RESOLVED
-        article.value.acceptedReplyId = replyId
-        await loadReplies()
-        ElMessage.success('已采纳为最佳答案')
+        item.accepted = true
+        ElMessage.success('已采纳')
       }
     } catch {
-      // 请求层已统一展示错误，这里只阻止事件异常继续冒泡。
+      // 请求层已统一展示错误
     } finally {
       questionActionSaving.value = false
     }
   }
 
-  async function closeCurrentQuestion() {
-    if (!canCloseQuestion.value || questionActionSaving.value || !article.value?.id) return
-    try {
-      await ElMessageBox.confirm(
-        '关闭后将不再接受新回答，P0 暂不支持重新打开。',
-        '关闭这个问题',
-        {
-          type: 'warning',
-          confirmButtonText: '确认关闭',
-          cancelButtonText: '取消',
-        },
-      )
-    } catch {
+  async function acceptSubAnswer(payload) {
+    if (!canAcceptAnswer.value || questionActionSaving.value) return
+    const subUserId = payload?.postUser?.id
+    if (subUserId != null && author.value?.id != null && Number(subUserId) === Number(author.value.id)) {
       return
     }
+    const subReplyId = payload?.subReply?.id || payload?.subReplyId
+    if (!subReplyId || !article.value?.id) return
+    if (payload?.accepted) return
     questionActionSaving.value = true
     try {
-      const res = await closeQuestion({ articleId: article.value.id })
+      const res = await acceptQuestionAnswer({
+        articleId: article.value.id,
+        subReplyId,
+      })
       if (res.code === 0) {
-        article.value.questionStatus = QUESTION_STATUS.CLOSED
-        clearReplyTarget()
-        ElMessage.success('问题已关闭')
+        if (payload) payload.accepted = true
+        ElMessage.success('已采纳')
       }
     } catch {
-      // 请求层已统一展示错误，这里只阻止事件异常继续冒泡。
+      // 忽略
+    } finally {
+      questionActionSaving.value = false
+    }
+  }
+
+  async function toggleQuestionResolved() {
+    if (!canToggleQuestionResolved.value || questionActionSaving.value || !article.value?.id) return
+    const nextResolved = !questionResolved.value
+    questionActionSaving.value = true
+    try {
+      const res = await setQuestionResolved({
+        articleId: article.value.id,
+        resolved: nextResolved,
+      })
+      if (res.code === 0) {
+        article.value.questionStatus = nextResolved
+          ? QUESTION_STATUS.RESOLVED
+          : QUESTION_STATUS.WAITING
+        ElMessage.success(nextResolved ? '已标记为已解决' : '已标记为未解决')
+      }
+    } catch {
+      // 忽略
     } finally {
       questionActionSaving.value = false
     }
@@ -896,9 +1691,21 @@ export function useArticleDetail() {
     }, 2000)
   }
 
-  function handleShare() {
+  async function handleShare() {
     if (!article.value?.id) return
     const url = `${window.location.origin}/article/${article.value.id}`
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: article.value.title || '分享帖子',
+          text: article.value.title || '',
+          url,
+        })
+        return
+      } catch (error) {
+        if (error?.name === 'AbortError') return
+      }
+    }
     const copied = copyToClipboardSync(url)
     if (copied) {
       showShareCopiedFeedback()
@@ -919,6 +1726,8 @@ export function useArticleDetail() {
 
   async function handleLike() {
     if (!(await ensureLoggedIn('点赞需要登录'))) return
+    if (engagementSubmitting.value) return
+    engagementSubmitting.value = true
     try {
       const res = isLiked.value 
         ? await unlikeArticle(article.value.id) 
@@ -926,13 +1735,102 @@ export function useArticleDetail() {
 
       if (res.code === 0) {
         isLiked.value = !isLiked.value
-        article.value.likeCount += isLiked.value ? 1 : -1
+        const currentLikeCount = Number(article.value.likeCount) || 0
+        article.value.likeCount = Math.max(0, currentLikeCount + (isLiked.value ? 1 : -1))
         ElMessage.success(isLiked.value ? '已点赞' : '已取消')
       } else {
         ElMessage.error(res.message || '操作失败')
       }
     } catch (err) {
       ElMessage.error('点赞请求异常')
+    } finally {
+      engagementSubmitting.value = false
+    }
+  }
+
+  function stopTriplePressAnimation() {
+    if (triplePressFrame != null) {
+      cancelAnimationFrame(triplePressFrame)
+      triplePressFrame = null
+    }
+    triplePressActive.value = false
+    triplePressProgress.value = 0
+  }
+
+  function tickTriplePress(now) {
+    const elapsed = Math.max(0, now - triplePressStartedAt)
+    triplePressProgress.value = Math.min(1, elapsed / 5000)
+    if (triplePressProgress.value >= 1) {
+      stopTriplePressAnimation()
+      void completeTripleEngagement()
+      return
+    }
+    triplePressFrame = requestAnimationFrame(tickTriplePress)
+  }
+
+  function startTriplePress(event) {
+    if (event?.button != null && event.button !== 0) return
+    if (engagementSubmitting.value) return
+    event?.preventDefault?.()
+    stopTriplePressAnimation()
+    triplePointerId = event?.pointerId ?? null
+    if (triplePointerId != null && event?.currentTarget?.setPointerCapture) {
+      event.currentTarget.setPointerCapture(triplePointerId)
+    }
+    triplePressActive.value = true
+    triplePressStartedAt = performance.now()
+    triplePressFrame = requestAnimationFrame(tickTriplePress)
+  }
+
+  function releaseTriplePointer(event) {
+    if (triplePointerId != null && event?.currentTarget?.hasPointerCapture?.(triplePointerId)) {
+      try {
+        event.currentTarget.releasePointerCapture(triplePointerId)
+      } catch {
+        // 指针已由浏览器释放时无需重复处理
+      }
+    }
+    triplePointerId = null
+  }
+
+  function cancelTriplePress(event) {
+    releaseTriplePointer(event)
+    if (!triplePressActive.value) return
+    stopTriplePressAnimation()
+  }
+
+  function finishTriplePress(event) {
+    releaseTriplePointer(event)
+    if (!triplePressActive.value) return
+    const elapsed = Math.max(0, performance.now() - triplePressStartedAt)
+    stopTriplePressAnimation()
+    if (elapsed < 5000) {
+      void handleLike()
+    }
+  }
+
+  async function completeTripleEngagement() {
+    if (!article.value?.id || engagementSubmitting.value) return
+    engagementSubmitting.value = true
+    try {
+      if (!isLiked.value) {
+        const likeRes = await likeArticle(article.value.id)
+        if (likeRes.code !== 0) throw new Error(likeRes.message || '点赞失败')
+        isLiked.value = true
+        article.value.likeCount = (Number(article.value.likeCount) || 0) + 1
+      }
+      if (!isFavorited.value) {
+        const favoriteRes = await saveArticleFavorite({ articleId: article.value.id, folderId: null })
+        if (favoriteRes.code !== 0) throw new Error(favoriteRes.message || '收藏失败')
+        isFavorited.value = true
+        article.value.favoriteCount = (Number(article.value.favoriteCount) || 0) + 1
+      }
+      ElMessage.success('三连成功，感谢支持！')
+      await handleShare()
+    } catch (error) {
+      ElMessage.error(error?.message || '三连未完成，请稍后重试')
+    } finally {
+      engagementSubmitting.value = false
     }
   }
 
@@ -993,7 +1891,7 @@ export function useArticleDetail() {
   }
 
   async function toggleFavorite() {
-    if (!(await ensureLoggedIn('点赞需要登录'))) return
+    if (!(await ensureLoggedIn('收藏需要登录'))) return
     if (!article.value?.id) return
 
     if (isFavorited.value) {
@@ -1040,12 +1938,22 @@ export function useArticleDetail() {
     }
   }
 
+  function onReplyKeydown(event) {
+    if (event.shiftKey) return
+    event.preventDefault()
+    if (!canSubmitReply.value) return
+    submitReply()
+  }
+
   async function submitReply() {
     if (!(await ensureLoggedIn('评论需要登录'))) return
     if (blockIfMuted(userStore)) return
+    if (replySubmitting.value) return
+    if (replyPendingImages.value.some((img) => img?.pending)) return
     const text = replyContent.value.trim()
     const mediaList = buildReplyMediaList()
     if (!text && !mediaList.length) return
+    replySubmitting.value = true
     try {
       let res
       const payload = { content: text, mediaList }
@@ -1066,7 +1974,7 @@ export function useArticleDetail() {
         const subReplyId = wasSub ? replyTarget.value.replyId : null
         replyTarget.value = null
         clearReplyPendingMedia()
-        await loadReplies()
+        await loadReplies(1)
         if (subReplyId != null) {
           subReplyRefreshTokens.value = {
             ...subReplyRefreshTokens.value,
@@ -1079,59 +1987,99 @@ export function useArticleDetail() {
     } catch (err) {
       if (err?.code === 1104) return
       ElMessage.error(err?.message || '评论发送失败')
+    } finally {
+      replySubmitting.value = false
+    }
+  }
+
+  async function refreshAiSummaryState() {
+    if (!article.value?.id) return
+    try {
+      const res = await getArticleSummaryState(article.value.id)
+      if (res.code !== 0 || !res.data) return
+      applyAiSummaryState(res.data)
+      if (res.data.status === 'PROCESSING' || res.data.status === 'NOT_READY') {
+        startAiSummaryPolling()
+      } else {
+        stopAiSummaryPolling()
+      }
+    } catch {
+      aiSummaryStatus.value = 'FAILED'
+      aiSummaryCanRegenerate.value = true
+    }
+  }
+
+  function applyAiSummaryState(state) {
+    const wasProcessing = aiSummaryStatus.value === 'PROCESSING' || aiLoading.value
+    const nextStatus = state.status || 'NOT_READY'
+    aiSummaryStatus.value = nextStatus
+    aiSummaryCanExpand.value = nextStatus === 'PROCESSING' ? false : state.canExpand === true
+    aiSummaryCanRegenerate.value = state.canRegenerate === true
+    aiLoading.value = nextStatus === 'PROCESSING'
+    if (nextStatus === 'PROCESSING') {
+      aiSummaryCollapsed.value = true
+    } else if (wasProcessing && (nextStatus === 'READY' || nextStatus === 'TOO_SHORT')) {
+      aiSummaryCollapsed.value = false
+    }
+    if (state.summary) {
+      aiSummary.value = state.summary
+      aiSummaryIsHint.value = nextStatus === 'TOO_SHORT' || isAiSummaryHintMessage(state.summary)
+      nextTick(resizeAiSummaryArea)
+    }
+  }
+
+  function startAiSummaryPolling() {
+    if (aiSummaryPollTimer) return
+    aiSummaryPollStartedAt = Date.now()
+    aiSummaryPollTimer = window.setInterval(async () => {
+      if (Date.now() - aiSummaryPollStartedAt >= 120000) {
+        stopAiSummaryPolling()
+        return
+      }
+      await refreshAiSummaryState()
+    }, 5000)
+  }
+
+  function stopAiSummaryPolling() {
+    if (aiSummaryPollTimer) {
+      window.clearInterval(aiSummaryPollTimer)
+      aiSummaryPollTimer = null
     }
   }
 
   async function loadAiSummary() {
-    if (!article.value?.id) return
-    const plainContent = String(article.value?.content || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (plainContent.length < 30) {
-      aiSummary.value = '内容过少，无法生成摘要'
-      aiSummaryIsHint.value = true
-      await nextTick()
-      resizeAiSummaryArea()
-      return
-    }
-    if (guideStreamAbort) {
-      guideStreamAbort()
-      guideStreamAbort = null
-    }
-    aiLoading.value = true
-    aiSummary.value = ''
-    aiSummaryIsHint.value = false
+    if (!article.value?.id || !aiSummaryCanExpand.value) return
+    await refreshAiSummaryState()
+    aiSummaryCollapsed.value = false
     await nextTick()
     resizeAiSummaryArea()
-    await new Promise((resolve) => {
-      guideStreamAbort = streamArticleGuide(article.value.id, {
-        onChunk: (piece) => {
-          aiSummary.value += piece
-          aiSummaryIsHint.value = isAiSummaryHintMessage(aiSummary.value)
-          nextTick(resizeAiSummaryArea)
-        },
-        onDone: () => {
-          if (
-            isAiSummaryHintMessage(aiSummary.value)
-            || isSummaryLikelyArticleBody(aiSummary.value, article.value?.content)
-          ) {
-            aiSummary.value = '内容过少，无法生成摘要'
-            aiSummaryIsHint.value = true
-          }
-          nextTick(resizeAiSummaryArea)
-          aiLoading.value = false
-          guideStreamAbort = null
-          resolve()
-        },
-        onError: (msg) => {
-          ElMessage.error(msg || '生成摘要失败')
-          aiLoading.value = false
-          guideStreamAbort = null
-          resolve()
-        },
-      })
-    })
+  }
+
+  async function regenerateAiSummary() {
+    if (!article.value?.id || !aiSummaryCanRegenerate.value || aiLoading.value) return
+    if (!(await ensureLoggedIn('重新生成AI导读需要登录'))) return
+    const previousCollapsed = aiSummaryCollapsed.value
+    const previousCanExpand = aiSummaryCanExpand.value
+    aiSummaryCollapsed.value = true
+    aiSummaryCanExpand.value = false
+    aiLoading.value = true
+    try {
+      const res = await regenerateArticleSummary(article.value.id)
+      if (res.code !== 0) {
+        ElMessage.error(res.message || '重新生成失败')
+        aiSummaryCollapsed.value = previousCollapsed
+        aiSummaryCanExpand.value = previousCanExpand
+        return
+      }
+      applyAiSummaryState(res.data || {})
+      startAiSummaryPolling()
+    } catch (error) {
+      ElMessage.error(error?.message || '重新生成失败')
+      aiSummaryCollapsed.value = previousCollapsed
+      aiSummaryCanExpand.value = previousCanExpand
+    } finally {
+      aiLoading.value = aiSummaryStatus.value === 'PROCESSING'
+    }
   }
 
   const isVipGold = computed(() => {
@@ -1147,53 +2095,100 @@ export function useArticleDetail() {
   return {
     ArrowLeft,
     ArrowRight,
+    ArrowUp,
     ChatDotRound,
     Close,
     CollectionTag,
     MagicStick,
+    Flag,
+    Download,
+    Compass,
+    Headset,
+    VideoPlay,
+    VideoPause,
     Picture,
     PictureFilled,
+    Promotion,
+    RefreshRight,
     Share,
+    View,
     ArticleDetailVideo,
+    BorderGlow,
+    CommentExpandableText,
     SubReplyArea,
+    articleNotFoundImageUrl,
     aiLoading,
     aiSummary,
+    aiSummaryStatus,
+    aiSummaryCanExpand,
+    aiSummaryCanRegenerate,
+    contentReportDialogVisible,
+    contentReportDialogTitle,
+    contentReportSubmitting,
     aiSummaryAreaRef,
+    aiSummaryCollapsed,
     aiSummaryIsHint,
+    authorMetaText,
     activeGalleryIndex,
+    galleryCanGoNext,
+    galleryCanGoPrev,
+    galleryPageLabel,
+    showGalleryNavArrows,
+    shiftGalleryIndex,
+    formatCompactNumber,
+    galleryThumbIndexLabel,
+    scrollGalleryStripBy,
+    toggleAiSummaryCollapsed,
+    downloadCurrentGalleryImage,
+    reloadArticleDetail,
+    browseOtherArticles,
     activeGalleryUrl,
-    acceptAnswer,
     mainDisplayImageUrl,
     imagePreviewList,
+    mainImagePreviewVisible,
+    openMainImagePreview,
+    closeMainImagePreview,
     article,
+    articleContentScrollRef,
     articleTags,
-    hiddenArticleTagCount,
-    tagsExpanded,
-    toggleArticleTags,
-    visibleArticleTags,
     articleGalleryUrls,
     articleVideoUrl,
+    articleHlsUrl,
+    articleVideoTranscodeStatus,
+    articleMusic,
+    musicPlaying,
+    musicAudioRef,
+    musicEqBars,
+    toggleArticleMusic,
+    onMusicEnded,
     detailVideoRef,
     isVideoArticle,
+    videoPlayerReady,
+    videoPosterUrl,
+    onDetailVideoPlaying,
     replayDetailVideo,
     author,
     addReplyShopEmoji,
     canSubmitReply,
     canAcceptAnswer,
-    canCloseQuestion,
+    canToggleQuestionResolved,
+    questionResolved,
+    questionResolveHint,
     clearReplyTarget,
     confirmFavorite,
     contentExpanded,
     shouldCollapseContent,
     closeDetailDialog,
-    closeCurrentQuestion,
     defaultAvatar,
     dialogOpen,
+    expandFromCardPrep,
     followSaving,
     isFollowingAuthor,
     isQuestion,
-    isQuestionClosed,
     isAcceptedReply,
+    acceptAnswer,
+    acceptSubAnswer,
+    toggleQuestionResolved,
     toggleFollowAuthor,
     galleryStripFadeLeft,
     galleryStripFadeRight,
@@ -1208,6 +2203,11 @@ export function useArticleDetail() {
     favoriteFoldersLoading,
     favoriteSaving,
     handleLike,
+    startTriplePress,
+    finishTriplePress,
+    cancelTriplePress,
+    triplePressActive,
+    triplePressProgress,
     handleShare,
     shareCopied,
     isLiked,
@@ -1219,10 +2219,12 @@ export function useArticleDetail() {
     emojiPackIconUrl,
     emojiShopStore,
     loadAiSummary,
+    regenerateAiSummary,
     loading,
     loadFavoriteFolders,
     onGalleryStripScroll,
     onReplyEmojiPopoverShow,
+    onReplyKeydown,
     onReplyImageFileChange,
     onReplyPackBarScroll,
     openCommentShopDetail,
@@ -1233,6 +2235,12 @@ export function useArticleDetail() {
     renderedContent,
     renderCommentHtml,
     replies,
+    replyHasMore,
+    replyLoadMoreSentinelRef,
+    replyLoadingMore,
+    replyPageNum,
+    replyPageSize,
+    replyTotal,
     replyContent,
     replyCountDisplay,
     replyEmojiPanelOpen,
@@ -1244,11 +2252,13 @@ export function useArticleDetail() {
     replyPendingImages,
     replyPlaceholder,
     replySelectedPack,
+    replySubmitting,
     replyTarget,
     replyTargetLabel,
     replyVisiblePacks,
     removePendingEmoji,
     removePendingImage,
+    retryPendingImage,
     scrollReplyPackBarLeft,
     scrollReplyPackBarRight,
     selectReplyPack,
@@ -1269,5 +2279,13 @@ export function useArticleDetail() {
     toggleFavorite,
     triggerReplyImagePick,
     formatForumDateTimeShanghai,
+    formatCommentMeta,
+    isOwnComment,
+    isArticleAuthorReply,
+    reportArticle,
+    reportDanmaku,
+    reportReply,
+    reportSubReply,
+    submitContentReport,
   }
 }

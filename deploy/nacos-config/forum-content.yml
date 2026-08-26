@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: ${FORUM_CONTENT_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_content_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_CONTENT_DB_USERNAME:forum_content}
+    password: ${FORUM_CONTENT_DB_PASSWORD}
+  cloud:
+    openfeign:
+      client:
+        config:
+          contentAiHubInternalFeignClient:
+            connect-timeout: 5000
+            # 标签推荐等 AI 调用，与前端 / gateway 对齐
+            read-timeout: 300000
+
+forum:
+  domain: content
+  features:
+    scheduling: true
+    mq: true
+    mq-consumer: true
+    websocket: false
+    game-runtime: false

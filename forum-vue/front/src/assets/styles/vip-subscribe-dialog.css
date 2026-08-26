@@ -1,0 +1,23 @@
+/* 会员购买 Dialog：固定 1200 画布，去掉 el dialog 默认内边距 */
+.vip-subscribe-dialog.el-dialog {
+  width: 1200px !important;
+  max-width: calc(100vw - 24px);
+  padding: 0;
+  border-radius: 24px;
+  background: transparent;
+  box-shadow: 0 18px 48px rgba(32, 20, 39, 0.28);
+  overflow: visible;
+}
+
+.vip-subscribe-dialog .el-dialog__header {
+  display: none;
+}
+
+.vip-subscribe-dialog .el-dialog__body {
+  padding: 0;
+  background: transparent;
+}
+
+.vip-subscribe-dialog .el-dialog__footer {
+  display: none;
+}

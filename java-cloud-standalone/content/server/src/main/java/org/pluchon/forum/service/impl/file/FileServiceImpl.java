@@ -2,7 +2,6 @@ package org.pluchon.forum.service.impl.file;
 
 import cn.hutool.core.util.IdUtil;
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClientBuilder;
 import com.aliyun.oss.model.ObjectMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.config.OssConfig;
@@ -11,41 +10,44 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.LotteryImagePathUtils;
-import org.pluchon.forum.service.remote.ContentAiGatewayService;
+import org.pluchon.forum.common.utils.OssFolderSupport;
 import org.pluchon.forum.common.utils.ImageCompressor;
+import org.pluchon.forum.common.utils.ImageMagicValidator;
 import org.pluchon.forum.common.utils.InMemoryMultipartFile;
+import org.pluchon.forum.entity.vo.file.BatchImageUploadResultVO;
 import org.pluchon.forum.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * 文件上传统一实现
- * 全工程唯一持有 OSS 客户端的地方, 所有业务接口都不应再直接处理 MultipartFile,
- * 而是先调用 /file/uploadXxx 拿到 URL, 再通过业务接口把 URL 写入 DB
- *
- * 上传流水线 (uploadImage):
- *   1) validateImageFile : 基础校验 (非空 / 文件名 / 类型白名单 / 硬上限 / GIF 单独限尺寸)
- *   2) maybeCompress     : > 5MB 的静态图走 thumbnailator 压缩, GIF / 已达标图原样返回
- *   3) ContentAiGatewayService：用压缩后的字节经 AI 域审核，减小网络压力
- *   4) putObject         : 写入 OSS 并返回外链 URL
- */
+// 文件上传与对象存储服务实现
 @Service
 @Slf4j
 public class FileServiceImpl implements FileService {
@@ -54,7 +56,14 @@ public class FileServiceImpl implements FileService {
     private OssConfig ossConfig;
 
     @Autowired
-    private ContentAiGatewayService contentAiGatewayService;
+    private AuditedOssImageUploader auditedOssImageUploader;
+
+    @Autowired
+    @Qualifier("imageAuditExecutor")
+    private ExecutorService imageAuditExecutor;
+
+    @Autowired
+    private OSS ossClient;
 
     @Value("${forum.ffmpeg.internal-key:}")
     private String ffmpegInternalKey;
@@ -83,11 +92,21 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
+    public String uploadFavoriteFolderCover(MultipartFile file, Long userId) {
+        return uploadImage(file, userId, Constant.OSS_PATH_FAVORITE_FOLDER);
+    }
+
+    @Override
     public String uploadArticleImage(MultipartFile file, Long userId) {
         return uploadImage(file, userId, Constant.OSS_PATH_ARTICLE_IMAGE);
     }
 
-    /** 仅超过 200MB 才走 ffmpeg（119MB 级游戏录像全量重编码在弱 CPU 上可能 30min+） */
+    @Override
+    public BatchImageUploadResultVO uploadArticleImages(MultipartFile[] files, Long userId) {
+        return uploadImagesBatch(files, userId, Constant.OSS_PATH_ARTICLE_IMAGE);
+    }
+
+    // 仅超过 200MB 才走 ffmpeg 119MB 级游戏录像全量重编码在弱 CPU 上可能 30min+
     private static final long VIDEO_COMPRESS_THRESHOLD = 200L * 1024 * 1024;
     private static final long VIDEO_HARD_MAX_SIZE = 600L * 1024 * 1024;
 
@@ -97,11 +116,12 @@ public class FileServiceImpl implements FileService {
         validateVideoFile(file);
         MultipartFile uploadFile = maybeCompressVideo(file);
         String objectName = ossConfig.objectKey(Constant.OSS_PATH_ARTICLE_VIDEO, buildVideoObjectName(userId));
-        OSS ossClient = buildOssClient();
+        OSS ossClient = this.ossClient;
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentType("video/mp4");
             metadata.setContentLength(uploadFile.getSize());
+            OssFolderSupport.ensureFolderExists(ossClient, ossConfig, Constant.OSS_PATH_ARTICLE_VIDEO);
             ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
             log.info("OSS 视频上传成功, userId={}, key={}, size={}MB",
                     userId, objectName, uploadFile.getSize() / 1024 / 1024);
@@ -110,7 +130,6 @@ public class FileServiceImpl implements FileService {
             log.error("OSS 视频上传失败, userId={}, key={}", userId, objectName, e);
             throw new ApplicationException("视频上传 OSS 失败: " + e.getMessage());
         } finally {
-            ossClient.shutdown();
         }
     }
 
@@ -120,13 +139,48 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
+    public BatchImageUploadResultVO uploadChatImages(MultipartFile[] files, Long userId) {
+        return uploadImagesBatch(files, userId, Constant.OSS_PATH_CHAT_MESSAGE);
+    }
+
+    @Override
     public String uploadChatEmoji(MultipartFile file, Long userId) {
         return uploadImage(file, userId, Constant.OSS_PATH_CHAT_EMOJI);
     }
 
     @Override
+    public BatchImageUploadResultVO uploadChatEmojis(MultipartFile[] files, Long userId) {
+        return uploadImagesBatch(files, userId, Constant.OSS_PATH_CHAT_EMOJI);
+    }
+
+    @Override
     public String uploadEmojiShopImage(MultipartFile file, Long userId) {
         return uploadImage(file, userId, Constant.OSS_PATH_EMOJI_SHOP);
+    }
+
+    @Override
+    public BatchImageUploadResultVO uploadEmojiShopImages(MultipartFile[] files, Long userId) {
+        return uploadImagesBatch(files, userId, Constant.OSS_PATH_EMOJI_SHOP);
+    }
+
+    // 批量上传共用：校验 + 压缩落内存 + uploadBatch，最多 9 张，允许部分成功
+    private BatchImageUploadResultVO uploadImagesBatch(MultipartFile[] files, Long userId, String pathPrefix) {
+        ensureOssReady();
+        if (files == null || files.length == 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "上传文件不能为空"));
+        }
+        if (files.length > 9) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "单次最多上传9张图片"));
+        }
+        List<MultipartFile> prepared = new ArrayList<>(files.length);
+        List<String> fileNames = new ArrayList<>(files.length);
+        for (MultipartFile file : files) {
+            validateImageFile(file);
+            MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
+            prepared.add(uploadFile);
+            fileNames.add(buildObjectName(uploadFile, userId));
+        }
+        return auditedOssImageUploader.uploadBatch(prepared, pathPrefix, fileNames, imageAuditExecutor);
     }
 
     private static final Pattern DATA_URL_PATTERN = Pattern.compile(
@@ -245,88 +299,34 @@ public class FileServiceImpl implements FileService {
     public String uploadLotteryPrizePicture(MultipartFile file, long activityId, long prizeId) {
         ensureOssReady();
         validateImageFile(file);
-        MultipartFile uploadFile = maybeCompress(file);
-        if (!contentAiGatewayService.validateImage(uploadFile)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
-        }
+        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
         String ts = LotteryImagePathUtils.nowTs();
-        String objectName = ossConfig.objectKey(
-                Constant.OSS_PATH_LOTTERY_PRIZE,
-                LotteryImagePathUtils.prizeImageObjectName(activityId, prizeId, ts, ext));
-        OSS ossClient = buildOssClient();
-        try (InputStream inputStream = uploadFile.getInputStream()) {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(uploadFile.getContentType());
-            metadata.setContentLength(uploadFile.getSize());
-            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
-            log.info("OSS 抽奖奖品图上传成功 activityId={}, prizeId={}, key={}", activityId, prizeId, objectName);
-            return ossConfig.getUrlPrefix() + objectName;
-        } catch (Exception e) {
-            log.error("OSS 抽奖奖品图上传失败 activityId={}, prizeId={}, key={}", activityId, prizeId, objectName, e);
-            throw new ApplicationException("文件上传 OSS 失败: " + e.getMessage());
-        } finally {
-            ossClient.shutdown();
-        }
+        String fileName = LotteryImagePathUtils.prizeImageObjectName(activityId, prizeId, ts, ext);
+        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_LOTTERY_PRIZE, fileName);
     }
 
     @Override
     public String uploadLotteryActivityPicture(MultipartFile file, long activityId, long publisherUserId) {
         ensureOssReady();
         validateImageFile(file);
-        MultipartFile uploadFile = maybeCompress(file);
-        if (!contentAiGatewayService.validateImage(uploadFile)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
-        }
+        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
         String ext = extFromOriginalName(uploadFile.getOriginalFilename());
         String ts = LotteryImagePathUtils.nowTs();
-        String objectName = ossConfig.objectKey(
-                Constant.OSS_PATH_LOTTERY_ACTIVITY,
-                LotteryImagePathUtils.activityCoverObjectName(activityId, publisherUserId, ts, ext));
-        OSS ossClient = buildOssClient();
-        try (InputStream inputStream = uploadFile.getInputStream()) {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(uploadFile.getContentType());
-            metadata.setContentLength(uploadFile.getSize());
-            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
-            log.info("OSS 抽奖活动封面上传成功 activityId={}, publisherId={}, key={}", activityId, publisherUserId, objectName);
-            return ossConfig.getUrlPrefix() + objectName;
-        } catch (Exception e) {
-            log.error("OSS 抽奖活动封面上传失败 activityId={}, publisherId={}, key={}", activityId, publisherUserId, objectName, e);
-            throw new ApplicationException("文件上传 OSS 失败: " + e.getMessage());
-        } finally {
-            ossClient.shutdown();
-        }
+        String fileName = LotteryImagePathUtils.activityCoverObjectName(activityId, publisherUserId, ts, ext);
+        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_LOTTERY_ACTIVITY, fileName);
     }
 
     @Override
     public String uploadNoticePicture(MultipartFile file, Long publisherUserId, Long noticeId) {
         ensureOssReady();
         validateImageFile(file);
-        MultipartFile uploadFile = maybeCompress(file);
-        if (!contentAiGatewayService.validateImage(uploadFile)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
-        }
-        String objectName = ossConfig.objectKey(
-                Constant.OSS_PATH_NOTICE_PICTURE,
-                buildNoticePictureObjectName(uploadFile, publisherUserId, noticeId != null ? noticeId : 0L));
-        OSS ossClient = buildOssClient();
-        try (InputStream inputStream = uploadFile.getInputStream()) {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(uploadFile.getContentType());
-            metadata.setContentLength(uploadFile.getSize());
-            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
-            log.info("OSS 公告配图上传成功, publisherId={}, noticeId={}, key={}", publisherUserId, noticeId, objectName);
-            return ossConfig.getUrlPrefix() + objectName;
-        } catch (Exception e) {
-            log.error("OSS 公告配图上传失败, publisherId={}, noticeId={}, key={}", publisherUserId, noticeId, objectName, e);
-            throw new ApplicationException("文件上传 OSS 失败: " + e.getMessage());
-        } finally {
-            ossClient.shutdown();
-        }
+        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
+        String fileName = buildNoticePictureObjectName(uploadFile, publisherUserId, noticeId != null ? noticeId : 0L);
+        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_NOTICE_PICTURE, fileName);
     }
 
-    /** 不含点的扩展名，供 lottery 对象名 {@code xxx.yyy} 使用 */
+    // 不含点的扩展名，供 lottery 对象名 {@code xxx.yyy} 使用
     private static String extFromOriginalName(String originalFilename) {
         if (originalFilename == null || !originalFilename.contains(".")) {
             return "jpg";
@@ -338,14 +338,14 @@ public class FileServiceImpl implements FileService {
         return e;
     }
 
-    /** 发布者ID + 公告ID + 东八区发布时间(到秒) + 扩展名 */
+    // 发布者ID + 公告ID + 东八区发布时间 到秒 + 扩展名
     private String buildNoticePictureObjectName(MultipartFile file, Long publisherUserId, long noticeId) {
         String originalFilename = file.getOriginalFilename();
         String extName = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extName = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
-        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Taipei"))
                 .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         return publisherUserId + "_" + noticeId + "_" + timeStr + extName;
     }
@@ -353,43 +353,20 @@ public class FileServiceImpl implements FileService {
     private void ensureOssReady() {
         if (!ossConfig.isBucketConfigured()) {
             throw new ApplicationException(
-                    "OSS 未配置：请设置环境变量 OSS_BUCKET_NAME 与 OSS_URL_PREFIX（勿使用占位符 your-forum-oss-bucket）");
+                    "OSS 未配置：请设置 OSS_LOCAL_BUCKET_NAME 与 OSS_LOCAL_URL_PREFIX（本地）或 OSS_SERVER_*（服务器）");
         }
     }
 
-    /** 共用上传逻辑: 参数校验 + (可选)压缩 + AI 审核 + OSS 写入 */
+    // 共用上传逻辑: 参数校验 + 可选压缩 + pending OSS + URL 审图 + promote
     private String uploadImage(MultipartFile file, Long userId, String pathPrefix) {
         ensureOssReady();
         validateImageFile(file);
-        MultipartFile uploadFile = maybeCompress(file);
-        if (!contentAiGatewayService.validateImage(uploadFile)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
-        }
-        String objectName = ossConfig.objectKey(pathPrefix, buildObjectName(uploadFile, userId));
-        OSS ossClient = buildOssClient();
-        try (InputStream inputStream = uploadFile.getInputStream()) {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(uploadFile.getContentType());
-            metadata.setContentLength(uploadFile.getSize());
-            ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
-            log.info("OSS 上传成功, userId={}, key={}, size={}KB",
-                    userId, objectName, uploadFile.getSize() / 1024);
-            return ossConfig.getUrlPrefix() + objectName;
-        } catch (Exception e) {
-            log.error("OSS 上传失败, userId={}, key={}", userId, objectName, e);
-            throw new ApplicationException("文件上传 OSS 失败: " + e.getMessage());
-        } finally {
-            ossClient.shutdown();
-        }
+        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
+        String fileName = buildObjectName(uploadFile, userId);
+        return auditedOssImageUploader.upload(uploadFile, pathPrefix, fileName);
     }
 
-    /**
-     * 基础校验:
-     * - 非空 / 文件名合法
-     * - contentType 必须落在白名单 (JPG / PNG / GIF), WebP / HEIC 等其他格式直接拒
-     * - 大小不能超过服务器硬上限 30MB
-     * - GIF 单独限制: 不超过 15MB (动图本身体积大, 但不参与压缩)
-     */
+    // 基础校验: 非空 / 文件名合法 contentType 必须落在白名单 JPG / PNG / GIF , WebP / HEIC 等其他格式直接拒 大小不能超过服务器硬上限 30MB GIF 单独限制: 不超过 15MB 动图本身体积大, 但不参与压缩
     private void validateImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "上传文件不能为空"));
@@ -411,14 +388,10 @@ public class FileServiceImpl implements FileService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
                     "GIF 动图不能超过 " + (Constant.IMAGE_GIF_MAX_SIZE / 1024 / 1024) + "MB"));
         }
+        ImageMagicValidator.validateSupportedImage(file);
     }
 
-    /**
-     * 决定是否进入压缩通道:
-     * - GIF : 不压缩 (会丢帧), 直接返回原文件
-     * - 静态图 ≤ 5MB : 直接返回原文件
-     * - 静态图 > 5MB : 走 thumbnailator 压缩, 包成 InMemoryMultipartFile 返回
-     */
+    // 决定是否进入压缩通道: GIF : 不压缩 会丢帧 , 直接返回原文件 静态图 ≤ 5MB : 直接返回原文件 静态图 > 5MB : 走 thumbnailator 压缩, 包成 InMemoryMultipartFile 返回
     private MultipartFile maybeCompress(MultipartFile file) {
         String contentType = file.getContentType();
         if (Constant.IMAGE_TYPE_GIF.equalsIgnoreCase(contentType)) {
@@ -438,20 +411,35 @@ public class FileServiceImpl implements FileService {
         return new InMemoryMultipartFile(file.getName(), newName, "image/jpeg", compressed);
     }
 
-    /** 拼接 OSS 对象名: {userId}_{时间}_{8位UUID}.{ext} */
+    // 压缩后或原文件统一落内存，避免流被 Feign / OSS 重复读取时偶发为空
+    private MultipartFile materializeUploadFile(MultipartFile file) {
+        try {
+            byte[] bytes = file.getBytes();
+            return new InMemoryMultipartFile(
+                    file.getName(),
+                    file.getOriginalFilename(),
+                    file.getContentType(),
+                    bytes);
+        } catch (Exception e) {
+            log.error("读取上传图片失败: name={}", file.getOriginalFilename(), e);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "读取上传图片失败"));
+        }
+    }
+
+    // 拼接 OSS 对象名: {userId}_{时间}_{8位UUID}.{ext}
     private String buildObjectName(MultipartFile file, Long userId) {
         String originalFilename = file.getOriginalFilename();
-        // 上一步 validate 已保证文件名包含 "."
+        // 上一步 validate 已保证文件名包含 .
         String extName = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extName = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        String uuid = IdUtil.simpleUUID().substring(0, 8);
+        String uuid = IdUtil.simpleUUID();
         return userId + "_" + timeStr + "_" + uuid + extName;
     }
 
-    /** 替换文件名扩展名, 用于压缩后将 png/jpeg 统一改写为 .jpg */
+    // 替换文件名扩展名, 用于压缩后将 png/jpeg 统一改写为 .jpg
     private String replaceExtension(String originalFilename, String newExt) {
         if (originalFilename == null || originalFilename.isEmpty()) {
             return "image" + newExt;
@@ -461,9 +449,6 @@ public class FileServiceImpl implements FileService {
         return base + newExt;
     }
 
-    private OSS buildOssClient() {
-        return new OSSClientBuilder().build(ossConfig.getEndpoint(), ossConfig.getAccessKeyId(), ossConfig.getAccessKeySecret());
-    }
 
     private void validateVideoFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -483,16 +468,14 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    /** 视频对象名: {userId}_{yyyyMMddHHmmss}.mp4 */
+    // 视频对象名: {userId}_{yyyyMMddHHmmss}.mp4
     private String buildVideoObjectName(Long userId) {
-        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Taipei"))
                 .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         return userId + "_" + timeStr + ".mp4";
     }
 
-    /**
-     * >200MB 走 ffmpeg（优先 remux 不重编码），否则原样上传 OSS。
-     */
+    // >200MB 走 ffmpeg 优先 remux 不重编码 ，否则原样上传 OSS
     private MultipartFile maybeCompressVideo(MultipartFile file) {
         if (file.getSize() <= VIDEO_COMPRESS_THRESHOLD) {
             return file;
@@ -541,5 +524,96 @@ public class FileServiceImpl implements FileService {
             log.error("视频压缩服务调用失败: {}", e.getMessage());
             throw new ApplicationException("视频压缩失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public String transcodeArticleVideoToHls(Long articleId, String sourceVideoUrl) {
+        ensureOssReady();
+        if (articleId == null || articleId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (sourceVideoUrl == null || sourceVideoUrl.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址为空"));
+        }
+        if (!ossConfig.matchesPublicObjectUrl(sourceVideoUrl.trim(), Constant.OSS_PATH_ARTICLE_VIDEO)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址非法"));
+        }
+        long t0 = System.currentTimeMillis();
+        String baseUrl = System.getenv().getOrDefault("FORUM_FFMPEG_URL", "http://ffmpeg:8099");
+        String url = baseUrl.endsWith("/") ? baseUrl + "transcode-hls" : baseUrl + "/transcode-hls";
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("sourceUrl", sourceVideoUrl.trim());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (ffmpegInternalKey != null && !ffmpegInternalKey.isBlank()) {
+            headers.set("X-Internal-Key", ffmpegInternalKey);
+        }
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(payload, headers);
+        ResponseEntity<byte[]> resp;
+        try {
+            resp = ffmpegRestTemplate.postForEntity(url, req, byte[].class);
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            if (e.getStatusCode().value() == 503) {
+                throw new ApplicationException("视频转码队列繁忙，请稍后再试");
+            }
+            log.error("HLS 转码服务 HTTP {}: {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw new ApplicationException("视频 HLS 转码失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("HLS 转码服务调用失败: {}", e.getMessage());
+            throw new ApplicationException("视频 HLS 转码失败: " + e.getMessage());
+        }
+        byte[] zipBytes = resp.getBody();
+        if (!resp.getStatusCode().is2xxSuccessful() || zipBytes == null || zipBytes.length == 0) {
+            throw new ApplicationException("视频 HLS 转码失败: 空响应");
+        }
+        String hlsPrefix = Constant.OSS_PATH_ARTICLE_HLS + articleId + "/";
+        OssFolderSupport.ensureFolderExists(ossClient, ossConfig, hlsPrefix);
+        String playlistKey = null;
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                String name = entry.getName();
+                if (name == null || name.isBlank() || name.contains("..")) {
+                    continue;
+                }
+                String normalized = name.replace("\\", "/");
+                byte[] fileBytes = zis.readAllBytes();
+                if (fileBytes.length == 0) {
+                    continue;
+                }
+                String objectKey = ossConfig.objectKey(hlsPrefix, normalized);
+                ObjectMetadata metadata = new ObjectMetadata();
+                metadata.setContentLength(fileBytes.length);
+                metadata.setContentType(resolveHlsContentType(normalized));
+                ossClient.putObject(ossConfig.getBucketName(), objectKey, new ByteArrayInputStream(fileBytes), metadata);
+                if ("index.m3u8".equals(normalized) || normalized.endsWith("/index.m3u8")) {
+                    playlistKey = objectKey;
+                }
+            }
+        } catch (ApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("HLS zip 上传 OSS 失败 articleId={}", articleId, e);
+            throw new ApplicationException("视频 HLS 上传失败: " + e.getMessage());
+        }
+        if (playlistKey == null || playlistKey.isBlank()) {
+            throw new ApplicationException("视频 HLS 转码失败: 缺少 index.m3u8");
+        }
+        log.info("视频 HLS 转码上传完成 articleId={} 耗时={}ms", articleId, System.currentTimeMillis() - t0);
+        return ossConfig.getUrlPrefix() + playlistKey;
+    }
+
+    private String resolveHlsContentType(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".m3u8")) {
+            return "application/vnd.apple.mpegurl";
+        }
+        if (lower.endsWith(".ts")) {
+            return "video/mp2t";
+        }
+        return "application/octet-stream";
     }
 }

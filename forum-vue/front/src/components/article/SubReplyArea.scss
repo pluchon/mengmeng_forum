@@ -1,25 +1,138 @@
-.sub-item-meta {
+.sub-item-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.sub-item-meta-left,
-.sub-item-meta-actions {
-  display: inline-flex;
-  align-items: center;
-}
-
-.sub-item-meta-left {
-  gap: 8px;
-}
-
-.sub-item-meta-actions {
   gap: 10px;
 }
 
+.sub-item-author {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #686b77;
+  line-height: 1.4;
+}
+
+.sub-user-link,
+.sub-reply-target {
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub-item-avatar-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.sub-up-tag {
+  margin: 0;
+  height: 18px;
+  padding: 0 5px;
+  line-height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.sub-reply-to {
+  font-weight: 400;
+  color: #a0a3ae;
+}
+
+.sub-reply-target {
+  font-weight: 700;
+  color: #686b77;
+}
+
+.sub-item-meta-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: #a0a3ae;
+  white-space: nowrap;
+}
+
+.sub-item-content {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 17px;
+  color: #626572;
+  word-break: break-word;
+}
+
+.sub-violated-placeholder {
+  color: #9aa3b2;
+  font-style: normal;
+}
+
+.sub-item-actions {
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sub-item-actions__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sub-item-actions__right {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-item--accepted {
+  margin: 0;
+  border-radius: 12px;
+  padding: 10px 12px 8px;
+  background: linear-gradient(135deg, rgba(232, 249, 239, 0.92), rgba(247, 253, 249, 0.98));
+  border: 1px solid rgba(39, 137, 84, 0.15);
+}
+
+/* 嵌套采纳：绿底盖住灰色 sub-nested-panel 的 padding/底色 */
+.sub-nested-panel > .sub-item.sub-item--accepted {
+  margin-left: -10px;
+  margin-right: -10px;
+  border-radius: 8px;
+}
+
+.sub-nested-panel > .sub-item.sub-item--accepted:first-child {
+  margin-top: -8px;
+  padding-top: 12px;
+}
+
+.sub-nested-panel > .sub-item.sub-item--accepted:last-child {
+  margin-bottom: -8px;
+  padding-bottom: 10px;
+}
+
+.sub-accepted-tag {
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: #1a7446;
+  background: #eaf8f0;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+}
 .sub-user-link {
   cursor: pointer;
+}
+
+.sub-user-link:hover {
+  color: #ff4767;
 }

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
+import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -14,7 +16,45 @@ from graphs.prompts import IMAGE_AUDIT_TEMPLATE, IMAGE_DESC_PROMPT, TEXT_AUDIT_T
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from utils import cache as semantic_cache
 from utils.html import clean_html
-from utils.image import to_data_url, validate_image_bytes
+from utils.image import fetch_image_bytes, meets_vision_model_min_size, to_data_url, validate_image_bytes
+from modules.moderation.graph import run_text_moderation
+
+logger = logging.getLogger(__name__)
+
+_VISION_RETRY_DELAYS_SEC = (0.0, 1.2, 2.5)
+
+
+def _is_retryable_vision_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    if any(token in message for token in ("429", "too many requests", "rate limit", "throttl", "timeout")):
+        return True
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status = getattr(response, "status_code", None)
+        if status in {429, 500, 502, 503, 504}:
+            return True
+    return False
+
+
+def _invoke_vision(message: HumanMessage):
+    last_exc: BaseException | None = None
+    for delay in _VISION_RETRY_DELAYS_SEC:
+        if delay > 0:
+            time.sleep(delay)
+        try:
+            return vision_llm().invoke([message])
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_vision_error(exc):
+                break
+    try:
+        return vision_llm_fallback().invoke([message])
+    except Exception as exc:
+        last_exc = exc
+    raise ModuleRequestError(
+        "VISION_AUDIT_UNAVAILABLE",
+        "图片审核服务暂时不可用，请稍后重试",
+    ) from last_exc
 
 
 class ContentModerationModule:
@@ -51,6 +91,7 @@ class ContentModerationModule:
         plain = clean_html(content).strip()
         if not plain:
             return ModuleResult(success=True, data={"allowed": True, "reason": "", "cached": False})
+        logger.info("TEXT_AUDIT 收到审核请求 contentLen=%s", len(plain))
         cached = semantic_cache.find_match(plain)
         if cached:
             return ModuleResult(
@@ -58,49 +99,167 @@ class ContentModerationModule:
                 data={"allowed": bool(cached["allow"]), "reason": cached.get("msg", ""), "cached": True},
             )
 
-        def invoke() -> tuple[bool, str]:
-            response = (TEXT_AUDIT_TEMPLATE | text_llm()).invoke(
-                {"title": str(request.payload.get("title") or ""), "text": plain}
-            )
-            raw = _extract_text(response)
-            allowed = raw.upper() == "YES"
-            return allowed, "" if allowed else raw
-
-        allowed, reason = await asyncio.to_thread(invoke)
+        decision = await asyncio.to_thread(
+            run_text_moderation,
+            str(request.payload.get("title") or ""),
+            plain,
+        )
+        allowed = bool(decision["allowed"])
+        reason = str(decision.get("reason") or "")
         semantic_cache.save(plain, {"allow": allowed, "msg": reason or "OK"})
-        return ModuleResult(success=True, data={"allowed": allowed, "reason": reason, "cached": False})
+        return ModuleResult(success=True, data={
+            "allowed": allowed,
+            "reason": reason,
+            "confidence": decision.get("confidence"),
+            "category": decision.get("category"),
+            "deepUsed": decision.get("deepUsed", False),
+            "cached": False,
+        })
 
     @staticmethod
     async def _audit_image(request: ModuleRequest) -> ModuleResult:
-        encoded = request.payload.get("contentBase64")
+        payload = request.payload if isinstance(request.payload, dict) else {}
+        items = payload.get("items")
+        if not isinstance(items, list):
+            image_urls = payload.get("imageUrls")
+            if isinstance(image_urls, list) and image_urls:
+                items = [{"imageUrl": url, "objectKey": ""} for url in image_urls if isinstance(url, str)]
+        if isinstance(items, list) and items:
+            return await ContentModerationModule._audit_image_batch(items)
+
+        image_data = await ContentModerationModule._load_image_audit_bytes(payload)
+        allowed, reason = await asyncio.to_thread(ContentModerationModule._audit_image_data, image_data)
+        return ModuleResult(success=True, data={"allowed": allowed, "reason": reason})
+
+    @staticmethod
+    async def _audit_image_batch(items: list[Any]) -> ModuleResult:
+        max_workers = int(settings.audit.get("max_image_workers", 3))
+        if max_workers < 1:
+            max_workers = 1
+        sem = asyncio.Semaphore(max_workers)
+        # 同请求内按 URL/key 去重，避免重复打视觉模型
+        unique: dict[str, dict[str, Any]] = {}
+        order: list[str] = []
+        normalized_items: list[dict[str, Any]] = []
+        for raw in items[:9]:
+            if not isinstance(raw, dict):
+                continue
+            image_url = raw.get("imageUrl") if isinstance(raw.get("imageUrl"), str) else ""
+            object_key = raw.get("objectKey") if isinstance(raw.get("objectKey"), str) else ""
+            image_url = image_url.strip()
+            object_key = object_key.strip()
+            key = object_key or image_url
+            if not key:
+                continue
+            normalized_items.append({"imageUrl": image_url, "objectKey": object_key, "dedupe": key})
+            if key not in unique:
+                unique[key] = {"imageUrl": image_url, "objectKey": object_key}
+                order.append(key)
+
+        async def _one(item: dict[str, Any]) -> dict[str, Any]:
+            async with sem:
+                try:
+                    image_data = await ContentModerationModule._load_image_audit_bytes(item)
+                    allowed, reason = await asyncio.to_thread(
+                        ContentModerationModule._audit_image_data, image_data
+                    )
+                    return {"allowed": bool(allowed), "reason": str(reason or "")}
+                except ModuleRequestError as exc:
+                    return {"allowed": False, "reason": str(exc.message or exc)}
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("IMAGE_AUDIT 批量单项失败: %s", exc)
+                    return {"allowed": False, "reason": "图片审核服务暂时不可用，请稍后重试"}
+
+        tasks = [asyncio.create_task(_one(unique[k])) for k in order]
+        done = await asyncio.gather(*tasks)
+        by_key = {order[i]: done[i] for i in range(len(order))}
+        results: list[dict[str, Any]] = []
+        all_allowed = True
+        for index, item in enumerate(normalized_items):
+            row = dict(by_key.get(item["dedupe"], {"allowed": False, "reason": "审核失败"}))
+            row["index"] = index
+            row["imageUrl"] = item["imageUrl"]
+            row["objectKey"] = item["objectKey"]
+            if not row.get("allowed"):
+                all_allowed = False
+            results.append(row)
+        return ModuleResult(
+            success=True,
+            data={"allowed": all_allowed, "results": results},
+        )
+
+    @staticmethod
+    async def _load_image_audit_bytes(payload: dict[str, Any]) -> bytes:
+        raw_key = payload.get("objectKey")
+        object_key = raw_key.strip() if isinstance(raw_key, str) else ""
+        raw_url = payload.get("imageUrl")
+        image_url = raw_url.strip() if isinstance(raw_url, str) else ""
+        if object_key or image_url:
+            def _fetch() -> bytes | None:
+                return fetch_image_bytes(
+                    image_url,
+                    15,
+                    object_key=object_key or None,
+                )
+
+            image_data = await asyncio.to_thread(_fetch)
+            if not image_data:
+                logger.warning(
+                    "IMAGE_AUDIT 读取失败 url=%s key=%s",
+                    image_url[:120],
+                    object_key[:80],
+                )
+                raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片无法拉取，请稍后重试")
+            return image_data
+        encoded = payload.get("contentBase64")
         if not isinstance(encoded, str) or not encoded.strip():
-            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "contentBase64 不能为空")
+            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "imageUrl 或 contentBase64 不能为空")
         try:
             image_data = base64.b64decode(encoded, validate=True)
         except (ValueError, TypeError) as exc:
             raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "contentBase64 格式错误") from exc
+        return image_data
+
+    @staticmethod
+    def _audit_image_data(image_data: bytes) -> tuple[bool, str]:
         max_bytes = int(settings.image.get("max_bytes", 10 * 1024 * 1024))
         if len(image_data) > max_bytes:
             raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片超过允许大小")
         fmt = validate_image_bytes(image_data)
         if not fmt:
-            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "不支持的图片格式")
-
-        def invoke() -> tuple[bool, str]:
-            data_url = to_data_url(image_data, fmt)
-            message = HumanMessage(content=[{"image": data_url}, {"text": IMAGE_DESC_PROMPT}])
-            try:
-                response = vision_llm().invoke([message])
-            except Exception:
-                response = vision_llm_fallback().invoke([message])
-            description = _extract_text(response)
-            if not description:
-                return False, "图片描述为空"
+            head = image_data[:12].hex() if image_data else ""
+            logger.warning("IMAGE_AUDIT 无法识别图片 bytes=%d head=%s", len(image_data), head)
+            message = _format_reject_message(image_data)
+            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", message)
+        if not meets_vision_model_min_size(image_data):
+            raise ModuleRequestError(
+                "INVALID_IMAGE_AUDIT_PAYLOAD",
+                "图片尺寸过小，宽高均需大于 10 像素",
+            )
+        data_url = to_data_url(image_data, fmt)
+        message = HumanMessage(content=[{"image": data_url}, {"text": IMAGE_DESC_PROMPT}])
+        try:
+            response = _invoke_vision(message)
+        except ModuleRequestError:
+            raise
+        except Exception as exc:
+            logger.warning("IMAGE_AUDIT 视觉模型调用失败: %s", exc)
+            raise ModuleRequestError(
+                "VISION_AUDIT_UNAVAILABLE",
+                "图片审核服务暂时不可用，请稍后重试",
+            ) from exc
+        description = _extract_text(response)
+        if not description:
+            return False, "图片描述为空"
+        try:
             verdict = _extract_text((IMAGE_AUDIT_TEMPLATE | text_llm()).invoke({"desc": description}))
-            return verdict.startswith("是"), verdict
-
-        allowed, reason = await asyncio.to_thread(invoke)
-        return ModuleResult(success=True, data={"allowed": allowed, "reason": reason})
+        except Exception as exc:
+            logger.warning("IMAGE_AUDIT 文本判定失败: %s", exc)
+            raise ModuleRequestError(
+                "VISION_AUDIT_UNAVAILABLE",
+                "图片审核服务暂时不可用，请稍后重试",
+            ) from exc
+        return verdict.startswith("是"), verdict
 
     @staticmethod
     def _to_audit_task(request: ModuleRequest) -> dict[str, Any]:
@@ -131,6 +290,17 @@ class ContentModerationModule:
         if final_status == "REJECTED":
             return "BLOCK", "REJECT"
         return "REVIEW", "MANUAL_REVIEW"
+
+
+def _format_reject_message(image_data: bytes) -> str:
+    if len(image_data) >= 12 and image_data[4:8] == b"ftyp":
+        brand = image_data[8:12].decode("ascii", errors="ignore").lower()
+        if brand.startswith("hei") or brand == "mif1":
+            return "不支持 HEIC/HEIF，请转换为 JPG 或 PNG"
+        if brand.startswith("avif"):
+            return "不支持 AVIF，请转换为 JPG 或 PNG"
+        return f"不支持该图片编码({brand})，请使用 JPG / PNG / GIF"
+    return "不支持的图片格式"
 
 
 def _extract_text(response: object) -> str:

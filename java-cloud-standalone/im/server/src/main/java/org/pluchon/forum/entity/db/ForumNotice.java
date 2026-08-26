@@ -8,9 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 论坛公告中心内容，对应表 forum_notice。
- */
+// 论坛公告中心内容，对应表 forum_notice
 @Data
 @TableName("forum_notice")
 public class ForumNotice {
@@ -34,14 +32,14 @@ public class ForumNotice {
 
     private String subtitle;
 
-    /** 正文 Markdown，用户端主要阅读区 */
+    // 正文 Markdown，用户端主要阅读区
     @TableField("content_markdown")
     private String contentMarkdown;
 
     @TableField("body_json")
     private String bodyJson;
 
-    /** 1 置顶：同类型同分类范围下始终排最前 */
+    // 1 置顶：同类型同分类范围下始终排最前
     @TableField("pin_top")
     private Byte pinTop;
 

@@ -1,6 +1,6 @@
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart, LineChart } from 'echarts/charts'
+import { PieChart, BarChart, LineChart, SunburstChart } from 'echarts/charts'
 import {
   TitleComponent,
   TooltipComponent,
@@ -16,6 +16,7 @@ use([
   PieChart,
   BarChart,
   LineChart,
+  SunburstChart,
   TitleComponent,
   TooltipComponent,
   LegendComponent,

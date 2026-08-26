@@ -1,8 +1,21 @@
 .shell-main-stack {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.home-feed-page {
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.home-feed-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .note-card--masonry {
@@ -23,8 +36,4 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   pointer-events: none;
-}
-
-:global(:root[data-theme='dark']) .note-card-not-interested-mask {
-  background: rgba(8, 12, 20, 0.7);
 }

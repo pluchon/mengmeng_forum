@@ -3,18 +3,23 @@ package org.pluchon.forum.service.impl.shop;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.TransactionHooks;
+import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.EmojiItem;
 import org.pluchon.forum.entity.db.EmojiShop;
 import org.pluchon.forum.entity.db.UserEmoji;
 import org.pluchon.forum.entity.vo.shop.UserEmojiPackVO;
+import org.pluchon.forum.entity.vo.shop.EmojiShopListItemVO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.EmojiItemMapper;
 import org.pluchon.forum.mapper.EmojiShopMapper;
 import org.pluchon.forum.mapper.UserEmojiMapper;
+import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.shop.UserEmojiService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,17 +33,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
-/**
- * 用户已购表情包实现.
- * 购买流程(@Transactional):
- *   1) 商品存在且 status=1, 且当前用户未购买
- *   2) INSERT user_emoji; uix_user_shop 唯一键兜底极端并发重复购买(DuplicateKeyException 走"已购买"分支)
- *   3) pointsService.deductPoints(...): 原子扣分(余额不足直接抛), 写 points_log
- *   4) emoji_shop.sales_count + 1
- * 任一步失败整个事务回滚, 不会出现"扣分了但没拿到包"或"拿到包但没扣分".
- * 先 INSERT 再扣分的好处: 唯一键失败可立即返回"已购买"错误, 不必再做余额预校验.
- */
+// 用户已购表情包服务实现
 @Service
 @Slf4j
 public class UserEmojiServiceImpl implements UserEmojiService {
@@ -54,6 +52,9 @@ public class UserEmojiServiceImpl implements UserEmojiService {
 
     @Autowired
     private PointsService pointsService;
+
+    @Autowired
+    private EconomyUserInternalFeignClient userInternalFeignClient;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -92,7 +93,7 @@ public class UserEmojiServiceImpl implements UserEmojiService {
             // 极端并发重复点击购买, 唯一键兜底
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_ALREADY_PURCHASED));
         }
-        // 仅当售价 > 0 时才扣分 + 写流水; price=0 走"免费领取", 不写积分流水
+        // 仅当售价 > 0 时才扣分 + 写流水; price 0 走 免费领取 , 不写积分流水
         int balanceAfter;
         if (price > 0) {
             balanceAfter = pointsService.deductPoints(userId, price, Constant.POINTS_SOURCE_SHOP_PURCHASE,
@@ -108,7 +109,6 @@ public class UserEmojiServiceImpl implements UserEmojiService {
             invalidateShopDetailCache(shopId);
             invalidateShopListCache();
         });
-        log.info("购买表情包成功: userId={}, shopId={}, price={}, balanceAfter={}", userId, shopId, price, balanceAfter);
         return balanceAfter;
     }
 
@@ -126,9 +126,19 @@ public class UserEmojiServiceImpl implements UserEmojiService {
         for (UserEmoji u : owns) shopIds.add(u.getShopId());
         // 一次拉商品 + 一次拉所有图片
         List<EmojiShop> shops = emojiShopMapper.selectList(new LambdaQueryWrapper<EmojiShop>()
-                .in(EmojiShop::getId, shopIds).ne(EmojiShop::getDeleteState, 1));
+                .in(EmojiShop::getId, shopIds)
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_ONLINE)
+                .ne(EmojiShop::getDeleteState, 1));
         Map<Long, EmojiShop> shopMap = new HashMap<>();
         for (EmojiShop s : shops) shopMap.put(s.getId(), s);
+
+        Map<Long, UserInternalVO> uploaderMap = new HashMap<>();
+        for (EmojiShop s : shops) {
+            Long uploaderId = s.getUploadUserId();
+            if (uploaderId != null && !uploaderMap.containsKey(uploaderId)) {
+                uploaderMap.put(uploaderId, userInternalFeignClient.getById(uploaderId));
+            }
+        }
 
         List<EmojiItem> items = emojiItemMapper.selectList(new LambdaQueryWrapper<EmojiItem>()
                 .in(EmojiItem::getShopId, shopIds).ne(EmojiItem::getDeleteState, 1)
@@ -141,12 +151,76 @@ public class UserEmojiServiceImpl implements UserEmojiService {
         List<UserEmojiPackVO> result = new ArrayList<>(owns.size());
         for (UserEmoji u : owns) {
             EmojiShop s = shopMap.get(u.getShopId());
-            if (s == null) continue; // 商品被硬删则跳过(理论不会触发)
+            if (s == null) continue; // 商品被硬删则跳过 理论不会触发
+            UserInternalVO uploader = uploaderMap.get(s.getUploadUserId());
             result.add(new UserEmojiPackVO(u.getId(), s.getId(), s.getName(), s.getCoverUrl(),
+                    s.getUploadUserId(), uploader == null ? null : uploader.getNickname(),
+                    uploader == null ? null : uploader.getAvatarUrl(),
                     u.getPricePaid(), itemMap.getOrDefault(s.getId(), Collections.emptyList()),
                     u.getCreateTime()));
         }
         return result;
+    }
+
+    @Override
+    public PageResult<EmojiShopListItemVO> queryMyPurchases(Long userId, String keyword,
+                                                            Integer pageNum, Integer pageSize) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize == null ? 8 : pageSize);
+        String validKeyword = keyword == null ? "" : keyword.trim();
+        List<UserEmoji> purchases = userEmojiMapper.selectList(new LambdaQueryWrapper<UserEmoji>()
+                .eq(UserEmoji::getUserId, userId)
+                .ne(UserEmoji::getDeleteState, 1)
+                .orderByDesc(UserEmoji::getCreateTime)
+                .orderByDesc(UserEmoji::getId));
+        if (purchases.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0L, validPageNum, validPageSize, 0L, false);
+        }
+
+        List<Long> shopIds = new ArrayList<>(purchases.size());
+        for (UserEmoji purchase : purchases) {
+            shopIds.add(purchase.getShopId());
+        }
+        List<EmojiShop> shops = emojiShopMapper.selectList(new LambdaQueryWrapper<EmojiShop>()
+                .in(EmojiShop::getId, shopIds)
+                .ne(EmojiShop::getStatus, Constant.SHOP_STATUS_DRAFT)
+                .ne(EmojiShop::getDeleteState, 1));
+        Map<Long, EmojiShop> shopMap = new HashMap<>();
+        Set<Long> uploaderIds = new HashSet<>();
+        for (EmojiShop shop : shops) {
+            if (validKeyword.isEmpty() || (shop.getName() != null && shop.getName().contains(validKeyword))) {
+                shopMap.put(shop.getId(), shop);
+                if (shop.getUploadUserId() != null) {
+                    uploaderIds.add(shop.getUploadUserId());
+                }
+            }
+        }
+        Map<Long, UserInternalVO> uploaderMap = new HashMap<>();
+        for (Long uploaderId : uploaderIds) {
+            uploaderMap.put(uploaderId, userInternalFeignClient.getById(uploaderId));
+        }
+        List<EmojiShopListItemVO> allRecords = new ArrayList<>();
+        for (UserEmoji purchase : purchases) {
+            EmojiShop shop = shopMap.get(purchase.getShopId());
+            if (shop == null) {
+                continue;
+            }
+            UserInternalVO uploader = uploaderMap.get(shop.getUploadUserId());
+            allRecords.add(new EmojiShopListItemVO(shop.getId(), shop.getName(), shop.getCategory(),
+                    shop.getCoverUrl(), shop.getPrice(), shop.getSalesCount(), shop.getUploadUserId(),
+                    uploader == null ? null : uploader.getNickname(),
+                    uploader == null ? null : uploader.getAvatarUrl(), true, shop.getStatus(),
+                    shop.getCreateTime()));
+        }
+        long total = allRecords.size();
+        long pages = total == 0 ? 0 : (total + validPageSize - 1) / validPageSize;
+        int fromIndex = Math.min((validPageNum - 1) * validPageSize, allRecords.size());
+        int toIndex = Math.min(fromIndex + validPageSize, allRecords.size());
+        List<EmojiShopListItemVO> records = new ArrayList<>(allRecords.subList(fromIndex, toIndex));
+        return new PageResult<>(records, total, validPageNum, validPageSize, pages, toIndex < allRecords.size());
     }
 
     private void invalidateShopDetailCache(Long shopId) {

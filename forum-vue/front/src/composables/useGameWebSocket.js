@@ -84,7 +84,8 @@ export function useGameWebSocket(path, handlers = {}) {
       try {
         handlers.onMessage?.(JSON.parse(event.data))
       } catch {
-        console.error('[GameWebSocket] 解析消息失败: ', event.data)
+        lastError.value = '实时消息格式异常'
+        handlers.onError?.()
       }
     }
 

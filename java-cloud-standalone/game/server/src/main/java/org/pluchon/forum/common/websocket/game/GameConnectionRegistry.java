@@ -20,18 +20,18 @@ public class GameConnectionRegistry {
 
     private static final long HEARTBEAT_TIMEOUT_MS = 90_000;
 
-    // 游戏中心大厅连接：userId -> session
+    // 游戏中心大厅连接：userId > session
     private final ConcurrentHashMap<Long, WebSocketSession> lobbySessions = new ConcurrentHashMap<>();
 
-    // 游戏级连接：gameCode -> userId -> session
+    // 游戏级连接：gameCode > userId > session
     private final ConcurrentHashMap<String, ConcurrentHashMap<Long, WebSocketSession>> gameSessions =
             new ConcurrentHashMap<>();
 
-    // 房间连接：roomId -> userId -> session
+    // 房间连接：roomId > userId > session
     private final ConcurrentHashMap<String, ConcurrentHashMap<Long, WebSocketSession>> roomSessions =
             new ConcurrentHashMap<>();
 
-    // sessionId -> 最后心跳时间
+    // sessionId > 最后心跳时间
     private final ConcurrentHashMap<String, Long> lastPingTime = new ConcurrentHashMap<>();
 
     public void enterLobby(Long userId, WebSocketSession session) {

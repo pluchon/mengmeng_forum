@@ -19,7 +19,6 @@ public class GobangMatchGuardChain {
     public static GobangMatchGuardChain defaultChain() {
         return new GobangMatchGuardChain(List.of(
                 new MatchUserExistsGuard(),
-                new MatchPointEnoughGuard(),
                 new MatchNotPlayingGuard(),
                 new MatchNotAlreadyQueuedGuard()
         ));

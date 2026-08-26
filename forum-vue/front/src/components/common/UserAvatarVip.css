@@ -4,7 +4,7 @@
   line-height: 0;
 }
 
-/* Google 系分段色环：conic-gradient + 内圈留白形成环宽 */
+/* Google 系分段色环：conic gradient + 内圈留白形成环宽 */
 .vip-chrome-ring {
   flex-shrink: 0;
   border-radius: 50%;

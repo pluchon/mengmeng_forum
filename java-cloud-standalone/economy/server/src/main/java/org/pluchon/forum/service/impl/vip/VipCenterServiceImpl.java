@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.impl.vip;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import org.pluchon.forum.api.ai.AiUsageDailyBucketsVO;
 import org.pluchon.forum.api.economy.VipQuotaHintVO;
@@ -10,18 +11,26 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.PageUtils;
+import org.pluchon.forum.converter.VipPurchaseRecordConverter;
 import org.pluchon.forum.entity.db.ForumVipQuotaConfig;
 import org.pluchon.forum.entity.db.UserVipSubscription;
+import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanFeatureVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanVO;
+import org.pluchon.forum.entity.vo.vip.VipPurchaseRecordVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaGroupVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaItemVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaPanelVO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.ForumVipQuotaConfigMapper;
+import org.pluchon.forum.mapper.VipPurchaseRecordMapper;
+import org.pluchon.forum.entity.db.VipPurchaseRecord;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.vip.VipCenterService;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
+import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -34,13 +43,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.math.BigDecimal;
 
 @Service
 public class VipCenterServiceImpl implements VipCenterService {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Resource
@@ -57,6 +66,12 @@ public class VipCenterServiceImpl implements VipCenterService {
 
     @Resource
     private AiUsageInternalFeignClient aiUsageInternalFeignClient;
+
+    @Resource
+    private VipPurchaseRecordMapper vipPurchaseRecordMapper;
+
+    @Resource
+    private VipQuotaBonusService vipQuotaBonusService;
 
     private boolean vipActive(UserVipSubscription sub) {
         if (sub == null) {
@@ -91,14 +106,13 @@ public class VipCenterServiceImpl implements VipCenterService {
         vo.setVipExpireAt(vipExpireAt);
         vo.setPoints(pointsService.getWallet(userId).getBalance());
         vo.setVipActive(active);
-        vo.setPlans(buildPlans(cur, active));
-        if (active && (Constant.VIP_TIER_PRO.equals(vipTier) || Constant.VIP_TIER_MAX.equals(vipTier))) {
-            vo.setQuota(buildQuotaPanel(userId, vipTier, vipExpireAt));
-        } else {
-            VipQuotaPanelVO empty = new VipQuotaPanelVO();
-            empty.setEmptyHint("开通 PRO 或 MAX 后可查看本期模型配额与用量");
-            vo.setQuota(empty);
-        }
+        boolean firstPurchaseEligible = vipPurchaseRecordMapper.selectCount(
+                Wrappers.lambdaQuery(VipPurchaseRecord.class)
+                        .eq(VipPurchaseRecord::getUserId, userId)
+                        .eq(VipPurchaseRecord::getPaymentState, (byte) 1)
+                        .eq(VipPurchaseRecord::getDeleteState, (byte) 0)) == 0;
+        vo.setPlans(buildPlans(cur, active, firstPurchaseEligible));
+        vo.setQuota(buildQuotaPanel(userId, active ? vipTier : Constant.VIP_TIER_FREE, sub));
         return vo;
     }
 
@@ -110,58 +124,15 @@ public class VipCenterServiceImpl implements VipCenterService {
         out.put("quotaLabel", "");
         requireUserExists(userId);
         UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
-        Byte vipTier = sub != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
-        Date vipExpireAt = sub != null ? sub.getVipExpireAt() : null;
-        if (!vipActive(sub) || (!Constant.VIP_TIER_PRO.equals(vipTier)
-                && !Constant.VIP_TIER_MAX.equals(vipTier))) {
-            return toQuotaHintVO(out);
-        }
-        String route = "qwen-deep";
-        VipQuotaPanelVO panel = buildQuotaPanel(userId, vipTier, vipExpireAt);
-        String modelCode = resolveModelCodeFromRoute(route);
-        int percent = 0;
-        String label = "";
-        for (VipQuotaGroupVO g : panel.getGroups()) {
-            if (g.getItems() == null) {
-                continue;
-            }
-            for (VipQuotaItemVO item : g.getItems()) {
-                if ("unlimited".equals(item.getQuotaType())) {
-                    continue;
-                }
-                boolean match = false;
-                if ("token_period".equals(item.getQuotaType()) && modelCode != null
-                        && modelCode.equals(item.getModelCode())) {
-                    match = true;
-                }
-                if ("daily_count".equals(item.getQuotaType()) && routeNeedsAdvancedDaily(route)
-                        && "advanced_llm".equals(item.getQuotaKey())) {
-                    match = true;
-                }
-                if (match) {
-                    percent = item.getPercent() != null ? item.getPercent() : 0;
-                    label = item.getDisplayName();
-                    break;
-                }
-            }
-            if (label != null && !label.isEmpty() && percent > 0) {
-                break;
-            }
-        }
-        if (label.isEmpty() && modelCode != null) {
-            for (VipQuotaGroupVO g : panel.getGroups()) {
-                for (VipQuotaItemVO item : g.getItems()) {
-                    if (modelCode.equals(item.getModelCode())) {
-                        percent = item.getPercent() != null ? item.getPercent() : 0;
-                        label = item.getDisplayName();
-                        break;
-                    }
-                }
-            }
-        }
+        boolean active = vipActive(sub);
+        Byte vipTier = active ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+        VipQuotaPanelVO panel = buildQuotaPanel(userId, vipTier, sub);
+        long limit = Math.max(0L, panel.getQwenBudgetMicros());
+        long used = Math.max(0L, panel.getQwenUsedMicros());
+        int percent = limit > 0L ? (int) Math.min(100L, Math.round(used * 100.0 / limit)) : 0;
         out.put("percent", percent);
-        out.put("quotaLabel", label);
-        out.put("canUsePointsPay", percent >= 95);
+        out.put("quotaLabel", "通用额度");
+        out.put("canUsePointsPay", percent >= 100);
         return toQuotaHintVO(out);
     }
 
@@ -175,38 +146,31 @@ public class VipCenterServiceImpl implements VipCenterService {
         return vo;
     }
 
-    private static boolean routeNeedsAdvancedDaily(String route) {
-        return route.startsWith("qwen-deep");
-    }
-
-    private static String resolveModelCodeFromRoute(String route) {
-        if (route == null || route.isBlank()) {
-            return "qwen3.6-flash";
-        }
-        return switch (route) {
-            case "qwen-flash" -> "qwen3.6-flash";
-            case "qwen-deep" -> "qwen3.7-max";
-            default -> route;
-        };
-    }
-
     @Override
     public VipQuotaPanelVO quota(Long userId) {
         requireUserExists(userId);
         UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
         Byte vipTier = sub != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
-        Date vipExpireAt = sub != null ? sub.getVipExpireAt() : null;
-        if (!vipActive(sub)) {
-            VipQuotaPanelVO empty = new VipQuotaPanelVO();
-            empty.setEmptyHint("开通 PRO 或 MAX 后可查看本期模型配额与用量");
-            return empty;
-        }
-        if (!Constant.VIP_TIER_PRO.equals(vipTier) && !Constant.VIP_TIER_MAX.equals(vipTier)) {
-            VipQuotaPanelVO empty = new VipQuotaPanelVO();
-            empty.setEmptyHint("当前档位暂无配额面板");
-            return empty;
-        }
-        return buildQuotaPanel(userId, vipTier, vipExpireAt);
+        return buildQuotaPanel(userId, vipActive(sub) ? vipTier : Constant.VIP_TIER_FREE, sub);
+    }
+
+    @Override
+    public PageResult<VipPurchaseRecordVO> purchaseRecords(Long userId, Integer pageNum, Integer pageSize) {
+        requireUserExists(userId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize == null ? 10 : pageSize);
+        Page<VipPurchaseRecord> page = new Page<>(validPageNum, validPageSize);
+        Page<VipPurchaseRecord> result = vipPurchaseRecordMapper.selectPage(page,
+                Wrappers.lambdaQuery(VipPurchaseRecord.class)
+                        .eq(VipPurchaseRecord::getUserId, userId)
+                        .eq(VipPurchaseRecord::getDeleteState, (byte) 0)
+                        .orderByDesc(VipPurchaseRecord::getCreateTime)
+                        .orderByDesc(VipPurchaseRecord::getId));
+        List<VipPurchaseRecordVO> records = result.getRecords().stream()
+                .map(VipPurchaseRecordConverter::toVO)
+                .toList();
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
     }
 
     private void requireUserExists(Long userId) {
@@ -216,11 +180,11 @@ public class VipCenterServiceImpl implements VipCenterService {
         }
     }
 
-    private List<VipPlanVO> buildPlans(int curTier, boolean active) {
+    private List<VipPlanVO> buildPlans(int curTier, boolean active, boolean firstPurchaseEligible) {
         List<VipPlanVO> list = new ArrayList<>();
         list.add(planFree(curTier, active));
-        list.add(planPro(curTier, active));
-        list.add(planMax(curTier, active));
+        list.add(planPro(curTier, active, firstPurchaseEligible));
+        list.add(planMax(curTier, active, firstPurchaseEligible));
         return list;
     }
 
@@ -228,17 +192,19 @@ public class VipCenterServiceImpl implements VipCenterService {
         VipPlanVO p = new VipPlanVO();
         p.setTier(Constant.VIP_TIER_FREE);
         p.setCode("free");
-        p.setName("默认");
+        p.setName("免费");
         p.setSubtitle("基础体验，免费使用");
         p.setPricePoints(0);
         p.setDurationDays(0);
         p.setFeatured(false);
+        p.setOriginalPrice(BigDecimal.ZERO);
+        p.setFirstMonthPrice(BigDecimal.ZERO);
+        p.setFirstPurchaseEligible(false);
         p.setFeatures(List.of(
-                feat("Qwen Flash 每日 10 次", true),
-                feat("推荐配图要点", true),
-                feat("高级模型写作", false),
-                feat("AI 生图", false),
-                feat("深度模型配额", false)));
+                feat("通用额度6元/月", true),
+                feat("Wan 15张/月", true),
+                feat("更多免费权益......", true)));
+        applyPlanQuota(p, new BigDecimal("6.0"), 15);
         if (!active || curTier == 0) {
             p.setButtonState("current");
             p.setButtonLabel("当前方案");
@@ -249,42 +215,56 @@ public class VipCenterServiceImpl implements VipCenterService {
         return p;
     }
 
-    private VipPlanVO planPro(int curTier, boolean active) {
+    private VipPlanVO planPro(int curTier, boolean active, boolean firstPurchaseEligible) {
         VipPlanVO p = new VipPlanVO();
         p.setTier(Constant.VIP_TIER_PRO);
         p.setCode("pro");
         p.setName("PRO");
         p.setSubtitle("进阶创作者");
         p.setBadge("最受欢迎");
-        p.setPricePoints(Constant.VIP_PRICE_PRO_MONTH);
+        p.setPricePoints(null);
         p.setDurationDays(30);
         p.setFeatured(true);
         p.setFeatures(List.of(
-                feat("Qwen 智能写作", true),
-                feat("Z-Image Turbo 与 GPT Image 2 生图", true),
-                feat("Qwen 深度写作每日 50 次", true),
-                feat("AI 生图每日 25 次", true)));
+                feat("通用额度10.9元/月", true),
+                feat("Wan 20张/月", true),
+                feat("更多会员隐藏福利......", true)));
+        applyPlanPricing(p, new BigDecimal("9.9"), new BigDecimal("3.9"), firstPurchaseEligible);
+        applyPlanQuota(p, new BigDecimal("10.9"), 20);
         applyPlanButton(p, curTier, active, 1);
         return p;
     }
 
-    private VipPlanVO planMax(int curTier, boolean active) {
+    private VipPlanVO planMax(int curTier, boolean active, boolean firstPurchaseEligible) {
         VipPlanVO p = new VipPlanVO();
         p.setTier(Constant.VIP_TIER_MAX);
         p.setCode("max");
         p.setName("MAX");
         p.setSubtitle("重度创作者专属");
         p.setBadge("顶配体验");
-        p.setPricePoints(Constant.VIP_PRICE_MAX_MONTH);
+        p.setPricePoints(null);
         p.setDurationDays(30);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("Qwen 智能写作", true),
-                feat("Z-Image Turbo 与 GPT Image 2 生图", true),
-                feat("Qwen 深度写作每日 300 次", true),
-                feat("AI 生图每日 100 次", true)));
+                feat("通用额度20.9元/月", true),
+                feat("Wan 50张/月", true),
+                feat("更多会员隐藏福利......", true)));
+        applyPlanPricing(p, new BigDecimal("15.9"), new BigDecimal("6.9"), firstPurchaseEligible);
+        applyPlanQuota(p, new BigDecimal("20.9"), 50);
         applyPlanButton(p, curTier, active, 2);
         return p;
+    }
+
+    private void applyPlanPricing(VipPlanVO plan, BigDecimal original, BigDecimal firstMonth,
+                                  boolean firstPurchaseEligible) {
+        plan.setOriginalPrice(original);
+        plan.setFirstMonthPrice(firstMonth);
+        plan.setFirstPurchaseEligible(firstPurchaseEligible);
+    }
+
+    private void applyPlanQuota(VipPlanVO plan, BigDecimal qwenBudget, int wanLimit) {
+        plan.setQwenBudgetMicros(qwenBudget.multiply(BigDecimal.valueOf(1_000_000)).longValue());
+        plan.setWanImageLimit(wanLimit);
     }
 
     private void applyPlanButton(VipPlanVO p, int curTier, boolean active, int planTier) {
@@ -304,12 +284,13 @@ public class VipCenterServiceImpl implements VipCenterService {
         return f;
     }
 
-    private VipQuotaPanelVO buildQuotaPanel(Long userId, Byte tier, Date vipExpireAt) {
+    private VipQuotaPanelVO buildQuotaPanel(Long userId, Byte tier, UserVipSubscription subscription) {
         VipQuotaPanelVO panel = new VipQuotaPanelVO();
         panel.setVipTier(tier);
-        panel.setTierLabel(Constant.VIP_TIER_MAX.equals(tier) ? "MAX" : "PRO");
+        panel.setTierLabel(Constant.VIP_TIER_MAX.equals(tier) ? "MAX"
+                : (Constant.VIP_TIER_PRO.equals(tier) ? "PRO" : "免费"));
 
-        PeriodWindow window = resolvePeriod(vipExpireAt);
+        PeriodWindow window = resolvePeriod(subscription, tier);
         panel.setPeriodStart(window.start);
         panel.setPeriodEnd(window.end);
 
@@ -321,6 +302,46 @@ public class VipCenterServiceImpl implements VipCenterService {
         long totalTokens = tokenByModel.values().stream().mapToLong(Long::longValue).sum();
         panel.setTotalCalls(totalCalls);
         panel.setTotalTokensUsed(totalTokens);
+        Byte baseTier = window.baseTier;
+        long baseQwenBudgetMicros = Constant.VIP_TIER_MAX.equals(baseTier) ? 20_900_000L
+                : (Constant.VIP_TIER_PRO.equals(baseTier) ? 10_900_000L : 6_000_000L);
+        int baseWanLimit = Constant.VIP_TIER_MAX.equals(baseTier) ? 50
+                : (Constant.VIP_TIER_PRO.equals(baseTier) ? 20 : 15);
+        List<VipQuotaBonusGrant> bonusGrants = vipQuotaBonusService.listActiveGrants(userId);
+        long qwenBonusGrantedMicros = bonusGrants.stream()
+                .mapToLong(item -> Math.max(0L, nvl(item.getQwenGrantedMicros())))
+                .sum();
+        long qwenBonusUsedMicros = bonusGrants.stream()
+                .mapToLong(item -> Math.max(0L, nvl(item.getQwenUsedMicros())))
+                .sum();
+        long qwenBonusMicros = Math.max(0L, qwenBonusGrantedMicros - qwenBonusUsedMicros);
+        BigDecimal wanBonusGrantedCredits = bonusGrants.stream()
+                .map(item -> positive(item.getWanGrantedCredits()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal wanBonusUsedCredits = bonusGrants.stream()
+                .map(item -> positive(item.getWanUsedCredits()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal wanBonusCredits = wanBonusGrantedCredits.subtract(wanBonusUsedCredits).max(BigDecimal.ZERO);
+        long qwenBudgetMicros = baseQwenBudgetMicros + qwenBonusGrantedMicros;
+        BigDecimal wanLimit = BigDecimal.valueOf(baseWanLimit).add(wanBonusGrantedCredits);
+        panel.setQwenBudgetMicros(qwenBudgetMicros);
+        long observedQwenUsed = Math.max(0L, usage.getQwenCostMicros() == null ? 0L : usage.getQwenCostMicros());
+        long baseQwenUsed = Math.max(0L, observedQwenUsed - qwenBonusUsedMicros);
+        long qwenUsed = baseQwenUsed + qwenBonusUsedMicros;
+        panel.setQwenUsedMicros(qwenUsed);
+        panel.setQwenRemainingMicros(
+                Math.max(0L, baseQwenBudgetMicros - baseQwenUsed) + qwenBonusMicros);
+        panel.setWanImageLimit(wanLimit);
+        BigDecimal observedWanUsed = BigDecimal.valueOf(
+                Math.max(0, usage.getWanImageUsed() == null ? 0 : usage.getWanImageUsed()));
+        BigDecimal baseWanUsed = observedWanUsed.subtract(wanBonusUsedCredits).max(BigDecimal.ZERO);
+        panel.setWanImageUsed(baseWanUsed.add(wanBonusUsedCredits));
+        panel.setWanImageRemaining(
+                BigDecimal.valueOf(baseWanLimit).subtract(baseWanUsed).max(BigDecimal.ZERO).add(wanBonusCredits));
+        panel.setQwenBonusMicros(qwenBonusMicros);
+        panel.setWanBonusCredits(wanBonusCredits);
+        panel.setActiveBonusGrantCount(bonusGrants.size());
+        panel.setBonusExpireAt(bonusGrants.isEmpty() ? null : bonusGrants.get(0).getExpireTime());
 
         List<ForumVipQuotaConfig> configs = forumVipQuotaConfigMapper.selectList(
                 Wrappers.lambdaQuery(ForumVipQuotaConfig.class)
@@ -411,15 +432,21 @@ public class VipCenterServiceImpl implements VipCenterService {
             case "qwen_flash" -> nvl(daily.getQwenFlashUsed());
             case "advanced_llm" -> nvl(daily.getAdvancedLlmUsed());
             case "image_normal" -> nvl(daily.getImageNormalUsed());
-            case "image_premium" -> nvl(daily.getImagePremiumUsed());
             case "companion_normal" -> nvl(daily.getCompanionNormalUsed());
-            case "companion_premium" -> nvl(daily.getCompanionPremiumUsed());
             default -> 0;
         };
     }
 
     private int nvl(Integer v) {
         return v == null ? 0 : v;
+    }
+
+    private long nvl(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private BigDecimal positive(BigDecimal value) {
+        return value == null || value.signum() < 0 ? BigDecimal.ZERO : value;
     }
 
     private AiUsageDailyBucketsVO loadUsageSnapshot(Long userId, Date start, Date end) {
@@ -435,8 +462,8 @@ public class VipCenterServiceImpl implements VipCenterService {
         if (periodEnd == null) {
             return "周期内有效";
         }
-        LocalDate end = periodEnd.toInstant().atZone(SHANGHAI).toLocalDate();
-        long days = ChronoUnit.DAYS.between(LocalDate.now(SHANGHAI), end);
+        LocalDate end = periodEnd.toInstant().atZone(TAIPEI).toLocalDate();
+        long days = ChronoUnit.DAYS.between(LocalDate.now(TAIPEI), end);
         if (days < 0) {
             return "已到期";
         }
@@ -446,26 +473,48 @@ public class VipCenterServiceImpl implements VipCenterService {
         return "周期重置于 " + end.format(DATE_FMT);
     }
 
-    private PeriodWindow resolvePeriod(Date vipExpireAt) {
+    private PeriodWindow resolvePeriod(UserVipSubscription subscription, Byte effectiveTier) {
         Date now = new Date();
-        Date end = vipExpireAt;
+        if (subscription != null && subscription.getQuotaPeriodStart() != null
+                && subscription.getQuotaPeriodEnd() != null
+                && subscription.getQuotaPeriodEnd().after(now)) {
+            PeriodWindow stored = new PeriodWindow();
+            stored.start = subscription.getQuotaPeriodStart();
+            stored.end = subscription.getQuotaPeriodEnd();
+            stored.baseTier = subscription.getBaseQuotaTier() == null
+                    ? Constant.VIP_TIER_FREE
+                    : subscription.getBaseQuotaTier();
+            return stored;
+        }
+        if (Constant.VIP_TIER_FREE.equals(effectiveTier)) {
+            ZonedDateTime current = ZonedDateTime.now(TAIPEI);
+            PeriodWindow free = new PeriodWindow();
+            free.start = Date.from(current.withDayOfMonth(1).toLocalDate().atStartOfDay(TAIPEI).toInstant());
+            free.end = Date.from(current.plusMonths(1).withDayOfMonth(1).toLocalDate()
+                    .atStartOfDay(TAIPEI).toInstant());
+            free.baseTier = Constant.VIP_TIER_FREE;
+            return free;
+        }
+        Date end = subscription == null ? null : subscription.getVipExpireAt();
         if (end == null) {
-            ZonedDateTime z = ZonedDateTime.now(SHANGHAI);
+            ZonedDateTime z = ZonedDateTime.now(TAIPEI);
             end = Date.from(z.plusDays(30).toInstant());
         }
-        ZonedDateTime endZ = end.toInstant().atZone(SHANGHAI);
+        ZonedDateTime endZ = end.toInstant().atZone(TAIPEI);
         ZonedDateTime startZ = endZ.minusDays(30);
         if (startZ.toInstant().isAfter(now.toInstant())) {
-            startZ = ZonedDateTime.now(SHANGHAI).minusDays(30);
+            startZ = ZonedDateTime.now(TAIPEI).minusDays(30);
         }
         PeriodWindow w = new PeriodWindow();
         w.start = Date.from(startZ.toInstant());
         w.end = end;
+        w.baseTier = effectiveTier;
         return w;
     }
 
     private static class PeriodWindow {
         Date start;
         Date end;
+        Byte baseTier;
     }
 }

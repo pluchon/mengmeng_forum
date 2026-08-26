@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 用户签到状态表实体类
- */
+// 用户签到状态表实体类
 @Data
 @TableName("user_checkin_info")
 @Schema(description = "用户签到状态实体")
@@ -35,6 +33,9 @@ public class UserCheckinInfo {
 
     @Schema(description = "最后一次签到日期")
     private Date lastCheckin;
+
+    @Schema(description = "持有补签卡数量")
+    private Integer makeupCardCount;
 
     @Schema(description = "是否删除: 0否 1是")
     @JsonIgnore

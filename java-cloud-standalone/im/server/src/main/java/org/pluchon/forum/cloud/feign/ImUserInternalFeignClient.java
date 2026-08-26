@@ -1,6 +1,6 @@
 package org.pluchon.forum.cloud.feign;
 
-import org.pluchon.forum.api.auth.UserInternalApi;
+import org.pluchon.forum.api.UserInternalApi;
 import org.springframework.cloud.openfeign.FeignClient;
 
 // IM 服务私有的认证用户内部客户端

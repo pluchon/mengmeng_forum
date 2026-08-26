@@ -9,9 +9,9 @@
           <h1>五子棋对局</h1>
           <span>房间号：{{ room.roomId || roomId }}</span>
         </div>
-        <div class="gobang-room-conn" :class="{ 'is-online': roomSocket.connected.value }">
+        <div class="gobang-room-conn" :class="{ 'is-online': roomSocket.connected.value, 'is-warning': Boolean(peerStateText) }">
           <span />
-          {{ roomSocket.connected.value ? '已连接' : '连接中' }}
+          {{ peerStateText || (roomSocket.connected.value ? '已连接' : '连接中') }}
         </div>
       </header>
 
@@ -120,7 +120,6 @@
               <em>{{ finishCountdownText }}</em>
             </div>
           </div>
-          <p v-if="peerStateText" class="gobang-peer-tip">{{ peerStateText }}</p>
         </section>
 
         <aside class="gobang-chat-panel">
@@ -201,13 +200,14 @@
         </div>
         <div v-if="!spectatorRows.length" class="gobang-side-empty">暂无观战玩家</div>
       </div>
-      <div class="gobang-dialog-pager" v-if="spectators.length > spectatorPageSize">
-        <el-pagination
+      <div class="gobang-dialog-pager">
+        <AppPagination
           v-model:current-page="spectatorPage"
           size="small"
-          layout="prev, pager, next"
           :page-size="spectatorPageSize"
           :total="spectators.length"
+          :pager-count="5"
+          :show-jumper="false"
         />
       </div>
     </el-dialog>

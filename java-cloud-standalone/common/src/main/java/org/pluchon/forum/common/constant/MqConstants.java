@@ -12,10 +12,16 @@ public final class MqConstants {
     public static final String QUORUM_QUEUE_1 = "q-queue_1";
     // 业务仲裁队列 2：私信消息
     public static final String QUORUM_QUEUE_2 = "q-queue_2";
-    // Java -> Python 帖子异步审核任务
+    // Java > Python 帖子异步审核任务
     public static final String QUORUM_QUEUE_AUDIT_TASK = "q-audit-article";
-    // Python -> Java 帖子审核结果回执
+    // Python > Java 帖子审核结果回执
     public static final String QUORUM_QUEUE_AUDIT_RESULT = "q-audit-result";
+    // Java > Python 通用AI异步任务
+    public static final String QUEUE_AI_ASYNC_TASK = "q-ai-async-task";
+    // Python > Content 异步结果
+    public static final String QUEUE_AI_CONTENT_RESULT = "q-ai-content-result";
+    // Python > IM 异步结果
+    public static final String QUEUE_AI_IM_RESULT = "q-ai-im-result";
     // 游戏对局结束事件
     public static final String QUORUM_QUEUE_GAME_FINISHED = "q-game-finished";
     // 死信队列
@@ -25,6 +31,9 @@ public final class MqConstants {
     public static final String ROUTING_KEY_QUEUE_2 = "forum.notify.message";
     public static final String ROUTING_KEY_AUDIT_TASK = "forum.audit.article";
     public static final String ROUTING_KEY_AUDIT_RESULT = "forum.audit.result";
+    public static final String ROUTING_KEY_AI_ASYNC_TASK = "forum.ai.async.task";
+    public static final String ROUTING_KEY_AI_CONTENT_RESULT = "forum.ai.content.result";
+    public static final String ROUTING_KEY_AI_IM_RESULT = "forum.ai.im.result";
     public static final String ROUTING_KEY_GAME_FINISHED = "forum.game.finished";
     public static final String ROUTING_KEY_DEAD = "forum.dead.#";
 

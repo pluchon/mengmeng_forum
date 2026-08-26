@@ -16,7 +16,7 @@ import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
 public class GobangRoom {
 
     // 房间 ID
-    private final String roomId = UUID.randomUUID().toString();
+    private final String roomId = GameRoomIdGenerator.generateRoomId();
 
     // 黑方用户 ID
     private final Long blackUserId;
@@ -68,11 +68,11 @@ public class GobangRoom {
 
     // AI 展示名：Python 模型成功返回时更新，否则显示本地兜底策略
     @Setter
-    private String aiModelName = "qwen3.6-flash";
+    private String aiModelName = "qwen3.7-flash";
 
     // AI 模型编码：低水平玩家默认 Qwen Flash，高水平玩家默认 Qwen 深度档
     @Setter
-    private String aiModelCode = "qwen3.6-flash";
+    private String aiModelCode = "qwen3.7-flash";
 
     // AI 是否正在思考，供前端展示
     @Setter
@@ -82,13 +82,21 @@ public class GobangRoom {
     @Setter
     private int aiMoveCount;
 
+    // 本地引擎搜索深度（按玩家段位分桶）
+    @Setter
+    private int aiSearchDepth = 2;
+
+    // 本地引擎候选宽度
+    @Setter
+    private int aiMaxCandidates = 12;
+
     // 房间内聊天消息
     private final List<String> chatMessages = new ArrayList<>();
 
-    // 观众进入时间：userId -> 进入时间戳，用于前端按加入顺序展示观战席
+    // 观众进入时间：userId > 进入时间戳，用于前端按加入顺序展示观战席
     private final ConcurrentHashMap<Long, Long> spectatorJoinedAt = new ConcurrentHashMap<>();
 
-    // 断线重连截止时间：userId -> 截止时间戳
+    // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
     public GobangRoom(Long blackUserId, Long whiteUserId) {

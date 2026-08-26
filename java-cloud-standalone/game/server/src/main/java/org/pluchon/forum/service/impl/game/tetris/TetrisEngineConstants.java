@@ -25,6 +25,8 @@ public final class TetrisEngineConstants {
 
     public static final int[] CLEAR_POINTS = {100, 300, 700, 1500};
 
+    public static final int TETRIS_BONUS = 200;
+
     public static final int EACH_LINES = 20;
 
     static {
@@ -64,5 +66,33 @@ public final class TetrisEngineConstants {
     // PK 消行与单人模式一致：只更新己方棋盘，不向对手发送垃圾行
     public static int garbageLinesForClear(int lines) {
         return 0;
+    }
+
+    // 连击加成百分比：第 2 次 +10%，第 3 次 +15%，第 4 次起 +20%
+    public static int comboBonusPercent(int comboCount) {
+        if (comboCount >= 4) {
+            return 20;
+        }
+        if (comboCount == 3) {
+            return 15;
+        }
+        if (comboCount == 2) {
+            return 10;
+        }
+        return 0;
+    }
+
+    // 单次消行得分（含连击与四消奖励），comboCount 为本次消行后的连击数
+    public static int calcClearScore(int lineCount, int comboCount) {
+        if (lineCount <= 0 || lineCount > CLEAR_POINTS.length) {
+            return 0;
+        }
+        int base = CLEAR_POINTS[lineCount - 1];
+        int bonus = base * comboBonusPercent(comboCount) / 100;
+        int score = base + bonus;
+        if (lineCount == 4) {
+            score += TETRIS_BONUS;
+        }
+        return score;
     }
 }

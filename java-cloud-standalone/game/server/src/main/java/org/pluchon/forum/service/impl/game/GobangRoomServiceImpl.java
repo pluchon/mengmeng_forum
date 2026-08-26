@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.mq.ForumProducer;
@@ -16,11 +15,10 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.api.ai.AiGobangMoveRequest;
 import org.pluchon.forum.api.ai.AiGobangMoveVO;
-import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
-import org.pluchon.forum.game.client.GameAiHubInternalFeignClient;
+import org.pluchon.forum.service.remote.GameAiGatewayService;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
@@ -43,14 +41,16 @@ import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GobangRoomService;
+import org.pluchon.forum.api.ai.AiGobangBoardInsight;
 import org.pluchon.forum.service.impl.game.ai.GameAiPlanner;
+import org.pluchon.forum.service.impl.game.ai.GobangAiDifficultyProfile;
 import org.pluchon.forum.service.impl.game.ai.GobangAiEngine;
+import org.pluchon.forum.service.impl.game.ai.GobangThreatDetector;
 import org.pluchon.forum.service.impl.game.guard.GobangActionContext;
 import org.pluchon.forum.service.impl.game.guard.GobangGuardChain;
 import org.pluchon.forum.service.impl.game.guard.GobangGuardResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -61,7 +61,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.util.concurrent.Executor;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -83,16 +82,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     private static final int AI_PRO_SCORE_THRESHOLD = 1600;
 
-    private static final String AI_MODEL_FLASH = "qwen3.6-flash";
+    private static final String AI_MODEL_FLASH = "qwen3.7-flash";
 
     private static final String AI_MODEL_PRO = "qwen3.7-max";
 
     private static final String DEFAULT_AI_MODEL_NAME = AI_MODEL_FLASH;
 
-    // roomId -> 房间状态
+    // roomId > 房间状态
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
 
-    // userId -> roomId，用于防止同一用户进入多个房间
+    // userId > roomId，用于防止同一用户进入多个房间
     private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
 
     @Autowired
@@ -129,9 +128,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GameSettlementEventMapper gameSettlementEventMapper;
 
     @Autowired
-    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
-
-    @Autowired
     private GameUserLookupService gameUserLookupService;
 
     @Autowired
@@ -162,7 +158,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
 
     @Autowired
-    private GameAiHubInternalFeignClient gameAiHubInternalFeignClient;
+    private GameAiGatewayService gameAiGatewayService;
 
     @Autowired(required = false)
     public void setGobangGuardChain(GobangGuardChain gobangGuardChain) {
@@ -207,6 +203,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         String modelCode = chooseAiModelCode(userId);
         room.setAiModelCode(modelCode);
         room.setAiModelName(GameAiPlanner.formatModelLabel(modelCode, false, false));
+        GobangAiDifficultyProfile difficulty = chooseAiDifficulty(userId);
+        room.setAiSearchDepth(difficulty.depth());
+        room.setAiMaxCandidates(difficulty.maxCandidates());
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
         userRoomIds.put(userId, room.getRoomId());
@@ -507,25 +506,8 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             record.setLoserScoreDelta(loserDelta(rankResult));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
-            record.setDeleteState((byte) 0);
+            record.setDeleteState(GameConstants.NOT_DELETED);
             gameGobangMatchRecordMapper.insert(record);
-            if (winnerId != null && loserId != null && scoreDelta > 0) {
-                if (!GameConstants.AI_USER_ID.equals(winnerId)) {
-                    gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
-                            Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "五子棋胜利奖励",
-                            "game:gobang:win:" + room.getRoomId());
-                }
-                if (!GameConstants.AI_USER_ID.equals(loserId)) {
-                    Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
-                    int loserPoints = balance == null ? 0 : balance;
-                    int loserPenalty = Math.abs(loserDelta(rankResult));
-                    if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                        gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
-                                Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "五子棋对局扣除",
-                                "game:gobang:lose:" + room.getRoomId());
-                    }
-                }
-            }
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
         saveRoomSnapshot(room);
@@ -575,7 +557,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         event.setRecordId(record.getId());
         event.setStatus(GameConstants.SETTLEMENT_EVENT_CREATED);
         event.setRetryCount(0);
-        event.setDeleteState((byte) 0);
+        event.setDeleteState(GameConstants.NOT_DELETED);
         gameSettlementEventMapper.insert(event);
         return new GameFinishedMqVO(
                 eventId,
@@ -618,6 +600,19 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
         int score = profile == null || profile.getScore() == null ? 0 : profile.getScore();
         return score < AI_PRO_SCORE_THRESHOLD ? AI_MODEL_FLASH : AI_MODEL_PRO;
+    }
+
+    private GobangAiDifficultyProfile chooseAiDifficulty(Long userId) {
+        GameUserProfile profile = gameUserProfileService.getOrCreateProfile(userId, GameConstants.GOBANG);
+        int score = profile == null || profile.getScore() == null ? 0 : profile.getScore();
+        return GobangAiDifficultyProfile.ofScore(score);
+    }
+
+    private GobangAiDifficultyProfile difficultyOf(GobangRoom room) {
+        if (room == null) {
+            return GobangAiDifficultyProfile.ofScore(0);
+        }
+        return GobangAiDifficultyProfile.of(room.getAiSearchDepth(), room.getAiMaxCandidates());
     }
 
     private void updateSettlementEventStatusFromCreated(String eventId, String status, String lastError) {
@@ -757,7 +752,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         Map<Long, GameUserProfile> profileMap = new HashMap<>();
         gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, GameConstants.GOBANG)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
                 .in(GameUserProfile::getUserId, userIds))
                 .forEach(profile -> profileMap.put(profile.getUserId(), profile));
         return profileMap;
@@ -817,7 +812,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return new GobangRoomParticipantVO(
                     GameConstants.AI_USER_ID,
                     "ai",
-                    "同水平AI",
+                    "智能对手",
                     "",
                     (byte) 0,
                     false,
@@ -862,11 +857,11 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         row.setRoomId(roomId);
         row.setUserId(userId);
         row.setRoomRole(role);
-        row.setDeleteState((byte) 0);
+        row.setDeleteState(GameConstants.NOT_DELETED);
         try {
             gameRoomPlayerMapper.insert(row);
         } catch (Exception e) {
-            log.debug("保存游戏房间玩家映射失败 roomId={}, userId={}, role={}", roomId, userId, role);
+            log.warn("保存游戏房间玩家映射失败 roomId={}, userId={}, role={}, error={}", roomId, userId, role, e.getMessage());
         }
     }
 
@@ -879,7 +874,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         move.setColIndex(col);
         move.setChess(chess);
         move.setSpentMs(spentMs);
-        move.setDeleteState((byte) 0);
+        move.setDeleteState(GameConstants.NOT_DELETED);
         gameGobangRoomMoveMapper.insert(move);
     }
 
@@ -910,8 +905,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private void scheduleAiMove(GobangRoom room) {
-        boolean consultLlm = GameAiPlanner.shouldConsultLlm(room)
-                && !gobangAiEngine.hasTacticalMove(room.getBoard());
+        GobangAiDifficultyProfile difficulty = difficultyOf(room);
+        boolean forcedThreat = gobangAiEngine.hasForcedThreat(room.getBoard());
+        int scoreSpread = gobangAiEngine.candidateScoreSpread(room.getBoard(), difficulty);
+        boolean consultLlm = !forcedThreat && GameAiPlanner.shouldConsultLlm(room, scoreSpread);
         long minThinkMs = GameAiPlanner.minThinkMs(consultLlm);
         room.setAiThinking(true);
         sendStateToRoom(room, "room_state_updated");
@@ -968,33 +965,45 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private int[] chooseAiMove(GobangRoom room, boolean consultLlm) {
-        if (gobangAiEngine.hasTacticalMove(room.getBoard())) {
+        GobangAiDifficultyProfile difficulty = difficultyOf(room);
+        GobangThreatDetector.ThreatHit forced = gobangAiEngine.findForcedThreat(room.getBoard());
+        if (forced != null) {
             room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
-            return gobangAiEngine.chooseMove(room.getBoard());
+            return new int[] { forced.row(), forced.col() };
         }
         if (consultLlm) {
-            int[] remoteMove = chooseRemoteAiMove(room);
+            int[] remoteMove = chooseRemoteAiMove(room, difficulty);
             if (remoteMove != null) {
                 return remoteMove;
             }
         }
         room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
-        return gobangAiEngine.chooseMove(room.getBoard());
+        return gobangAiEngine.chooseMove(room.getBoard(), difficulty);
     }
 
-    private int[] chooseRemoteAiMove(GobangRoom room) {
+    private int[] chooseRemoteAiMove(GobangRoom room, GobangAiDifficultyProfile difficulty) {
         try {
+            AiGobangBoardInsight insight = gobangAiEngine.buildBoardInsight(room.getBoard(), difficulty);
             AiGobangMoveRequest request = new AiGobangMoveRequest();
             request.setBoard(room.copyBoard());
             request.setAiChess(2);
             request.setModelCode(room.getAiModelCode());
-            AiGobangMoveVO move = gameAiHubInternalFeignClient.chooseGobangMove(request);
+            request.setInsight(insight);
+            AiGobangMoveVO move = gameAiGatewayService.chooseGobangMove(request);
             if (move == null || move.getRow() == null || move.getCol() == null) {
                 return null;
             }
             int row = move.getRow();
             int col = move.getCol();
             if (!inBoard(row, col) || room.getBoard()[row][col] != 0) {
+                return null;
+            }
+            GobangThreatDetector.ThreatHit mustBlock = gobangAiEngine.findMustBlock(room.getBoard());
+            if (mustBlock != null && (mustBlock.row() != row || mustBlock.col() != col)) {
+                room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, true));
+                return new int[] { mustBlock.row(), mustBlock.col() };
+            }
+            if (!isCandidateMove(insight, row, col)) {
                 return null;
             }
             String modelCode = parseModelCode(move.getModelCode(), room.getAiModelCode());
@@ -1006,6 +1015,22 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             log.warn("五子棋 Python AI 不可用，使用本地智能引擎 roomId={}, error={}", room.getRoomId(), e.getMessage());
             return null;
         }
+    }
+
+    private boolean isCandidateMove(AiGobangBoardInsight insight, int row, int col) {
+        if (insight == null || insight.getCandidateMoves() == null || insight.getCandidateMoves().isEmpty()) {
+            return true;
+        }
+        for (AiGobangBoardInsight.CandidateMove candidate : insight.getCandidateMoves()) {
+            if (candidate != null
+                    && candidate.getRow() != null
+                    && candidate.getCol() != null
+                    && candidate.getRow() == row
+                    && candidate.getCol() == col) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String parseModelCode(String raw, String defaultModelCode) {

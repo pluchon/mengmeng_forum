@@ -1,4 +1,8 @@
-"""看板娘 Supervisor 的受控意图判断。"""
+"""看板娘意图路由（遗留）。
+
+基本 Agent 闭环后，工具/生图/站内帖邀请已由 graphs.mascot_graph 的 tool_planner 统一决策。
+本模块保留 parse/history 辅助，避免外部误引用立刻炸掉；勿再作为主决策入口。
+"""
 
 from __future__ import annotations
 
@@ -20,21 +24,15 @@ def decide_mascot_action(
     message: str,
     history: list[dict[str, str]] | None,
 ) -> tuple[str, str, str, bool, str, bool, dict[str, Any]]:
-    """根据最近对话决定生图、复杂度与是否主动询问站内检索。"""
+    """遗留接口：请改用 mascot_graph.tool_planner。仍返回兼容元组供旧调用方兜底。"""
     conversation = _format_history(history)
-    model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash")
+    model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.7-flash")
     system = """你是论坛看板娘的受控 Supervisor。判断本轮生图、复杂度和是否适合询问站内帖子检索。
 仅当用户明确要求“由你新生成一张图”时 action 才能为 IMAGE；用户想看、查找、搜索、展示、识别或评价已有图片，
 即使消息里出现“图片”“画面”“图”，也都必须是 CHAT，后续联网链路会处理图集。
-例如“帮我画一张琪露诺”“生成一张海边插画”是 IMAGE；“想看看琪露诺的图片”“网上搜图给我看”
-“这张图是什么”都是 CHAT。你可以参考历史对话补全用户已经明确的主体、场景、风格。
-action=IMAGE 时 image_prompt 必须是一段可独立交给生图模型的中文画面描述，保留已知事实，不要编造人物身份、
-地名、品牌、图片文字或敏感内容；action=CHAT 时 image_prompt 必须为空。
-complexity 只能是 SIMPLE 或 COMPLEX：闲聊、单点问答、简短改写、简单站点功能提问属于 SIMPLE；
-需要多步推理、比较取舍、方案规划、长篇结构化创作或深入分析才是 COMPLEX。
-suggest_related_search=true 仅限用户确实在谈一个可被部落帖子帮助的话题，并且自然地问一句“要不要我帮你看看部落里有没有人聊过？”会有价值；
-不要每轮都建议，不要对寒暄、站点操作、已有明确答案、图片生成请求建议。related_search_query 必须是结合最近上下文和本轮内容的简洁检索语句；
-不建议时 related_search_query 为空。need_search_images=true 仅当本轮需要联网查询、用户在了解新实体、地点或作品且图片确实有助于理解时才允许；普通问答、新闻、操作说明一律 false。只输出合法 JSON，不要 Markdown：
+complexity 只能是 SIMPLE 或 COMPLEX。
+suggest_related_search=true 仅限自然邀请站内帖检索有价值时。
+need_search_images=true 表示应联网并展示图集。只输出合法 JSON：
 {"action":"CHAT|IMAGE","image_prompt":"","complexity":"SIMPLE|COMPLEX","suggest_related_search":false,"related_search_query":"","need_search_images":false}"""
     user = f"最近对话：\n{conversation}\n\n本轮用户：{message[:2000]}"
     try:

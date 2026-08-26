@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-// 积分域内部契约（纯 API，无 @FeignClient；写操作收口到 forum-economy）
+// 积分域内部契约 纯 API，无 @FeignClient；写操作收口到 forum economy
 public interface PointsInternalApi {
 
     @GetMapping("/points/internal/{userId}/balance")

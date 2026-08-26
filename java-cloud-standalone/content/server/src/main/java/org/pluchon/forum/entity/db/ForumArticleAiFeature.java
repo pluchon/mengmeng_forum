@@ -22,6 +22,18 @@ public class ForumArticleAiFeature {
     // 结构化特征 JSON
     private String featureJson;
 
+    // 帖子AI总结
+    private String summaryText;
+
+    // 总结状态
+    private Byte summaryStatus;
+
+    // 总结对应正文哈希
+    private String summaryContentHash;
+
+    // 总结生成时间
+    private Date summaryGeneratedAt;
+
     // 特征协议版本
     private String featureVersion;
 

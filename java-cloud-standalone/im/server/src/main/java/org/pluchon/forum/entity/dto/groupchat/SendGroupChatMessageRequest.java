@@ -22,4 +22,7 @@ public class SendGroupChatMessageRequest {
 
     // 回复的群消息 ID
     private Long replyMessageId;
+
+    // 商城表情包 ID；发送商城表情时必填
+    private Long emojiShopId;
 }

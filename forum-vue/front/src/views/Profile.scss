@@ -24,8 +24,3 @@
   cursor: wait;
   opacity: 0.55;
 }
-
-:global(:root[data-theme='dark']) .profile-not-interested-restore {
-  background: rgba(34, 197, 94, 0.14);
-  color: #8fe1b5;
-}

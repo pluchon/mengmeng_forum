@@ -9,6 +9,10 @@ import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.points.PointsDailyVO;
+import org.pluchon.forum.entity.dto.points.PointsLogQueryDTO;
+import org.pluchon.forum.entity.vo.points.PointsCenterOverviewVO;
+import org.pluchon.forum.entity.vo.points.PointsCenterChartVO;
+import org.pluchon.forum.entity.vo.points.PointsCenterTrendVO;
 import org.pluchon.forum.entity.vo.points.PointsLogVO;
 import org.pluchon.forum.entity.vo.points.PointsWalletVO;
 import org.pluchon.forum.service.interfaces.points.PointsService;
@@ -64,6 +68,46 @@ public class PointsController {
                                                 HttpServletRequest request) {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getDailyAggregation(loginUser.getId(), days));
+    }
+
+    /** 萌币中心概览：自然周趋势、里程碑与收支来源 */
+    @GetMapping("/center/overview")
+    public Result<PointsCenterOverviewVO> getCenterOverview(@RequestParam(defaultValue = "0") Integer weekOffset,
+                                                            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.getCenterOverview(loginUser.getId(), weekOffset));
+    }
+
+    /** 萌币中心周趋势：切换周时不重复刷新里程碑 */
+    @GetMapping("/center/trend")
+    public Result<PointsCenterTrendVO> getCenterTrend(@RequestParam(defaultValue = "0") Integer weekOffset,
+                                                       HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.getCenterTrend(loginUser.getId(), weekOffset));
+    }
+
+    /** 萌币流水图表：按与流水相同的筛选条件聚合 */
+    @GetMapping("/center/chart")
+    public Result<PointsCenterChartVO> getCenterChart(PointsLogQueryDTO query,
+                                                       HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.getCenterChart(loginUser.getId(), query));
+    }
+
+    /** 萌币中心流水：后端负责收支、来源、时间筛选与分页 */
+    @GetMapping("/center/log")
+    public Result<PageResult<PointsLogVO>> getCenterLog(PointsLogQueryDTO query,
+                                                         HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.getCenterLogWithPage(loginUser.getId(), query));
+    }
+
+    /** 领取已达成的萌币里程碑 */
+    @PostMapping("/center/milestones/{milestoneCode}/claim")
+    public Result<Integer> claimMilestone(@PathVariable String milestoneCode,
+                                          HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(pointsService.claimMilestone(loginUser.getId(), milestoneCode));
     }
 
     /** 内部服务调用：查询余额 */

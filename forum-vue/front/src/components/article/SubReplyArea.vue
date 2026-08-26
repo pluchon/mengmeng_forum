@@ -1,7 +1,7 @@
 <template>
   <div class="sub-reply-wrap">
-    <div class="sub-reply-toolbar">
-      <button v-if="total > 0" type="button" class="sub-expand-inline" @click="toggle">
+    <div v-if="total > 0" class="sub-reply-toolbar">
+      <button type="button" class="sub-expand-inline" @click="toggle">
         <el-icon class="sub-expand-icon"><component :is="expanded ? CaretTop : CaretBottom" /></el-icon>
         <span>{{ expanded ? '收起回复' : `展开 ${total} 条回复` }}</span>
       </button>
@@ -9,69 +9,116 @@
 
     <el-collapse-transition>
       <div v-if="expanded && total > 0" class="sub-nested-panel">
-        <div v-for="sub in subList" :key="sub.subReply.id" class="sub-item">
-          <el-row :gutter="12" justify="start">
-            <el-col :span="1.5">
-              <span class="sub-user-link" role="button" tabindex="0" @click="goProfile(sub.postUser?.id)">
+        <div
+          v-for="sub in subList"
+          :key="sub.subReply.id"
+          class="sub-item"
+          :class="{ 'sub-item--accepted': !!sub.accepted }"
+        >
+          <div class="sub-item-head">
+            <div class="sub-item-author">
+              <div
+                v-if="sub.postUser?.id"
+                class="sub-item-avatar-link"
+                role="link"
+                tabindex="0"
+                @click="emitProfile(sub.postUser.id)"
+                @keydown.enter.prevent="emitProfile(sub.postUser.id)"
+              >
                 <UserAvatarVip
-                  :size="24"
+                  :size="20"
                   :src="sub.postUser?.avatarUrl || defaultAvatar"
                   :vip-tier="Number(sub.postUser?.vipTier) || 0"
                   :vip-expire-at="sub.postUser?.vipExpireAt"
                 />
-              </span>
-            </el-col>
-            <el-col :span="21">
-              <div class="sub-msg-body">
-                <el-space wrap :size="4">
-                  <el-text
-                    type="primary"
-                    strong
-                    size="small"
-                    class="sub-user-link"
-                    @click="goProfile(sub.postUser?.id)"
-                  >{{ sub.postUser?.nickname }}</el-text>
-                  <template v-if="shouldShowReplyMention(sub)">
-                    <el-text type="info" size="small">回复</el-text>
-                    <el-text type="primary" size="small">@{{ sub.replyUserNickname }}</el-text>
-                  </template>
-                  <el-text size="small" class="sub-text-content">: {{ sub.subReply.content }}</el-text>
-                </el-space>
-                <CommentReplyMediaDisplay
-                  :media-list="sub.mediaList"
-                  @open-shop="(id) => emit('open-shop', id)"
-                />
               </div>
-              <div class="sub-item-meta">
-                <div class="sub-item-meta-left">
-                  <el-text type="info" size="small">{{ sub.subReply.createTime }}</el-text>
-                  <IpRegionLabel :region="sub.subReply?.ipRegion" />
-                </div>
-                <div class="sub-item-meta-actions">
-                  <button type="button" class="comment-action-btn" @click="toggleSubLike(sub)">
-                    <LikeCountIcon class="comment-like-icon" :filled="sub.liked" />
-                    <span :class="{ 'is-liked': sub.liked }">{{ sub.subReply.likeCount || 0 }}</span>
-                  </button>
-                  <button type="button" class="comment-action-btn" @click="emitReply(sub)">
-                    <el-icon><ChatDotRound /></el-icon>
-                    <span>回复</span>
-                  </button>
-                </div>
-              </div>
-            </el-col>
-          </el-row>
+              <UserAvatarVip
+                v-else
+                :size="20"
+                :src="sub.postUser?.avatarUrl || defaultAvatar"
+                :vip-tier="Number(sub.postUser?.vipTier) || 0"
+                :vip-expire-at="sub.postUser?.vipExpireAt"
+              />
+              <span
+                class="sub-user-link"
+                :title="sub.postUser?.nickname || '用户'"
+                role="link"
+                tabindex="0"
+                @click="emitProfile(sub.postUser?.id)"
+                @keydown.enter.prevent="emitProfile(sub.postUser?.id)"
+              >{{ compactNickname(sub.postUser?.nickname) }}</span>
+              <el-tag
+                v-if="isAuthorReply(sub)"
+                size="small"
+                type="danger"
+                effect="plain"
+                class="up-tag sub-up-tag"
+              >
+                UP
+              </el-tag>
+              <template v-if="shouldShowReplyMention(sub)">
+                <span class="sub-reply-to"> 回复 </span>
+                <span class="sub-reply-target" :title="sub.replyUserNickname">@{{ compactNickname(sub.replyUserNickname) }}</span>
+              </template>
+            </div>
+            <span class="sub-item-meta-time">
+              {{ formatCommentMeta(sub.subReply?.createTime, resolveIpRegion(sub)) }}
+            </span>
+          </div>
+          <div class="sub-item-content">
+            <span v-if="isViolated(sub)" class="sub-violated-placeholder">该回复因违规已屏蔽</span>
+            <CommentExpandableText v-else :content="sub.subReply.content" />
+          </div>
+          <CommentReplyMediaDisplay
+            v-if="!isViolated(sub)"
+            :media-list="sub.mediaList"
+            @open-shop="(id) => emit('open-shop', id)"
+          />
+          <div class="sub-item-actions">
+            <div class="sub-item-actions__left">
+              <button type="button" class="comment-action-btn" @click="toggleSubLike(sub)">
+                <LikeCountIcon class="comment-like-icon" :filled="sub.liked" />
+                <span :class="{ 'is-liked': sub.liked }">{{ sub.subReply.likeCount || 0 }}</span>
+              </button>
+              <button type="button" class="comment-action-btn" @click="emitReply(sub)">
+                <el-icon :size="12"><ChatDotRound /></el-icon>
+                <span>回复</span>
+              </button>
+              <button
+                v-if="canAccept && !isAuthorReply(sub) && !sub.accepted"
+                type="button"
+                class="comment-action-btn comment-action-btn--accept"
+                :disabled="acceptSaving"
+                @click="emitAccept(sub)"
+              >
+                采纳
+              </button>
+            </div>
+            <div class="sub-item-actions__right">
+              <span v-if="sub.accepted" class="sub-accepted-tag">已采纳</span>
+              <button
+                v-if="!isOwnSub(sub) && !isAuthorReply(sub)"
+                type="button"
+                class="comment-action-btn comment-action-btn--report"
+                aria-label="举报回复"
+                title="举报"
+                @click="emitReport(sub)"
+              >
+                <el-icon :size="13"><Flag /></el-icon>
+              </button>
+            </div>
+          </div>
         </div>
 
         <el-empty v-if="subList.length === 0" description="暂无回复" :image-size="40" />
 
-        <el-pagination
-          v-if="total > pageSize"
+        <AppPagination
           v-model:current-page="page"
+          size="small"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next"
-          small
-          hide-on-single-page
+          :pager-count="5"
+          :show-jumper="false"
           class="sub-pager"
           @current-change="loadSubs"
         />

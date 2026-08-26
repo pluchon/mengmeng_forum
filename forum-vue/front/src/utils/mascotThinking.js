@@ -1,4 +1,4 @@
-/** 看板娘 · 模型思考态文案（随机语义） */
+// 看板娘 · 模型思考态文案 随机语义
 
 const PERSONA_BY_LLM = {
   'qwen-flash': 'Qwen',
@@ -29,7 +29,7 @@ export function pickThinkingPhrase(llmId) {
   return tpl.replace(/\{name\}/g, name)
 }
 
-/** 思考阶段轮换文案，返回 stop 函数 */
+// 思考阶段轮换文案，返回 stop 函数
 export function startThinkingRotation(llmId, onUpdate, intervalMs = 2800) {
   onUpdate(pickThinkingPhrase(llmId))
   const timer = setInterval(() => {

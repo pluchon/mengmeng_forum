@@ -1,0 +1,7 @@
+spring:
+  config:
+    import:
+      - classpath:application-core-defaults.yml
+      - classpath:application-core-prod-defaults.yml
+      - nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false

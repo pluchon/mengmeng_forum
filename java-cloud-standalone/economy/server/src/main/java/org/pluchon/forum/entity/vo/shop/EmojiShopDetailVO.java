@@ -9,9 +9,7 @@ import org.pluchon.forum.entity.vo.common.PageResult;
 import java.util.Date;
 import java.util.List;
 
-/**
- * 商品详情 VO. 包内单图按分页返回.
- */
+// 商品详情 VO. 包内单图按分页返回.
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

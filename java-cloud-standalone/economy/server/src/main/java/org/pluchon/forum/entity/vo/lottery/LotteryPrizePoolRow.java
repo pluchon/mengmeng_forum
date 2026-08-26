@@ -2,9 +2,7 @@ package org.pluchon.forum.entity.vo.lottery;
 
 import lombok.Data;
 
-/**
- * 单次加权抽签用的奖池行 (活动奖品关联 JOIN 奖品定义).
- */
+// 单次加权抽签用的奖池行 活动奖品关联 JOIN 奖品定义 .
 @Data
 public class LotteryPrizePoolRow {
 

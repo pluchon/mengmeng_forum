@@ -12,6 +12,10 @@ export function getFollowStats(userId) {
   return request({ url: '/user/followStats', method: 'get', params: { userId } })
 }
 
+export function getCreatorMonthlyNewFollowers() {
+  return request({ url: '/user/creator/monthly-new-followers', method: 'get' })
+}
+
 export function getMyFollowingIds() {
   return request({ url: '/user/followingIds', method: 'get' })
 }

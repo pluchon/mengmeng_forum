@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/** 抽奖请求幂等表，防止重复扣积分与重复发奖 */
+// 抽奖请求幂等表，防止重复扣积分与重复发奖
 @Data
 @TableName("lottery_draw_request")
 public class LotteryDrawRequest {
@@ -27,6 +27,12 @@ public class LotteryDrawRequest {
     private String batchKey;
 
     private Integer pityAfter;
+
+    // 本批使用抵扣券数量；NULL 表示历史记录未保存
+    private Integer vouchersUsed;
+
+    // 本批实际扣除萌币；NULL 表示历史记录未保存
+    private Integer pointsCharged;
 
     @TableLogic
     private Byte deleteState;

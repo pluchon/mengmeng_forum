@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter;
 // 规范化命名，提高了服务端的健壮与高可用性
 public final class LotteryImagePathUtils {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZONE);
 
     private LotteryImagePathUtils() {
@@ -21,7 +21,8 @@ public final class LotteryImagePathUtils {
     }
 
     public static String activityCoverObjectName(long activityId, long publisherId, String ts, String ext) {
-        return activityId + "_" + publisherId + "_" + ts + "." + ext;
+        String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return activityId + "_" + publisherId + "_" + ts + "_" + uuid + "." + ext;
     }
 
     public static String activityCoverRelative(long activityId, long publisherId, String ts, String ext) {
@@ -29,6 +30,7 @@ public final class LotteryImagePathUtils {
     }
 
     public static String prizeImageObjectName(long activityId, long prizeId, String ts, String ext) {
-        return activityId + "_" + prizeId + "_" + ts + "." + ext;
+        String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return activityId + "_" + prizeId + "_" + ts + "_" + uuid + "." + ext;
     }
 }

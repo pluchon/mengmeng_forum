@@ -1,3 +1,5 @@
+defineOptions({ name: 'UnifiedSearchFeed' })
+
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -5,9 +7,17 @@ import { searchArticles, searchUsers } from '@/api/search'
 import { followUser, unfollowUser } from '@/api/userFollow'
 import SearchArticleCard from '@/components/search/SearchArticleCard.vue'
 import SearchUserRow from '@/components/search/SearchUserRow.vue'
+import Masonry from '@/components/common/Masonry.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useHomeShellContext } from '@/composables/useHomeShell'
-import { useHomeMasonry } from '@/composables/useHomeMasonry'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
+import articleNotFoundAssetUrl from '@/assets/images/article_not_found.png'
+import userNotFoundAssetUrl from '@/assets/images/user_not_found.png'
+import {
+  captureFeedCardOrigin,
+  captureFeedOpenFrom,
+  getFeedCardOrigin,
+} from '@/utils/feedNavigation'
 
 function useUnifiedSearchFeed() {
   const route = useRoute()
@@ -25,20 +35,36 @@ function useUnifiedSearchFeed() {
   const total = ref(0)
   const followSavingIds = ref(new Set())
 
-  const preferAiRag = computed(() => shell.aiSearchMode.value)
-
-  const keyword = computed(() => (route.query.keyword ?? '').toString().trim())
+  // 搜索条件属于结果页自身状态。详情页打开后，当前全局路由会变为 /article/:id
+  // 不能再直接读取 route.查询，否则普通搜索和 AI 搜索的背景结果都会被清空
+  const resultKeyword = ref('')
+  const resultAiRag = ref(false)
+  const preferAiRag = computed(() => resultAiRag.value)
+  const keyword = computed(() => resultKeyword.value)
+  const masonryReloadKey = computed(() => {
+    const first = articleRecords.value?.[0]?.article?.id
+    return `${searchTab.value}-${pageNum.value}-${preferAiRag.value ? 1 : 0}-${first || ''}-${articleRecords.value.length}`
+  })
 
   const feedList = computed(() =>
     searchTab.value === 'article' ? articleRecords.value : [],
   )
-
-  const { containerRef: masonryRef, columns: masonryColumns } = useHomeMasonry(feedList, {
-    columnWidth: 220,
-    gap: 16,
+  const masonryCards = computed(() => {
+    const list = articleRecords.value || []
+    return list.map((entry, index) => {
+      const article = entry?.article || {}
+      const seed = Number(article?.id) || index + 1
+      const titleLength = String(article?.title || '').length
+      const titleHeight = Math.min(2, Math.max(1, Math.ceil(titleLength / 24))) * 24
+      return {
+        id: String(article?.id || `search-article-${index}`),
+        entry,
+        height: 170 + Math.abs(seed % 5) * 24 + titleHeight + 112,
+      }
+    })
   })
 
-  let lastSig = ''
+  let handledSearchSubmitVersion = -1
 
   async function runSearch(pn = 1) {
     const kw = keyword.value
@@ -46,6 +72,11 @@ function useUnifiedSearchFeed() {
     pageNum.value = pn
     loading.value = true
     hasSearched.value = true
+    if (preferAiRag.value) {
+      articleRecords.value = []
+      userRecords.value = []
+      total.value = 0
+    }
     try {
       if (searchTab.value === 'user') {
         const res = await searchUsers({
@@ -92,12 +123,21 @@ function useUnifiedSearchFeed() {
     if (keyword.value) query.keyword = keyword.value
     if (preferAiRag.value) query.ai = '1'
     router.replace({ path: '/search', query })
-    if (keyword.value) runSearch(1)
   }
 
-  function openArticle(entry) {
+  function openArticle(entry, event, meta = {}) {
     const articleId = entry?.article?.id
     if (!articleId) return
+    const card = event?.currentTarget?.closest?.('.note-card') || event?.currentTarget
+    const cover = card?.querySelector?.('.note-cover') || card
+    if (cover) {
+      captureFeedCardOrigin(articleId, cover, {
+        coverUrl: meta.previewUrl || entry?.article?.coverImg || '',
+        restoreCoverUrl: meta.restoreCoverUrl || entry?.article?.coverImg || '',
+      })
+    }
+    getFeedCardOrigin(articleId)
+    captureFeedOpenFrom(route.fullPath)
     router.push(`/article/${articleId}`)
   }
 
@@ -141,46 +181,43 @@ function useUnifiedSearchFeed() {
   }
 
   watch(
-    () => route.query.tab,
-    (tab) => {
-      if (tab === 'user') searchTab.value = 'user'
-      else if (tab === 'article') searchTab.value = 'article'
+    () => [route.path, route.query.keyword, route.query.ai, route.query.tab],
+    ([path, nextKeyword, nextAi, nextTab]) => {
+      // 仅在真正进入搜索页时同步路由条件；详情弹窗期间保留原结果页的普通/AI 搜索状态
+      if (path !== '/search') return
+      resultKeyword.value = (nextKeyword ?? '').toString().trim()
+      resultAiRag.value = nextAi === '1' || nextAi === 'true'
+      if (nextTab === 'user') searchTab.value = 'user'
+      else if (nextTab === 'article') searchTab.value = 'article'
     },
     { immediate: true },
   )
 
   watch(
-    () => [route.query.keyword, route.query.ai, shell.aiSearchMode.value],
-    () => {
-      const kw = keyword.value
-      if (!kw) {
-        hasSearched.value = false
-        articleRecords.value = []
-        userRecords.value = []
-        return
-      }
-      const sig = `${kw}\0${preferAiRag.value ? '1' : '0'}\0${searchTab.value}`
-      if (sig === lastSig && hasSearched.value) return
-      lastSig = sig
+    () => [route.path, shell.searchSubmitVersion.value],
+    ([path, submitVersion]) => {
+      if (path !== '/search' || !keyword.value) return
+      if (hasSearched.value && handledSearchSubmitVersion === submitVersion) return
+      handledSearchSubmitVersion = submitVersion
       runSearch(1)
     },
     { immediate: true },
   )
 
   watch(searchTab, (tab, prev) => {
-    if (!keyword.value || tab === prev) return
-    lastSig = ''
+    if (route.path !== '/search' || !keyword.value || tab === prev) return
     runSearch(1)
   })
 
   return {
+    articleNotFoundImageUrl: articleNotFoundAssetUrl,
     feedList,
     hasSearched,
     isFollowSaving,
     keyword,
     loading,
-    masonryColumns,
-    masonryRef,
+    masonryCards,
+    masonryReloadKey,
     openArticle,
     openUser,
     pageNum,
@@ -194,26 +231,30 @@ function useUnifiedSearchFeed() {
     toggleUserFollow,
     userStore: shell.userStore,
     userRecords,
+    userNotFoundImageUrl: userNotFoundAssetUrl,
   }
 }
 
 const {
+  articleNotFoundImageUrl,
   feedList,
   hasSearched,
   isFollowSaving,
   keyword,
   loading,
-  masonryColumns,
-  masonryRef,
   openArticle,
   openUser,
   pageNum,
   pageSize,
+  preferAiRag,
   runSearch,
   searchTab,
   setSearchTab,
   total,
   toggleUserFollow,
   userRecords,
+  userNotFoundImageUrl,
   userStore,
+  masonryCards,
+  masonryReloadKey,
 } = useUnifiedSearchFeed()

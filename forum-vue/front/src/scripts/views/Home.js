@@ -1,26 +1,24 @@
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   CircleCheck,
   Close,
   Search,
   Message,
-  Notification,
   EditPen,
   ArrowDown,
 } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import { useBoardStore } from '@/stores/board'
 import { useUserStore } from '@/stores/user'
-import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { useMessageStore } from '@/stores/message'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
-import { getArticleList, getHotArticleListWithPage } from '@/api/article'
+import { getArticleList } from '@/api/article'
 import { getRecommendationFeed } from '@/api/recommendation'
+import { onRecommendationSettingChanged } from '@/utils/recommendationSettingEvent'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { shanghaiCalendarYmd } from '@/utils/datetime'
 import { blockIfMuted } from '@/utils/userMute'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
@@ -30,8 +28,6 @@ import aiSearchIconUrl from '@/assets/svg/AI搜索.svg?url'
 import articleSearchIconUrl from '@/assets/svg/文章.svg?url'
 import userSearchIconUrl from '@/assets/svg/用户.svg?url'
 
-const CHECKIN_STRIP_DISMISS_LS = 'luntan_checkin_home_strip_dismissed'
-const HOME_HOT_COLLAPSED_LS = 'luntan_home_hot_collapsed'
 const AI_SEARCH_LS = 'luntan_home_ai_search'
 const SEARCH_TARGET_LS = 'luntan_search_target'
 
@@ -40,13 +36,11 @@ export function useHome() {
   const route = useRoute()
   const boardStore = useBoardStore()
   const userStore = useUserStore()
-  const checkinSnapshotStore = useCheckinSnapshotStore()
   const messageStore = useMessageStore()
   const pointsWalletStore = usePointsWalletStore()
   const messageCenterUi = useMessageCenterUiStore()
   const { initWebSocket, closeWebSocket } = useWebSocket()
 
-  const { streakDays, totalPoints, todaySigned, loaded: checkinLoaded } = storeToRefs(checkinSnapshotStore)
   const { balance: pointsBalance } = storeToRefs(pointsWalletStore)
   const defaultAvatar = DEFAULT_AVATAR
 
@@ -58,27 +52,30 @@ export function useHome() {
   const total = ref(0)
   const feedError = ref('')
   const feedForbidden = ref(false)
-  /** 首页右侧悬浮热帖榜数据（保留原热度排序，不再占用左侧导航） */
-  const homeHotList = ref([])
-  const homeHotTotal = ref(0)
-  const homeHotLoading = ref(false)
-  const homeHotCollapsed = ref(false)
-  const homeHotPage = ref(1)
-  const homeHotPageSize = 10
+  // server | network | forbidden | generic
+  const feedErrorKind = ref('')
 
-  try {
-    homeHotCollapsed.value = typeof localStorage === 'undefined'
-      || localStorage.getItem(HOME_HOT_COLLAPSED_LS) !== '0'
-  } catch {
-    homeHotCollapsed.value = true
-  }
-
-  /** 0 = 首页全站流；正数 = 首页顶部导航中选中的分类。 */
+  // 0 首页全站流；正数 首页顶部导航中选中的分类
   const activeCategoryId = ref(0)
   const menuActiveKey = ref('home')
-  /** 非首页路由时侧栏不高亮具体入口。 */
-  const sidebarMenuActive = computed(() => (route.path === '/' ? menuActiveKey.value : undefined))
+  // 侧栏高亮：按当前路由映射入口；社区流再区分首页 / 推荐
+  const sidebarMenuActive = computed(() => {
+    const path = route.path || ''
+    if (path === '/community' || path.startsWith('/board/')) {
+      return menuActiveKey.value === 'rec' ? 'rec' : 'home'
+    }
+    if (path === '/profile' || path.startsWith('/profile/')) return 'profile'
+    if (path === '/game' || path.startsWith('/game/') || path === '/games' || path.startsWith('/games/')) return 'game'
+    if (path === '/music-hall' || path.startsWith('/music-hall/')) return 'music'
+    if (path === '/creative' || path.startsWith('/creative/')) return 'creative'
+    if (path === '/checkin' || path.startsWith('/checkin/')) return 'checkin'
+    if (path === '/emoji-shop' || path.startsWith('/emoji-shop/')) return 'emoji'
+    if (path === '/lottery' || path.startsWith('/lottery/')) return 'lottery'
+    if (path === '/article/create' || path.startsWith('/article/edit/')) return 'creative'
+    return ''
+  })
   const searchQuery = ref('')
+  const searchSubmitVersion = ref(0)
   const aiSearchMode = ref(false)
   try {
     aiSearchMode.value = typeof localStorage !== 'undefined' && localStorage.getItem(AI_SEARCH_LS) === '1'
@@ -94,8 +91,6 @@ export function useHome() {
     searchTargetMode.value = 'article'
   }
 
-  const announcementRef = ref(null)
-
   const msgUnread = computed(
     () => (Number(messageStore.unreadCount) || 0) + (Number(messageStore.systemUnreadCount) || 0),
   )
@@ -103,11 +98,9 @@ export function useHome() {
   const isHomeFeed = computed(() => menuActiveKey.value === 'home')
   const isRecommendationFeed = computed(() => menuActiveKey.value === 'rec')
 
-  const searchInputPlaceholder = computed(() =>
-    aiSearchMode.value ? 'AI 语义搜索帖子与用户…' : '搜索帖子、用户、标签…',
-  )
+  const searchInputPlaceholder = computed(() => '搜你所想......')
 
-  /** 首页承载分类导航；推荐与热帖榜保持内容流聚焦。 */
+  // 首页承载分类导航；推荐与热帖榜保持内容流聚焦
   const showCategoryNavigator = computed(() => isHomeFeed.value)
 
   const effectiveVipTier = computed(() => {
@@ -139,7 +132,7 @@ export function useHome() {
       try {
         localStorage.setItem(AI_SEARCH_LS, v ? '1' : '0')
       } catch {
-        /* ignore */
+        // 忽略
       }
     },
   )
@@ -150,7 +143,7 @@ export function useHome() {
       try {
         localStorage.setItem(SEARCH_TARGET_LS, v === 'user' ? 'user' : 'article')
       } catch {
-        /* ignore */
+        // 忽略
       }
     },
   )
@@ -178,54 +171,6 @@ export function useHome() {
     { immediate: true },
   )
 
-  const checkinSummary = computed(() => {
-    if (!userStore.isLoggedIn || !checkinLoaded.value) return null
-    return {
-      streakDays: streakDays.value,
-      totalPoints: totalPoints.value,
-      todaySigned: todaySigned.value,
-    }
-  })
-
-  const checkinStripDismissedToday = ref(false)
-
-  function syncCheckinStripDismissState() {
-    try {
-      checkinStripDismissedToday.value = localStorage.getItem(CHECKIN_STRIP_DISMISS_LS) === shanghaiCalendarYmd()
-    } catch {
-      checkinStripDismissedToday.value = false
-    }
-  }
-
-  const showCheckinHomeStrip = computed(() => {
-    const s = checkinSummary.value
-    if (!userStore.isLoggedIn || !s) return false
-    return !checkinStripDismissedToday.value
-  })
-
-  function dismissCheckinHomeStrip(ev) {
-    ev?.stopPropagation?.()
-    try {
-      localStorage.setItem(CHECKIN_STRIP_DISMISS_LS, shanghaiCalendarYmd())
-    } catch {
-      /* ignore */
-    }
-    checkinStripDismissedToday.value = true
-  }
-
-  async function fetchCheckinSummary() {
-    if (!userStore.isLoggedIn) {
-      checkinSnapshotStore.clear()
-      return
-    }
-    try {
-      await checkinSnapshotStore.refresh()
-      syncCheckinStripDismissState()
-    } catch {
-      checkinSnapshotStore.clear()
-    }
-  }
-
   async function fetchUnread() {
     if (!userStore.isLoggedIn) return
     try {
@@ -236,13 +181,9 @@ export function useHome() {
         messageStore.setSystemUnreadCount(Number(sysRes.data) || 0)
       }
     } catch {
-      /* ignore */
+      // 忽略
     }
   }
-
-  watch([todaySigned, checkinLoaded], () => {
-    syncCheckinStripDismissState()
-  })
 
   watch(
     () => userStore.isLoggedIn,
@@ -251,11 +192,9 @@ export function useHome() {
         userStore.fetchUserInfo()
         initWebSocket()
         fetchUnread()
-        checkinSnapshotStore.refresh()
         pointsWalletStore.refresh()
       } else {
         closeWebSocket()
-        checkinSnapshotStore.clear()
       }
     },
     { immediate: true },
@@ -274,38 +213,31 @@ export function useHome() {
     },
   )
 
-  onUnmounted(() => {
-    if (incomingUnreadTimer) clearTimeout(incomingUnreadTimer)
+  // 切回页面时刷新积分：手动改库 / 他端消费后顶栏能跟上 权威表是 points_wallet
+  function onForumPointsVisibilityRefresh() {
+    if (document.visibilityState !== 'visible') return
+    if (!userStore.isLoggedIn) return
+    pointsWalletStore.refresh()
+  }
+
+  let stopRecommendationSettingListen = null
+
+  onMounted(() => {
+    document.addEventListener('visibilitychange', onForumPointsVisibilityRefresh)
+    stopRecommendationSettingListen = onRecommendationSettingChanged(() => {
+      if (!isRecommendationFeed.value) return
+      fetchArticles(1)
+    })
   })
 
-  async function fetchHomeHotList(page = homeHotPage.value) {
-    homeHotLoading.value = true
-    try {
-      const res = await getHotArticleListWithPage({
-        pageNum: page,
-        pageSize: homeHotPageSize,
-      })
-      if (res.code === 0) {
-        homeHotList.value = res.data?.records || []
-        homeHotTotal.value = Number(res.data?.total) || 0
-        homeHotPage.value = Number(res.data?.pageNum) || 1
-      }
-    } catch {
-      homeHotList.value = []
-      homeHotTotal.value = 0
-    } finally {
-      homeHotLoading.value = false
+  onUnmounted(() => {
+    if (incomingUnreadTimer) clearTimeout(incomingUnreadTimer)
+    document.removeEventListener('visibilitychange', onForumPointsVisibilityRefresh)
+    if (typeof stopRecommendationSettingListen === 'function') {
+      stopRecommendationSettingListen()
+      stopRecommendationSettingListen = null
     }
-  }
-
-  function toggleHomeHotCollapsed() {
-    homeHotCollapsed.value = !homeHotCollapsed.value
-    try {
-      localStorage.setItem(HOME_HOT_COLLAPSED_LS, homeHotCollapsed.value ? '1' : '0')
-    } catch {
-      /* 浏览器禁用本地存储时仅保留当前页面状态 */
-    }
-  }
+  })
 
   const homeFeedInitialized = ref(false)
 
@@ -313,8 +245,6 @@ export function useHome() {
     if (homeFeedInitialized.value) return
     homeFeedInitialized.value = true
     await fetchArticles(1)
-    void fetchHomeHotList()
-    await fetchCheckinSummary()
     if (userStore.isLoggedIn) {
       await pointsWalletStore.refresh()
     }
@@ -326,6 +256,10 @@ export function useHome() {
     loading.value = true
     feedError.value = ''
     feedForbidden.value = false
+    feedErrorKind.value = ''
+    // 换页 / 重载时先清空列表，只显示右侧整区灰色动态骨架，避免旧帖闪现
+    articleList.value = []
+    total.value = 0
     try {
       const params = { pageNum: pageNum.value, pageSize: pageSize.value }
       const res = isRecommendationFeed.value
@@ -338,8 +272,26 @@ export function useHome() {
     } catch (error) {
       articleList.value = []
       total.value = 0
-      feedError.value = error?.message || '内容加载失败，请稍后重试'
-      feedForbidden.value = error?.response?.status === 403
+      const status = Number(error?.response?.status)
+      const kind = status === 403
+        ? 'forbidden'
+        : status >= 500
+          ? 'server'
+          : !error?.response
+            ? 'network'
+            : 'generic'
+      feedErrorKind.value = kind
+      feedForbidden.value = kind === 'forbidden'
+      // 品牌化兜底只展示固定文案，不把技术错误细节铺在界面上
+      if (kind === 'forbidden') {
+        feedError.value = '暂时无法访问这部分内容'
+      } else if (kind === 'server') {
+        feedError.value = '服务器开小差了，请重试'
+      } else if (kind === 'network') {
+        feedError.value = '网络好像走神了，请重试'
+      } else {
+        feedError.value = error?.message || '内容加载失败，请稍后重试'
+      }
     } finally {
       if (!preserveScroll) {
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -349,19 +301,28 @@ export function useHome() {
   }
 
   async function selectCategoryMenu(index) {
-    if (route.path !== '/') {
-      await router.push('/')
+    const nextMenuKey = index === 'rec' ? 'rec' : 'home'
+    const isCurrentFeed = nextMenuKey === 'rec'
+      ? menuActiveKey.value === 'rec'
+      : menuActiveKey.value === 'home'
+        && Number(activeCategoryId.value) === 0
+        && Number(currentBoardId.value) === 0
+    if (route.path !== '/community') {
+      await router.push('/community')
       await nextTick()
     }
+    // 从其他页面回到已停留的信息流时，KeepAlive 中的帖子、页码和滚动位置就是用户离开前的状态
+    // 仅在切换 首页 / 为你推荐 时才重新请求另一套信息流
+    if (isCurrentFeed) return
     if (index === 'home') {
       activeCategoryId.value = 0
       menuActiveKey.value = 'home'
       currentBoardId.value = 0
       fetchArticles(1)
-      void fetchHomeHotList()
       return
     }
     if (index === 'rec') {
+      if (!(await ensureLoggedIn('为你推荐需要登录'))) return
       activeCategoryId.value = 0
       menuActiveKey.value = 'rec'
       currentBoardId.value = 0
@@ -371,18 +332,21 @@ export function useHome() {
   }
 
   async function selectHomeBoard(categoryId, boardId) {
-    if (route.path !== '/') {
-      await router.push('/')
+    if (route.path !== '/community') {
+      await router.push('/community')
       await nextTick()
     }
     const normalizedCategoryId = Number(categoryId)
     const normalizedBoardId = Number(boardId)
     if (!Number.isFinite(normalizedCategoryId) || !Number.isFinite(normalizedBoardId)) return
+    const isCurrentBoard = menuActiveKey.value === 'home'
+      && Number(activeCategoryId.value) === normalizedCategoryId
+      && Number(currentBoardId.value) === normalizedBoardId
+    if (isCurrentBoard) return
     activeCategoryId.value = normalizedCategoryId
     menuActiveKey.value = 'home'
     currentBoardId.value = normalizedBoardId
     fetchArticles(1)
-    void fetchHomeHotList()
   }
 
   function toggleSearchTargetMode(ev) {
@@ -391,9 +355,10 @@ export function useHome() {
     searchTargetMode.value = searchTargetMode.value === 'article' ? 'user' : 'article'
   }
 
-  function toggleAiSearchMode(ev) {
+  async function toggleAiSearchMode(ev) {
     ev?.stopPropagation?.()
     ev?.preventDefault?.()
+    if (!aiSearchMode.value && !(await ensureLoggedIn('AI 搜索需要登录'))) return
     aiSearchMode.value = !aiSearchMode.value
   }
 
@@ -401,10 +366,11 @@ export function useHome() {
     const kw = searchQuery.value?.trim()
     if (!kw) return
     void (async () => {
-      if (!(await ensureLoggedIn('搜索需要登录'))) return
+      if (aiSearchMode.value && !(await ensureLoggedIn('AI 搜索需要登录'))) return
       const query = { keyword: kw }
       if (aiSearchMode.value) query.ai = '1'
-      router.push({ path: '/search', query })
+      await router.push({ path: '/search', query })
+      searchSubmitVersion.value += 1
     })()
   }
 
@@ -432,7 +398,7 @@ export function useHome() {
 
   function goPoints() {
     void (async () => {
-      if (!(await ensureLoggedIn('积分中心需要登录'))) return
+      if (!(await ensureLoggedIn('萌币中心需要登录'))) return
       router.push('/points')
     })()
   }
@@ -442,6 +408,10 @@ export function useHome() {
       if (!(await ensureLoggedIn('个人主页需要登录'))) return
       router.push(`/profile/${userStore.id}`)
     })()
+  }
+
+  function goMusicHall() {
+    router.push('/music-hall')
   }
 
   function goCheckin() {
@@ -458,10 +428,6 @@ export function useHome() {
     })()
   }
 
-  function showAnnouncement() {
-    announcementRef.value?.show()
-  }
-
   function handleLogout() {
     userStore.logout({ remote: true })
   }
@@ -472,7 +438,7 @@ export function useHome() {
     return `hsl(${hue}, 70%, 92%)`
   }
 
-  /** 无封面时给瀑布流一个随机高度区间，避免完全等高 */
+  // 无封面时给瀑布流一个随机高度区间，避免完全等高
   function placeholderMinHeight(seed) {
     const n = Number(seed) || 0
     const h = 160 + (n % 5) * 36
@@ -492,39 +458,29 @@ export function useHome() {
     Close,
     EditPen,
     Message,
-    Notification,
     Search,
     activeCategoryId,
-    announcementRef,
     articleList,
     boardStore,
     categoriesWithId,
-    checkinSummary,
     coverImageUrl,
     currentBoardId,
     defaultAvatar,
-    dismissCheckinHomeStrip,
     effectiveVipTier,
     ensureHomeFeedLoaded,
     feedError,
     feedForbidden,
+    feedErrorKind,
     fetchArticles,
-    fetchCheckinSummary,
-    fetchHomeHotList,
     getRandomPastel,
     goCheckin,
     goLottery,
+    goMusicHall,
     goPoints,
     goProfile,
     goSettings,
     goToCreative,
     handleLogout,
-    homeHotList,
-    homeHotTotal,
-    homeHotLoading,
-    homeHotCollapsed,
-    homeHotPage,
-    homeHotPageSize,
     isHomeFeed,
     isRecommendationFeed,
     loading,
@@ -537,18 +493,16 @@ export function useHome() {
     pointsBalance,
     searchInputPlaceholder,
     searchQuery,
+    searchSubmitVersion,
     searchTargetMode,
     sidebarMenuActive,
     selectCategoryMenu,
     selectHomeBoard,
     showCategoryNavigator,
-    showAnnouncement,
-    showCheckinHomeStrip,
     submitSearch,
     toggleAiSearchMode,
     toggleSearchTargetMode,
     total,
-    toggleHomeHotCollapsed,
     userSearchIconUrl,
     userStore,
   }

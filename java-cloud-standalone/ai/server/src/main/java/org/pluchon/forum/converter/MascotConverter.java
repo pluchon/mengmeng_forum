@@ -1,9 +1,8 @@
 package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.vo.ai.AiUsageStatsVO;
-import org.pluchon.forum.entity.vo.mascot.MascotChatResponseVO;
-import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionImageGalleryItemVO;
+import org.pluchon.forum.entity.vo.MascotChatResponseVO;
+import org.pluchon.forum.entity.vo.CompanionImageGalleryItemVO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,21 +12,6 @@ import java.util.Map;
 public final class MascotConverter {
 
     private MascotConverter() {
-    }
-
-    public static MascotQuotaHintVO toQuotaHintVO(Map<String, Object> raw) {
-        MascotQuotaHintVO vo = new MascotQuotaHintVO();
-        if (raw == null) {
-            vo.setPercent(0);
-            vo.setCanUsePointsPay(false);
-            vo.setQuotaLabel("");
-            return vo;
-        }
-        vo.setPercent(intVal(raw.get("percent")));
-        Object canPay = raw.get("canUsePointsPay");
-        vo.setCanUsePointsPay(canPay instanceof Boolean b ? b : Boolean.TRUE.equals(String.valueOf(canPay)));
-        vo.setQuotaLabel(stringVal(raw.get("quotaLabel")));
-        return vo;
     }
 
     public static MascotChatResponseVO toChatResponse(Map<String, Object> data) {
@@ -44,6 +28,12 @@ public final class MascotConverter {
         vo.setPointsCost(intVal(data.get("pointsCost")));
         vo.setBalanceAfter(intVal(data.get("balanceAfter")));
         vo.setBillingMode(stringVal(data.get("billingMode")));
+        Object quotaFallback = data.get("quotaFallbackToPoints");
+        if (quotaFallback instanceof Boolean b) {
+            vo.setQuotaFallbackToPoints(b);
+        } else if (quotaFallback != null) {
+            vo.setQuotaFallbackToPoints(Boolean.parseBoolean(String.valueOf(quotaFallback)));
+        }
         vo.setUsageStats(toUsageStatsVO(data.get("usageStats")));
         vo.setModelCode(stringVal(data.get("modelCode")));
         Object relatedSearchOffer = data.get("relatedSearchOffer");

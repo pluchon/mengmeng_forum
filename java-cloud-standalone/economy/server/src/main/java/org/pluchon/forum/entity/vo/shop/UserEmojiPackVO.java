@@ -8,9 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Date;
 import java.util.List;
 
-/**
- * 用户已购表情包 VO. 在聊天面板"我的已购"选项卡里显示, 一次性返回每个包内所有 URL.
- */
+// 用户已购表情包 VO. 在聊天面板 我的已购 选项卡里显示, 一次性返回每个包内所有 URL.
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -28,6 +26,15 @@ public class UserEmojiPackVO {
 
     @Schema(description = "封面图URL")
     private String coverUrl;
+
+    @Schema(description = "上传者ID, NULL 表示站长推荐")
+    private Long uploadUserId;
+
+    @Schema(description = "上传者昵称")
+    private String uploadUserNickname;
+
+    @Schema(description = "上传者头像 URL")
+    private String uploadUserAvatarUrl;
 
     @Schema(description = "支付积分")
     private Integer pricePaid;

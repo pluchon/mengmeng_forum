@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 抽奖硬保底计数，对应 user_lottery_pity（economy 权威）
+// 抽奖硬保底计数，对应 user_lottery_pity economy 权威
 @Data
 @TableName("user_lottery_pity")
 public class UserLotteryPity {

@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.impl.remote;
 
-import org.pluchon.forum.api.auth.FollowStatsInternalVO;
+import org.pluchon.forum.api.FollowStatsInternalVO;
+import org.pluchon.forum.api.FollowDailyCountInternalVO;
 import org.pluchon.forum.cloud.feign.ContentFollowInternalFeignClient;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDate;
 
 // 内容域使用的关注只读查询
 @Service
@@ -41,5 +43,18 @@ public class ContentFollowLookupService {
     public Set<Long> listFollowingIds(Long followerId) {
         Set<Long> ids = contentFollowInternalFeignClient.listFollowingIds(followerId);
         return ids == null ? Set.of() : ids;
+    }
+
+    public long countNewFollowers(Long userId, LocalDate startDate, LocalDate endDate) {
+        Long count = contentFollowInternalFeignClient.countNewFollowers(
+                userId, startDate.toString(), endDate.toString());
+        return count == null ? 0L : Math.max(0L, count);
+    }
+
+    public List<FollowDailyCountInternalVO> listDailyNewFollowers(
+            Long userId, LocalDate startDate, LocalDate endDate) {
+        List<FollowDailyCountInternalVO> rows = contentFollowInternalFeignClient.listDailyNewFollowers(
+                userId, startDate.toString(), endDate.toString());
+        return rows == null ? List.of() : rows;
     }
 }

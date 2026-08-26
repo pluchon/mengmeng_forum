@@ -1,6 +1,6 @@
 package org.pluchon.forum.cloud.feign;
 
-import org.pluchon.forum.api.auth.FollowInternalApi;
+import org.pluchon.forum.api.FollowInternalApi;
 import org.springframework.cloud.openfeign.FeignClient;
 
 // 内容服务私有的关注内部客户端

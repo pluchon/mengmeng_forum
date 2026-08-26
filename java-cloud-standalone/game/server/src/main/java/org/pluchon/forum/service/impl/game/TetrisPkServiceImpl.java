@@ -10,7 +10,7 @@ import org.pluchon.forum.converter.GameConverter;
 import org.pluchon.forum.converter.TetrisPkConverter;
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GameUserProfileVO;
 import org.pluchon.forum.entity.vo.game.TetrisPkLeaderboardVO;
@@ -63,7 +63,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
                 .and(w -> w.eq(GameTetrisPkMatchRecord::getPlayer1UserId, userId)
                         .or()
                         .eq(GameTetrisPkMatchRecord::getPlayer2UserId, userId))
-                .eq(GameTetrisPkMatchRecord::getDeleteState, (byte) 0)
+                .eq(GameTetrisPkMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                 .orderByDesc(GameTetrisPkMatchRecord::getEndedAt)
                 .orderByDesc(GameTetrisPkMatchRecord::getId);
         Page<GameTetrisPkMatchRecord> result = gameTetrisPkMatchRecordMapper.selectPage(page, wrapper);
@@ -93,7 +93,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
         int validPageSize = PageUtils.getValidPageSize(pageSize == null ? 20 : pageSize);
         List<GameUserProfile> profiles = gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
-                .eq(GameUserProfile::getDeleteState, (byte) 0));
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED));
         Map<Long, Integer> bestScores = loadBestScores();
         profiles.sort(Comparator
                 .comparingInt(this::profileWinRate).reversed()
@@ -166,7 +166,7 @@ public class TetrisPkServiceImpl implements TetrisPkService {
     private Map<Long, Integer> loadBestScores() {
         List<GameTetrisPkMatchRecord> records = gameTetrisPkMatchRecordMapper.selectList(
                 new LambdaQueryWrapper<GameTetrisPkMatchRecord>()
-                        .eq(GameTetrisPkMatchRecord::getDeleteState, (byte) 0)
+                        .eq(GameTetrisPkMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                         .select(
                                 GameTetrisPkMatchRecord::getPlayer1UserId,
                                 GameTetrisPkMatchRecord::getPlayer2UserId,

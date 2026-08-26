@@ -9,9 +9,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * MQ 消费幂等：同一 eventId 在 TTL 内只处理一次。
- */
+// MQ 消费幂等：同一 eventId 在 TTL 内只处理一次
 @Component
 public class MqEventDedupHelper {
 
@@ -21,9 +19,6 @@ public class MqEventDedupHelper {
     @Autowired
     private ForumMetrics forumMetrics;
 
-    /**
-     * @return true 表示首次消费，false 表示重复消息应跳过
-     */
     public boolean tryMarkConsumed(String eventId) {
         if (!StringUtils.hasText(eventId)) {
             return true;

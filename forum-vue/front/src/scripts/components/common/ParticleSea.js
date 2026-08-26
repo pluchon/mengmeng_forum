@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref, watch, nextTick, unref } from 'v
 import { useRoute } from 'vue-router'
 import { createAuthWallThree } from '@scripts/components/common/AuthWallThree'
 
-/** 非认证页：原有粉色连线粒子（独立 2D canvas） */
+// 非认证页：原有粉色连线粒子 独立 2D canvas
 function useClassicParticles(canvasRef, getSize) {
   let animationFrame = null
   let ctx = null
@@ -132,7 +132,7 @@ function useClassicParticles(canvasRef, getSize) {
   return { start, stop, handleResize }
 }
 
-/** 认证页：与 src/sea/wallbgcanvas.js 同构的 Three 粒子海（独立 WebGL canvas） */
+// 认证页：与 src/sea/wallbgcanvas.js 同构的 Three 粒子海 独立 WebGL canvas
 function useAuthOcean(canvasRef) {
   let api = null
 
@@ -143,9 +143,7 @@ function useAuthOcean(canvasRef) {
     stop()
     try {
       api = await createAuthWallThree(canvasRef.value)
-    } catch (err) {
-      console.warn('createAuthWallThree failed', err)
-    }
+    } catch {}
   }
 
   function stop() {

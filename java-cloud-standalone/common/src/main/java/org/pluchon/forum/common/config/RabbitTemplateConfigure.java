@@ -32,7 +32,7 @@ public class RabbitTemplateConfigure {
             Jackson2JsonMessageConverter converter) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(converter);
-        // Broker 收到消息后触发：ack=true 表示入队成功，false 则需告警或补偿重发
+        // Broker 收到消息后触发：ack true 表示入队成功，false 则需告警或补偿重发
         // 监控消息有没有成功到达交换机，通过ack如果没到达则会进行重发
         template.setConfirmCallback((correlationData, ack, cause) -> {
             String messageId = correlationData != null ? correlationData.getId() : "unknown";
@@ -74,7 +74,7 @@ public class RabbitTemplateConfigure {
     }
 
     // 帖子异步审核
-    // Java 侧向 Python 发送“帖子审核任务”的投递与兜底重投
+    // Java 侧向 Python 发送 帖子审核任务 的投递与兜底重投
     @Bean("auditRabbitTemplate")
     public RabbitTemplate auditRabbitTemplate(ConnectionFactory connectionFactory,
             Jackson2JsonMessageConverter converter) {
@@ -92,6 +92,26 @@ public class RabbitTemplateConfigure {
                 "[帖子审核MQ] 消息被退回 | routingKey={} | replyText={} | body={}",
                 returned.getRoutingKey(), returned.getReplyText(),
                 new String(returned.getMessage().getBody())));
+        return template;
+    }
+
+    // 通用AI异步任务
+    @Bean("aiAsyncRabbitTemplate")
+    public RabbitTemplate aiAsyncRabbitTemplate(ConnectionFactory connectionFactory,
+            Jackson2JsonMessageConverter converter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(converter);
+        template.setConfirmCallback((correlationData, ack, cause) -> {
+            String messageId = correlationData != null ? correlationData.getId() : "unknown";
+            if (ack) {
+                log.debug("[AI异步MQ] 投递成功 | messageId={}", messageId);
+            } else {
+                log.error("[AI异步MQ] 投递失败 | messageId={} | cause={}", messageId, cause);
+            }
+        });
+        template.setReturnsCallback(returned -> log.error(
+                "[AI异步MQ] 消息被退回 | routingKey={} | replyText={}",
+                returned.getRoutingKey(), returned.getReplyText()));
         return template;
     }
 

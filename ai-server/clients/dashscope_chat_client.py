@@ -1,4 +1,4 @@
-"""Dashscope OpenAI 兼容 /chat/completions（qwen3.6 / qwen3-vl 等）."""
+"""Dashscope OpenAI 兼容 /chat/completions（qwen3.7 / qwen3-vl 等）."""
 
 from __future__ import annotations
 
@@ -64,7 +64,8 @@ def dashscope_chat_completion(
     messages: list[dict[str, Any]],
     *,
     temperature: float = 0.0,
-    timeout: int = 120,
+    timeout: int = 45,
+    response_format: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     api_key = settings.dashscope.get("api_key") or ""
     base = dashscope_compat_base()
@@ -75,6 +76,8 @@ def dashscope_chat_completion(
         "messages": messages,
         "temperature": temperature,
     }
+    if response_format:
+        payload["response_format"] = response_format
     r = requests.post(url, headers=headers, json=payload, timeout=timeout)
     if not r.ok:
         logger.warning("Dashscope HTTP %s: %s", r.status_code, r.text[:500])
@@ -89,12 +92,45 @@ def dashscope_chat_completion(
     raise ValueError(f"Dashscope 响应无法解析: {data!r}"[:500])
 
 
+def json_chat_completion(
+    model: str,
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float = 0.2,
+    timeout: int = 120,
+    retries: int = 0,
+) -> tuple[str, dict[str, Any]]:
+    """强制 JSON 对象输出；可选轻量重试（默认不重试，避免放大费用）。"""
+    last_error: Exception | None = None
+    for attempt in range(max(0, retries) + 1):
+        try:
+            return dashscope_chat_completion(
+                model,
+                messages,
+                temperature=temperature,
+                timeout=timeout,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt < retries:
+                logger.warning(
+                    "json_chat_completion 失败将重试 model=%s attempt=%s",
+                    model,
+                    attempt + 1,
+                )
+                continue
+            raise
+    assert last_error is not None
+    raise last_error
+
+
 def dashscope_stream_text(
     model: str,
     messages: list[dict[str, Any]],
     *,
     temperature: float = 0.3,
-    timeout: int = 180,
+    timeout: int = 45,
 ) -> Iterator[tuple[str, Any]]:
     """流式事件：('text', 片段) 或 ('usage', dict)。"""
     api_key = settings.dashscope.get("api_key") or ""
@@ -136,7 +172,7 @@ def dashscope_stream_text_legacy(
     messages: list[dict[str, Any]],
     *,
     temperature: float = 0.3,
-    timeout: int = 180,
+    timeout: int = 45,
 ) -> Iterator[str]:
     """兼容旧调用：仅 yield 文本片段。"""
     for event in dashscope_stream_text(model, messages, temperature=temperature, timeout=timeout):
@@ -147,7 +183,7 @@ def dashscope_stream_text_legacy(
 class DashscopeChatModel(BaseChatModel):
     """LangChain Runnable，供 Prompt | model 与 .invoke(messages) 使用。"""
 
-    model_name: str = Field(default="qwen3.6-flash")
+    model_name: str = Field(default="qwen3.7-flash")
     temperature: float = 0.0
 
     @property
@@ -164,7 +200,7 @@ class DashscopeChatModel(BaseChatModel):
         from config import settings
 
         openai_msgs = lc_messages_to_openai(messages)
-        timeout = int(settings.audit.get("text_audit_timeout", 180))
+        timeout = int(settings.audit.get("text_audit_timeout", 45))
         text, _ = dashscope_chat_completion(
             self.model_name,
             openai_msgs,

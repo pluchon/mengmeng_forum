@@ -1,0 +1,53 @@
+.report-reason-dialog__input {
+  margin-top: 12px;
+}
+
+// 理由芯片：白底细边方块，与底栏操作按钮明显分层
+:deep(.app-dialog__chip) {
+  background: #fff;
+  outline: 1px solid #f0e4ea;
+  outline-offset: -0.5px;
+  color: #5a4a5c;
+  font-weight: 500;
+  border-radius: 10px;
+  box-shadow: none;
+
+  &.is-active {
+    background: #fff4f9;
+    outline: 1.5px solid #f07ba8;
+    outline-offset: -0.75px;
+    color: #e85a98;
+    font-weight: 600;
+  }
+}
+
+:deep(.app-dialog__actions) {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #f5e8ef;
+  gap: 12px;
+}
+
+:deep(.app-dialog__btn--ghost) {
+  flex: 0 0 auto;
+  min-width: 96px;
+  background: transparent !important;
+  outline: none !important;
+  color: #9a8a9c !important;
+  font-weight: 500;
+  border-radius: 999px;
+
+  &:hover:not(:disabled) {
+    background: #faf6f8 !important;
+    color: #6a5a6c !important;
+  }
+}
+
+:deep(.app-dialog__btn--primary) {
+  flex: 1 1 auto;
+  background: linear-gradient(180deg, #f48bb4 0%, #ef78a9 100%) !important;
+  color: #fff !important;
+  border-radius: 999px;
+  box-shadow: 0 6px 14px #ef78a933;
+  font-weight: 700;
+}

@@ -1,13 +1,11 @@
 <template>
   <el-config-provider :locale="zhCn">
-    <div :class="['app-root', { 'has-header-padding': showGlobalHeader, 'is-theme-adapted': isThemeAdaptedPage }]">
+    <div class="app-root">
       <ParticleSea v-if="isAuthPage" />
-      <TheHeader v-if="showGlobalHeader" />
       <div class="app-shell">
         <router-view />
         <MascotDock v-if="showMascot" />
         <MessageView />
-        <GroupVoiceDock />
       </div>
     </div>
   </el-config-provider>
@@ -17,15 +15,12 @@
 import { useApp } from '@scripts/App'
 import ParticleSea from '@/components/common/ParticleSea.vue'
 import MascotDock from '@/components/mascot/MascotDock.vue'
-import GroupVoiceDock from '@/components/group-voice/GroupVoiceDock.vue'
 import MessageView from '@/views/MessageView.vue'
+
 const {
   ElConfigProvider,
-  TheHeader,
   isAuthPage,
-  showGlobalHeader,
   showMascot,
-  isThemeAdaptedPage,
   zhCn,
 } = useApp()
 </script>
@@ -39,5 +34,4 @@ const {
 .app-shell {
   position: relative;
   z-index: 1;
-}
-</style>
+}</style>

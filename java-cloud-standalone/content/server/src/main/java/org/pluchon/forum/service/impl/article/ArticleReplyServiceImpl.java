@@ -5,19 +5,16 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.enums.ResultCode;
-import org.pluchon.forum.common.enums.ArticleType;
-import org.pluchon.forum.common.enums.QuestionStatus;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.mq.ForumProducer;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleReplyLike;
 import org.pluchon.forum.entity.db.ArticleSubReply;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.ReplyArticleRequest;
 import org.pluchon.forum.entity.vo.article.ArticleReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -33,6 +30,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
+import org.pluchon.forum.service.interfaces.moderation.ContentModerationTaskService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,7 +81,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
     private ArticleQuestionService articleQuestionService;
 
     @Autowired
-    private ContentAiGatewayService contentAiGatewayService;
+    private ContentModerationTaskService contentModerationTaskService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -98,27 +96,10 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         if (!StringUtils.hasText(plain) && !hasMedia) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_CONTENT_EMPTY));
         }
-        // 一级评论：与楼中楼一致，极短内容不调远程审核；审核服务异常时降级放行
-        String violation = null;
-        if (plain.length() >= 25) {
-            try {
-                violation = contentAiGatewayService.validateText(content);
-            } catch (ApplicationException ex) {
-                log.warn("一级回复文本审核服务不可用，降级放行: {}", ex.getMessage());
-            }
-        }
-        if (violation != null) {
-            log.warn("回复内容审核未通过, userId: {}, reason: {}", loginUserId, violation);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
-        }
-        // 校验帖子并复用 article 信息（写消息队列时还需要楼主 ID）
+        // 校验帖子并复用 article 信息 写消息队列时还需要楼主 ID
         Article article = articleMapper.selectByIdForUpdate(articleId);
         if (article == null || Objects.equals(article.getState(), (byte) 1)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-        if (ArticleType.isQuestion(article.getArticleType())
-                && Objects.equals(article.getQuestionStatus(), QuestionStatus.CLOSED.getCode())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_QUESTION_STATUS_INVALID));
         }
         ArticleReply newReply = new ArticleReply();
         newReply.setArticleId(articleId);
@@ -141,6 +122,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         TransactionHooks.afterCommit(() -> forumProducer.sendReplyNotify(notifyVo));
         // 帖子回复数 +1
         articleService.addReply(articleId);
+        contentModerationTaskService.scheduleComment((byte) 2, newReply.getId(), raw);
     }
 
     @Override
@@ -158,8 +140,9 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         Set<Long> likedReplyIds = loadLikedReplyIds(loginUserId, rows);
         Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap =
                 articleReplyMediaService.mapByReplyIds(rows.stream().map(ArticleReply::getId).collect(Collectors.toList()));
+        Set<Long> acceptedReplyIds = articleQuestionService.listAcceptedReplyIds(articleId);
         List<ArticleReplyListResponse> records = rows.stream()
-                .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds, mediaMap))
+                .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds, mediaMap, acceptedReplyIds))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
     }
@@ -193,10 +176,11 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         return likes.stream().map(ArticleReplyLike::getReplyId).collect(Collectors.toCollection(HashSet::new));
     }
 
-    /** 单条回复 -> 列表项装配；用户已注销时回退为占位昵称 */
+    // 单条回复 > 列表项装配；用户已注销时回退为占位昵称
     private ArticleReplyListResponse buildReplyResponse(
             ArticleReply reply, Map<Long, Integer> subCountMap, Set<Long> likedReplyIds,
-            Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap) {
+            Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap,
+            Set<Long> acceptedReplyIds) {
         UserBriefVO userBriefVO;
         try {
             UserInternalVO user = userService.queryUserByUserId(reply.getPostUserId());
@@ -210,6 +194,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         vo.setUser(userBriefVO);
         vo.setSubReplyCount(subCountMap.getOrDefault(reply.getId(), 0));
         vo.setLiked(likedReplyIds.contains(reply.getId()));
+        vo.setAccepted(acceptedReplyIds != null && acceptedReplyIds.contains(reply.getId()));
         vo.setMediaList(mediaMap.getOrDefault(reply.getId(), List.of()));
         return vo;
     }

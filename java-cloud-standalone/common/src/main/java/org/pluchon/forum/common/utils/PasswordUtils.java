@@ -3,9 +3,7 @@ package org.pluchon.forum.common.utils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.util.StringUtils;
 
-/**
- * 密码哈希：新用户使用 BCrypt；历史 MD5+盐 在登录成功后渐进迁移。
- */
+// 密码哈希：新用户使用 BCrypt；历史 MD5+盐 在登录成功后渐进迁移
 public final class PasswordUtils {
 
     private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder(12);

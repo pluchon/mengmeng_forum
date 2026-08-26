@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import {
   uploadChatEmoji,
+  uploadChatEmojis,
   favoriteEmoji,
   deleteFavoriteEmoji,
   getEmojiList,
@@ -10,46 +12,53 @@ import {
 import { canFavoriteChatMediaMessage } from '@/utils/chatMedia'
 
 export const useChatEmojiStore = defineStore('chatEmoji', () => {
-  const list = ref([])
-  const loaded = ref(false)
+  const uploadedItems = ref([])
+  const favoriteItems = ref([])
+  const pagination = reactive({
+    uploaded: { pageNum: 1, pageSize: 8, total: 0, pages: 1 },
+    favorite: { pageNum: 1, pageSize: 8, total: 0, pages: 1 },
+  })
   const loading = ref(false)
 
-  async function fetchList(force = false) {
-    if (loaded.value && !force) return
+  async function fetchPage(source, pageNum = 1, pageSize = 8) {
+    if (source !== 'uploaded' && source !== 'favorite') return null
     loading.value = true
     try {
-      const res = await getEmojiList()
-      if (res.code === 0 && Array.isArray(res.data)) {
-        list.value = res.data
-        loaded.value = true
+      const res = await getEmojiList({ source, pageNum, pageSize })
+      const page = res?.data || {}
+      const records = Array.isArray(page.records) ? page.records : []
+      if (source === 'uploaded') {
+        uploadedItems.value = records
+      } else {
+        favoriteItems.value = records
       }
+      pagination[source].pageNum = Number(page.pageNum) || 1
+      pagination[source].pageSize = Number(page.pageSize) || pageSize
+      pagination[source].total = Number(page.total) || 0
+      pagination[source].pages = Math.max(1, Number(page.pages) || 1)
+      return page
     } finally {
       loading.value = false
     }
   }
 
-  function invalidate() {
-    loaded.value = false
+  async function fetchBoth() {
+    await Promise.all([
+      fetchPage('favorite', pagination.favorite.pageNum, pagination.favorite.pageSize),
+      fetchPage('uploaded', pagination.uploaded.pageNum, pagination.uploaded.pageSize),
+    ])
   }
 
-  /** @returns {Promise<object|null>} 新增的收藏项；1132 返回 null */
-  async function uploadAndFavorite(file) {
-    const up = await uploadChatEmoji(file)
-    const rawUrl = up?.data
-    const mediaUrl = typeof rawUrl === 'string' ? rawUrl.trim() : ''
-    const isGif = file.type === 'image/gif'
+  async function favoriteUploadedUrl(mediaUrl, file) {
+    const isGif = file?.type === 'image/gif'
     try {
-      // 不自传 originMessageId，避免某些环境下被序列化成 0 导致服务端误判为「引用聊天图」
       const fav = await favoriteEmoji({
         mediaUrl,
         mediaType: isGif ? 1 : 0,
         mediaMime: isGif ? 'image/gif' : undefined,
-        mediaSize: file.size,
+        mediaSize: file?.size,
       })
-      if (fav.data) {
-        list.value.unshift(fav.data)
-        return fav.data
-      }
+      if (fav.data) return fav.data
     } catch (e) {
       if (e?.code === 1132) {
         ElMessage.info('已在你的收藏中')
@@ -60,23 +69,68 @@ export const useChatEmojiStore = defineStore('chatEmoji', () => {
     return null
   }
 
-  /** @param message 私信详情里的 message 对象（含 id / mediaUrl / messageType …） */
+  async function uploadAndFavorite(file) {
+    const up = await uploadChatEmoji(file)
+    const rawUrl = up?.data
+    const mediaUrl = typeof rawUrl === 'string' ? rawUrl.trim() : ''
+    if (!mediaUrl) return null
+    return favoriteUploadedUrl(mediaUrl, file)
+  }
+
+  // 多选：分槽并行上传（每张独立审图/入库），避免整页锁死且便于刷新「我的上传」
+  async function uploadAndFavoriteMany(files, { onItemDone } = {}) {
+    const list = Array.isArray(files) ? files.filter(Boolean) : []
+    if (!list.length) return { okCount: 0, items: [] }
+    const CONCURRENCY = 3
+    let cursor = 0
+    const items = []
+    let okCount = 0
+    const workers = Array.from({ length: Math.min(CONCURRENCY, list.length) }, async () => {
+      while (cursor < list.length) {
+        const index = cursor
+        cursor += 1
+        const file = list[index]
+        try {
+          const up = await uploadChatEmoji(file)
+          const mediaUrl = typeof up?.data === 'string' ? up.data.trim() : ''
+          if (!mediaUrl) {
+            onItemDone?.({ index, ok: false })
+            continue
+          }
+          const fav = await favoriteUploadedUrl(mediaUrl, file)
+          if (fav) {
+            okCount += 1
+            items.push(fav)
+            onItemDone?.({ index, ok: true, item: fav })
+          } else {
+            onItemDone?.({ index, ok: false })
+          }
+        } catch {
+          onItemDone?.({ index, ok: false })
+        }
+      }
+    })
+    await Promise.all(workers)
+    return { okCount, items }
+  }
+
   async function favoriteFromChatMessage(message) {
     if (!canFavoriteChatMediaMessage(message)) {
-      ElMessage.warning('商城表情不支持添加到收藏')
+      ElMessage.warning('商城表情无需重复收藏')
       return null
     }
     try {
+      const fromGroup = Number(message.groupId) > 0
       const fav = await favoriteEmoji({
         mediaUrl: message.mediaUrl,
-        mediaType: Number(message.messageType) === 2 ? 1 : 0,
-        mediaMime: message.mediaMime,
+        mediaType: fromGroup ? 0 : (Number(message.messageType) === 2 ? 1 : 0),
+        mediaMime: fromGroup ? undefined : message.mediaMime,
         mediaSize: message.mediaSize,
-        originMessageId: message.id,
+        originMessageId: fromGroup ? undefined : message.id,
+        originGroupMessageId: fromGroup ? message.id : undefined,
       })
       if (fav.data) {
-        list.value.unshift(fav.data)
-        ElMessage.success('已添加到表情')
+        ElMessage.success('已收藏')
         return fav.data
       }
     } catch (e) {
@@ -91,7 +145,7 @@ export const useChatEmojiStore = defineStore('chatEmoji', () => {
 
   async function remove(emojiId) {
     try {
-      await ElMessageBox.confirm('确定从表情收藏中移除这张吗？', '移除表情', {
+      await confirmDialog('确定从表情收藏中移除这张吗？', '移除表情', {
         type: 'warning',
         confirmButtonText: '移除',
         cancelButtonText: '取消',
@@ -101,20 +155,23 @@ export const useChatEmojiStore = defineStore('chatEmoji', () => {
     }
     try {
       await deleteFavoriteEmoji(emojiId)
-      list.value = list.value.filter((e) => e.id !== emojiId)
       ElMessage.success('已移除')
+      return true
     } catch {
-      /* 全局拦截器已提示 */
+      // 全局拦截器已提示
+      return false
     }
   }
 
   return {
-    list,
-    loaded,
+    favoriteItems,
     loading,
-    fetchList,
-    invalidate,
+    pagination,
+    uploadedItems,
+    fetchBoth,
+    fetchPage,
     uploadAndFavorite,
+    uploadAndFavoriteMany,
     favoriteFromChatMessage,
     remove,
   }

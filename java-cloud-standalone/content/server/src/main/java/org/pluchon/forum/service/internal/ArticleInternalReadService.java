@@ -6,7 +6,11 @@ import org.pluchon.forum.api.content.ArticleInternalVO;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.utils.SearchKeywordHelper;
 import org.pluchon.forum.entity.db.Article;
+import org.pluchon.forum.entity.db.ArticleLike;
+import org.pluchon.forum.entity.db.UserMusicFavorite;
+import org.pluchon.forum.mapper.ArticleLikeMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
+import org.pluchon.forum.mapper.UserMusicFavoriteMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -24,6 +28,12 @@ public class ArticleInternalReadService {
 
     @Autowired
     private ArticleMapper articleMapper;
+
+    @Autowired
+    private ArticleLikeMapper articleLikeMapper;
+
+    @Autowired
+    private UserMusicFavoriteMapper userMusicFavoriteMapper;
 
     public List<ArticleInternalVO> listByIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
@@ -67,6 +77,60 @@ public class ArticleInternalReadService {
         return articleMapper.selectPage(new Page<>(1, size, false), query).getRecords()
                 .stream()
                 .map(this::toVo)
+                .collect(Collectors.toList());
+    }
+
+    public List<String> listLikedTitles(Long userId, Integer limit) {
+        if (userId == null || userId <= 0) {
+            return List.of();
+        }
+        int size = limit == null || limit <= 0 ? 6 : Math.min(limit, 12);
+        List<ArticleLike> likes = articleLikeMapper.selectPage(new Page<>(1, size, false),
+                new LambdaQueryWrapper<ArticleLike>()
+                        .eq(ArticleLike::getUserId, userId)
+                        .orderByDesc(ArticleLike::getCreateTime)
+                        .orderByDesc(ArticleLike::getId)).getRecords();
+        List<Long> articleIds = likes.stream()
+                .map(ArticleLike::getArticleId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (articleIds.isEmpty()) {
+            return List.of();
+        }
+        return articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                        .in(Article::getId, articleIds)
+                        .ne(Article::getDeleteState, DELETE_TRUE)
+                        .ne(Article::getState, STATE_FORBIDDEN)
+                        .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()))
+                .stream()
+                .sorted((a, b) -> Integer.compare(articleIds.indexOf(a.getId()), articleIds.indexOf(b.getId())))
+                .map(Article::getTitle)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .limit(size)
+                .collect(Collectors.toList());
+    }
+
+    public List<String> listFavoriteSongTitles(Long userId, Integer limit) {
+        if (userId == null || userId <= 0) {
+            return List.of();
+        }
+        int size = limit == null || limit <= 0 ? 6 : Math.min(limit, 12);
+        return userMusicFavoriteMapper.selectPage(new Page<>(1, size, false),
+                        new LambdaQueryWrapper<UserMusicFavorite>()
+                                .eq(UserMusicFavorite::getUserId, userId)
+                                .eq(UserMusicFavorite::getDeleteState, (byte) 0)
+                                .orderByDesc(UserMusicFavorite::getUpdateTime)
+                                .orderByDesc(UserMusicFavorite::getId))
+                .getRecords()
+                .stream()
+                .map(UserMusicFavorite::getTitle)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .limit(size)
                 .collect(Collectors.toList());
     }
 

@@ -18,12 +18,12 @@ public final class SearchRedisKeys {
         return PREFIX + "fwd:" + articleId;
     }
 
-    // 某帖子当前挂载的倒排词（用于更新/删除时清理）
+    // 某帖子当前挂载的倒排词 用于更新/删除时清理
     public static String articleTerms(long articleId) {
         return PREFIX + "article:" + articleId + ":terms";
     }
 
-    // 已建立倒排索引的帖子 ID 登记（全量重建时清理脏数据）
+    // 已建立倒排索引的帖子 ID 登记 全量重建时清理脏数据
     public static String indexedArticles() {
         return PREFIX + "articles";
     }

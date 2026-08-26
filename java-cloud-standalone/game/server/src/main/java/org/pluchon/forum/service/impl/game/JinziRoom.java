@@ -15,8 +15,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Getter
 public class JinziRoom {
 
-    // 房间 ID
-    private final String roomId = UUID.randomUUID().toString();
+    public static final int TARGET_WINS = 3;
+    public static final int MAX_DRAW_ROUNDS = 3;
+    public static final int MAX_TOTAL_ROUNDS = 7;
+
+    // 房间 ID 6 位纯数字
+    private final String roomId = GameRoomIdGenerator.generateRoomId();
 
     // 黑方用户 ID
     private final Long blackUserId;
@@ -34,21 +38,61 @@ public class JinziRoom {
     @Setter
     private Long currentTurnUserId;
 
-    // 房间状态
+    // 房间状态：WAITING / PLAYING / FINISHED
     @Setter
     private String roomStatus = GameConstants.ROOM_WAITING;
 
-    // 胜方用户 ID，平局为空
+    // 大局胜方用户 ID，平局为空
     @Setter
     private Long winnerUserId;
 
-    // 结束原因
+    // 大局结束原因
     @Setter
     private String endReason;
 
-    // 三连坐标
+    // 当前小局三连坐标
     @Setter
     private List<JinziBoardPointVO> winningLine = new ArrayList<>();
+
+    // 全局落子步数计数器 跨小局累加，用于落子记录唯一编号
+    @Setter
+    private int totalMoveCount = 0;
+
+    public synchronized int nextMoveNo() {
+        return ++totalMoveCount;
+    }
+
+    // 黑方小局获胜数
+    @Setter
+    private int blackWins = 0;
+
+    // 白方小局获胜数
+    @Setter
+    private int whiteWins = 0;
+
+    // 平局小局数
+    @Setter
+    private int drawRounds = 0;
+
+    // 当前第几小局
+    @Setter
+    private int currentRound = 1;
+
+    // 当前小局的先手方棋子类型：1 黑 X ，2 白 O
+    @Setter
+    private int roundStartingChess = 1;
+
+    // 当前小局是否已结束 展示结算过渡中
+    @Setter
+    private boolean roundFinished = false;
+
+    // 当前小局胜者用户 ID
+    @Setter
+    private Long roundWinnerUserId;
+
+    // 当前小局结束原因：LINE / DRAW / SURRENDER 等
+    @Setter
+    private String roundEndReason;
 
     // 黑方剩余局时毫秒
     @Setter
@@ -62,7 +106,7 @@ public class JinziRoom {
     @Setter
     private long turnStartedAtMs = System.currentTimeMillis();
 
-    // 断线重连截止时间：userId -> 截止时间戳
+    // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
     public JinziRoom(Long blackUserId, Long whiteUserId) {
@@ -117,6 +161,63 @@ public class JinziRoom {
             whiteRemainingMs = Math.max(0, whiteRemainingMs - used);
         }
         turnStartedAtMs = now;
+    }
+
+    public void recordRoundWin(int chess, Long winnerId, String reason, List<JinziBoardPointVO> line) {
+        if (chess == 1) {
+            blackWins++;
+        } else if (chess == 2) {
+            whiteWins++;
+        }
+        this.roundFinished = true;
+        this.roundWinnerUserId = winnerId;
+        this.roundEndReason = reason;
+        this.winningLine = line == null ? new ArrayList<>() : line;
+    }
+
+    public void recordRoundDraw(String reason) {
+        drawRounds++;
+        this.roundFinished = true;
+        this.roundWinnerUserId = null;
+        this.roundEndReason = reason;
+        this.winningLine = new ArrayList<>();
+    }
+
+    public boolean isMatchOver() {
+        return blackWins >= TARGET_WINS
+                || whiteWins >= TARGET_WINS
+                || drawRounds >= MAX_DRAW_ROUNDS
+                || currentRound >= MAX_TOTAL_ROUNDS;
+    }
+
+    public Long getMatchWinnerId() {
+        if (blackWins >= TARGET_WINS) {
+            return blackUserId;
+        }
+        if (whiteWins >= TARGET_WINS) {
+            return whiteUserId;
+        }
+        if (blackWins > whiteWins) {
+            return blackUserId;
+        }
+        if (whiteWins > blackWins) {
+            return whiteUserId;
+        }
+        return blackUserId != null ? blackUserId : whiteUserId;
+    }
+
+    public void startNextRound() {
+        for (int i = 0; i < GameConstants.JINZI_BOARD_SIZE; i++) {
+            Arrays.fill(board[i], 0);
+        }
+        this.winningLine.clear();
+        this.roundFinished = false;
+        this.roundWinnerUserId = null;
+        this.roundEndReason = null;
+        this.currentRound++;
+        this.roundStartingChess = (this.roundStartingChess == 1) ? 2 : 1;
+        this.currentTurnUserId = (this.roundStartingChess == 1) ? blackUserId : whiteUserId;
+        this.turnStartedAtMs = System.currentTimeMillis();
     }
 
     public int[][] copyBoard() {

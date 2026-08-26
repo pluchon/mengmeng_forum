@@ -1,9 +1,11 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer, UserFilled } from '@element-plus/icons-vue'
 import { getGobangRoom, surrenderGobangRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { modelIcon } from '@/constants/aiModels'
@@ -137,7 +139,7 @@ const opponentSideText = computed(() => {
   return myChess.value === 1 ? '白棋' : '黑棋'
 })
 const blackPlayer = computed(() => room.blackPlayer || fallbackParticipant(room.blackUserId, '黑方'))
-const whitePlayer = computed(() => room.whitePlayer || fallbackParticipant(room.whiteUserId, room.aiRoom ? '同水平AI' : '白方'))
+const whitePlayer = computed(() => room.whitePlayer || fallbackParticipant(room.whiteUserId, room.aiRoom ? '智能对手' : '白方'))
 const primaryPlayerCard = computed(() => {
   if (isSpectator.value) {
     return {
@@ -261,7 +263,7 @@ function fallbackParticipant(userId, label) {
     vip: false,
     vipTier: 0,
     ai: userId === -1,
-    aiModelName: userId === -1 ? 'qwen3.6-flash · Qwen' : '',
+    aiModelName: userId === -1 ? 'qwen3.7-flash · Qwen' : '',
   }
 }
 
@@ -399,7 +401,7 @@ function participantName(userId) {
 }
 
 function participantDisplayName(player) {
-  return player?.nickname || player?.username || (player?.ai ? '同水平AI' : '等待玩家')
+  return player?.nickname || player?.username || (player?.ai ? '智能对手' : '等待玩家')
 }
 
 function avatarText(player) {
@@ -409,7 +411,7 @@ function avatarText(player) {
 
 function aiModelCode(player) {
   const text = String(player?.aiModelName || '')
-  return text.includes('qwen3.7-max') ? 'qwen3.7-max' : 'qwen3.6-flash'
+  return text.includes('qwen3.7-max') ? 'qwen3.7-max' : 'qwen3.7-flash'
 }
 
 function aiModelIcon(player) {
@@ -424,7 +426,7 @@ function openOpponentStats() {
 async function surrender() {
   if (isFinished.value || surrendering.value || isSpectator.value) return
   try {
-    await ElMessageBox.confirm('确认认输并结束本局吗？', '五子棋', {
+    await confirmDialog('确认认输并结束本局吗？', '五子棋', {
       type: 'warning',
       confirmButtonText: '认输',
       cancelButtonText: '继续对局',
@@ -446,7 +448,7 @@ async function surrender() {
 async function backGame() {
   if (!isFinished.value) {
     try {
-      await ElMessageBox.confirm('确认离开当前对局吗？离开后可从匹配页回到进行中的房间。', '离开对局', {
+      await confirmDialog('确认离开当前对局吗？离开后可从匹配页回到进行中的房间。', '离开对局', {
         type: 'warning',
         confirmButtonText: '离开',
         cancelButtonText: '继续对局',

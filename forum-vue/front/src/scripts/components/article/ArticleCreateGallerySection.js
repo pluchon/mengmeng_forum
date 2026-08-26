@@ -1,5 +1,5 @@
 import { Loading, Picture, Plus } from '@element-plus/icons-vue'
-import { onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   variant: { type: String, default: 'strip' },
@@ -9,10 +9,13 @@ const props = defineProps({
   stripFadeLeft: { type: Boolean, default: false },
   canAdd: { type: Boolean, default: true },
   uploading: { type: Boolean, default: false },
-  uploadLabel: { type: String, default: '图片上传中…' },
+  pendingCount: { type: Number, default: 0 },
+  uploadLabel: { type: String, default: '上传中…' },
 })
 
 const emit = defineEmits(['open', 'remove', 'scroll', 'bind-ref'])
+
+const displayCount = computed(() => props.urls.length + Math.max(0, props.pendingCount || 0))
 
 function setItemsRef(el) {
   if (props.variant === 'strip') {

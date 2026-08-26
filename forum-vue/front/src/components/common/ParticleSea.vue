@@ -62,5 +62,4 @@ const { canvasClassicRef, canvasGlRef, isAuthLayout } = useParticleSea({
 
 .particle-hero--embedded .particle-canvas {
   pointer-events: none;
-}
-</style>
+}</style>

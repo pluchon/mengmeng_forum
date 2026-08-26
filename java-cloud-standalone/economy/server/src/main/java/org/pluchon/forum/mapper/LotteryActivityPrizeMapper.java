@@ -26,7 +26,7 @@ public interface LotteryActivityPrizeMapper extends BaseMapper<LotteryActivityPr
             + "WHERE lap.activity_id = #{activityId} AND lap.delete_state = 0 AND p.delete_state = 0")
     List<LotteryPrizePoolRow> selectPool(@Param("activityId") Long activityId);
 
-    /** 用户抽奖/前台奖池展示：仅上架奖品（catalog_status = 1） */
+    // 用户抽奖/前台奖池展示：仅上架奖品 catalog_status 1
     @Select("SELECT lap.id AS activityPrizeId, lap.prize_id AS prizeId, lap.weight AS weight, "
             + "lap.stock_remaining AS stockRemaining, lap.is_jackpot AS isJackpot, "
             + "p.name AS prizeName, p.prize_type AS prizeType, p.prize_value AS prizeValue, "

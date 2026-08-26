@@ -19,44 +19,103 @@
       </button>
     </nav>
 
-    <main v-if="searchTab === 'article'" class="home-xhs-main home-xhs-main--feed">
-      <div v-if="loading" class="home-masonry home-masonry--loading">
-        <div v-for="i in 8" :key="i" class="home-masonry-item">
-          <el-skeleton animated :rows="6" class="skeleton-card" />
-        </div>
+    <main
+      v-if="searchTab === 'article'"
+      class="home-xhs-main home-xhs-main--feed"
+      :class="{ 'home-xhs-main--loading': loading }"
+    >
+      <div
+        v-if="preferAiRag && loading"
+        class="unified-search-ai-loading"
+        role="status"
+        aria-live="polite"
+        aria-label="AI 检索中"
+      >
+        <span class="unified-search-ai-star unified-search-ai-star--one" aria-hidden="true">✦</span>
+        <span class="unified-search-ai-star unified-search-ai-star--two" aria-hidden="true">✧</span>
+        <span class="unified-search-ai-star unified-search-ai-star--three" aria-hidden="true">✦</span>
+        <span class="unified-search-ai-star unified-search-ai-star--four" aria-hidden="true">✧</span>
+        <strong>AI 检索中......</strong>
       </div>
 
-      <div v-else-if="feedList.length" ref="masonryRef" class="home-masonry">
-        <div
-          v-for="(col, colIdx) in masonryColumns"
-          :key="`search-column-${colIdx}`"
-          class="home-masonry-column"
+      <div
+        v-else-if="loading"
+        class="unified-search-spin-loading"
+        role="status"
+        aria-live="polite"
+        aria-label="搜索中"
+      >
+        <span class="unified-search-spin" aria-hidden="true" />
+      </div>
+
+      <div
+        v-else-if="feedList.length"
+        class="recommendation-feed-stage"
+      >
+        <Masonry
+          :items="masonryCards"
+          :column-width="220"
+          :gap="16"
+          :max-columns="6"
+          :default-item-height="320"
+          :reload-key="masonryReloadKey"
+          :duration="0.72"
+          ease="power3.out"
+          :stagger="0.05"
+          animate-from="bottom"
         >
-          <div v-for="entry in col" :key="entry.article?.id" class="home-masonry-item">
-            <SearchArticleCard :entry="entry" @open="openArticle" />
-          </div>
-        </div>
+          <template #default="{ item }">
+            <SearchArticleCard :entry="item.entry" @open="openArticle" />
+          </template>
+        </Masonry>
       </div>
 
-      <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+      <div v-if="!loading && total > pageSize" class="pagination-wrap">
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next"
-          background
           @current-change="runSearch"
         />
       </div>
 
-      <el-empty
+      <div
         v-if="!loading && keyword && hasSearched && !feedList.length"
-        description="未检索到对应的帖子"
-      />
+        class="unified-search-empty"
+      >
+        <img :src="articleNotFoundImageUrl" alt="没有找到相关帖子">
+        <p>没有找到相关帖子呀……</p>
+      </div>
     </main>
 
-    <main v-else class="home-xhs-main unified-search-users">
-      <div v-loading="loading" class="unified-search-user-list">
+    <main
+      v-else
+      class="home-xhs-main unified-search-users"
+      :class="{ 'home-xhs-main--loading': loading }"
+    >
+      <div
+        v-if="preferAiRag && loading"
+        class="unified-search-ai-loading"
+        role="status"
+        aria-live="polite"
+        aria-label="AI 检索中"
+      >
+        <span class="unified-search-ai-star unified-search-ai-star--one" aria-hidden="true">✦</span>
+        <span class="unified-search-ai-star unified-search-ai-star--two" aria-hidden="true">✧</span>
+        <span class="unified-search-ai-star unified-search-ai-star--three" aria-hidden="true">✦</span>
+        <span class="unified-search-ai-star unified-search-ai-star--four" aria-hidden="true">✧</span>
+        <strong>AI 检索中......</strong>
+      </div>
+      <div
+        v-else-if="loading"
+        class="unified-search-spin-loading"
+        role="status"
+        aria-live="polite"
+        aria-label="搜索中"
+      >
+        <span class="unified-search-spin" aria-hidden="true" />
+      </div>
+      <div v-else class="unified-search-user-list">
         <SearchUserRow
           v-for="user in userRecords"
           :key="user.id"
@@ -66,18 +125,19 @@
           @open="openUser"
           @toggle-follow="toggleUserFollow"
         />
-        <el-empty
-          v-if="!loading && keyword && hasSearched && !userRecords.length"
-          description="未检索到对应的用户"
-        />
+        <div
+          v-if="keyword && hasSearched && !userRecords.length"
+          class="unified-search-empty unified-search-empty--user"
+        >
+          <img :src="userNotFoundImageUrl" alt="没有找到相关用户">
+          <p>没有找到相关用户呀……</p>
+        </div>
       </div>
-      <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+      <div v-if="!loading && total > pageSize" class="pagination-wrap">
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next"
-          background
           @current-change="runSearch"
         />
       </div>

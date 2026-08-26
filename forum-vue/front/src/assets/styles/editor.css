@@ -830,7 +830,7 @@
   background: linear-gradient(to right, #fff 12%, rgba(255, 255, 255, 0));
 }
 
-/* 封面（编辑模式遗留，保留兼容） */
+/* 封面 编辑模式遗留，保留兼容 */
 .cover-upload-section {
   margin-bottom: 20px;
 }

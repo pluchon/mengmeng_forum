@@ -5,17 +5,16 @@ import org.pluchon.forum.api.ai.AiHubInternalApi;
 import org.pluchon.forum.api.ai.AiGobangMoveRequest;
 import org.pluchon.forum.api.ai.AiGobangMoveVO;
 import org.pluchon.forum.api.ai.AiRagSearchRequest;
-import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
-import org.pluchon.forum.entity.dto.ai.AiImageRequest;
-import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
-import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
+import org.pluchon.forum.entity.dto.*;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubCreatorInsightResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleCoverResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagRecommendResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagSimilarityResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubMusicMatchResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
+import org.pluchon.forum.entity.vo.ai.AiImageModerationItemResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
@@ -25,9 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -42,6 +39,37 @@ public class AiHubInternalController implements AiHubInternalApi {
     public AiHubPolishResultVO polish(@RequestParam("userId") Long userId,
                                       @Valid @RequestBody AiPolishRequest request) {
         return aiHubService.polish(userId, request);
+    }
+
+    // 执行帖子封面生成子图
+    @Override
+    public AiHubArticleCoverResultVO articleCover(@RequestParam("userId") Long userId,
+                                                  @Valid @RequestBody AiArticleCoverRequest request) {
+        return aiHubService.articleCover(userId, request);
+    }
+
+    // 推荐帖子已有标签
+    @Override
+    public AiHubArticleTagRecommendResultVO recommendArticleTags(
+            @Valid @RequestBody AiArticleTagRecommendRequest request) {
+        return aiHubService.recommendArticleTags(request);
+    }
+
+    // 严格确认新标签是否与已有标签高度相似
+    @Override
+    public AiHubArticleTagSimilarityResultVO checkArticleTagSimilarity(
+            @Valid @RequestBody AiArticleTagSimilarityRequest request) {
+        return aiHubService.checkArticleTagSimilarity(request);
+    }
+
+    @Override
+    public AiHubMusicMatchResultVO recommendMusic(@Valid @RequestBody AiMusicRecommendRequest request) {
+        return aiHubService.recommendMusic(request);
+    }
+
+    @Override
+    public AiHubMusicMatchResultVO searchMusic(@Valid @RequestBody AiMusicSearchRequest request) {
+        return aiHubService.searchMusic(request);
     }
 
     @Override
@@ -70,8 +98,22 @@ public class AiHubInternalController implements AiHubInternalApi {
     }
 
     @Override
+    public AiHubMusicMatchResultVO recommendMusicTaste(
+            @RequestParam("userId") Long userId,
+            @Valid @RequestBody AiMusicTasteRecommendRequest request) {
+        return aiHubService.recommendMusicTaste(userId, request);
+    }
+
+    @Override
     public String summarize(@RequestParam("content") String content) {
         return aiHubService.summarize(content);
+    }
+
+    // 生成创作中心数据小结
+    @Override
+    public AiHubCreatorInsightResultVO generateCreatorInsight(
+            @Valid @RequestBody AiCreatorInsightRequest request) {
+        return aiHubService.generateCreatorInsight(request);
     }
 
     @Override
@@ -82,6 +124,11 @@ public class AiHubInternalController implements AiHubInternalApi {
     @Override
     public void indexEmojiRag(@Valid @RequestBody RagEmojiIndexDTO payload) {
         aiHubService.indexEmojiRag(payload);
+    }
+
+    @Override
+    public void indexMusicRag(@Valid @RequestBody RagMusicIndexDTO payload) {
+        aiHubService.indexMusicRag(payload);
     }
 
     @Override
@@ -102,6 +149,11 @@ public class AiHubInternalController implements AiHubInternalApi {
     @Override
     public List<Long> ragVectorSearchEmojis(@Valid @RequestBody AiRagSearchRequest request) {
         return aiHubService.ragVectorSearchEmojis(request.getQuery());
+    }
+
+    @Override
+    public List<String> ragVectorSearchMusic(@Valid @RequestBody AiRagSearchRequest request) {
+        return aiHubService.ragVectorSearchMusic(request.getQuery());
     }
 
     @Override
@@ -130,8 +182,24 @@ public class AiHubInternalController implements AiHubInternalApi {
     }
 
     @Override
-    public Boolean validateImage(@RequestPart("file") MultipartFile file) {
-        return aiHubService.validateImage(file);
+    public Boolean validateImageUrl(@Valid @RequestBody AiImageModerationUrlRequest request) {
+        return aiHubService.validateImageUrl(
+                request.getImageUrl(),
+                request.getObjectKey());
+    }
+
+    @Override
+    public List<AiImageModerationItemResultVO> validateImageUrls(
+            @Valid @RequestBody AiImageModerationBatchUrlRequest request) {
+        return aiHubService.validateImageUrls(request);
+    }
+
+    @Override
+    public Boolean validateImagePayload(@Valid @RequestBody AiImageModerationRequest request) {
+        return aiHubService.validateImagePayload(
+                request.getContentBase64(),
+                request.getFilename(),
+                request.getContentType());
     }
 
     @Override

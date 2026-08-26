@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GobangRoomParticipantVO {
 
-    // 用户 ID，AI 固定为 -1
+    // 用户 ID，AI 固定为 1
     private Long userId;
 
     // 用户名

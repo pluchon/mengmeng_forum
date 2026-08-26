@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "xiaomeng",
+  "displayName": "小萌",
+  "atlas": {
+    "image": "spritesheet.webp",
+    "width": 1536,
+    "height": 1872,
+    "columns": 8,
+    "rows": 9,
+    "frameWidth": 192,
+    "frameHeight": 208
+  },
+  "display": {
+    "width": 96,
+    "height": 104,
+    "bottom": 12,
+    "edgeMargin": 16
+  },
+  "states": {
+    "idle": { "row": 0, "frames": 6, "fps": 6, "loop": true, "repeats": 0 },
+    "running-right": { "row": 1, "frames": 8, "fps": 10, "loop": true, "repeats": 0 },
+    "running-left": { "row": 2, "frames": 8, "fps": 10, "loop": true, "repeats": 0 },
+    "waving": { "row": 3, "frames": 4, "fps": 5, "loop": false, "repeats": 2 },
+    "jumping": { "row": 4, "frames": 5, "fps": 8, "loop": false, "repeats": 1 },
+    "failed": { "row": 5, "frames": 8, "fps": 6, "loop": false, "repeats": 1 },
+    "waiting": { "row": 6, "frames": 6, "fps": 6, "loop": true, "repeats": 0 },
+    "running": { "row": 7, "frames": 6, "fps": 10, "loop": true, "repeats": 0 },
+    "review": { "row": 8, "frames": 6, "fps": 6, "loop": true, "repeats": 0 }
+  }
+}

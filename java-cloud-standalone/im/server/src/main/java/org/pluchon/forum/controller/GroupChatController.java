@@ -9,8 +9,8 @@ import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.groupchat.CreateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupMuteMemberRequest;
-import org.pluchon.forum.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.SendGroupChatMessageRequest;
+import org.pluchon.forum.entity.dto.groupchat.SendGroupChatAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupMemberRoleRequest;
@@ -20,6 +20,7 @@ import org.pluchon.forum.entity.vo.groupchat.GroupChatJoinRequestVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMemberVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMessageVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionVO;
+import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionSearchResponse;
 import org.pluchon.forum.service.interfaces.groupchat.GroupChatService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,8 +32,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @Tag(name = "群聊", description = "群聊、成员与消息管理")
 @RestController
@@ -68,6 +67,17 @@ public class GroupChatController {
             HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(groupChatService.queryMySessions(sessionUser.getId(), pageNum, pageSize));
+    }
+
+    /** 搜索群聊文本消息所在会话 */
+    @GetMapping("/searchSessions")
+    public Result<PageResult<GroupChatSessionSearchResponse>> searchSessions(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(groupChatService.searchSessions(sessionUser.getId(), keyword, pageNum, pageSize));
     }
 
     /** 查询公开群聊 */
@@ -130,11 +140,13 @@ public class GroupChatController {
     /** 查询我的群收到的入群申请 */
     @GetMapping("/requests/received")
     public Result<PageResult<GroupChatJoinRequestVO>> queryReceivedJoinRequests(
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
             HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(groupChatService.queryReceivedJoinRequests(sessionUser.getId(), pageNum, pageSize));
+        return Result.success(groupChatService.queryReceivedJoinRequests(
+                sessionUser.getId(), keyword, pageNum, pageSize));
     }
 
     /** 标记入群申请已查看 */
@@ -231,6 +243,42 @@ public class GroupChatController {
         return Result.success(groupChatService.sendMessage(request, sessionUser.getId()));
     }
 
+    /** 查询本人发起的公开群申请结果 */
+    @GetMapping("/requests/applied")
+    public Result<PageResult<GroupChatJoinRequestVO>> queryAppliedJoinRequests(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "50") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(groupChatService.queryAppliedJoinRequests(
+                sessionUser.getId(), keyword, pageNum, pageSize));
+    }
+
+    /** 标记本人申请结果为已读 */
+    @PutMapping("/requests/applied/read")
+    public Result<String> markAppliedJoinRequestsRead(HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        groupChatService.markAppliedJoinRequestsRead(sessionUser.getId());
+        return Result.success("申请结果已标记为已读");
+    }
+
+    /** 发送群聊图集 */
+    @PostMapping("/messages/album")
+    public Result<GroupChatMessageVO> sendAlbum(@Valid @RequestBody SendGroupChatAlbumMessageRequest request,
+                                                HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(groupChatService.sendAlbum(request, sessionUser.getId()));
+    }
+
+    /** 撤回群聊消息 */
+    @PutMapping("/messages/{messageId}/recall")
+    public Result<String> recallMessage(@PathVariable Long messageId, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        groupChatService.recallMessage(messageId, sessionUser.getId());
+        return Result.success("消息已撤回");
+    }
+
     /** 查询群聊消息 */
     @GetMapping("/{groupId}/messages")
     public Result<PageResult<GroupChatMessageVO>> queryMessages(
@@ -252,22 +300,18 @@ public class GroupChatController {
         return Result.success("已标记群聊为已读");
     }
 
-    /** 举报群聊消息 */
-    @PostMapping("/{groupId}/messages/report")
-    public Result<String> reportMessage(@PathVariable Long groupId,
-                                        @Valid @RequestBody ReportGroupChatMessageRequest request,
-                                        HttpServletRequest httpServletRequest) {
-        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        groupChatService.reportMessage(groupId, request, sessionUser.getId());
-        return Result.success("举报已提交");
-    }
-
-    /** 查询群成员 */
+    /** 分页查询群成员 */
     @GetMapping("/{groupId}/members")
-    public Result<List<GroupChatMemberVO>> queryMembers(@PathVariable Long groupId,
-                                                        HttpServletRequest httpServletRequest) {
+    public Result<PageResult<GroupChatMemberVO>> queryMembers(
+            @PathVariable Long groupId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "default") String sortMode,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "4") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(groupChatService.queryMembers(groupId, sessionUser.getId()));
+        return Result.success(groupChatService.queryMembers(
+                groupId, sessionUser.getId(), keyword, sortMode, pageNum, pageSize));
     }
 
     /** 修改我的群内备注 */

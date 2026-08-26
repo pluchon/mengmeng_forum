@@ -1,7 +1,14 @@
+.emoji-shop-detail-dialog {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
 .emoji-shop-detail-dialog :deep(.el-dialog__header) {
   margin: 0;
-  padding: 14px 16px 12px;
-  border-bottom: 0.5px solid #e5e6eb;
+  min-height: 72px;
+  padding: 0 26px 0 30px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #edf0f3;
 }
 
 .emoji-shop-detail-dialog :deep(.el-dialog__body) {
@@ -12,47 +19,56 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 72px;
+}
+
+.emoji-shop-detail-dialog__head :deep(.el-button) {
+  width: 28px;
+  height: 28px;
+  color: #8e8d99;
+  font-size: 19px;
 }
 
 .emoji-shop-detail-dialog__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1d2129;
+  color: #2f3039;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .emoji-shop-detail-dialog__body {
-  min-height: 320px;
+  min-height: 510px;
 }
 
 .emoji-shop-detail-dialog__split {
   display: flex;
-  min-height: 380px;
+  min-height: 510px;
 }
 
 .emoji-shop-detail-dialog__preview {
-  width: 260px;
-  flex-shrink: 0;
-  background: #f7f8fa;
-  border-right: 0.5px solid #e5e6eb;
   display: flex;
+  width: 296px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 28px 26px 22px;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 1.5rem 1rem;
-  gap: 12px;
-  box-sizing: border-box;
+  gap: 16px;
+  border-right: 1px solid #eef0f2;
+  background: #f5f6f8;
 }
 
 .emoji-shop-detail-dialog__main-img {
-  width: 200px;
-  height: 200px;
-  border-radius: 12px;
-  background: #fff;
-  border: 0.5px solid #e5e6eb;
   display: flex;
+  width: 238px;
+  height: 238px;
+  flex-shrink: 0;
+  overflow: hidden;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  border: 1px solid #ebdfe0;
+  border-radius: 14px;
+  background: #fff0c8;
 }
 
 .emoji-shop-detail-dialog__main-img img {
@@ -62,57 +78,88 @@
 }
 
 .emoji-shop-detail-dialog__img-ph {
-  font-size: 72px;
   color: #c9cdd4;
+  font-size: 72px;
 }
 
 .emoji-shop-detail-dialog__thumbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  width: 100%;
+  min-height: 109px;
+  grid-template-columns: repeat(4, 50px);
+  grid-auto-rows: 50px;
+  gap: 9px;
   justify-content: center;
 }
 
 .emoji-shop-detail-dialog__thumb {
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   padding: 0;
-  border-radius: 10px;
-  background: #fff;
-  border: 0.5px solid #e5e6eb;
-  cursor: pointer;
   overflow: hidden;
-  flex-shrink: 0;
+  border: 1px solid #e4e8ed;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.emoji-shop-detail-dialog__thumb:hover {
+  border-color: #f7a2bd;
+  transform: translateY(-1px);
 }
 
 .emoji-shop-detail-dialog__thumb img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
 
 .emoji-shop-detail-dialog__thumb.is-active {
-  border: 2px solid var(--primary-red, #ff2442);
+  border: 2px solid #f66a9c;
+  box-shadow: 0 3px 8px rgb(246 106 156 / 16%);
 }
 
 .emoji-shop-detail-dialog__pager {
   display: flex;
-  justify-content: center;
   width: 100%;
+  margin-top: -2px;
+  justify-content: center;
+}
+
+
+.emoji-shop-detail-dialog__pager :deep(.btn-prev),
+.emoji-shop-detail-dialog__pager :deep(.btn-next),
+.emoji-shop-detail-dialog__pager :deep(.number) {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  color: #a6a8b1;
+  background: transparent;
+  font-size: 11px;
+}
+
+.emoji-shop-detail-dialog__pager :deep(.number.is-active) {
+  color: #f66a9c;
+  font-weight: 700;
 }
 
 .emoji-shop-detail-dialog__thumb-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #86909c;
+  margin: auto 0 0;
+  color: #999da7;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .emoji-shop-detail-dialog__info {
-  flex: 1;
-  min-width: 0;
-  padding: 1.25rem 1.25rem 1rem;
   display: flex;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 29px 29px 26px 24px;
+  flex: 1;
   flex-direction: column;
 }
 
@@ -120,110 +167,107 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 14px;
+  margin-bottom: 12px;
 }
 
 .emoji-shop-detail-dialog__name {
-  margin: 0 0 4px;
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
+  margin: 0 0 12px;
+  color: #2f3039;
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.16;
+}
+
+.emoji-shop-detail-dialog__info-top :deep(.el-tag) {
+  margin-top: 2px;
+  border: 0;
+  color: #68a543;
+  background: #eef9e9;
+  font-size: 12px;
 }
 
 .emoji-shop-detail-dialog__author {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #86909c;
+  gap: 8px;
+  color: #747582;
+  font-size: 14px;
   cursor: pointer;
   transition: color 0.2s;
 }
 
 .emoji-shop-detail-dialog__author:hover {
-  color: var(--primary-red, #ff2442);
+  color: #f66a9c;
 }
 
 .emoji-shop-detail-dialog__stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 13px;
 }
 
 .emoji-shop-detail-dialog__stat-pill {
   display: inline-flex;
+  min-height: 27px;
+  box-sizing: border-box;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #4e5969;
-  background: #f2f3f5;
   padding: 3px 10px;
-  border-radius: 20px;
+  border-radius: 14px;
+  color: #7e808b;
+  background: #f5f6f8;
+  font-size: 12px;
 }
 
 .emoji-shop-detail-dialog__sep {
-  border: none;
-  border-top: 0.5px solid #e5e6eb;
-  margin: 14px 0;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid #e7e9ed;
 }
 
 .emoji-shop-detail-dialog__section-label {
-  font-size: 12px;
-  color: #86909c;
-  margin-bottom: 6px;
+  margin-top: 18px;
+  margin-bottom: 7px;
+  color: #858792;
+  font-size: 14px;
 }
 
 .emoji-shop-detail-dialog__section-text {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: #1d2129;
-  line-height: 1.6;
+  min-height: 40px;
+  margin: 0 0 16px;
+  color: #4f505b;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .emoji-shop-detail-dialog__footer {
   margin-top: auto;
+  padding-top: 17px;
 }
 
 .emoji-shop-detail-dialog__price-row {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .emoji-shop-detail-dialog__price-label {
-  font-size: 11px;
-  color: #86909c;
-  margin-bottom: 2px;
+  margin-right: 7px;
+  color: #888a95;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .emoji-shop-detail-dialog__price-value {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--primary-red, #ff2442);
-}
-
-.emoji-shop-detail-dialog__price-unit {
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.emoji-shop-detail-dialog__balance {
-  text-align: right;
-}
-
-.emoji-shop-detail-dialog__balance-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
-.emoji-shop-detail-dialog__buy-btn {
-  flex: 1;
-  min-width: 0;
-  margin: 0 !important;
+  display: inline-flex;
+  align-items: baseline;
+  color: #f65c92;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .emoji-shop-detail-dialog__action-row {
@@ -232,7 +276,47 @@
   gap: 10px;
 }
 
+.emoji-shop-detail-dialog__buy-btn,
 .emoji-shop-detail-dialog__shelf-btn {
-  flex-shrink: 0;
+  height: 39px;
   margin: 0 !important;
+  border: 0 !important;
+  font-weight: 600;
+}
+
+.emoji-shop-detail-dialog__buy-btn {
+  min-width: 0;
+  flex: 1;
+}
+
+.emoji-shop-detail-dialog__buy-btn:deep(.is-disabled) {
+  color: #fff;
+  background: #ace08f;
+}
+
+.emoji-shop-detail-dialog__shelf-btn {
+  flex: 0 0 73px;
+  color: #92949e;
+  background: #f0f1f3;
+}
+
+@media (max-width: 760px) {
+  .emoji-shop-detail-dialog {
+    width: calc(100vw - 28px) !important;
+  }
+
+  .emoji-shop-detail-dialog__split {
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .emoji-shop-detail-dialog__preview {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid #eef0f2;
+  }
+
+  .emoji-shop-detail-dialog__info {
+    min-height: 400px;
+  }
 }

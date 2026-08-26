@@ -8,11 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 系统消息实体, 对应 system_message 表.
- * 用于平台 -> 用户的单向通知(审核结果 / 公告 / 封禁提示等),
- * 与用户间私信 message 表物理隔离, 互不污染索引与展示逻辑.
- */
+// 系统消息实体, 对应 system_message 表. 用于平台 > 用户的单向通知 审核结果 / 公告 / 封禁提示等 , 与用户间私信 message 表物理隔离, 互不污染索引与展示逻辑.
 @Data
 @TableName("system_message")
 @Schema(description = "系统消息实体(审核结果/公告等)")
@@ -33,6 +29,9 @@ public class SystemMessage {
 
     @Schema(description = "消息正文(展示用, 最长500字)")
     private String content;
+
+    @Schema(description = "搜索用标题或摘要")
+    private String searchText;
 
     @Schema(description = "关联业务ID(如审核类: articleId)")
     private Long relatedId;

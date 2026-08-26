@@ -1,6 +1,7 @@
 package org.pluchon.forum.controller;
 
-import org.pluchon.forum.api.auth.FollowStatsInternalVO;
+import org.pluchon.forum.api.FollowStatsInternalVO;
+import org.pluchon.forum.api.FollowDailyCountInternalVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDate;
 
 // 关注域内部接口：供 content 等域 Feign 调用
 @RestController
@@ -43,5 +45,23 @@ public class FollowInternalController {
     @GetMapping("/{followerId}/following-ids")
     public Set<Long> listFollowingIds(@PathVariable("followerId") Long followerId) {
         return userFollowService.listFollowingIds(followerId);
+    }
+
+    @GetMapping("/{userId}/new-count")
+    public Long countNewFollowers(
+            @PathVariable("userId") Long userId,
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
+        return userFollowService.countNewFollowers(
+                userId, LocalDate.parse(startDate), LocalDate.parse(endDate));
+    }
+
+    @GetMapping("/{userId}/daily-new-counts")
+    public List<FollowDailyCountInternalVO> listDailyNewFollowers(
+            @PathVariable("userId") Long userId,
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
+        return userFollowService.listDailyNewFollowers(
+                userId, LocalDate.parse(startDate), LocalDate.parse(endDate));
     }
 }

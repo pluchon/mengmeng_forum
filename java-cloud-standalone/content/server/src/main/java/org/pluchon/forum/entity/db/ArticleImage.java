@@ -9,10 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 帖子相册图片表实体, 对应 article_image.
- * 一篇 article 对应 0~15 条记录, 由 ArticleService.replaceArticleImages 全量替换式维护.
- */
+// 帖子相册图片表实体, 对应 article_image. 一篇 article 对应 0 15 条记录, 由 ArticleService.replaceArticleImages 全量替换式维护.
 @Data
 @TableName("article_image")
 @Schema(description = "帖子相册图片实体")

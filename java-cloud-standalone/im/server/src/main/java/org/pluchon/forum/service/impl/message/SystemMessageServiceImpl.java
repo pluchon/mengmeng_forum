@@ -9,22 +9,27 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.SystemMessage;
+import org.pluchon.forum.entity.vo.common.PageResult;
+import org.pluchon.forum.entity.vo.message.SystemMessageVO;
+import org.pluchon.forum.converter.SystemMessageConverter;
 import org.pluchon.forum.mapper.SystemMessageMapper;
 import org.pluchon.forum.service.interfaces.message.SystemMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
+import java.util.List;
+import java.util.Locale;
 
 @Service
 @Slf4j
 public class SystemMessageServiceImpl implements SystemMessageService {
 
-    /** 未读 */
+    // 未读
     private static final byte STATE_UNREAD = 0;
-    /** 已读 */
+    // 已读
     private static final byte STATE_READ = 1;
-    /** 软删 */
+    // 软删
     private static final byte DELETE_TRUE = 1;
 
     @Autowired
@@ -41,6 +46,7 @@ public class SystemMessageServiceImpl implements SystemMessageService {
         row.setType(type);
         row.setTitle(title);
         row.setContent(content);
+        row.setSearchText(title);
         row.setRelatedId(relatedId);
         row.setPayload(payload);
         row.setState(STATE_UNREAD);
@@ -51,7 +57,8 @@ public class SystemMessageServiceImpl implements SystemMessageService {
     }
 
     @Override
-    public Page<SystemMessage> queryByUser(Long userId, Integer pageNum, Integer pageSize) {
+    public PageResult<SystemMessageVO> queryByUser(Long userId, String category, String keyword,
+                                                   Integer pageNum, Integer pageSize) {
         if (userId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -60,9 +67,40 @@ public class SystemMessageServiceImpl implements SystemMessageService {
         Page<SystemMessage> page = PageUtils.getPage(validPageNum, validPageSize);
         LambdaQueryWrapper<SystemMessage> w = new LambdaQueryWrapper<>();
         w.eq(SystemMessage::getReceiveUserId, userId)
-                .ne(SystemMessage::getDeleteState, DELETE_TRUE)
-                .orderByDesc(SystemMessage::getId);
-        return systemMessageMapper.selectPage(page, w);
+                .ne(SystemMessage::getDeleteState, DELETE_TRUE);
+        applyCategory(w, category);
+        String validKeyword = keyword == null ? "" : keyword.trim();
+        if (!validKeyword.isEmpty()) {
+            w.and(query -> query.like(SystemMessage::getSearchText, validKeyword)
+                    .or().like(SystemMessage::getContent, validKeyword));
+        }
+        w.orderByDesc(SystemMessage::getId);
+        Page<SystemMessage> result = systemMessageMapper.selectPage(page, w);
+        List<SystemMessageVO> records = result.getRecords().stream()
+                .map(SystemMessageConverter::toVO)
+                .toList();
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
+    }
+
+    private void applyCategory(LambdaQueryWrapper<SystemMessage> query, String category) {
+        if (category == null || category.isBlank()) {
+            return;
+        }
+        switch (category.trim().toUpperCase(Locale.ROOT)) {
+            case "TAG" -> query.eq(SystemMessage::getType, (byte) 4);
+            case "AUDIT" -> query.in(SystemMessage::getType, List.of((byte) 1, (byte) 2, (byte) 3))
+                    .and(w -> w.not(n -> n.like(SystemMessage::getTitle, "歌曲审核")
+                            .or().like(SystemMessage::getPayload, "\"kind\":\"music\"")
+                            .or().like(SystemMessage::getPayload, "musicId")));
+            case "MUSIC" -> query.in(SystemMessage::getType, List.of((byte) 1, (byte) 2, (byte) 3))
+                    .and(w -> w.like(SystemMessage::getTitle, "歌曲审核")
+                            .or().like(SystemMessage::getPayload, "\"kind\":\"music\"")
+                            .or().like(SystemMessage::getPayload, "musicId"));
+            case "REPORT" -> query.in(SystemMessage::getType, List.of((byte) 5, (byte) 6, (byte) 7));
+            default -> throw new ApplicationException(Result.fail(
+                    ResultCode.FAILED_PARAMS_VALIDATE, "category 仅允许 TAG、AUDIT、MUSIC、REPORT"));
+        }
     }
 
     @Override

@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.pluchon.forum.entity.db.UserMascotPreference;
 
-// 看板娘偏好 Mapper（ai）
+// 看板娘偏好 Mapper ai
 @Mapper
 public interface UserMascotPreferenceMapper extends BaseMapper<UserMascotPreference> {
 

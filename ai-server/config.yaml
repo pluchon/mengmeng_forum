@@ -1,6 +1,5 @@
-# ai-server 本地开发配置（直连宿主机映射端口：mysql/redis/rabbitmq/postgres 见 nginx/docker-compose）
-# 密钥勿写入本文件：请设 Windows 用户环境变量或 scripts/dev-secrets.ps1（见 scripts/dev-secrets.ps1.example）
-# Docker 部署：容器内 config.docker.yaml + nginx/.env 注入 DASHSCOPE_API_KEY 等
+# ai-server 本地开发配置（直连 deploy/docker-compose.dev.yaml 暴露的宿主机端口）
+# 密钥勿写入本文件：本地使用 Windows 用户环境变量，生产由外部 prod.env 注入
 
 server:
   host: 0.0.0.0
@@ -8,33 +7,40 @@ server:
 
 logging:
   level: WARNING
-  file: ../logs/python-backend/ai-server/ai-server.log
+  file: ../logs/ai-server/ai-server.log
   max_bytes: 20971520
   backup_count: 14
+
+gateway:
+  fast_concurrency: 8
+  standard_concurrency: 4
+  long_concurrency: 2
+  index_concurrency: 2
 
 dashscope:
   api_key: ""
   # qwen3.6 / qwen3-vl 需走 OpenAI 兼容端点（旧版 ChatTongyi 会报 url error）
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  # z-image-turbo 生图（勿与 base_url 混用；走 multimodal-generation）
+  # wan2.7 / 旧 z-image 文生图均走 multimodal-generation（现有 dashscope 域名仍可用）
   image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
   # 模型分配（名称以 Dashscope 控制台为准，可按环境微调）
-  model_text: "qwen3.6-flash"                   # 文本审核 / 摘要（默认与 flash 对齐）
-  model_text_flash: "qwen3.6-flash"             # 看板娘等低成本对话
+  model_text: "qwen3.7-flash"                   # 文本审核 / 摘要（默认与 flash 对齐）
+  model_text_flash: "qwen3.7-flash"             # 看板娘等低成本对话
   model_text_deep: "qwen3.7-max"                # 看板娘深度文本（VIP）
   model_vision: "qwen3-vl-flash"                # 图片审核（视觉，首选）
   model_vision_fallback: "qwen3-vl-plus"       # 视觉兜底（flash 无法处理时）
   # rerank 与 embedding 不可混用：rerank 只做搜索结果重排，不能生成向量
-  model_rerank: "qwen3-vl-rerank"              # RAG 检索结果重排（TextReRank，非向量）
+  model_rerank: "qwen3-rerank"                 # 站内文本 RAG 重排（TextReRank）
   model_embedding_rag: "qwen3-vl-embedding"    # RAG 多模态向量（MultiModalEmbedding，与对话 API 不同）
-  model_embedding_text_fallback: "text-embedding-v3"  # MultiModal 失败时 TextEmbedding 降级
-  model_image_normal: "z-image-turbo"                   # 普通生图（Dashscope，0.1元/张）
-  model_image_premium: "wanx2.1-t2i-plus"             # 进阶生图（Dashscope 万相）
+  model_embedding_text_fallback: "text-embedding-v4"  # MultiModal 失败时 TextEmbedding 降级
+  model_image_normal: "wan2.7-image"            # 普通生图（万相 2.7 平衡档，默认 2K）
+  model_image_premium: "wan2.7-image-pro"      # DashScope Wan 进阶生图
+  model_omni: "qwen3-omni-flash"               # 用户上传歌曲音频理解/审核
 
 redis:
   host: 127.0.0.1
   port: 63790
-  password: "123456"
+  password: ""
   db: 0
   socket_timeout: 2
 
@@ -43,12 +49,15 @@ rabbitmq:
   port: 56720
   virtual_host: forum-demo
   username: nuonuo
-  password: "123456"
+  password: ""
   # 与 Java 侧 RabbitMQConfigure 保持一致
   exchange: "t_exchange_1"
   audit_task_queue: "q-audit-article"
   audit_task_routing_key: "forum.audit.article"
   audit_result_routing_key: "forum.audit.result"
+  ai_async_task_queue: "q-ai-async-task"
+  ai_content_result_routing_key: "forum.ai.content.result"
+  ai_im_result_routing_key: "forum.ai.im.result"
   # 消费并发: 单线程消费足够, 单帖审核内部已并行图片
   prefetch: 1
 
@@ -58,7 +67,7 @@ postgres:
   host: 127.0.0.1
   port: 54320
   user: langgraph
-  password: "123456"
+  password: ""
   db: langgraph_db
   # PostgresSaver 首次启动自动 CREATE TABLE
   auto_setup: true
@@ -73,12 +82,12 @@ audit:
   # 单图片审核超时
   image_audit_timeout: 30
   # 文本审核 LLM 读超时（秒）；配额充足仍可能因网络/长正文超时
-  text_audit_timeout: 180
+  text_audit_timeout: 45
   # 送审正文最大字符（超出截断，避免 MC 长文拖垮审核）
   text_audit_max_chars: 12000
-  video_audit_timeout: 300
+  video_audit_timeout: 120
   video_max_bytes_for_url: 104857600
-  video_frame_extract_timeout: 600
+  video_frame_extract_timeout: 120
   # 摘要生成最小正文长度 (低于此不调 LLM)
   summary_min_len: 50
 
@@ -86,8 +95,9 @@ oss:
   endpoint: https://oss-cn-shenzhen.aliyuncs.com
   access_key_id: ""
   access_key_secret: ""
-  bucket_name: ""
-  url_prefix: ""
+  # 本地默认开发桶；Docker/生产由 FORUM_OSS_PROFILE + OSS_LOCAL_* / OSS_SERVER_* 覆盖
+  bucket_name: item-for-picture-with-zhanglihong-local-develop
+  url_prefix: https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/
   root_prefix: ""
 
 ffmpeg:
@@ -112,7 +122,8 @@ rag:
   redis_article_doc_prefix: "forum_rag:article:"
   redis_user_ids_key: "forum_rag:user:ids"
   redis_user_doc_prefix: "forum_rag:user:"
-  vector_scan_limit: 400
+  vector_scan_limit: 800
+  # 过约 1500 条稳定索引后再考虑 Redis Stack KNN；当前暴力扫描 + pipeline 足够
   max_candidates: 80
   doc_truncate: 1200
   relevance_threshold: 0.22
@@ -148,12 +159,6 @@ mascot:
   max_user_message_len: 2000
   max_history_turns: 8
 
-# HuanAPI：GPT Image 生图
-huanapi:
-  base_url: "https://www.huanapi.com"
-  image_key: ""
-  model_image_premium: "gpt-image-2"
-
 # Tavily 联网搜索（MCP 工具 tavily_search）；密钥用环境变量 TAVILY_API_KEY
 tavily:
   enabled: true
@@ -168,16 +173,6 @@ mcp:
   tools:
     - tavily_search
     - get_current_datetime
-    - map_geocode
-    - map_search_places
-    - map_directions
-    - map_weather
-
-# 百度地图（出行规划）；密钥用环境变量 BAIDU_MAP_API_KEY，勿写入本文件
-# 申请：https://lbsyun.baidu.com/apiconsole/key
-baidu_map:
-  enabled: true
-  api_key: ""
 
 # Java BFF 调用 /api/v1/ai/* 时校验 X-Internal-Key；可与 mascot 共用 MASCOT_INTERNAL_KEY
 ai_hub:

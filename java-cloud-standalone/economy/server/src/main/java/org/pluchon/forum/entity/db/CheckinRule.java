@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 签到积分规则表实体类
- */
+// 签到积分规则表实体类
 @Data
 @TableName("checkin_rule")
 @Schema(description = "签到积分规则实体")
@@ -29,6 +27,9 @@ public class CheckinRule {
 
     @Schema(description = "签到获得积分")
     private Integer points;
+
+    @Schema(description = "是否惊喜奖励日: 0否 1是")
+    private Byte isSurprise;
 
     @Schema(description = "是否删除: 0否 1是")
     @JsonIgnore

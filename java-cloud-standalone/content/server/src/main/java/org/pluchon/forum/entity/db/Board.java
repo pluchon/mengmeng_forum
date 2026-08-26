@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 版块表实体类，对应 board
- */
+// 版块表实体类，对应 board
 @Data
 @TableName("board")
 @Schema(description = "版块实体")
@@ -21,7 +19,7 @@ public class Board {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "版块名称", example = "Java")
+    @Schema(description = "版块名称", example = "当季新番")
     private String name;
 
     @Schema(description = "所属分类ID", example = "1")

@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.article.auditguard;
 
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 
 public class ArticleAuditSubmitContext {
 

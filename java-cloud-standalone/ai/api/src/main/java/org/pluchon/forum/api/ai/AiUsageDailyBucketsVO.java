@@ -11,9 +11,9 @@ public class AiUsageDailyBucketsVO {
     private Integer qwenFlashUsed;
     private Integer advancedLlmUsed;
     private Integer imageNormalUsed;
-    private Integer imagePremiumUsed;
     private Integer companionNormalUsed;
-    private Integer companionPremiumUsed;
     private Integer totalCalls;
+    private Long qwenCostMicros;
+    private Integer wanImageUsed;
     private Map<String, Long> tokenByModel = new HashMap<>();
 }

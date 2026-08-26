@@ -12,7 +12,7 @@ export function usePrivacy() {
           <li><strong>内容数据：</strong>帖子、评论、私信、上传的图片。</li>
           <li><strong>基础日志：</strong>访问时间、IP 等用于安全分析的信息。</li>
         </ul>
-      `
+      `,
     },
     {
       title: '我们如何使用信息',
@@ -25,7 +25,7 @@ export function usePrivacy() {
           <li>用于安全监控，防止恶意注册、刷帖等违规行为。</li>
           <li>统计分析平台整体运营数据（仅使用匿名化聚合数据）。</li>
         </ul>
-      `
+      `,
     },
     {
       title: '信息安全与共享',
@@ -35,7 +35,7 @@ export function usePrivacy() {
           <li>不会出售您的个人信息；仅在法律法规要求、您授权或为保护合法权益的必要范围内披露。</li>
           <li>您公开发布的内容属于您主动公开的信息，其他用户可在站内查看。</li>
         </ul>
-      `
+      `,
     },
     {
       title: '您的权利',
@@ -46,14 +46,15 @@ export function usePrivacy() {
           <li><strong>删除：</strong>您可以删除自己发布的帖子和评论。</li>
           <li><strong>注销：</strong>如需注销账号，请联系管理员。</li>
         </ul>
-      `
+        <p>如需注销账号或行使其他权利，请联系管理员。</p>
+      `,
     },
     {
       title: '政策更新',
       content: `
         <p>本政策可能随平台发展不定期更新。重大变更时，我们将在平台显著位置发布通知。继续使用本平台服务即视为您接受更新后的政策。</p>
-      `
-    }
+      `,
+    },
   ]
 
   return {

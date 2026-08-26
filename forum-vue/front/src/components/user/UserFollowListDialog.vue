@@ -11,7 +11,7 @@
       <el-input
         v-model="keyword"
         clearable
-        placeholder="在列表内搜索昵称或简介"
+        placeholder="搜索用户昵称"
         @input="onKeywordInput"
         @clear="clearKeyword"
       >
@@ -57,20 +57,20 @@
         </el-button>
       </div>
 
-      <el-empty
-        v-if="!loading && items.length === 0"
-        :description="keyword.trim() ? '没有匹配的用户' : '暂无数据'"
-      />
+      <div v-if="!loading && items.length === 0" class="follow-list-empty">
+        <img :src="emptyImage" alt="" class="follow-list-empty-image">
+        <p>暂无数据</p>
+      </div>
     </div>
 
     <div v-if="total > PAGE_SIZE" class="follow-list-pagination">
-      <el-pagination
+      <AppPagination
         v-model:current-page="pageNum"
+        size="small"
         :total="total"
         :page-size="PAGE_SIZE"
-        layout="prev, pager, next"
-        background
-        small
+        :pager-count="5"
+        :show-jumper="false"
         @current-change="fetchPage"
       />
     </div>

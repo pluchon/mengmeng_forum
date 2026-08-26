@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="disc" x1="118" y1="112" x2="402" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD9E8"/>
+      <stop offset="0.55" stop-color="#F1D9FF"/>
+      <stop offset="1" stop-color="#CFC6FF"/>
+    </linearGradient>
+    <linearGradient id="note" x1="286" y1="116" x2="370" y2="328" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9FC2"/>
+      <stop offset="1" stop-color="#8F7BE6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#B6A7C8" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- soft musical aura -->
+  <circle cx="256" cy="256" r="206" fill="#FFF9FC"/>
+  <circle cx="256" cy="256" r="187" fill="url(#disc)" fill-opacity="0.9" stroke="#6E6272" stroke-width="8"/>
+
+  <!-- vinyl center -->
+  <circle cx="256" cy="270" r="112" fill="#FFF8FC" stroke="#B7A6C8" stroke-width="6"/>
+  <circle cx="256" cy="270" r="72" fill="#F4E8FA" stroke="#CBB7D7" stroke-width="5"/>
+  <circle cx="256" cy="270" r="17" fill="#FFB3CA" stroke="#6E6272" stroke-width="5"/>
+  <circle cx="256" cy="270" r="5" fill="#FFF"/>
+
+  <!-- equalizer bars -->
+  <rect x="168" y="320" width="16" height="42" rx="8" fill="#F6ABC5" opacity="0.78"/>
+  <rect x="194" y="306" width="16" height="56" rx="8" fill="#BBA6EE" opacity="0.85"/>
+  <rect x="220" y="326" width="16" height="36" rx="8" fill="#F7C5D8"/>
+  <rect x="246" y="296" width="16" height="66" rx="8" fill="#9B86E9" opacity="0.9"/>
+  <rect x="272" y="314" width="16" height="48" rx="8" fill="#F2AFCB"/>
+  <rect x="298" y="286" width="16" height="76" rx="8" fill="#BBA6EE"/>
+  <rect x="324" y="305" width="16" height="57" rx="8" fill="#F5B7D1" opacity="0.85"/>
+
+  <!-- music note -->
+  <g filter="url(#shadow)">
+    <path d="M315 108V222" stroke="url(#note)" stroke-width="13" stroke-linecap="round"/>
+    <path d="M315 110C347 98 377 99 396 109V128C374 119 345 119 315 131V110Z" fill="url(#note)"/>
+    <ellipse cx="300" cy="229" rx="30" ry="22" fill="url(#note)"/>
+    <path d="M395 114V188" stroke="url(#note)" stroke-width="13" stroke-linecap="round"/>
+    <ellipse cx="381" cy="196" rx="30" ry="22" fill="url(#note)"/>
+  </g>
+
+  <!-- cat paw accent -->
+  <g transform="translate(122 150)">
+    <ellipse cx="42" cy="49" rx="27" ry="23" fill="#FFB3CA" stroke="#6E6272" stroke-width="6"/>
+    <ellipse cx="17" cy="22" rx="9" ry="12" fill="#FFDDE9" stroke="#6E6272" stroke-width="5"/>
+    <ellipse cx="37" cy="12" rx="9" ry="12" fill="#FFDDE9" stroke="#6E6272" stroke-width="5"/>
+    <ellipse cx="57" cy="12" rx="9" ry="12" fill="#FFDDE9" stroke="#6E6272" stroke-width="5"/>
+    <ellipse cx="77" cy="22" rx="9" ry="12" fill="#FFDDE9" stroke="#6E6272" stroke-width="5"/>
+  </g>
+
+  <!-- small sparkles -->
+  <path d="M376 298L381 311L394 316L381 321L376 334L371 321L358 316L371 311L376 298Z" fill="#F5C96F"/>
+  <path d="M148 328L152 337L161 341L152 345L148 354L144 345L135 341L144 337L148 328Z" fill="#E7B9F2"/>
+  <circle cx="394" cy="252" r="6" fill="#FFE6A8"/>
+
+  <!-- simple blossom -->
+  <g transform="translate(392 348)">
+    <path d="M0 12C-8 4-6-6 2-10C8-13 15-9 17-2C20 7 11 15 0 12Z" fill="#FFB4CC"/>
+    <path d="M22 12C14 4 16-6 24-10C30-13 37-9 39-2C42 7 33 15 22 12Z" fill="#FFB4CC"/>
+    <path d="M11 23C3 15 5 5 13 1C19-2 26 2 28 9C31 18 22 26 11 23Z" fill="#FFB4CC"/>
+    <circle cx="19" cy="7" r="6" fill="#FFF2BA"/>
+  </g>
+
+  <!-- top soft highlight -->
+  <path d="M160 178C184 145 222 126 264 125" stroke="#FFF" stroke-width="12" stroke-linecap="round" opacity="0.72"/>
+</svg>

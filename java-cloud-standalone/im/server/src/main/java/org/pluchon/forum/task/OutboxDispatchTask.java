@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.OutboxMessageState;
 import org.pluchon.forum.common.mq.ForumProducer;
+import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
 import org.pluchon.forum.entity.db.ForumOutboxMessage;
 import org.pluchon.forum.entity.vo.mq.MessageNotifyMqVO;
 import org.pluchon.forum.entity.vo.mq.ReplyNotifyMqVO;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.List;
 
-/** 本地消息表投递：防多实例重复执行 */
+// 本地消息表投递：防多实例重复执行
 @Slf4j
 @ConditionalOnProperty(name = "forum.domain", havingValue = "im")
 @Component
@@ -44,7 +45,8 @@ public class OutboxDispatchTask {
 
     @Scheduled(fixedDelay = 10_000, initialDelay = 15_000)
     public void dispatchPendingMessages() {
-        Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(LOCK_KEY, "1", Duration.ofMinutes(2));
+        String lockToken = java.util.UUID.randomUUID().toString().replace("-", "");
+        Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(LOCK_KEY, lockToken, Duration.ofMinutes(2));
         if (!Boolean.TRUE.equals(locked)) {
             return;
         }
@@ -60,7 +62,7 @@ public class OutboxDispatchTask {
         } catch (Exception e) {
             log.error("Outbox 批量投递失败", e);
         } finally {
-            stringRedisTemplate.delete(LOCK_KEY);
+            RedisAtomicValueConsumer.consumeIfMatch(stringRedisTemplate, LOCK_KEY, lockToken);
         }
     }
 

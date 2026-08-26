@@ -12,7 +12,7 @@ public class VipQuotaItemVO {
     private String modelCode;
     private String iconProvider;
     private String quotaType;
-    /** 每日 | 本周期 | 会员期内 — 与后端计费维度一致 */
+    // 每日 | 本周期 | 会员期内 与后端计费维度一致
     private String scopeLabel;
     private String tierTag;
     private Long used;

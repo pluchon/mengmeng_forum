@@ -2,7 +2,7 @@ package org.pluchon.forum.service.impl.lottery.guard;
 
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.springframework.stereotype.Component;
 
 @Component

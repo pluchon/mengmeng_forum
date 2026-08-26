@@ -95,46 +95,71 @@
 .header-moebi {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 10px 0 5px;
+  border: 1px solid rgba(212, 83, 126, 0.16);
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(255, 248, 251, 0.96), rgba(255, 239, 245, 0.82));
+  box-shadow: 0 3px 10px rgba(212, 83, 126, 0.06);
   text-decoration: none;
-  color: #333;
+  color: #c74874;
   font-weight: 600;
-  font-size: 15px;
-  padding: 0 4px;
-  border-radius: 6px;
-  transition: color 0.2s;
+  font-size: 14px;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .header-moebi:hover {
-  color: var(--primary-red);
+  border-color: rgba(212, 83, 126, 0.3);
+  background: #fff8fb;
+  box-shadow: 0 6px 16px rgba(212, 83, 126, 0.12);
+  color: #b93968;
+  transform: translateY(-1px);
 }
 
 .header-moebi-paw {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 5px;
   flex-shrink: 0;
-  color: #606266;
-  transition: color 0.2s;
+  border: 1px solid rgba(212, 83, 126, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #d4537e;
+  box-shadow: 0 2px 7px rgba(212, 83, 126, 0.08);
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .header-moebi:hover .header-moebi-paw {
-  color: var(--el-color-primary);
+  color: #c33f6d;
+  transform: rotate(-6deg);
 }
 
 .header-moebi-num {
+  order: 2;
   color: inherit;
+  font-size: 14px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 .header-moebi-label {
+  order: 1;
   font-size: 12px;
-  font-weight: 600;
-  color: #86909c;
-  margin-left: 1px;
+  font-weight: 700;
+  color: #a45d76;
 }
 
 .header-moebi:hover .header-moebi-label {
-  color: #606266;
+  color: #8f405d;
 }
 
 .icon-btn {

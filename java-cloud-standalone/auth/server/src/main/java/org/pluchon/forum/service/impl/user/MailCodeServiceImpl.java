@@ -7,23 +7,20 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.CaptchaUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
-import org.pluchon.forum.common.utils.MailUtil;
+import org.pluchon.forum.common.MailUtil;
 import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.mapper.UserMapper;
 import org.pluchon.forum.service.interfaces.user.MailCodeService;
-import org.pluchon.forum.service.impl.user.AuthTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * 邮箱验证服务实现
- */
+// 邮箱验证服务实现
 @Service
 public class MailCodeServiceImpl implements MailCodeService {
 
@@ -133,7 +130,7 @@ public class MailCodeServiceImpl implements MailCodeService {
 
     @Override
     public boolean consumeVerificationCode(String email, String code) {
-        if (!RegexUtil.checkMail(email) || code == null || code.isBlank()) {
+        if (!RegexUtil.checkMail(email) || !RegexUtil.checkMailCode(code)) {
             return false;
         }
         return RedisAtomicValueConsumer.consumeIfMatch(
@@ -142,7 +139,7 @@ public class MailCodeServiceImpl implements MailCodeService {
 
     @Override
     public boolean consumeResetCode(String email, String code) {
-        if (!RegexUtil.checkMail(email) || code == null || code.isBlank()) {
+        if (!RegexUtil.checkMail(email) || !RegexUtil.checkMailCode(code)) {
             return false;
         }
         return RedisAtomicValueConsumer.consumeIfMatch(

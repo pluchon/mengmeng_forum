@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 用户已购表情包表实体, 对应 user_emoji. (user_id, shop_id) 全表唯一.
- */
+// 用户已购表情包表实体, 对应 user_emoji. user_id, shop_id 全表唯一.
 @Data
 @TableName("user_emoji")
 @Schema(description = "用户已购表情包实体")

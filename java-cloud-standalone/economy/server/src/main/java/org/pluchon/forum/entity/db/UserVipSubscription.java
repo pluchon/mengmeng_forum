@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 用户 VIP 订阅，对应 user_vip_subscription（economy 权威）
+// 用户 VIP 订阅，对应 user_vip_subscription economy 权威
 @Data
 @TableName("user_vip_subscription")
 public class UserVipSubscription {
@@ -22,6 +22,13 @@ public class UserVipSubscription {
     private Byte vipTier;
 
     private Date vipExpireAt;
+
+    // 基础配额档位，不随体验卡改变
+    private Byte baseQuotaTier;
+
+    private Date quotaPeriodStart;
+
+    private Date quotaPeriodEnd;
 
     private Date createTime;
 

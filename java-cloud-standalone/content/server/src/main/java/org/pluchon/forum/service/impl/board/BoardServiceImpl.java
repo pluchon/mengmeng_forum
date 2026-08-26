@@ -15,15 +15,15 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.Board;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.board.BoardPublicVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
+import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
@@ -61,15 +61,18 @@ public class BoardServiceImpl implements BoardService {
     private ContentFollowLookupService userFollowService;
 
     @Autowired
+    private ArticleMediaService articleMediaService;
+
+    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
 
-    // ============================================================
+    
     // 板块列表
-    // 0 = 升序，1 = 降序；带 5 分钟缓存
-    // ============================================================
+    // 0 升序，1 降序；带 5 分钟缓存
+    
     @Override
     public List<BoardPublicVO> queryBoardListByOrder(Integer orderBy) {
         if (orderBy == null || orderBy < 0 || orderBy > 1) {
@@ -143,9 +146,9 @@ public class BoardServiceImpl implements BoardService {
         return result;
     }
 
-    // ============================================================
-    // 板块帖子列表（分页）；boardId=0 表示首页全量
-    // ============================================================
+    
+    // 板块帖子列表 分页 ；boardId 0 表示首页全量
+    
     @Override
     public PageResult<ArticleListResponse> selectBoardListWithPage(
             Long boardId,
@@ -177,19 +180,25 @@ public class BoardServiceImpl implements BoardService {
         Set<Long> followingIds = (loginUserId != null && loginUserId > 0)
                 ? userFollowService.listFollowingIds(loginUserId)
                 : Set.of();
+        Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(
+                articleRecords.stream().map(Article::getId).collect(Collectors.toList()));
+        Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(
+                articleRecords.stream().map(Article::getId).collect(Collectors.toList()));
         List<ArticleListResponse> records = articleRecords.stream().map(article -> {
             UserInternalVO user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
             response.setFromFollowing(followingIds.contains(article.getUserId()));
+            response.setImageCount(imageCounts.getOrDefault(article.getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(article.getId()));
             return response;
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
     }
 
-    /** 首页全站流以新帖为主体，随机插入少量高互动帖子，避免每次只按时间倒序展示。 */
+    // 首页全站流以新帖为主体，随机插入少量高互动帖子，避免每次只按时间倒序展示
     private List<Article> mixHomeFeedArticles(List<Article> newestArticles, int pageSize,
             List<Long> notInterestedArticleIds) {
         if (newestArticles == null || newestArticles.isEmpty()) {
@@ -272,9 +281,9 @@ public class BoardServiceImpl implements BoardService {
                 .toList();
     }
 
-    // ============================================================
+    
     // 帖子计数维护
-    // ============================================================
+    
     @Override
     public void addOneById(Long boardId) {
         requireBoardEntity(boardId);
@@ -297,7 +306,7 @@ public class BoardServiceImpl implements BoardService {
         invalidateBoardListCache();
     }
 
-    /** 文章数变更后必须把升降序两份板块列表缓存一起清掉 */
+    // 文章数变更后必须把升降序两份板块列表缓存一起清掉
     private void invalidateBoardListCache() {
         stringRedisTemplate.delete(Arrays.asList(Constant.REDIS_KEY_BOARD_LIST + 0, Constant.REDIS_KEY_BOARD_LIST + 1));
     }

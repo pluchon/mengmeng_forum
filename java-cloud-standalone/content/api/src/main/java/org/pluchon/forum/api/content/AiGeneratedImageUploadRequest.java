@@ -1,6 +1,11 @@
 package org.pluchon.forum.api.content;
 
+import lombok.Getter;
+import lombok.Setter;
+
 // AI 生图转存 OSS 的内部请求
+@Setter
+@Getter
 public class AiGeneratedImageUploadRequest {
 
     private Long userId;
@@ -18,35 +23,4 @@ public class AiGeneratedImageUploadRequest {
         this.baseName = baseName;
     }
 
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    public String getSourceUrl() {
-        return sourceUrl;
-    }
-
-    public void setSourceUrl(String sourceUrl) {
-        this.sourceUrl = sourceUrl;
-    }
-
-    public String getOssPath() {
-        return ossPath;
-    }
-
-    public void setOssPath(String ossPath) {
-        this.ossPath = ossPath;
-    }
-
-    public String getBaseName() {
-        return baseName;
-    }
-
-    public void setBaseName(String baseName) {
-        this.baseName = baseName;
-    }
 }

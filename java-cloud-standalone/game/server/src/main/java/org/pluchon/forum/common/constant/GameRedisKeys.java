@@ -36,6 +36,14 @@ public class GameRedisKeys {
         return PREFIX + gameCode + ":match:user:";
     }
 
+    public static String matchOccupancy(Long userId) {
+        return PREFIX + "match:occupancy:user:" + userId;
+    }
+
+    public static String matchOccupancyPrefix() {
+        return PREFIX + "match:occupancy:user:";
+    }
+
     public static String matchQueuePattern(String gameCode) {
         return PREFIX + gameCode + ":match:*";
     }

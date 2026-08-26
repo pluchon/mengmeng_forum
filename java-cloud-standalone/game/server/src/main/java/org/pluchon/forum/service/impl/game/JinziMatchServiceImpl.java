@@ -7,7 +7,7 @@ import org.pluchon.forum.common.websocket.game.GameWsResponse;
 import org.pluchon.forum.entity.bo.game.GameMatchBucket;
 import org.pluchon.forum.entity.bo.game.GameMatchPair;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.game.GameMatchSuccessVO;
 import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameMatchQueueService;
@@ -66,14 +66,6 @@ public class JinziMatchServiceImpl implements JinziMatchService {
             sendToSession(session, GameWsResponse.fail("match_failed", requestId, "用户不存在，无法开始匹配"));
             return;
         }
-        if (points < GameConstants.JINZI_SCORE_DELTA) {
-            sendToSession(session, GameWsResponse.fail(
-                    "match_failed",
-                    requestId,
-                    "论坛积分不足，至少需要 " + GameConstants.JINZI_SCORE_DELTA + " 积分才能开始匹配"
-            ));
-            return;
-        }
         if (GameConstants.PROFILE_PLAYING.equals(profile.getCurrentStatus())) {
             sendToSession(session, GameWsResponse.fail("match_failed", requestId, "你已经在对局中"));
             return;
@@ -89,6 +81,19 @@ public class JinziMatchServiceImpl implements JinziMatchService {
         }
         boolean enqueued = gameMatchQueueService.enqueue(GameConstants.JINZI, userId, bucketOf(points));
         if (!enqueued) {
+            String matchingGameCode = gameMatchQueueService.matchingGameCode(userId);
+            if (matchingGameCode != null && !GameConstants.JINZI.equals(matchingGameCode)) {
+                sendToSession(session, GameWsResponse.fail(
+                        "match_failed",
+                        requestId,
+                        "一次只能匹配一个游戏"
+                ));
+                return;
+            }
+            if (gameMatchQueueService.contains(GameConstants.JINZI, userId)) {
+                sendToSession(session, GameWsResponse.ok("match_started", requestId, null));
+                return;
+            }
             sendToSession(session, GameWsResponse.fail("match_failed", requestId, "匹配服务暂时不可用，请稍后再试"));
             return;
         }

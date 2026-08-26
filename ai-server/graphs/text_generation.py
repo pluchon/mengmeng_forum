@@ -12,7 +12,7 @@ def run_text_generation(kind: str, messages: list[dict[str, Any]]) -> tuple[str,
     normalized_kind = kind.strip().lower()
     dash = settings.dashscope
     if normalized_kind == "qwen_flash":
-        model = dash.get("model_text_flash") or dash.get("model_text") or "qwen3.6-flash"
+        model = dash.get("model_text_flash") or dash.get("model_text") or "qwen3.7-flash"
     elif normalized_kind == "qwen_pro":
         model = dash.get("model_text_deep") or "qwen3.7-max"
     else:

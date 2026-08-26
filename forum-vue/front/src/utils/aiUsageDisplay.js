@@ -1,8 +1,4 @@
-/**
- * 将后端 usageStats 格式化为普通用户可读的单行说明（厂商 token + 耗时）。
- * @param {Record<string, unknown>|null|undefined} stats
- * @returns {string}
- */
+// 将后端 usageStats 格式化为普通用户可读的单行说明 厂商 token + 耗时
 export function formatAiUsageLine(stats) {
   if (!stats || typeof stats !== 'object') return ''
   const parts = []
@@ -27,10 +23,6 @@ export function formatAiUsageLine(stats) {
   return parts.join(' · ')
 }
 
-/**
- * @param {Record<string, unknown>|null|undefined} metaOrData
- * @returns {Record<string, unknown>|null}
- */
 export function usageStatsFromApi(metaOrData) {
   if (!metaOrData) return null
   const s = metaOrData.usageStats

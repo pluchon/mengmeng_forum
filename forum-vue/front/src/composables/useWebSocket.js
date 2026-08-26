@@ -1,8 +1,7 @@
 import { useUserStore } from '../stores/user'
 import { useMessageStore } from '../stores/message'
-import { useGroupVoiceStore } from '@/stores/groupVoice'
 
-/** 全局单例，避免 MainLayout / Header 等多处 useWebSocket() 各自 new 一份连接或互相 close 掉 CONNECTING */
+// 全局单例，避免 MainLayout / Header 等多处 useWebSocket 各自 new 一份连接或互相 close 掉 CONNECTING
 let sharedSocket = null
 let sharedToken = ''
 let heartbeatInterval = null
@@ -54,9 +53,7 @@ function attachHandlers(socket) {
     try {
       const notifyData = JSON.parse(event.data)
       handleNotifyMessage(notifyData)
-    } catch (e) {
-      console.error('[WebSocket] 解析消息失败: ', event.data)
-    }
+    } catch {}
   }
 
   socket.onclose = () => {
@@ -68,9 +65,6 @@ function attachHandlers(socket) {
     scheduleReconnect()
   }
 
-  socket.onerror = (error) => {
-    console.error('[WebSocket] 发生错误: ', error)
-  }
 }
 
 function handleNotifyMessage(notifyData) {
@@ -100,29 +94,15 @@ function handleNotifyMessage(notifyData) {
     messageStore.onSystemMessage(notifyData)
     return
   }
-  if (notifyData.type === 'group_message') {
+  if (['private_message_recalled', 'private_message_audit_failed'].includes(notifyData.type)) {
+    const messageStore = useMessageStore()
+    messageStore.onPrivateMessageMutation(notifyData)
+    return
+  }
+  if (['group_message', 'group_message_recalled', 'group_message_deleted', 'group_message_audit_failed', 'private_message_deleted'].includes(notifyData.type)) {
     const messageStore = useMessageStore()
     messageStore.onGroupMessage(notifyData)
     return
-  }
-  if (notifyData.type === 'group_voice_status') {
-    const groupVoiceStore = useGroupVoiceStore()
-    groupVoiceStore.onVoiceStatus(notifyData)
-    return
-  }
-  if (notifyData.type === 'group_voice_signal') {
-    const groupVoiceStore = useGroupVoiceStore()
-    groupVoiceStore.onVoiceSignal(notifyData)
-    return
-  }
-  if (notifyData.type === 'private_voice_status') {
-    const groupVoiceStore = useGroupVoiceStore()
-    groupVoiceStore.onVoiceStatus(notifyData)
-    return
-  }
-  if (notifyData.type === 'private_voice_signal') {
-    const groupVoiceStore = useGroupVoiceStore()
-    groupVoiceStore.onVoiceSignal(notifyData)
   }
 }
 
@@ -133,7 +113,7 @@ function flushPendingMessages() {
   }
 }
 
-/** 与后端 WebSocketConfigure 注册路径 /ws/notify 一致 */
+// 与后端 WebSocketConfigure 注册路径 /ws/notify 一致
 function buildNotifyWsUrl(token) {
   const envBase = (import.meta.env.VITE_WS_BASE_URL || '').trim().replace(/\/+$/, '')
   if (envBase) {

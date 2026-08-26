@@ -16,12 +16,16 @@ public class GroupChatJoinRequestVO {
     private UserBriefVO targetUser;
     // 发起人
     private UserBriefVO initiatorUser;
+    // 群主
+    private UserBriefVO ownerUser;
     // 请求类型
     private Byte requestType;
     // 请求状态
     private Byte status;
     // 群主查看状态
     private Byte ownerReadState;
+    // 申请人查看处理结果状态
+    private Byte applicantReadState;
     // 目标用户是否已入群
     private Boolean targetJoined;
     // 创建时间

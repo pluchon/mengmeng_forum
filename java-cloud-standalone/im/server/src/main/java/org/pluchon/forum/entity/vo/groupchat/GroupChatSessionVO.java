@@ -17,6 +17,8 @@ public class GroupChatSessionVO {
     private String remarkName;
     // 我的提醒模式
     private Byte notifyMode;
+    // 我的群角色
+    private Byte myRole;
     // 群头像 URL
     private String avatarUrl;
     // 群简介
@@ -37,4 +39,6 @@ public class GroupChatSessionVO {
     private Date lastMessageTime;
     // 未读消息数
     private Long unreadCount;
+    // 群创建时间
+    private Date createTime;
 }

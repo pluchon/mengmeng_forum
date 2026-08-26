@@ -8,13 +8,14 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
       </profile>
-      <profile name="Annotation profile for im" enabled="true">
+      <profile name="Annotation profile for java-cloud-standalone" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
+        <module name="im-server" />
         <module name="game-api" />
         <module name="auth-server" />
         <module name="economy-server" />
@@ -31,6 +32,9 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="imagebed" target="1.8" />
+      <module name="imagebed-api" target="17" />
+      <module name="imagebed-server" target="17" />
       <module name="platform" target="17" />
     </bytecodeTargetLevel>
   </component>
@@ -56,6 +60,9 @@
       <module name="im" options="-parameters" />
       <module name="im-api" options="-parameters" />
       <module name="im-server" options="-parameters" />
+      <module name="imagebed" options="-parameters" />
+      <module name="imagebed-api" options="-parameters" />
+      <module name="imagebed-server" options="-parameters" />
       <module name="java-cloud-standalone" options="-parameters" />
       <module name="platform" options="-parameters" />
     </option>

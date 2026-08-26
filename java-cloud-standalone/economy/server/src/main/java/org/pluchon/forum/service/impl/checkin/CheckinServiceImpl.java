@@ -7,29 +7,40 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
-import org.pluchon.forum.common.enums.GrowthExperienceSourceType;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.CursorUtils;
 import org.pluchon.forum.common.utils.PageUtils;
+import org.pluchon.forum.entity.db.CheckinGrantLog;
 import org.pluchon.forum.entity.db.CheckinLog;
 import org.pluchon.forum.entity.db.CheckinRule;
 import org.pluchon.forum.entity.db.CheckinStreakReward;
+import org.pluchon.forum.entity.db.CheckinSurprisePool;
 import org.pluchon.forum.entity.db.UserCheckinInfo;
+import org.pluchon.forum.entity.vo.checkin.CheckinMonthDayVO;
+import org.pluchon.forum.entity.vo.checkin.CheckinMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinResultResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinRuleDayResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinStatusResponse;
+import org.pluchon.forum.entity.vo.checkin.CheckinLogVO;
+import org.pluchon.forum.entity.vo.checkin.CheckinStreakRewardItemVO;
+import org.pluchon.forum.entity.vo.checkin.CheckinWeekStatVO;
 import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
+import org.pluchon.forum.mapper.CheckinGrantLogMapper;
 import org.pluchon.forum.mapper.CheckinLogMapper;
 import org.pluchon.forum.mapper.CheckinRuleMapper;
 import org.pluchon.forum.mapper.CheckinStreakRewardMapper;
+import org.pluchon.forum.mapper.CheckinSurprisePoolMapper;
 import org.pluchon.forum.mapper.UserCheckinInfoMapper;
+import org.pluchon.forum.service.impl.starlight.StarlightServiceImpl;
 import org.pluchon.forum.service.interfaces.checkin.CheckinService;
-import org.pluchon.forum.service.interfaces.growth.GrowthExperienceService;
+import org.pluchon.forum.service.interfaces.lottery.LotteryVoucherService;
 import org.pluchon.forum.service.interfaces.points.PointsService;
+import org.pluchon.forum.service.interfaces.starlight.StarlightService;
+import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -39,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -46,25 +58,29 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-/**
- * 签到模块实现.
- * 静态规则 (checkin_rule / checkin_streak_reward) 启动时加载到内存, 不入 Redis.
- */
+// 签到模块实现：日常签到 / 补签 / 连签混合奖 / 惊喜奖
 @Service
 @Slf4j
 public class CheckinServiceImpl implements CheckinService {
 
-    private static final int CHECKIN_GROWTH_EXPERIENCE = 5;
-
-    //明确时区
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-
-    /** 兜底默认月份 (checkin_rule.month=0) */
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Taipei");
     private static final int DEFAULT_RULE_MONTH = 0;
+    private static final int MAKEUP_LOOKBACK_DAYS = 30;
+
+    private static final String GRANT_STREAK = "STREAK";
+    private static final String GRANT_SURPRISE = "SURPRISE";
+    private static final String REWARD_POINTS = "POINTS";
+    private static final String REWARD_STARLIGHT = "STARLIGHT";
+    private static final String REWARD_MAKEUP_CARD = "MAKEUP_CARD";
+    private static final String REWARD_VIP_DAYS = "VIP_DAYS";
+    private static final String REWARD_LOTTERY_VOUCHER = "LOTTERY_VOUCHER";
 
     @Autowired
     private CheckinRuleMapper checkinRuleMapper;
@@ -79,6 +95,12 @@ public class CheckinServiceImpl implements CheckinService {
     private UserCheckinInfoMapper userCheckinInfoMapper;
 
     @Autowired
+    private CheckinGrantLogMapper checkinGrantLogMapper;
+
+    @Autowired
+    private CheckinSurprisePoolMapper checkinSurprisePoolMapper;
+
+    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
@@ -88,36 +110,47 @@ public class CheckinServiceImpl implements CheckinService {
     private PointsService pointsService;
 
     @Autowired
-    private GrowthExperienceService growthExperienceService;
+    private StarlightService starlightService;
 
-    /** 月份 -> (日 -> 积分). key=0 表示通用兜底规则; 服务启动时一次性装入, 供 doCheckin 热路径零延迟查 */
-    private volatile Map<Integer, Map<Integer, Integer>> ruleCache = Collections.emptyMap();
+    @Autowired
+    private VipSubscribeService vipSubscribeService;
 
-    /** 连续签到奖励, 按 streakDays 升序; 精确匹配; 同上, 仅 service 内部使用 */
+    @Autowired
+    private LotteryVoucherService lotteryVoucherService;
+
+    // 月份 > 日 > 日规则
+    private volatile Map<Integer, Map<Integer, DayRule>> ruleCache = Collections.emptyMap();
+
     private volatile List<CheckinStreakReward> rewardCache = Collections.emptyList();
 
-    /** 静态规则是否已成功加载; 启动时 DB 不可用则延迟到首次业务调用再试 */
+    private volatile List<CheckinSurprisePool> surprisePoolCache = Collections.emptyList();
+
     private volatile boolean cacheInitialized = false;
+
+    private record DayRule(int points, boolean surprise) {
+    }
+
+    private record SurpriseRoll(String type, int value, String label) {
+    }
 
     @PostConstruct
     public void initCache() {
         try {
             refreshCacheInternal();
             cacheInitialized = true;
-            log.info("签到规则缓存加载完成: {} 个月份规则, {} 个连签奖励档", ruleCache.size(), rewardCache.size());
+            log.info("签到规则缓存加载完成: {} 个月份规则, {} 个连签奖励档, {} 个惊喜奖池项",
+                    ruleCache.size(), rewardCache.size(), surprisePoolCache.size());
         } catch (Exception e) {
-            log.warn("启动时加载签到规则缓存失败, 将在首次签到相关请求时重试. "
-                            + "请确认 MySQL(127.0.0.1:33306/forum_economy_db) 已启动且 checkin_rule、checkin_streak_reward 表已初始化. 原因: {}",
-                    e.getMessage());
+            log.warn("启动时加载签到规则缓存失败, 将在首次签到相关请求时重试. 原因: {}", e.getMessage());
         }
     }
 
     private void ensureCacheLoaded() {
-        if (cacheInitialized) {
+        if (cacheInitialized && !ruleCache.isEmpty()) {
             return;
         }
         synchronized (this) {
-            if (cacheInitialized) {
+            if (cacheInitialized && !ruleCache.isEmpty()) {
                 return;
             }
             refreshCacheInternal();
@@ -129,22 +162,35 @@ public class CheckinServiceImpl implements CheckinService {
     private void refreshCacheInternal() {
         reloadRuleCache();
         reloadRewardCache();
+        reloadSurprisePoolCache();
     }
 
     private void reloadRuleCache() {
-        List<CheckinRule> rules = checkinRuleMapper.selectList(new LambdaQueryWrapper<CheckinRule>().ne(CheckinRule::getDeleteState, 1));
-        Map<Integer, Map<Integer, Integer>> grouped = new HashMap<>();
+        List<CheckinRule> rules = checkinRuleMapper.selectList(
+                new LambdaQueryWrapper<CheckinRule>().ne(CheckinRule::getDeleteState, 1));
+        Map<Integer, Map<Integer, DayRule>> grouped = new HashMap<>();
         for (CheckinRule r : rules) {
             int m = r.getMonth() == null ? DEFAULT_RULE_MONTH : r.getMonth().intValue();
             int d = r.getDayNumber() == null ? 0 : r.getDayNumber().intValue();
-            grouped.computeIfAbsent(m, k -> new HashMap<>()).put(d, r.getPoints());
+            int points = r.getPoints() == null ? 0 : r.getPoints();
+            boolean surprise = r.getIsSurprise() != null && r.getIsSurprise() == 1;
+            grouped.computeIfAbsent(m, k -> new HashMap<>()).put(d, new DayRule(points, surprise));
         }
         this.ruleCache = grouped;
     }
 
     private void reloadRewardCache() {
-        this.rewardCache = checkinStreakRewardMapper.selectList(new LambdaQueryWrapper<CheckinStreakReward>()
-                .ne(CheckinStreakReward::getDeleteState, 1).orderByAsc(CheckinStreakReward::getStreakDays));
+        this.rewardCache = checkinStreakRewardMapper.selectList(
+                new LambdaQueryWrapper<CheckinStreakReward>()
+                        .ne(CheckinStreakReward::getDeleteState, 1)
+                        .orderByAsc(CheckinStreakReward::getStreakDays));
+    }
+
+    private void reloadSurprisePoolCache() {
+        this.surprisePoolCache = checkinSurprisePoolMapper.selectList(
+                new LambdaQueryWrapper<CheckinSurprisePool>()
+                        .ne(CheckinSurprisePool::getDeleteState, 1)
+                        .orderByAsc(CheckinSurprisePool::getSortOrder));
     }
 
     @Override
@@ -155,52 +201,109 @@ public class CheckinServiceImpl implements CheckinService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         LocalDate today = LocalDate.now(SHANGHAI);
-        Date todayDate = toDate(today);
-        int pointsToday = resolvePoints(today);
-        UserCheckinInfo info = userCheckinInfoMapper.selectOne(new LambdaQueryWrapper<UserCheckinInfo>()
-                .eq(UserCheckinInfo::getUserId, userId).ne(UserCheckinInfo::getDeleteState, 1));
-        int newStreak = computeNewStreak(info, today);
-        int bonusPoints = 0;
-        String bonusDescription = null;
-        CheckinStreakReward reward = findReward(newStreak);
-        if (reward != null) {
-            bonusPoints = reward.getBonusPoints() == null ? 0 : reward.getBonusPoints();
-            bonusDescription = reward.getDescription();
+        return performCheckin(userId, today, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CheckinResultResponse makeupCheckin(Long userId) {
+        ensureCacheLoaded();
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        // 写入流水
+        // 日期由服务端决定：离今天最近的漏签日，禁止客户端自选刷惊喜/连签档
+        LocalDate today = LocalDate.now(SHANGHAI);
+        LocalDate target = findNearestMissedDate(userId, today);
+        if (target == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_MAKEUP_DATE_INVALID));
+        }
+        if (!consumeMakeupCard(userId, 1)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_MAKEUP_CARD_NOT_ENOUGH));
+        }
+        return performCheckin(userId, target, true);
+    }
+
+    // 在近 30 天内，从昨天往前找第一个未签日
+    private LocalDate findNearestMissedDate(Long userId, LocalDate today) {
+        LocalDate earliest = today.minusDays(MAKEUP_LOOKBACK_DAYS);
+        List<CheckinLog> recent = checkinLogMapper.selectList(new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1)
+                .ge(CheckinLog::getCheckinDate, toDate(earliest))
+                .lt(CheckinLog::getCheckinDate, toDate(today)));
+        Set<LocalDate> signed = new HashSet<>();
+        for (CheckinLog row : recent) {
+            LocalDate d = toLocalDate(row.getCheckinDate());
+            if (d != null) {
+                signed.add(d);
+            }
+        }
+        for (LocalDate cursor = today.minusDays(1); !cursor.isBefore(earliest); cursor = cursor.minusDays(1)) {
+            if (!signed.contains(cursor)) {
+                return cursor;
+            }
+        }
+        return null;
+    }
+
+    private CheckinResultResponse performCheckin(Long userId, LocalDate checkinDay, boolean makeup) {
+        Date checkinDate = toDate(checkinDay);
+        int pointsToday = resolvePoints(checkinDay);
+        UserCheckinInfo info = loadUserInfo(userId);
+        int oldStreak = info == null || info.getStreakDays() == null ? 0 : info.getStreakDays();
+
         CheckinLog logRow = new CheckinLog();
         logRow.setUserId(userId);
-        logRow.setCheckinDate(todayDate);
+        logRow.setCheckinDate(checkinDate);
         logRow.setPoints(pointsToday);
-        logRow.setBonusPoints(bonusPoints);
-        logRow.setStreakDays(newStreak);
+        logRow.setBonusPoints(0);
+        logRow.setIsMakeup(makeup ? (byte) 1 : (byte) 0);
         try {
             checkinLogMapper.insert(logRow);
         } catch (DuplicateKeyException e) {
+            if (makeup) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_MAKEUP_ALREADY_SIGNED));
+            }
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_DUPLICATE));
         }
-        // 写入 / 更新汇总
-        int addPoints = pointsToday + bonusPoints;
-        UserCheckinInfo afterCheckin = upsertUserCheckinInfo(info, userId, newStreak, addPoints, todayDate);
-        // 入账积分钱包: 基础 + 连签奖励分两条流水, 来源不同, 便于前端 ECharts 分色展示
-        pointsService.addPoints(userId, pointsToday, Constant.POINTS_SOURCE_CHECKIN_BASIC,
-                logRow.getId(), "签到 +" + pointsToday, "checkin_basic:" + userId + ":" + today);
-        if (bonusPoints > 0) {
-            pointsService.addPoints(userId, bonusPoints, Constant.POINTS_SOURCE_CHECKIN_BONUS,
-                    logRow.getId(), "连续 " + newStreak + " 天奖励 +" + bonusPoints,
-                    "checkin_bonus:" + userId + ":" + today);
+
+        int newStreak = recalcStreakFromLogs(userId, LocalDate.now(SHANGHAI));
+        logRow.setStreakDays(newStreak);
+        checkinLogMapper.updateById(logRow);
+
+        String bonusDescription = grantCrossedStreakRewards(userId, oldStreak, newStreak, logRow.getId());
+        int bonusPointsSnapshot = 0;
+        CheckinStreakReward exact = findReward(newStreak);
+        if (exact != null && exact.getBonusPoints() != null) {
+            bonusPointsSnapshot = exact.getBonusPoints();
         }
-        growthExperienceService.grantExperience(
-                userId,
-                GrowthExperienceSourceType.CHECKIN,
-                logRow.getId(),
-                CHECKIN_GROWTH_EXPERIENCE,
-                "每日签到");
-        // 主动失效 status 缓存, 下一次 /info 调用会重新从 DB 拉取并回填
+        logRow.setBonusPoints(bonusPointsSnapshot);
+        checkinLogMapper.updateById(logRow);
+
+        // 补签不发惊喜奖：防止故意漏惊喜日再补签刷奖；连签档仍按重算后的 streak 幂等补发
+        SurpriseRoll surprise = null;
+        if (!makeup && isSurpriseDay(checkinDay)) {
+            surprise = tryGrantSurprise(userId, checkinDay, logRow.getId());
+            if (surprise != null) {
+                logRow.setSurpriseType(surprise.type());
+                logRow.setSurpriseValue(surprise.value());
+                logRow.setSurpriseLabel(surprise.label());
+                checkinLogMapper.updateById(logRow);
+            }
+        }
+
+        if (!makeup) {
+            pointsService.addPoints(userId, pointsToday, Constant.POINTS_SOURCE_CHECKIN_BASIC,
+                    logRow.getId(), "签到 +" + pointsToday, "checkin_basic:" + userId + ":" + checkinDay);
+        } else {
+            pointsService.addPoints(userId, pointsToday, Constant.POINTS_SOURCE_CHECKIN_BASIC,
+                    logRow.getId(), "补签 +" + pointsToday, "checkin_makeup:" + userId + ":" + checkinDay);
+        }
+
+        UserCheckinInfo after = upsertUserCheckinInfoAfterEvent(info, userId, newStreak, pointsToday + bonusPointsSnapshot);
         invalidateStatusCache(userId);
-        return new CheckinResultResponse(pointsToday, bonusPoints, bonusDescription, afterCheckin.getStreakDays(),
-                afterCheckin.getTotalDays(), afterCheckin.getTotalPoints(), afterCheckin.getLastCheckin()
-        );
+
+        return buildResultResponse(after, pointsToday, bonusPointsSnapshot, bonusDescription, surprise, checkinDay);
     }
 
     @Override
@@ -231,16 +334,15 @@ public class CheckinServiceImpl implements CheckinService {
         return response;
     }
 
-    /** 从 DB 直读并组装 CheckinStatusResponse, 不经过缓存 */
     private CheckinStatusResponse buildStatusFromDb(Long userId) {
-        UserCheckinInfo info = userCheckinInfoMapper.selectOne(new LambdaQueryWrapper<UserCheckinInfo>()
-                .eq(UserCheckinInfo::getUserId, userId).ne(UserCheckinInfo::getDeleteState, 1));
+        UserCheckinInfo info = loadUserInfo(userId);
         LocalDate today = LocalDate.now(SHANGHAI);
         int streakDays = 0;
         int totalDays = 0;
         int totalPoints = 0;
         Date lastCheckin = null;
         boolean todaySigned = false;
+        int makeupCardCount = 0;
         if (info != null) {
             streakDays = info.getStreakDays() == null ? 0 : info.getStreakDays();
             totalDays = info.getTotalDays() == null ? 0 : info.getTotalDays();
@@ -248,6 +350,7 @@ public class CheckinServiceImpl implements CheckinService {
             lastCheckin = info.getLastCheckin();
             LocalDate lastLocal = toLocalDate(lastCheckin);
             todaySigned = lastLocal != null && lastLocal.equals(today);
+            makeupCardCount = info.getMakeupCardCount() == null ? 0 : info.getMakeupCardCount();
         }
         Integer nextThreshold = null;
         Integer nextThresholdBonus = null;
@@ -260,53 +363,147 @@ public class CheckinServiceImpl implements CheckinService {
                 break;
             }
         }
-        return new CheckinStatusResponse(streakDays, totalDays, totalPoints, lastCheckin, todaySigned,
-                nextThreshold, nextThresholdBonus, nextThresholdLeft);
+        return new CheckinStatusResponse(
+                streakDays,
+                totalDays,
+                totalPoints,
+                lastCheckin,
+                todaySigned,
+                nextThreshold,
+                nextThresholdBonus,
+                nextThresholdLeft,
+                makeupCardCount,
+                buildStreakRewardItems(streakDays));
     }
 
     @Override
-    public PageResult<CheckinLog> getLogWithPage(Long userId, Integer pageNum, Integer pageSize) {
+    public CheckinMonthResponse getMonth(Long userId, Integer year, Integer month) {
+        ensureCacheLoaded();
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        LocalDate today = LocalDate.now(SHANGHAI);
+        int y = year == null ? today.getYear() : year;
+        int m = month == null ? today.getMonthValue() : month;
+        if (m < 1 || m > 12) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        YearMonth ym = YearMonth.of(y, m);
+        LocalDate start = ym.atDay(1);
+        LocalDate end = ym.atEndOfMonth();
+
+        List<CheckinLog> logs = checkinLogMapper.selectList(new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ge(CheckinLog::getCheckinDate, toDate(start))
+                .le(CheckinLog::getCheckinDate, toDate(end))
+                .ne(CheckinLog::getDeleteState, 1));
+        Map<LocalDate, CheckinLog> byDate = new HashMap<>();
+        for (CheckinLog row : logs) {
+            LocalDate d = toLocalDate(row.getCheckinDate());
+            if (d != null) {
+                byDate.put(d, row);
+            }
+        }
+
+        List<CheckinMonthDayVO> days = new ArrayList<>();
+        int[] weekBuckets = new int[6];
+        int signedCount = 0;
+        for (int day = 1; day <= ym.lengthOfMonth(); day++) {
+            LocalDate date = ym.atDay(day);
+            DayRule rule = resolveDayRule(date);
+            CheckinLog row = byDate.get(date);
+            boolean signed = row != null;
+            if (signed) {
+                signedCount++;
+                int weekIndex = ((day - 1) / 7);
+                weekBuckets[weekIndex]++;
+            }
+            days.add(new CheckinMonthDayVO(
+                    date.toString(),
+                    day,
+                    rule.points(),
+                    signed,
+                    row != null && row.getIsMakeup() != null && row.getIsMakeup() == 1,
+                    rule.surprise(),
+                    date.equals(today)));
+        }
+
+        List<CheckinWeekStatVO> weeklyStats = new ArrayList<>();
+        int weeks = (ym.lengthOfMonth() + 6) / 7;
+        for (int i = 0; i < weeks; i++) {
+            weeklyStats.add(new CheckinWeekStatVO(i + 1, weekBuckets[i]));
+        }
+        return new CheckinMonthResponse(y, m, signedCount, days, weeklyStats);
+    }
+
+    @Override
+    public PageResult<CheckinLogVO> getLogWithPage(Long userId, Integer pageNum, Integer pageSize) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        int validPageSize = Math.min(10, PageUtils.getValidPageSize(pageSize));
         Page<CheckinLog> page = new Page<>(validPageNum, validPageSize);
-        Page<CheckinLog> result = checkinLogMapper.selectPage(page, new LambdaQueryWrapper<CheckinLog>().eq(CheckinLog::getUserId, userId)
-                .ne(CheckinLog::getDeleteState, 1).orderByDesc(CheckinLog::getCheckinDate).orderByDesc(CheckinLog::getId));
-        return new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
+        Page<CheckinLog> result = checkinLogMapper.selectPage(page, new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1)
+                .orderByDesc(CheckinLog::getCheckinDate)
+                .orderByDesc(CheckinLog::getId));
+        List<CheckinLogVO> records = result.getRecords().stream().map(this::toCheckinLogVO).toList();
+        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
+                result.getPages(), result.hasNext());
+    }
+
+    private CheckinLogVO toCheckinLogVO(CheckinLog row) {
+        CheckinLogVO vo = new CheckinLogVO();
+        vo.setId(row.getId());
+        vo.setCreateTime(row.getCreateTime());
+        vo.setAttributionDate(row.getCheckinDate());
+        vo.setCheckinType(row.getIsMakeup() != null && row.getIsMakeup() == 1 ? "补签" : "正常签到");
+        vo.setPoints((row.getPoints() == null ? 0 : row.getPoints())
+                + (row.getBonusPoints() == null ? 0 : row.getBonusPoints()));
+        vo.setStreakDays(row.getStreakDays());
+        vo.setSurpriseLabel(row.getSurpriseLabel());
+        return vo;
     }
 
     @Override
     public CheckinRuleMonthResponse getRule(Integer month) {
-        int target = (month == null || month < 1 || month > 12) ? LocalDate.now(SHANGHAI).getMonthValue() : month;
+        ensureCacheLoaded();
+        int target = (month == null || month < 1 || month > 12)
+                ? LocalDate.now(SHANGHAI).getMonthValue()
+                : month;
         String cacheKey = Constant.REDIS_KEY_CHECKIN_RULE + target;
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
             try {
-                return objectMapper.readValue(cached, CheckinRuleMonthResponse.class);
+                CheckinRuleMonthResponse fromRedis = objectMapper.readValue(cached, CheckinRuleMonthResponse.class);
+                if (fromRedis != null && fromRedis.getDays() != null && !fromRedis.getDays().isEmpty()) {
+                    return fromRedis;
+                }
             } catch (Exception e) {
                 log.error("反序列化签到规则缓存失败, month: {}", target, e);
             }
         }
         CheckinRuleMonthResponse response = buildRuleFromMemory(target);
-        try {
-            stringRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(response),
-                    Constant.REDIS_TTL_CHECKIN_RULE, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            log.error("序列化签到规则写入缓存失败, month: {}", target, e);
+        if (response.getDays() != null && !response.getDays().isEmpty()) {
+            try {
+                stringRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(response),
+                        Constant.REDIS_TTL_CHECKIN_RULE, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.error("序列化签到规则写入缓存失败, month: {}", target, e);
+            }
         }
         return response;
     }
 
-    /** 基于内存的 ruleCache 拼装月度规则响应, 不经过 Redis */
     private CheckinRuleMonthResponse buildRuleFromMemory(int target) {
-        Map<Integer, Integer> monthRule = ruleCache.get(target);
+        Map<Integer, DayRule> monthRule = ruleCache.get(target);
         if (monthRule == null || monthRule.isEmpty()) {
             monthRule = ruleCache.getOrDefault(DEFAULT_RULE_MONTH, Collections.emptyMap());
         }
         List<CheckinRuleDayResponse> days = new ArrayList<>(monthRule.size());
-        monthRule.forEach((day, points) -> days.add(new CheckinRuleDayResponse(day, points)));
+        monthRule.forEach((day, rule) -> days.add(new CheckinRuleDayResponse(day, rule.points(), rule.surprise())));
         days.sort(Comparator.comparingInt(CheckinRuleDayResponse::getDayNumber));
         return new CheckinRuleMonthResponse(target, days);
     }
@@ -342,24 +539,240 @@ public class CheckinServiceImpl implements CheckinService {
         return new CursorPageResult<>(rows, nextCursor, hasNext, size);
     }
 
-    /** 根据上次签到日期推算签到后的连续天数 */
-    private int computeNewStreak(UserCheckinInfo info, LocalDate today) {
-        if (info == null) {
-            return 1;
+    private String grantCrossedStreakRewards(Long userId, int oldStreak, int newStreak, Long logId) {
+        String lastDesc = null;
+        for (CheckinStreakReward reward : rewardCache) {
+            if (reward.getStreakDays() == null) {
+                continue;
+            }
+            int threshold = reward.getStreakDays();
+            if (oldStreak < threshold && threshold <= newStreak) {
+                if (tryBeginGrant(userId, GRANT_STREAK, "streak:" + userId + ":" + threshold,
+                        reward.getRewardType(), threshold, reward.getTitle(), logId)) {
+                    grantStreakBundle(userId, reward, logId);
+                    lastDesc = reward.getDescription() != null ? reward.getDescription() : reward.getTitle();
+                }
+            }
         }
-        LocalDate last = toLocalDate(info.getLastCheckin());
-        if (last == null) {
-            return 1;
-        }
-        if (last.equals(today)) {
-            // 防御性兜底, 正常情况下会被 checkin_log 唯一键先拦住
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_DUPLICATE));
-        }
-        int oldStreak = info.getStreakDays() == null ? 0 : info.getStreakDays();
-        return today.minusDays(1).equals(last) ? oldStreak + 1 : 1;
+        return lastDesc;
     }
 
-    /** 命中且仅命中 streakDays 精确等值的连签奖励 (不做循环) */
+    private void grantStreakBundle(Long userId, CheckinStreakReward reward, Long logId) {
+        int points = reward.getBonusPoints() == null ? 0 : reward.getBonusPoints();
+        int starlight = reward.getStarlightAmount() == null ? 0 : reward.getStarlightAmount();
+        int cards = reward.getMakeupCardAmount() == null ? 0 : reward.getMakeupCardAmount();
+        int vipDays = reward.getVipDays() == null ? 0 : reward.getVipDays();
+        if (points > 0) {
+            pointsService.addPoints(userId, points, Constant.POINTS_SOURCE_CHECKIN_BONUS,
+                    logId, "连签奖励 +" + points, "checkin_streak_pts:" + userId + ":" + reward.getStreakDays());
+        }
+        if (starlight > 0) {
+            starlightService.credit(userId, starlight, StarlightServiceImpl.SOURCE_CHECKIN, logId,
+                    "checkin_streak_sl:" + userId + ":" + reward.getStreakDays(),
+                    "连签萌星辉 +" + starlight);
+        }
+        if (cards > 0) {
+            addMakeupCards(userId, cards);
+        }
+        if (vipDays > 0) {
+            vipSubscribeService.grantTrialVipDays(userId, vipDays, "CHECKIN_STREAK",
+                    "CHECKIN_STREAK:" + userId + ":" + reward.getStreakDays());
+        }
+    }
+
+    private SurpriseRoll tryGrantSurprise(Long userId, LocalDate day, Long logId) {
+        String bizKey = "surprise:" + userId + ":" + day;
+        CheckinSurprisePool picked = pickSurprise();
+        if (picked == null) {
+            return null;
+        }
+        String type = picked.getRewardType();
+        int value = picked.getRewardValue() == null ? 0 : picked.getRewardValue();
+        String label = picked.getLabel();
+        if (!tryBeginGrant(userId, GRANT_SURPRISE, bizKey, type, value, label, logId)) {
+            return null;
+        }
+        grantTypedReward(userId, type, value, logId, "checkin_surprise:" + userId + ":" + day, "惊喜奖励 " + label);
+        return new SurpriseRoll(type, value, label);
+    }
+
+    private void grantTypedReward(Long userId, String type, int value, Long logId, String idempotencyKey, String remark) {
+        if (value <= 0 || type == null) {
+            return;
+        }
+        switch (type) {
+            case REWARD_POINTS -> pointsService.addPoints(userId, value, Constant.POINTS_SOURCE_CHECKIN_SURPRISE,
+                    logId, remark, idempotencyKey);
+            case REWARD_STARLIGHT -> starlightService.credit(userId, value, StarlightServiceImpl.SOURCE_CHECKIN,
+                    logId, idempotencyKey, remark);
+            case REWARD_MAKEUP_CARD -> addMakeupCards(userId, value);
+            case REWARD_VIP_DAYS -> vipSubscribeService.grantTrialVipDays(
+                    userId, value, "CHECKIN_SURPRISE", idempotencyKey);
+            case REWARD_LOTTERY_VOUCHER -> lotteryVoucherService.credit(
+                    userId, value, logId, idempotencyKey, remark, Constant.LOTTERY_VOUCHER_SOURCE_CHECKIN);
+            default -> log.warn("未知签到奖励类型: {}", type);
+        }
+    }
+
+    private CheckinSurprisePool pickSurprise() {
+        if (surprisePoolCache == null || surprisePoolCache.isEmpty()) {
+            return null;
+        }
+        int totalWeight = 0;
+        for (CheckinSurprisePool item : surprisePoolCache) {
+            totalWeight += Math.max(0, item.getWeight() == null ? 0 : item.getWeight());
+        }
+        if (totalWeight <= 0) {
+            return surprisePoolCache.get(0);
+        }
+        int roll = ThreadLocalRandom.current().nextInt(totalWeight);
+        int cursor = 0;
+        for (CheckinSurprisePool item : surprisePoolCache) {
+            cursor += Math.max(0, item.getWeight() == null ? 0 : item.getWeight());
+            if (roll < cursor) {
+                return item;
+            }
+        }
+        return surprisePoolCache.get(surprisePoolCache.size() - 1);
+    }
+
+    private boolean tryBeginGrant(Long userId, String kind, String bizKey, String rewardType,
+                                  Integer rewardValue, String rewardLabel, Long relatedId) {
+        CheckinGrantLog row = new CheckinGrantLog();
+        row.setUserId(userId);
+        row.setGrantKind(kind);
+        row.setBizKey(bizKey);
+        row.setRewardType(rewardType);
+        row.setRewardValue(rewardValue);
+        row.setRewardLabel(rewardLabel);
+        row.setRelatedId(relatedId);
+        try {
+            checkinGrantLogMapper.insert(row);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    private void addMakeupCards(Long userId, int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        UserCheckinInfo info = loadUserInfo(userId);
+        if (info == null) {
+            UserCheckinInfo created = new UserCheckinInfo();
+            created.setUserId(userId);
+            created.setTotalDays(0);
+            created.setStreakDays(0);
+            created.setTotalPoints(0);
+            created.setMakeupCardCount(amount);
+            try {
+                userCheckinInfoMapper.insert(created);
+                return;
+            } catch (DuplicateKeyException e) {
+                info = loadUserInfo(userId);
+            }
+        }
+        userCheckinInfoMapper.update(null, new LambdaUpdateWrapper<UserCheckinInfo>()
+                .eq(UserCheckinInfo::getUserId, userId)
+                .setSql("makeup_card_count = IFNULL(makeup_card_count, 0) + " + amount));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void grantMakeupCards(Long userId, int amount) {
+        if (userId == null || userId <= 0 || amount <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        addMakeupCards(userId, amount);
+    }
+
+    private boolean consumeMakeupCard(Long userId, int amount) {
+        UserCheckinInfo info = loadUserInfo(userId);
+        if (info == null) {
+            return false;
+        }
+        int current = info.getMakeupCardCount() == null ? 0 : info.getMakeupCardCount();
+        if (current < amount) {
+            return false;
+        }
+        int updated = userCheckinInfoMapper.update(null, new LambdaUpdateWrapper<UserCheckinInfo>()
+                .eq(UserCheckinInfo::getUserId, userId)
+                .ge(UserCheckinInfo::getMakeupCardCount, amount)
+                .setSql("makeup_card_count = makeup_card_count - " + amount));
+        return updated > 0;
+    }
+
+    private int recalcStreakFromLogs(Long userId, LocalDate today) {
+        List<CheckinLog> recent = checkinLogMapper.selectList(new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1)
+                .ge(CheckinLog::getCheckinDate, toDate(today.minusDays(400)))
+                .orderByDesc(CheckinLog::getCheckinDate));
+        Set<LocalDate> signed = new HashSet<>();
+        for (CheckinLog row : recent) {
+            LocalDate d = toLocalDate(row.getCheckinDate());
+            if (d != null) {
+                signed.add(d);
+            }
+        }
+        if (!signed.contains(today) && !signed.contains(today.minusDays(1))) {
+            // 今天和昨天都没签：连续为 0 补签过去某天且今天未签时，从今天往前会断
+            // 但仍要从「最近连续段」末端算：若昨天没签但补签了更早，streak 以今天为锚则为 0
+        }
+        int streak = 0;
+        LocalDate cursor = signed.contains(today) ? today : today.minusDays(1);
+        if (!signed.contains(cursor)) {
+            return 0;
+        }
+        while (signed.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
+    }
+
+    private List<CheckinStreakRewardItemVO> buildStreakRewardItems(int streakDays) {
+        List<CheckinStreakRewardItemVO> list = new ArrayList<>();
+        for (CheckinStreakReward r : rewardCache) {
+            int threshold = r.getStreakDays() == null ? 0 : r.getStreakDays();
+            boolean achieved = streakDays >= threshold;
+            list.add(new CheckinStreakRewardItemVO(
+                    threshold,
+                    r.getRewardType(),
+                    r.getTitle(),
+                    r.getSubtitle(),
+                    achieved,
+                    achieved ? 0 : threshold - streakDays));
+        }
+        return list;
+    }
+
+    private CheckinResultResponse buildResultResponse(UserCheckinInfo after, int pointsToday,
+                                                      int bonusPoints, String bonusDescription,
+                                                      SurpriseRoll surprise, LocalDate eventDay) {
+        int streak = after.getStreakDays() == null ? 0 : after.getStreakDays();
+        return new CheckinResultResponse(
+                pointsToday,
+                bonusPoints,
+                bonusDescription,
+                streak,
+                after.getTotalDays(),
+                after.getTotalPoints(),
+                toDate(eventDay),
+                after.getMakeupCardCount() == null ? 0 : after.getMakeupCardCount(),
+                surprise == null ? null : surprise.type(),
+                surprise == null ? null : surprise.value(),
+                surprise == null ? null : surprise.label(),
+                buildStreakRewardItems(streak));
+    }
+
+    private UserCheckinInfo loadUserInfo(Long userId) {
+        return userCheckinInfoMapper.selectOne(new LambdaQueryWrapper<UserCheckinInfo>()
+                .eq(UserCheckinInfo::getUserId, userId)
+                .ne(UserCheckinInfo::getDeleteState, 1));
+    }
+
     private CheckinStreakReward findReward(int streakDays) {
         for (CheckinStreakReward r : rewardCache) {
             if (r.getStreakDays() != null && r.getStreakDays() == streakDays) {
@@ -369,58 +782,81 @@ public class CheckinServiceImpl implements CheckinService {
         return null;
     }
 
-    /** 根据 today 命中规则缓存, 找不到具体月份则回退 month=0; 仍找不到给最低保底 10 分 */
-    private int resolvePoints(LocalDate today) {
-        int m = today.getMonthValue();
-        int d = today.getDayOfMonth();
-        Map<Integer, Integer> monthRule = ruleCache.get(m);
+    private boolean isSurpriseDay(LocalDate day) {
+        return resolveDayRule(day).surprise();
+    }
+
+    private int resolvePoints(LocalDate day) {
+        return resolveDayRule(day).points();
+    }
+
+    private DayRule resolveDayRule(LocalDate day) {
+        int m = day.getMonthValue();
+        int d = day.getDayOfMonth();
+        Map<Integer, DayRule> monthRule = ruleCache.get(m);
         if (monthRule != null && monthRule.containsKey(d)) {
             return monthRule.get(d);
         }
-        Map<Integer, Integer> defaultRule = ruleCache.get(DEFAULT_RULE_MONTH);
+        Map<Integer, DayRule> defaultRule = ruleCache.get(DEFAULT_RULE_MONTH);
         if (defaultRule != null && defaultRule.containsKey(d)) {
             return defaultRule.get(d);
         }
-        log.warn("checkin_rule 未命中 month={} day={}, 走最低保底积分", m, d);
-        return 10;
+        return new DayRule(10, false);
     }
 
-    /** 将签到事件落到 user_checkin_info: 不存在则 INSERT, 存在则 UPDATE */
-    private UserCheckinInfo upsertUserCheckinInfo(UserCheckinInfo existing, Long userId, int newStreak, int addPoints, Date todayDate) {
+    private UserCheckinInfo upsertUserCheckinInfoAfterEvent(UserCheckinInfo existing, Long userId,
+                                                            int newStreak, int addPoints) {
+        LocalDate today = LocalDate.now(SHANGHAI);
+        Date todayDate = toDate(today);
+        // last_checkin 取流水中最大日期
+        Page<CheckinLog> latestPage = new Page<>(1, 1, false);
+        List<CheckinLog> latestRows = checkinLogMapper.selectPage(latestPage, new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1)
+                .orderByDesc(CheckinLog::getCheckinDate)
+                .orderByDesc(CheckinLog::getId)).getRecords();
+        CheckinLog latest = latestRows.isEmpty() ? null : latestRows.get(0);
+        Date lastCheckin = latest == null ? todayDate : latest.getCheckinDate();
+        long totalDays = checkinLogMapper.selectCount(new LambdaQueryWrapper<CheckinLog>()
+                .eq(CheckinLog::getUserId, userId)
+                .ne(CheckinLog::getDeleteState, 1));
+
         if (existing == null) {
             UserCheckinInfo created = new UserCheckinInfo();
             created.setUserId(userId);
-            created.setTotalDays(1);
+            created.setTotalDays((int) totalDays);
             created.setStreakDays(newStreak);
-            created.setTotalPoints(addPoints);
-            created.setLastCheckin(todayDate);
+            created.setTotalPoints(Math.max(0, addPoints));
+            created.setLastCheckin(lastCheckin);
+            created.setMakeupCardCount(0);
             try {
                 userCheckinInfoMapper.insert(created);
                 return created;
             } catch (DuplicateKeyException e) {
-                // 极端并发首签场景: 另一并发请求刚刚 INSERT, 退化为 UPDATE
-                log.warn("user_checkin_info 并发首签 INSERT 冲突, 退化为 UPDATE: userId={}", userId);
-                UserCheckinInfo refreshed = userCheckinInfoMapper.selectOne(new LambdaQueryWrapper<UserCheckinInfo>()
-                        .eq(UserCheckinInfo::getUserId, userId).ne(UserCheckinInfo::getDeleteState, 1));
-                if (refreshed == null) {
+                existing = loadUserInfo(userId);
+                if (existing == null) {
                     throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
                 }
-                return updateExistingInfo(refreshed, newStreak, addPoints, todayDate);
             }
         }
-        return updateExistingInfo(existing, newStreak, addPoints, todayDate);
-    }
-
-    private UserCheckinInfo updateExistingInfo(UserCheckinInfo existing, int newStreak, int addPoints, Date todayDate) {
-        int newTotalDays = (existing.getTotalDays() == null ? 0 : existing.getTotalDays()) + 1;
-        int newTotalPoints = (existing.getTotalPoints() == null ? 0 : existing.getTotalPoints()) + addPoints;
-        userCheckinInfoMapper.update(null, new LambdaUpdateWrapper<UserCheckinInfo>().eq(UserCheckinInfo::getUserId, existing.getUserId())
-                .set(UserCheckinInfo::getTotalDays, newTotalDays).set(UserCheckinInfo::getStreakDays, newStreak)
-                .set(UserCheckinInfo::getTotalPoints, newTotalPoints).set(UserCheckinInfo::getLastCheckin, todayDate));
-        existing.setTotalDays(newTotalDays);
+        int newTotalPoints = (existing.getTotalPoints() == null ? 0 : existing.getTotalPoints()) + Math.max(0, addPoints);
+        int cards = existing.getMakeupCardCount() == null ? 0 : existing.getMakeupCardCount();
+        userCheckinInfoMapper.update(null, new LambdaUpdateWrapper<UserCheckinInfo>()
+                .eq(UserCheckinInfo::getUserId, userId)
+                .set(UserCheckinInfo::getTotalDays, (int) totalDays)
+                .set(UserCheckinInfo::getStreakDays, newStreak)
+                .set(UserCheckinInfo::getTotalPoints, newTotalPoints)
+                .set(UserCheckinInfo::getLastCheckin, lastCheckin));
+        existing.setTotalDays((int) totalDays);
         existing.setStreakDays(newStreak);
         existing.setTotalPoints(newTotalPoints);
-        existing.setLastCheckin(todayDate);
+        existing.setLastCheckin(lastCheckin);
+        existing.setMakeupCardCount(cards);
+        // 刷新补签卡 可能在发奖过程中已变
+        UserCheckinInfo refreshed = loadUserInfo(userId);
+        if (refreshed != null) {
+            existing.setMakeupCardCount(refreshed.getMakeupCardCount());
+        }
         return existing;
     }
 
@@ -432,11 +868,6 @@ public class CheckinServiceImpl implements CheckinService {
         return date == null ? null : date.toInstant().atZone(SHANGHAI).toLocalDate();
     }
 
-    /**
-     * 距离下一个 Asia/Shanghai 自然日 0 点的秒数. status 缓存 TTL 取
-     * {@code min(REDIS_TTL_CHECKIN_STATUS, secondsUntilNextMidnight())},
-     * 保证 todaySigned 字段不会跨天误命中.
-     */
     private static long secondsUntilNextMidnight() {
         ZonedDateTime now = ZonedDateTime.now(SHANGHAI);
         ZonedDateTime nextMidnight = now.toLocalDate().plusDays(1).atTime(LocalTime.MIDNIGHT).atZone(SHANGHAI);
@@ -446,6 +877,7 @@ public class CheckinServiceImpl implements CheckinService {
     private void invalidateStatusCache(Long userId) {
         try {
             stringRedisTemplate.delete(Constant.REDIS_KEY_CHECKIN_STATUS + userId);
+            // 规则缓存可能含惊喜标记，月切换时由 TTL 自然过期即可
         } catch (Exception e) {
             log.error("失效签到状态缓存失败, userId: {}", userId, e);
         }

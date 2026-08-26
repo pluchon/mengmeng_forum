@@ -41,7 +41,7 @@ public class IpRegionServiceImpl implements IpRegionService {
             try {
                 searcher.close();
             } catch (Exception ignored) {
-                // ignore
+                // 忽略
             }
         }
     }

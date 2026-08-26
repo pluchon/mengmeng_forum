@@ -13,8 +13,8 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.RequestIpUtils;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.entity.dto.RagArticleIndexDTO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
 import org.pluchon.forum.entity.vo.mq.ArticleAuditResultMqVO;
 import org.pluchon.forum.entity.vo.mq.ArticleAuditTaskMqVO;
@@ -23,13 +23,14 @@ import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitConte
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardChain;
 import org.pluchon.forum.service.impl.article.auditguard.ArticleAuditSubmitGuardResult;
 import org.pluchon.forum.cloud.feign.ContentWebSocketInternalFeignClient;
-import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
+import org.pluchon.forum.service.interfaces.article.ArticleSummaryService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
@@ -42,7 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Date;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +87,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private ArticleAuditService self;
 
     @Autowired
-    private ContentAiHubInternalFeignClient aiHubService;
+    private ContentAiGatewayService aiHubService;
 
     @Autowired
     private RecommendationAiProfileService recommendationAiProfileService;
@@ -109,6 +109,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
 
     @Autowired
     private ArticlePublishSideEffectService articlePublishSideEffectService;
+
+    @Autowired
+    private ArticleSummaryService articleSummaryService;
 
     private ArticleAuditSubmitGuardChain articleAuditSubmitGuardChain = ArticleAuditSubmitGuardChain.defaultChain();
 
@@ -167,7 +170,8 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 videoUrl,
                 System.currentTimeMillis()
         );
-        forumProducer.sendArticleAuditTask(task);
+        final ArticleAuditTaskMqVO auditTask = task;
+        TransactionHooks.afterCommit(() -> forumProducer.sendArticleAuditTask(auditTask));
         if (wasPublished) {
             final Long boardId = article.getBoardId();
             TransactionHooks.afterCommit(() ->
@@ -235,7 +239,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 stringRedisTemplate.opsForValue().set(dedupKey, "done",
                         Constant.REDIS_TTL_AUDIT_RESULT_DEDUP, TimeUnit.SECONDS);
             } catch (Exception ignored) {
-                // ignore
+                // 忽略
             }
         }
     }
@@ -268,13 +272,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         }
         articlePublishSideEffectService.promotePublishedExposure(articleId, userId, article.getBoardId());
         articleHotRankingService.addToHotRanking(articleId);
-        if (StringUtils.hasText(result.getSummary())) {
-            stringRedisTemplate.opsForValue().set(
-                    Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId,
-                    result.getSummary(),
-                    Constant.REDIS_TTL_ARTICLE_SUMMARY,
-                    TimeUnit.SECONDS);
-        }
         Article published = articleMapper.selectById(articleId);
         if (published != null) {
             UserInternalVO author = userService.getUserInfoById(userId);
@@ -285,12 +282,13 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             ragPayload.setMediaType(published.getMediaType() != null ? published.getMediaType().intValue() : 0);
             ragPayload.setVideoUrl(published.getVideoUrl());
             ragPayload.setCoverUrl(published.getCoverImg());
-            ragPayload.setSummary(result.getSummary());
+            ragPayload.setSummary("");
             ragPayload.setAuthorNickname(author != null ? author.getNickname() : "");
             ragPayload.setTagNames(articleTagService.tagNamesByArticleId(articleId));
             aiHubService.indexArticleRag(ragPayload);
             recommendationAiProfileService.generateArticleFeature(articleId);
             articleSearchIndexService.syncPublishedArticle(articleId);
+            articleSummaryService.scheduleInitialSummary(articleId);
         }
         notifyAuditResult(article, result,
                 Constant.SYSTEM_MSG_TYPE_AUDIT_PASS,

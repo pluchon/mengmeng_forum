@@ -2,8 +2,8 @@ package org.pluchon.forum.service.internal;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.api.auth.UserSearchPageInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.api.UserSearchPageInternalVO;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.common.utils.SearchKeywordHelper;
 import org.pluchon.forum.converter.UserInternalConverter;
@@ -31,7 +31,7 @@ public class UserInternalReadService {
         if (ids == null || ids.isEmpty()) {
             return Collections.emptyList();
         }
-        return userMapper.selectBatchIds(ids).stream()
+        return userMapper.selectByIds(ids).stream()
                 .map(UserInternalConverter::toInternalVO)
                 .collect(Collectors.toList());
     }
@@ -58,15 +58,15 @@ public class UserInternalReadService {
                     boolean first = true;
                     for (String term : terms) {
                         if (first) {
-                            wrapper.like(User::getUsername, term);
+                            wrapper.like(User::getNickname, term);
                             first = false;
                         } else {
-                            wrapper.or().like(User::getUsername, term);
+                            wrapper.or().like(User::getNickname, term);
                         }
-                        wrapper.or().like(User::getNickname, term);
                     }
                 })
-                .orderByDesc(User::getUpdateTime);
+                .orderByDesc(User::getUpdateTime)
+                .orderByDesc(User::getId);
         Page<User> pageResult = userMapper.selectPage(PageUtils.getPage(page, size), query);
         result.setRecords(pageResult.getRecords().stream()
                 .map(UserInternalConverter::toInternalVO)

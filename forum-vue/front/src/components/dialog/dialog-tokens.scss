@@ -1,0 +1,197 @@
+// 对齐 UI/dialog 三件套参考稿
+:root {
+  --app-dialog-ink: #3d2b3f;
+  --app-dialog-muted: #7a6b80;
+  --app-dialog-line: #f0e0ea;
+  --app-dialog-soft: #fff8fc;
+  --app-dialog-pink: #f07ba8;
+  --app-dialog-pink-soft: #fff0f7;
+  --app-dialog-danger: #ff4767;
+  --app-dialog-danger-soft: #fff0f3;
+  --app-dialog-success: #2fae7b;
+  --app-dialog-success-soft: #e6f6f0;
+  --app-dialog-shadow: 0 12px 32px 0 #3d2b3f22;
+  --app-dialog-radius: 20px;
+  --app-dialog-font: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+.app-dialog.el-dialog {
+  border-radius: var(--app-dialog-radius);
+  box-shadow: var(--app-dialog-shadow);
+  outline: 1px solid var(--app-dialog-line);
+  outline-offset: -0.5px;
+  overflow: hidden;
+  font-family: var(--app-dialog-font);
+
+  .el-dialog__header {
+    display: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .el-dialog__body {
+    padding: 0;
+  }
+}
+
+.app-dialog__shell {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 28px 28px 24px;
+  background: #fff;
+  color: var(--app-dialog-ink);
+}
+
+.app-dialog__shell--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.app-dialog__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.app-dialog__icon--success {
+  background: var(--app-dialog-success-soft);
+  color: var(--app-dialog-success);
+}
+
+.app-dialog__icon--danger {
+  background: var(--app-dialog-danger-soft);
+  color: var(--app-dialog-danger);
+}
+
+.app-dialog__icon--warn {
+  background: var(--app-dialog-danger-soft);
+  color: var(--app-dialog-danger);
+}
+
+.app-dialog__title {
+  margin: 0;
+  color: var(--app-dialog-ink);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.app-dialog__title--top {
+  font-size: 18px;
+  text-align: center;
+}
+
+.app-dialog__desc {
+  margin: 0;
+  width: 100%;
+  color: var(--app-dialog-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: center;
+}
+
+.app-dialog__desc--left {
+  text-align: left;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.app-dialog__actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding-top: 8px;
+  box-sizing: border-box;
+}
+
+.app-dialog__btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &:not(:disabled):active {
+    transform: scale(0.98);
+  }
+}
+
+.app-dialog__btn--ghost {
+  background: var(--app-dialog-soft);
+  outline: 1px solid var(--app-dialog-line);
+  outline-offset: -0.5px;
+  color: var(--app-dialog-muted);
+}
+
+.app-dialog__btn--primary {
+  background: var(--app-dialog-pink);
+  color: #fff;
+}
+
+.app-dialog__btn--danger {
+  background: var(--app-dialog-danger);
+  color: #fff;
+}
+
+.app-dialog__chip-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.app-dialog__chip-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.app-dialog__chip {
+  flex: 1 1 0;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--app-dialog-soft);
+  outline: 1px solid var(--app-dialog-line);
+  outline-offset: -0.5px;
+  color: var(--app-dialog-ink);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+
+  &.is-active {
+    background: var(--app-dialog-pink-soft);
+    outline: 1.5px solid var(--app-dialog-pink);
+    outline-offset: -0.75px;
+    color: #ef78a9;
+    font-weight: 600;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}

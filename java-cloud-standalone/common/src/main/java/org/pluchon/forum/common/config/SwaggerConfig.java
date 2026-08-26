@@ -6,7 +6,7 @@ import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-//API调试界面的工具
+// API调试界面的工具
 @Configuration
 public class SwaggerConfig {
 

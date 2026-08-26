@@ -10,131 +10,125 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.ArticleQuestionConverter;
 import org.pluchon.forum.entity.db.Article;
+import org.pluchon.forum.entity.db.ArticleQuestionAccept;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleReplyLike;
 import org.pluchon.forum.entity.db.ArticleSubReply;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO;
 import org.pluchon.forum.entity.vo.article.QuestionAnswerVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleMapper;
+import org.pluchon.forum.mapper.ArticleQuestionAcceptMapper;
 import org.pluchon.forum.mapper.ArticleReplyLikeMapper;
 import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.mapper.ArticleSubReplyMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
-import org.pluchon.forum.cloud.feign.ContentGrowthInternalFeignClient;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-// 问答帖状态与最佳答案业务实现
+// 问答帖状态与采纳业务：采纳可多条且不联动已解决；关闭问题已移除
 @Service
 public class ArticleQuestionServiceImpl implements ArticleQuestionService {
 
-    // 正常业务状态编码
     private static final byte NORMAL_STATE = 0;
+    private static final int DELETE_FALSE = 0;
+    private static final int DELETE_TRUE = 1;
 
-    // 帖子数据访问
     @Autowired
     private ArticleMapper articleMapper;
 
-    // 一级回答数据访问
     @Autowired
     private ArticleReplyMapper articleReplyMapper;
 
-    // 楼中楼数据访问
     @Autowired
     private ArticleSubReplyMapper articleSubReplyMapper;
 
-    // 一级回答点赞数据访问
     @Autowired
     private ArticleReplyLikeMapper articleReplyLikeMapper;
 
-    // 一级回答媒体业务
+    @Autowired
+    private ArticleQuestionAcceptMapper articleQuestionAcceptMapper;
+
     @Autowired
     private ArticleReplyMediaService articleReplyMediaService;
 
-    // 用户信息业务
     @Autowired
     private ContentUserLookupService userService;
 
-    // 用户成长权限业务
-    @Autowired
-    private ContentGrowthInternalFeignClient contentGrowthInternalFeignClient;
-
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void acceptAnswer(Long articleId, Long replyId, Long loginUserId) {
+    public void acceptAnswer(Long articleId, Long replyId, Long subReplyId, Long loginUserId) {
         validatePositiveId(articleId);
-        validatePositiveId(replyId);
-        contentGrowthInternalFeignClient.requireFormalUser(loginUserId);
+        boolean hasReply = replyId != null && replyId > 0;
+        boolean hasSub = subReplyId != null && subReplyId > 0;
+        if (hasReply == hasSub) {
+            throw failed(ResultCode.FAILED_PARAMS_VALIDATE);
+        }
         Article article = requireQuestion(articleId);
         requireQuestionOwner(article, loginUserId);
         requirePublished(article);
 
-        if (Objects.equals(article.getQuestionStatus(), QuestionStatus.RESOLVED.getCode())) {
-            if (Objects.equals(article.getAcceptedReplyId(), replyId)) {
+        if (hasReply) {
+            requireValidAnswer(articleId, replyId);
+            if (isReplyAccepted(articleId, replyId)) {
                 return;
             }
-            throw failed(ResultCode.FAILED_QUESTION_STATUS_INVALID);
+            ArticleQuestionAccept row = new ArticleQuestionAccept();
+            row.setArticleId(articleId);
+            row.setReplyId(replyId);
+            row.setDeleteState(DELETE_FALSE);
+            articleQuestionAcceptMapper.insert(row);
+            // 兼容旧字段：记录最近一次一级采纳
+            articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+                    .eq(Article::getId, articleId)
+                    .set(Article::getAcceptedReplyId, replyId));
+            return;
         }
-        if (!Objects.equals(article.getQuestionStatus(), QuestionStatus.WAITING.getCode())) {
-            throw failed(ResultCode.FAILED_QUESTION_STATUS_INVALID);
-        }
-        requireValidAnswer(articleId, replyId);
 
-        int updated = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
-                .eq(Article::getId, articleId)
-                .eq(Article::getUserId, loginUserId)
-                .eq(Article::getArticleType, ArticleType.QUESTION.getCode())
-                .eq(Article::getQuestionStatus, QuestionStatus.WAITING.getCode())
-                .isNull(Article::getAcceptedReplyId)
-                .eq(Article::getDeleteState, NORMAL_STATE)
-                .eq(Article::getState, NORMAL_STATE)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .set(Article::getAcceptedReplyId, replyId)
-                .set(Article::getQuestionStatus, QuestionStatus.RESOLVED.getCode()));
-        if (updated > 0) {
+        requireValidSubAnswer(articleId, subReplyId);
+        if (isSubReplyAccepted(articleId, subReplyId)) {
             return;
         }
-        Article latest = articleMapper.selectById(articleId);
-        if (latest != null
-                && Objects.equals(latest.getAcceptedReplyId(), replyId)
-                && Objects.equals(latest.getQuestionStatus(), QuestionStatus.RESOLVED.getCode())) {
-            return;
-        }
-        throw failed(ResultCode.FAILED_QUESTION_ACCEPT_CONFLICT);
+        ArticleQuestionAccept row = new ArticleQuestionAccept();
+        row.setArticleId(articleId);
+        row.setSubReplyId(subReplyId);
+        row.setDeleteState(DELETE_FALSE);
+        articleQuestionAcceptMapper.insert(row);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void closeQuestion(Long articleId, Long loginUserId) {
+    public void setResolved(Long articleId, boolean resolved, Long loginUserId) {
         validatePositiveId(articleId);
-        contentGrowthInternalFeignClient.requireFormalUser(loginUserId);
         Article article = requireQuestion(articleId);
         requireQuestionOwner(article, loginUserId);
         requirePublished(article);
-        if (Objects.equals(article.getQuestionStatus(), QuestionStatus.CLOSED.getCode())) {
+
+        byte target = resolved
+                ? QuestionStatus.RESOLVED.getCode()
+                : QuestionStatus.WAITING.getCode();
+        if (Objects.equals(article.getQuestionStatus(), target)) {
             return;
-        }
-        if (!Objects.equals(article.getQuestionStatus(), QuestionStatus.WAITING.getCode())) {
-            throw failed(ResultCode.FAILED_QUESTION_STATUS_INVALID);
         }
         int updated = articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .eq(Article::getUserId, loginUserId)
                 .eq(Article::getArticleType, ArticleType.QUESTION.getCode())
-                .eq(Article::getQuestionStatus, QuestionStatus.WAITING.getCode())
-                .isNull(Article::getAcceptedReplyId)
                 .eq(Article::getDeleteState, NORMAL_STATE)
                 .eq(Article::getState, NORMAL_STATE)
                 .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .set(Article::getQuestionStatus, QuestionStatus.CLOSED.getCode()));
+                .set(Article::getQuestionStatus, target));
         if (updated <= 0) {
             throw failed(ResultCode.FAILED_QUESTION_ACCEPT_CONFLICT);
         }
@@ -147,12 +141,20 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
         if (!ArticleStatus.isPublished(article.getStatus()) && !Objects.equals(article.getUserId(), loginUserId)) {
             throw failed(ResultCode.FAILED_NOT_EXISTS);
         }
-        if (!Objects.equals(article.getQuestionStatus(), QuestionStatus.RESOLVED.getCode())
-                || article.getAcceptedReplyId() == null) {
+        Long replyId = article.getAcceptedReplyId();
+        if (replyId == null) {
+            List<ArticleQuestionAccept> accepts = listActiveAccepts(articleId);
+            replyId = accepts.stream()
+                    .map(ArticleQuestionAccept::getReplyId)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (replyId == null) {
             return null;
         }
         ArticleReply reply = articleReplyMapper.selectOne(new LambdaQueryWrapper<ArticleReply>()
-                .eq(ArticleReply::getId, article.getAcceptedReplyId())
+                .eq(ArticleReply::getId, replyId)
                 .eq(ArticleReply::getArticleId, articleId)
                 .eq(ArticleReply::getDeleteState, NORMAL_STATE)
                 .eq(ArticleReply::getState, NORMAL_STATE));
@@ -177,19 +179,79 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
     }
 
     @Override
+    public Set<Long> listAcceptedReplyIds(Long articleId) {
+        if (articleId == null || articleId <= 0) {
+            return Collections.emptySet();
+        }
+        return listActiveAccepts(articleId).stream()
+                .map(ArticleQuestionAccept::getReplyId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    @Override
+    public Set<Long> listAcceptedSubReplyIds(Long articleId) {
+        if (articleId == null || articleId <= 0) {
+            return Collections.emptySet();
+        }
+        return listActiveAccepts(articleId).stream()
+                .map(ArticleQuestionAccept::getSubReplyId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleDeletedReply(Long articleId, Long replyId) {
         if (articleId == null || replyId == null) {
             return;
         }
+        articleQuestionAcceptMapper.update(null, new LambdaUpdateWrapper<ArticleQuestionAccept>()
+                .eq(ArticleQuestionAccept::getArticleId, articleId)
+                .eq(ArticleQuestionAccept::getReplyId, replyId)
+                .eq(ArticleQuestionAccept::getDeleteState, DELETE_FALSE)
+                .set(ArticleQuestionAccept::getDeleteState, DELETE_TRUE));
         articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .eq(Article::getArticleType, ArticleType.QUESTION.getCode())
-                .eq(Article::getQuestionStatus, QuestionStatus.RESOLVED.getCode())
                 .eq(Article::getAcceptedReplyId, replyId)
                 .eq(Article::getDeleteState, NORMAL_STATE)
-                .set(Article::getAcceptedReplyId, null)
-                .set(Article::getQuestionStatus, QuestionStatus.WAITING.getCode()));
+                .set(Article::getAcceptedReplyId, null));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleDeletedSubReply(Long articleId, Long subReplyId) {
+        if (articleId == null || subReplyId == null) {
+            return;
+        }
+        articleQuestionAcceptMapper.update(null, new LambdaUpdateWrapper<ArticleQuestionAccept>()
+                .eq(ArticleQuestionAccept::getArticleId, articleId)
+                .eq(ArticleQuestionAccept::getSubReplyId, subReplyId)
+                .eq(ArticleQuestionAccept::getDeleteState, DELETE_FALSE)
+                .set(ArticleQuestionAccept::getDeleteState, DELETE_TRUE));
+    }
+
+    private List<ArticleQuestionAccept> listActiveAccepts(Long articleId) {
+        return articleQuestionAcceptMapper.selectList(new LambdaQueryWrapper<ArticleQuestionAccept>()
+                .eq(ArticleQuestionAccept::getArticleId, articleId)
+                .eq(ArticleQuestionAccept::getDeleteState, DELETE_FALSE));
+    }
+
+    private boolean isReplyAccepted(Long articleId, Long replyId) {
+        Long count = articleQuestionAcceptMapper.selectCount(new LambdaQueryWrapper<ArticleQuestionAccept>()
+                .eq(ArticleQuestionAccept::getArticleId, articleId)
+                .eq(ArticleQuestionAccept::getReplyId, replyId)
+                .eq(ArticleQuestionAccept::getDeleteState, DELETE_FALSE));
+        return count != null && count > 0;
+    }
+
+    private boolean isSubReplyAccepted(Long articleId, Long subReplyId) {
+        Long count = articleQuestionAcceptMapper.selectCount(new LambdaQueryWrapper<ArticleQuestionAccept>()
+                .eq(ArticleQuestionAccept::getArticleId, articleId)
+                .eq(ArticleQuestionAccept::getSubReplyId, subReplyId)
+                .eq(ArticleQuestionAccept::getDeleteState, DELETE_FALSE));
+        return count != null && count > 0;
     }
 
     private Article requireQuestion(Long articleId) {
@@ -214,6 +276,24 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
         if (reply == null
                 || !Objects.equals(reply.getArticleId(), articleId)
                 || !Objects.equals(reply.getState(), NORMAL_STATE)) {
+            throw failed(ResultCode.FAILED_QUESTION_ANSWER_INVALID);
+        }
+        Article article = articleMapper.selectById(articleId);
+        if (article != null && Objects.equals(reply.getPostUserId(), article.getUserId())) {
+            throw failed(ResultCode.FAILED_QUESTION_ANSWER_INVALID);
+        }
+    }
+
+    private void requireValidSubAnswer(Long articleId, Long subReplyId) {
+        ArticleSubReply sub = articleSubReplyMapper.selectOne(new LambdaQueryWrapper<ArticleSubReply>()
+                .eq(ArticleSubReply::getId, subReplyId)
+                .eq(ArticleSubReply::getDeleteState, NORMAL_STATE)
+                .last("FOR UPDATE"));
+        if (sub == null || !Objects.equals(sub.getArticleId(), articleId) || !Objects.equals(sub.getState(), NORMAL_STATE)) {
+            throw failed(ResultCode.FAILED_QUESTION_ANSWER_INVALID);
+        }
+        Article article = articleMapper.selectById(articleId);
+        if (article != null && Objects.equals(sub.getPostUserId(), article.getUserId())) {
             throw failed(ResultCode.FAILED_QUESTION_ANSWER_INVALID);
         }
     }

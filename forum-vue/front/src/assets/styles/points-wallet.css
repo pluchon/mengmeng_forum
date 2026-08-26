@@ -1,541 +1,278 @@
-.points-wallet-page {
-  min-height: calc(100vh - 70px);
-  background: #f4f5f7;
-  color: #1d2129;
-}
-
-.points-wallet-inner {
-  width: 75%;
-  max-width: 1280px;
-  min-width: 0;
-  margin: 0 auto;
-  padding: 24px 0 48px;
+.meng-coin-center {
+  min-height: 100%;
   box-sizing: border-box;
+  padding: 10px 14px 44px;
+  background: #fff9fc;
+  color: #4e3f50;
 }
 
-@media (max-width: 960px) {
-  .points-wallet-inner {
-    width: 92%;
-    padding: 16px 0 40px;
-  }
+.meng-coin-center__inner {
+  display: grid;
+  gap: 26px;
+  width: min(1340px, 100%);
+  margin: 0 auto;
 }
 
-.points-wallet-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
+.meng-coin-center__state {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  border: 1px solid #f0dce9;
+  border-radius: 24px;
+  background: #fff;
 }
 
-.points-wallet-back {
+.meng-coin-hero {
+  display: grid;
+  grid-template-columns: 39% minmax(0, 1fr);
+  min-height: 295px;
+  overflow: hidden;
+  border: 1px solid #eadde8;
+  border-radius: 28px;
+  background: #fff;
+}
+
+.meng-coin-balance-card {
+  position: relative;
+  overflow: hidden;
+  padding: 42px 40px;
+  background: linear-gradient(135deg, #fff1f7 0%, #f3ecff 100%);
+}
+
+.meng-coin-balance-card__title,
+.meng-coin-review-card__title {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: #1d2129;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.points-wallet-back:hover {
-  background: rgba(29, 33, 41, 0.06);
-}
-
-.points-wallet-title {
-  margin: 0;
-  font-size: 22px;
+  gap: 10px;
+  color: #a06ee9;
+  font-size: 15px;
   font-weight: 800;
-  color: #1d2129;
-  letter-spacing: 0.02em;
 }
 
-.points-wallet-card {
-  margin-bottom: 20px;
-  border-radius: 14px;
-  border: 1px solid #e5e6eb;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  overflow: hidden;
-}
+.meng-coin-balance-card__coin { color: #b776e8; font-size: 25px; }
 
-/* 汇总卡：积分卡片背景 + 半透明遮罩 */
-.points-summary-card {
+.meng-coin-balance-card__value {
   position: relative;
-  min-height: 148px;
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  z-index: 1;
+  margin-top: 30px;
+  color: #7659df;
+  font-size: clamp(38px, 3.2vw, 56px);
+  font-weight: 900;
+  letter-spacing: .02em;
+  line-height: 1;
 }
 
-.points-summary-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+.meng-coin-balance-card__value small {
+  margin-left: 8px;
+  font-size: 15px;
 }
 
-.points-summary-mask {
+.meng-coin-balance-card p {
+  position: relative;
+  z-index: 1;
+  margin: 32px 0 0;
+  color: #9e8c9e;
+  font-size: 14px;
+}
+
+.meng-coin-balance-card__mascot {
   position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.72);
+  right: 0;
+  bottom: 0;
+  width: min(58%, 360px);
+  max-height: 95%;
+  object-fit: contain;
+  object-position: right bottom;
+  transform: scaleX(-1);
   pointer-events: none;
 }
 
-.points-summary-inner {
-  position: relative;
-  z-index: 1;
+.meng-coin-trend-card {
   display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 32px;
-  padding: 28px 36px;
-  min-height: 148px;
-  box-sizing: border-box;
-}
-
-@media (max-width: 720px) {
-  .points-summary-inner {
-    flex-direction: column;
-    gap: 20px;
-    padding: 22px 20px;
-  }
-}
-
-.points-summary-main {
-  flex: 1;
   min-width: 0;
-  display: flex;
   flex-direction: column;
-  justify-content: center;
+  padding: 34px 50px 28px;
+}
+
+.meng-coin-section-heading,
+.meng-coin-ledger-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.meng-coin-ledger-title { display: flex; align-items: center; gap: 12px; min-width: max-content; }
+
+.meng-coin-chart-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid #dfd5e6;
+  border-radius: 9px;
+  color: #786a7e;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease, background .2s ease;
+}
+
+.meng-coin-chart-toggle:hover,
+.meng-coin-chart-toggle.is-active {
+  border-color: #9174df;
+  color: #7252d4;
+  background: #f5f0ff;
+}
+
+.meng-coin-ledger-chart-wrap {
+  position: relative;
+  min-height: 390px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #eee5f1;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff 0%, #fff9fc 55%, #f7f3ff 100%);
+}
+
+.meng-coin-ledger-chart {
+  width: 100%;
+  height: 390px;
+}
+
+.meng-coin-chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #a897a9; font-size: 13px; background: rgba(255, 255, 255, .78); }
+
+:deep(.meng-coin-chart-dialog) { border-radius: 18px; }
+:deep(.meng-coin-chart-dialog .el-dialog__header) { margin: 0; padding: 20px 22px 12px; text-align: center; }
+:deep(.meng-coin-chart-dialog .el-dialog__title) { color: #55465a; font-size: 18px; font-weight: 800; }
+:deep(.meng-coin-chart-dialog .el-dialog__body) { min-height: 430px; padding: 10px 22px 24px; }
+
+.meng-coin-section-heading h1,
+.meng-coin-section-heading h2,
+.meng-coin-ledger-card h2 {
+  margin: 0;
+  color: #4e3f50;
+  font-size: 19px;
+  font-weight: 850;
+}
+
+.meng-coin-section-heading > span {
+  color: #b5a8b7;
+  font-size: 13px;
+}
+
+.meng-coin-week-switch { display: inline-flex; align-items: center; gap: 4px; padding: 2px 5px; border: 1px solid #f0e3ed; border-radius: 999px; background: #fdfafd; color: #b5a8b7; font-size: 12px; }
+.meng-coin-week-switch .el-button { width: 22px; height: 22px; padding: 0; color: #b593ae; }
+.meng-coin-week-switch .el-button:not(.is-disabled):hover { background: #fff0f6; color: #f15d92; }
+
+.meng-coin-milestone-total { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; background: #f5f0ff; color: #9276c8 !important; font-size: 12px !important; }
+.meng-coin-milestone-total .paw-coin-icon { color: #a26ee0; font-size: 14px; }
+.meng-coin-milestone-total b { color: #7c5bd0; font-weight: 850; }
+
+.meng-coin-trend-chart-wrap { position: relative; display: flex; flex: 1; min-height: 150px; margin-top: 4px; }
+.meng-coin-trend-chart { flex: 1; min-height: 150px; }
+.meng-coin-trend-empty { position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 24px; color: #b6a6b5; font-size: 13px; pointer-events: none; }
+
+.meng-coin-trend-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.points-summary-label {
-  font-size: 14px;
-  font-weight: 800;
-  color: #4e5969;
-}
+.meng-coin-trend-stats article { display: flex; align-items: center; justify-content: space-between; min-height: 37px; padding: 0 15px; border-radius: 999px; background: #f7faf8; color: #79958a; font-size: 13px; }
+.meng-coin-trend-stats article.is-expense { background: #fff6f8; color: #b28d9b; }
+.meng-coin-trend-stats span { display: inline-flex; align-items: center; gap: 7px; }
+.meng-coin-trend-stats i { width: 11px; height: 11px; border-radius: 50%; background: #36b887; }
+.meng-coin-trend-stats .is-expense i { background: #ef6a8b; }
+.meng-coin-trend-stats b { font-size: 16px; }
+.meng-coin-trend-stats .is-income b { color: #25a879; }
+.meng-coin-trend-stats .is-expense b { color: #ee6686; }
 
-.points-summary-balance {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.points-summary-num {
-  font-size: 48px;
-  font-weight: 900;
-  line-height: 1;
-  color: #6b4cff;
-  letter-spacing: -0.02em;
-}
-
-.points-summary-unit {
-  font-size: 18px;
-  font-weight: 800;
-  color: #8b7aff;
-}
-
-.points-summary-side {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 40px;
-  padding-left: 40px;
-  border-left: 1px solid rgba(29, 33, 41, 0.1);
-}
-
-@media (max-width: 720px) {
-  .points-summary-side {
-    width: 100%;
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid rgba(29, 33, 41, 0.1);
-    padding-top: 20px;
-    gap: 28px;
-  }
-}
-
-.points-summary-side-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 120px;
-}
-
-.points-summary-side-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: #4e5969;
-}
-
-.points-summary-side-value {
-  font-size: 26px;
-  font-weight: 900;
-  line-height: 1.2;
-}
-
-.points-summary-side-value.is-income {
-  color: #2ea86a;
-}
-
-.points-summary-side-value.is-spend {
-  color: #e34d59;
-}
-
-.points-panel-body {
-  padding: 22px 28px 26px;
-}
-
-.points-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.points-panel-head-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.points-panel-head-icon {
-  font-size: 20px;
-  color: #4e5969;
-  flex-shrink: 0;
-}
-
-.points-panel-head-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: #1d2129;
-}
-
-.points-month-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.points-month-nav-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid #e5e6eb;
-  border-radius: 10px;
-  background: #fff;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.points-month-nav-btn:hover:not(:disabled) {
-  border-color: var(--points-control-hover-border, var(--el-color-primary-light-5));
-  background: var(--points-control-hover-bg, #fff);
-}
-
-.points-month-nav-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.points-month-nav-icon {
-  filter: var(--points-month-nav-filter, none);
-  display: block;
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-}
-
-.points-chart-body {
+.meng-coin-milestones-card {
   display: grid;
-  grid-template-columns: minmax(168px, 200px) 1px 1fr;
-  gap: 0 28px;
-  align-items: stretch;
-}
-
-@media (max-width: 900px) {
-  .points-chart-body {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-
-  .points-chart-divider {
-    display: none;
-  }
-}
-
-.points-chart-divider {
-  width: 1px;
-  background: #e5e6eb;
-  align-self: stretch;
-  min-height: 100%;
-}
-
-.points-chart-stats {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 24px;
-  padding: 8px 4px 8px 0;
-}
-
-.points-chart-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 18px;
-  border: 1px solid #e5e6eb;
-  border-radius: 12px;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, .9fr);
+  gap: 34px;
+  padding: 26px 30px;
+  border: 1px solid #eadde8;
+  border-radius: 28px;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
-.points-chart-right {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
+.meng-coin-milestone-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 38px;
 }
 
-.points-chart-type-tabs {
-  display: inline-flex;
-  align-self: flex-end;
-  gap: 6px;
-  padding: 3px;
-  border-radius: 10px;
-  border: 1px solid var(--points-control-border, #e5e6eb);
-  background: var(--points-tabs-bg, #f7f8fa);
+.meng-coin-milestone-track::before {
+  position: absolute;
+  top: 25px;
+  right: 11%;
+  left: 11%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e3daf8;
+  content: '';
 }
 
-.points-chart-type-tab {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--points-control-text, #4e5969);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+.meng-coin-milestone-track__progress { position: absolute; z-index: 0; top: 25px; left: 11%; width: 78%; height: 6px; border-radius: 999px; background: #a27bea; transform: scaleX(var(--milestone-progress)); transform-origin: left center; }
+
+.meng-coin-milestone { position: relative; z-index: 1; display: grid; justify-items: center; gap: 10px; text-align: center; }
+.meng-coin-milestone__point { display: grid; width: 54px; height: 54px; place-items: center; border: 2px solid #9774e8; border-radius: 50%; background: #fff; color: #8969db; font-size: 13px; font-weight: 850; }
+.meng-coin-milestone.is-claimed .meng-coin-milestone__point { border: 0; background: #9774e8; color: #fff; }
+.meng-coin-milestone strong { font-size: 13px; }
+.meng-coin-milestone button { min-width: 118px; min-height: 27px; border: 0; border-radius: 9px; background: #f0eef3; color: #8d8292; font-size: 12px; cursor: default; }
+.meng-coin-milestone.is-claimable button { background: #8966db; color: #fff; cursor: pointer; }
+.meng-coin-milestone.is-locked .meng-coin-milestone__point { border-color: #d7d8df; background: #f7f7f9; color: #9798a2; }
+.meng-coin-milestone.is-locked strong { color: #8e8f98; }
+.meng-coin-milestone.is-locked button { border: 1px solid #dedee5; background: #f6f6f8; color: #9899a1; }
+.meng-coin-milestone button:disabled { cursor: default; }
+
+.meng-coin-review-card { display: flex; flex-direction: column; min-height: 145px; padding: 26px; border-radius: 22px; background: linear-gradient(135deg, #fcf8ff, #fff7fa); }
+.meng-coin-review-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.meng-coin-review-card__sources { display: grid; gap: 9px; margin-top: 20px; }
+.meng-coin-review-card__source { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 33px; padding: 0 10px; border-radius: 10px; background: rgba(255, 255, 255, .68); font-size: 12px; }
+.meng-coin-review-card__source span { display: inline-flex; align-items: center; gap: 3px; color: #8d72c8; }
+.meng-coin-review-card__source b { overflow: hidden; color: #74627b; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.meng-coin-review-card__source em { color: #26ac7a; font-size: 15px; font-style: normal; font-weight: 800; }
+.meng-coin-review-card__source.is-expense span { color: #d9779b; }
+.meng-coin-review-card__source.is-expense em { color: #ed6688; }
+
+.meng-coin-ledger-card { padding: 28px; border: 1px solid #eadde8; border-radius: 28px; background: #fff; }
+.meng-coin-ledger-card h2 { display: inline-flex; align-items: center; gap: 10px; }
+.meng-coin-ledger-card h2 .el-icon { color: #8a68df; }
+.meng-coin-ledger-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; color: #9e8f9f; font-size: 12px; }
+.meng-coin-ledger-controls .el-select { width: 132px; }
+.meng-coin-ledger-table { min-height: 604px; margin-top: 18px; --el-table-header-bg-color: #fbf8fc; --el-table-border-color: #f0e8f0; --el-table-row-hover-bg-color: #fffafe; --el-table-text-color: #735f72; --el-table-header-text-color: #a897a9; }
+.meng-coin-ledger-table :deep(.el-table__body td.el-table__cell) { padding-block: 12px; }
+.meng-coin-ledger-source { display: inline-flex; align-items: center; gap: 11px; font-weight: 700; }
+.meng-coin-ledger-source .el-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; }
+.meng-coin-ledger-source.is-income .el-icon { background: #ebfaf4; color: #32b787; }
+.meng-coin-ledger-source.is-expense .el-icon { background: #fff0f4; color: #ed6d8d; }
+.meng-coin-ledger-table strong.is-income { color: #23ac7a; font-size: 17px; }
+.meng-coin-ledger-table strong.is-expense { color: #ec6586; font-size: 17px; }
+.meng-coin-ledger-pagination { display: flex; justify-content: center; min-height: 36px; padding-top: 22px; }
+.meng-coin-ledger-pagination :deep(.el-pager li) { min-width: 32px; border-radius: 5px; background: #f2f4f7; color: #526071; }
+.meng-coin-ledger-pagination :deep(.el-pager li.is-active) { background: #ff4d86; color: #fff; }
+.meng-coin-ledger-pagination :deep(.btn-prev), .meng-coin-ledger-pagination :deep(.btn-next) { border-radius: 5px; background: #f2f4f7; color: #738094; }
+.meng-coin-ledger-pagination :deep(.el-pager li:not(.is-active):hover), .meng-coin-ledger-pagination :deep(.btn-prev:hover), .meng-coin-ledger-pagination :deep(.btn-next:hover) { color: #f04f86; }
+.meng-coin-ledger-controls :deep(.el-radio-button__inner) { border-color: #f0d8e2; color: #947c8e; box-shadow: none; }
+.meng-coin-ledger-controls :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { border-color: #ff5d94; background: #ff5d94; box-shadow: -1px 0 0 0 #ff5d94; color: #fff; }
+
+@media (max-width: 1020px) {
+  .meng-coin-hero, .meng-coin-milestones-card { grid-template-columns: 1fr; }
+  .meng-coin-balance-card { min-height: 260px; }
 }
 
-.points-chart-type-tab:hover {
-  color: var(--points-control-hover-text, #1d2129);
-}
-
-.points-chart-type-tab.is-active {
-  background: var(--points-tab-active-bg, #fff);
-  color: var(--points-tab-active-text, #6b4cff);
-  box-shadow: var(--points-tab-active-shadow, 0 1px 3px rgba(15, 23, 42, 0.08));
-}
-
-.points-chart-stat-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: #86909c;
-}
-
-.points-chart-stat-card .points-chart-stat-value {
-  margin-top: 0;
-}
-
-.points-chart-stat-value {
-  margin-top: 8px;
-  font-size: 28px;
-  font-weight: 900;
-  line-height: 1.2;
-}
-
-.points-chart-stat-value.is-income {
-  color: #2ea86a;
-}
-
-.points-chart-stat-value.is-spend {
-  color: #e34d59;
-}
-
-.points-chart-area {
-  min-height: 300px;
-  height: 300px;
-  border-radius: 12px;
-  border: 1px dashed #e5e6eb;
-  background: #fafbfc;
-  overflow: hidden;
-}
-
-.points-chart-echart {
-  width: 100%;
-  height: 100%;
-  min-height: 300px;
-}
-
-.points-chart-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-size: 14px;
-  font-weight: 600;
-  color: #86909c;
-}
-
-.points-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
-  background: #fff;
-  color: #4e5969;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.points-filter-btn:hover {
-  background: #f7f8fa;
-  border-color: #c9cdd4;
-  color: #1d2129;
-}
-
-.points-log-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.points-log-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px 0;
-  border-bottom: 1px solid #f2f3f5;
-}
-
-.points-log-item:last-child {
-  border-bottom: none;
-}
-
-.points-log-icon-wrap {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
-
-.points-log-icon-wrap.is-income {
-  background: rgba(46, 168, 106, 0.12);
-  color: #2ea86a;
-}
-
-.points-log-icon-wrap.is-spend {
-  background: rgba(245, 69, 104, 0.12);
-  color: #f54568;
-}
-
-.points-log-icon-wrap.is-neutral {
-  background: rgba(107, 76, 255, 0.12);
-  color: #6b4cff;
-}
-
-.points-log-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.points-log-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1d2129;
-  line-height: 1.4;
-}
-
-.points-log-time {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #86909c;
-}
-
-.points-log-amount-col {
-  flex-shrink: 0;
-  text-align: right;
-  min-width: 88px;
-}
-
-.points-log-delta {
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.points-log-delta.is-income {
-  color: #2ea86a;
-}
-
-.points-log-delta.is-spend {
-  color: #e34d59;
-}
-
-.points-log-balance {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #86909c;
-}
-
-.points-log-more {
-  display: flex;
-  justify-content: center;
-  padding-top: 12px;
-}
-
-.points-log-more-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid #e5e6eb;
-  border-radius: 50%;
-  background: var(--points-control-bg, #f7f8fa);
-  color: var(--points-control-text, #4e5969);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.points-log-more-btn:hover:not(:disabled) {
-  background: var(--points-control-hover-bg, #fff);
-  border-color: var(--points-control-hover-border, #c9cdd4);
-}
-
-.points-log-more-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.points-log-empty {
-  padding: 40px 0;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: #86909c;
+@media (max-width: 680px) {
+  .meng-coin-center { padding: 8px 8px 32px; }
+  .meng-coin-trend-card, .meng-coin-ledger-card, .meng-coin-milestones-card { padding: 20px; }
+  .meng-coin-milestone-track { gap: 12px; overflow-x: auto; grid-template-columns: repeat(4, 126px); justify-content: start; }
+  .meng-coin-milestone-track::before { width: 330px; right: auto; left: 35px; }
+  .meng-coin-ledger-card__head { align-items: flex-start; flex-direction: column; }
+  .meng-coin-ledger-controls { justify-content: flex-start; }
 }

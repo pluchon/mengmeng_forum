@@ -1,8 +1,11 @@
 package org.pluchon.forum.service.impl.user;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.auth.client.PointsInternalFeignClient;
 import org.pluchon.forum.common.captcha.CaptchaTicketPurpose;
 import org.pluchon.forum.common.enums.ResultCode;
+import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.UserConverter;
 import org.pluchon.forum.entity.db.User;
@@ -10,7 +13,6 @@ import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.vo.user.AuthLoginResultVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
-import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.service.interfaces.captcha.CaptchaTicketService;
 import org.pluchon.forum.service.interfaces.user.MailCodeService;
 import org.pluchon.forum.service.interfaces.user.PasswordResetService;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 // 登录与找回密码流程编排
+@Slf4j
 @Service
 public class UserAuthFlowServiceImpl implements UserAuthFlowService {
 
@@ -44,12 +47,15 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
     @Autowired
     private PasswordResetService passwordResetService;
 
+    @Autowired
+    private PointsInternalFeignClient pointsInternalFeignClient;
+
     @Override
     public AuthLoginResultVO loginByPassword(UserLoginRequest request, String captchaTicket, HttpServletRequest httpRequest) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.USER_LOGIN);
-        User user = userService.login(request);
+        User user = userService.login(request, httpRequest);
         userLoginLogService.recordSuccess(user.getId(), "password", httpRequest);
-        return UserConverter.toAuthLoginResult(user);
+        return withPoints(UserConverter.toAuthLoginResult(user));
     }
 
     @Override
@@ -60,7 +66,7 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.MAIL_LOGIN);
         User user = mailCodeService.loginByMail(email, code);
         userLoginLogService.recordSuccess(user.getId(), "mail", httpRequest);
-        return UserConverter.toAuthLoginResult(user);
+        return withPoints(UserConverter.toAuthLoginResult(user));
     }
 
     @Override
@@ -78,7 +84,7 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.SMS_LOGIN);
         User user = smsCodeService.loginBySms(phoneNumber, code);
         userLoginLogService.recordSuccess(user.getId(), "sms", httpRequest);
-        return UserConverter.toAuthLoginResult(user);
+        return withPoints(UserConverter.toAuthLoginResult(user));
     }
 
     @Override
@@ -129,12 +135,40 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
 
     @Override
     public UserSessionVO getSessionUser(Long userId) {
-        return UserConverter.toSessionVO(userService.getUserInfoById(userId));
+        return withPoints(UserConverter.toSessionVO(userService.getUserInfoById(userId)));
     }
 
     @Override
     public UserSessionVO modifyUser(ModifyUserRequest request, Long userId) {
-        return UserConverter.toSessionVO(userService.modifyUser(request, userId));
+        return withPoints(UserConverter.toSessionVO(userService.modifyUser(request, userId)));
+    }
+
+    private AuthLoginResultVO withPoints(AuthLoginResultVO result) {
+        if (result != null && result.getUser() != null) {
+            fillPoints(result.getUser());
+        }
+        return result;
+    }
+
+    private UserSessionVO withPoints(UserSessionVO session) {
+        fillPoints(session);
+        return session;
+    }
+
+    // 积分权威在 economy.points_wallet，会话展示时按需拉取
+    private void fillPoints(UserSessionVO session) {
+        if (session == null || session.getId() == null) {
+            return;
+        }
+        try {
+            Integer balance = pointsInternalFeignClient.getBalance(session.getId());
+            session.setPoints(balance == null ? 0 : balance);
+        } catch (Exception e) {
+            log.warn("拉取用户积分失败 userId={}: {}", session.getId(), e.getMessage());
+            if (session.getPoints() == null) {
+                session.setPoints(0);
+            }
+        }
     }
 
     private void requireCaptchaTicket(String captchaTicket, String purpose) {

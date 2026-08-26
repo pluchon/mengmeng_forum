@@ -2,7 +2,7 @@ package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.game.TetrisPkLeaderboardVO;
 import org.pluchon.forum.entity.vo.game.TetrisPkRecordVO;
 

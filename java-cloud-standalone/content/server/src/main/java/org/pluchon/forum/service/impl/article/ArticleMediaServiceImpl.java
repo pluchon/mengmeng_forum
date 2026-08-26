@@ -7,6 +7,7 @@ import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.enums.ResultCode;
+import org.pluchon.forum.common.enums.VideoTranscodeStatus;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.Article;
@@ -15,13 +16,18 @@ import org.pluchon.forum.mapper.ArticleImageMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
+import org.pluchon.forum.service.interfaces.article.ArticleUserMusicService;
+import org.pluchon.forum.service.interfaces.article.ArticleVideoTranscodeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 // 帖子封面、相册与视频媒体落库
 @Service
@@ -42,6 +48,12 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
 
     @Autowired
     private ArticlePublishSideEffectService articlePublishSideEffectService;
+
+    @Autowired
+    private ArticleUserMusicService articleUserMusicService;
+
+    @Autowired
+    private ArticleVideoTranscodeService articleVideoTranscodeService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -131,7 +143,6 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
                 articlePublishSideEffectService.rollbackPublishedExposure(articleId, article.getBoardId(), loginUserId);
             }
         }
-        log.info("帖子相册替换完成: articleId={}, count={}, userId={}", articleId, urls.size(), loginUserId);
     }
 
     @Override
@@ -162,7 +173,9 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         uw.eq(Article::getId, articleId)
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .set(Article::getMediaType, (byte) 1)
-                .set(Article::getVideoUrl, videoUrl.trim());
+                .set(Article::getVideoUrl, videoUrl.trim())
+                .set(Article::getHlsUrl, null)
+                .set(Article::getVideoTranscodeStatus, VideoTranscodeStatus.PROCESSING.getCode());
         if (wasPublished) {
             uw.set(Article::getStatus, ArticleStatus.DRAFT.getCode());
         }
@@ -172,7 +185,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         if (wasPublished) {
             articlePublishSideEffectService.rollbackPublishedExposure(articleId, article.getBoardId(), loginUserId);
         }
-        log.info("帖子视频已绑定: articleId={}, userId={}", articleId, loginUserId);
+        articleVideoTranscodeService.scheduleTranscode(articleId, videoUrl.trim());
     }
 
     @Override
@@ -196,7 +209,103 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         uw.eq(Article::getId, articleId)
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .set(Article::getMediaType, (byte) 0)
-                .set(Article::getVideoUrl, null);
+                .set(Article::getVideoUrl, null)
+                .set(Article::getHlsUrl, null)
+                .set(Article::getVideoTranscodeStatus, VideoTranscodeStatus.NONE.getCode());
+        if (wasPublished) {
+            uw.set(Article::getStatus, ArticleStatus.DRAFT.getCode());
+        }
+        if (articleMapper.update(null, uw) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        if (wasPublished) {
+            articlePublishSideEffectService.rollbackPublishedExposure(articleId, article.getBoardId(), loginUserId);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void setArticleMusic(Long articleId, Long loginUserId,
+                                String musicKey, String musicTitle,
+                                String musicCoverUrl, String musicAudioUrl, String musicLrcUrl) {
+        if (articleId == null || articleId <= 0 || loginUserId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (musicKey == null || musicKey.isBlank()
+                || musicTitle == null || musicTitle.isBlank()
+                || musicAudioUrl == null || musicAudioUrl.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐信息不完整"));
+        }
+        String audio = musicAudioUrl.trim();
+        if (!ossConfig.matchesPublicObjectUrl(audio, Constant.OSS_PATH_MUSIC_INFO)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐音频地址非法"));
+        }
+        String cover = musicCoverUrl == null || musicCoverUrl.isBlank() ? null : musicCoverUrl.trim();
+        if (cover != null && !ossConfig.matchesPublicObjectUrl(cover, Constant.OSS_PATH_MUSIC_AVATAR)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐封面地址非法"));
+        }
+        String lrc = musicLrcUrl == null || musicLrcUrl.isBlank() ? null : musicLrcUrl.trim();
+        if (lrc != null && !ossConfig.matchesPublicObjectUrl(lrc, Constant.OSS_PATH_MUSIC_LRC)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐歌词地址非法"));
+        }
+        if (!articleUserMusicService.isBindable(musicKey.trim())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "该歌曲尚未过审，不能用于帖子"));
+        }
+        Article article = articleMapper.selectByIdForUpdate(articleId);
+        if (article == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
+        }
+        if (!article.getUserId().equals(loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        if (ArticleStatus.isEditingLocked(article.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
+        }
+        boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        LambdaUpdateWrapper<Article> uw = new LambdaUpdateWrapper<>();
+        uw.eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .set(Article::getMusicKey, musicKey.trim())
+                .set(Article::getMusicTitle, musicTitle.trim())
+                .set(Article::getMusicCoverUrl, cover)
+                .set(Article::getMusicAudioUrl, audio)
+                .set(Article::getMusicLrcUrl, lrc);
+        if (wasPublished) {
+            uw.set(Article::getStatus, ArticleStatus.DRAFT.getCode());
+        }
+        if (articleMapper.update(null, uw) <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        if (wasPublished) {
+            articlePublishSideEffectService.rollbackPublishedExposure(articleId, article.getBoardId(), loginUserId);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void clearArticleMusic(Long articleId, Long loginUserId) {
+        if (articleId == null || articleId <= 0 || loginUserId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        Article article = articleMapper.selectByIdForUpdate(articleId);
+        if (article == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
+        }
+        if (!article.getUserId().equals(loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        if (ArticleStatus.isEditingLocked(article.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
+        }
+        boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        LambdaUpdateWrapper<Article> uw = new LambdaUpdateWrapper<>();
+        uw.eq(Article::getId, articleId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .set(Article::getMusicKey, null)
+                .set(Article::getMusicTitle, null)
+                .set(Article::getMusicCoverUrl, null)
+                .set(Article::getMusicAudioUrl, null)
+                .set(Article::getMusicLrcUrl, null);
         if (wasPublished) {
             uw.set(Article::getStatus, ArticleStatus.DRAFT.getCode());
         }
@@ -226,6 +335,67 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
             urls.add(r.getImageUrl());
         }
         return urls;
+    }
+
+    @Override
+    public Map<Long, Integer> countImagesByArticleIds(Collection<Long> articleIds) {
+        if (articleIds == null || articleIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = articleIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<ArticleImage> rows = articleImageMapper.selectList(new LambdaQueryWrapper<ArticleImage>()
+                .select(ArticleImage::getArticleId)
+                .in(ArticleImage::getArticleId, ids)
+                .ne(ArticleImage::getDeleteState, 1));
+        Map<Long, Integer> counts = new HashMap<>();
+        for (ArticleImage row : rows) {
+            if (row.getArticleId() == null) {
+                continue;
+            }
+            counts.merge(row.getArticleId(), 1, Integer::sum);
+        }
+        return counts;
+    }
+
+    @Override
+    public Map<Long, String> firstImageUrlByArticleIds(Collection<Long> articleIds) {
+        if (articleIds == null || articleIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = articleIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<ArticleImage> rows = articleImageMapper.selectList(new LambdaQueryWrapper<ArticleImage>()
+                .select(ArticleImage::getArticleId, ArticleImage::getImageUrl, ArticleImage::getSort, ArticleImage::getId)
+                .in(ArticleImage::getArticleId, ids)
+                .ne(ArticleImage::getDeleteState, 1)
+                .orderByAsc(ArticleImage::getSort)
+                .orderByAsc(ArticleImage::getId));
+        Map<Long, String> firstUrls = new HashMap<>();
+        for (ArticleImage row : rows) {
+            if (row.getArticleId() == null) {
+                continue;
+            }
+            if (firstUrls.containsKey(row.getArticleId())) {
+                continue;
+            }
+            String url = row.getImageUrl();
+            if (url == null || url.isBlank()) {
+                continue;
+            }
+            firstUrls.put(row.getArticleId(), url.trim());
+        }
+        return firstUrls;
     }
 
     private Article requireArticle(Long articleId) {

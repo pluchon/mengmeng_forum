@@ -6,32 +6,29 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.entity.db.ArticleSubReply;
 import org.pluchon.forum.entity.db.ArticleSubReplyLike;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.SubReplyRequest;
 import org.pluchon.forum.entity.vo.article.ArticleSubReplyListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleSubReplyLikeMapper;
 import org.pluchon.forum.mapper.ArticleSubReplyMapper;
 import org.pluchon.forum.common.utils.RequestIpUtils;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.article.ArticleReplyMediaService;
+import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.pluchon.forum.service.interfaces.article.ArticleSubReplyService;
+import org.pluchon.forum.service.interfaces.moderation.ContentModerationTaskService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,32 +58,23 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     private ArticleReplyMediaService articleReplyMediaService;
 
     @Autowired
-    private ContentAiGatewayService contentAiGatewayService;
+    private ContentModerationTaskService contentModerationTaskService;
+
+    @Autowired
+    private ArticleQuestionService articleQuestionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void subReply(SubReplyRequest req, Long loginUserId) {
         UserInternalVO loginUser = userService.queryUserByUserId(loginUserId);
         ContentUserMuteGuard.assertCanPost(loginUser);
-        // 楼中楼：极短内容不走远程审核；审核服务异常时降级放行，避免「一发就失败」
         String raw = req.getContent() == null ? "" : req.getContent();
         String plain = raw.replaceAll("<[^>]+>", "").trim();
         boolean hasMedia = req.getMediaList() != null && !req.getMediaList().isEmpty();
         if (!StringUtils.hasText(plain) && !hasMedia) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_CONTENT_EMPTY));
         }
-        String violation = null;
-        if (plain.length() >= 25) {
-            try {
-                violation = contentAiGatewayService.validateText(req.getContent());
-            } catch (ApplicationException ex) {
-                log.warn("楼中楼文本审核服务不可用，降级放行: {}", ex.getMessage());
-            }
-        }
-        if (violation != null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
-        }
-        // 校验所属帖子存在 -> 同时防止越权伪造
+        // 校验所属帖子存在 > 同时防止越权伪造
         articleService.selectArticleByArticleId(req.getArticleId());
         ArticleSubReply subReply = new ArticleSubReply();
         subReply.setArticleId(req.getArticleId());
@@ -101,6 +89,7 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         articleReplyMediaService.saveForSubReply(subReply.getId(), req.getMediaList(), loginUserId);
         // 楼中楼不计入楼层数 reply_count, 而是计入 sub_reply_count; 同时按 W_REPLY 入热帖榜分
         articleService.addSubReply(req.getArticleId());
+        contentModerationTaskService.scheduleComment((byte) 3, subReply.getId(), raw);
     }
 
     @Override
@@ -109,15 +98,21 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<ArticleSubReply> page = PageUtils.getPage(validPageNum, validPageSize);
+        // 楼中楼属于连续对话，固定按发布时间升序，避免新回复跑到原消息上方
         Page<ArticleSubReply> result = articleSubReplyMapper.selectPage(page, new LambdaQueryWrapper<ArticleSubReply>()
                 .eq(ArticleSubReply::getReplyId, replyId).ne(ArticleSubReply::getState, 1)
-                .ne(ArticleSubReply::getDeleteState, 1).orderByAsc(ArticleSubReply::getCreateTime));
+                .orderByAsc(ArticleSubReply::getCreateTime)
+                .orderByAsc(ArticleSubReply::getId));
         List<ArticleSubReply> rows = result.getRecords();
         Set<Long> likedSubIds = loadLikedSubReplyIds(loginUserId, rows);
         Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap =
                 articleReplyMediaService.mapBySubReplyIds(rows.stream().map(ArticleSubReply::getId).collect(Collectors.toList()));
+        Long articleId = rows.isEmpty() ? null : rows.get(0).getArticleId();
+        Set<Long> acceptedSubIds = articleId == null
+                ? Set.of()
+                : articleQuestionService.listAcceptedSubReplyIds(articleId);
         List<ArticleSubReplyListResponse> records = rows.stream()
-                .map(sub -> buildSubReplyResponse(sub, likedSubIds, mediaMap))
+                .map(sub -> buildSubReplyResponse(sub, likedSubIds, mediaMap, acceptedSubIds))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -134,10 +129,11 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         return likes.stream().map(ArticleSubReplyLike::getSubReplyId).collect(Collectors.toCollection(HashSet::new));
     }
 
-    /** 单条楼中楼 -> 列表项装配，被回复用户已注销时昵称留空 */
+    // 单条楼中楼 > 列表项装配，被回复用户已注销时昵称留空
     private ArticleSubReplyListResponse buildSubReplyResponse(
             ArticleSubReply sub, Set<Long> likedSubIds,
-            Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap) {
+            Map<Long, List<org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO>> mediaMap,
+            Set<Long> acceptedSubIds) {
         UserInternalVO postUser = userService.queryUserByUserId(sub.getPostUserId());
         String replyUserNickname = "";
         if (sub.getReplyUserId() != null) {
@@ -151,11 +147,27 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
             }
         }
         ArticleSubReplyListResponse vo = new ArticleSubReplyListResponse();
-        vo.setSubReply(sub);
+        boolean violated = sub.getDeleteState() != null && sub.getDeleteState() == 1;
+        if (violated) {
+            ArticleSubReply stub = new ArticleSubReply();
+            stub.setId(sub.getId());
+            stub.setArticleId(sub.getArticleId());
+            stub.setReplyId(sub.getReplyId());
+            stub.setPostUserId(sub.getPostUserId());
+            stub.setReplyUserId(sub.getReplyUserId());
+            stub.setDeleteState(sub.getDeleteState());
+            stub.setCreateTime(sub.getCreateTime());
+            vo.setSubReply(stub);
+            vo.setViolated(true);
+        } else {
+            vo.setSubReply(sub);
+            vo.setViolated(false);
+        }
         vo.setPostUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(postUser));
         vo.setReplyUserNickname(replyUserNickname);
-        vo.setLiked(likedSubIds.contains(sub.getId()));
-        vo.setMediaList(mediaMap.getOrDefault(sub.getId(), List.of()));
+        vo.setLiked(!violated && likedSubIds.contains(sub.getId()));
+        vo.setAccepted(!violated && acceptedSubIds != null && acceptedSubIds.contains(sub.getId()));
+        vo.setMediaList(violated ? List.of() : mediaMap.getOrDefault(sub.getId(), List.of()));
         return vo;
     }
 }

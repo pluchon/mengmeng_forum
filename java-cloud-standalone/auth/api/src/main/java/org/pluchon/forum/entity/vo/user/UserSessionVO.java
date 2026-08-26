@@ -4,7 +4,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 登录态用户对外展示（不含密码、盐值、哈希）
+// 登录态用户对外展示 不含密码、盐值、哈希
 @Data
 public class UserSessionVO {
 
@@ -19,8 +19,8 @@ public class UserSessionVO {
     private String backgroundUrl;
     private Integer articleCount;
     private Byte isAdmin;
+    // 积分余额来自 economy.points_wallet，登录/会话组装时填充
     private Integer points;
-    private Integer lotteryPityDraws;
     private Byte vipTier;
     private Date vipExpireAt;
     private Long mascotModelId;

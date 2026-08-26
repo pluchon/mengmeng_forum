@@ -4,7 +4,7 @@ import pendingIconUrl from '@/assets/svg/审核中.svg?url'
 import rejectedIconUrl from '@/assets/svg/审核失败.svg?url'
 import auditErrorIconUrl from '@/assets/svg/审核异常.svg?url'
 
-/** 与后端 ArticleStatus 一致（audit-async-api.md） */
+// 与后端 ArticleStatus 一致 audit async api.md
 export const ARTICLE_STATUS = {
   DRAFT: 0,
   PENDING_AUDIT: 1,
@@ -36,7 +36,7 @@ export function canSubmitArticleAudit(status) {
   return [0, 3, 4, 5].includes(s)
 }
 
-/** 创作中心列表：状态图标 + 悬停提示 */
+// 创作中心列表：状态图标 + 悬停提示
 export function articleStatusMeta(status) {
   const s = Number(status)
   const label = articleStatusLabel(s)
