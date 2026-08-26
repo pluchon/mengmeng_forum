@@ -79,7 +79,7 @@ class RecommendationFeatureService:
         fallback: dict[str, Any],
     ) -> dict[str, Any]:
         def invoke() -> dict[str, Any]:
-            model_name = str(settings.dashscope.get("model_text_flash") or "qwen3.6-flash")
+            model_name = str(settings.dashscope.get("model_text_flash") or "qwen3.7-flash")
             response = _runtime.call_llm(
                 lambda: (prompt | text_llm(temperature=0.1, model_name=model_name)).invoke(values),
                 trace_id=trace_id,

@@ -82,7 +82,8 @@ public class TetrisScoreValidator {
             throw invalid();
         }
         long pieceBudget = duration / 300L;
-        int upper = lines * 1500 + (int) (pieceBudget * 15L) + 5000;
+        // 四消 1500 + 连击 20% + 固定 200 ≈ 2000/次；留 piece 落锁分余量
+        int upper = lines * 2000 + (int) (pieceBudget * 15L) + 5000;
         if (score > upper) {
             throw invalid();
         }

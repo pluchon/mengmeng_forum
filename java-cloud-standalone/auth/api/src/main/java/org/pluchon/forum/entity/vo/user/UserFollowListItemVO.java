@@ -11,10 +11,10 @@ import java.util.Date;
 @NoArgsConstructor
 public class UserFollowListItemVO {
     private UserBriefVO user;
-    /** 关注关系建立时间（关注列表=我关注对方的时间；粉丝列表=对方关注我的时间） */
+    // 关注关系建立时间 关注列表 我关注对方的时间；粉丝列表 对方关注我的时间
     private Date followTime;
-    /** 当前登录用户是否关注了列表中的该用户 */
+    // 当前登录用户是否关注了列表中的该用户
     private Boolean isFollowing;
-    /** 列表中的该用户是否关注了主页用户（粉丝列表恒为 true） */
+    // 列表中的该用户是否关注了主页用户 粉丝列表恒为 true
     private Boolean followsProfileUser;
 }

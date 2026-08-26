@@ -1,11 +1,10 @@
 import { ref, watch, onMounted, onActivated, onBeforeUnmount, nextTick, unref, computed } from 'vue'
 
-/**
- * 首页瀑布流：flex 等宽多列 + 轮询分配，列宽铺满容器（避免 CSS column-count 右侧留白）。
- */
+// 首页瀑布流：固定列宽多列 + 轮询分配；宽屏目标 5 列，窄屏按可用宽度降列
 export function useHomeMasonry(itemsSource, options = {}) {
   const columnWidth = options.columnWidth ?? 220
   const gap = options.gap ?? 16
+  const maxColumns = options.maxColumns ?? 5
   const containerRef = ref(null)
   const columnCount = ref(1)
   const columns = ref([])
@@ -20,13 +19,14 @@ export function useHomeMasonry(itemsSource, options = {}) {
 
   function columnCountForWidth(width) {
     if (!width || width < columnWidth) return 1
-    return Math.max(1, Math.floor((width + gap) / (columnWidth + gap)))
+    const byWidth = Math.floor((width + gap) / (columnWidth + gap))
+    return Math.min(maxColumns, Math.max(1, byWidth))
   }
 
   function redistribute() {
     const items = unref(itemsSource) || []
     const w = measureWidth()
-    // keep-alive 隐藏时宽度为 0，此时重算会把全部帖子塞进一列导致回到首页样式崩坏
+    // keep alive 隐藏时宽度为 0，此时重算会把全部帖子塞进一列导致回到首页样式崩坏
     if (!w || !items.length) return
 
     const n = columnCountForWidth(w)

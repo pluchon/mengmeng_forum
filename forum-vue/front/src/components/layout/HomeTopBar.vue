@@ -1,10 +1,5 @@
 <template>
   <header class="home-shell-header">
-    <router-link to="/" class="home-shell-brand">
-      <img class="home-shell-brand-logo" src="/logo.ico" alt="" />
-      <span>{{ siteName }}</span>
-    </router-link>
-
     <div class="home-shell-search">
       <div class="home-search-inner" :class="{ 'home-search-inner--ai-rag': aiSearchMode }">
         <div class="home-search-bar home-search-bar--stream">
@@ -35,17 +30,35 @@
     </div>
 
     <div class="home-shell-tools">
+          <button
+            v-if="userStore.isLoggedIn"
+            type="button"
+            class="vip-status-pill"
+            :class="vipStatusPillClass"
+            :aria-label="vipStatusLabel"
+            @click="openVipPurchase"
+          >
+            <svg
+              class="vip-status-pill__icon"
+              viewBox="0 0 14 14"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path :d="vipStatusIcon.d" :fill="vipStatusIcon.fill" />
+            </svg>
+            <span>{{ vipStatusLabel }}</span>
+          </button>
       <button type="button" class="home-shell-icon-btn" aria-label="设置" @click="goSettings">
         <el-icon><Setting /></el-icon>
       </button>
+      <span class="home-shell-tools-divider" aria-hidden="true" />
       <button
         v-if="userStore.isLoggedIn"
         type="button"
         class="home-shell-points"
         @click="goPoints"
       >
-        <el-icon><Coin /></el-icon>
-        <span>积分 {{ pointsBalance }}</span>
+        <span>萌币 {{ pointsBalance }}</span>
       </button>
       <template v-if="userStore.isLoggedIn">
         <el-dropdown trigger="click" placement="bottom-end">
@@ -55,6 +68,7 @@
               :src="userStore.avatarUrl || defaultAvatar"
               :vip-tier="Number(userStore.vipTier) || 0"
               :vip-expire-at="userStore.vipExpireAt"
+              :show-vip-ring="false"
             />
           </button>
           <template #dropdown>
@@ -70,6 +84,8 @@
         </el-button>
       </template>
     </div>
+
+    <VipSubscribeDialog v-model="vipDialogVisible" />
   </header>
 </template>
 

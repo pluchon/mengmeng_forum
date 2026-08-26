@@ -5,10 +5,10 @@ import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.TimeZone;
 
-// 论坛统一使用东八区墙钟，与 JDBC serverTimezone、Jackson time-zone 对齐
+// 论坛统一使用东八区墙钟，与 JDBC serverTimezone、Jackson time zone 对齐
 public final class ForumDateTimes {
 
-    public static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Shanghai");
+    public static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Taipei");
 
     private ForumDateTimes() {
     }
@@ -17,7 +17,7 @@ public final class ForumDateTimes {
         TimeZone.setDefault(TimeZone.getTimeZone(ZONE_SHANGHAI));
     }
 
-    // 当前时刻，供写入 MySQL datetime（配合 JDBC serverTimezone=Asia/Shanghai）
+    // 当前时刻，供写入 MySQL datetime 配合 JDBC serverTimezone Asia/Taipei
     public static Date now() {
         return Date.from(ZonedDateTime.now(ZONE_SHANGHAI).toInstant());
     }

@@ -24,6 +24,6 @@ public class TetrisSettleRequest {
     // 回放 JSON 字符串
     private String replayPayload;
 
-    // 客户端开局时间戳（毫秒）
+    // 客户端开局时间戳 毫秒
     private Long startedAtMs;
 }

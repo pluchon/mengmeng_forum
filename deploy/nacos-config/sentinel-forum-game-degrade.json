@@ -1,0 +1,19 @@
+[
+  {
+    "resource": "game.ai.gobang",
+    "grade": 0,
+    "count": 15000,
+    "timeWindow": 30,
+    "minRequestAmount": 5,
+    "statIntervalMs": 60000,
+    "slowRatioThreshold": 0.6
+  },
+  {
+    "resource": "game.ai.gobang",
+    "grade": 1,
+    "count": 0.5,
+    "timeWindow": 30,
+    "minRequestAmount": 5,
+    "statIntervalMs": 60000
+  }
+]

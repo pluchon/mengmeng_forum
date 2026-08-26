@@ -1,27 +1,20 @@
-import { EditPen } from '@element-plus/icons-vue'
-import editPwdIconUrl from '@/assets/svg/修改.svg?url'
-import InterestPreferenceDialog from '@/components/recommendation/InterestPreferenceDialog.vue'
+import { CircleCheck, Clock, Key, RefreshRight } from '@element-plus/icons-vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useAccountSecurity } from '@scripts/components/settings/AccountSecurity'
 
 const emit = defineEmits(['open-password'])
 
 const {
-  categoriesWithId,
-  interestDialogVisible,
-  interestDraftBoardIds,
-  interestError,
-  interestLoading,
   loadingLogs,
-  loadingPersonalization,
+  loadSecurityAssessment,
   loginLogPage,
   loginLogPageSize,
   loginLogVisible,
   loginLogs,
-  openInterestEditor,
   openLoginLogs,
   pagedLoginLogs,
-  personalizedEnabled,
-  saveInterestPreferences,
-  savingPersonalization,
-  togglePersonalization,
+  reassessSecurity,
+  securityAssessment,
+  securityAssessmentLoading,
+  securityReassessing,
 } = useAccountSecurity()

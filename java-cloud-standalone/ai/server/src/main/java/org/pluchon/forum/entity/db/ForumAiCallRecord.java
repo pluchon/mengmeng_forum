@@ -10,7 +10,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/** AI 调用预记录表：调用前写入 PENDING，结算后更新状态，防止重复扣费 */
+// AI 调用预记录表：调用前写入 PENDING，结算后更新状态，防止重复扣费
 @Data
 @TableName("forum_ai_call_record")
 public class ForumAiCallRecord {
@@ -26,7 +26,7 @@ public class ForumAiCallRecord {
 
     private String modelCode;
 
-    /** 0=待调用 1=成功 2=失败 3=超时 4=停止 5=断开 */
+    // 0 待调用 1 成功 2 失败 3 超时 4 停止 5 断开
     private Integer callState;
 
     private Integer estimatedPoints;
@@ -37,7 +37,7 @@ public class ForumAiCallRecord {
 
     private Integer outputTokens;
 
-    /** 失败摘要，禁止记录完整用户输入 */
+    // 失败摘要，禁止记录完整用户输入
     private String errorSummary;
 
     @TableLogic

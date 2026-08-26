@@ -1,4 +1,4 @@
-/* append-to-body 弹窗不受 SFC scoped 约束 */
+/* append to body 弹窗不受 SFC scoped 约束 */
 .article-detail-modal.el-dialog {
   pointer-events: auto;
   display: flex;
@@ -7,10 +7,74 @@
   margin-top: 2vh !important;
   border-radius: 16px;
   overflow: hidden;
+  background: #fff;
 }
 
+.article-detail-modal.el-dialog.article-detail-modal--shrinking,
+.article-detail-modal.el-dialog.article-detail-modal--expanding {
+  will-change: transform, width, height;
+  transform-origin: left top !important;
+  margin: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* 打开前：真实弹窗保持隐藏做终态测量； 展开时用 clip path 从封面矩形横向裁开右侧内容区 */
+.article-detail-modal.el-dialog.article-detail-modal--expand-prep {
+  visibility: hidden !important;
+}
+
+.el-overlay:has(.article-detail-modal--expand-prep) {
+  background-color: transparent !important;
+}
+
+/* 关闭收尾：保持不可见直到 el dialog 真正卸载，避免清样式时闪回 */
+.article-detail-modal.el-dialog.article-detail-modal--closed {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.el-overlay.article-detail-overlay--closed {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  background-color: transparent !important;
+}
+
+.article-detail-modal.el-dialog.article-detail-modal--portrait-shell,
+.article-detail-modal.el-dialog.article-detail-modal--expanding,
 .article-detail-modal.el-dialog.article-detail-modal--shrinking {
-  will-change: transform, opacity;
+  border-radius: 16px !important;
+}
+
+.article-detail-modal.el-dialog.article-detail-modal--expanding .red-detail-page--modal,
+.article-detail-modal.el-dialog.article-detail-modal--shrinking .red-detail-page--modal {
+  max-height: none !important;
+  height: 100% !important;
+}
+
+.article-detail-modal.el-dialog.article-detail-modal--shrinking .info-section {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+.article-detail-modal.el-dialog.article-detail-modal--shrinking .detail-video-player__danmaku-layer {
+  visibility: hidden !important;
+}
+
+/* 关闭回落英雄层（兜底，主路径已改为整壳 translate+scale） */
+.forum-feed-close-hero {
+  position: fixed;
+  z-index: 3210;
+  border-radius: 12px;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #111;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
 }
 
 .article-detail-modal--no-top-title .el-dialog__header {
@@ -21,6 +85,11 @@
   height: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.article-detail-modal .article-detail-card-close {
+  top: 8px;
+  right: 8px;
 }
 
 .article-detail-modal .author-header-close {
@@ -61,6 +130,8 @@
   max-height: 85vh;
   background: #fff;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .article-detail-modal .red-detail-container {
@@ -71,6 +142,8 @@
   min-height: 0;
   max-width: none;
   margin: 0;
+  gap: 0;
+  padding: 0;
 }
 
 .article-detail-modal .media-section {
@@ -94,11 +167,32 @@
   min-height: 0;
 }
 
+/* 视频播放器铺满左侧舞台，与图文主图同壳 不再内嵌圆角卡片感 */
+.article-detail-modal--video .detail-video-player {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  overflow: visible;
+  background: #0b0d12;
+}
+
+.article-detail-modal--video .detail-video-player__media {
+  border-radius: 0;
+}
+
+/* 视频打开交接：过渡层盖住前，媒体区保持黑底，不要露出封面图 */
+.article-detail-modal .media-video-open-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background: #0b0d12;
+}
+
 .article-detail-modal .media-gallery-panel {
   background: #fff;
 }
 
-/* 预览层需高于详情弹窗 (3100) */
+/* 预览层需高于详情弹窗 3100 */
 .el-image-viewer__wrapper {
   z-index: 5200 !important;
 }
@@ -114,6 +208,8 @@
   min-width: 300px;
   max-width: none;
   border-left: 1px solid #eee;
+  border-radius: 0;
+  position: relative;
 }
 
 .ai-summary-icon-btn {

@@ -13,7 +13,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 import java.util.Arrays;
 
-// IM 通知 WebSocket（/ws/notify）
+// IM 通知 WebSocket /ws/notify
 @Configuration
 @EnableWebSocket
 @ConditionalOnExpression("'true'.equals('${forum.features.websocket:false}') && 'im'.equals('${forum.domain:}')")

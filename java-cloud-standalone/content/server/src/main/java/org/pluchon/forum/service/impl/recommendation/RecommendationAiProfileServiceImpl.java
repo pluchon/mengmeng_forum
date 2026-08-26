@@ -6,7 +6,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.enums.ArticleStatus;
-import org.pluchon.forum.common.enums.PersonalizationState;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleFavorite;
 import org.pluchon.forum.entity.db.ArticleLike;
@@ -14,10 +13,9 @@ import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.ForumArticleAiFeature;
 import org.pluchon.forum.entity.db.ForumUserAiProfileSnapshot;
-import org.pluchon.forum.entity.db.UserInterestPreference;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
+import org.pluchon.forum.entity.dto.AiRecommendationArticleFeatureRequest;
+import org.pluchon.forum.entity.dto.AiRecommendationProfileRequest;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.pluchon.forum.mapper.ArticleFavoriteMapper;
@@ -27,10 +25,10 @@ import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.ForumArticleAiFeatureMapper;
 import org.pluchon.forum.mapper.ForumUserAiProfileSnapshotMapper;
-import org.pluchon.forum.mapper.UserInterestPreferenceMapper;
 import org.pluchon.forum.mapper.UserRecommendFeedbackMapper;
-import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
+import org.pluchon.forum.service.interfaces.recommendation.UserRecommendationSettingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -59,7 +57,7 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
     private static final String FEATURE_VERSION = "v1";
 
     @Autowired
-    private ContentAiHubInternalFeignClient aiHubService;
+    private ContentAiGatewayService aiHubService;
 
     @Autowired
     private ArticleMapper articleMapper;
@@ -77,9 +75,6 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
     private BoardMapper boardMapper;
 
     @Autowired
-    private UserInterestPreferenceMapper preferenceMapper;
-
-    @Autowired
     private UserRecommendFeedbackMapper feedbackMapper;
 
     @Autowired
@@ -87,6 +82,9 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
 
     @Autowired
     private ForumUserAiProfileSnapshotMapper profileSnapshotMapper;
+
+    @Autowired
+    private UserRecommendationSettingService userRecommendationSettingService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -120,7 +118,9 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
             ForumArticleAiFeature existing = articleFeatureMapper.selectOne(new LambdaQueryWrapper<ForumArticleAiFeature>()
                     .eq(ForumArticleAiFeature::getArticleId, articleId));
             if (existing != null && DELETE_FALSE == existing.getDeleteState()
-                    && contentHash.equals(existing.getContentHash())) {
+                    && contentHash.equals(existing.getContentHash())
+                    && existing.getFeatureJson() != null
+                    && !"{}".equals(existing.getFeatureJson().trim())) {
                 return;
             }
             AiRecommendationArticleFeatureRequest request = new AiRecommendationArticleFeatureRequest();
@@ -202,6 +202,26 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
         return getProfileTopicWeights(userId, "avoidTopics");
     }
 
+    @Override
+    public String getPreferenceQuery(Long userId) {
+        ForumUserAiProfileSnapshot snapshot = findProfileSnapshot(userId);
+        if (snapshot == null || snapshot.getProfileJson() == null || snapshot.getProfileJson().isBlank()) {
+            return "";
+        }
+        try {
+            Map<String, Object> profile = objectMapper.readValue(snapshot.getProfileJson(), new TypeReference<>() { });
+            Object raw = profile.get("preferenceQuery");
+            if (raw == null) {
+                return "";
+            }
+            String query = String.valueOf(raw).trim();
+            return query.length() > 200 ? query.substring(0, 200) : query;
+        } catch (Exception e) {
+            log.warn("用户偏好查询句解析失败 userId={}", userId);
+            return "";
+        }
+    }
+
     private Map<String, Double> getProfileTopicWeights(Long userId, String fieldName) {
         ForumUserAiProfileSnapshot snapshot = findProfileSnapshot(userId);
         if (snapshot == null || snapshot.getProfileJson() == null || snapshot.getProfileJson().isBlank()) {
@@ -218,12 +238,8 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
 
     private void refreshProfile(Long userId) {
         try {
-            if (!isPersonalizationEnabled(userId)) {
-                clearProfile(userId);
-                return;
-            }
             SignalWindow window = collectSignals(userId);
-            List<String> explicitBoards = listExplicitBoardNames(userId);
+            List<String> explicitBoards = userRecommendationSettingService.getInterestBoardNames(userId);
             if (explicitBoards.isEmpty() && window.recent7().isEmpty() && window.recent14().isEmpty()
                     && window.negativeRecent7().isEmpty() && window.negativeRecent14().isEmpty()) {
                 return;
@@ -236,15 +252,18 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
             request.setNegativeRecent14(window.negativeRecent14());
             AiRecommendationProfileResultVO result = aiHubService.generateRecommendationProfile(userId, request);
             if (result == null || ((result.getTopics() == null || result.getTopics().isEmpty())
-                    && (result.getAvoidTopics() == null || result.getAvoidTopics().isEmpty()))) {
+                    && (result.getAvoidTopics() == null || result.getAvoidTopics().isEmpty())
+                    && (result.getPreferenceQuery() == null || result.getPreferenceQuery().isBlank()))) {
                 return;
             }
             Date now = new Date();
             ForumUserAiProfileSnapshot snapshot = findProfileSnapshot(userId);
-            String profileJson = objectMapper.writeValueAsString(Map.of(
-                    "topics", result.getTopics() == null ? List.of() : result.getTopics(),
-                    "avoidTopics", result.getAvoidTopics() == null ? List.of() : result.getAvoidTopics(),
-                    "summary", result.getSummary() == null ? "" : result.getSummary()));
+            Map<String, Object> profilePayload = new HashMap<>();
+            profilePayload.put("topics", result.getTopics() == null ? List.of() : result.getTopics());
+            profilePayload.put("avoidTopics", result.getAvoidTopics() == null ? List.of() : result.getAvoidTopics());
+            profilePayload.put("summary", result.getSummary() == null ? "" : result.getSummary());
+            profilePayload.put("preferenceQuery", result.getPreferenceQuery() == null ? "" : result.getPreferenceQuery().trim());
+            String profileJson = objectMapper.writeValueAsString(profilePayload);
             upsertProfile(snapshot, userId, profileJson, result, now);
         } catch (Exception e) {
             log.warn("推荐用户画像生成失败 userId={}: {}", userId, e.getMessage());
@@ -422,32 +441,6 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
                     }
                 });
         return result;
-    }
-
-    private List<String> listExplicitBoardNames(Long userId) {
-        List<Long> boardIds = preferenceMapper.selectList(new LambdaQueryWrapper<UserInterestPreference>()
-                        .eq(UserInterestPreference::getUserId, userId)
-                        .eq(UserInterestPreference::getDeleteState, DELETE_FALSE)
-                        .gt(UserInterestPreference::getBoardId, 0L)
-                        .select(UserInterestPreference::getBoardId))
-                .stream().map(UserInterestPreference::getBoardId).toList();
-        if (boardIds.isEmpty()) {
-            return List.of();
-        }
-        return boardMapper.selectList(new LambdaQueryWrapper<Board>()
-                        .in(Board::getId, boardIds)
-                        .eq(Board::getDeleteState, DELETE_FALSE)
-                        .eq(Board::getState, STATE_ENABLED)
-                        .select(Board::getName))
-                .stream().map(Board::getName).toList();
-    }
-
-    private boolean isPersonalizationEnabled(Long userId) {
-        UserInterestPreference setting = preferenceMapper.selectOne(new LambdaQueryWrapper<UserInterestPreference>()
-                .eq(UserInterestPreference::getUserId, userId)
-                .eq(UserInterestPreference::getBoardId, 0L)
-                .eq(UserInterestPreference::getDeleteState, DELETE_FALSE));
-        return setting == null || PersonalizationState.isEnabled(setting.getPersonalizedEnabled());
     }
 
     private ForumUserAiProfileSnapshot findProfileSnapshot(Long userId) {

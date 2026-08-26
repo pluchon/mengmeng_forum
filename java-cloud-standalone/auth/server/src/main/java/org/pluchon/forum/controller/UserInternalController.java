@@ -1,8 +1,8 @@
 package org.pluchon.forum.controller;
 
-import org.pluchon.forum.api.auth.UserInternalApi;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.api.auth.UserSearchPageInternalVO;
+import org.pluchon.forum.api.UserInternalApi;
+import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.api.UserSearchPageInternalVO;
 import org.pluchon.forum.converter.UserInternalConverter;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.service.internal.UserInternalReadService;
@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-// 用户域内部接口：契约路径已是 /user/internal/**，勿再叠加 @RequestMapping("/user")
+// 用户域内部接口：契约路径已是 /user/internal/**，勿再叠加 @RequestMapping /user
 @RestController
 public class UserInternalController implements UserInternalApi {
 

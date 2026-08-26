@@ -1,14 +1,24 @@
-import { ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { login as apiLogin, smsLogin, mailLogin } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
+import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import {
+  AUTH_MSG,
+  containsDangerousInput,
+  createAuthRules,
+  digitsOnlyPhone,
+} from '@/utils/authValidators'
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CODE_SUCCESS_FLASH_MS = 650
+const CODE_COUNTDOWN_SEC = 60
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 export function useSignIn(captchaDialogRef) {
   const router = useRouter()
-  const announcementRef = ref()
   const phoneFormRef = ref()
   const userNameFormRef = ref()
   const emailCodeFormRef = ref()
@@ -16,13 +26,17 @@ export function useSignIn(captchaDialogRef) {
 
   const loginTab = ref('phone')
   const loading = ref(false)
-  const sendingCode = ref(false)
-  const sendingMailCode = ref(false)
   const agreed = ref(false)
+
+  // idle | sending | success | countdown | expired
+  const smsCodePhase = ref('idle')
+  const mailCodePhase = ref('idle')
   const countdown = ref(0)
   const mailCountdown = ref(0)
   let smsTimer = null
   let mailTimer = null
+  let smsFlashTimer = null
+  let mailFlashTimer = null
 
   const loginForm = ref({
     userName: '',
@@ -34,45 +48,64 @@ export function useSignIn(captchaDialogRef) {
     emailCode: '',
   })
 
+  const base = createAuthRules()
   const rules = {
-    phoneNum: [
-      { required: true, message: '请输入手机号', trigger: 'blur' },
-      { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' },
-    ],
-    code: [
-      { required: true, message: '请输入验证码', trigger: 'blur' },
-      { len: 4, message: '验证码为 4 位', trigger: 'blur' },
-    ],
+    phoneNum: base.phoneRequired,
+    code: base.smsCode,
     userName: [
       { required: true, message: '请输入用户名', trigger: 'blur' },
       {
         validator: (_rule, value, callback) => {
-          if (value && String(value).includes('@')) {
+          const text = String(value || '').trim()
+          if (text.includes('@')) {
             callback(new Error('邮箱登录请切换到邮箱登录方式'))
-          } else {
-            callback()
+            return
           }
+          if (containsDangerousInput(text)) {
+            callback(new Error(AUTH_MSG.dangerous))
+            return
+          }
+          // 登录兼容历史用户名；新注册已禁止特殊符号
+          if (!text || text.length < 4 || text.length > 20) {
+            callback(new Error(AUTH_MSG.userName))
+            return
+          }
+          callback()
         },
         trigger: 'blur',
       },
     ],
-    password: [
-      { required: true, message: '请输入密码', trigger: 'blur' },
-      { min: 6, message: '密码不能少于 6 位', trigger: 'blur' },
-    ],
-    email: [
-      { required: true, message: '请输入邮箱', trigger: 'blur' },
-      { pattern: EMAIL_RE, message: '邮箱格式不正确', trigger: 'blur' },
-    ],
-    emailPassword: [
-      { required: true, message: '请输入密码', trigger: 'blur' },
-      { min: 6, message: '密码不能少于 6 位', trigger: 'blur' },
-    ],
-    emailCode: [
-      { required: true, message: '请输入验证码', trigger: 'blur' },
-      { len: 6, message: '验证码为 6 位', trigger: 'blur' },
-    ],
+    password: base.password,
+    email: base.emailRequired,
+    emailPassword: base.password,
+    emailCode: base.mailCode,
   }
+
+  const smsCodeLabel = computed(() => {
+    if (smsCodePhase.value === 'countdown') return String(countdown.value)
+    if (smsCodePhase.value === 'expired') return '验证码已过期，点击重发'
+    if (smsCodePhase.value === 'success') return ''
+    return '获取验证码'
+  })
+
+  const mailCodeLabel = computed(() => {
+    if (mailCodePhase.value === 'countdown') return String(mailCountdown.value)
+    if (mailCodePhase.value === 'expired') return '验证码已过期，点击重发'
+    if (mailCodePhase.value === 'success') return ''
+    return '获取验证码'
+  })
+
+  const smsCodeBusy = computed(() =>
+    smsCodePhase.value === 'sending'
+    || smsCodePhase.value === 'success'
+    || smsCodePhase.value === 'countdown',
+  )
+
+  const mailCodeBusy = computed(() =>
+    mailCodePhase.value === 'sending'
+    || mailCodePhase.value === 'success'
+    || mailCodePhase.value === 'countdown',
+  )
 
   async function verifyCaptcha(purpose) {
     const dialog = captchaDialogRef?.value
@@ -87,83 +120,143 @@ export function useSignIn(captchaDialogRef) {
     }
   }
 
+  const clearSmsTimer = () => {
+    if (smsTimer) {
+      clearInterval(smsTimer)
+      smsTimer = null
+    }
+    if (smsFlashTimer) {
+      clearTimeout(smsFlashTimer)
+      smsFlashTimer = null
+    }
+  }
+
+  const clearMailTimer = () => {
+    if (mailTimer) {
+      clearInterval(mailTimer)
+      mailTimer = null
+    }
+    if (mailFlashTimer) {
+      clearTimeout(mailFlashTimer)
+      mailFlashTimer = null
+    }
+  }
+
   const startSmsTimer = () => {
-    countdown.value = 60
-    if (smsTimer) clearInterval(smsTimer)
+    clearSmsTimer()
+    smsCodePhase.value = 'countdown'
+    countdown.value = CODE_COUNTDOWN_SEC
     smsTimer = setInterval(() => {
-      countdown.value--
+      countdown.value -= 1
       if (countdown.value <= 0) {
         clearInterval(smsTimer)
         smsTimer = null
+        countdown.value = 0
+        smsCodePhase.value = 'expired'
       }
     }, 1000)
   }
 
   const startMailTimer = () => {
-    mailCountdown.value = 60
-    if (mailTimer) clearInterval(mailTimer)
+    clearMailTimer()
+    mailCodePhase.value = 'countdown'
+    mailCountdown.value = CODE_COUNTDOWN_SEC
     mailTimer = setInterval(() => {
-      mailCountdown.value--
+      mailCountdown.value -= 1
       if (mailCountdown.value <= 0) {
         clearInterval(mailTimer)
         mailTimer = null
+        mailCountdown.value = 0
+        mailCodePhase.value = 'expired'
       }
     }, 1000)
   }
 
+  const flashSmsSuccessThenCountdown = async () => {
+    smsCodePhase.value = 'success'
+    await sleep(CODE_SUCCESS_FLASH_MS)
+    if (smsCodePhase.value === 'success') {
+      startSmsTimer()
+    }
+  }
+
+  const flashMailSuccessThenCountdown = async () => {
+    mailCodePhase.value = 'success'
+    await sleep(CODE_SUCCESS_FLASH_MS)
+    if (mailCodePhase.value === 'success') {
+      startMailTimer()
+    }
+  }
+
   const handleSendCode = async () => {
+    if (smsCodeBusy.value) return
+
     try {
       await phoneFormRef.value.validateField('phoneNum')
     } catch {
+      await nextTick()
+      shakeAuthFormErrors(phoneFormRef.value)
       return
     }
 
-    sendingCode.value = true
+    smsCodePhase.value = 'sending'
     try {
       const ticket = await verifyCaptcha('SMS_SEND')
-      if (!ticket) return
+      if (!ticket) {
+        smsCodePhase.value = 'idle'
+        return
+      }
 
       const res = await smsLogin(loginForm.value.phoneNum, undefined, ticket)
       if (res.code === 0) {
         loginForm.value.code = ''
-        ElMessage.success(res.message || '验证码已发送')
-        startSmsTimer()
+        await flashSmsSuccessThenCountdown()
+      } else {
+        smsCodePhase.value = 'idle'
       }
     } catch {
-      /* 错误已由 axios 响应拦截器提示 */
-    } finally {
-      sendingCode.value = false
+      smsCodePhase.value = 'idle'
     }
   }
 
   const handleSendMailCode = async () => {
+    if (mailCodeBusy.value) return
+
     try {
       await emailCodeFormRef.value.validateField('email')
     } catch {
+      await nextTick()
+      shakeAuthFormErrors(emailCodeFormRef.value)
       return
     }
 
-    sendingMailCode.value = true
+    mailCodePhase.value = 'sending'
     try {
       const ticket = await verifyCaptcha('MAIL_SEND')
-      if (!ticket) return
+      if (!ticket) {
+        mailCodePhase.value = 'idle'
+        return
+      }
 
       const res = await mailLogin(loginForm.value.email, undefined, ticket)
       if (res.code === 0) {
         loginForm.value.emailCode = ''
-        ElMessage.success(res.message || '验证码已发送')
-        startMailTimer()
+        await flashMailSuccessThenCountdown()
+      } else {
+        mailCodePhase.value = 'idle'
       }
     } catch {
-      /* 错误已由 axios 响应拦截器提示 */
-    } finally {
-      sendingMailCode.value = false
+      mailCodePhase.value = 'idle'
     }
   }
 
   const afterLoginSuccess = () => {
     ElMessage.success('欢迎回来')
     router.push('/')
+  }
+
+  const onPhoneNumInput = (val) => {
+    loginForm.value.phoneNum = digitsOnlyPhone(val)
   }
 
   const handleLogin = async () => {
@@ -181,6 +274,8 @@ export function useSignIn(captchaDialogRef) {
     try {
       await formRef.validate()
     } catch {
+      await nextTick()
+      shakeAuthFormErrors(formRef)
       return
     }
 
@@ -246,14 +341,12 @@ export function useSignIn(captchaDialogRef) {
   }
 
   onUnmounted(() => {
-    if (smsTimer) clearInterval(smsTimer)
-    if (mailTimer) clearInterval(mailTimer)
+    clearSmsTimer()
+    clearMailTimer()
   })
 
   return {
-    AnnouncementBoard,
     agreed,
-    announcementRef,
     countdown,
     emailCodeFormRef,
     emailPasswordFormRef,
@@ -263,11 +356,16 @@ export function useSignIn(captchaDialogRef) {
     loading,
     loginForm,
     loginTab,
+    mailCodeBusy,
+    mailCodeLabel,
+    mailCodePhase,
     mailCountdown,
+    onPhoneNumInput,
     phoneFormRef,
     rules,
-    sendingCode,
-    sendingMailCode,
+    smsCodeBusy,
+    smsCodeLabel,
+    smsCodePhase,
     userNameFormRef,
   }
 }

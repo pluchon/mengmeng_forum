@@ -31,6 +31,9 @@ public class TetrisBoardViewVO {
     // 消行数
     private Integer linesCleared;
 
+    // 当前连击数（连续消行放置次数，零消后归零）
+    private Integer combo;
+
     // 是否已结束
     private Boolean gameOver;
 

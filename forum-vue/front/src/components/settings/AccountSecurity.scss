@@ -1,46 +1,174 @@
-.personalization-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
+.settings-section--account {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
-.interest-edit-button {
+.security-overview {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #eaf5ef;
+  border-radius: 16px;
+  background: #f4fbf7;
+}
+
+.security-overview__icon,
+.settings-feature-row__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 14px;
+}
+
+.security-overview__icon {
+  color: #35a675;
+  background: transparent;
+  font-size: 23px;
+}
+
+.security-overview__content,
+.settings-feature-row__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.security-overview__title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.security-overview h2,
+.security-overview p,
+.settings-feature-row h3,
+.settings-feature-row p {
+  margin: 0;
+}
+
+.security-overview h2,
+.settings-feature-row h3 {
+  color: #5d495c;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.security-overview p,
+.settings-feature-row p {
+  margin-top: 5px;
+  color: #a08e9e;
+  font-size: 13px;
+}
+
+.security-level {
+  color: #4e8b68;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.security-level--warning {
+  color: #bd7b4c;
+}
+
+.security-level--risk {
+  color: #c45b5b;
+}
+
+.security-overview__risk {
+  margin-top: 6px !important;
+  color: #c45b5b !important;
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+
+.security-overview__refresh {
+  margin-left: auto;
   width: 34px;
   height: 34px;
-  border-color: #eceef2;
-  background: #f7f8fa;
-  color: #6b7280;
-  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+  border-color: #bce6d2;
+  color: #329a6b;
+  background: #ffffff;
+  box-shadow: 0 3px 10px rgba(53, 166, 117, 0.1);
 }
 
-.interest-edit-button:hover,
-.interest-edit-button:focus-visible {
-  border-color: rgba(255, 36, 66, .35);
-  background: #fff1f3;
-  color: #ff2442;
-  transform: translateY(-1px);
+.security-overview__refresh:hover,
+.security-overview__refresh:focus-visible {
+  border-color: #77c89f;
+  color: #218258;
+  background: #eaf8f0;
 }
 
-.settings-interest-editor {
-  min-height: 180px;
+.security-overview__reassessing {
+  margin-left: auto;
+  color: #418b6c;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-:global(:root[data-theme='dark']) .interest-edit-button {
-  border-color: rgba(148, 163, 184, .2);
-  background: rgba(30, 41, 59, .72);
-  color: #c8d3e3;
+.settings-feature-list {
+  margin-top: 14px;
 }
 
-:global(:root[data-theme='dark']) .interest-edit-button:hover,
-:global(:root[data-theme='dark']) .interest-edit-button:focus-visible {
-  border-color: rgba(255, 111, 134, .35);
-  background: rgba(255, 111, 134, .12);
-  color: #ff9aaa;
+.settings-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 94px;
+  border-bottom: 1px solid #f3edf3;
+}
+
+.settings-feature-row__icon--rose {
+  color: #e675a7;
+  background: #fff0f6;
+  font-size: 19px;
+}
+
+.settings-feature-row__icon--violet {
+  color: #8b64d2;
+  background: #f2ecff;
+  font-size: 19px;
+}
+
+.settings-secondary-button {
+  min-width: 92px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.settings-secondary-button {
+  border-color: #ece1ed;
+  color: #8c7198;
+  background: #faf6fc;
+}
+
+.login-log-pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.premium-dialog--login-log .el-dialog__body {
+  min-height: 430px;
+}
+
+.premium-dialog--login-log .login-log-table {
+  min-height: 350px;
 }
 
 @media (max-width: 640px) {
-  .personalization-control {
-    gap: 8px;
+  .security-overview {
+    flex-wrap: wrap;
   }
+
+  .security-overview__refresh {
+    margin-left: 57px;
+  }
+
+  .security-overview__reassessing {
+    margin-left: 57px;
+  }
+
 }

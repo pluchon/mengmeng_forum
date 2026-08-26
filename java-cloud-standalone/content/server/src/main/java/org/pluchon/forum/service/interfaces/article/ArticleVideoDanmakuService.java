@@ -9,5 +9,5 @@ public interface ArticleVideoDanmakuService {
 
     DanmakuItemVO sendDanmaku(SendDanmakuRequest req, Long loginUserId);
 
-    List<DanmakuItemVO> listByTimeWindow(Long articleId, Integer fromMs, Integer toMs);
+    List<DanmakuItemVO> listByTimeWindow(Long articleId, Integer fromMs, Integer toMs, Long loginUserId);
 }

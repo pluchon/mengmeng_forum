@@ -14,19 +14,19 @@ spring:
         namespace: ${NACOS_NAMESPACE:}
   config:
     import:
-      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
-      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+      - optional:nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
   # auth 不发不收 MQ；排除自动装配，避免 RabbitHealthIndicator 去连 Broker
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
     # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
-    url: ${FORUM_AUTH_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_auth_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    url: ${FORUM_AUTH_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_auth_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
     username: ${FORUM_AUTH_DB_USERNAME:forum_auth}
-    password: ${FORUM_AUTH_DB_PASSWORD:forum_auth_pass}
+    password: ${FORUM_AUTH_DB_PASSWORD}
 
 management:
   health:

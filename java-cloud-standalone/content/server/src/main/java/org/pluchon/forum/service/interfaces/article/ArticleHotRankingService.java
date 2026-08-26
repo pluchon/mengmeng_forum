@@ -25,4 +25,7 @@ public interface ArticleHotRankingService {
     void removeFromRanking(Long articleId);
 
     Map<Long, HotArticleTrendDirection> getTrendDirections(List<Long> articleIds);
+
+    // 批量读取当前热榜综合分
+    Map<Long, Double> getHotScores(List<Long> articleIds);
 }

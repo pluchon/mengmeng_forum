@@ -1,7 +1,9 @@
-import { Coin, Search, Setting } from '@element-plus/icons-vue'
+import { Search, Setting } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import { SITE_NAME as siteName } from '@/constants/site'
+import VipSubscribeDialog from '@/components/vip/VipSubscribeDialog/VipSubscribeDialog.vue'
 import { useHomeShellContext } from '@/composables/useHomeShell'
+import { useVipStatusEntry } from '@/composables/useVipStatusEntry'
+import '@/assets/styles/vip-status-pill.css'
 
 const {
   aiSearchMode,
@@ -16,3 +18,11 @@ const {
   toggleAiSearchMode,
   userStore,
 } = useHomeShellContext()
+
+const {
+  vipDialogVisible,
+  vipStatusIcon,
+  vipStatusLabel,
+  vipStatusPillClass,
+  openVipPurchase,
+} = useVipStatusEntry(userStore)

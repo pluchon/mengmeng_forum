@@ -1,27 +1,32 @@
 import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CaretBottom, CaretTop, ChatDotRound } from '@element-plus/icons-vue'
-import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import IpRegionLabel from '@/components/common/IpRegionLabel.vue'
+import { CaretBottom, CaretTop, ChatDotRound, Flag } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
+import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
+import CommentExpandableText from '@/components/article/CommentExpandableText.vue'
 import { getSubReplyList, likeSubReply, unlikeSubReply } from '@/api/reply'
-import { DEFAULT_AVATAR } from '@/utils/constants'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
+import { useUserStore } from '@/stores/user'
+import { DEFAULT_AVATAR } from '@/utils/constants'
+import { formatCommentTimeShanghai } from '@/utils/datetime'
 import '@/assets/styles/article.css'
 
 const props = defineProps({
   replyId: { type: [Number, String], required: true },
   articleId: { type: [Number, String], required: true },
+  authorId: { type: [Number, String], default: null },
   readOnly: { type: Boolean, default: true },
   refreshToken: { type: Number, default: 0 },
   subReplyCount: { type: Number, default: 0 },
+  canAccept: { type: Boolean, default: false },
+  acceptSaving: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['reply', 'open-shop'])
-const router = useRouter()
+const emit = defineEmits(['reply', 'open-profile', 'open-shop', 'report', 'accept'])
+const userStore = useUserStore()
 const defaultAvatar = DEFAULT_AVATAR
 const expanded = ref(false)
 const subList = ref([])
@@ -29,13 +34,52 @@ const page = ref(1)
 const pageSize = ref(5)
 const total = ref(0)
 
-function goProfile(userId) {
-  if (userId == null || userId === '') return
-  router.push(`/profile/${userId}`)
+function emitProfile(userId) {
+  const uid = String(userId ?? '').trim()
+  if (!/^\d+$/.test(uid) || /^0+$/.test(uid)) return
+  emit('open-profile', uid)
 }
 
 function toggle() {
   expanded.value = !expanded.value
+}
+
+function resolveIpRegion(sub) {
+  return String(
+    sub?.subReply?.ipRegion
+    || sub?.ipRegion
+    || sub?.subReply?.ip_region
+    || '',
+  ).trim()
+}
+
+function formatCommentMeta(createTime, ipRegion) {
+  const time = formatCommentTimeShanghai(createTime)
+  const region = String(ipRegion || '').trim()
+  if (time && region) return `${time} · ${region}`
+  return time || region || ''
+}
+
+function compactNickname(value) {
+  const chars = Array.from(String(value || '用户'))
+  return chars.length > 4 ? `${chars.slice(0, 4).join('')}...` : chars.join('')
+}
+
+function isAuthorReply(sub) {
+  const uid = sub?.postUser?.id
+  if (uid == null || props.authorId == null || props.authorId === '') return false
+  return Number(uid) === Number(props.authorId)
+}
+
+function isViolated(sub) {
+  return !!(sub?.violated || sub?.subReply?.violated)
+}
+
+function isOwnSub(sub) {
+  const uid = sub?.postUser?.id
+  const me = userStore.userInfo?.id
+  if (uid == null || me == null) return false
+  return Number(uid) === Number(me)
 }
 
 async function loadSubs(p = 1) {
@@ -56,8 +100,22 @@ function emitReply(sub) {
     replyId: props.replyId,
     replyUserId: sub?.postUser?.id || null,
     nickname: sub?.postUser?.nickname || sub?.replyUserNickname || '用户',
-    content: sub?.subReply?.content || '',
+    content: isViolated(sub) ? '' : (sub?.subReply?.content || ''),
   })
+}
+
+function emitReport(sub) {
+  if (isOwnSub(sub) || isAuthorReply(sub)) return
+  emit('report', {
+    subReplyId: sub?.subReply?.id,
+    replyId: props.replyId,
+    articleId: props.articleId,
+  })
+}
+
+function emitAccept(sub) {
+  if (!props.canAccept || props.acceptSaving || sub?.accepted || isAuthorReply(sub)) return
+  emit('accept', sub)
 }
 
 function shouldShowReplyMention(sub) {

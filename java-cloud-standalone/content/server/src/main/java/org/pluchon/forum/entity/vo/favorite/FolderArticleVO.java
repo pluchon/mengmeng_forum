@@ -9,10 +9,7 @@ import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 import java.util.Date;
 
-/**
- * 收藏夹内单条帖子的展示项: 帖子摘要信息 + 作者简介 + 收藏时间.
- * 收藏时间 favoriteTime 来自 article_favorite.create_time, 方便前端做"最近收藏"排序.
- */
+// 收藏夹内单条帖子的展示项: 帖子摘要信息 + 作者简介 + 收藏时间. 收藏时间 favoriteTime 来自 article_favorite.create_time, 方便前端做 最近收藏 排序.
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 用户看板娘偏好，对应 user_mascot_preference（ai 权威）
+// 用户看板娘偏好，对应 user_mascot_preference ai 权威
 @Data
 @TableName("user_mascot_preference")
 public class UserMascotPreference {

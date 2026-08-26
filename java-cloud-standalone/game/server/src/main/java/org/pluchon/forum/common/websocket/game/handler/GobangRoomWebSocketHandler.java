@@ -60,7 +60,7 @@ public class GobangRoomWebSocketHandler extends TextWebSocketHandler {
             )));
         } catch (Exception e) {
             if (!proxyJoin(session, roomId, userId)) {
-                // 房间可能已经结算并被内存清理，握手成功后也要给前端可处理的错误，避免 1011 异常断连。
+                // 房间可能已经结算并被内存清理，握手成功后也要给前端可处理的错误，避免 1011 异常断连
                 log.warn("五子棋房间连接失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
                 gameConnectionRegistry.send(session, objectMapper.writeValueAsString(GameWsResponse.fail(
                         "room_error",

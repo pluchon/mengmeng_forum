@@ -3,8 +3,8 @@ package org.pluchon.forum.service.interfaces.groupchat;
 import org.pluchon.forum.entity.dto.groupchat.CreateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupMuteMemberRequest;
-import org.pluchon.forum.entity.dto.groupchat.ReportGroupChatMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.SendGroupChatMessageRequest;
+import org.pluchon.forum.entity.dto.groupchat.SendGroupChatAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupMemberRoleRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
@@ -14,8 +14,7 @@ import org.pluchon.forum.entity.vo.groupchat.GroupChatJoinRequestVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMemberVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMessageVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionVO;
-
-import java.util.List;
+import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionSearchResponse;
 
 // 群聊业务接口
 public interface GroupChatService {
@@ -25,6 +24,9 @@ public interface GroupChatService {
     GroupChatDetailVO updateGroup(Long groupId, UpdateGroupChatRequest request, Long loginUserId);
 
     PageResult<GroupChatSessionVO> queryMySessions(Long loginUserId, Integer pageNum, Integer pageSize);
+
+    PageResult<GroupChatSessionSearchResponse> searchSessions(Long loginUserId, String keyword,
+                                                              Integer pageNum, Integer pageSize);
 
     PageResult<GroupChatDetailVO> queryPublicGroups(Long loginUserId, Integer pageNum, Integer pageSize);
 
@@ -38,9 +40,15 @@ public interface GroupChatService {
 
     GroupChatJoinRequestVO queryJoinRequest(Long requestId, Long loginUserId);
 
-    PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, Integer pageNum, Integer pageSize);
+    PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, String keyword,
+                                                                 Integer pageNum, Integer pageSize);
 
     void markReceivedJoinRequestsRead(Long loginUserId);
+
+    PageResult<GroupChatJoinRequestVO> queryAppliedJoinRequests(Long loginUserId, String keyword,
+                                                                Integer pageNum, Integer pageSize);
+
+    void markAppliedJoinRequestsRead(Long loginUserId);
 
     GroupChatJoinRequestVO approveJoinRequest(Long requestId, Long loginUserId);
 
@@ -62,16 +70,16 @@ public interface GroupChatService {
 
     GroupChatMessageVO sendMessage(SendGroupChatMessageRequest request, Long loginUserId);
 
-    // 追加群聊语音通话摘要
-    GroupChatMessageVO appendVoiceCallSummary(Long groupId, Long senderUserId, String durationText);
+    GroupChatMessageVO sendAlbum(SendGroupChatAlbumMessageRequest request, Long loginUserId);
+
+    void recallMessage(Long messageId, Long loginUserId);
 
     PageResult<GroupChatMessageVO> queryMessages(Long groupId, Long loginUserId, Integer pageNum, Integer pageSize);
 
     void markRead(Long groupId, Long messageId, Long loginUserId);
 
-    void reportMessage(Long groupId, ReportGroupChatMessageRequest request, Long loginUserId);
-
-    List<GroupChatMemberVO> queryMembers(Long groupId, Long loginUserId);
+    PageResult<GroupChatMemberVO> queryMembers(Long groupId, Long loginUserId, String keyword,
+                                               String sortMode, Integer pageNum, Integer pageSize);
 
     GroupChatMemberVO updateMyRemark(Long groupId, UpdateGroupMemberRemarkRequest request, Long loginUserId);
 }

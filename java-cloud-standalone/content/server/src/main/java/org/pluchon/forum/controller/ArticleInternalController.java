@@ -27,4 +27,18 @@ public class ArticleInternalController implements ArticleInternalApi {
             @RequestParam(value = "limit", defaultValue = "40") Integer limit) {
         return articleInternalReadService.searchCandidates(keyword, limit);
     }
+
+    @Override
+    public List<String> listLikedTitles(
+            @RequestParam("userId") Long userId,
+            @RequestParam(value = "limit", defaultValue = "6") Integer limit) {
+        return articleInternalReadService.listLikedTitles(userId, limit);
+    }
+
+    @Override
+    public List<String> listFavoriteSongTitles(
+            @RequestParam("userId") Long userId,
+            @RequestParam(value = "limit", defaultValue = "6") Integer limit) {
+        return articleInternalReadService.listFavoriteSongTitles(userId, limit);
+    }
 }

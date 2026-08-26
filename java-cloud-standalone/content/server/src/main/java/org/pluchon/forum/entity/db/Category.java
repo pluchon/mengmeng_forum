@@ -18,7 +18,7 @@ public class Category {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "分类名称", example = "代码世界")
+    @Schema(description = "分类名称", example = "动画番剧")
     private String name;
 
     @Schema(description = "分类描述")

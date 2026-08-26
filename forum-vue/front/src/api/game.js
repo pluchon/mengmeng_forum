@@ -4,6 +4,22 @@ export function getGameCenterOverview() {
   return request({ url: '/game/center/overview', method: 'get' })
 }
 
+export function getGamePage(params) {
+  return request({ url: '/game/page', method: 'get', params })
+}
+
+export function getGameCategories() {
+  return request({ url: '/game/categories', method: 'get' })
+}
+
+export function getGameStatisticsSummary() {
+  return request({ url: '/game/statistics/summary', method: 'get' })
+}
+
+export function getGameStatisticsRecords(params) {
+  return request({ url: '/game/statistics/records', method: 'get', params })
+}
+
 export function getGobangProfile() {
   return request({ url: '/game/gobang/profile', method: 'get' })
 }

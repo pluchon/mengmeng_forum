@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -61,9 +62,12 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     @Autowired
     private ArticleHotRankingService articleHotRankingService;
 
-    // ============================================================
+    @Autowired
+    private OssConfig ossConfig;
+
+    
     // 创建 / 修改 / 删除
-    // ============================================================
+    
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createFolder(CreateFolderRequest req, Long loginUserId) {
@@ -97,7 +101,7 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     @Transactional(rollbackFor = Exception.class)
     public void updateFolder(UpdateFolderRequest req, Long loginUserId) {
         UserFavoriteFolder folder = requireFolder(req.getFolderId(), loginUserId, true);
-        // 同名校验(仅当用户改了名字才做)
+        // 同名校验 仅当用户改了名字才做
         if (StringUtils.hasLength(req.getName()) && !Objects.equals(req.getName().trim(), folder.getName())) {
             String newName = req.getName().trim();
             Long dup = folderMapper.selectCount(new LambdaQueryWrapper<UserFavoriteFolder>()
@@ -117,6 +121,13 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (req.getSortOrder() != null) {
             folder.setSortOrder(req.getSortOrder());
         }
+        if (StringUtils.hasText(req.getCoverUrl())) {
+            String coverUrl = req.getCoverUrl().trim();
+            if (!ossConfig.matchesPublicObjectUrl(coverUrl, Constant.OSS_PATH_FAVORITE_FOLDER)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "收藏夹封面地址不合法"));
+            }
+            folder.setCoverUrl(coverUrl);
+        }
         if (folderMapper.updateById(folder) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
@@ -129,37 +140,36 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (folder.getIsDefault() != null && folder.getIsDefault() == DEFAULT_YES) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_DEFAULT_FOLDER_CANNOT_DELETE));
         }
-        // 1) 列出夹内所有未删除的收藏记录, 用于回扣 article.favorite_count 与热帖榜分
+        // 查询收藏夹内有效记录用于联动更新
         List<ArticleFavorite> favorites = favoriteMapper.selectList(new LambdaQueryWrapper<ArticleFavorite>()
                 .eq(ArticleFavorite::getFolderId, folderId)
                 .ne(ArticleFavorite::getDeleteState, DELETE_YES));
-        // 2) 软删夹内所有 article_favorite
+        // 软删除收藏记录
         if (!favorites.isEmpty()) {
             favoriteMapper.update(null, new LambdaUpdateWrapper<ArticleFavorite>()
                     .eq(ArticleFavorite::getFolderId, folderId)
                     .ne(ArticleFavorite::getDeleteState, DELETE_YES)
                     .set(ArticleFavorite::getDeleteState, DELETE_YES));
         }
-        // 3) 软删夹本身
+        // 软删除收藏夹
         if (folderMapper.update(null, new LambdaUpdateWrapper<UserFavoriteFolder>()
                 .eq(UserFavoriteFolder::getId, folderId)
                 .ne(UserFavoriteFolder::getDeleteState, DELETE_YES)
                 .set(UserFavoriteFolder::getDeleteState, DELETE_YES)) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
-        // 4) 事务提交后再回扣帖子计数 / 热帖榜分; 这里直接 SQL 内 -1, 不再走 article 的状态校验
+        // 回扣帖子收藏数与热度得分
         for (ArticleFavorite f : favorites) {
             articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                     .eq(Article::getId, f.getArticleId())
                     .setSql("favorite_count = GREATEST(favorite_count - 1, 0)"));
             articleHotRankingService.incrementScore(f.getArticleId(), -Constant.HOT_SCORE_WEIGHT_FAVORITE);
         }
-        log.info("用户 {} 删除收藏夹 {} 完成, 联动清理 {} 条收藏记录", loginUserId, folderId, favorites.size());
     }
 
-    // ============================================================
+    
     // 查询
-    // ============================================================
+    
     @Override
     public PageResult<FolderVO> queryMyFolders(Long loginUserId, Integer pageNum, Integer pageSize) {
         if (loginUserId == null || loginUserId <= 0) {
@@ -204,9 +214,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         return new PageResult<>(records, result.getTotal(), p, s, result.getPages(), result.hasNext());
     }
 
-    // ============================================================
+    
     // 默认夹懒加载
-    // ============================================================
+    
     @Override
     public Long ensureDefaultFolder(Long userId) {
         if (userId == null || userId <= 0) {
@@ -233,7 +243,7 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             log.info("为用户 {} 创建默认收藏夹 id={}", userId, folder.getId());
             return folder.getId();
         } catch (DuplicateKeyException dup) {
-            // 并发场景: 极端情况下两次调用可能同时走 insert; 退化为再查一次
+            // 并发场景: 极端情况下两次调用可能同时走 插入; 退化为再查一次
             List<UserFavoriteFolder> againRows = folderMapper.selectPage(new Page<>(1, 1, false),
                     new LambdaQueryWrapper<UserFavoriteFolder>()
                     .eq(UserFavoriteFolder::getUserId, userId)
@@ -244,9 +254,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         }
     }
 
-    // ============================================================
+    
     // 共通: 校验夹归属与可见性
-    // ============================================================
+    
     @Override
     public UserFavoriteFolder requireFolder(Long folderId, Long loginUserId, boolean mustOwn) {
         if (folderId == null || folderId <= 0) {
@@ -262,7 +272,7 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (mustOwn && !owner) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_NO_PERMISSION));
         }
-        // 只读场景: 私密夹仅本人可见, 其他人按"不存在"返回, 避免被探测出私密夹列表
+        // 只读场景: 私密夹仅本人可见, 其他人按 不存在 返回, 避免被探测出私密夹列表
         if (!mustOwn && !owner && folder.getIsPublic() != null && folder.getIsPublic() == PUBLIC_NO) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_NOT_EXISTS));
         }

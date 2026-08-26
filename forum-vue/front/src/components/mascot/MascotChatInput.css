@@ -20,12 +20,20 @@
 }
 
 .mascot-input-shell {
-  position: relative;
+  flex: 1;
+  min-width: 0;
   border-radius: 12px;
   background: var(--el-fill-color-blank, #fff);
   border: 1px solid var(--el-border-color, #dcdfe6);
-  padding: 8px 44px 8px 12px;
+  padding: 8px 12px;
   min-height: 40px;
+  box-sizing: border-box;
+}
+
+.mascot-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .mascot-input-box {
@@ -50,19 +58,20 @@
 }
 
 .mascot-send-btn {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 32px;
-  height: 32px;
+  min-width: 82px;
+  align-self: stretch;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--el-color-primary, #409eff);
   color: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .mascot-send-btn:disabled {
@@ -149,8 +158,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -167,6 +176,52 @@
 .mascot-context-control__compress:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.mascot-context-control__compact-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  background: currentColor;
+  -webkit-mask: url('@/assets/svg/compact.svg') center / contain no-repeat;
+  mask: url('@/assets/svg/compact.svg') center / contain no-repeat;
+}
+
+.mascot-context-control__compact-icon.is-loading {
+  animation: rotating 2s linear infinite;
+}
+
+.mascot-context-control__memory {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mascot-context-control__memory:hover:not(:disabled) {
+  color: var(--el-color-primary, #409eff);
+  background: var(--el-fill-color-light, #f5f7fa);
+}
+
+.mascot-context-control__memory:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.mascot-context-control__memory-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  background: currentColor;
+  -webkit-mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
+  mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
 }
 
 .mascot-generation-hint {

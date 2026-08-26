@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.mq.ForumProducer;
@@ -18,8 +17,7 @@ import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameRoomPlayer;
 import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
 import org.pluchon.forum.entity.vo.game.GameRoomSnapshotVO;
 import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
@@ -55,6 +53,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 // 井字棋房间服务，复用游戏结算链路但不开放观战角色
 @Slf4j
@@ -62,11 +63,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class JinziRoomServiceImpl implements JinziRoomService {
 
-    // roomId -> 房间状态
+    // roomId > 房间状态
     private final ConcurrentHashMap<String, JinziRoom> rooms = new ConcurrentHashMap<>();
 
-    // userId -> roomId，用于防止同一用户进入多个房间
+    // userId > roomId，用于防止同一用户进入多个房间
     private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
+
+    private final ScheduledExecutorService roundScheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Autowired
     private GameConnectionRegistry gameConnectionRegistry;
@@ -102,9 +105,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private GameSettlementEventMapper gameSettlementEventMapper;
 
     @Autowired
-    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
-
-    @Autowired
     private GameUserLookupService gameUserLookupService;
 
     @Autowired
@@ -134,6 +134,14 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     }
 
     private String createMatchedRoomInternal(Long userIdA, Long userIdB) {
+        String existingRoomA = userRoomIds.get(userIdA);
+        if (existingRoomA != null && rooms.containsKey(existingRoomA)) {
+            return existingRoomA;
+        }
+        String existingRoomB = userRoomIds.get(userIdB);
+        if (existingRoomB != null && rooms.containsKey(existingRoomB)) {
+            return existingRoomB;
+        }
         JinziRoom room = new JinziRoom(userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
@@ -215,31 +223,66 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
             boolean win = jinziRuleEngine.hasLine(room.getBoard(), chess);
             boolean draw = !win && jinziRuleEngine.isDraw(room.getBoard());
-            Long nextTurnUserId = win || draw ? null : room.opponentOf(userId);
+
             if (win) {
-                room.setWinningLine(jinziRuleEngine.winningLine(room.getBoard(), chess));
+                room.recordRoundWin(chess, userId, GameConstants.END_LINE, jinziRuleEngine.winningLine(room.getBoard(), chess));
+            } else if (draw) {
+                room.recordRoundDraw(GameConstants.END_DRAW);
             }
+
+            boolean matchOver = room.isMatchOver();
+            Long matchWinnerUserId = matchOver ? room.getMatchWinnerId() : null;
+            String matchEndReason = matchOver ? (win ? GameConstants.END_LINE : (draw ? GameConstants.END_DRAW : room.getRoundEndReason())) : null;
+
+            Long nextTurnUserId = (win || draw || matchOver) ? null : room.opponentOf(userId);
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
             saveRoomSnapshot(room);
             cacheRoomState(room);
+
             JinziMoveVO moveVO = new JinziMoveVO(
                     userId,
                     row,
                     col,
                     chess,
                     nextTurnUserId,
+                    (win || draw),
                     win ? userId : null,
                     win ? GameConstants.END_LINE : (draw ? GameConstants.END_DRAW : null),
-                    win ? room.getWinningLine() : null
+                    win ? room.getWinningLine() : null,
+                    room.getBlackWins(),
+                    room.getWhiteWins(),
+                    room.getDrawRounds(),
+                    room.getCurrentRound(),
+                    matchOver,
+                    matchWinnerUserId,
+                    matchEndReason
             );
             broadcast(roomId, GameWsResponse.ok("move_accepted", requestId, moveVO));
-            if (win) {
-                finishRoom(room, userId, GameConstants.END_LINE);
-            } else if (draw) {
-                finishRoom(room, null, GameConstants.END_DRAW);
+
+            if (matchOver) {
+                finishRoom(room, matchWinnerUserId, matchEndReason != null ? matchEndReason : GameConstants.END_LINE);
+            } else if (win || draw) {
+                scheduleNextRound(room);
             }
         }
+    }
+
+    private void scheduleNextRound(JinziRoom room) {
+        roundScheduler.schedule(() -> {
+            try {
+                synchronized (room) {
+                    if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus()) && room.isRoundFinished()) {
+                        room.startNextRound();
+                        saveRoomSnapshot(room);
+                        cacheRoomState(room);
+                        sendStateToRoom(room, "round_started");
+                    }
+                }
+            } catch (Exception e) {
+                log.error("井字棋开启下一小局失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
+            }
+        }, 5000, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -327,7 +370,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         long now = System.currentTimeMillis();
         for (JinziRoom room : rooms.values()) {
             synchronized (room) {
-                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
+                if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus()) || room.isRoundFinished() || room.getCurrentTurnUserId() == null) {
                     continue;
                 }
                 long moveLeft = room.currentTurnRemainingMs(now);
@@ -342,6 +385,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     private String validateMove(JinziRoom room, Long userId, Integer row, Integer col) {
         if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
             return "当前对战已经结束，不能继续落子";
+        }
+        if (room.isRoundFinished()) {
+            return "本小局已结束，即将开始下一局";
         }
         if (!room.contains(userId)) {
             return "只有对局玩家可以落子";
@@ -404,42 +450,14 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             record.setLoserScoreDelta(loserDelta(rankResult));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
-            record.setDeleteState((byte) 0);
+            record.setDeleteState(GameConstants.NOT_DELETED);
             gameJinziMatchRecordMapper.insert(record);
-            settlePoints(room, record, winnerId, loserId, scoreDelta, Math.abs(loserDelta(rankResult)));
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
         saveRoomSnapshot(room);
         publishGameFinishedEvent(finishedEvent);
         sendFinalStateToRoom(room);
         cleanupRoom(room);
-    }
-
-    private void settlePoints(
-            JinziRoom room,
-            GameJinziMatchRecord record,
-            Long winnerId,
-            Long loserId,
-            int scoreDelta,
-            int loserPenalty
-    ) {
-        if (winnerId == null || loserId == null || scoreDelta <= 0) {
-            return;
-        }
-        if (!GameConstants.AI_USER_ID.equals(winnerId)) {
-            gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
-                    Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "井字棋胜利奖励",
-                    "game:jinzi:win:" + room.getRoomId());
-        }
-        if (!GameConstants.AI_USER_ID.equals(loserId)) {
-            Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
-            int loserPoints = balance == null ? 0 : balance;
-            if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
-                        Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "井字棋对局扣除",
-                        "game:jinzi:lose:" + room.getRoomId());
-            }
-        }
     }
 
     private GameRankSettlementCommand createRankCommand(JinziRoom room, Long winnerId, Long loserId, String endReason) {
@@ -501,6 +519,14 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 room.copyBoard(),
                 room.getWinnerUserId(),
                 room.getEndReason(),
+                room.getBlackWins(),
+                room.getWhiteWins(),
+                room.getDrawRounds(),
+                room.getCurrentRound(),
+                room.getRoundStartingChess(),
+                room.isRoundFinished(),
+                room.getRoundWinnerUserId(),
+                room.getRoundEndReason(),
                 room.remainingGameMs(room.getBlackUserId(), now),
                 room.remainingGameMs(room.getWhiteUserId(), now),
                 room.currentTurnRemainingMs(now),
@@ -535,7 +561,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         Map<Long, GameUserProfile> profileMap = new HashMap<>();
         gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, GameConstants.JINZI)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
                 .in(GameUserProfile::getUserId, userIds))
                 .forEach(profile -> profileMap.put(profile.getUserId(), profile));
         return profileMap;
@@ -575,13 +601,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         );
     }
 
-    private boolean inBoard(int row, int col) {
-        return row >= 0
-                && row < GameConstants.JINZI_BOARD_SIZE
-                && col >= 0
-                && col < GameConstants.JINZI_BOARD_SIZE;
-    }
-
     private void saveRoomSnapshot(JinziRoom room) {
         long now = System.currentTimeMillis();
         GameRoomSnapshotVO snapshot = new GameRoomSnapshotVO(
@@ -592,7 +611,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 room.getWhiteUserId(),
                 room.getCurrentTurnUserId(),
                 room.copyBoard(),
-                countMoves(room),
+                room.getTotalMoveCount(),
                 room.getWinnerUserId(),
                 room.getEndReason(),
                 toGobangPoints(room.getWinningLine()),
@@ -620,7 +639,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         event.setRecordId(record.getId());
         event.setStatus(GameConstants.SETTLEMENT_EVENT_CREATED);
         event.setRetryCount(0);
-        event.setDeleteState((byte) 0);
+        event.setDeleteState(GameConstants.NOT_DELETED);
         gameSettlementEventMapper.insert(event);
         return new GameFinishedMqVO(
                 eventId,
@@ -670,37 +689,25 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         row.setRoomId(roomId);
         row.setUserId(userId);
         row.setRoomRole(role);
-        row.setDeleteState((byte) 0);
+        row.setDeleteState(GameConstants.NOT_DELETED);
         try {
             gameRoomPlayerMapper.insert(row);
         } catch (Exception e) {
-            log.debug("保存井字棋房间玩家映射失败 roomId={}, userId={}, role={}", roomId, userId, role);
+            log.warn("保存井字棋房间玩家映射失败 roomId={}, userId={}, role={}, error={}", roomId, userId, role, e.getMessage());
         }
     }
 
     private void saveMove(JinziRoom room, Long userId, Integer row, Integer col, Integer chess, Long spentMs) {
         GameJinziRoomMove move = new GameJinziRoomMove();
         move.setRoomId(room.getRoomId());
-        move.setMoveNo(countMoves(room) + 1);
+        move.setMoveNo(room.nextMoveNo());
         move.setUserId(userId);
         move.setRowIndex(row);
         move.setColIndex(col);
         move.setChess(chess);
         move.setSpentMs(spentMs);
-        move.setDeleteState((byte) 0);
+        move.setDeleteState(GameConstants.NOT_DELETED);
         gameJinziRoomMoveMapper.insert(move);
-    }
-
-    private int countMoves(JinziRoom room) {
-        int count = 0;
-        for (int row = 0; row < GameConstants.JINZI_BOARD_SIZE; row++) {
-            for (int col = 0; col < GameConstants.JINZI_BOARD_SIZE; col++) {
-                if (room.getBoard()[row][col] != 0) {
-                    count++;
-                }
-            }
-        }
-        return count;
     }
 
     private JinziRoom requireRoom(String roomId, Long userId) {

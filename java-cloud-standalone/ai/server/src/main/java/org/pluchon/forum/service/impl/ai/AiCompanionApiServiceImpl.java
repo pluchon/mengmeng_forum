@@ -3,18 +3,21 @@ package org.pluchon.forum.service.impl.ai;
 import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.pluchon.forum.common.constant.Constant;
-import org.pluchon.forum.common.enums.AiCallState;
+import org.pluchon.forum.common.AiCallState;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.converter.AiHubConverter;
 import org.pluchon.forum.api.content.AiGeneratedImageUploadRequest;
 import org.pluchon.forum.cloud.feign.AiFileInternalFeignClient;
-import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
-import org.pluchon.forum.entity.dto.ai.AiImageRequest;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
-import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
+import org.pluchon.forum.entity.dto.AiArticleCoverRequest;
+import org.pluchon.forum.entity.dto.AiCoverHintsRequest;
+import org.pluchon.forum.entity.dto.AiImageRequest;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiPolishRequest;
+import org.pluchon.forum.entity.vo.ai.AiArticleCoverResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleCoverResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
@@ -34,15 +37,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 // AI 润色/生图用例：配额预占、Hub 调用、计费与 OSS 落库
 @Slf4j
 @Service
 public class AiCompanionApiServiceImpl implements AiCompanionApiService {
-
-    private static final String K_QWEN_FLASH = "qwen_flash";
-    private static final String K_QWEN_PRO = "qwen_pro";
 
     @Autowired
     private AiUserLookupService aiUserLookupService;
@@ -79,15 +82,17 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         int out = Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS;
         int img = 0;
         if ("drawing".equalsIgnoreCase(skill) || "image".equalsIgnoreCase(skill)) {
-            boolean premium = "premium".equalsIgnoreCase(quality);
-            model = premium ? Constant.AI_MODEL_IMAGE_PREMIUM : Constant.AI_MODEL_IMAGE_NORMAL;
+            if ("premium".equalsIgnoreCase(quality)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
+            }
+            model = Constant.AI_MODEL_IMAGE_NORMAL;
             in = 0;
             out = 0;
             img = 1;
         } else {
             AiUserContext user = requireUser(userId);
             model = aiQuotaService.hasAdvancedQwenAccess(user)
-                    ? Constant.AI_MODEL_QWEN_DEEP : "qwen3.6-flash";
+                    ? Constant.AI_MODEL_QWEN_DEEP : "qwen3.7-flash";
         }
         AiPriceEstimateVO vo = new AiPriceEstimateVO();
         vo.setModelCode(model);
@@ -106,12 +111,11 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         req.setTitle(StringUtils.hasText(req.getTitle()) ? req.getTitle().trim() : "");
         req.setContent(req.getContent().trim());
         req.setEditorMode("markdown".equalsIgnoreCase(req.getEditorMode()) ? "markdown" : "rich");
-        String kind = aiQuotaService.hasAdvancedQwenAccess(user) ? K_QWEN_PRO : K_QWEN_FLASH;
-        req.setKind(kind);
-        String modelCode = modelCodeForPolishKind(kind);
-        if (modelCode == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        if (!StringUtils.hasText(req.getClientRequestId())) {
+            req.setClientRequestId(UUID.randomUUID().toString());
         }
+        String modelCode = Constant.AI_MODEL_QWEN_FLASH;
+        boolean useAdvancedQuota = aiQuotaService.hasAdvancedQwenAccess(user);
         boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
         Long workspaceId = req.getWorkspaceId();
         if (workspaceId != null) {
@@ -132,22 +136,23 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
-                if (K_QWEN_FLASH.equals(kind)) {
-                    aiQuotaService.consumeQwenFlash(user);
-                    reservedQwenFlash = true;
-                } else if (K_QWEN_PRO.equals(kind)) {
+                if (useAdvancedQuota) {
                     aiQuotaService.consumeAdvancedLlm(user);
                     reservedAdvanced = true;
                 } else {
-                    throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+                    aiQuotaService.consumeQwenFlash(user);
+                    reservedQwenFlash = true;
                 }
             }
             AiHubPolishResultVO hubResult = aiHubService.polish(user.getId(), req);
-            AiModelUsageDTO usage = aiPointsBillingService.normalizeUsage(hubResult.getUsage(), modelCode);
+            List<AiModelUsageDTO> usages = normalizeUsageItems(
+                    hubResult.getUsageItems(), hubResult.getUsage(), modelCode);
+            AiModelUsageDTO usage = aiPointsBillingService.aggregateUsage(usages, modelCode);
+            hubResult.setUsage(usage);
             String relatedId = StringUtils.hasText(req.getClientRequestId())
                     ? req.getClientRequestId().trim() : null;
-            Map<String, Object> billing = aiCallRecordService.settleSuccess(
-                    begin, user, "ai_polish", usage, relatedId,
+            Map<String, Object> billing = aiCallRecordService.settleSuccessBatch(
+                    begin, user, "ai_polish", usages, modelCode, relatedId,
                     Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
                     System.currentTimeMillis() - startMs);
             AiPolishResponseVO response = AiHubConverter.toPolishResponse(hubResult, billing);
@@ -159,14 +164,95 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             response.setWorkspaceId(workspaceId);
             response.setWorkspaceVersionId(versionId);
             return response;
-        } catch (ApplicationException ex) {
-            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releasePolishReservation(user, reservedQwenFlash, reservedAdvanced);
-            throw ex;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
             releasePolishReservation(user, reservedQwenFlash, reservedAdvanced);
             throw ex;
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AiArticleCoverResponseVO articleCover(Long userId, AiArticleCoverRequest req) {
+        AiUserContext user = requireUser(userId);
+        if (req == null || !StringUtils.hasText(req.getContent()) || !StringUtils.hasText(req.getQuality())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        req.setTitle(StringUtils.hasText(req.getTitle()) ? req.getTitle().trim() : "");
+        req.setContent(req.getContent().trim());
+        req.setEditorMode("markdown".equalsIgnoreCase(req.getEditorMode()) ? "markdown" : "rich");
+        req.setUserPrompt(StringUtils.hasText(req.getUserPrompt()) ? req.getUserPrompt().trim() : "");
+        String quality = req.getQuality().trim().toLowerCase(Locale.ROOT);
+        if (!"normal".equals(quality)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
+        }
+        req.setQuality(quality);
+        if (!StringUtils.hasText(req.getClientRequestId())) {
+            req.setClientRequestId(UUID.randomUUID().toString());
+        }
+        String imageModel = Constant.AI_MODEL_IMAGE_NORMAL;
+        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
+        if (usePoints) {
+            aiPointsBillingService.ensureBalance(
+                    user, aiPointsBillingService.estimatePoints(imageModel, 0, 0, 1));
+        }
+
+        boolean reservedNormal = false;
+        boolean reservedQwenFlash = false;
+        AiCallBeginResult begin = aiCallRecordService.beginCall(
+                user.getId(), "article_cover", req.getClientRequestId(), imageModel);
+        rejectDuplicateAiBegin(begin);
+        long startMs = System.currentTimeMillis();
+        try {
+            if (!usePoints) {
+                aiQuotaService.consumeQwenFlash(user);
+                reservedQwenFlash = true;
+                aiQuotaService.consumeImageNormal(user);
+                reservedNormal = true;
+            }
+            AiHubArticleCoverResultVO hubResult = aiHubService.articleCover(user.getId(), req);
+            if (!StringUtils.hasText(hubResult.getUrl())) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 未返回封面图片"));
+            }
+            List<AiModelUsageDTO> usages = normalizeUsageItems(
+                    hubResult.getUsageItems(), hubResult.getUsage(), imageModel);
+            AiModelUsageDTO aggregate = aiPointsBillingService.aggregateUsage(usages, imageModel);
+            hubResult.setUsage(aggregate);
+            Map<String, Object> billing = aiCallRecordService.settleSuccessBatch(
+                    begin, user, "article_cover", usages, imageModel, req.getClientRequestId(),
+                    Constant.POINTS_SOURCE_AI_IMAGE, usePoints, System.currentTimeMillis() - startMs);
+
+            String base = user.getId() + "_article_cover_" + System.currentTimeMillis();
+            String storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
+                    new AiGeneratedImageUploadRequest(
+                            user.getId(), hubResult.getUrl(), Constant.OSS_PATH_AI_GENERATION_ARTICLE, base));
+            AiArticleCoverResponseVO response = AiHubConverter.toArticleCoverResponse(hubResult, storedUrl, billing);
+            aiQuotaService.recordCoverHint(user);
+            if (req.getWorkspaceId() != null) {
+                Long workspaceId = aiWorkspaceService.ensureWorkspace(
+                        user.getId(), req.getWorkspaceId(), req.getCheckpointId());
+                Long versionId = aiWorkspaceService.appendGeneratedArtifact(
+                        user.getId(), workspaceId, req.getParentVersionId(),
+                        "ARTICLE_COVER", artifactJson("ARTICLE_COVER", response), req.getCheckpointId());
+                response.setWorkspaceId(workspaceId);
+                response.setWorkspaceVersionId(versionId);
+            }
+            return response;
+        } catch (ApplicationException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
+            releaseImageReservation(user, reservedNormal);
+            if (reservedQwenFlash) {
+                aiQuotaService.releaseQwenFlash(user);
+            }
+            throw ex;
+        } catch (RuntimeException ex) {
+            aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
+            releaseImageReservation(user, reservedNormal);
+            if (reservedQwenFlash) {
+                aiQuotaService.releaseQwenFlash(user);
+            }
+            log.error("AI 文章封面生成失败 userId={} quality={}: {}", user.getId(), quality, ex.getMessage(), ex);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 封面生成失败，请稍后重试"));
         }
     }
 
@@ -203,30 +289,27 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
         String q = req.getQuality().trim().toLowerCase(Locale.ROOT);
         req.setQuality(q);
-        if (!"normal".equals(q) && !"premium".equals(q)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        if (!"normal".equals(q)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
         }
-        String modelCode = "premium".equals(q) ? Constant.AI_MODEL_IMAGE_PREMIUM : Constant.AI_MODEL_IMAGE_NORMAL;
+        String modelCode = Constant.AI_MODEL_IMAGE_NORMAL;
         boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
         if (usePoints) {
             aiPointsBillingService.ensureBalance(user, aiPointsBillingService.estimatePoints(modelCode, 0, 0, 1));
         }
 
         boolean reservedNormal = false;
-        boolean reservedPremium = false;
+        boolean reservedQwenFlash = false;
         AiCallBeginResult begin = aiCallRecordService.beginCall(
                 user.getId(), "companion_image", req.getClientRequestId(), modelCode);
         rejectDuplicateAiBegin(begin);
         long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
-                if ("normal".equals(q)) {
-                    aiQuotaService.consumeImageNormal(user);
-                    reservedNormal = true;
-                } else {
-                    aiQuotaService.consumeImagePremium(user);
-                    reservedPremium = true;
-                }
+                aiQuotaService.consumeQwenFlash(user);
+                reservedQwenFlash = true;
+                aiQuotaService.consumeImageNormal(user);
+                reservedNormal = true;
             }
             boolean ephemeral = Boolean.TRUE.equals(req.getEphemeral());
             Long dbSessionId = null;
@@ -254,7 +337,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             if (url == null || url.isBlank()) {
                 log.warn("AI 生图返回空 URL userId={} quality={}", user.getId(), q);
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE,
-                        "AI 未返回图片地址，请检查进阶生图密钥(HUANAPI_IMAGE_KEY)或改用普通档"));
+                        "AI 未返回图片地址，请稍后重试"));
             }
             String storedUrl;
             long ts = System.currentTimeMillis();
@@ -283,11 +366,17 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseImageReservation(user, reservedNormal, reservedPremium);
+            releaseImageReservation(user, reservedNormal);
+            if (reservedQwenFlash) {
+                aiQuotaService.releaseQwenFlash(user);
+            }
             throw ex;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseImageReservation(user, reservedNormal, reservedPremium);
+            releaseImageReservation(user, reservedNormal);
+            if (reservedQwenFlash) {
+                aiQuotaService.releaseQwenFlash(user);
+            }
             log.error("AI 生图失败 userId={} quality={}: {}", user.getId(), q, ex.getMessage(), ex);
             String detail = ex.getMessage() != null && !ex.getMessage().isBlank()
                     ? ex.getMessage() : "请稍后重试";
@@ -315,12 +404,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
-    private void releaseImageReservation(AiUserContext user, boolean reservedNormal, boolean reservedPremium) {
+    private void releaseImageReservation(AiUserContext user, boolean reservedNormal) {
         if (reservedNormal) {
             aiQuotaService.releaseImageNormal(user);
-        }
-        if (reservedPremium) {
-            aiQuotaService.releaseImagePremium(user);
         }
     }
 
@@ -336,15 +422,20 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
-    private static String modelCodeForPolishKind(String kind) {
-        if (kind == null) {
-            return null;
+    private List<AiModelUsageDTO> normalizeUsageItems(
+            List<AiModelUsageDTO> usageItems,
+            AiModelUsageDTO aggregate,
+            String fallbackModel) {
+        List<AiModelUsageDTO> normalized = new ArrayList<>();
+        if (usageItems != null) {
+            for (AiModelUsageDTO item : usageItems) {
+                normalized.add(aiPointsBillingService.normalizeUsage(item, fallbackModel));
+            }
         }
-        return switch (kind) {
-            case K_QWEN_FLASH -> "qwen3.6-flash";
-            case K_QWEN_PRO -> Constant.AI_MODEL_QWEN_DEEP;
-            default -> null;
-        };
+        if (normalized.isEmpty()) {
+            normalized.add(aiPointsBillingService.normalizeUsage(aggregate, fallbackModel));
+        }
+        return normalized;
     }
 
     private String artifactJson(String artifactType, Object payload) {

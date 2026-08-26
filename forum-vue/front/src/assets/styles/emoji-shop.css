@@ -10,86 +10,92 @@
   min-height: 0;
   width: 100%;
   box-sizing: border-box;
-  background: #fff;
+  background:
+    radial-gradient(circle at 8% 14%, rgba(255, 228, 239, 0.58), transparent 21rem),
+    radial-gradient(circle at 93% 18%, rgba(229, 224, 255, 0.62), transparent 25rem),
+    #fcfafd;
 }
 
 .emoji-shop-inner {
   flex: 1;
   width: 100%;
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 28px 20px 48px;
   box-sizing: border-box;
 }
 
-/* —— 顶栏：标题 + 搜索/上传（同一行） —— */
+/* 标题横幅：小萌表情工坊场景，左右留给页面功能 */
 .emoji-shop-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  position: relative;
+  height: 92px;
+  min-height: 92px;
+  display: flex;
   align-items: center;
-  gap: 24px;
-  margin-bottom: 28px;
+  justify-content: space-between;
+  overflow: hidden;
+  margin-bottom: 18px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background: linear-gradient(96deg, #fce8f0 5%, #f8ebf5 47%, #eee8ff 95%);
+  box-shadow: 0 9px 28px rgba(179, 127, 157, 0.09);
+}
+
+.emoji-shop-hero-scene {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: min(48%, 560px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  background-image: var(--emoji-shop-hero-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: auto 306%;
 }
 
 .emoji-shop-hero-left {
+  position: relative;
+  z-index: 2;
   min-width: 0;
 }
 
 .emoji-shop-title {
-  margin: 0 0 8px;
-  font-size: 2rem;
-  font-weight: 900;
-  color: #1a1c1c;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  margin: 0 0 5px;
+  font-size: 19px;
+  font-weight: 800;
+  color: #6b4560;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
 }
 
 .emoji-shop-desc {
   margin: 0;
-  font-size: 14px;
-  color: #5e3f3e;
+  font-size: 12px;
+  color: #9d7587;
   line-height: 1.5;
 }
 
 .emoji-shop-hero-right {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-}
-
-.emoji-shop-search-wrap {
-  width: min(360px, 42vw);
-  flex-shrink: 1;
-  min-width: 200px;
-}
-
-.emoji-shop-search :deep(.el-input__wrapper) {
-  height: 42px;
-  border-radius: 999px;
-  background: #f3f3f3 !important;
-  box-shadow: none !important;
-}
-
-.emoji-shop-search-wrap.is-vip:focus-within :deep(.el-input__wrapper) {
-  box-shadow:
-    0 0 0 1px rgba(26, 26, 26, 0.95) inset,
-    0 0 0 2px rgba(201, 162, 39, 0.92) inset,
-    0 0 0 3px rgba(201, 162, 39, 0.28),
-    0 0 12px rgba(201, 162, 39, 0.22) !important;
 }
 
 .emoji-shop-upload-btn {
   height: 42px;
-  padding: 0 20px;
+  padding: 0 16px;
   border: none;
-  border-radius: 999px;
-  background: var(--primary-red, #ff2442);
+  border-radius: 11px;
+  background: #f05c91;
   color: #fff;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -97,13 +103,13 @@
   gap: 8px;
   white-space: nowrap;
   flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(255, 36, 66, 0.28);
+  box-shadow: 0 5px 12px rgba(205, 76, 126, 0.2);
   transition: transform 0.15s ease, background 0.15s ease;
 }
 
 .emoji-shop-upload-btn:hover {
-  background: #e61e3b;
-  transform: scale(1.02);
+  background: #e74f85;
+  transform: translateY(-1px);
 }
 
 .emoji-shop-upload-icon {
@@ -114,13 +120,13 @@
   filter: brightness(0) invert(1);
 }
 
-/* —— 筛选栏 —— */
+/* 筛选栏 */
 .emoji-shop-filter-bar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 18px;
+  margin-bottom: 16px;
   padding-bottom: 0;
   border-bottom: 1px solid #f0f0f0;
   flex-wrap: nowrap;
@@ -140,7 +146,7 @@
 .emoji-shop-main-tabs {
   display: flex;
   align-items: flex-end;
-  gap: 28px;
+  gap: 22px;
   min-width: max-content;
 }
 
@@ -148,10 +154,10 @@
   position: relative;
   border: none;
   background: transparent;
-  padding: 8px 0 14px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #999;
+  padding: 7px 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #978d95;
   cursor: pointer;
   line-height: 1.2;
   white-space: nowrap;
@@ -159,11 +165,11 @@
 }
 
 .emoji-shop-main-tab:hover {
-  color: #666;
+  color: #6b4560;
 }
 
 .emoji-shop-main-tab.is-active {
-  color: #1a1c1c;
+  color: #3e3540;
   font-weight: 800;
 }
 
@@ -175,83 +181,143 @@
   bottom: 0;
   height: 3px;
   border-radius: 2px;
-  background: var(--primary-red, #ff2442);
+  background: #f04f83;
 }
 
 .emoji-shop-owned-tab {
-  margin-left: 4px;
+  margin-left: 5px;
+  color: #5c7db5;
 }
 
-.emoji-shop-price-sort {
+.emoji-shop-owned-tab.is-active::after {
+  background: #7398d7;
+}
+
+.emoji-shop-main-tab.emoji-shop-owned-tab.is-active {
+  color: #4f76b3;
+}
+
+.emoji-shop-draft-tab {
+  color: #6da16e;
+}
+
+.emoji-shop-draft-tab.is-active::after {
+  background: #8acb7c;
+}
+
+.emoji-shop-main-tab.emoji-shop-draft-tab.is-active {
+  color: #5f9f61;
+}
+
+.emoji-shop-filter-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
-  padding-bottom: 12px;
   white-space: nowrap;
 }
 
-.emoji-shop-price-sort-btn {
-  border: none;
-  background: transparent;
-  padding: 0;
+.emoji-shop-search-wrap {
+  width: 224px;
+  min-width: 0;
+}
+
+.emoji-shop-search :deep(.el-input__wrapper) {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #e5dce8;
+  border-radius: 11px;
+  background: #fff !important;
+  box-shadow: 0 3px 10px rgb(148 112 151 / 8%) !important;
+}
+
+.emoji-shop-search :deep(.el-input__inner) {
   font-size: 13px;
-  font-weight: 600;
-  color: #999;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  transition: color 0.15s ease;
+  color: #504552;
 }
 
-.emoji-shop-price-sort-btn:hover {
-  color: var(--primary-red, #ff2442);
+.emoji-shop-search :deep(.el-input__inner::placeholder) {
+  color: #a69da5;
 }
 
-.emoji-shop-price-sort-btn.is-active {
-  color: var(--primary-red, #ff2442);
+.emoji-shop-search :deep(.el-input__prefix-inner) {
+  color: #a69da5;
+}
+
+.emoji-shop-search-wrap.is-vip:focus-within :deep(.el-input__wrapper) {
+  border-color: #e978a0;
+  box-shadow: 0 0 0 2px rgb(240 79 131 / 12%) !important;
+}
+
+.emoji-shop-sort-select {
+  width: 154px;
+}
+
+.emoji-shop-sort-select :deep(.el-select__wrapper) {
+  min-height: 36px;
+  padding: 0 10px 0 12px;
+  border: 1px solid #e5dce8;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgb(148 112 151 / 8%) !important;
+}
+
+.emoji-shop-sort-select :deep(.el-select__selected-item) {
+  color: #775770;
+  font-size: 13px;
   font-weight: 700;
 }
 
-.emoji-shop-price-sort-arrow {
+.emoji-shop-sort-select :deep(.el-select__selected-item),
+.emoji-shop-sort-select :deep(.el-select__placeholder) {
+  color: #8d838c;
   font-size: 12px;
-  line-height: 1;
 }
 
-/* —— 商品网格 —— */
+.emoji-shop-sort-select :deep(.el-select__caret) {
+  color: #8d838c;
+}
+
+/* 商品网格 */
+.emoji-shop-content {
+  position: relative;
+  min-height: 280px;
+}
+
+.emoji-shop-content :deep(.el-loading-mask) {
+  border-radius: 16px;
+}
+
 .emoji-shop-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 20px;
-}
-
-.emoji-shop-grid--loading {
-  min-height: 280px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .emoji-shop-card {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  border-radius: 17px;
   background: #fff;
-  border: 1px solid #f0f0f0;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eee7ec;
+  box-shadow: 0 3px 12px rgba(79, 51, 70, 0.035);
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .emoji-shop-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-3px);
+  border-color: #f3cad9;
+  box-shadow: 0 10px 22px rgba(168, 93, 130, 0.12);
 }
 
 .emoji-shop-card-cover {
+  position: relative;
   aspect-ratio: 1;
   margin: 12px 12px 0;
   border-radius: 12px;
-  background: #f7f7f7;
+  background: #fbf4f7;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
@@ -275,22 +341,92 @@
 }
 
 .emoji-shop-card-body {
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   flex: 1;
 }
 
+.emoji-shop-card-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(44, 32, 39, 0.1);
+}
+
+.emoji-shop-card-status.is-online {
+  color: #4d9860;
+}
+
+.emoji-shop-card-status.is-offline {
+  color: #a27b43;
+}
+
+.emoji-shop-card-status.is-pending {
+  color: #6f7db8;
+}
+
+.emoji-shop-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
 .emoji-shop-card-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
-  color: #1a1c1c;
+  color: #4b3d47;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.emoji-shop-card-author {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: #8f8490;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.emoji-shop-card-author-avatar {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.emoji-shop-card-author-avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5e7ed;
+  color: #bd718f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.emoji-shop-card-author-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .emoji-shop-card-footer {
@@ -307,7 +443,7 @@
   gap: 4px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--primary-red, #ff2442);
+  color: #d85d88;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -320,8 +456,8 @@
 
 .emoji-shop-card-action {
   flex-shrink: 0;
-  height: 32px;
-  padding: 0 18px;
+  height: 28px;
+  padding: 0 14px;
   border: none;
   border-radius: 999px;
   font-size: 13px;
@@ -331,23 +467,44 @@
 }
 
 .emoji-shop-card-action.is-redeem {
-  background: #8b1530;
-  color: #fff;
+  background: #fbe7ef;
+  color: #c85b84;
 }
 
 .emoji-shop-card-action.is-redeem:hover {
-  background: var(--primary-red, #ff2442);
-  transform: scale(1.03);
+  background: #f05c91;
+  color: #fff;
+  transform: translateY(-1px);
 }
 
 .emoji-shop-card-action.is-owned {
-  background: #f0f0f0;
-  color: #999;
+  background: #f3f0f2;
+  color: #9e949c;
   cursor: default;
 }
 
 .emoji-shop-empty {
-  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 500px;
+  padding: 48px 16px 40px;
+}
+
+.emoji-shop-empty-image {
+  width: min(220px, 52vw);
+  height: auto;
+  object-fit: contain;
+}
+
+.emoji-shop-empty-text {
+  margin: 0;
+  color: #9d8c99;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .emoji-shop-pagination {
@@ -356,9 +513,6 @@
   justify-content: center;
 }
 
-.emoji-shop-pagination :deep(.el-pagination) {
-  justify-content: center;
-}
 
 /* 详情页 / 旧组件复用 */
 .emoji-shop-card-cover.note-cover-img,
@@ -384,20 +538,8 @@
 
 @media (max-width: 900px) {
   .emoji-shop-hero {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  .emoji-shop-hero-right {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .emoji-shop-search-wrap {
-    flex: 1;
-    width: auto;
-    min-width: 0;
+    height: 88px;
+    min-height: 88px;
   }
 
   .emoji-shop-filter-bar {
@@ -405,9 +547,81 @@
     align-items: flex-start;
   }
 
-  .emoji-shop-price-sort {
+  .emoji-shop-filter-actions {
     width: 100%;
-    padding-bottom: 10px;
+    justify-content: flex-end;
+  }
+}
+
+.emoji-shop-card-action.is-owned:disabled {
+  max-width: 138px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.emoji-shop-card-action.is-draft {
+  background: #eaf7e9;
+  color: #5a9a61;
+}
+
+.emoji-shop-card-action.is-draft:hover:not(:disabled) {
+  background: #71b978;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.emoji-shop-card-action.is-draft:disabled {
+  background: #eef0f6;
+  color: #8b90a3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 620px) {
+  .emoji-shop-inner {
+    padding: 18px 12px 36px;
+  }
+
+  .emoji-shop-hero {
+    height: 82px;
+    min-height: 82px;
+    padding: 0 14px;
+  }
+
+  .emoji-shop-hero-scene {
+    width: 58%;
+  }
+
+  .emoji-shop-title {
+    font-size: 18px;
+  }
+
+  .emoji-shop-desc {
+    max-width: 190px;
+  }
+
+  .emoji-shop-upload-btn {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 0;
+  }
+
+  .emoji-shop-upload-icon {
+    margin: 0;
+  }
+
+  .emoji-shop-filter-actions {
+    justify-content: space-between;
+  }
+
+  .emoji-shop-search-wrap {
+    width: min(190px, calc(100vw - 190px));
+  }
+
+  .emoji-shop-sort-select {
+    width: 136px;
   }
 }
 

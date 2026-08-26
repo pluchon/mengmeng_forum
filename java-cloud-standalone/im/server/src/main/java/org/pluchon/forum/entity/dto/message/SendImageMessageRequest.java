@@ -3,11 +3,7 @@ package org.pluchon.forum.entity.dto.message;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-/**
- * 发送图片消息请求.
- * 注意: 图片消息不允许同时携带文字; 服务端会强制把 content 置空.
- * 流程: 前端先调 /file/uploadChatImage 拿到 OSS URL, 再用此请求体调 /message/sendImage
- */
+// 发送图片消息请求. 注意: 图片消息不允许同时携带文字; 服务端会强制把 content 置空. 流程: 前端先调 /file/uploadChatImage 拿到 OSS URL, 再用此请求体调 /message/sendImage
 @Data
 @Schema(description = "发送图片/GIF 消息请求")
 public class SendImageMessageRequest {
@@ -32,4 +28,7 @@ public class SendImageMessageRequest {
 
     @Schema(description = "媒体像素高 (前端在 onload 后回填; 缺省允许)")
     private Integer mediaHeight;
+
+    @Schema(description = "商城表情包ID；发送商城表情时必填")
+    private Long emojiShopId;
 }

@@ -1,10 +1,11 @@
 package org.pluchon.forum.service.impl.article;
 
-import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
 import org.pluchon.forum.service.interfaces.board.BoardService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
+import org.pluchon.forum.service.interfaces.creator.CreatorDashboardService;
 import org.pluchon.forum.cloud.feign.ContentUserInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -31,7 +32,10 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
     private ArticleHotRankingService articleHotRankingService;
 
     @Autowired
-    private ContentAiHubInternalFeignClient aiHubService;
+    private ContentAiGatewayService aiHubService;
+
+    @Autowired
+    private CreatorDashboardService creatorDashboardService;
 
     @Override
     public void rollbackPublishedExposure(Long articleId, Long boardId, Long userId) {
@@ -47,5 +51,6 @@ public class ArticlePublishSideEffectServiceImpl implements ArticlePublishSideEf
     public void promotePublishedExposure(Long articleId, Long userId, Long boardId) {
         contentUserInternalFeignClient.incrementArticleCount(userId);
         boardService.addOneById(boardId);
+        creatorDashboardService.recordPublished(userId);
     }
 }

@@ -9,7 +9,7 @@ public class LotteryRecentDrawVO {
 
     private String prizeName;
 
-    /** 1：来自带 batchKey 的多抽批次（当前仅有十连）；0：单抽 */
+    // 1：来自带 batchKey 的多抽批次 当前仅有十连 ；0：单抽
     @Schema(description = "是否属于十连批次中的一抽")
     private Integer multiDraw;
 }

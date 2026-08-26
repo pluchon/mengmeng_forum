@@ -81,7 +81,7 @@ export function useSearchArticle() {
       if (preferAiRag.value) nextQuery.ai = '1'
       router.replace({ path: '/search', query: nextQuery })
     } catch {
-      // ignore
+      // 忽略
     }
   }
 

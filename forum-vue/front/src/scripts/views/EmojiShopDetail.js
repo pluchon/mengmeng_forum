@@ -1,6 +1,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { getShopDetail, purchaseShop, updateShopStatus } from '@/api/shop'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
@@ -40,7 +41,7 @@ async function onPurchase() {
   const id = shopId()
   if (!detail.value || detail.value.owned) return
   try {
-    await ElMessageBox.confirm(
+    await confirmDialog(
       detail.value.price === 0 ? '确认领取该表情包？' : `确认消耗 ${detail.value.price} 积分购买？`,
       '购买确认',
       { type: 'warning' },
@@ -70,7 +71,7 @@ async function setShelf(status) {
       await load()
     }
   } catch {
-    /* 拦截器已提示 */
+    // 拦截器已提示
   }
 }
 

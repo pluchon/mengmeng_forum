@@ -4,15 +4,19 @@ server:
 spring:
   application:
     name: forum-gateway
+  main:
+    banner-mode: off
   config:
     import:
-      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
-      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
+      - optional:nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
   cloud:
     nacos:
       discovery:
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
         namespace: ${NACOS_NAMESPACE:}
+        # 本地多网卡环境可通过 Windows 用户变量指定可由其他宿主服务访问的注册地址；Docker 未设置时自动探测
+        ip: ${NACOS_DISCOVERY_IP:}
       config:
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
         namespace: ${NACOS_NAMESPACE:}
@@ -22,6 +26,10 @@ spring:
           discovery:
             locator:
               enabled: false
+          httpclient:
+            connect-timeout: 5000
+            # 普通业务默认 60s；AI 长调用在 forum-ai 路由 metadata 单独放宽
+            response-timeout: 60s
           routes:
             - id: forum-auth
               uri: lb://forum-auth
@@ -30,11 +38,11 @@ spring:
             - id: forum-content
               uri: lb://forum-content
               predicates:
-                - Path=/article/**,/articleReply/**,/articleSubReply/**,/like/**,/replyLike/**,/articleQuestion/**,/articleDanmaku/**,/board/**,/category/**,/favorite/**,/search/**,/recommend/**,/profile/interests/**,/file/**
+                - Path=/article/**,/articleReply/**,/articleSubReply/**,/like/**,/replyLike/**,/articleQuestion/**,/articleDanmaku/**,/board/**,/category/**,/favorite/**,/search/**,/recommend/**,/file/**
             - id: forum-im
               uri: lb://forum-im
               predicates:
-                - Path=/message/**,/group-chat/**,/voice/**,/system-message/**,/notice/**
+                - Path=/message/**,/group-chat/**,/system-message/**,/notice/**
             - id: forum-game
               uri: lb://forum-game
               predicates:
@@ -42,11 +50,14 @@ spring:
             - id: forum-economy
               uri: lb://forum-economy
               predicates:
-                - Path=/points/**,/checkin/**,/vip/**,/lottery/**,/shop/**,/growth/**
+                - Path=/points/**,/checkin/**,/vip/**,/lottery/**,/shop/**,/starlight/**
             - id: forum-ai
               uri: lb://forum-ai
               predicates:
-                - Path=/ai/**,/mascot/**,/drift-bottle/**
+                - Path=/ai/**,/mascot/**
+              metadata:
+                response-timeout: 320000
+                connect-timeout: 5000
             - id: forum-ws-im
               uri: lb:ws://forum-im
               predicates:
@@ -71,6 +82,9 @@ management:
       enabled: false
 
 logging:
+  config: classpath:forum-logback-spring.xml
+  charset:
+    file: UTF-8
   level:
     root: WARN
     org.springframework.cloud.gateway: WARN

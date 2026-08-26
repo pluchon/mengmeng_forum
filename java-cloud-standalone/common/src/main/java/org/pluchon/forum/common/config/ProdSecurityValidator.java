@@ -29,6 +29,9 @@ public class ProdSecurityValidator implements ApplicationRunner {
     @Value("${forum.ffmpeg.internal-key:}")
     private String ffmpegInternalKey;
 
+    @Value("${forum.service.internal-key:}")
+    private String serviceInternalKey;
+
     @Override
     public void run(ApplicationArguments args) {
         assertMinLength("JWT_SECRET", jwtSecret, 32);
@@ -36,12 +39,13 @@ public class ProdSecurityValidator implements ApplicationRunner {
         assertMinLength("FORUM_MASCOT_INTERNAL_KEY", mascotInternalKey, 16);
         assertMinLength("FORUM_AI_INTERNAL_KEY", aiInternalKey, 16);
         assertMinLength("FORUM_FFMPEG_INTERNAL_KEY", ffmpegInternalKey, 16);
+        assertMinLength("FORUM_SERVICE_INTERNAL_KEY", serviceInternalKey, 16);
         log.info("生产环境安全密钥校验通过");
     }
 
     private static void assertMinLength(String name, String value, int minLen) {
         if (!StringUtils.hasText(value) || value.trim().length() < minLen) {
-            throw new IllegalStateException(name + " 未配置或长度不足 " + minLen + "，请在 .env 中设置后再启动");
+            throw new IllegalStateException(name + " 未配置或长度不足 " + minLen + "，请在外部环境变量中设置后再启动");
         }
     }
 }

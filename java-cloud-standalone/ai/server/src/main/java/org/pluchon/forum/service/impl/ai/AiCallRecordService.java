@@ -3,10 +3,10 @@ package org.pluchon.forum.service.impl.ai;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
-import org.pluchon.forum.common.enums.AiCallState;
+import org.pluchon.forum.common.AiCallState;
 import org.pluchon.forum.common.metrics.ForumMetrics;
 import org.pluchon.forum.entity.db.ForumAiCallRecord;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.cloud.feign.AiPointsInternalFeignClient;
 import org.pluchon.forum.mapper.ForumAiCallRecordMapper;
@@ -19,11 +19,10 @@ import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/**
- * AI 调用预记录：调用前写入 PENDING，成功/失败/停止/断网分别结算。
- */
+// AI 调用预记录：调用前写入 PENDING，成功/失败/停止/断网分别结算
 @Slf4j
 @Service
 public class AiCallRecordService {
@@ -42,9 +41,7 @@ public class AiCallRecordService {
     @Autowired
     private ForumMetrics forumMetrics;
 
-    /**
-     * 调用 AI 前预写记录。clientRequestId 为空时不建预记录（兼容旧客户端）。
-     */
+    // 调用 AI 前预写记录。clientRequestId 为空时不建预记录 兼容旧客户端
     @Transactional(rollbackFor = Exception.class)
     public AiCallBeginResult beginCall(Long userId, String featureCode, String clientRequestId, String modelCode) {
         if (userId == null || !StringUtils.hasText(featureCode) || !StringUtils.hasText(clientRequestId)) {
@@ -121,6 +118,34 @@ public class AiCallRecordService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> settleSuccessBatch(
+            AiCallBeginResult begin,
+            AiUserContext user,
+            String featureCode,
+            List<AiModelUsageDTO> usages,
+            String fallbackModel,
+            String relatedId,
+            Byte pointsSource,
+            boolean usePointsBilling,
+            long latencyMs) {
+        AiModelUsageDTO total = aiPointsBillingService.aggregateUsage(usages, fallbackModel);
+        if (begin != null && begin.isDuplicateSuccess()) {
+            return duplicateBillingResult(user, begin.getPreviousPointsCharged());
+        }
+        if (begin != null && begin.isTerminalFailure()) {
+            forumMetrics.recordIdempotencyHit();
+            return duplicateBillingResult(user, 0);
+        }
+        forumMetrics.recordAiCallLatency(latencyMs);
+        Map<String, Object> billing = aiPointsBillingService.billBatch(
+                user, featureCode, usages, fallbackModel, relatedId, pointsSource, usePointsBilling);
+        if (begin != null) {
+            updateRecordSettled(begin.getRecordId(), AiCallState.SUCCESS, total, billing);
+        }
+        return billing;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public void markFailure(AiCallBeginResult begin, AiCallState state, String errorSummary) {
         if (begin == null || begin.getRecordId() == null) {
             return;
@@ -138,9 +163,7 @@ public class AiCallRecordService {
                 .set(ForumAiCallRecord::getPointsCharged, 0));
     }
 
-    /**
-     * 流式停止或断网但有部分输出：按实际输出 token 计费；无输出则不扣费。
-     */
+    // 流式停止或断网但有部分输出：按实际输出 token 计费；无输出则不扣费
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> settlePartialOutput(AiCallBeginResult begin, AiUserContext user, String featureCode,
                                                    String modelCode, int outputCharCount, String relatedId,

@@ -36,11 +36,35 @@ public class JinziRoomStateVO {
     // 棋盘快照，0空 1黑 2白
     private int[][] board;
 
-    // 胜方用户 ID，平局为空
+    // 大局胜方用户 ID，平局为空
     private Long winnerUserId;
 
-    // 结束原因：LINE / DRAW / SURRENDER / DISCONNECT / TIMEOUT
+    // 大局结束原因：LINE / DRAW / SURRENDER / DISCONNECT / TIMEOUT
     private String endReason;
+
+    // 黑方小局获胜数
+    private Integer blackWins;
+
+    // 白方小局获胜数
+    private Integer whiteWins;
+
+    // 平局小局数
+    private Integer drawRounds;
+
+    // 当前第几小局
+    private Integer currentRound;
+
+    // 当前小局先手棋子：1黑 2白
+    private Integer roundStartingChess;
+
+    // 当前小局是否已决出胜负或平局
+    private Boolean roundFinished;
+
+    // 当前小局胜者 ID
+    private Long roundWinnerUserId;
+
+    // 当前小局结束原因
+    private String roundEndReason;
 
     // 黑方剩余局时毫秒
     private Long blackRemainingMs;

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
-/** 并发整改可观测性指标 */
+// 并发整改可观测性指标
 @Component
 public class ForumMetrics {
 

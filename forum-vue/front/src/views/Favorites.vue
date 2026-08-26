@@ -53,7 +53,7 @@
         <el-empty v-if="!loading && folders.length === 0" description="还没有收藏夹，先建一个吧" />
       </div>
 
-      <el-dialog v-model="createDialogVisible" :title="dialogTitle" width="420px" class="red-dialog">
+      <el-dialog v-model="createDialogVisible" :title="dialogTitle" width="420px" class="red-dialog" :show-close="false">
         <el-form label-width="84px">
           <el-form-item label="名称">
             <el-input v-model="folderForm.name" maxlength="25" show-word-limit placeholder="输入收藏夹名称" />
@@ -154,6 +154,5 @@ const {
 .folder-actions {
   display: flex;
   gap: 6px;
-}
-</style>
+}</style>
 

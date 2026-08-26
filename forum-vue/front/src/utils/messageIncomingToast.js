@@ -4,12 +4,12 @@ import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 const PREVIEW_MAX = 80
 let lastSeq = 0
 
-/** 右上角私信到达提示（发送者 + 摘要） */
+// 右上角私信到达提示 发送者 + 摘要
 export function showMessageIncomingToast(sig) {
   if (!sig?.seq || sig.seq === lastSeq) return
   lastSeq = sig.seq
 
-  // 已在消息中心时，会话未读状态已经可见，不重复弹出右上角通知。
+  // 已在消息中心时，会话未读状态已经可见，不重复弹出右上角通知
   if (useMessageCenterUiStore().visible) return
 
   const sender = (sig.sender || '新私信').toString()
@@ -28,7 +28,7 @@ export function showMessageIncomingToast(sig) {
       try {
         useMessageCenterUiStore().open()
       } catch {
-        /* ignore */
+        // 忽略
       }
     },
   })

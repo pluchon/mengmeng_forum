@@ -8,12 +8,8 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * @author pluchon
- * @create 2026-04-18-09:31
- * 作者代码水平一般，难免难看，请见谅
- */
-//记录用户点赞了哪些帖子
+// &#064;create 2026 04 18 09:31 作者代码水平一般，难免难看，请见谅
+// 记录用户点赞了哪些帖子
 @Data
 @TableName("article_like")
 @Schema(description = "用户喜欢的文章实体")

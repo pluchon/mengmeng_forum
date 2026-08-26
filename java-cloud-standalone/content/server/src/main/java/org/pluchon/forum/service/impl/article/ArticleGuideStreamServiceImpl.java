@@ -3,10 +3,10 @@ package org.pluchon.forum.service.impl.article;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
-import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.RagArticleIndexDTO;
 import org.pluchon.forum.entity.db.Article;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
+import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.article.ArticleGuideStreamService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-// 帖子 AI 智能导读流式输出（独立 Bean，避免拖垮 ArticleServiceImpl 注册）
+// 帖子 AI 智能导读流式输出 独立 Bean，避免拖垮 ArticleServiceImpl 注册
 @Slf4j
 @Service
 public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService {
@@ -35,7 +35,7 @@ public class ArticleGuideStreamServiceImpl implements ArticleGuideStreamService 
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    private ContentAiHubInternalFeignClient aiHubService;
+    private ContentAiGatewayService aiHubService;
 
     @Autowired
     private ContentUserLookupService userService;

@@ -1,13 +1,8 @@
 package org.pluchon.forum.common.advice;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.utils.OnlineUserManageUtil;
-import org.pluchon.forum.entity.dto.groupchat.GroupVoiceSignalRequest;
-import org.pluchon.forum.entity.dto.message.PrivateVoiceSignalRequest;
-import org.pluchon.forum.service.interfaces.groupchat.GroupVoiceService;
-import org.pluchon.forum.service.interfaces.message.PrivateVoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,15 +22,6 @@ public class WebSocket extends TextWebSocketHandler {
 
     @Autowired
     private OnlineUserManageUtil onlineUserManageUtil;
-
-    @Autowired
-    private GroupVoiceService groupVoiceService;
-
-    @Autowired
-    private PrivateVoiceService privateVoiceService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     // 心跳超时阈值：90 秒内未收到 ping 则视为死连接
     private static final long HEARTBEAT_TIMEOUT_MS = 90_000;
@@ -68,33 +54,6 @@ public class WebSocket extends TextWebSocketHandler {
             lastPingTime.put(session.getId(), System.currentTimeMillis());
             session.sendMessage(new TextMessage("pong"));
             return;
-        }
-        handleBusinessMessage(session, message.getPayload());
-    }
-
-    private void handleBusinessMessage(WebSocketSession session, String payload) {
-        Long userId = resolveUserId(session);
-        if (userId == null || payload == null || payload.isBlank()) {
-            return;
-        }
-        try {
-            String type = objectMapper.readTree(payload).path("type").asText("");
-            if ("group_voice_signal".equals(type)) {
-                GroupVoiceSignalEnvelope envelope = objectMapper.readValue(payload, GroupVoiceSignalEnvelope.class);
-                log.debug("[WebSocket] 收到群语音信令 | from={} | target={} | roomVersion={} | type={}",
-                        userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
-                groupVoiceService.handleSignal(envelope, userId);
-                return;
-            }
-            if ("private_voice_signal".equals(type)) {
-                PrivateVoiceSignalEnvelope envelope = objectMapper.readValue(payload, PrivateVoiceSignalEnvelope.class);
-                log.debug("[WebSocket] 收到私聊语音信令 | from={} | target={} | roomVersion={} | type={}",
-                        userId, envelope.getTargetUserId(), envelope.getRoomVersion(), envelope.getSignalType());
-                privateVoiceService.handleSignal(envelope, userId);
-                return;
-            }
-        } catch (Exception e) {
-            log.debug("[WebSocket] 业务消息处理失败 | sessionId={} | error={}", session.getId(), e.getMessage(), e);
         }
     }
 
@@ -138,7 +97,7 @@ public class WebSocket extends TextWebSocketHandler {
                         cleanup(session);
                     }
                 } else {
-                    // session 已关闭但未清理（异常断开场景），直接移除
+                    // session 已关闭但未清理 异常断开场景 ，直接移除
                     lastPingTime.remove(sessionId);
                     activeSessions.remove(sessionId);
                 }
@@ -158,29 +117,4 @@ public class WebSocket extends TextWebSocketHandler {
         return userId instanceof Long ? (Long) userId : null;
     }
 
-    // 群语音信令外壳
-    private static class GroupVoiceSignalEnvelope extends GroupVoiceSignalRequest {
-        private String type;
-
-        public String getType() {
-            return type;
-        }
-
-        public void setType(String type) {
-            this.type = type;
-        }
-    }
-
-    // 私聊语音信令外壳
-    private static class PrivateVoiceSignalEnvelope extends PrivateVoiceSignalRequest {
-        private String type;
-
-        public String getType() {
-            return type;
-        }
-
-        public void setType(String type) {
-            this.type = type;
-        }
-    }
 }

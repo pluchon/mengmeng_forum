@@ -3,18 +3,41 @@
     <video
       ref="videoEl"
       class="detail-video-player__media"
-      :src="src"
+      :poster="poster || undefined"
       playsinline
-      preload="auto"
+      preload="metadata"
       @loadedmetadata="onLoadedMetadata"
       @timeupdate="onTimeUpdate"
       @ended="onEnded"
+      @error="onMediaError"
       @click="togglePlay"
     />
+    <div
+      v-if="loadError"
+      class="detail-video-player__error"
+      role="alert"
+    >
+      <span class="detail-video-player__error-text">视频加载失败</span>
+      <button
+        type="button"
+        class="detail-video-player__error-retry"
+        @click.stop="retryLoad"
+      >
+        重试
+      </button>
+    </div>
+    <div
+      v-else-if="showProcessingHint"
+      class="detail-video-player__processing-hint"
+    >
+      流处理中，正在播放原片
+    </div>
     <div
       v-if="settings.enabled"
       class="detail-video-player__danmaku-layer"
       :style="danmakuLayerStyle"
+      @mouseenter="onDanmakuLayerEnter"
+      @mouseleave="onDanmakuLayerLeave"
     >
       <div
         v-for="item in danmakuVisibleItems"
@@ -23,10 +46,38 @@
         :class="{
           'is-fixed-top': item.mode === 1,
           'is-fixed-bottom': item.mode === 2,
+          'is-hovered': hoveredDanmakuKey === item.key,
         }"
         :style="item.style"
+        @mouseenter="onDanmakuItemEnter(item)"
+        @mouseleave="onDanmakuItemLeave"
       >
-        {{ item.content }}
+        <span class="detail-video-player__danmaku-text">{{ item.content }}</span>
+        <span
+          v-if="item.likeCount >= 3"
+          class="detail-video-player__danmaku-like-count"
+        >{{ item.likeCount }}</span>
+        <span
+          v-if="hoveredDanmakuKey === item.key && isLoggedIn"
+          class="detail-video-player__danmaku-actions"
+        >
+          <button
+            type="button"
+            class="detail-video-player__danmaku-action-btn"
+            aria-label="点赞弹幕"
+            @click.stop="toggleDanmakuLike(item)"
+          >
+            <LikeCountIcon class="detail-video-player__danmaku-like-icon" :filled="item.liked" />
+          </button>
+          <button
+            type="button"
+            class="detail-video-player__danmaku-action-btn"
+            aria-label="举报弹幕"
+            @click.stop="reportDanmakuItem(item)"
+          >
+            <el-icon :size="12"><Flag /></el-icon>
+          </button>
+        </span>
       </div>
     </div>
     <div class="detail-video-player__controls">
@@ -47,7 +98,14 @@
         role="slider"
         tabindex="0"
         aria-label="播放进度"
-        @click="onProgressClick"
+        :aria-valuenow="Math.round(progressPercent)"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        @pointerdown="onProgressPointerDown"
+        @pointermove="onProgressPointerMove"
+        @pointerup="onProgressPointerUp"
+        @pointercancel="onProgressPointerUp"
+        @keydown="onProgressKeydown"
       >
         <div class="detail-video-player__progress-rail">
           <div class="detail-video-player__progress-fill" :style="{ width: progressPercent + '%' }" />

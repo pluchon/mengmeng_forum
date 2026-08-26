@@ -14,22 +14,22 @@ spring:
         namespace: ${NACOS_NAMESPACE:}
   config:
     import:
-      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
-      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+      - optional:nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
   datasource:
     # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
-    url: ${FORUM_IM_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_im_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    url: ${FORUM_IM_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_im_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
     username: ${FORUM_IM_DB_USERNAME:forum_im}
-    password: ${FORUM_IM_DB_PASSWORD:forum_im_pass}
+    password: ${FORUM_IM_DB_PASSWORD}
 
 forum:
   domain: im
   features:
     scheduling: true
-    # Outbox 投递需要 Producer；本域无 @RabbitListener
+    # Outbox 投递和 IM 异步审核结果回写均需 RabbitMQ 消费者
     mq: true
-    mq-consumer: false
+    mq-consumer: true
     websocket: true
     game-runtime: false

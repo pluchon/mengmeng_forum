@@ -1,9 +1,9 @@
 package org.pluchon.forum.converter;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.User;
 
-// User ↔ UserInternalVO（跨服务契约，不含敏感字段）
+// User ↔ UserInternalVO 跨服务契约，不含敏感字段
 public final class UserInternalConverter {
 
     private UserInternalConverter() {

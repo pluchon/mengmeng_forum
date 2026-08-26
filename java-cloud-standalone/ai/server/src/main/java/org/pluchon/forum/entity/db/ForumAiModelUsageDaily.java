@@ -8,9 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * AI 模型调用按日汇总，对应 forum_ai_model_usage_daily。
- */
+// AI 模型调用按日汇总，对应 forum_ai_model_usage_daily
 @Data
 @TableName("forum_ai_model_usage_daily")
 public class ForumAiModelUsageDaily {

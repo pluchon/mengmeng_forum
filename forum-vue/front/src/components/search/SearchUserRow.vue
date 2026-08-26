@@ -25,7 +25,7 @@
       :class="{ 'is-following': user.isFollowing }"
       :loading="saving"
       :disabled="saving"
-      round
+      size="small"
       @click.stop="emitToggleFollow"
     >
       {{ user.isFollowing ? '已关注' : '关注' }}

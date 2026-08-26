@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="LOG_FILE" source="logging.file.name"
+                    defaultValue="../../../logs/java-backend/forum-service/forum-service.log"/>
+    <springProperty scope="context" name="ROOT_LEVEL" source="logging.level.root" defaultValue="WARN"/>
+    <springProperty scope="context" name="APP_LEVEL" source="logging.level.org.pluchon.forum" defaultValue="WARN"/>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <append>true</append>
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS,Asia/Taipei} [%thread] %-5level [%X{traceId:-no-trace}] %logger{48} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <logger name="org.pluchon.forum" level="${APP_LEVEL}"/>
+    <root level="${ROOT_LEVEL}">
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
-// 游戏结束结算仅由 forum-game 消费，避免 content 进程抢队列后空 ACK
+// 游戏结束结算仅由 forum game 消费，避免 content 进程抢队列后空 ACK
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "forum.domain", havingValue = "game")

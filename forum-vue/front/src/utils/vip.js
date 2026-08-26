@@ -1,4 +1,4 @@
-/** 会员是否有效（未过期） */
+// 会员是否有效 未过期
 export function isVipActive(vipTier, vipExpireAt) {
   const t = Number(vipTier) || 0
   if (t <= 0) return false

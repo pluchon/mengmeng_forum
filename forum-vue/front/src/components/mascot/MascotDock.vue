@@ -2,72 +2,17 @@
   <div
     class="mascot-root"
     :aria-label="uiLabels.ariaRoot"
-    :style="rootStyle"
   >
-    <div class="mascot-stack">
-      <div
-        class="mascot-stage-wrap"
-        :style="stageWrapStyle"
-        @pointerenter="stageHovered = true"
-        @pointerleave="onStageLeave"
-      >
-        <div
-          ref="stageHost"
-          class="mascot-stage-host"
-          :style="stageHostStyle"
-          @pointerdown="onStagePointerDown"
-        />
-        <div
-          v-if="stageTipText"
-          class="mascot-cloud-tip"
-          role="status"
-          aria-live="polite"
-        >
-          <span class="mascot-cloud-tip__text">{{ stageTipText }}</span>
-        </div>
-        <img
-          v-if="stageUseFallback"
-          :src="companionAvatarSrc"
-          class="mascot-stage-fallback"
-          alt=""
-          draggable="false"
-          @pointerdown="onStagePointerDown"
-        >
-        <el-popover
-          trigger="click"
-          placement="top-end"
-          :width="240"
-          :teleported="true"
-          popper-class="mascot-scale-popper"
-          @show="scalePopoverOpen = true"
-          @hide="scalePopoverOpen = false"
-        >
-          <template #reference>
-            <button
-              type="button"
-              class="mascot-scale-btn"
-              :class="{ 'mascot-scale-btn--dim': !(stageHovered || scalePopoverOpen) }"
-              :title="uiLabels.scaleTitle"
-              :aria-label="uiLabels.scaleTitle"
-              @pointerdown.stop
-              @click.stop
-            >
-              <el-icon><ZoomIn /></el-icon>
-            </button>
-          </template>
-          <div class="mascot-scale-pop">
-            <div class="mascot-scale-pop__hint">{{ uiLabels.scaleHint }}</div>
-            <el-slider
-              v-model="stageScale"
-              :min="0.35"
-              :max="1.45"
-              :step="0.01"
-              show-tooltip
-              @change="onScaleSliderChange"
-            />
-          </div>
-        </el-popover>
-      </div>
+    <MascotSprite
+      :state="spriteState"
+      :x="spriteX"
+      :paused="spritePaused"
+      :tip-text="stageTipText"
+      @activate="openAssistantFromSprite"
+      @animation-complete="onSpriteAnimationComplete"
+      @hover-change="onSpriteHoverChange"
+      @ready="onSpriteReady"
+    />
 
       <el-dialog
         v-model="assistantOpen"
@@ -86,32 +31,6 @@
               <div class="mascot-dlg-head__titles">
                 <div class="mascot-dlg-head__brand">
                   <span>{{ uiLabels.brandTitle }}</span>
-                  <el-dropdown
-                    v-if="catalog.length > 1"
-                    trigger="click"
-                    @command="switchMascot"
-                  >
-                    <button
-                      type="button"
-                      class="mascot-dlg-head__switch"
-                      title="切换形象"
-                      aria-label="切换形象"
-                    >
-                      <el-icon><Refresh /></el-icon>
-                    </button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item
-                          v-for="mascot in catalog"
-                          :key="mascot.code"
-                          :command="mascot.code"
-                          :disabled="mascot.code === activeCode"
-                        >
-                          {{ mascot.name || mascot.code }}
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
                 </div>
                 <div class="mascot-dlg-head__status">
                   <span class="mascot-dlg-head__dot" aria-hidden="true" />
@@ -125,73 +44,105 @@
         <div class="mascot-fs-layout">
           <div class="mascot-fs-body">
               <aside class="mascot-fs-sidebar">
-                <div class="mascot-fs-sidebar__header">
-                  <div class="mascot-fs-sidebar__title">{{ uiLabels.sessionListTitle }}</div>
-                  <button
-                    type="button"
-                    class="mascot-new-session-icon"
-                    :title="uiLabels.newSession"
-                    :aria-label="uiLabels.newSession"
-                    @click="startNewSession"
-                  >
-                    <el-icon><Plus /></el-icon>
-                  </button>
+                <div class="mascot-fs-sessions-card">
+                  <div class="mascot-fs-sidebar__header">
+                    <div class="mascot-fs-sidebar__title">{{ uiLabels.sessionListTitle }}</div>
+                    <button
+                      type="button"
+                      class="mascot-new-session-icon"
+                      :title="uiLabels.newSession"
+                      :aria-label="uiLabels.newSession"
+                      @click="startNewSession"
+                    >
+                      <el-icon><Plus /></el-icon>
+                    </button>
+                  </div>
+                  <div class="mascot-fs-session-list">
+                    <p v-if="!sessionListForNav.length" class="mascot-fs-sidebar__empty">
+                      {{ uiLabels.sessionEmpty }}
+                    </p>
+                    <div
+                      v-for="sess in sessionListForNav"
+                      :key="sess.id"
+                      class="mascot-fs-session-item"
+                      :class="{ 'is-active': String(sess.id) === String(sessionId) }"
+                      role="button"
+                      tabindex="0"
+                      @click="selectLocalSession(sess.id)"
+                      @keydown.enter.prevent="selectLocalSession(sess.id)"
+                      @keydown.space.prevent="selectLocalSession(sess.id)"
+                    >
+                      <span class="mascot-fs-session-item__copy">
+                        <input
+                          v-if="String(renamingSessionId) === String(sess.id)"
+                          ref="renameInputRef"
+                          v-model="renameDraft"
+                          class="mascot-fs-session-item__rename-input"
+                          maxlength="48"
+                          aria-label="会话名称"
+                          @click.stop
+                          @keydown.enter.stop.prevent="commitRenameSession(sess)"
+                          @keydown.esc.stop.prevent="cancelRenameSession"
+                          @blur="commitRenameSession(sess)"
+                        >
+                        <span v-else class="mascot-fs-session-item__title">{{ sess.title || uiLabels.untitledSession }}</span>
+                        <span class="mascot-fs-session-item__time">{{ formatSessionTime(sess.updateTime) }}</span>
+                      </span>
+                      <button
+                        type="button"
+                        class="mascot-fs-session-item__edit"
+                        :aria-label="`${uiLabels.renameSession}：${sess.title || uiLabels.untitledSession}`"
+                        :title="uiLabels.renameSession"
+                        :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
+                        @click.stop="startRenameSession(sess)"
+                      >
+                        <el-icon><Edit /></el-icon>
+                      </button>
+                      <button
+                        type="button"
+                        class="mascot-fs-session-item__delete"
+                        :aria-label="`${uiLabels.deleteSession}：${sess.title || uiLabels.untitledSession}`"
+                        :title="uiLabels.deleteSession"
+                        :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
+                        @click.stop="deleteSession(sess)"
+                      >
+                        <el-icon><Delete /></el-icon>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <p v-if="!sessionListForNav.length" class="mascot-fs-sidebar__empty">
-                  {{ uiLabels.sessionEmpty }}
-                </p>
-                <div
-                  v-for="sess in sessionListForNav"
-                  :key="sess.id"
-                  class="mascot-fs-session-item"
-                  :class="{ 'is-active': String(sess.id) === String(sessionId) }"
-                  role="button"
-                  tabindex="0"
-                  @click="selectLocalSession(sess.id)"
-                  @keydown.enter.prevent="selectLocalSession(sess.id)"
-                  @keydown.space.prevent="selectLocalSession(sess.id)"
-                >
-                  <span class="mascot-fs-session-item__copy">
-                    <span class="mascot-fs-session-item__title">{{ sess.title || uiLabels.untitledSession }}</span>
-                    <span class="mascot-fs-session-item__time">{{ formatSessionTime(sess.updateTime) }}</span>
-                  </span>
+                <section class="mascot-quota-card" aria-label="AI 配额">
+                  <div v-for="row in quotaRows" :key="row.key" class="mascot-quota-card__row" :class="`is-${row.tone}`">
+                    <div class="mascot-quota-card__line">
+                      <span>{{ row.label }}</span>
+                      <small>{{ row.text }}</small>
+                    </div>
+                    <div class="mascot-quota-card__track" aria-hidden="true">
+                      <span :class="{ 'is-exhausted': row.exhausted }" :style="{ width: `${row.remainingPercent}%` }" />
+                    </div>
+                  </div>
                   <button
+                    v-if="quotaExhausted"
                     type="button"
-                    class="mascot-fs-session-item__edit"
-                    :aria-label="`${uiLabels.renameSession}：${sess.title || uiLabels.untitledSession}`"
-                    :title="uiLabels.renameSession"
-                    :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
-                    @click.stop="renameSession(sess)"
-                  >
-                    <el-icon><Edit /></el-icon>
-                  </button>
-                  <button
-                    type="button"
-                    class="mascot-fs-session-item__delete"
-                    :aria-label="`${uiLabels.deleteSession}：${sess.title || uiLabels.untitledSession}`"
-                    :title="uiLabels.deleteSession"
-                    :disabled="Boolean(deletingSessionId) || Boolean(renamingSessionId)"
-                    @click.stop="deleteSession(sess)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </button>
-                </div>
+                    class="mascot-quota-card__points"
+                    :class="{ 'is-active': usePointsBilling }"
+                    @click="togglePointsPay"
+                  >{{ usePointsBilling ? '已启用萌币支付' : '使用萌币继续' }}</button>
+                </section>
               </aside>
 
               <div class="mascot-fs-main">
                 <div class="mascot-fs-messages-pane">
+                  <div v-if="!messages.length && !loading" class="mascot-fs-chat-empty">
+                    <img :src="aiMessageEmptyUrl" alt="">
+                    <p>{{ uiLabels.chatEmptyHint }}</p>
+                  </div>
                   <el-scrollbar
+                    v-else
                     ref="scrollbarFs"
                     class="mascot-messages mascot-messages--fs"
-                    always
                   >
                     <div class="mascot-messages-inner">
-                      <p
-                        v-if="!messages.length && !loading"
-                        class="mascot-fs-chat-empty"
-                      >
-                        {{ uiLabels.chatEmptyHint }}
-                      </p>
                       <template
                         v-for="(m, i) in messages"
                         :key="'fs-' + i + '-' + (m.at || 0)"
@@ -202,7 +153,7 @@
                         :class="[m.role, { 'mascot-msg-row--context': m.type === 'context_summary' }]"
                       >
                       <template v-if="m.type === 'context_summary'">
-                        <div class="mascot-context-marker"><span>———————</span><el-icon><ScaleToOriginal /></el-icon><span>上下文已压缩</span><span>———————</span></div>
+                        <div class="mascot-context-marker"><span>———————</span><span>上下文已压缩</span><span>———————</span></div>
                       </template>
                       <template v-else>
                       <img
@@ -224,6 +175,9 @@
                           <div class="mascot-img-wrap">
                             <img :src="m.url" alt="AI image" class="mascot-img">
                             <a class="mascot-img-link" :href="m.url" target="_blank" rel="noreferrer">{{ uiLabels.openImageInNewTab }}</a>
+                          </div>
+                          <div v-if="m.usageStats" class="mascot-bubble-meta mascot-bubble-meta--assistant">
+                            <span class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
                           </div>
                         </template>
                         <template v-else-if="m.type === 'related-result'">
@@ -286,6 +240,12 @@
                             <span v-if="m.usageStats" class="mascot-bubble-stats">{{ formatAiUsageLine(m.usageStats) }}</span>
                           </div>
                           <div
+                            v-if="m.role === 'assistant' && activeAsk && activeAsk.message === m && !m.streaming"
+                            class="mascot-ask-hint"
+                          >
+                            请在下方选择…
+                          </div>
+                          <div
                             v-if="m.role === 'assistant' && m.relatedSearchOffer && !m.streaming"
                             class="mascot-related-offer"
                           >
@@ -332,6 +292,65 @@
                   </el-scrollbar>
                 </div>
 
+                <div v-if="activeAsk" class="mascot-ask-panel" role="group" aria-label="意图确认">
+                  <div class="mascot-ask-panel__head">
+                    <span class="mascot-ask-panel__badge">确认 {{ activeAsk.step }}/{{ activeAsk.total }}</span>
+                    <div class="mascot-ask-panel__head-actions">
+                      <button
+                        v-if="!activeAsk.isFirst"
+                        type="button"
+                        class="mascot-ask-panel__back"
+                        :disabled="activeAsk.submitting || loading"
+                        @click="askGoBack"
+                      >
+                        上一个
+                      </button>
+                      <button
+                        type="button"
+                        class="mascot-ask-panel__close"
+                        :disabled="activeAsk.submitting || loading"
+                        title="关闭"
+                        aria-label="关闭"
+                        @click="dismissActiveAsk"
+                      >×</button>
+                    </div>
+                  </div>
+                  <div class="mascot-ask-panel__q">Q：{{ activeAsk.current.question }}</div>
+                  <div class="mascot-ask-panel__opts">
+                    <button
+                      v-for="opt in activeAsk.current.options"
+                      :key="opt.letter"
+                      type="button"
+                      class="mascot-ask-panel__opt"
+                      :disabled="activeAsk.submitting || loading"
+                      @click="pickAskOption(opt)"
+                    >
+                      <span class="mascot-ask-panel__letter">{{ opt.letter }}</span>
+                      <span class="mascot-ask-panel__opt-text">{{ opt.label }}</span>
+                    </button>
+                  </div>
+                  <div class="mascot-ask-panel__other">
+                    <span class="mascot-ask-panel__other-label">都不是：</span>
+                    <input
+                      v-model="askWizard.customText"
+                      class="mascot-ask-panel__other-input"
+                      type="text"
+                      maxlength="500"
+                      placeholder="补充想法…"
+                      :disabled="activeAsk.submitting || loading"
+                      @keydown.enter.exact.prevent="submitAskCustom"
+                    >
+                    <button
+                      type="button"
+                      class="mascot-ask-panel__other-submit"
+                      :disabled="activeAsk.submitting || loading || !askWizard.customText.trim()"
+                      @click="submitAskCustom"
+                    >
+                      {{ activeAsk.isLast ? '完成' : '下一个' }}
+                    </button>
+                  </div>
+                </div>
+
                 <MascotChatInput
                   v-model="draft"
                   v-model:image-quality="imageQuality"
@@ -351,6 +370,7 @@
                   @send="send"
                   @toggle-points-pay="togglePointsPay"
                   @compress-context="compressContext"
+                  @open-memory="openMemoryDialog"
                 />
               </div>
           </div>
@@ -365,31 +385,84 @@
         v-model:visible="searchGalleryVisible"
         :items="searchGalleryItems"
       />
-    </div>
+      <TopTitleDialog
+        v-model="memoryDialogVisible"
+        title="长期记忆"
+        width="min(520px, 94vw)"
+        confirm-text="更新记忆"
+        :confirm-disabled="!memoryEditDraft.trim() || memoryEditDraft.trim().length > MEMORY_EDIT_MAX"
+        :loading="memorySaving"
+        @confirm="submitMemoryEdit"
+      >
+        <div class="mascot-memory-dialog">
+          <div class="mascot-memory-dialog__section">
+            <div class="mascot-memory-dialog__label">
+              <span>摘要</span>
+              <em>{{ displayMemorySummary.length }}/{{ MEMORY_SUMMARY_MAX }}</em>
+            </div>
+            <p class="mascot-memory-dialog__summary">{{ displayMemorySummary || '还没有记下什么' }}</p>
+          </div>
+          <div class="mascot-memory-dialog__section">
+            <div class="mascot-memory-dialog__label">
+              <span>事实</span>
+              <em>{{ displayMemoryFacts.length }}/{{ MEMORY_FACTS_MAX }}</em>
+            </div>
+            <ul v-if="displayMemoryFacts.length" class="mascot-memory-dialog__facts">
+              <li v-for="(fact, idx) in displayMemoryFacts" :key="idx">{{ fact }}</li>
+            </ul>
+            <p v-else class="mascot-memory-dialog__empty">还没有记下具体事实，稳定偏好会在对话中慢慢积累。</p>
+          </div>
+          <div class="mascot-memory-dialog__section">
+            <div class="mascot-memory-dialog__label">
+              <span>修改</span>
+              <em>{{ memoryEditDraft.length }}/{{ MEMORY_EDIT_MAX }}</em>
+            </div>
+            <textarea
+              v-model="memoryEditDraft"
+              class="mascot-memory-dialog__input"
+              :maxlength="MEMORY_EDIT_MAX"
+              placeholder="比如：记住我平时更喜欢轻松一点的语气，也常看音乐和动画相关帖子。"
+            />
+          </div>
+        </div>
+      </TopTitleDialog>
   </div>
 </template>
 
 <script setup>
-import { Delete, Edit, Picture, Plus, Refresh, ScaleToOriginal, ZoomIn } from '@element-plus/icons-vue'
+import { Delete, Edit, Picture, Plus, Refresh } from '@element-plus/icons-vue'
+import aiMessageEmptyUrl from '@/assets/images/ai_message_empty.png'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
+import TopTitleDialog from '@/components/dialog/TopTitleDialog.vue'
 import MascotRelatedArticlesDialog from '@/components/mascot/MascotRelatedArticlesDialog.vue'
 import MascotSearchGalleryDialog from '@/components/mascot/MascotSearchGalleryDialog.vue'
+import MascotSprite from '@/components/mascot/MascotSprite.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { useMascotDock } from '@scripts/components/mascot/MascotDock'
 
 const {
-  activeCode,
   acceptRelatedSearchOffer,
+  activeAsk,
+  askGoBack,
+  askWizard,
   assistantOpen,
-  catalog,
   companionAvatarSrc,
       draft,
       deleteSession,
       deletingSessionId,
-  renameSession,
+  cancelRenameSession,
+  commitRenameSession,
+  quotaRows,
+  quotaExhausted,
+  renameDraft,
+  renameInputRef,
+  renameSubmitting,
   renamingSessionId,
+  dismissActiveAsk,
   dismissRelatedSearchOffer,
+  pickAskOption,
+  submitAskCustom,
   showPointsPayButton,
   togglePointsPay,
   usePointsBilling,
@@ -404,37 +477,45 @@ const {
   inputPlaceholder,
   isVip,
   loading,
+  memoryDialogVisible,
+  memoryEditDraft,
+  memoryFacts,
+  memorySaving,
+  memorySummary,
+  MEMORY_EDIT_MAX,
+  MEMORY_FACTS_MAX,
+  MEMORY_SUMMARY_MAX,
+  displayMemoryFacts,
+  displayMemorySummary,
   messages,
   onAssistantOpened,
-  onScaleSliderChange,
-  onStageLeave,
-  onStagePointerDown,
+  onSpriteAnimationComplete,
+  onSpriteHoverChange,
+  onSpriteReady,
+  openAssistantFromSprite,
+  openMemoryDialog,
   openRelatedArticle,
   openRelatedRecommendation,
   openSearchGallery,
   regenerateAssistant,
   renderMascotMarkdown,
   ringVipTier,
-  rootStyle,
   relatedDialogItems,
   relatedDialogVisible,
   searchGalleryItems,
   searchGalleryVisible,
-  scalePopoverOpen,
   scrollbarFs,
   selectLocalSession,
   send,
   sessionId,
   sessionListForNav,
-  stageHost,
-  stageHostStyle,
-  stageHovered,
-  stageScale,
   stageTipText,
-  stageUseFallback,
-  stageWrapStyle,
+  spritePaused,
+  spriteState,
+  spriteX,
+  startRenameSession,
   startNewSession,
-  switchMascot,
+  submitMemoryEdit,
   uiLabels,
   userStore,
   contextCompressing,

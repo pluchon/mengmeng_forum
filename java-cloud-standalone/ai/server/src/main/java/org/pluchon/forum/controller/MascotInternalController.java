@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// 看板娘偏好内部接口（供 auth 等跨服务调用）
+// 看板娘偏好内部接口 供 auth 等跨服务调用
 @RestController
 public class MascotInternalController implements MascotPreferenceInternalApi {
 

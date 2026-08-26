@@ -7,9 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * 月度签到规则响应, 用于前端日历展示
- */
+// 月度签到规则响应, 用于前端日历展示
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

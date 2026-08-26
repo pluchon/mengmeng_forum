@@ -37,6 +37,12 @@
             <groupId>org.pluchon.forum</groupId>
             <artifactId>ai-api</artifactId>
         </dependency>
+        <!-- 读取 mp3/flac 等内嵌标签、封面与歌词（FLAC Picture Block / Vorbis / ID3） -->
+        <dependency>
+            <groupId>net.jthink</groupId>
+            <artifactId>jaudiotagger</artifactId>
+            <version>3.0.1</version>
+        </dependency>
         <dependency>
             <groupId>org.pluchon.forum</groupId>
             <artifactId>im-api</artifactId>
@@ -48,6 +54,14 @@
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>

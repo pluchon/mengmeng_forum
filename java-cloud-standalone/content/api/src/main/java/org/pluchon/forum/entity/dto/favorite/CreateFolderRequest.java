@@ -14,7 +14,7 @@ public class CreateFolderRequest {
     @Schema(description = "收藏夹名称", example = "我的精选")
     private String name;
 
-    /** 0 私密 1 公开; 不传按 1 处理 */
+    // 0 私密 1 公开; 不传按 1 处理
     @Schema(description = "公开性: 0私密 1公开, 默认 1", example = "1")
     private Byte isPublic;
 }

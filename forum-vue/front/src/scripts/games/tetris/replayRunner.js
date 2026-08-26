@@ -1,5 +1,5 @@
 import Block from './block'
-import { clearPoints, createBlankMatrix, eachLines, speeds } from './constants'
+import { calcClearScore, createBlankMatrix, eachLines, speeds } from './constants'
 import { createBlockBagPicker, createRng, pickBlockType } from './rng'
 import {
   clearLineRows,
@@ -21,6 +21,7 @@ export function createReplayRunner(seed, inputs = [], randomizerVersion = 2) {
   let speedRun = 1
   let clearLines = 0
   let points = 0
+  let combo = 0
   let playing = true
 
   function drawNextType() {
@@ -45,8 +46,11 @@ export function createReplayRunner(seed, inputs = [], randomizerVersion = 2) {
     if (lines) {
       matrix = clearLineRows(matrix, lines)
       clearLines += lines.length
-      points += clearPoints[lines.length - 1]
+      combo += 1
+      points += calcClearScore(lines.length, combo)
       speedRun = Math.min(6, 1 + Math.floor(clearLines / eachLines))
+    } else {
+      combo = 0
     }
     if (isOver(matrix)) {
       playing = false

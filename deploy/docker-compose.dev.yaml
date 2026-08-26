@@ -1,0 +1,167 @@
+# 本地开发：仅 Docker 中间件（Nacos / MySQL / Redis / RabbitMQ / PostgreSQL / FFmpeg）
+#
+# 以下在宿主机自行启动，本文件不包含：
+#   - Java 微服务（java-cloud-standalone，经 Gateway :10086）
+#   - AI 服务（ai-server）             http://localhost:5000
+#   - 用户端 Vite                         dev 端口（如 5173）
+# 日志约定（仓库根）：logs/java-backend/  logs/ai-server/  logs/ffmpeg/
+#
+# 用法（仓库根 PowerShell）：
+#   .\deploy\scripts\dev-compose.ps1 up -d
+#   .\deploy\scripts\dev-compose.ps1 up -d --build
+#
+# 宿主机连接（与 backend/application.yml、ai-server/config.yaml 默认一致）：
+#   Nacos       客户端 127.0.0.1:8848（gRPC 9848）；控制台 http://127.0.0.1:8080/index.html
+#   MySQL       127.0.0.1:33306
+#   Redis       127.0.0.1:63790
+#   RabbitMQ    AMQP 56720，管理台 http://127.0.0.1:25672
+#   PostgreSQL  54320
+#   FFmpeg      http://127.0.0.1:8099  （Java 大文件压缩：FORUM_FFMPEG_URL=http://127.0.0.1:8099）
+# 注意：中间件请用 127.0.0.1，勿用 localhost（Windows 上易走 IPv6 连不上仅绑 IPv4 的映射端口）
+# Nacos 与线上一致使用镜像 nacos/nacos-server:v3.1.1；本地需映射 8848/9848/8080 供 IDEA 与浏览器连接。
+# 启用前请停掉仓库内本机独立 Nacos，避免 8848/9848 端口冲突。
+
+# 固定历史 Compose 项目名，继续复用现有 nginx_forum_dev_* 数据卷，避免创建空白中间件。
+name: nginx
+
+services:
+
+  # 与线上同镜像；端口映射仅本地需要（IDEA 在宿主机连 127.0.0.1:8848）
+  nacos:
+    image: nacos/nacos-server:v3.1.1
+    container_name: forum-nacos-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NACOS_HTTP_HOST_PORT:-8848}:8848"
+      - "127.0.0.1:${NACOS_GRPC_HOST_PORT:-9848}:9848"
+      # Nacos 3.x 控制台独立端口（浏览器访问）；8848 仅给 Java 客户端
+      - "127.0.0.1:${NACOS_CONSOLE_HOST_PORT:-8080}:8080"
+    environment:
+      MODE: standalone
+      # ip 模式 + NACOS_SERVER_IP 显式指定：绕过 InetUtils.refreshIp() 在 Docker/WSL 环境下
+      # 自动探测网卡时抛 NPE 崩溃重启的问题（Nacos v3.1.1 已知 bug）。
+      # 容器静态 IP 固定为 172.20.0.10，与下方 networks.forum-dev-net.ipam 的 subnet 一致。
+      PREFER_HOST_MODE: ip
+      NACOS_SERVER_IP: 172.20.0.10
+      NACOS_AUTH_ENABLE: "false"
+      # 镜像即使关闭认证也要求这三个值非空；缺失时必须在重建容器前失败，不能留下重启循环。
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请使用 dev-compose.ps1 载入 Windows 用户环境变量}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请使用 dev-compose.ps1 载入 Windows 用户环境变量}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请使用 dev-compose.ps1 载入 Windows 用户环境变量}
+    volumes:
+      - forum_dev_nacos_data:/home/nacos/data
+    networks:
+      forum-dev-net:
+        ipv4_address: 172.20.0.10
+
+  mysql:
+    image: mysql:9.7.0
+    container_name: forum-mysql-dev
+    restart: unless-stopped
+    ports:
+      - "${MYSQL_HOST_PORT:-33306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
+      MYSQL_USER: ${MYSQL_USER:-forum_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
+      TZ: Asia/Taipei
+    command: ["--default-time-zone=+08:00"]
+    volumes:
+      - forum_dev_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123456789}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - forum-dev-net
+
+  redis:
+    image: redis:8.0
+    container_name: forum-redis-dev
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-63790}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - forum_dev_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-123456}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - forum-dev-net
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    container_name: forum-rabbitmq-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-56720}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-25672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nuonuo}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-123456}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-forum-demo}
+    volumes:
+      - forum_dev_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forum-dev-net
+
+  postgres:
+    image: postgres:17
+    container_name: forum-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_HOST_PORT:-54320}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-langgraph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_DB: ${POSTGRES_DB:-langgraph_db}
+    volumes:
+      - forum_dev_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-langgraph} -d ${POSTGRES_DB:-langgraph_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - forum-dev-net
+
+  ffmpeg:
+    build:
+      context: ./ffmpeg
+      dockerfile: Dockerfile
+    image: ${FORUM_FFMPEG_IMAGE:-forum-ffmpeg:latest}
+    container_name: forum-ffmpeg-dev
+    restart: unless-stopped
+    ports:
+      - "${FFMPEG_HOST_PORT:-8099}:8099"
+    environment:
+      FFMPEG_REQUIRE_INTERNAL_KEY: "0"
+      FORUM_OSS_PROFILE: local
+      OSS_LOCAL_URL_PREFIX: ${OSS_LOCAL_URL_PREFIX:-https://item-for-picture-with-zhanglihong-local-develop.oss-cn-shenzhen.aliyuncs.com/}
+    networks:
+      - forum-dev-net
+
+volumes:
+  forum_dev_nacos_data:
+  forum_dev_mysql_data:
+  forum_dev_redis_data:
+  forum_dev_rabbitmq_data:
+  forum_dev_postgres_data:
+
+networks:
+  forum-dev-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

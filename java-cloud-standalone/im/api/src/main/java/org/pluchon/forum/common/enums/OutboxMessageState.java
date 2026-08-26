@@ -1,8 +1,6 @@
 package org.pluchon.forum.common.enums;
 
-/**
- * MQ 本地消息表状态。
- */
+// MQ 本地消息表状态
 public enum OutboxMessageState {
 
     PENDING(0, "待投递"),

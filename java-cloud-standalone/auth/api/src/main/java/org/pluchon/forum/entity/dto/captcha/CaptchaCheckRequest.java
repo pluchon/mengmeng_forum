@@ -12,7 +12,7 @@ public class CaptchaCheckRequest {
     @NotBlank
     private String id;
 
-    /** 与 {@link CaptchaTicketPurpose} 常量一致 */
+    // 与 {@link CaptchaTicketPurpose} 常量一致
     @NotBlank
     private String purpose;
 

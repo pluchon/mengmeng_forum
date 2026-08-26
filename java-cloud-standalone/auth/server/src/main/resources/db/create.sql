@@ -1,5 +1,5 @@
--- auth domain full schema
-DROP DATABASE IF EXISTS `forum_auth_db`;
+-- auth 域最终空库基线，已合并历史增量；本文件不会删除已有数据库或表。
+-- 仅对全新空库执行；已有表时应失败并改用经过审核的前向迁移。
 
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `forum_auth_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
@@ -117,18 +117,15 @@ CREATE TABLE `user` (
   `background_url` varchar(500) DEFAULT NULL COMMENT '用户主页背景图URL',
   `article_count` int NOT NULL DEFAULT '0' COMMENT '发帖数量',
   `is_admin` tinyint NOT NULL DEFAULT '0' COMMENT '是否管理员, 0否 1是',
-  `points` int NOT NULL DEFAULT '0' COMMENT '积分钱包余额(签到入账+商城消费)',
-  `vip_tier` tinyint NOT NULL DEFAULT '0' COMMENT 'VIP档位: 0普通 1PRO 2MAX',
-  `vip_expire_at` datetime DEFAULT NULL COMMENT 'VIP到期时间; NULL且vip_tier>0可视为运营期内不限期占位',
-  `creator_state` tinyint NOT NULL DEFAULT '0' COMMENT 'åˆ›ä½œè€…è®¤è¯çŠ¶æ€: 0æœªè®¤è¯ 1å·²è®¤è¯',
-  `mascot_model_id` bigint DEFAULT NULL COMMENT '用户选择的看板娘模型 forum_mascot_model.id',
+  `vip_tier` tinyint NOT NULL DEFAULT '0' COMMENT 'VIP档位快照: 0普通 1PRO 2MAX（权威在 economy.user_vip_subscription）',
+  `vip_expire_at` datetime DEFAULT NULL COMMENT 'VIP到期时间快照（权威在 economy.user_vip_subscription）',
+  `creator_state` tinyint NOT NULL DEFAULT '0' COMMENT '创作者认证状态: 0未认证 1已认证',
+  `mascot_model_id` bigint DEFAULT NULL COMMENT '看板娘模型快照（权威在 ai.user_mascot_preference）',
   `remark` varchar(1000) DEFAULT NULL COMMENT '备注, 自我介绍',
   `ip_region` varchar(32) DEFAULT NULL COMMENT '最近登录IP属地(省份/国家)',
   `dept_id` bigint DEFAULT NULL COMMENT '后台部门ID，对应 sys_dept.id',
   `state` tinyint NOT NULL DEFAULT '0' COMMENT '状态: 0正常, 1禁言',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',
-  `lottery_pity_draws` int NOT NULL DEFAULT '0' COMMENT '抽奖硬保底计数：连续未中神秘大奖(is_jackpot)父档的次数，命中后归零',
-  `lottery_surprise_claimed` tinyint NOT NULL DEFAULT '0' COMMENT '抽奖页彩蛋积分是否已领取 0否 1是',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -136,6 +133,26 @@ CREATE TABLE `user` (
   UNIQUE KEY `user_phone_hash_uindex` (`phone_hash`),
   UNIQUE KEY `user_email_hash_uindex` (`email_hash`)
 ) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_profile_change_request` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `field_type` varchar(20) NOT NULL COMMENT 'NICKNAME/BIO',
+  `candidate_content` varchar(255) NOT NULL DEFAULT '' COMMENT '待审核内容',
+  `content_hash` varchar(32) NOT NULL COMMENT '内容MD5',
+  `review_status` tinyint NOT NULL DEFAULT '0' COMMENT '0待审核 1审核中 2通过 3拒绝 4失败 5被新申请替代',
+  `retry_count` int NOT NULL DEFAULT '0' COMMENT '审核重试次数',
+  `review_reason` varchar(500) DEFAULT NULL COMMENT '审核原因',
+  `reviewed_at` datetime DEFAULT NULL COMMENT '完成时间',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `delete_state` tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_profile_change_user_field` (`user_id`,`field_type`,`delete_state`,`id`),
+  KEY `idx_profile_change_retry` (`review_status`,`retry_count`,`update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户资料异步审核申请';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;

@@ -32,12 +32,11 @@
       </div>
 
       <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next, jumper"
-          background
+          :show-jumper="true"
           @current-change="doSearch"
         />
       </div>
@@ -48,6 +47,7 @@
 <script setup>
 import { useSearchArticle } from '@scripts/views/SearchArticle'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
+import AppPagination from '@/components/common/AppPagination.vue'
 
 const {
   bannerText,
@@ -105,5 +105,4 @@ const {
 
 .dot {
   margin: 0 6px;
-}
-</style>
+}</style>

@@ -1,9 +1,13 @@
-import { reactive, ref, onMounted, watch } from 'vue'
-import { Camera } from '@element-plus/icons-vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { updateUserInfo, uploadAvatar, updateAvatarUrl } from '@/api/settings'
-import { validateText } from '@/api/article'
+import {
+  getProfileChangeStatus,
+  submitProfileChange,
+  updateUserInfo,
+  uploadAvatar,
+  updateAvatarUrl,
+} from '@/api/settings'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 
@@ -31,9 +35,19 @@ export function useBasicInfo() {
   })
 
   const saving = ref(false)
+  const reviewState = reactive({
+    nickname: null,
+    remark: null,
+  })
+  let reviewTimer = null
 
   onMounted(() => {
     syncFromStore()
+    loadReviewStates()
+  })
+
+  onUnmounted(() => {
+    if (reviewTimer) window.clearTimeout(reviewTimer)
   })
 
   watch(
@@ -105,38 +119,95 @@ export function useBasicInfo() {
       return
     }
 
-    if (field === 'nickname' && !profileForm.nickname.trim()) {
-      return ElMessage.warning('昵称不能为空')
+    if (field === 'nickname') {
+      const nickname = profileForm.nickname.trim()
+      if (!nickname) return ElMessage.warning('昵称不能为空')
+      if (!/^[\u4e00-\u9fa5A-Za-z0-9]{2,20}$/.test(nickname)) {
+        return ElMessage.warning('昵称需为2–20位中文、英文字母或数字')
+      }
+      profileForm.nickname = nickname
     }
 
-    if (field === 'remark' && profileForm.remark?.trim()) {
-      try {
-        const aiRes = await validateText(profileForm.remark)
-        if (aiRes.code === 0 && aiRes.data && !aiRes.data.isAllowed) {
-          return ElMessage.warning(
-            '内容违规: ' + (aiRes.data.reason || '签名内容不符合平台规范'),
-          )
-        }
-      } catch (err) {
-        console.warn('AI 检测异常:', err)
-      }
+    const remark = String(profileForm.remark || '').trim()
+    if (field === 'remark' && remark.length > 50) {
+      return ElMessage.warning('个人简介不能超过50个字')
     }
 
     saving.value = true
     try {
-      const backendField = field === 'nickname' ? 'nickName' : field
-      const res = await updateUserInfo({ [backendField]: profileForm[field] })
+      const fieldType = field === 'nickname' ? 'NICKNAME' : 'BIO'
+      const content = field === 'nickname' ? profileForm.nickname : remark
+      const res = await submitProfileChange({ fieldType, content })
       if (res.code === 0) {
-        ElMessage.success('更新成功')
-        originalValues[field] = profileForm[field]
+        ElMessage.success('已提交审核，通过后将自动生效')
+        reviewState[field] = res.data
         editing[field] = false
-        if (field === 'nickname') userStore.patchUserProfile({ nickname: profileForm.nickname })
-        if (field === 'remark') userStore.patchUserProfile({ remark: profileForm.remark })
-        if (field === 'gender') userStore.patchUserProfile({ gender: profileForm.gender })
+        profileForm[field] = originalValues[field]
+        scheduleReviewRefresh()
+      } else {
+        ElMessage.error(res.message || '提交审核失败')
       }
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.message || error?.message || '更新失败')
     } finally {
       saving.value = false
     }
+  }
+
+  async function loadReviewStates() {
+    try {
+      const [nicknameRes, bioRes] = await Promise.all([
+        getProfileChangeStatus('NICKNAME'),
+        getProfileChangeStatus('BIO'),
+      ])
+      reviewState.nickname = nicknameRes.code === 0 ? nicknameRes.data : null
+      reviewState.remark = bioRes.code === 0 ? bioRes.data : null
+      const approved = [reviewState.nickname, reviewState.remark].some(
+        (item) => item?.status === 'APPROVED',
+      )
+      if (approved) {
+        await userStore.fetchUserInfo()
+        syncFromStore()
+      }
+      scheduleReviewRefresh()
+    } catch {
+      // 审核状态加载失败不影响资料页正常使用
+    }
+  }
+
+  function scheduleReviewRefresh() {
+    if (reviewTimer) window.clearTimeout(reviewTimer)
+    const pending = [reviewState.nickname, reviewState.remark].some((item) =>
+      ['PENDING', 'PROCESSING'].includes(item?.status),
+    )
+    if (pending) reviewTimer = window.setTimeout(loadReviewStates, 4000)
+  }
+
+  function reviewStatusText(field) {
+    const item = reviewState[field]
+    if (!item) return ''
+    // 已通过不展示状态文案
+    if (item.status === 'APPROVED') return ''
+    if (item.status === 'PENDING' || item.status === 'PROCESSING') return '审核中'
+    if (item.status === 'REJECTED') return compactReviewReason(item.reason)
+    if (item.status === 'FAILED') return compactReviewReason(item.reason || '审核暂时失败')
+    return ''
+  }
+
+  function compactReviewReason(reason) {
+    if (!reason) return '未通过'
+    const normalized = String(reason)
+      .replace(/\s+/g, ' ')
+      .replace(/^(审核结果|审核不通过|违规原因|原因)\s*[:：]?\s*/u, '')
+      .trim()
+    const firstClause = normalized.split(/[。；;！!\n]/u)[0] || '未通过'
+    return firstClause.length > 28 ? `${firstClause.slice(0, 28)}…` : firstClause
+  }
+
+  function reviewStatusClass(field) {
+    const status = reviewState[field]?.status
+    if (status === 'REJECTED' || status === 'FAILED') return 'is-rejected'
+    return 'is-pending'
   }
 
   async function handleAvatarUpload(file) {
@@ -172,7 +243,6 @@ export function useBasicInfo() {
   }
 
   return {
-    Camera,
     DEFAULT_AVATAR,
     cancelEdit,
     editing,
@@ -180,6 +250,9 @@ export function useBasicInfo() {
     handleAvatarUpload,
     maskPhone,
     profileForm,
+    reviewState,
+    reviewStatusClass,
+    reviewStatusText,
     saveSingleField,
     saveGender,
     saving,

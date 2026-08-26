@@ -11,21 +11,22 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.SearchUserConverter;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.Article;
+import org.pluchon.forum.entity.db.ForumArticleAiFeature;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.search.SearchArticleResponse;
 import org.pluchon.forum.entity.vo.search.SearchUserItemVO;
 import org.pluchon.forum.entity.vo.search.SearchUserResponse;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.mapper.ArticleMapper;
+import org.pluchon.forum.mapper.ForumArticleAiFeatureMapper;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
 import org.pluchon.forum.api.ai.AiRagSearchRequest;
-import org.pluchon.forum.content.client.ContentAiHubInternalFeignClient;
+import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.search.SearchService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
@@ -42,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.Comparator;
 
 @Service
 @Slf4j
@@ -49,15 +51,15 @@ public class SearchServiceImpl implements SearchService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
-    /** AI 搜索：候选集 hybrid_rank 最低分 */
+    // AI 搜索：候选集 hybrid_rank 最低分（社区与创作中心共用）
     private static final double ARTICLE_AI_HYBRID_MIN_SCORE = 0.22;
-    /** AI 搜索：无字面候选时，纯向量兜底最低分（更高，减少误召回） */
-    private static final double ARTICLE_AI_VECTOR_MIN_SCORE = 0.30;
+    // AI 搜索：无字面候选时，纯向量兜底最低分 更高，减少噪声 query 误召回
+    private static final double ARTICLE_AI_VECTOR_MIN_SCORE = 0.36;
     // 帖子正文未命中时，作者语义回退的高相似度阈值
     private static final double ARTICLE_AUTHOR_VECTOR_MIN_SCORE = 0.72;
-    /** AI 用户搜索：候选集 hybrid_rank 最低分 */
+    // AI 用户搜索：候选集 hybrid_rank 最低分
     private static final double USER_AI_HYBRID_MIN_SCORE = 0.22;
-    /** AI 用户搜索：纯向量兜底最低分 */
+    // AI 用户搜索：纯向量兜底最低分
     private static final double USER_AI_VECTOR_MIN_SCORE = 0.38;
     private static final int RAG_TEXT_TRUNCATE = 1200;
 
@@ -75,16 +77,22 @@ public class SearchServiceImpl implements SearchService {
     private ArticleMapper articleMapper;
 
     @Autowired
+    private ForumArticleAiFeatureMapper articleAiFeatureMapper;
+
+    @Autowired
     private ContentUserLookupService userInternalLookupService;
 
     @Autowired
-    private ContentAiHubInternalFeignClient aiHubService;
+    private ContentAiGatewayService aiHubService;
 
     @Autowired
     private ArticleSearchIndexService articleSearchIndexService;
 
     @Autowired
     private ContentFollowLookupService userFollowService;
+
+    @Autowired
+    private org.pluchon.forum.service.interfaces.article.ArticleMediaService articleMediaService;
 
     @Override
     public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
@@ -93,63 +101,142 @@ public class SearchServiceImpl implements SearchService {
         int s = PageUtils.getValidPageSize(pageSize);
 
         if (!preferAiRag) {
-            List<Long> invIds = articleSearchIndexService.searchPublishedIds(
-                    kw, Constant.SEARCH_INVERTED_MAX_RESULTS);
-            if (!invIds.isEmpty()) {
-                return new SearchArticleResponse(
-                        Constant.SEARCH_SOURCE_INV, kw, pageArticlesByIds(invIds, kw, p, s));
-            }
-            Page<Article> page = PageUtils.getPage(p, s);
-            Page<Article> dbResult = articleMapper.selectPage(page, buildDbFuzzyArticleQuery(kw));
-            if (dbResult.getRecords() != null && !dbResult.getRecords().isEmpty()) {
-                return new SearchArticleResponse(Constant.SEARCH_SOURCE_DB, kw, wrap(dbResult, p, s, kw));
-            }
-            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
+            return searchArticlesTraditionally(kw, p, s);
         }
 
         return searchArticlesByAiRag(kw, p, s);
     }
 
-    /**
-     * AI 语义搜索：先从 DB 捞字面相关候选，再 hybrid_rank 打分；低分丢弃。
-     * 候选为空时再走向量兜底，且使用更高阈值，避免无关结果。
-     */
+    private SearchArticleResponse searchArticlesTraditionally(String keyword, int page, int size) {
+        Set<Long> candidateIds = new LinkedHashSet<>(articleSearchIndexService.searchPublishedIds(
+                keyword, Constant.SEARCH_INVERTED_MAX_RESULTS));
+        List<Article> textMatches = articleMapper.selectPage(
+                new Page<>(1, Constant.SEARCH_INVERTED_MAX_RESULTS, false),
+                buildDbFuzzyArticleQuery(keyword)).getRecords();
+        textMatches.forEach(article -> candidateIds.add(article.getId()));
+
+        var authorMatches = userInternalLookupService.searchByKeyword(
+                keyword, 1, Constant.SEARCH_RAG_CANDIDATE_LIMIT);
+        if (authorMatches != null && authorMatches.getRecords() != null
+                && !authorMatches.getRecords().isEmpty()) {
+            List<Long> authorIds = authorMatches.getRecords().stream()
+                    .map(UserInternalVO::getId)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            List<Article> authorArticles = articleMapper.selectPage(
+                    new Page<>(1, Constant.SEARCH_INVERTED_MAX_RESULTS, false),
+                    publishedArticleQuery().in(Article::getUserId, authorIds)
+                            .orderByDesc(Article::getUpdateTime)
+                            .orderByDesc(Article::getId)).getRecords();
+            authorArticles.forEach(article -> candidateIds.add(article.getId()));
+        }
+        if (candidateIds.isEmpty()) {
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY,
+                    keyword, emptyPage(page, size));
+        }
+
+        List<Article> candidates = loadPublishedArticlesInOrder(new ArrayList<>(candidateIds));
+        Map<Long, UserInternalVO> authors = loadAuthors(candidates);
+        candidates.sort(Comparator
+                .comparingInt((Article article) -> traditionalArticleRank(
+                        article, authors.get(article.getUserId()), keyword))
+                .thenComparing(Article::getUpdateTime,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(Article::getId, Comparator.reverseOrder()));
+        List<Long> rankedIds = candidates.stream().map(Article::getId).toList();
+        PageResult<ArticleListResponse> result = pageRankedArticles(rankedIds, page, size);
+        String source = textMatches.isEmpty() ? Constant.SEARCH_SOURCE_DB : Constant.SEARCH_SOURCE_INV;
+        return new SearchArticleResponse(source, keyword, result);
+    }
+
+    private LambdaQueryWrapper<Article> publishedArticleQuery() {
+        return new LambdaQueryWrapper<Article>()
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .ne(Article::getState, STATE_FORBIDDEN)
+                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode());
+    }
+
+    private int traditionalArticleRank(Article article, UserInternalVO author, String keyword) {
+        String query = safeLower(keyword);
+        String title = safeLower(article.getTitle());
+        String nickname = author == null ? "" : safeLower(author.getNickname());
+        String content = safeLower(stripHtml(article.getContent()));
+        if (title.equals(query)) {
+            return 0;
+        }
+        if (title.startsWith(query) || title.contains(query)) {
+            return 1;
+        }
+        if (nickname.equals(query)) {
+            return 2;
+        }
+        if (nickname.contains(query)) {
+            return 3;
+        }
+        return content.contains(query) ? 4 : 5;
+    }
+
+    private PageResult<ArticleListResponse> pageRankedArticles(
+            List<Long> rankedIds, int page, int size) {
+        long total = rankedIds.size();
+        int fromIndex = (page - 1) * size;
+        if (fromIndex >= total) {
+            return new PageResult<>(Collections.emptyList(), total, page, size,
+                    (total + size - 1) / size, false);
+        }
+        int toIndex = Math.min(fromIndex + size, rankedIds.size());
+        List<ArticleListResponse> records = buildListResponsesForRag(
+                rankedIds.subList(fromIndex, toIndex));
+        long pages = (total + size - 1) / size;
+        return new PageResult<>(records, total, page, size, pages, toIndex < total);
+    }
+
+    // AI 语义搜索：先清洗噪声词，再从 DB 捞字面相关候选，hybrid_rank 打分；低分丢弃。 候选为空时再走向量兜底，且使用更高阈值，避免无关结果
     private SearchArticleResponse searchArticlesByAiRag(String kw, int p, int s) {
+        String query = SearchKeywordHelper.sanitizeAiSearchQuery(kw);
+        if (!StringUtils.hasText(query)) {
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
+        }
         List<Long> rankedIds = new ArrayList<>();
 
         List<Long> candidateIds = articleSearchIndexService.searchPublishedIds(
-                kw, Constant.SEARCH_RAG_CANDIDATE_LIMIT);
+                query, Constant.SEARCH_RAG_CANDIDATE_LIMIT);
         List<Article> candidates;
         if (!candidateIds.isEmpty()) {
             candidates = loadPublishedArticlesInOrder(candidateIds);
         } else {
             candidates = articleMapper.selectPage(new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
-                buildRagCandidateArticleQuery(kw)).getRecords();
+                buildRagCandidateArticleQuery(query)).getRecords();
         }
         if (candidates != null && !candidates.isEmpty()) {
+            Map<Long, String> summaries = loadReadySummaries(candidates);
+            Map<Long, UserInternalVO> authors = loadAuthors(candidates);
             List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
             for (Article a : candidates) {
-                Map<String, Object> item = new HashMap<>(2);
+                Map<String, Object> item = new HashMap<>(5);
                 item.put("articleId", a.getId());
+                item.put("title", a.getTitle());
+                item.put("summary", summaries.getOrDefault(a.getId(), ""));
+                UserInternalVO author = authors.get(a.getUserId());
+                item.put("authorNickname", author == null ? "" : author.getNickname());
                 item.put("text", buildRagCandidateText(a));
                 payload.add(item);
             }
-            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(ragRequest(kw, payload)),
+            rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(ragRequest(query, payload)),
                     ARTICLE_AI_HYBRID_MIN_SCORE);
         }
 
         if (rankedIds.isEmpty()) {
             rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(
-                    ragRequest(kw, Collections.emptyList())),
+                    ragRequest(query, Collections.emptyList())),
                     ARTICLE_AI_VECTOR_MIN_SCORE);
         }
 
         if (rankedIds.isEmpty()) {
-            rankedIds = articleIdsByHighSimilarityAuthors(kw);
+            rankedIds = articleIdsByHighSimilarityAuthors(query);
         }
 
         if (rankedIds.isEmpty()) {
-            log.info("AI 帖子语义搜索未命中 keyword={}", kw);
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
         }
         if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
@@ -157,7 +244,6 @@ public class SearchServiceImpl implements SearchService {
         }
         rankedIds = retainPublishedArticleIds(rankedIds);
         if (rankedIds.isEmpty()) {
-            log.info("AI 帖子语义搜索命中结果均不可公开 keyword={}", kw);
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
         }
         long total = rankedIds.size();
@@ -179,7 +265,7 @@ public class SearchServiceImpl implements SearchService {
         return request;
     }
 
-    // 正文未命中时，只接受高相似度作者语义命中，避免把普通用户检索扩散为无关帖子。
+    // 正文未命中时，只接受高相似度作者语义命中，避免把普通用户检索扩散为无关帖子
     private List<Long> articleIdsByHighSimilarityAuthors(String keyword) {
         List<Long> authorIds = extractUserHitIds(aiHubService.ragUserVectorRanked(keyword),
                 ARTICLE_AUTHOR_VECTOR_MIN_SCORE);
@@ -206,14 +292,14 @@ public class SearchServiceImpl implements SearchService {
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
 
-        // content 无 user 表：字面 / AI 用户搜索一律走 auth Feign（或向量 + Feign 回表）
+        // content 无 user 表：字面 / AI 用户搜索一律走 auth Feign 或向量 + Feign 回表
         if (!preferAiRag) {
             return searchUsersByDbRemote(kw, p, s, viewerId);
         }
         return searchUsersByAiRagRemote(kw, p, s, viewerId);
     }
 
-    /** 微服务模式：字面搜索走 auth Feign，再组装关注态 */
+    // 微服务模式：字面搜索走 auth Feign，再组装关注态
     private SearchUserResponse searchUsersByDbRemote(String kw, int p, int s, Long viewerId) {
         var remote = userInternalLookupService.searchByKeyword(kw, p, s);
         if (remote == null || remote.getRecords() == null || remote.getRecords().isEmpty()) {
@@ -232,12 +318,15 @@ public class SearchServiceImpl implements SearchService {
         return new SearchUserResponse(Constant.SEARCH_SOURCE_DB, kw, pageResult);
     }
 
-    /** 微服务模式：无 user 表，仅向量检索 + Feign 批量回表 */
+    // 微服务模式：无 user 表，仅向量检索 + Feign 批量回表
     private SearchUserResponse searchUsersByAiRagRemote(String kw, int p, int s, Long viewerId) {
-        List<Long> rankedIds = extractUserHitIds(
-                aiHubService.ragUserVectorRanked(kw), USER_AI_VECTOR_MIN_SCORE);
+        String query = SearchKeywordHelper.sanitizeAiSearchQuery(kw);
+        if (!StringUtils.hasText(query)) {
+            return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
+        }
+        List<RagUserVectorHitVO> hits = aiHubService.ragUserVectorRanked(query);
+        List<Long> rankedIds = rankUsersByFollowersAndSemantic(query, hits, viewerId);
         if (rankedIds.isEmpty()) {
-            log.info("AI 用户语义搜索未命中 keyword={}", kw);
             return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
         }
         if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
@@ -253,6 +342,268 @@ public class SearchServiceImpl implements SearchService {
         PageResult<SearchUserItemVO> pageResult = new PageResult<>(
                 records, total, p, s, pages, toIdx < rankedIds.size());
         return new SearchUserResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
+    }
+
+    @Override
+    public SearchArticleResponse searchCreatorArticles(Long creatorUserId, String keyword, Integer status,
+                                                       Integer pageNum, Integer pageSize, boolean preferAiRag) {
+        String kw = normalizeSearchKeyword(keyword);
+        int page = PageUtils.getValidPageNum(pageNum);
+        int size = PageUtils.getValidPageSize(pageSize);
+        LambdaQueryWrapper<Article> baseQuery = creatorArticleBaseQuery(creatorUserId, status);
+        if (!preferAiRag) {
+            baseQuery.and(wrapper -> applyTextLike(wrapper, keywordTerms(kw),
+                    Article::getTitle, Article::getContent))
+                    .orderByDesc(Article::getUpdateTime)
+                    .orderByDesc(Article::getId);
+            Page<Article> result = articleMapper.selectPage(PageUtils.getPage(page, size), baseQuery);
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_DB, kw, wrap(result, page, size, kw));
+        }
+        // 与社区 AI 同源：清洗 → 字面候选 → hybrid → 向量兜底，最后收窄到本人帖
+        return searchCreatorArticlesByAiRag(creatorUserId, kw, status, page, size);
+    }
+
+    // 创作中心 AI：社区同阈值/同流水线，仅候选与结果限定本人（可含草稿等状态筛选）
+    private SearchArticleResponse searchCreatorArticlesByAiRag(
+            Long creatorUserId, String kw, Integer status, int page, int size) {
+        String query = SearchKeywordHelper.sanitizeAiSearchQuery(kw);
+        if (!StringUtils.hasText(query)) {
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(page, size));
+        }
+        // 优先字面相关本人帖；没有再退回最近本人帖做语义打分（避免旧帖挤出候选）
+        List<Article> candidates = articleMapper.selectPage(
+                new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
+                creatorArticleBaseQuery(creatorUserId, status)
+                        .and(wrapper -> applyTextLike(wrapper, keywordTerms(query),
+                                Article::getTitle, Article::getContent))
+                        .orderByDesc(Article::getUpdateTime)
+                        .orderByDesc(Article::getId)).getRecords();
+        boolean literalCandidate = candidates != null && !candidates.isEmpty();
+        if (!literalCandidate) {
+            candidates = articleMapper.selectPage(
+                    new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
+                    creatorArticleBaseQuery(creatorUserId, status)
+                            .orderByDesc(Article::getUpdateTime)
+                            .orderByDesc(Article::getId)).getRecords();
+        }
+        List<Long> rankedIds = new ArrayList<>();
+        Map<Long, Article> byId = new HashMap<>();
+        if (candidates != null && !candidates.isEmpty()) {
+            for (Article article : candidates) {
+                byId.put(article.getId(), article);
+            }
+            Map<Long, String> summaries = loadReadySummaries(candidates);
+            List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
+            for (Article article : candidates) {
+                Map<String, Object> item = new HashMap<>(5);
+                item.put("articleId", article.getId());
+                item.put("title", article.getTitle());
+                item.put("summary", summaries.getOrDefault(article.getId(), ""));
+                item.put("authorNickname", "");
+                item.put("text", buildRagCandidateText(article));
+                payload.add(item);
+            }
+            rankedIds = extractArticleHitIds(
+                    aiHubService.ragArticleVectorRanked(ragRequest(query, payload)),
+                    ARTICLE_AI_HYBRID_MIN_SCORE);
+        }
+        if (rankedIds.isEmpty()) {
+            List<Long> vectorIds = extractArticleHitIds(
+                    aiHubService.ragArticleVectorRanked(ragRequest(query, Collections.emptyList())),
+                    ARTICLE_AI_VECTOR_MIN_SCORE);
+            rankedIds = retainCreatorArticleIds(vectorIds, creatorUserId, status);
+            if (!rankedIds.isEmpty()) {
+                List<Article> vectorArticles = articleMapper.selectList(
+                        creatorArticleBaseQuery(creatorUserId, status).in(Article::getId, rankedIds));
+                for (Article article : vectorArticles) {
+                    byId.put(article.getId(), article);
+                }
+            }
+        }
+        // 字面命中保底：标题/正文已命中的本人帖不得因向量分被丢掉
+        if (literalCandidate) {
+            rankedIds = mergeCreatorLiteralThenSemantic(candidates, rankedIds, query);
+            for (Article article : candidates) {
+                byId.putIfAbsent(article.getId(), article);
+            }
+        }
+        if (rankedIds.isEmpty()) {
+            return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(page, size));
+        }
+        Map<Long, Integer> semanticOrder = new HashMap<>();
+        for (int index = 0; index < rankedIds.size(); index++) {
+            semanticOrder.put(rankedIds.get(index), index);
+        }
+        rankedIds = new ArrayList<>(rankedIds);
+        rankedIds.sort(Comparator
+                .comparingInt((Long id) -> creatorTitleMatchRank(byId.get(id), query))
+                .thenComparingInt(id -> semanticOrder.getOrDefault(id, Integer.MAX_VALUE)));
+        if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
+            rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
+        }
+        long total = rankedIds.size();
+        int fromIndex = Math.min((page - 1) * size, rankedIds.size());
+        int toIndex = Math.min(fromIndex + size, rankedIds.size());
+        List<ArticleListResponse> records = buildListResponsesForCreator(
+                rankedIds.subList(fromIndex, toIndex), creatorUserId, status);
+        long pages = total == 0 ? 0 : (total + size - 1) / size;
+        return new SearchArticleResponse(Constant.SEARCH_SOURCE_RAG, kw,
+                new PageResult<>(records, total, page, size, pages, toIndex < total));
+    }
+
+    private LambdaQueryWrapper<Article> creatorArticleBaseQuery(Long creatorUserId, Integer status) {
+        LambdaQueryWrapper<Article> query = new LambdaQueryWrapper<Article>()
+                .eq(Article::getUserId, creatorUserId)
+                .ne(Article::getDeleteState, DELETE_TRUE)
+                .ne(Article::getState, STATE_FORBIDDEN);
+        if (status != null) {
+            query.eq(Article::getStatus, status);
+        }
+        return query;
+    }
+
+    private List<Long> retainCreatorArticleIds(List<Long> ids, Long creatorUserId, Integer status) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Article> rows = articleMapper.selectList(creatorArticleBaseQuery(creatorUserId, status)
+                .in(Article::getId, ids)
+                .select(Article::getId));
+        Set<Long> allowed = rows.stream().map(Article::getId).collect(Collectors.toSet());
+        List<Long> out = new ArrayList<>(ids.size());
+        for (Long id : ids) {
+            if (allowed.contains(id)) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    private List<Long> mergeCreatorLiteralThenSemantic(
+            List<Article> literalCandidates, List<Long> semanticIds, String query) {
+        LinkedHashSet<Long> merged = new LinkedHashSet<>();
+        List<Article> sortedLiteral = new ArrayList<>(literalCandidates);
+        sortedLiteral.sort(Comparator.comparingInt(article -> creatorTitleMatchRank(article, query)));
+        for (Article article : sortedLiteral) {
+            if (article.getId() != null) {
+                merged.add(article.getId());
+            }
+        }
+        if (semanticIds != null) {
+            merged.addAll(semanticIds);
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private int creatorTitleMatchRank(Article article, String keyword) {
+        if (article == null) {
+            return 4;
+        }
+        String title = article.getTitle() == null ? "" : article.getTitle().trim();
+        if (title.equals(keyword)) {
+            return 0;
+        }
+        if (title.startsWith(keyword)) {
+            return 1;
+        }
+        if (title.contains(keyword)) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private List<ArticleListResponse> buildListResponsesForCreator(
+            List<Long> ids, Long creatorUserId, Integer status) {
+        if (ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LambdaQueryWrapper<Article> query = new LambdaQueryWrapper<Article>()
+                .in(Article::getId, ids)
+                .eq(Article::getUserId, creatorUserId)
+                .ne(Article::getDeleteState, DELETE_TRUE);
+        if (status != null) {
+            query.eq(Article::getStatus, status);
+        }
+        Map<Long, Article> byId = articleMapper.selectList(query).stream()
+                .collect(Collectors.toMap(Article::getId, article -> article));
+        List<ArticleListResponse> list = ids.stream().map(byId::get).filter(java.util.Objects::nonNull)
+                .map(this::toListResponse).toList();
+        fillImageMeta(list);
+        return list;
+    }
+
+    private List<Long> rankUsersByFollowersAndSemantic(
+            String keyword, List<RagUserVectorHitVO> hits, Long viewerId) {
+        if (hits == null || hits.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, Double> semanticScores = new HashMap<>();
+        for (RagUserVectorHitVO hit : hits) {
+            if (hit.getUserId() == null || hit.getScore() == null
+                    || hit.getScore() < USER_AI_VECTOR_MIN_SCORE) {
+                continue;
+            }
+            semanticScores.put(hit.getUserId(), hit.getScore());
+        }
+        if (semanticScores.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<UserInternalVO> users = userInternalLookupService.listByIds(
+                new ArrayList<>(semanticScores.keySet()));
+        Map<Long, UserFollowStatsVO> stats = userFollowService.getBatchStats(
+                semanticScores.keySet(), viewerId);
+        double maxLogFollowers = users.stream()
+                .map(user -> stats.get(user.getId()))
+                .filter(java.util.Objects::nonNull)
+                .map(UserFollowStatsVO::getFollowerCount)
+                .filter(java.util.Objects::nonNull)
+                .mapToDouble(count -> Math.log1p(Math.max(0L, count)))
+                .max()
+                .orElse(1.0);
+        final double followerScale = maxLogFollowers <= 0 ? 1.0 : maxLogFollowers;
+        String normalized = keyword.trim().toLowerCase(java.util.Locale.ROOT);
+        return users.stream()
+                .filter(user -> user.getState() == null || user.getState() != STATE_FORBIDDEN)
+                .sorted(Comparator
+                        .comparing((UserInternalVO user) -> normalized.equals(
+                                safeLower(user.getNickname()))).reversed()
+                        .thenComparing((UserInternalVO user) -> {
+                            UserFollowStatsVO row = stats.get(user.getId());
+                            long followers = row == null || row.getFollowerCount() == null
+                                    ? 0L : row.getFollowerCount();
+                            double followerScore = Math.log1p(Math.max(0L, followers)) / followerScale;
+                            return followerScore * 0.70
+                                    + semanticScores.getOrDefault(user.getId(), 0.0) * 0.30;
+                        }, Comparator.reverseOrder())
+                        .thenComparing(UserInternalVO::getId, Comparator.reverseOrder()))
+                .map(UserInternalVO::getId)
+                .toList();
+    }
+
+    private Map<Long, String> loadReadySummaries(List<Article> articles) {
+        List<Long> articleIds = articles.stream().map(Article::getId).toList();
+        List<ForumArticleAiFeature> rows = articleAiFeatureMapper.selectList(
+                new LambdaQueryWrapper<ForumArticleAiFeature>()
+                        .in(ForumArticleAiFeature::getArticleId, articleIds)
+                        .eq(ForumArticleAiFeature::getSummaryStatus, (byte) 2)
+                        .ne(ForumArticleAiFeature::getDeleteState, DELETE_TRUE)
+                        .select(ForumArticleAiFeature::getArticleId,
+                                ForumArticleAiFeature::getSummaryText));
+        return rows.stream()
+                .filter(row -> StringUtils.hasText(row.getSummaryText()))
+                .collect(Collectors.toMap(ForumArticleAiFeature::getArticleId,
+                        ForumArticleAiFeature::getSummaryText, (left, right) -> right));
+    }
+
+    private Map<Long, UserInternalVO> loadAuthors(List<Article> articles) {
+        List<Long> userIds = articles.stream().map(Article::getUserId).distinct().toList();
+        return userInternalLookupService.listByIds(userIds).stream()
+                .collect(Collectors.toMap(UserInternalVO::getId, user -> user,
+                        (left, right) -> left));
+    }
+
+    private static String safeLower(String value) {
+        return value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private List<Long> extractArticleHitIds(List<RagArticleVectorHitVO> ranked, double minScore) {
@@ -315,13 +666,13 @@ public class SearchServiceImpl implements SearchService {
                     out.add(id);
                 }
             } catch (NumberFormatException ignore) {
-                // skip
+                // 跳过
             }
         }
         return out;
     }
 
-    // RAG 索引属于事务外副作用，展示前必须以数据库公开状态为准，避免撤稿或回退草稿的帖子被旧向量命中。
+    // RAG 索引属于事务外副作用，展示前必须以数据库公开状态为准，避免撤稿或回退草稿的帖子被旧向量命中
     private List<Long> retainPublishedArticleIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Collections.emptyList();
@@ -344,7 +695,7 @@ public class SearchServiceImpl implements SearchService {
         return out;
     }
 
-    /** AI 搜索候选：标题或正文包含扩展检索词 */
+    // AI 搜索候选：标题或正文包含扩展检索词
     private LambdaQueryWrapper<Article> buildRagCandidateArticleQuery(String kw) {
         return new LambdaQueryWrapper<Article>()
                 .ne(Article::getDeleteState, DELETE_TRUE)
@@ -377,7 +728,7 @@ public class SearchServiceImpl implements SearchService {
         return html.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
     }
 
-    // ============ 内部工具 ============
+    
     private PageResult<ArticleListResponse> wrap(Page<Article> page, int p, int s, String kw) {
         List<String> terms = keywordTerms(kw);
         List<Article> sorted = new ArrayList<>(page.getRecords());
@@ -386,6 +737,7 @@ public class SearchServiceImpl implements SearchService {
                 SearchKeywordHelper.literalRelevanceScore(a.getTitle(), stripHtml(a.getContent()), terms)));
         List<ArticleListResponse> records = sorted.stream()
                 .map(this::toListResponse).collect(Collectors.toList());
+        fillImageMeta(records);
         return new PageResult<>(records, page.getTotal(), p, s, page.getPages(), page.hasNext());
     }
 
@@ -393,7 +745,7 @@ public class SearchServiceImpl implements SearchService {
         return new PageResult<>(Collections.emptyList(), 0L, p, s, 0L, false);
     }
 
-    /** 普通搜索：标题或正文包含关键词（模糊 LIKE） */
+    // 普通搜索：标题或正文包含关键词 模糊 LIKE
     private LambdaQueryWrapper<Article> buildDbFuzzyArticleQuery(String kw) {
         List<String> terms = keywordTerms(kw);
         return new LambdaQueryWrapper<Article>()
@@ -422,7 +774,7 @@ public class SearchServiceImpl implements SearchService {
         }
     }
 
-    /** 原词 + 分词 + 同义扩展（控制词数，减轻 MySQL / AI 压力） */
+    // 原词 + 分词 + 同义扩展 控制词数，减轻 MySQL / AI 压力
     private List<String> keywordTerms(String kw) {
         return SearchKeywordHelper.expandTerms(kw);
     }
@@ -475,10 +827,12 @@ public class SearchServiceImpl implements SearchService {
         rows.sort((a, b) -> Integer.compare(
                 SearchKeywordHelper.literalRelevanceScore(b.getTitle(), stripHtml(b.getContent()), terms),
                 SearchKeywordHelper.literalRelevanceScore(a.getTitle(), stripHtml(a.getContent()), terms)));
-        return rows.stream().map(this::toListResponse).collect(Collectors.toList());
+        List<ArticleListResponse> list = rows.stream().map(this::toListResponse).collect(Collectors.toList());
+        fillImageMeta(list);
+        return list;
     }
 
-    /** RAG 命中 ID 回表；展示前仍以数据库公开状态为准，避免旧向量索引泄露未发布帖子。 */
+    // RAG 命中 ID 回表；展示前仍以数据库公开状态为准，避免旧向量索引泄露未发布帖子
     private List<ArticleListResponse> buildListResponsesForRag(List<Long> ids) {
         if (ids.isEmpty()) {
             return Collections.emptyList();
@@ -501,6 +855,7 @@ public class SearchServiceImpl implements SearchService {
             }
             out.add(toListResponse(a));
         }
+        fillImageMeta(out);
         return out;
     }
 
@@ -514,6 +869,32 @@ public class SearchServiceImpl implements SearchService {
             log.warn("搜索结果中作者 {} 已不可用, 跳过用户信息", article.getUserId());
         }
         return vo;
+    }
+
+    private void fillImageMeta(List<ArticleListResponse> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<Long> articleIds = records.stream()
+                .map(ArticleListResponse::getArticle)
+                .filter(java.util.Objects::nonNull)
+                .map(Article::getId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (articleIds.isEmpty()) {
+            return;
+        }
+        Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(articleIds);
+        Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(articleIds);
+        for (ArticleListResponse response : records) {
+            Article article = response.getArticle();
+            if (article == null || article.getId() == null) {
+                continue;
+            }
+            response.setImageCount(imageCounts.getOrDefault(article.getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(article.getId()));
+        }
     }
 
     private PageResult<SearchUserItemVO> emptyUserPage(int p, int s) {

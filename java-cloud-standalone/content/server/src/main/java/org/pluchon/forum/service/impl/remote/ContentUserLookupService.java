@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.remote;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.api.auth.UserSearchPageInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.api.UserSearchPageInternalVO;
 import org.pluchon.forum.cloud.feign.ContentUserInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

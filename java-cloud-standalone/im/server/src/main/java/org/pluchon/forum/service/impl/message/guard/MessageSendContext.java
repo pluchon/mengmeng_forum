@@ -1,9 +1,12 @@
 package org.pluchon.forum.service.impl.message.guard;
 
+import lombok.Getter;
 import org.pluchon.forum.entity.dto.message.MessageReplyRequest;
+import org.pluchon.forum.entity.dto.message.SendAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendMessageRequest;
 
+@Getter
 public class MessageSendContext {
 
     private final MessageSendType sendType;
@@ -56,6 +59,17 @@ public class MessageSendContext {
         );
     }
 
+    public static MessageSendContext album(SendAlbumMessageRequest request, Long senderUserId) {
+        return new MessageSendContext(
+                MessageSendType.ALBUM,
+                senderUserId,
+                request == null ? null : request.getReceiveUserId(),
+                request == null ? null : request.getContent(),
+                null,
+                null
+        );
+    }
+
     public static MessageSendContext reply(MessageReplyRequest request, Long senderUserId) {
         return new MessageSendContext(
                 MessageSendType.REPLY,
@@ -67,27 +81,4 @@ public class MessageSendContext {
         );
     }
 
-    public MessageSendType getSendType() {
-        return sendType;
-    }
-
-    public Long getSenderUserId() {
-        return senderUserId;
-    }
-
-    public Long getReceiverUserId() {
-        return receiverUserId;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public Byte getMessageType() {
-        return messageType;
-    }
-
-    public String getMediaUrl() {
-        return mediaUrl;
-    }
 }

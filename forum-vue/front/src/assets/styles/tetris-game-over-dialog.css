@@ -15,115 +15,159 @@
   background: transparent !important;
 }
 
+/* 弹窗 teleport 到 body，需全局样式 */
+.tetris-over-dialog.el-dialog {
+  border-radius: 20px;
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tetris-over-dialog .el-dialog__header {
+  display: none;
+}
+
+.tetris-over-dialog .el-dialog__body {
+  padding: 0;
+  background: transparent !important;
+}
+
 .tetris-over-card {
-  padding: 28px 24px 24px;
+  padding: 32px 28px 28px;
   text-align: center;
-  border-radius: 16px;
+  border-radius: 20px;
   background:
-    radial-gradient(circle at 18% 34%, rgba(112, 164, 255, 0.95) 0 1px, transparent 2px),
-    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.74) 0 1px, transparent 2px),
-    radial-gradient(circle at 84% 72%, rgba(75, 139, 255, 0.76) 0 1px, transparent 2px),
-    linear-gradient(135deg, #030712 0%, #0a1830 46%, #07111f 100%);
+    radial-gradient(circle at 18% 34%, rgba(112, 164, 255, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.3) 0 1px, transparent 2px),
+    linear-gradient(135deg, rgba(8, 16, 32, 0.92) 0%, rgba(14, 28, 52, 0.88) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   color: #e8f2ff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .tetris-over-title {
-  margin: 0 0 22px;
-  font-size: 22px;
+  margin: 0 0 18px;
+  font-size: 24px;
   font-weight: 900;
   color: #fff;
   letter-spacing: 0.08em;
   text-align: center;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .tetris-over-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.tetris-over-row {
-  display: flex;
-  align-items: baseline;
   justify-content: center;
-  gap: 10px;
-  width: 100%;
-  font-size: 15px;
-  font-weight: 700;
-  color: rgba(232, 242, 255, 0.88);
+  gap: 12px;
+  margin: 10px 0 28px;
+  min-height: 120px;
 }
 
-.tetris-over-row-value {
-  font-size: 28px;
+.tetris-over-best-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  line-height: 1;
+  color: #ffd043;
+  border: 1px solid rgba(255, 208, 67, 0.6);
+  background: rgba(255, 208, 67, 0.12);
+  box-shadow: 0 0 12px rgba(255, 208, 67, 0.3);
+  position: relative;
+  overflow: hidden;
+  animation: best-pulse 2s infinite ease-in-out;
+}
+
+@keyframes best-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(255, 208, 67, 0.25);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 18px rgba(255, 208, 67, 0.55);
+  }
+}
+
+.tetris-over-score-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.tetris-over-score-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(180, 205, 240, 0.8);
+  letter-spacing: 1px;
+}
+
+.tetris-over-score-number {
+  font-size: 52px;
+  font-weight: 900;
+  font-family: 'Mochiy Pop One', monospace;
+  background: linear-gradient(135deg, #ffffff 30%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 4px 20px rgba(96, 165, 250, 0.4);
+  line-height: 1.1;
 }
 
 .tetris-over-saving {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(232, 242, 255, 0.72);
-}
-
-.tetris-over-best {
-  margin: 4px 0 0;
-  padding: 6px 14px;
-  border-radius: 999px;
   font-size: 13px;
-  font-weight: 900;
-  color: #ffe7a3;
-  border: 1px solid rgba(255, 215, 120, 0.75);
-  background: rgba(255, 215, 120, 0.08);
-  box-shadow: 0 0 0 1px rgba(255, 215, 120, 0.2) inset;
+  font-weight: 600;
+  color: rgba(232, 242, 255, 0.65);
 }
 
+/* 底部按钮：1 行 2 列左右排列 */
 .tetris-over-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  width: 100%;
 }
 
-.tetris-over-actions .el-button {
-  min-width: 160px;
-  min-height: 42px;
+.tetris-action-btn.el-button {
+  width: 100%;
+  min-height: 44px;
   margin: 0;
-  border-radius: 10px;
-  font-weight: 900;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.tetris-over-close.el-button {
-  --el-button-text-color: #d8e8ff;
-  --el-button-bg-color: rgba(122, 170, 255, 0.14);
-  --el-button-border-color: rgba(122, 170, 255, 0.45);
-  --el-button-hover-bg-color: rgba(122, 170, 255, 0.22);
-  --el-button-hover-border-color: rgba(122, 170, 255, 0.65);
-  --el-button-hover-text-color: #fff;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(122, 170, 255, 0.35) 0 1px, transparent 2px),
-    linear-gradient(135deg, rgba(16, 36, 74, 0.9), rgba(7, 17, 31, 0.95)) !important;
+.tetris-action-btn.primary-btn {
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4) !important;
 }
 
-.tetris-over-dialog .tetris-btn-star {
-  min-width: 160px;
-  --el-button-text-color: #fff;
-  --el-button-bg-color: #07111f;
-  --el-button-border-color: #4d86ff;
-  --el-button-hover-bg-color: #0a1d38;
-  --el-button-hover-border-color: #78a4ff;
-  --el-button-hover-text-color: #fff;
-  --el-button-active-bg-color: #050a13;
-  --el-button-active-border-color: #78a4ff;
-  background:
-    radial-gradient(circle at 18% 34%, rgba(112, 164, 255, 0.95) 0 1px, transparent 2px),
-    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.74) 0 1px, transparent 2px),
-    radial-gradient(circle at 84% 72%, rgba(75, 139, 255, 0.76) 0 1px, transparent 2px),
-    linear-gradient(135deg, #030712 0%, #0a1830 46%, #07111f 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(95, 148, 255, 0.2);
+.tetris-action-btn.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6) !important;
+}
+
+.tetris-action-btn.ghost-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: rgba(232, 242, 255, 0.9) !important;
+  backdrop-filter: blur(6px);
+}
+
+.tetris-action-btn.ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: #fff !important;
+  transform: translateY(-2px);
 }

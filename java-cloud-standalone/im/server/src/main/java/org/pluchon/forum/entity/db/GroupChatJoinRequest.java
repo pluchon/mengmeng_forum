@@ -37,6 +37,9 @@ public class GroupChatJoinRequest {
     // 群主是否已查看: 0未读 1已读
     private Byte ownerReadState;
 
+    // 申请人是否已查看处理结果: 0未读 1已读
+    private Byte applicantReadState;
+
     // 处理人用户 ID
     private Long handledByUserId;
 

@@ -1,20 +1,20 @@
 spring:
   main:
+    banner-mode: off
     # Feign 客户端创建依赖 MVC，而 LoginInterceptor → AuthSnapshot → Feign 形成启动环；@Lazy + 本开关兜底
     allow-circular-references: true
-  config:
-    import:
-      # file: 相对进程 CWD；兼容从仓库根 / nginx / */server 启动
-      - "optional:file:./nginx/.env[.properties]"
-      - "optional:file:../nginx/.env[.properties]"
-      - "optional:file:../../nginx/.env[.properties]"
-      - "optional:file:../../../nginx/.env[.properties]"
+  cloud:
+    nacos:
+      discovery:
+        # 本地多网卡环境可通过 Windows 用户变量 NACOS_DISCOVERY_IP 显式指定可达地址；Docker 未设置时保持 Nacos 自动探测容器地址
+        ip: ${NACOS_DISCOVERY_IP:}
+  # 本地 Java 只读进程环境、classpath 默认值和显式导入的 Nacos 配置。
   data:
     redis:
       # Windows 上 localhost 常解析到 ::1，而 Docker 端口仅绑 127.0.0.1
       host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
       port: 63790
-      password: ${REDIS_PASSWORD:123456}
+      password: ${REDIS_PASSWORD}
       database: 0
       timeout: 5000ms
       lettuce:
@@ -26,8 +26,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 465
-    username: ${MAIL_USERNAME:noreply@example.com}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     default-encoding: UTF-8
     properties:
       mail:
@@ -36,7 +36,7 @@ spring:
             enable: true
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: Asia/Taipei
     default-property-inclusion: NON_NULL
   servlet:
     multipart:
@@ -48,7 +48,7 @@ spring:
     # 默认 vhost 与历史 forum-demo 兼容；新环境建议显式设置 SPRING_RABBITMQ_VIRTUAL_HOST=forum
     virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:forum-demo}
     username: ${SPRING_RABBITMQ_USERNAME:nuonuo}
-    password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:123456}}
+    password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD}}
     listener:
       simple:
         acknowledge-mode: manual
@@ -59,6 +59,7 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
   global-config:
+    banner: false
     db-config:
       id-type: auto
 springdoc:
@@ -80,10 +81,10 @@ oss:
   path: forum_db_item/forum_head_picture/
 
 jwt:
-  secret: ${JWT_SECRET:local_dev_jwt_secret_min_32_chars_change_me}
+  secret: ${JWT_SECRET}
 
 pii:
-  secret: ${PII_CRYPTO_SECRET:local_dev_pii_secret_min_32_chars_change_me}
+  secret: ${PII_CRYPTO_SECRET}
 
 captcha:
   prefix: captcha
@@ -102,6 +103,9 @@ captcha:
     keyPrefix: "captcha:secondary"
 
 forum:
+  # Java↔Java /internal/** 共享密钥；生产必须用外部环境变量覆盖
+  service:
+    internal-key: ${FORUM_SERVICE_INTERNAL_KEY:local-dev-forum-service-key}
   websocket:
     allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
   mascot:
@@ -111,24 +115,27 @@ forum:
     basic-daily-limit: ${FORUM_MASCOT_BASIC_DAILY_LIMIT:30}
     treat-admin-as-vip: ${FORUM_MASCOT_TREAT_ADMIN_AS_VIP:true}
   ai:
+    # Flask 只监听 IPv4；localhost 在 Windows 会先解析 ::1 导致连接被拒
     hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://127.0.0.1:5000}
     internal-key: ${FORUM_AI_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
+    timeout:
+      connect-ms: 5000
+      fast-ms: 60000
+      standard-ms: 300000
+      long-ms: 300000
+      index-ms: 50000
   ffmpeg:
     internal-key: ${FORUM_FFMPEG_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY:}}
-  voice:
-    ice:
-      stun-urls: ${FORUM_VOICE_STUN_URLS:stun:stun.l.google.com:19302}
-      turn-urls: ${FORUM_VOICE_TURN_URLS:}
-      turn-username: ${FORUM_VOICE_TURN_USERNAME:}
-      turn-credential: ${FORUM_VOICE_TURN_CREDENTIAL:}
-      turn-secret: ${FORUM_VOICE_TURN_SECRET:}
-      turn-ttl-seconds: ${FORUM_VOICE_TURN_TTL_SECONDS:3600}
-
+    connect-timeout-ms: 5000
+    read-timeout-ms: 150000
 # 本地默认：以 */server 工作目录回到仓库根 logs/java-backend/
 # 勿在默认值里再写 ${LOG_FILE:...}，否则会与 Boot 写入的 LOG_FILE 互相抢占。
 # 覆盖优先级：环境变量 LOG_FILE（Boot 原生）> FORUM_LOG_FILE > 下方默认路径
 # 生产：application-core-prod-defaults.yml 或 Compose 注入 LOG_FILE=/app/logs/...
 logging:
+  config: classpath:forum-logback-spring.xml
+  charset:
+    file: UTF-8
   level:
     root: WARN
     org.pluchon.forum: WARN

@@ -4,7 +4,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Date;
 
-/** 游标编解码：createTimeMillis_id，保证排序稳定 */
+// 游标编解码：createTimeMillis_id，保证排序稳定
 public final class CursorUtils {
 
     private static final String SEP = "_";

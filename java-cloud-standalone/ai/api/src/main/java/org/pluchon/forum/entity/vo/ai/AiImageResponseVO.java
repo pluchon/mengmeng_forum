@@ -1,9 +1,9 @@
 package org.pluchon.forum.entity.vo.ai;
 
 import lombok.Data;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
 
-// AI 生图接口完整响应（含计费摘要）
+// AI 生图接口完整响应 含计费摘要
 @Data
 public class AiImageResponseVO {
 

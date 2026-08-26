@@ -37,6 +37,7 @@
         <option value="$PROJECT_DIR$/java-cloud-standalone/game/server/pom.xml" />
         <option value="$PROJECT_DIR$/java-cloud-standalone/im/api/pom.xml" />
         <option value="$PROJECT_DIR$/java-cloud-standalone/im/server/pom.xml" />
+        <option value="$PROJECT_DIR$/java-cloud-standalone/imagebed/pom.xml" />
       </list>
     </option>
   </component>

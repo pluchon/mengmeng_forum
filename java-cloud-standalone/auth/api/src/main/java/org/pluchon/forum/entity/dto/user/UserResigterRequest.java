@@ -5,22 +5,20 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.hibernate.validator.constraints.Length;
 
-/**
- * @author pluchon
- * @create 2026-03-05-16:13
- * 作者代码水平一般，难免难看，请见谅
- */
-//前端注册请求
+// &#064;create 2026 03 05 16:13 作者代码水平一般，难免难看，请见谅
+// 前端注册请求
 @Data
 public class UserResigterRequest {
     @NotNull
-    @Length(min = 6,message = "用户名至少为6个字符")
+    @Length(min = 4, max = 20, message = "用户名长度为 4 到 20 个字符")
     private String userName;
+
     @NotNull
-    @Length(min = 6,message = "密码至少为6位")
+    @Length(min = 8, max = 20, message = "密码长度为 8 到 20 位")
     private String password;
+
     @NotNull
-    @Length(min = 6,message = "昵称至少为6个字符")
+    @Length(min = 2, max = 20, message = "昵称长度为 2 到 20 个字符")
     private String nickname;
 
     // 可选：手机号
@@ -29,7 +27,7 @@ public class UserResigterRequest {
     // 可选：邮箱
     private String email;
 
-    /** 行为验证码一次性票据（REGISTER） */
+    // 行为验证码一次性票据 REGISTER
     @NotBlank(message = "请先完成人机验证")
     private String captchaTicket;
 }

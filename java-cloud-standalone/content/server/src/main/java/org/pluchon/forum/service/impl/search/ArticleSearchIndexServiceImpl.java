@@ -67,7 +67,8 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
             return;
         }
         removeArticle(article.getId());
-        List<String> terms = SearchKeywordHelper.buildIndexTerms(article.getTitle(), tagNames);
+        List<String> terms = SearchKeywordHelper.buildIndexTerms(
+                article.getTitle() + " " + stripHtml(article.getContent()), tagNames);
         if (terms.isEmpty()) {
             return;
         }
@@ -128,7 +129,7 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
                     long id = Long.parseLong(member);
                     hitCount.merge(id, 1, Integer::sum);
                 } catch (NumberFormatException ignore) {
-                    // skip
+                    // 跳过
                 }
             }
         }
@@ -151,7 +152,7 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
                 .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .ne(Article::getDeleteState, DELETE_TRUE)
                 .ne(Article::getState, STATE_FORBIDDEN)
-                .select(Article::getId, Article::getTitle, Article::getUserId, Article::getStatus,
+                .select(Article::getId, Article::getTitle, Article::getContent, Article::getUserId, Article::getStatus,
                         Article::getUpdateTime));
         Set<Long> alive = new HashSet<>();
         int count = 0;
@@ -190,5 +191,14 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
         } catch (NumberFormatException ignore) {
             return 0L;
         }
+    }
+
+    private static String stripHtml(String content) {
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        return content.replaceAll("<[^>]+>", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 }

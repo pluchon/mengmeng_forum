@@ -12,17 +12,41 @@ spring:
       config:
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
         namespace: ${NACOS_NAMESPACE:}
+    sentinel:
+      filter:
+        enabled: false
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+            namespace: ${NACOS_NAMESPACE:}
+            group-id: ${NACOS_GROUP:FORUM}
+            data-id: sentinel-forum-game-flow.json
+            data-type: json
+            rule-type: flow
+        degrade:
+          nacos:
+            server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+            namespace: ${NACOS_NAMESPACE:}
+            group-id: ${NACOS_GROUP:FORUM}
+            data-id: sentinel-forum-game-degrade.json
+            data-type: json
+            rule-type: degrade
   config:
     import:
-      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
-      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+      - optional:nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
   datasource:
     # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
-    url: ${FORUM_GAME_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    url: ${FORUM_GAME_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
     username: ${FORUM_GAME_DB_USERNAME:forum_game}
-    password: ${FORUM_GAME_DB_PASSWORD:forum_game_pass}
+    password: ${FORUM_GAME_DB_PASSWORD}
+
+feign:
+  sentinel:
+    enabled: true
 
 forum:
   domain: game

@@ -5,9 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * 积分钱包概览 VO. 给前端"我的积分"页头部使用.
- */
+// 积分钱包概览 VO. 给前端 我的积分 页头部使用.
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

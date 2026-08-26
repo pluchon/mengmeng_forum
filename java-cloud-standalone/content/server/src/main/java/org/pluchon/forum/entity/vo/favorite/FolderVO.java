@@ -8,10 +8,7 @@ import org.pluchon.forum.entity.db.UserFavoriteFolder;
 
 import java.util.Date;
 
-/**
- * 收藏夹展示 VO. 比实体多一个 owner 标志, 便于前端控制 "改 / 删" 按钮可见性.
- * 对外不暴露内部的 delete_state 字段.
- */
+// 收藏夹展示 VO. 比实体多一个 owner 标志, 便于前端控制 改 / 删 按钮可见性. 对外不暴露内部的 delete_state 字段.
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,6 +23,9 @@ public class FolderVO {
 
     @Schema(description = "夹名称")
     private String name;
+
+    @Schema(description = "收藏夹封面URL")
+    private String coverUrl;
 
     @Schema(description = "公开性: 0私密 1公开")
     private Byte isPublic;
@@ -52,6 +52,7 @@ public class FolderVO {
         this.id = folder.getId();
         this.userId = folder.getUserId();
         this.name = folder.getName();
+        this.coverUrl = folder.getCoverUrl();
         this.isPublic = folder.getIsPublic();
         this.isDefault = folder.getIsDefault();
         this.sortOrder = folder.getSortOrder();

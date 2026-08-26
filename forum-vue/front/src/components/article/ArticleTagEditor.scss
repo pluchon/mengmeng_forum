@@ -1,0 +1,322 @@
+.article-tag-editor {
+  margin-bottom: 12px;
+}
+
+.article-tag-editor__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.article-tag-editor--compact {
+  position: relative;
+  min-height: 82px;
+  margin: 0;
+}
+
+.article-tag-editor--compact .article-tag-editor__head {
+  position: absolute;
+  top: -37px;
+  right: 0;
+  z-index: 1;
+  display: block;
+  width: 72px;
+  margin: 0;
+}
+
+.article-tag-editor__label {
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.article-tag-editor__add,
+.article-tag-editor__ai {
+  padding: 4px 10px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  background: var(--el-fill-color-blank);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.article-tag-editor--compact .article-tag-editor__ai {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a27dcc;
+  line-height: 1;
+}
+
+.article-tag-editor--compact .article-tag-editor__add {
+  position: absolute;
+  top: 29px;
+  right: 0;
+  display: flex;
+  width: 72px;
+  height: 72px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-color: #e4d7ec;
+  border-radius: 9px;
+  background: #fbf8fc;
+  color: #9a67b6;
+}
+
+.article-tag-editor--compact .article-tag-editor__add :deep(svg) {
+  width: 29px;
+  height: 29px;
+  stroke-width: 2.6;
+}
+
+.article-tag-editor--compact .article-tag-editor__add:hover {
+  border-color: #d0a7dd;
+  background: #fff4fb;
+}
+
+.article-tag-editor--compact .article-tag-editor__chips {
+  padding-right: 82px;
+}
+
+.article-tag-editor__ai {
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
+}
+
+.article-tag-editor__hint {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.article-tag-editor__chips,
+.article-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.article-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.article-tag-chip--pick {
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.article-tag-chip--pick.is-on {
+  outline: 2px solid var(--el-color-primary);
+  opacity: 1;
+}
+
+.article-tag-chip__x {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.article-tag-chip--sky { background: #e0f2fe; color: #0369a1; }
+.article-tag-chip--rose { background: #ffe4e6; color: #be123c; }
+.article-tag-chip--amber { background: #fef3c7; color: #b45309; }
+.article-tag-chip--mint { background: #d1fae5; color: #047857; }
+.article-tag-chip--violet { background: #ede9fe; color: #6d28d9; }
+.article-tag-chip--slate { background: #f1f5f9; color: #475569; }
+.article-tag-chip--orange { background: #ffedd5; color: #c2410c; }
+.article-tag-chip--teal { background: #ccfbf1; color: #0f766e; }
+
+:global(.article-tag-picker-dialog) {
+  border-radius: 14px;
+}
+
+:global(.article-tag-picker-dialog .el-dialog__header) {
+  position: relative;
+  margin-right: 0;
+  padding: 12px 52px 10px;
+}
+
+.article-tag-picker__title {
+  margin: 0;
+  color: var(--el-text-color-primary);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 24px;
+  text-align: center;
+}
+
+.article-tag-picker__content {
+  min-height: 140px;
+}
+
+.article-tag-picker {
+  min-height: 96px;
+  align-content: flex-start;
+}
+
+.article-tag-picker :deep(.el-empty) {
+  width: 100%;
+  padding: 6px 0;
+}
+
+.article-tag-picker__pagination {
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.article-tag-picker__pagination :deep(.is-active) {
+  background: #7966e8 !important;
+  color: #fff !important;
+}
+
+.article-tag-feedback {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) auto minmax(150px, 0.9fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #eee8f5;
+  border-radius: 9px;
+  background: #fbf9fe;
+}
+
+.article-tag-feedback__label {
+  color: #554d65;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.article-tag-feedback__input {
+  width: 100%;
+}
+
+.article-tag-feedback__input-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.article-tag-feedback__input :deep(.el-input__inner) {
+  padding-right: 28px;
+}
+
+.article-tag-feedback__input :deep(.el-input__wrapper) {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e6dfef inset;
+}
+
+.article-tag-feedback__submit {
+  min-width: 76px;
+  border-color: #dcd4ef;
+  border-radius: 7px;
+  color: #6657b8;
+  font-weight: 700;
+}
+
+.article-tag-feedback__submit:hover {
+  border-color: #9485df;
+  background: #f2efff;
+  color: #5948bd;
+}
+
+.article-tag-feedback__search {
+  min-width: 0;
+}
+
+.article-tag-feedback__search :deep(.el-input__wrapper) {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e6dfef inset;
+}
+
+.article-tag-color-trigger {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--tag-color, #34d399);
+  box-shadow: 0 0 0 1px #d9d1e2;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.article-tag-color-palette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 4px;
+}
+
+.article-tag-color-option {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background: var(--tag-color);
+  background-clip: padding-box;
+  cursor: pointer;
+}
+
+.article-tag-color-option.is-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #7566d8;
+}
+
+:global(.article-tag-picker-dialog .el-dialog__footer) {
+  padding-top: 4px;
+}
+
+.article-tag-picker__done {
+  min-width: 76px;
+  height: 34px;
+  border-color: #7162d9;
+  border-radius: 7px;
+  background: #7162d9;
+  color: #fff;
+  font-weight: 700;
+}
+
+.article-tag-picker__done:hover,
+.article-tag-picker__done:focus {
+  border-color: #6353cc;
+  background: #6353cc;
+  color: #fff;
+}
+
+@media (max-width: 520px) {
+  :global(.article-tag-picker-dialog) {
+    width: calc(100vw - 28px) !important;
+  }
+
+  .article-tag-feedback {
+    grid-template-columns: 1fr auto;
+  }
+
+  .article-tag-feedback__label {
+    grid-column: 1 / -1;
+  }
+
+  .article-tag-feedback__search {
+    grid-column: 1 / -1;
+  }
+}

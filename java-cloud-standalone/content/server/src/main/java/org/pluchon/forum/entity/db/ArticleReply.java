@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 帖子回复表实体类，对应 article_reply
- */
+// 帖子回复表实体类，对应 article_reply
 @Data
 @TableName("article_reply")
 @Schema(description = "帖子回复实体")

@@ -1,5 +1,5 @@
 import { computed, ref, watch, nextTick } from 'vue'
-import { Loading, Promotion, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Loading, Promotion } from '@element-plus/icons-vue'
 import { findImageQualityOption } from '@/constants/aiModels'
 
 const props = defineProps({
@@ -27,6 +27,7 @@ const emit = defineEmits([
   'send',
   'toggle-points-pay',
   'compress-context',
+  'open-memory',
 ])
 
 const textareaRef = ref(null)

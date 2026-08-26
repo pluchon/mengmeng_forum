@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.pluchon.forum.entity.db.UserLotteryPity;
 
-// 抽奖保底 Mapper（economy）
+// 抽奖保底 Mapper economy
 @Mapper
 public interface UserLotteryPityMapper extends BaseMapper<UserLotteryPity> {
 

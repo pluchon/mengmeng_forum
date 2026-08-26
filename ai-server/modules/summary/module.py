@@ -1,21 +1,14 @@
-"""复用现有模型能力的帖子摘要模块。"""
+"""帖子详情页自适应总结模块。"""
 
 from __future__ import annotations
 
-import asyncio
-
-from clients.llm import text_llm
-from config import settings
-from graphs.prompts import SUMMARY_TEMPLATE
-from runtime.ai_runtime import AiRuntime
+from modules.summary.graph import run_summary_graph
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from utils.html import clean_html
 
-_runtime = AiRuntime()
-
 
 class PostSummaryModule:
-    """短帖直接总结，长帖先分块再汇总。"""
+    """按语义复杂度路由1至3个worker并评估择优。"""
 
     async def run(self, request: ModuleRequest) -> ModuleResult:
         content = request.payload.get("content")
@@ -24,10 +17,10 @@ class PostSummaryModule:
         plain = clean_html(content).strip()
         if not plain:
             raise ModuleRequestError("INVALID_SUMMARY_PAYLOAD", "content 不能为空")
-        max_chars = int(settings.audit.get("text_audit_max_chars", 12000))
-        chunks = [plain[index:index + max_chars] for index in range(0, len(plain), max_chars)]
-        partials = [await self._summarize(chunk, request.trace_id) for chunk in chunks]
-        summary = partials[0] if len(partials) == 1 else await self._summarize("\n".join(partials), request.trace_id)
+        if len(plain) <= 50:
+            raise ModuleRequestError("SUMMARY_CONTENT_TOO_SHORT", "帖子正文不超过50字")
+        result = run_summary_graph(str(request.payload.get("title") or ""), plain)
+        summary = str(result.get("summary") or "")
         return ModuleResult(
             success=True,
             data={
@@ -36,28 +29,10 @@ class PostSummaryModule:
                 "keywords": [],
                 "riskLevel": "UNKNOWN",
                 "qualityScore": 1.0 if summary else 0.0,
-                "chunkCount": len(chunks),
+                "route": result.get("route"),
+                "candidateCount": result.get("candidateCount", 0),
+                "deepUsed": result.get("deepUsed", False),
+                "mcpUsed": result.get("mcpUsed", False),
             },
+            usage=result.get("usage") or {},
         )
-
-    @staticmethod
-    async def _summarize(content: str, trace_id: str) -> str:
-        def invoke() -> str:
-            flash_model = str(
-                settings.dashscope.get("model_text_flash") or "qwen3.6-flash"
-            )
-            response = _runtime.call_llm(
-                lambda: (SUMMARY_TEMPLATE | text_llm(
-                    temperature=0.3,
-                    model_name=flash_model,
-                )).invoke({"text": content}),
-                trace_id=trace_id,
-                model_name=flash_model,
-            )
-            raw = getattr(response, "content", response)
-            if isinstance(raw, list) and raw:
-                first = raw[0]
-                return str(first.get("text", "") if isinstance(first, dict) else first).strip()
-            return str(raw or "").strip()
-
-        return await asyncio.to_thread(invoke)

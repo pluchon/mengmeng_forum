@@ -1,9 +1,11 @@
 package org.pluchon.forum.common.config;
 
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.Map;
 import java.util.concurrent.Executor;
 
 // SSE 等长连接异步任务：使用 Spring 托管线程池，支持优雅停机
@@ -17,6 +19,7 @@ public class ForumAsyncConfig {
         executor.setMaxPoolSize(16);
         executor.setQueueCapacity(64);
         executor.setThreadNamePrefix("forum-sse-");
+        executor.setTaskDecorator(this::withTraceContext);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
         executor.initialize();
@@ -30,9 +33,24 @@ public class ForumAsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("forum-recommendation-");
+        executor.setTaskDecorator(this::withTraceContext);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(20);
         executor.initialize();
         return executor;
+    }
+
+    private Runnable withTraceContext(Runnable task) {
+        Map<String, String> context = MDC.getCopyOfContextMap();
+        return () -> {
+            if (context != null) {
+                MDC.setContextMap(context);
+            }
+            try {
+                task.run();
+            } finally {
+                MDC.clear();
+            }
+        };
     }
 }

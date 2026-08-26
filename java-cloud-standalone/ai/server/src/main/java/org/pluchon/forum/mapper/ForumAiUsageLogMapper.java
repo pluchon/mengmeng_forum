@@ -31,4 +31,19 @@ public interface ForumAiUsageLogMapper extends BaseMapper<ForumAiUsageLog> {
     int countCallsBetween(@Param("userId") Long userId,
                           @Param("start") Date start,
                           @Param("end") Date end);
+
+    @Select("SELECT COALESCE(SUM(cost_yuan), 0) FROM forum_ai_usage_log "
+            + "WHERE user_id = #{userId} AND billable_state = 1 AND image_count = 0 AND delete_state = 0 "
+            + "AND create_time >= #{start} AND create_time < #{end}")
+    java.math.BigDecimal sumBillableTextCostBetween(@Param("userId") Long userId,
+                                                    @Param("start") Date start,
+                                                    @Param("end") Date end);
+
+    @Select("SELECT COALESCE(SUM(image_count), 0) FROM forum_ai_usage_log "
+            + "WHERE user_id = #{userId} AND billable_state = 1 AND model_code = #{modelCode} AND delete_state = 0 "
+            + "AND create_time >= #{start} AND create_time < #{end}")
+    int sumImageCountByModelBetween(@Param("userId") Long userId,
+                                    @Param("modelCode") String modelCode,
+                                    @Param("start") Date start,
+                                    @Param("end") Date end);
 }

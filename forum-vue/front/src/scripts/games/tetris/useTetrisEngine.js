@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Block from './block'
 import {
-  clearPoints,
+  calcClearScore,
   createBlankMatrix,
   eachLines,
   speeds,
@@ -37,6 +37,8 @@ export function useTetrisEngine(options = {}) {
   const canHold = ref(true)
   const points = ref(0)
   const clearLines = ref(0)
+  const combo = ref(0)
+  const comboFlash = ref(0)
   const speedStart = ref(1)
   const speedRun = ref(1)
   const pause = ref(false)
@@ -52,7 +54,18 @@ export function useTetrisEngine(options = {}) {
   let rng = createRng(1)
   let pickNextBlockType = createBlockBagPicker(rng)
   let fallTimer = null
+  let comboFlashTimer = null
   let startedAtMs = 0
+
+  function triggerComboFlash(comboCount) {
+    if (comboCount < 2) return
+    comboFlash.value = comboCount >= 3 ? 3 : 2
+    if (comboFlashTimer) clearTimeout(comboFlashTimer)
+    comboFlashTimer = setTimeout(() => {
+      comboFlash.value = 0
+      comboFlashTimer = null
+    }, 600)
+  }
 
   const ghost = computed(() => {
     if (!cur.value) return null
@@ -106,13 +119,17 @@ export function useTetrisEngine(options = {}) {
         const cleared = clearLineRows(matrixAfterLock, lines)
         matrix.value = cleared
         clearLines.value += lines.length
-        dispatchPoints(points.value + clearPoints[lines.length - 1])
+        combo.value += 1
+        dispatchPoints(points.value + calcClearScore(lines.length, combo.value))
+        triggerComboFlash(combo.value)
         const speedAdd = Math.floor(clearLines.value / eachLines)
         speedRun.value = Math.min(6, speedStart.value + speedAdd)
         spawnNext(cleared)
       }, 100)
       return
     }
+
+    combo.value = 0
 
     if (isOver(matrixAfterLock)) {
       finishGame()
@@ -240,6 +257,12 @@ export function useTetrisEngine(options = {}) {
     canHold.value = true
     points.value = 0
     clearLines.value = 0
+    combo.value = 0
+    comboFlash.value = 0
+    if (comboFlashTimer) {
+      clearTimeout(comboFlashTimer)
+      comboFlashTimer = null
+    }
     speedStart.value = 1
     speedRun.value = 1
     pause.value = false
@@ -354,6 +377,7 @@ export function useTetrisEngine(options = {}) {
   onUnmounted(() => {
     window.removeEventListener('keydown', onKeyDown, true)
     clearFallTimer()
+    if (comboFlashTimer) clearTimeout(comboFlashTimer)
   })
 
   return {
@@ -363,6 +387,8 @@ export function useTetrisEngine(options = {}) {
     holdType,
     points,
     clearLines,
+    combo,
+    comboFlash,
     speedRun,
     pause,
     gameOver,

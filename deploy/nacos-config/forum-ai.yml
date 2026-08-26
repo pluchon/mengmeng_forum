@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: ${FORUM_AI_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_AI_DB_USERNAME:forum_ai}
+    password: ${FORUM_AI_DB_PASSWORD}
+
+server:
+  tomcat:
+    # 仅 ai 域：content→forum-ai 的 image-payload JSON（Base64）需大于默认 2MB
+    max-http-post-size: 41943040
+    max-swallow-size: 41943040
+
+forum:
+  domain: ai
+  features:
+    scheduling: false
+    mq: false
+    mq-consumer: false
+    websocket: false
+    game-runtime: false

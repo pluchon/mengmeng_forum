@@ -6,8 +6,10 @@ import lombok.Getter;
 @Getter
 public enum GroupChatMessageStatus {
     NORMAL((byte) 0),
-    REPORTED_HIDDEN((byte) 1),
-    DELETED((byte) 2);
+    DELETED((byte) 2),
+    RECALLED((byte) 3),
+    // 文本内容审核未通过（仅发送方可见）
+    AUDIT_FAILED((byte) 4);
 
     private final Byte code;
 

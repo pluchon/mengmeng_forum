@@ -1,34 +1,40 @@
-﻿# Docker Compose 内网服务名（由 nginx/docker-compose 使用）
+﻿# Docker Compose 内网服务名（由 deploy/docker-compose 使用）
 server:
   host: 0.0.0.0
   port: 5000
 
 logging:
   level: WARNING
-  file: /var/log/forum/python-backend/ai-server/ai-server.log
+  file: /var/log/forum/ai-server/ai-server.log
   max_bytes: 20971520
   backup_count: 14
+
+gateway:
+  fast_concurrency: 8
+  standard_concurrency: 4
+  long_concurrency: 2
+  index_concurrency: 2
 
 dashscope:
   api_key: ""
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-  model_text: "qwen3.6-flash"
-  model_text_flash: "qwen3.6-flash"
+  model_text: "qwen3.7-flash"
+  model_text_flash: "qwen3.7-flash"
   model_text_deep: "qwen3.7-max"
   model_vision: "qwen3-vl-flash"
   model_vision_fallback: "qwen3-vl-plus"
-  model_rerank: "qwen3-vl-rerank"
+  model_rerank: "qwen3-rerank"
   model_embedding_rag: "qwen3-vl-embedding"
-  model_embedding_text_fallback: "text-embedding-v3"
-  # 勿将 embedding 配置为 qwen3-vl-rerank；对话走 compatible-mode，向量走 MultiModal/TextEmbedding
-  model_image_normal: "z-image-turbo"
-  model_image_premium: "wanx2.1-t2i-plus"
+  model_embedding_text_fallback: "text-embedding-v4"
+  # 勿将 embedding 配置为 rerank；对话走 compatible-mode，向量走 MultiModal/TextEmbedding
+  model_image_normal: "wan2.7-image"
+  model_image_premium: "wan2.7-image-pro"
 
 redis:
   host: redis
   port: 6379
-  password: "123456"
+  password: ""
   db: 0
   socket_timeout: 2
 
@@ -37,18 +43,21 @@ rabbitmq:
   port: 5672
   virtual_host: forum-demo
   username: nuonuo
-  password: "123456"
+  password: ""
   exchange: "t_exchange_1"
   audit_task_queue: "q-audit-article"
   audit_task_routing_key: "forum.audit.article"
   audit_result_routing_key: "forum.audit.result"
+  ai_async_task_queue: "q-ai-async-task"
+  ai_content_result_routing_key: "forum.ai.content.result"
+  ai_im_result_routing_key: "forum.ai.im.result"
   prefetch: 1
 
 postgres:
   host: postgres
   port: 5432
   user: langgraph
-  password: "123456"
+  password: ""
   db: langgraph_db
   auto_setup: true
 
@@ -57,11 +66,11 @@ audit:
   task_state_key_prefix: "ai_audit:task_state:"
   task_state_ttl: 3600
   image_audit_timeout: 30
-  text_audit_timeout: 180
+  text_audit_timeout: 45
   text_audit_max_chars: 12000
-  video_audit_timeout: 300
+  video_audit_timeout: 120
   video_max_bytes_for_url: 104857600
-  video_frame_extract_timeout: 600
+  video_frame_extract_timeout: 120
   summary_min_len: 50
 
 oss:
@@ -85,7 +94,8 @@ rag:
   redis_article_doc_prefix: "forum_rag:article:"
   redis_user_ids_key: "forum_rag:user:ids"
   redis_user_doc_prefix: "forum_rag:user:"
-  vector_scan_limit: 400
+  vector_scan_limit: 800
+  # 过约 1500 条稳定索引后再考虑 Redis Stack KNN
   max_candidates: 80
   doc_truncate: 1200
   relevance_threshold: 0.22
@@ -117,11 +127,6 @@ mascot:
   max_user_message_len: 2000
   max_history_turns: 8
 
-huanapi:
-  base_url: "https://www.huanapi.com"
-  image_key: ""
-  model_image_premium: "gpt-image-2"
-
 tavily:
   enabled: true
   api_key: ""
@@ -134,14 +139,6 @@ mcp:
   tools:
     - tavily_search
     - get_current_datetime
-    - map_geocode
-    - map_search_places
-    - map_directions
-    - map_weather
-
-baidu_map:
-  enabled: true
-  api_key: ""
 
 ai_hub:
   internal_key: ""

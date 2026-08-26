@@ -2,22 +2,21 @@ package org.pluchon.forum.entity.dto.article;
 
 import lombok.Data;
 
-/**
- * @author pluchon
- * 楼中楼回复请求 DTO
- */
-//回复楼中楼请求
+import java.util.List;
+
+// 楼中楼回复请求
 @Data
 public class SubReplyRequest {
-    //所属帖子ID
+    // 帖子ID
     private Long articleId;
-    //所属楼层（一级回复）ID
+    // 一级回复ID
     private Long replyId;
-    //被回复的目标用户ID
+    // 被回复用户ID
     private Long replyUserId;
-    //当前登录用户ID（由 Controller 从 session 注入，不暴露给前端
+    // 发送用户ID
     private Long postUserId;
-    //回复内容
+    // 回复内容
     private String content;
-    private java.util.List<ArticleReplyMediaItemDTO> mediaList;
+    // 媒体附件列表
+    private List<ArticleReplyMediaItemDTO> mediaList;
 }

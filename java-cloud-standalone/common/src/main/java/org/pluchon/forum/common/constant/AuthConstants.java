@@ -7,8 +7,9 @@ public final class AuthConstants {
 
     public static final String USER_SESSION = "user_session";
 
+    // 用户名：4 20，仅中文 / 字母 / 数字 与 RegexUtil.checkUserName 一致
     public static final Pattern VALID_USERNAME_PATTERN = Pattern
-            .compile("^[\\u4e00-\\u9fa5a-zA-Z0-9][\\u4e00-\\u9fa5a-zA-Z0-9_-]{2,18}[\\u4e00-\\u9fa5a-zA-Z0-9]$");
+            .compile("^[\\u4e00-\\u9fa5a-zA-Z0-9]{4,20}$");
 
     public static final String JWT_NAME = "Authorization";
     public static final String JWT_USER_ID = "userId";

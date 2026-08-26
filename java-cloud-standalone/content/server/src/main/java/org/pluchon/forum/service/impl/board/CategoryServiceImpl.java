@@ -11,14 +11,14 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.Category;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.board.CategoryWithBoards;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.CategoryMapper;
+import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.board.CategoryService;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +44,9 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Autowired
     private ContentUserLookupService userService;
+
+    @Autowired
+    private ArticleMediaService articleMediaService;
 
     @Override
     public List<Category> queryAllCategories() {
@@ -66,10 +70,7 @@ public class CategoryServiceImpl implements CategoryService {
         return result;
     }
 
-    /**
-     * 获取分类下所有板块的帖子（分页）
-     * 通过 article IN (boardIds) 一次分页查出，避免前端逐板块请求带来的 N+1 问题
-     */
+    // 获取分类下所有板块的帖子 分页 通过 article IN boardIds 一次分页查出，避免前端逐板块请求带来的 N+1 问题
     @Override
     public PageResult<ArticleListResponse> getArticlesByCategoryWithPage(Long categoryId, Integer pageNum, Integer pageSize) {
         if (categoryId == null || categoryId <= 0) {
@@ -89,11 +90,17 @@ public class CategoryServiceImpl implements CategoryService {
                 .ne(Article::getDeleteState, 1).ne(Article::getState, 1)
                 .orderByDesc(Article::getUpdateTime);
         Page<Article> result = articleMapper.selectPage(page, wrapper);
+        Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(
+                result.getRecords().stream().map(Article::getId).collect(Collectors.toList()));
+        Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(
+                result.getRecords().stream().map(Article::getId).collect(Collectors.toList()));
         List<ArticleListResponse> records = result.getRecords().stream().map(article -> {
             UserInternalVO user = userService.getUserInfoById(article.getUserId());
             ArticleListResponse response = new ArticleListResponse();
             response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user));
+            response.setImageCount(imageCounts.getOrDefault(article.getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(article.getId()));
             return response;
         }).collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());

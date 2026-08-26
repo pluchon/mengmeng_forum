@@ -6,9 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-/**
- * 用户资料、积分、VIP 变更后失效相关派生缓存。
- */
+// 用户资料、积分、VIP 变更后失效相关派生缓存
 @Component
 public class UserDerivedCacheInvalidator {
 

@@ -11,6 +11,8 @@ public interface GameMatchQueueService {
 
     boolean contains(String gameCode, Long userId);
 
+    String matchingGameCode(Long userId);
+
     GameMatchPair pollPair(String gameCode, String bucketCode);
 
     Long pollAiCandidate(String gameCode, String bucketCode, long waitTimeoutMs);

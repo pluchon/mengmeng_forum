@@ -13,20 +13,20 @@ import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.utils.UUIDUtils;
 import org.pluchon.forum.auth.client.FavoriteFolderInternalFeignClient;
-import org.pluchon.forum.auth.client.GrowthInternalFeignClient;
 import org.pluchon.forum.auth.client.PointsInternalFeignClient;
-import org.pluchon.forum.cloud.feign.MascotPreferenceInternalFeignClient;
-import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
+import org.pluchon.forum.cloud.MascotPreferenceInternalFeignClient;
+import org.pluchon.forum.entity.dto.RagUserIndexDTO;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
+import org.pluchon.forum.entity.vo.user.UserLoginRiskHintVO;
+import org.pluchon.forum.entity.vo.user.UserSecurityAssessmentVO;
 import org.pluchon.forum.mapper.UserMapper;
 import org.pluchon.forum.auth.client.AuthAiHubInternalFeignClient;
+import org.pluchon.forum.service.interfaces.user.UserLoginLogService;
 import org.pluchon.forum.service.interfaces.user.UserService;
-import org.pluchon.forum.service.impl.user.UserDerivedCacheInvalidator;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +34,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import static org.pluchon.forum.common.constant.Constant.VALID_USERNAME_PATTERN;
 
 @Service
 @Slf4j
@@ -62,9 +62,6 @@ public class UserServiceImpl implements UserService {
     private PointsInternalFeignClient pointsInternalFeignClient;
 
     @Autowired
-    private GrowthInternalFeignClient growthInternalFeignClient;
-
-    @Autowired
     private AuthAiHubInternalFeignClient aiHubService;
 
     @Autowired
@@ -76,9 +73,12 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
 
-    // ============================================================
+    @Autowired
+    private UserLoginLogService userLoginLogService;
+
+    
     // 注册，使用事务保证原子性
-    // ============================================================
+    
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void resigter(UserResigterRequest req) {
@@ -88,15 +88,25 @@ public class UserServiceImpl implements UserService {
         if (!StringUtils.hasLength(userName) || !StringUtils.hasLength(nickname) || !StringUtils.hasLength(password)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        if (!isValidUserName(userName)) {
-            log.warn("用户名包含非法字符: {}", userName);
+        if (!RegexUtil.checkUserName(userName)) {
+            log.warn("用户名格式不合法");
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (!RegexUtil.checkNickname(nickname)) {
+            log.warn("昵称格式不合法");
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         if (!RegexUtil.checkPassword(password)) {
-            log.warn("用户 {} 注册时密码强度不达标", userName);
+            log.warn("用户注册时密码强度不达标");
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        // 直接查库校验用户名是否存在（不走 queryUserByUserName，避免抛出无法查找的异常）
+        if (StringUtils.hasLength(req.getPhoneNum()) && !RegexUtil.checkMobile(req.getPhoneNum())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (StringUtils.hasLength(req.getEmail()) && !RegexUtil.checkMail(req.getEmail())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        // 直接查库校验用户名是否存在 不走 queryUserByUserName，避免抛出无法查找的异常
         User existing = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, userName).ne(User::getDeleteState, 1));
         if (existing != null) {
@@ -108,7 +118,7 @@ public class UserServiceImpl implements UserService {
         String salt = UUIDUtils.UUID32();
         register.setSalt(salt);
         register.setPassword(PasswordUtils.encode(password));
-        // 我们敏感信息都有两个字段，一个是可逆的密文，一个是哈希。
+        // 我们敏感信息都有两个字段，一个是可逆的密文，一个是哈希
         // 可逆的密文是为了还原数据的，但是每一次生成都不确定，无法建立索引
         // 不可逆的哈希密文每一次都是固定的，因此便于建立索引
         // 这里的都是注册的时候选填的内容
@@ -121,17 +131,12 @@ public class UserServiceImpl implements UserService {
             register.setEmailHash(PiiUtils.hmac(req.getEmail()));
         }
         userMapper.insert(register);
-        // 跨服务 Feign（成长建档 / 注册赠分）必须在本地事务提交后再调用，
-        // 否则 economy 更新同一 user 行会与本事务互相等待，触发 Lock wait timeout。
+        // 跨服务 Feign 注册赠分 必须在本地事务提交后再调用
+        // 否则 economy 更新同一 user 行会与本事务互相等待，触发 Lock wait timeout
         final Long newUserId = register.getId();
         final String newUserName = register.getUsername();
         final User ragSnapshot = register;
         Runnable afterCommitSideEffects = () -> {
-            try {
-                growthInternalFeignClient.createNewUserProfile(newUserId);
-            } catch (Exception e) {
-                log.warn("用户 {} 成长档案创建失败(可补偿): {}", newUserId, e.getMessage());
-            }
             try {
                 Integer balance = pointsInternalFeignClient.addPoints(
                         newUserId,
@@ -167,9 +172,9 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    // ============================================================
+    
     // 共通查询：先 Redis 后 DB
-    // ============================================================
+    
     @Override
     public User queryUserByUserName(String userName) {
         if (!StringUtils.hasLength(userName)) {
@@ -223,26 +228,103 @@ public class UserServiceImpl implements UserService {
         return queryUserByUserId(userId);
     }
 
-    // ============================================================
-    // 登录：用户名 / 邮箱
-    // ============================================================
     @Override
-    public User login(UserLoginRequest req) {
-        String account = req.getUserName();
+    public UserSecurityAssessmentVO assessSecurity(Long userId) {
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getId, userId)
+                .ne(User::getDeleteState, 1));
+        if (user == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
+        }
+
+        boolean passwordConfigured = StringUtils.hasText(user.getPassword());
+        boolean emailBound = StringUtils.hasText(user.getEmail());
+        boolean phoneBound = StringUtils.hasText(user.getPhoneNum());
+        int protectionCount = (passwordConfigured ? 1 : 0)
+                + (emailBound ? 1 : 0)
+                + (phoneBound ? 1 : 0);
+
+        UserSecurityAssessmentVO assessment = new UserSecurityAssessmentVO();
+        assessment.setPasswordConfigured(passwordConfigured);
+        assessment.setEmailBound(emailBound);
+        assessment.setPhoneBound(phoneBound);
+        String level;
+        String description;
+        if (protectionCount == 3) {
+            level = "良好";
+            description = "密码、邮箱与手机均已绑定";
+        } else if (protectionCount == 2) {
+            level = "一般";
+            description = "建议补充未绑定的安全信息";
+        } else {
+            level = "需完善";
+            description = "建议设置密码并绑定邮箱或手机";
+        }
+
+        UserLoginRiskHintVO loginRisk = userLoginLogService.assessRecentRisk(userId);
+        boolean riskDetected = loginRisk != null && Boolean.TRUE.equals(loginRisk.getRiskDetected());
+        assessment.setLoginRiskDetected(riskDetected);
+        assessment.setLoginRiskHint(riskDetected ? loginRisk.getHint() : null);
+        if (riskDetected) {
+            if ("良好".equals(level) || "一般".equals(level)) {
+                level = "需留意";
+            }
+        }
+        assessment.setLevel(level);
+        assessment.setDescription(description);
+        return assessment;
+    }
+
+    
+    // 登录：用户名 / 邮箱
+    
+    @Override
+    public User login(UserLoginRequest req, HttpServletRequest httpRequest) {
+        String account = req.getUserName() == null ? "" : req.getUserName().trim();
         String password = req.getPassword();
         if (!StringUtils.hasLength(account) || !StringUtils.hasLength(password)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        // 区分邮箱登录 / 用户名登录：邮箱不走用户名缓存
-        User user = account.contains("@") ? loadUserByEmail(account) : loadUserByUsername(account);
+        // 登录密码与注册同一复杂度；历史弱密码需先找回重置
+        if (RegexUtil.containsDangerousInput(account) || RegexUtil.containsDangerousInput(password)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (!RegexUtil.checkPassword(password)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        boolean emailLogin = account.contains("@");
+        if (emailLogin) {
+            if (!RegexUtil.checkMail(account)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+            }
+        } else if (!RegexUtil.checkUserName(account)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        // 失败计数键邮箱按小写归并，查库仍用用户输入原文以匹配注册时 HMAC
+        String failKey = Constant.REDIS_KEY_LOGIN_FAIL
+                + (emailLogin ? account.toLowerCase() : account);
+        assertLoginNotLocked(failKey);
+        User user;
+        try {
+            user = emailLogin ? loadUserByEmail(account) : loadUserByUsername(account);
+        } catch (ApplicationException ex) {
+            if (isUserMissing(ex)) {
+                recordLoginFail(failKey);
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_LOGIN));
+            }
+            throw ex;
+        }
         // 缓存中不存盐值与密码哈希，必要时回库取完整记录，获取盐值，便于查询加密后的密码
         if (user.getSalt() == null || user.getPassword() == null) {
             user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                     .eq(User::getId, user.getId()).ne(User::getDeleteState, 1));
         }
         if (!PasswordUtils.matches(password, user.getPassword(), user.getSalt())) {
+            userLoginLogService.recordFailure(user.getId(), "password", httpRequest);
+            recordLoginFail(failKey);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_LOGIN));
         }
+        clearLoginFail(failKey);
         authTokenService.assertCanAuthenticate(user);
         if (!PasswordUtils.isBcryptHash(user.getPassword())) {
             String bcrypt = PasswordUtils.encode(password);
@@ -254,19 +336,52 @@ public class UserServiceImpl implements UserService {
             user.setSalt("");
         }
         user.setToken(authTokenService.issueLoginToken(user));
-        log.info("用户 {} 登录校验通过", user.getUsername());
-        //用户完整信息存入缓存
+        // 用户完整信息存入缓存
         storeRedis(user);
-        //用户简要信息存入缓存
+        // 用户简要信息存入缓存
         storeUserNameMapping(user.getUsername(), user.getId());
         return toSafeUser(user);
+    }
+
+    private void assertLoginNotLocked(String failKey) {
+        String raw = stringRedisTemplate.opsForValue().get(failKey);
+        if (!StringUtils.hasLength(raw)) {
+            return;
+        }
+        try {
+            if (Long.parseLong(raw.trim()) >= Constant.LOGIN_FAIL_MAX) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_LOGIN_LOCKED));
+            }
+        } catch (NumberFormatException ignored) {
+            stringRedisTemplate.delete(failKey);
+        }
+    }
+
+    private void recordLoginFail(String failKey) {
+        Long count = stringRedisTemplate.opsForValue().increment(failKey);
+        if (count != null && count == 1L) {
+            stringRedisTemplate.expire(failKey, Constant.REDIS_TTL_LOGIN_FAIL, TimeUnit.SECONDS);
+        }
+        if (count != null && count >= Constant.LOGIN_FAIL_MAX) {
+            stringRedisTemplate.expire(failKey, Constant.REDIS_TTL_LOGIN_FAIL, TimeUnit.SECONDS);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_LOGIN_LOCKED));
+        }
+    }
+
+    private void clearLoginFail(String failKey) {
+        stringRedisTemplate.delete(failKey);
+    }
+
+    private static boolean isUserMissing(ApplicationException ex) {
+        Result<?> error = ex.getErrorResult();
+        return error != null && error.getCode() == ResultCode.FAILED_USER_NOT_EXISTS.getCode();
     }
 
     private User loadUserByEmail(String email) {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getEmailHash, PiiUtils.hmac(email)).ne(User::getDeleteState, 1));
         if (user == null) {
-            log.warn("邮箱未绑定账号: {}", email);
+            log.warn("邮箱未绑定账号");
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         return user;
@@ -280,9 +395,9 @@ public class UserServiceImpl implements UserService {
         return user;
     }
 
-    // ============================================================
-    // 帖子计数维护（外部 ArticleService 调用）
-    // ============================================================
+    
+    // 帖子计数维护 外部 ArticleService 调用
+    
     @Override
     public void addOneById(Long userId) {
         queryUserByUserId(userId);
@@ -305,7 +420,7 @@ public class UserServiceImpl implements UserService {
         incrementCachedArticleCount(userId, -1);
     }
 
-    /** 用户详情 Hash 还在缓存里就同步增减；不在则跳过，避免创建残缺 Hash */
+    // 用户详情 Hash 还在缓存里就同步增减；不在则跳过，避免创建残缺 Hash
     private void incrementCachedArticleCount(Long userId, int delta) {
         String cacheKey = Constant.REDIS_KEY_USER_INFO + userId;
         if (stringRedisTemplate.hasKey(cacheKey)) {
@@ -313,21 +428,39 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    // ============================================================
+    
     // 修改用户信息
-    // ============================================================
+    
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public User modifyUser(ModifyUserRequest req, Long userId) {
+        if (req.getNickName() != null || req.getRemark() != null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "昵称和个人简介请通过审核流程提交"));
+        }
         // 获取旧的用户信息
         User oldUser = queryUserByUserId(userId);
         // 获取新旧用户名
         String oldUserName = oldUser.getUsername();
         String newUserName = req.getUserName();
-        if (StringUtils.hasLength(newUserName) && !isValidUserName(newUserName)) {
-            log.warn("新用户名包含非法字符: {}", newUserName);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        if (StringUtils.hasLength(newUserName) && !RegexUtil.checkUserName(newUserName)) {
+            log.warn("新用户名格式不合法");
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "用户名需为4–20位中文、英文字母或数字"));
         }
-        // mybatis-plus 默认仅更新非空字段，无需手动判空
+        if (StringUtils.hasLength(req.getNickName()) && !RegexUtil.checkNickname(req.getNickName())) {
+            log.warn("新昵称格式不合法");
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "昵称需为2–20位中文、英文字母或数字"));
+        }
+        if (StringUtils.hasLength(req.getEmail()) && !RegexUtil.checkMail(req.getEmail())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "邮箱格式不正确"));
+        }
+        if (req.getRemark() != null && req.getRemark().trim().length() > 50) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "个人简介不能超过50个字"));
+        }
+        // mybatis plus 默认仅更新非空字段，无需手动判空
         User update = new User();
         update.setUsername(newUserName);
         update.setNickname(req.getNickName());
@@ -351,13 +484,34 @@ public class UserServiceImpl implements UserService {
         if (StringUtils.hasLength(newUserName) && !newUserName.equals(oldUserName)) {
             deleteUserNameMapping(oldUserName);
             storeUserNameMapping(newUserName, userId);
-            log.info("用户名变更: {} -> {}，缓存映射已更新", oldUserName, newUserName);
         }
         // 详细信息缓存失效，下一次查询会从 DB 重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
         User latest = queryUserByUserId(userId);
         indexUserRagProfile(latest);
         return latest;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void applyReviewedProfileChange(Long userId, String fieldType, String content) {
+        User update = new User();
+        if ("NICKNAME".equals(fieldType)) {
+            update.setNickname(content);
+        } else if ("BIO".equals(fieldType)) {
+            update.setRemark(content);
+        } else {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        int updated = userMapper.update(update, new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .eq(User::getDeleteState, (byte) 0));
+        if (updated != 1) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+        stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
+        User latest = queryUserByUserId(userId);
+        indexUserRagProfile(latest);
     }
 
     private void indexUserRagProfile(User user) {
@@ -367,20 +521,18 @@ public class UserServiceImpl implements UserService {
         RagUserIndexDTO payload = new RagUserIndexDTO();
         payload.setUserId(user.getId());
         payload.setNickname(user.getNickname());
-        payload.setUsername(user.getUsername());
-        payload.setRemark(user.getRemark());
         aiHubService.indexUserRag(payload);
     }
 
     @Override
     public void setMascotModel(Long userId, Long mascotModelId) {
-        // 偏好权威在 forum-ai；auth 仅转发并失效本地用户缓存由 ai 侧完成
+        // 偏好权威在 forum ai；auth 仅转发并失效本地用户缓存由 ai 侧完成
         mascotPreferenceInternalFeignClient.setMascotModel(userId, mascotModelId);
     }
 
-    // ============================================================
+    
     // 修改密码
-    // ============================================================
+    
     @Override
     public void updatePawssword(Long userId, String oldPassword, String newPassword) {
         if (!StringUtils.hasLength(oldPassword) || !StringUtils.hasLength(newPassword)) {
@@ -408,7 +560,6 @@ public class UserServiceImpl implements UserService {
         jwtTokenVersionService.bump(userId);
         // 盐值变更必须清缓存，下次读取时重建
         stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
-        log.info("用户 {} 修改密码成功，缓存已清除", userId);
     }
 
     @Override
@@ -420,9 +571,9 @@ public class UserServiceImpl implements UserService {
         jwtTokenVersionService.bump(userId);
     }
 
-    // ============================================================
-    // URL 落库（FileController 上传完成后调用）
-    // ============================================================
+    
+    // URL 落库 FileController 上传完成后调用
+    
     @Override
     public void updateAvatarUrl(Long userId, String url) {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
@@ -437,9 +588,9 @@ public class UserServiceImpl implements UserService {
         userDerivedCacheInvalidator.invalidateUserCaches(userId);
     }
 
-    // ============================================================
-    // Redis 缓存：用户详情 Hash + 用户名->ID 映射
-    // ============================================================
+    
+    // Redis 缓存：用户详情 Hash + 用户名 >ID 映射
+    
     private void storeRedis(User user) {
         String redisKey = Constant.REDIS_KEY_USER_INFO + user.getId();
         Map<String, String> map = new HashMap<>();
@@ -455,12 +606,12 @@ public class UserServiceImpl implements UserService {
         map.put("backgroundUrl", nullToEmpty(user.getBackgroundUrl()));
         map.put("vipTier", user.getVipTier() == null ? "0" : String.valueOf(user.getVipTier().intValue()));
         map.put("vipExpireMs", user.getVipExpireAt() == null ? "" : String.valueOf(user.getVipExpireAt().getTime()));
-        map.put("points", user.getPoints() == null ? "0" : String.valueOf(user.getPoints()));
         map.put("mascotModelId", user.getMascotModelId() == null ? "" : String.valueOf(user.getMascotModelId()));
         map.put("state", user.getState() == null ? "0" : String.valueOf(user.getState().intValue()));
         map.put("creatorState", user.getCreatorState() == null ? "0" : String.valueOf(user.getCreatorState().intValue()));
         map.put("ipRegion", nullToEmpty(user.getIpRegion()));
-        // 敏感信息（password / salt）不入缓存
+        map.put("createTimeMs", user.getCreateTime() == null ? "" : String.valueOf(user.getCreateTime().getTime()));
+        // 敏感信息 password / salt 不入缓存
         stringRedisTemplate.opsForHash().putAll(redisKey, map);
         // 设置过期时间，防止存在内存中过久，我们一般设置为5分钟
         stringRedisTemplate.expire(redisKey, Constant.REDIS_TTL_USER_INFO, TimeUnit.SECONDS);
@@ -494,6 +645,10 @@ public class UserServiceImpl implements UserService {
             stringRedisTemplate.delete(redisKey);
             return null;
         }
+        if (!map.containsKey("createTimeMs")) {
+            stringRedisTemplate.delete(redisKey);
+            return null;
+        }
         User user = new User();
         user.setId(Long.valueOf(map.get("id").toString()));
         user.setUsername(map.get("username").toString());
@@ -510,7 +665,6 @@ public class UserServiceImpl implements UserService {
         if (StringUtils.hasLength(vipExpireMs)) {
             user.setVipExpireAt(new Date(Long.parseLong(vipExpireMs.trim())));
         }
-        user.setPoints(Integer.valueOf(map.getOrDefault("points", "0").toString()));
         String mid = map.getOrDefault("mascotModelId", "").toString();
         if (StringUtils.hasLength(mid)) {
             user.setMascotModelId(Long.valueOf(mid.trim()));
@@ -518,6 +672,10 @@ public class UserServiceImpl implements UserService {
         user.setState(Byte.valueOf(map.getOrDefault("state", "0").toString()));
         user.setCreatorState(Byte.valueOf(map.getOrDefault("creatorState", "0").toString()));
         user.setIpRegion(map.getOrDefault("ipRegion", "").toString());
+        String createTimeMs = map.getOrDefault("createTimeMs", "").toString();
+        if (StringUtils.hasLength(createTimeMs)) {
+            user.setCreateTime(new Date(Long.parseLong(createTimeMs.trim())));
+        }
         return user;
     }
 
@@ -542,13 +700,5 @@ public class UserServiceImpl implements UserService {
         user.setEmail(PiiUtils.decrypt(user.getEmail()));
         user.setPhoneNum(PiiUtils.maskPhone(user.getPhoneNum()));
         return user;
-    }
-
-    /** 用户名长度 4-20，且必须以中英文/数字开头结尾 */
-    private boolean isValidUserName(String userName) {
-        if (userName == null || userName.length() < 4 || userName.length() > 20) {
-            return false;
-        }
-        return VALID_USERNAME_PATTERN.matcher(userName).matches();
     }
 }

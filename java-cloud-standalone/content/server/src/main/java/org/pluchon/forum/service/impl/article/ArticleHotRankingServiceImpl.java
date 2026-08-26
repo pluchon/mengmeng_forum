@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.constant.ForumBusinessConstants;
@@ -55,8 +56,8 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
     @Override
     public PageResult<Long> getHotArticlePage(Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = Math.min(PageUtils.getValidPageSize(pageSize), 10);
-        List<Long> validTopIds = getHotArticleList(50);
+        int validPageSize = Math.min(PageUtils.getValidPageSize(pageSize), ForumBusinessConstants.HOT_RANK_PAGE_SIZE_MAX);
+        List<Long> validTopIds = getHotArticleList(ForumBusinessConstants.HOT_RANK_LIST_MAX);
         int fromIndex = Math.min((validPageNum - 1) * validPageSize, validTopIds.size());
         int toIndex = Math.min(fromIndex + validPageSize, validTopIds.size());
         List<Long> records = new ArrayList<>(validTopIds.subList(fromIndex, toIndex));
@@ -144,6 +145,11 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
         return hotArticleRedisOps.readTrendDirections(articleIds);
     }
 
+    @Override
+    public Map<Long, Double> getHotScores(List<Long> articleIds) {
+        return hotArticleRedisOps.readScores(articleIds);
+    }
+
     void updateDailyTrendSnapshots(List<Article> articles) {
         List<Long> articleIds = articles.stream().map(Article::getId).toList();
         boolean initialized = hotArticleRedisOps.isDailyTrendInitialized();
@@ -225,8 +231,22 @@ public class ArticleHotRankingServiceImpl implements ArticleHotRankingService {
                 .ne(Article::getState, STATE_FORBIDDEN)
                 .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
                 .ge(Article::getCreateTime, windowStart));
+        // 时间窗内无帖时退化为全量已发布帖，按互动热度排序，避免 Redis 空榜时接口长期返回空
         if (articles.isEmpty()) {
-            return Collections.emptyList();
+            int fetchSize = Math.max(topN * 5, 50);
+            Page<Article> fallbackPage = articleMapper.selectPage(
+                    new Page<>(1, fetchSize),
+                    new LambdaQueryWrapper<Article>()
+                            .ne(Article::getDeleteState, DELETE_TRUE)
+                            .ne(Article::getState, STATE_FORBIDDEN)
+                            .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
+                            .orderByDesc(Article::getLikeCount)
+                            .orderByDesc(Article::getVisitCount)
+                            .orderByDesc(Article::getUpdateTime));
+            return fallbackPage.getRecords().stream()
+                    .limit(topN)
+                    .map(Article::getId)
+                    .collect(Collectors.toList());
         }
         return articles.stream()
                 .sorted(Comparator.comparingDouble(this::computeHotScore).reversed())

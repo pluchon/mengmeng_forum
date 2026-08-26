@@ -124,9 +124,6 @@ public class ArticleReplyMediaServiceImpl implements ArticleReplyMediaService {
                     throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_INVALID));
                 }
                 imageCount++;
-                if (imageCount > Constant.REPLY_MEDIA_MAX_IMAGES) {
-                    throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_TOO_MANY));
-                }
                 item.setMediaType(Constant.REPLY_MEDIA_TYPE_IMAGE);
             } else if (Constant.REPLY_MEDIA_TYPE_SHOP_EMOJI.equals(type)) {
                 Long shopId = raw.getShopId();
@@ -135,13 +132,14 @@ public class ArticleReplyMediaServiceImpl implements ArticleReplyMediaService {
                 }
                 assertOwnedShopEmoji(loginUserId, shopId, url);
                 emojiCount++;
-                if (emojiCount > Constant.REPLY_MEDIA_MAX_EMOJIS) {
-                    throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_TOO_MANY));
-                }
                 item.setMediaType(Constant.REPLY_MEDIA_TYPE_SHOP_EMOJI);
                 item.setShopId(shopId);
             } else {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_INVALID));
+            }
+            // 图片 + 表情包合计不得超过上限 安全边界在后端
+            if (imageCount + emojiCount > Constant.REPLY_MEDIA_MAX_TOTAL) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_TOO_MANY));
             }
             out.add(item);
         }

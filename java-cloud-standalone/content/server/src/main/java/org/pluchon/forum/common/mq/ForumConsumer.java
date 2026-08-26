@@ -9,6 +9,10 @@ import org.pluchon.forum.common.utils.MqEventDedupHelper;
 import org.pluchon.forum.cloud.feign.ContentWebSocketInternalFeignClient;
 import org.pluchon.forum.entity.vo.mq.MessageNotifyMqVO;
 import org.pluchon.forum.entity.vo.mq.ReplyNotifyMqVO;
+import org.pluchon.forum.service.interfaces.article.ArticleSummaryService;
+import org.pluchon.forum.service.interfaces.article.ArticleUserMusicAuditService;
+import org.pluchon.forum.service.interfaces.moderation.ContentModerationTaskService;
+import org.pluchon.forum.service.interfaces.moderation.ContentReportService;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +40,18 @@ public class ForumConsumer {
 
     @Autowired
     private ForumMetrics forumMetrics;
+
+    @Autowired
+    private ArticleSummaryService articleSummaryService;
+
+    @Autowired
+    private ArticleUserMusicAuditService articleUserMusicAuditService;
+
+    @Autowired
+    private ContentModerationTaskService contentModerationTaskService;
+
+    @Autowired
+    private ContentReportService contentReportService;
 
     @RabbitListener(queues = Constant.QUORUM_QUEUE_1, ackMode = "MANUAL")
     public void handleReplyNotify(Message message, Channel channel) throws IOException {
@@ -94,6 +110,24 @@ public class ForumConsumer {
             forumMetrics.recordMqConsumeFailure();
             log.error("[MQ 消费者] 私信通知失败 | deliveryTag={} | error={}", deliveryTag, e.getMessage(), e);
             channel.basicNack(deliveryTag, false, false);
+        }
+    }
+
+    @RabbitListener(queues = Constant.QUEUE_AI_CONTENT_RESULT, ackMode = "MANUAL")
+    public void handleAiContentResult(Message message, Channel channel) throws IOException {
+        long deliveryTag = message.getMessageProperties().getDeliveryTag();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(message.getBody(), Map.class);
+            articleSummaryService.applyAsyncResult(result);
+            articleUserMusicAuditService.applyAsyncResult(result);
+            contentModerationTaskService.applyAsyncResult(result);
+            contentReportService.applyAsyncResult(result);
+            channel.basicAck(deliveryTag, false);
+        } catch (Exception exception) {
+            forumMetrics.recordMqConsumeFailure();
+            log.error("AI内容异步结果处理失败 deliveryTag={}", deliveryTag, exception);
+            channel.basicNack(deliveryTag, false, true);
         }
     }
 

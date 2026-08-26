@@ -18,9 +18,9 @@ export const useUserStore = defineStore('user', () => {
   const vipTier = ref(0)
   const vipExpireAt = ref(null)
   const mascotModelId = ref(null)
-  /** 0女 1男 2保密 */
+  // 0女 1男 2保密
   const gender = ref(2)
-  /** 0 正常 1 禁言 */
+  // 0 正常 1 禁言
   const state = ref(0)
   const ipRegion = ref('')
 
@@ -45,11 +45,19 @@ export const useUserStore = defineStore('user', () => {
         gender.value = res.data.gender != null ? Number(res.data.gender) : 2
         state.value = res.data.state != null ? Number(res.data.state) : 0
         ipRegion.value = res.data.ipRegion || ''
-      } else {
+        return
+      }
+      // 业务明确未登录 / 令牌失效时才清会话；勿把下游 503 当成掉线
+      const businessCode = Number(res?.code)
+      if (businessCode === 1106 || businessCode === 1001) {
         logout({ redirect: false })
       }
     } catch (error) {
-      logout({ redirect: false })
+      const status = Number(error?.response?.status)
+      if (status === 401) {
+        logout({ redirect: false })
+      }
+      // 503/504/网络异常：保留本地 token，避免服务抖动被当成未登录
     }
   }
 

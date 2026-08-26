@@ -16,10 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-/**
- * 搜索: 帖子 / 用户；DB 优先，未命中走 Python RAG.
- * 不强制登录, 匿名用户也能搜.
- */
+/** 搜索: 帖子 / 用户；DB 优先，未命中走 Python RAG. 不强制登录, 匿名用户也能搜. */
 @Tag(name = "搜索模块")
 @RestController
 @RequestMapping("/search")
@@ -54,5 +51,23 @@ public class SearchController {
         boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
         Long viewerId = loginUser == null ? null : loginUser.getId();
         return Result.success(searchService.searchUsers(keyword, pageNum, pageSize, preferAiRag, viewerId));
+    }
+
+    /** 在当前登录创作者自己的帖子中搜索 */
+    @GetMapping("/article/creator")
+    public Result<SearchArticleResponse> searchCreatorArticle(
+            @RequestParam String keyword,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(required = false) String ai,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(org.pluchon.forum.common.enums.ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        boolean preferAiRag = "1".equals(ai) || "true".equalsIgnoreCase(ai);
+        return Result.success(searchService.searchCreatorArticles(
+                loginUser.getId(), keyword, status, pageNum, pageSize, preferAiRag));
     }
 }

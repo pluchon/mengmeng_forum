@@ -52,7 +52,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
         updatePassword(user.getId(), newPassword);
-        log.info("用户 {} 通过邮箱重置密码成功", user.getId());
     }
 
     @Override
@@ -67,7 +66,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
         updatePassword(user.getId(), newPassword);
-        log.info("用户 {} 通过手机号重置密码成功", user.getId());
     }
 
     @Override
@@ -76,7 +74,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         resetBySms(phoneNumber, code, newPassword);
     }
 
-    /** 共用：参数空值 + 密码强度校验 */
+    // 共用：参数空值 + 密码强度校验
     private void assertParamsValid(String contact, String code, String newPassword) {
         if (!StringUtils.hasText(contact) || !StringUtils.hasText(code) || !StringUtils.hasText(newPassword)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -86,7 +84,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         }
     }
 
-    /** 共用：生成新盐 + 新密码哈希落库，并清理用户缓存 */
+    // 共用：生成新盐 + 新密码哈希落库，并清理用户缓存
     private void updatePassword(Long userId, String newPassword) {
         String newSecret = PasswordUtils.encode(newPassword);
         int updated = userMapper.update(null, new LambdaUpdateWrapper<User>().eq(User::getId, userId)

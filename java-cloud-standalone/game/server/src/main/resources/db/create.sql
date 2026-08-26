@@ -1,5 +1,5 @@
--- game domain full schema
-DROP DATABASE IF EXISTS `forum_game_db`;
+-- game 域最终空库基线；本文件不会删除已有数据库或表。
+-- 仅对全新空库执行；已有表时应失败并改用经过审核的前向迁移。
 
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `forum_game_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
@@ -20,6 +20,12 @@ CREATE TABLE `game_definition` (
   UNIQUE KEY `uk_game_code` (`game_code`),
   KEY `idx_game_status_sort` (`status`,`delete_state`,`sort`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='游戏定义表';
+
+INSERT INTO `game_definition` (`id`, `game_code`, `game_name`, `cover_url`, `status`, `sort`, `delete_state`) VALUES
+(1, 'gobang', '五子棋', NULL, 1, 1, 0),
+(2, 'jinzi', '井字棋', NULL, 1, 2, 0),
+(3, 'tetris', '俄罗斯方块单人', NULL, 1, 3, 0),
+(4, 'tetris_pk', '俄罗斯方块 PK', NULL, 1, 4, 0);
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -32,8 +38,8 @@ CREATE TABLE `game_gobang_match_record` (
   `loser_user_id` bigint DEFAULT NULL COMMENT '负方用户ID',
   `end_reason` varchar(32) NOT NULL COMMENT '结束原因 FIVE/SURRENDER/DISCONNECT/TIMEOUT/ABNORMAL',
   `score_delta` int NOT NULL DEFAULT '10' COMMENT '本局胜负积分变化绝对值',
-  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '鑳滄柟鏈?眬鎺掍綅鍒嗗彉鍖',
-  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '璐ユ柟鏈?眬鎺掍綅鍒嗗彉鍖栵紝璐熸暟',
+  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '胜方本局排位分变化',
+  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '败方本局排位分变化，负数',
   `started_at` datetime NOT NULL COMMENT '对局开始时间',
   `ended_at` datetime NOT NULL COMMENT '对局结束时间',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',
@@ -76,8 +82,8 @@ CREATE TABLE `game_jinzi_match_record` (
   `loser_user_id` bigint DEFAULT NULL COMMENT '负方用户ID',
   `end_reason` varchar(32) NOT NULL COMMENT '结束原因 THREE/SURRENDER/DISCONNECT/TIMEOUT/ABNORMAL/DRAW',
   `score_delta` int NOT NULL DEFAULT '10' COMMENT '本局胜负积分变化绝对值',
-  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '鑳滄柟鏈?眬鎺掍綅鍒嗗彉鍖',
-  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '璐ユ柟鏈?眬鎺掍綅鍒嗗彉鍖栵紝璐熸暟',
+  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '胜方本局排位分变化',
+  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '败方本局排位分变化，负数',
   `started_at` datetime NOT NULL COMMENT '对局开始时间',
   `ended_at` datetime NOT NULL COMMENT '对局结束时间',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',
@@ -205,8 +211,8 @@ CREATE TABLE `game_tetris_pk_match_record` (
   `player2_score` int NOT NULL DEFAULT '0' COMMENT '玩家2得分',
   `end_reason` varchar(32) NOT NULL DEFAULT '' COMMENT '结束原因',
   `score_delta` int NOT NULL DEFAULT '3' COMMENT '积分变动',
-  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '鑳滄柟鏈?眬鎺掍綅鍒嗗彉鍖',
-  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '璐ユ柟鏈?眬鎺掍綅鍒嗗彉鍖栵紝璐熸暟',
+  `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '胜方本局排位分变化',
+  `loser_score_delta` int NOT NULL DEFAULT '0' COMMENT '败方本局排位分变化，负数',
   `replay_payload` mediumtext COMMENT '回放JSON',
   `started_at` datetime NOT NULL COMMENT '开始时间',
   `ended_at` datetime NOT NULL COMMENT '结束时间',

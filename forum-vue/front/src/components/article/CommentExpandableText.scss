@@ -1,0 +1,26 @@
+.comment-expandable-text {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  word-break: break-word;
+}
+
+.comment-expandable-text__body {
+  display: inline;
+}
+
+.comment-expandable-text__toggle {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4e5969;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.comment-expandable-text__toggle:hover {
+  color: #ff4767;
+}

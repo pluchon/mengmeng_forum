@@ -1,5 +1,5 @@
 <template>
-  <div class="shell-main-stack shell-page-scroll">
+  <div class="shell-main-stack shell-page-scroll home-feed-page">
     <div v-if="showCategoryNavigator" class="home-discovery-section">
       <nav class="home-discovery-nav" aria-label="首页板块导航">
         <button
@@ -55,228 +55,186 @@
       </nav>
     </div>
 
-    <main class="home-xhs-main home-xhs-main--feed">
-      <div v-if="showCheckinHomeStrip" class="checkin-home-strip animate-fade-up">
-        <el-card
-          class="checkin-home-card"
-          :class="{ 'checkin-home-done': checkinSummary.todaySigned }"
-          shadow="hover"
-          :body-style="{ padding: '12px 18px', cursor: 'pointer' }"
-          @click="$router.push('/checkin')"
-        >
-          <div class="checkin-home-inner">
-            <strong class="checkin-home-title">每日签到</strong>
-            <span class="checkin-home-status" :class="{ 'is-done': checkinSummary.todaySigned }">
-              {{ checkinSummary.todaySigned ? '已签到' : '待签到' }}
-            </span>
-            <span class="checkin-home-streak">
-              连续 <strong>{{ checkinSummary.streakDays ?? 0 }}</strong> 天
-            </span>
-            <el-button
-              class="checkin-home-action"
-              round
-              size="small"
-              :disabled="checkinSummary.todaySigned"
-              @click.stop="$router.push('/checkin')"
-            >
-              {{ checkinSummary.todaySigned ? '已完成' : '去签到' }}
-            </el-button>
-            <button
-              type="button"
-              class="checkin-home-close"
-              aria-label="关闭签到提醒"
-              @click.stop.prevent="handleDismissCheckin"
-            >
-              <el-icon><Close /></el-icon>
-            </button>
-          </div>
-        </el-card>
+    <main
+      class="home-xhs-main home-xhs-main--feed"
+      :class="{
+        'home-xhs-main--load-error': !loading && !!feedError,
+        'home-xhs-main--loading': loading && !feedList.length,
+      }"
+    >
+      <div
+        v-if="loading && !feedList.length"
+        class="home-feed-area-skeleton"
+        aria-busy="true"
+        aria-live="polite"
+        aria-label="帖子加载中"
+      >
+        <el-skeleton animated :rows="14" />
       </div>
 
-      <div v-if="loading" class="home-masonry home-masonry--loading">
-        <div v-for="i in 8" :key="i" class="home-masonry-item">
-          <el-skeleton animated :rows="6" class="skeleton-card" />
-        </div>
-      </div>
-
-      <div v-if="!loading && feedList.length" class="recommendation-feed-stage">
-        <div
-          ref="masonryRef"
-          class="home-masonry"
+      <div
+        v-if="!loading && feedList.length"
+        class="recommendation-feed-stage"
+      >
+        <Masonry
+          :items="masonryCards"
+          :column-width="220"
+          :max-columns="6"
+          :gap="16"
+          :reload-key="masonryReloadKey"
+          :duration="0.72"
+          ease="power3.out"
+          :stagger="0.05"
+          animate-from="bottom"
         >
-          <div
-            v-for="(col, colIdx) in masonryColumns"
-            :key="'m-col-' + colIdx"
-            class="home-masonry-column"
-          >
-            <div
-              v-for="entry in col"
-              :key="entry.article?.id"
-              class="home-masonry-item"
+          <template #default="{ item }">
+            <el-card
+              class="note-card note-card--masonry"
+              :class="cardTypeClass(item.article)"
+              :style="cardOutlineStyle(item)"
+              :body-style="{ padding: '0px' }"
+              shadow="never"
+              @click="openArticle(item.entry, $event)"
             >
-              <el-card
-                class="note-card note-card--masonry"
-                :class="{
-                  'note-card--question': isQuestionArticle(entry.article),
-                  'note-card--not-interested': isNotInterestedArticle(entry.article?.id),
-                }"
-                :body-style="{ padding: '0px' }"
-                shadow="hover"
-                @click="openArticle(entry, $event)"
+              <div
+                class="note-cover note-cover--fluid"
+                :class="{ 'is-aspect-locked': !!coverAspectById[item.article?.id] }"
+                :style="coverAspectStyle(item.article?.id)"
+                @mouseenter="onCoverHoverEnter(item.entry)"
+                @mouseleave="onCoverHoverLeave(item.entry)"
               >
-                <div class="note-cover note-cover--fluid">
-                  <img
-                    v-if="coverImageUrl(entry)"
-                    class="note-cover-img"
-                    :src="coverImageUrl(entry)"
-                    :alt="entry.article?.title || ''"
-                    loading="lazy"
-                  />
-                  <div
-                    v-else
-                    class="note-cover-placeholder"
-                    :class="{ 'note-cover-placeholder--video': Number(entry.article?.mediaType) === 1 }"
-                    :style="{
-                      background: getRandomPastel(),
-                      minHeight: placeholderMinHeight(entry.article?.id),
-                    }"
-                  >
-                    <span class="cover-title">{{ (entry.article?.title || '').substring(0, 12) }}</span>
-                  </div>
-                  <div v-if="Number(entry.article?.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
-                </div>
+                <img
+                  v-if="displayCoverUrl(item.entry)"
+                  class="note-cover-img"
+                  :class="{ 'is-loaded': coverLoadedById[item.article?.id] }"
+                  :src="displayCoverUrl(item.entry)"
+                  alt=""
+                  loading="lazy"
+                  @load="onCoverLoad(item.article?.id, item.entry, $event)"
+                  @error="onCoverError(item.article?.id)"
+                />
                 <div
-                  class="note-info"
-                  :class="{
-                    'note-info--question': isQuestionArticle(entry.article),
-                    'note-info--resolved': isQuestionArticle(entry.article) && Number(entry.article?.questionStatus) === 1,
+                  v-else
+                  class="note-cover-placeholder"
+                  :class="{ 'note-cover-placeholder--video': isVideoArticle(item.article) }"
+                  :style="{
+                    background: getRandomPastel(),
+                    minHeight: placeholderMinHeight(item.article?.id),
                   }"
                 >
-                  <div
-                    v-if="isQuestionArticle(entry.article)"
-                    class="question-card-meta"
+                  <span class="cover-title">{{ (item.article?.title || '').substring(0, 12) }}</span>
+                </div>
+                <div
+                  v-if="isVideoArticle(item.article)"
+                  class="note-cover-play"
+                  aria-hidden="true"
+                />
+                <span
+                  v-if="isVideoArticle(item.article) && videoDurationLabel(item.article?.id)"
+                  class="note-cover-badge"
+                >
+                  {{ videoDurationLabel(item.article?.id) }}
+                </span>
+                <span
+                  v-else-if="!isVideoArticle(item.article) && !isQuestionArticle(item.article) && Number(item.entry?.imageCount) > 1"
+                  class="note-cover-badge note-cover-badge--images"
+                >
+                  <el-icon class="note-cover-badge__icon"><Picture /></el-icon>
+                  {{ item.entry?.imageCount }}
+                </span>
+              </div>
+              <div
+                class="note-info"
+                :class="{
+                  'note-info--question': isQuestionArticle(item.article),
+                  'note-info--resolved': isQuestionArticle(item.article) && Number(item.article?.questionStatus) === 1,
+                  'note-info--waiting': isQuestionArticle(item.article) && Number(item.article?.questionStatus) !== 1,
+                }"
+              >
+                <div
+                  v-if="isQuestionArticle(item.article)"
+                  class="note-title-row"
+                >
+                  <h3 class="note-title">{{ item.article?.title }}</h3>
+                  <span
+                    class="question-card-status"
+                    :class="questionStatusClass(item.article?.questionStatus)"
                   >
-                    <span
-                      class="question-card-status"
-                      :class="questionStatusClass(entry.article?.questionStatus)"
-                    >
-                      <span class="question-card-status__dot" />
-                      {{ questionStatusLabel(entry.article?.questionStatus) }}
-                    </span>
+                    <span class="question-card-status__dot" />
+                    {{ questionStatusLabel(item.article?.questionStatus) }}
+                  </span>
+                </div>
+                <h3 v-else class="note-title">{{ item.article?.title }}</h3>
+                <p
+                  v-if="isRecommendationFeed && item.entry?.reasonMessage"
+                  class="note-recommend-reason"
+                >
+                  {{ item.entry.reasonMessage }}
+                </p>
+                <div class="note-footer">
+                  <div class="author">
+                    <UserAvatarVip
+                      :size="22"
+                      :src="item.entry?.user?.avatarUrl || defaultAvatar"
+                      :vip-tier="Number(item.entry?.user?.vipTier) || 0"
+                      :vip-expire-at="item.entry?.user?.vipExpireAt"
+                      :show-vip-ring="false"
+                    />
+                    <span class="nickname" :title="item.entry?.user?.nickname || '匿名用户'">{{ formatCardNickname(item.entry?.user?.nickname || '匿名用户') }}</span>
                   </div>
-                  <h3 class="note-title">{{ entry.article?.title }}</h3>
-                  <div class="note-footer">
-                    <div class="author">
-                      <UserAvatarVip
-                        :size="22"
-                        :src="entry.user?.avatarUrl || defaultAvatar"
-                        :vip-tier="Number(entry.user?.vipTier) || 0"
-                        :vip-expire-at="entry.user?.vipExpireAt"
-                      />
-                      <span class="nickname" :title="entry.user?.nickname">{{ formatCardNickname(entry.user?.nickname) }}</span>
-                    </div>
-                    <div v-if="isQuestionArticle(entry.article)" class="question-answer-count">
-                      <span>{{ entry.article?.replyCount || 0 }}回答</span>
-                    </div>
-                    <div v-else class="likes">
-                      <LikeCountIcon />
-                      <span>{{ entry.article?.likeCount }}</span>
-                    </div>
+                  <div class="likes">
+                    <LikeCountIcon />
+                    <span>{{ item.article?.likeCount || 0 }}</span>
                   </div>
                 </div>
-                <div v-if="isNotInterestedArticle(entry.article?.id)" class="note-card-not-interested-mask">
-                  不感兴趣
-                </div>
-              </el-card>
-            </div>
-          </div>
-        </div>
+              </div>
+              <div v-if="isNotInterestedArticle(item.article?.id)" class="note-card-not-interested-mask">
+                不感兴趣
+              </div>
+            </el-card>
+          </template>
+        </Masonry>
       </div>
-
-      <transition name="home-hot-collapse" mode="out-in">
-        <aside v-if="isHomeFeed && !homeHotCollapsed" class="home-hot-floating" :class="{ 'is-checkin-visible': showCheckinHomeStrip }" aria-label="热帖榜">
-        <div class="home-hot-floating-head">
-          <div class="home-hot-floating-title">
-            <el-icon><TrendCharts /></el-icon>
-            <span>热帖榜</span>
-          </div>
-          <button type="button" class="home-hot-collapse-action" @click="toggleHomeHotCollapsed">点击收起</button>
-        </div>
-        <div v-if="homeHotLoading" class="home-hot-floating-loading">
-          <el-skeleton v-for="item in 4" :key="item" animated :rows="1" />
-        </div>
-        <div v-else-if="homeHotList.length" class="home-hot-floating-list">
-          <button
-            v-for="entry in homeHotList"
-            :key="entry.article?.id"
-            type="button"
-            class="home-hot-floating-item"
-            @click="openArticle(entry, $event)"
-          >
-            <span class="home-hot-floating-rank" :class="{ 'is-top': Number(entry.rank) <= 3 }">
-              {{ entry.rank }}
-            </span>
-            <span class="home-hot-floating-copy">
-              <strong>{{ entry.article?.title }}</strong>
-              <small>{{ entry.article?.likeCount || 0 }} 赞 · {{ entry.article?.replyCount || 0 }} 评</small>
-            </span>
-            <span
-              v-if="entry.trendDirection === 'UP'"
-              class="home-hot-trend is-up"
-              aria-label="热度上升"
-              title="热度上升"
-            >↑</span>
-          </button>
-        </div>
-        <el-empty v-else :image-size="42" description="暂无热帖" />
-        <el-pagination
-          v-if="homeHotTotal > homeHotPageSize"
-          v-model:current-page="homeHotPage"
-          class="home-hot-floating-pager"
-          :total="homeHotTotal"
-          :page-size="homeHotPageSize"
-          layout="prev, pager, next"
-          small
-          background
-          @current-change="fetchHomeHotList"
-        />
-        </aside>
-        <button
-          v-else-if="isHomeFeed"
-          type="button"
-          class="home-hot-collapsed-button"
-          :class="{ 'is-checkin-visible': showCheckinHomeStrip }"
-          aria-label="展开热帖榜"
-          @click="toggleHomeHotCollapsed"
-        >
-          <el-icon><TrendCharts /></el-icon>
-        </button>
-      </transition>
 
       <div v-if="loading && feedList.length" class="home-feed-loading-more" aria-live="polite">
         <el-icon class="home-feed-loading-spin" :size="20"><Loading /></el-icon>
         <span>正在加载更多…</span>
       </div>
 
-      <el-result
+      <section
         v-if="!loading && feedError"
-        class="home-feed-error"
-        icon="error"
-        :title="feedForbidden ? '暂时无法访问这部分内容' : '内容加载失败'"
-        :sub-title="feedError"
+        class="home-feed-load-error"
+        role="alert"
+        aria-live="polite"
       >
-        <template #extra>
-          <el-button type="primary" @click="fetchArticles(pageNum)">重新加载</el-button>
-        </template>
-      </el-result>
+        <img
+          class="home-feed-load-error__art"
+          :src="feedLoadErrorArt"
+          alt=""
+          width="264"
+          height="208"
+          decoding="async"
+        />
+        <h2 class="home-feed-load-error__title">
+          {{ feedLoadErrorTitle }}
+        </h2>
+        <button
+          type="button"
+          class="home-feed-load-error__retry"
+          @click="fetchArticles(pageNum)"
+        >
+          <el-icon class="home-feed-load-error__retry-icon"><Refresh /></el-icon>
+          <span>重新加载</span>
+        </button>
+      </section>
 
-      <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+      <div class="pagination-wrap">
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next, jumper"
-          background
+          :pager-count="7"
+          :show-jumper="true"
           @current-change="fetchArticles"
         />
       </div>
@@ -288,7 +246,6 @@
     </main>
 
   </div>
-  <router-view />
 </template>
 
 <script setup src="./HomeFeed.js"></script>

@@ -13,7 +13,7 @@ public class TetrisCurPieceVO {
     // 方块类型
     private String type;
 
-    // 棋盘坐标 [row, col]
+    // 棋盘坐标 row, col
     private int[] xy;
 
     // 形状矩阵

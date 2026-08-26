@@ -17,5 +17,8 @@ public class AiRecommendationProfileResultVO {
 
     private List<Map<String, Object>> avoidTopics;
 
+    // 向量召回用的偏好查询句
+    private String preferenceQuery;
+
     private String generatedBy;
 }

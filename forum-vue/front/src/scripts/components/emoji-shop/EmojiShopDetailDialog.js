@@ -1,12 +1,18 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getShopDetail, purchaseShop, updateShopStatus } from '@/api/shop'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
+import {
+  getShopDetail,
+  purchaseShop,
+  updateShopStatus,
+  getShopEmojiAvailability,
+} from '@/api/shop'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { formatCheckinLogDateOnly } from '@/utils/datetime'
 
-const ITEM_PAGE_SIZE = 9
+const ITEM_PAGE_SIZE = 8
 
 function effectiveVipTier(tier, expireAt) {
   const t = Number(tier) || 0
@@ -71,17 +77,8 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
 
   const priceText = computed(() => {
     const p = Number(detail.value?.price)
-    if (!Number.isFinite(p) || p <= 0) return { main: '免费', unit: '' }
-    return { main: String(p), unit: '积分' }
-  })
-
-  const purchaseHint = computed(() => {
-    if (!detail.value || detail.value.owned) return ''
-    const p = Number(detail.value.price) || 0
-    if (!userStore.isLoggedIn) return ''
-    if (p === 0) return '免费领取'
-    const remain = wallet.balance - p
-    return `购买后剩余 ${remain} 积分`
+    if (!Number.isFinite(p) || p <= 0) return '免费'
+    return `${p}积分`
   })
 
   const isAuthor = computed(() => {
@@ -105,17 +102,28 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     return p > 0 && wallet.balance < p
   })
 
-  const purchaseLabel = computed(() => {
-    if (!detail.value) return '立即购买'
-    if (detail.value.owned) return '已拥有'
-    if (!userStore.isLoggedIn) return '登录后购买'
-    if (detail.value.price === 0) return '免费领取'
-    const hint = purchaseHint.value
-    return hint ? `立即购买 · ${hint}` : '立即购买'
-  })
-
-  function setPreview(idx) {
-    previewIndex.value = idx
+  async function setPreview(idx) {
+    const url = detail.value?.imageUrls?.[idx]
+    const shopId = detail.value?.id
+    if (!url || !shopId) return
+    try {
+      const res = await getShopEmojiAvailability({ shopId, url })
+      const status = res.data?.status
+      if (res.code === 0 && status === 'AVAILABLE') {
+        previewIndex.value = idx
+        return
+      }
+      if (status === 'SERIES_OFFLINE') {
+        ElMessage.warning('该表情包系列已下架')
+        await loadDetail(shopId, itemPage.value, false)
+      } else {
+        ElMessage.warning('该表情已被删除')
+        if (status === 'ITEM_DELETED') await loadDetail(shopId, itemPage.value, false)
+        else close()
+      }
+    } catch {
+      // 请求拦截器已提示
+    }
   }
 
   async function loadDetail(id, page, clearDetail = false) {
@@ -177,7 +185,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     onClosed?.()
   }
 
-  /** 先跳转个人主页，避免 close/onClosed 的 replace 覆盖 router-link 导航 */
+  // 先跳转个人主页，避免 close/onClosed 的 replace 覆盖 router link 导航
   function goUploaderProfile() {
     const uid = Number(detail.value?.uploadUserId)
     if (!Number.isFinite(uid) || uid <= 0) return
@@ -196,7 +204,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
       return
     }
     try {
-      await ElMessageBox.confirm(
+      await confirmDialog(
         detail.value.price === 0 ? '确认领取该表情包？' : `确认消耗 ${detail.value.price} 积分购买？`,
         '购买确认',
         { type: 'warning' },
@@ -227,7 +235,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
         detail.value.status = status
       }
     } catch {
-      /* 拦截器已提示 */
+      // 拦截器已提示
     }
   }
 
@@ -256,7 +264,6 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     isAuthor,
     canPurchase,
     purchaseDisabled,
-    purchaseLabel,
     setPreview,
     open,
     onItemPageChange,

@@ -4,41 +4,77 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import uuid
 from collections.abc import Iterator
 from typing import Any
 
+from config import settings
+
 from modules.moderation import ContentModerationModule
-from modules.mascot import MascotChatModule, MascotContextCompressModule
-from modules.creation import CoverHintsModule, ImageGenerationModule, PostPolishModule
+from modules.mascot import MascotChatModule, MascotContextCompressModule, MascotMemoryEditModule
+from modules.creation import (
+    ArticleCoverModule,
+    ArticleTagRecommendModule,
+    ArticleTagSimilarityModule,
+    CoverHintsModule,
+    ImageGenerationModule,
+    MusicRecommendModule,
+    MusicSearchModule,
+    PostPolishModule,
+)
+from modules.creator_insight import CreatorInsightModule
 from modules.game import GobangMoveModule
 from modules.search import SearchModule
 from modules.summary import PostSummaryModule
-from modules.rag import RagIndexArticleModule, RagIndexEmojiModule, RagIndexUserModule, RagRemoveArticleModule
-from modules.recommendation import ArticleFeatureModule, UserProfileModule
+from modules.rag import (
+    RagIndexArticleModule,
+    RagIndexEmojiModule,
+    RagIndexMusicModule,
+    RagIndexUserModule,
+    RagRemoveArticleModule,
+)
+from modules.recommendation import ArticleFeatureModule, MusicTasteModule, UserProfileModule
 from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError
 from runtime.module_registry import ModuleRegistry
 
 logger = logging.getLogger(__name__)
+
+_gateway_cfg = settings.gateway
+_semaphores = {
+    "fast": threading.BoundedSemaphore(int(_gateway_cfg.get("fast_concurrency", 8))),
+    "standard": threading.BoundedSemaphore(int(_gateway_cfg.get("standard_concurrency", 4))),
+    "long": threading.BoundedSemaphore(int(_gateway_cfg.get("long_concurrency", 2))),
+    "index": threading.BoundedSemaphore(int(_gateway_cfg.get("index_concurrency", 2))),
+}
 
 _registry = ModuleRegistry()
 _registry.register("CONTENT_MODERATION", "ARTICLE_AUDIT", "v1", ContentModerationModule())
 _registry.register("CONTENT_MODERATION", "TEXT_AUDIT", "v1", ContentModerationModule())
 _registry.register("CONTENT_MODERATION", "IMAGE_AUDIT", "v1", ContentModerationModule())
 _registry.register("POST_SUMMARY", "GENERATE", "v1", PostSummaryModule())
+_registry.register("CREATOR_INSIGHT", "GENERATE", "v1", CreatorInsightModule())
 _registry.register("POST_CREATION", "POLISH", "v1", PostPolishModule())
 _registry.register("POST_CREATION", "COVER_HINTS", "v1", CoverHintsModule())
+_registry.register("POST_CREATION", "COVER_GENERATE", "v1", ArticleCoverModule())
+_registry.register("POST_CREATION", "TAG_RECOMMEND", "v1", ArticleTagRecommendModule())
+_registry.register("POST_CREATION", "TAG_SIMILARITY", "v1", ArticleTagSimilarityModule())
+_registry.register("POST_CREATION", "MUSIC_RECOMMEND", "v1", MusicRecommendModule())
+_registry.register("POST_CREATION", "MUSIC_SEARCH", "v1", MusicSearchModule())
 _registry.register("IMAGE_GENERATION", "GENERATE", "v1", ImageGenerationModule())
 _registry.register("GAME", "GOBANG_MOVE", "v1", GobangMoveModule())
 _registry.register("SEARCH", "QUERY", "v1", SearchModule())
 _registry.register("RAG", "INDEX_ARTICLE", "v1", RagIndexArticleModule())
 _registry.register("RAG", "INDEX_EMOJI", "v1", RagIndexEmojiModule())
+_registry.register("RAG", "INDEX_MUSIC", "v1", RagIndexMusicModule())
 _registry.register("RAG", "INDEX_USER", "v1", RagIndexUserModule())
 _registry.register("RAG", "REMOVE_ARTICLE", "v1", RagRemoveArticleModule())
 _registry.register("RECOMMENDATION", "ARTICLE_FEATURE", "v1", ArticleFeatureModule())
 _registry.register("RECOMMENDATION", "USER_PROFILE", "v1", UserProfileModule())
+_registry.register("RECOMMENDATION", "MUSIC_TASTE", "v1", MusicTasteModule())
 _registry.register("MASCOT", "CHAT", "v1", MascotChatModule())
 _registry.register("MASCOT", "CONTEXT_COMPRESS", "v1", MascotContextCompressModule())
+_registry.register("MASCOT", "MEMORY_EDIT", "v1", MascotMemoryEditModule())
 
 
 def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -46,8 +82,14 @@ def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
     request: ModuleRequest | None = None
     try:
         request = _parse_request(raw)
-        result = asyncio.run(_registry.invoke(request))
-        return {"code": 200, "msg": "ok", "data": result.to_dict(request)}, 200
+        semaphore = _semaphore_for(request)
+        if not semaphore.acquire(blocking=False):
+            return _busy_response(request)
+        try:
+            result = asyncio.run(_registry.invoke(request))
+            return {"code": 200, "msg": "ok", "data": result.to_dict(request)}, 200
+        finally:
+            semaphore.release()
     except ModuleRequestError as exc:
         return {
             "code": 400,
@@ -87,10 +129,21 @@ def stream_gateway(raw: dict[str, Any]) -> Iterator[dict[str, Any]]:
         return
 
     try:
-        yield ModuleEvent("progress", {"status": "preparing", "traceId": request.trace_id}).to_dict()
-        for event in _registry.stream(request):
-            yield event.to_dict()
-        yield ModuleEvent("done", {"success": True, "traceId": request.trace_id}).to_dict()
+        semaphore = _semaphore_for(request)
+        if not semaphore.acquire(blocking=False):
+            yield ModuleEvent(
+                "error",
+                {"errorCode": "AI_GATEWAY_BUSY", "message": "AI 服务繁忙，请稍后重试"},
+            ).to_dict()
+            yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
+            return
+        try:
+            yield ModuleEvent("progress", {"status": "preparing", "traceId": request.trace_id}).to_dict()
+            for event in _registry.stream(request):
+                yield event.to_dict()
+            yield ModuleEvent("done", {"success": True, "traceId": request.trace_id}).to_dict()
+        finally:
+            semaphore.release()
     except ModuleRequestError as exc:
         yield ModuleEvent("error", {"errorCode": exc.code, "message": exc.message}).to_dict()
         yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
@@ -120,6 +173,28 @@ def _parse_request(raw: dict[str, Any]) -> ModuleRequest:
         payload=_object_value(raw, "payload"),
         metadata=_object_value(raw, "metadata"),
     )
+
+
+def _semaphore_for(request: ModuleRequest) -> threading.BoundedSemaphore:
+    if request.task_type == "IMAGE_GENERATION" or request.intent == "COVER_GENERATE":
+        return _semaphores["long"]
+    if request.task_type == "RAG" and request.intent.startswith(("INDEX_", "REMOVE_")):
+        return _semaphores["index"]
+    if request.task_type in {"CONTENT_MODERATION", "GAME"} or request.intent == "TAG_SIMILARITY":
+        return _semaphores["fast"]
+    return _semaphores["standard"]
+
+
+def _busy_response(request: ModuleRequest) -> tuple[dict[str, Any], int]:
+    return {
+        "code": 429,
+        "msg": "AI 服务繁忙，请稍后重试",
+        "data": {
+            "requestId": request.request_id,
+            "traceId": request.trace_id,
+            "errorCode": "AI_GATEWAY_BUSY",
+        },
+    }, 429
 
 
 def _required_text(raw: dict[str, Any], field: str) -> str:

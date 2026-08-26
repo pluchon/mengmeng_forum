@@ -6,11 +6,7 @@ import lombok.NoArgsConstructor;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
-/**
- * @author pluchon
- * @create 2026-03-09-15:59
- * 作者代码水平一般，难免难看，请见谅
- */
+// 作者代码水平一般，难免难看，请见谅
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -21,5 +17,7 @@ public class ArticleReplyListResponse {
     private Integer subReplyCount;
     // 当前登录用户是否已点赞
     private Boolean liked;
+    // 问答帖：是否已被楼主采纳
+    private Boolean accepted;
     private java.util.List<ArticleReplyMediaVO> mediaList;
 }

@@ -2,25 +2,30 @@ package org.pluchon.forum.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.message.FavoriteEmojiRequest;
 import org.pluchon.forum.entity.dto.message.MessageReplyRequest;
+import org.pluchon.forum.entity.dto.message.MessageSessionVisibilityRequest;
+import org.pluchon.forum.entity.dto.message.SendAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendMessageRequest;
+import org.pluchon.forum.entity.dto.message.ChatMessageReportRequest;
 import org.pluchon.forum.entity.vo.message.MessageDetailResponse;
 import org.pluchon.forum.entity.vo.message.MessageListResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionResponse;
+import org.pluchon.forum.entity.vo.message.MessageSessionSearchResponse;
 import org.pluchon.forum.entity.vo.message.MessageVO;
 import org.pluchon.forum.entity.vo.message.UserChatEmojiResponse;
+import org.pluchon.forum.entity.vo.message.ChatMessageReportVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.service.interfaces.message.MessageService;
+import org.pluchon.forum.service.interfaces.message.ChatMessageReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Tag(name = "私信模块", description = "私信的增删改查接口")
 @RestController
@@ -28,6 +33,18 @@ import java.util.List;
 public class MessageController {
     @Autowired
     private MessageService messageService;
+
+    @Autowired
+    private ChatMessageReportService chatMessageReportService;
+
+    /** 举报私信或群聊文本消息 */
+    @PostMapping("/report")
+    public Result<ChatMessageReportVO> reportMessage(
+            @Valid @RequestBody ChatMessageReportRequest request,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(chatMessageReportService.report(sessionUser.getId(), request));
+    }
 
     @Operation(summary = "发送私信(纯文本)", description = "传入接收者ID以及文本内容; 图片消息请走 /message/sendImage")
     @PostMapping("/sendMessage")
@@ -60,11 +77,25 @@ public class MessageController {
         return Result.success("已取消收藏");
     }
 
-    @Operation(summary = "我的表情收藏列表", description = "按收藏时间倒序; 走 Redis 缓存, 收藏/取消时主动失效")
+    @Operation(summary = "我的表情分页列表", description = "source=uploaded 查询我的上传，source=favorite 查询聊天收藏；按创建时间升序")
     @GetMapping("/emoji/list")
-    public Result<List<UserChatEmojiResponse>> queryEmojiList(HttpServletRequest httpServletRequest) {
+    public Result<PageResult<UserChatEmojiResponse>> queryEmojiList(
+            @RequestParam String source,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "8") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(messageService.queryEmojiList(sessionUser.getId()));
+        return Result.success(messageService.queryEmojiList(sessionUser.getId(), source, pageNum, pageSize));
+    }
+
+    // 发送一至十张图片组成的私信图集，可附带说明文字
+    @Operation(summary = "发送图集私信",
+            description = "前端先逐张调用 /file/uploadChatImage，再一次提交最多十张图片及可选说明文字")
+    @PostMapping("/sendAlbum")
+    public Result<MessageVO> sendAlbum(@Valid @RequestBody SendAlbumMessageRequest req,
+                                       HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(messageService.sendAlbum(req, sessionUser.getId()));
     }
 
     @Operation(summary = "查询私信未读数量", description = "获取当前登录的用户ID")
@@ -115,6 +146,45 @@ public class MessageController {
             HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(messageService.queryMessageSessionWithPage(sessionUser.getId(), pageNum, pageSize));
+    }
+
+    /** 搜索当前用户私信中的文本会话 */
+    @GetMapping("/searchSessions")
+    public Result<PageResult<MessageSessionSearchResponse>> searchMessageSessions(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "50") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(messageService.searchMessageSessions(sessionUser.getId(), keyword, pageNum, pageSize));
+    }
+
+    /** 隐藏当前用户视角下的私信会话 */
+    @PostMapping("/session/hide")
+    public Result<Void> hideMessageSession(@Valid @RequestBody MessageSessionVisibilityRequest request,
+                                           HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        messageService.hideMessageSession(sessionUser.getId(), request.getPeerUserId());
+        return Result.success();
+    }
+
+    /** 恢复当前用户视角下的私信会话 */
+    @PostMapping("/session/restore")
+    public Result<Void> restoreMessageSession(@Valid @RequestBody MessageSessionVisibilityRequest request,
+                                              HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        messageService.restoreMessageSession(sessionUser.getId(), request.getPeerUserId());
+        return Result.success();
+    }
+
+    /** 查询当前用户主动隐藏的私信会话 */
+    @GetMapping("/session/hidden")
+    public Result<PageResult<MessageSessionResponse>> queryHiddenMessageSessions(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "50") Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(messageService.queryHiddenMessageSessions(sessionUser.getId(), pageNum, pageSize));
     }
 
     @Operation(summary = "获取和特定用户的会话记录(分页)", description = "传入对方用户ID和分页参数")

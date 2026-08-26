@@ -27,6 +27,41 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
             GameConstants.MATCH_BUCKET_MASTER
     );
 
+    private static final String ENQUEUE_SCRIPT = """
+            local occupiedGame = redis.call('GET', KEYS[1])
+            if occupiedGame and occupiedGame ~= ARGV[1] then
+                return -1
+            end
+            if redis.call('EXISTS', KEYS[2]) == 1 then
+                if not occupiedGame then
+                    redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[5])
+                else
+                    redis.call('EXPIRE', KEYS[1], ARGV[5])
+                end
+                redis.call('EXPIRE', KEYS[2], ARGV[5])
+                return 0
+            end
+            if not occupiedGame then
+                redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[5])
+            else
+                redis.call('EXPIRE', KEYS[1], ARGV[5])
+            end
+            redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[5])
+            redis.call('ZADD', KEYS[3], ARGV[4], ARGV[3])
+            return 1
+            """;
+
+    private static final String DEQUEUE_SCRIPT = """
+            local removed = redis.call('DEL', KEYS[2])
+            for index = 3, #KEYS do
+                redis.call('ZREM', KEYS[index], ARGV[2])
+            end
+            if redis.call('GET', KEYS[1]) == ARGV[1] then
+                redis.call('DEL', KEYS[1])
+            end
+            return removed
+            """;
+
     private static final String POLL_PAIR_SCRIPT = """
             local picked = {}
             local candidates = redis.call('ZRANGE', KEYS[1], 0, 9)
@@ -46,6 +81,12 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
             end
             redis.call('ZREM', KEYS[1], picked[1], picked[2])
             redis.call('DEL', ARGV[1] .. picked[1], ARGV[1] .. picked[2])
+            if redis.call('GET', ARGV[2] .. picked[1]) == ARGV[3] then
+                redis.call('DEL', ARGV[2] .. picked[1])
+            end
+            if redis.call('GET', ARGV[2] .. picked[2]) == ARGV[3] then
+                redis.call('DEL', ARGV[2] .. picked[2])
+            end
             return picked
             """;
 
@@ -61,6 +102,9 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
                 elseif queuedAt <= tonumber(ARGV[2]) then
                     redis.call('ZREM', KEYS[1], userId)
                     redis.call('DEL', markerKey)
+                    if redis.call('GET', ARGV[3] .. userId) == ARGV[4] then
+                        redis.call('DEL', ARGV[3] .. userId)
+                    end
                     return userId
                 end
                 index = index + 2
@@ -76,27 +120,21 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
         if (gameCode == null || gameCode.isBlank() || userId == null || bucket == null) {
             return false;
         }
+        String occupancyKey = GameRedisKeys.matchOccupancy(userId);
         String markerKey = GameRedisKeys.matchUser(gameCode, userId);
         String queueKey = GameRedisKeys.matchQueue(gameCode, bucket.getBucketCode());
         try {
-            Boolean marked = stringRedisTemplate.opsForValue().setIfAbsent(
-                    markerKey,
+            DefaultRedisScript<Long> script = new DefaultRedisScript<>(ENQUEUE_SCRIPT, Long.class);
+            Long result = stringRedisTemplate.execute(
+                    script,
+                    List.of(occupancyKey, markerKey, queueKey),
+                    gameCode,
                     bucket.getBucketCode(),
-                    MATCH_MARK_TTL
-            );
-            if (!Boolean.TRUE.equals(marked)) {
-                return false;
-            }
-            Boolean added = stringRedisTemplate.opsForZSet().add(
-                    queueKey,
                     String.valueOf(userId),
-                    System.currentTimeMillis()
+                    String.valueOf(System.currentTimeMillis()),
+                    String.valueOf(MATCH_MARK_TTL.toSeconds())
             );
-            if (!Boolean.TRUE.equals(added)) {
-                stringRedisTemplate.delete(markerKey);
-                return false;
-            }
-            return true;
+            return Long.valueOf(1L).equals(result);
         } catch (Exception e) {
             log.debug("Redis 游戏匹配入队失败 gameCode={}, userId={}, error={}",
                     gameCode,
@@ -111,13 +149,21 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
         if (gameCode == null || gameCode.isBlank() || userId == null) {
             return false;
         }
-        String member = String.valueOf(userId);
         try {
-            Boolean hadMarker = stringRedisTemplate.delete(GameRedisKeys.matchUser(gameCode, userId));
+            List<String> keys = new java.util.ArrayList<>();
+            keys.add(GameRedisKeys.matchOccupancy(userId));
+            keys.add(GameRedisKeys.matchUser(gameCode, userId));
             for (String bucket : BUCKETS) {
-                stringRedisTemplate.opsForZSet().remove(GameRedisKeys.matchQueue(gameCode, bucket), member);
+                keys.add(GameRedisKeys.matchQueue(gameCode, bucket));
             }
-            return Boolean.TRUE.equals(hadMarker);
+            DefaultRedisScript<Long> script = new DefaultRedisScript<>(DEQUEUE_SCRIPT, Long.class);
+            Long removed = stringRedisTemplate.execute(
+                    script,
+                    keys,
+                    gameCode,
+                    String.valueOf(userId)
+            );
+            return removed != null && removed > 0;
         } catch (Exception e) {
             log.debug("Redis 游戏匹配出队失败 gameCode={}, userId={}, error={}",
                     gameCode,
@@ -145,6 +191,19 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
     }
 
     @Override
+    public String matchingGameCode(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        try {
+            return stringRedisTemplate.opsForValue().get(GameRedisKeys.matchOccupancy(userId));
+        } catch (Exception e) {
+            log.debug("读取 Redis 用户匹配占用失败 userId={}, error={}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public GameMatchPair pollPair(String gameCode, String bucketCode) {
         if (gameCode == null || gameCode.isBlank() || bucketCode == null || bucketCode.isBlank()) {
             return null;
@@ -154,7 +213,9 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
             List<?> rows = stringRedisTemplate.execute(
                     script,
                     List.of(GameRedisKeys.matchQueue(gameCode, bucketCode)),
-                    GameRedisKeys.matchUserPrefix(gameCode)
+                    GameRedisKeys.matchUserPrefix(gameCode),
+                    GameRedisKeys.matchOccupancyPrefix(),
+                    gameCode
             );
             if (rows == null || rows.size() < 2) {
                 return null;
@@ -186,7 +247,9 @@ public class RedisGameMatchQueueServiceImpl implements GameMatchQueueService {
                     script,
                     List.of(GameRedisKeys.matchQueue(gameCode, bucketCode)),
                     GameRedisKeys.matchUserPrefix(gameCode),
-                    String.valueOf(cutoff)
+                    String.valueOf(cutoff),
+                    GameRedisKeys.matchOccupancyPrefix(),
+                    gameCode
             );
             return parseUserId(userId);
         } catch (Exception e) {

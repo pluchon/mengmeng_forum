@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: ${FORUM_GAME_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_game_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_GAME_DB_USERNAME:forum_game}
+    password: ${FORUM_GAME_DB_PASSWORD}
+  cloud:
+    openfeign:
+      client:
+        config:
+          gameAiHubInternalFeignClient:
+            connect-timeout: 5000
+            read-timeout: 30000
+
+forum:
+  domain: game
+  features:
+    scheduling: true
+    mq: true
+    mq-consumer: true
+    websocket: false
+    game-runtime: true
+  game:
+    ai:
+      core-pool-size: 2
+      max-pool-size: 4
+      queue-capacity: 16

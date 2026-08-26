@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.util.Date;
 import java.util.List;
+import java.math.BigDecimal;
 
 @Data
 @Schema(description = "VIP 配额面板（PRO/MAX）")
@@ -18,4 +19,14 @@ public class VipQuotaPanelVO {
     private Integer totalCalls;
     private List<VipQuotaGroupVO> groups;
     private String emptyHint;
+    private Long qwenBudgetMicros;
+    private Long qwenUsedMicros;
+    private Long qwenRemainingMicros;
+    private BigDecimal wanImageLimit;
+    private BigDecimal wanImageUsed;
+    private BigDecimal wanImageRemaining;
+    private Long qwenBonusMicros;
+    private BigDecimal wanBonusCredits;
+    private Date bonusExpireAt;
+    private Integer activeBonusGrantCount;
 }

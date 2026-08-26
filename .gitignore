@@ -128,6 +128,8 @@ ai-server/.env.*
 logs/
 **/logs/
 *.log
+*.log.*
+*.log.gz
 
 # --- 密钥 / 凭据 / 环境（全仓库）---
 .env
@@ -137,9 +139,12 @@ logs/
 !**/.env*.example
 .envrc
 .direnv/
-nginx/.env
-nginx/.env.*
-!nginx/.env.example
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+forum-vue/front/.env.oss
+forum-vue/front/.env.development
+forum-vue/front/.env.production
 scripts/dev-secrets.ps1
 scripts/*-secrets.ps1
 !scripts/*-secrets.ps1.example
@@ -162,12 +167,12 @@ scripts/*-secrets.ps1
 *_secret.txt
 *_secrets.txt
 
-# --- TLS / SSH（证书与私钥勿入库；nginx/ssl 目录可保留 .gitkeep）---
-nginx/ssl/*.pem
-nginx/ssl/*.key
-nginx/ssl/*.crt
-nginx/ssl/*.p12
-nginx/ssl/*.pfx
+# --- TLS / SSH（证书与私钥勿入库；deploy/ssl 目录可保留 .gitkeep）---
+deploy/ssl/*.pem
+deploy/ssl/*.key
+deploy/ssl/*.crt
+deploy/ssl/*.p12
+deploy/ssl/*.pfx
 *.pem
 *.key
 *.p12
@@ -192,10 +197,10 @@ known_hosts
 *.dump
 
 # --- 部署产物（本地生成）---
-nginx/package/
-nginx/dist/
-nginx/logs/
-nginx/conf.d.local/
+deploy/package/
+deploy/dist/
+deploy/logs/
+deploy/conf.d.local/
 output/
 test-output/
 .playwright-cli/
@@ -211,3 +216,8 @@ docker-compose.override.yml
 docker-compose.override.yaml
 forum-vue/front/.env.production
 forum-vue/**/.codex/
+# Draco 编码器仅本地工具用，运行时不需要
+forum-vue/front/public/draco/draco_encoder.js
+.agents/
+skills-lock.json
+skills/

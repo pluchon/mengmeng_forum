@@ -1,0 +1,10 @@
+[
+  {
+    "resource": "game.ai.gobang",
+    "grade": 0,
+    "count": 4,
+    "strategy": 0,
+    "controlBehavior": 0,
+    "clusterMode": false
+  }
+]

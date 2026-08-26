@@ -7,6 +7,7 @@ import org.pluchon.forum.api.content.AiGeneratedImageUploadRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.entity.vo.file.BatchImageUploadResultVO;
 import org.pluchon.forum.service.interfaces.file.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,6 +56,18 @@ public class FileController {
         return Result.successData(fileService.uploadBackground(file, loginUser.getId()));
     }
 
+    /** 上传收藏夹封面 */
+    @Operation(summary = "上传收藏夹封面", description = "上传并审核收藏夹封面，返回OSS URL后通过收藏夹更新接口落库")
+    @PostMapping("/uploadFavoriteFolderCover")
+    public Result<String> uploadFavoriteFolderCover(@RequestParam("file") MultipartFile file,
+                                                     HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadFavoriteFolderCover(file, loginUser.getId()));
+    }
+
     @Operation(summary = "上传帖子内容图片", description = "上传图片到OSS返回URL，可直接嵌入富文本编辑器")
     @PostMapping("/uploadArticleImage")
     public Result<String> uploadArticleImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
@@ -63,6 +76,19 @@ public class FileController {
             return Result.fail("您尚未登录");
         }
         return Result.successData(fileService.uploadArticleImage(file, loginUser.getId()));
+    }
+
+    /** 批量上传帖子内容图片，允许部分成功 */
+    @Operation(summary = "批量上传帖子内容图片", description = "最多9张；返回成功 URL 与失败原因（按 index）")
+    @PostMapping("/uploadArticleImages")
+    public Result<BatchImageUploadResultVO> uploadArticleImages(
+            @RequestParam("files") MultipartFile[] files,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadArticleImages(files, loginUser.getId()));
     }
 
     @Operation(summary = "上传帖子视频", description = "上传单个视频到 OSS；大于100MB会触发压缩；返回 URL 后再调 /article/setArticleVideo 落库")
@@ -85,6 +111,19 @@ public class FileController {
         return Result.successData(fileService.uploadChatImage(file, loginUser.getId()));
     }
 
+    /** 批量上传聊天图片，允许部分成功 */
+    @Operation(summary = "批量上传聊天图片", description = "最多9张；返回成功 URL 与失败原因（按 index）；再调 sendImage / sendAlbum")
+    @PostMapping("/uploadChatImages")
+    public Result<BatchImageUploadResultVO> uploadChatImages(
+            @RequestParam("files") MultipartFile[] files,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadChatImages(files, loginUser.getId()));
+    }
+
     @Operation(summary = "上传聊天表情", description = "用户自上传表情到收藏库, 返回URL后再调 /message/emoji/favorite 入库")
     @PostMapping("/uploadChatEmoji")
     public Result<String> uploadChatEmoji(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
@@ -95,6 +134,19 @@ public class FileController {
         return Result.successData(fileService.uploadChatEmoji(file, loginUser.getId()));
     }
 
+    /** 批量上传聊天表情，允许部分成功；自上传收藏须走 emoji 目录 */
+    @Operation(summary = "批量上传聊天表情", description = "最多9张；返回成功 URL 后再逐张调 /message/emoji/favorite")
+    @PostMapping("/uploadChatEmojis")
+    public Result<BatchImageUploadResultVO> uploadChatEmojis(
+            @RequestParam("files") MultipartFile[] files,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadChatEmojis(files, loginUser.getId()));
+    }
+
     @Operation(summary = "上传表情商城商品图", description = "封面 + 包内单图共用此接口, 返回URL后再调 /shop/createShop 落库")
     @PostMapping("/uploadEmojiShopImage")
     public Result<String> uploadEmojiShopImage(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
@@ -103,6 +155,19 @@ public class FileController {
             return Result.fail("您尚未登录");
         }
         return Result.successData(fileService.uploadEmojiShopImage(file, loginUser.getId()));
+    }
+
+    /** 批量上传表情商城包内图，允许部分成功 */
+    @Operation(summary = "批量上传表情商城商品图", description = "最多9张；封面仍用单张接口；包内图可分片批量")
+    @PostMapping("/uploadEmojiShopImages")
+    public Result<BatchImageUploadResultVO> uploadEmojiShopImages(
+            @RequestParam("files") MultipartFile[] files,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail("您尚未登录");
+        }
+        return Result.successData(fileService.uploadEmojiShopImages(files, loginUser.getId()));
     }
 
     @Operation(summary = "上传公告中心卡片配图", description = "落库路径 forum_notice_picture/，文件名：发布者ID_公告ID_东八区时间；新建公告传 noticeId=0")
@@ -149,7 +214,7 @@ public class FileController {
         return Result.successData(fileService.uploadLotteryActivityPicture(file, aid, loginUser.getId()));
     }
 
-    /** 内部：AI 域生图结果转存 OSS（ai → content） */
+    /** 内部：AI 域生图结果转存 OSS ai → content */
     @PostMapping("/internal/upload-ai-generated")
     public String uploadAiGeneratedInternal(@RequestBody AiGeneratedImageUploadRequest request) {
         return fileService.uploadAiGeneratedImageFromRemote(

@@ -48,12 +48,28 @@ def open_consumer_channel() -> tuple[BlockingConnection, pika.channel.Channel]:
 
 def _ensure_publisher() -> pika.channel.Channel:
     global _publisher_connection, _publisher_channel
-    if _publisher_connection is None or _publisher_connection.is_closed:
+    connection_unavailable = _publisher_connection is None or _publisher_connection.is_closed
+    channel_unavailable = _publisher_channel is None or _publisher_channel.is_closed
+    if connection_unavailable or channel_unavailable:
+        _reset_publisher()
         _publisher_connection = BlockingConnection(_params())
         _publisher_channel = _publisher_connection.channel()
         _publisher_channel.confirm_delivery()
         logger.info("[Rabbit] 发布连接已建立")
     return _publisher_channel
+
+
+def _reset_publisher() -> None:
+    global _publisher_connection, _publisher_channel
+    connection = _publisher_connection
+    _publisher_connection = None
+    _publisher_channel = None
+    if connection is None or connection.is_closed:
+        return
+    try:
+        connection.close()
+    except Exception as exc:
+        logger.debug("[Rabbit] 关闭失效发布连接失败: %s", exc)
 
 
 def publish_json(routing_key: str, payload: dict, retries: int = 3) -> bool:
@@ -87,13 +103,7 @@ def publish_json(routing_key: str, payload: dict, retries: int = 3) -> bool:
                     retries,
                     exc,
                 )
-                global _publisher_connection
-                try:
-                    if _publisher_connection is not None:
-                        _publisher_connection.close()
-                except Exception:
-                    pass
-                _publisher_connection = None
+                _reset_publisher()
         if attempt + 1 < retries:
             time.sleep(0.35 * (attempt + 1))
     logger.exception("[Rabbit] 发布最终失败 routing_key=%s", routing_key, exc_info=last_err)
@@ -106,3 +116,15 @@ def audit_task_queue() -> str:
 
 def audit_result_routing_key() -> str:
     return _cfg.get("audit_result_routing_key", "forum.audit.result")
+
+
+def ai_async_task_queue() -> str:
+    return _cfg.get("ai_async_task_queue", "q-ai-async-task")
+
+
+def ai_content_result_routing_key() -> str:
+    return _cfg.get("ai_content_result_routing_key", "forum.ai.content.result")
+
+
+def ai_im_result_routing_key() -> str:
+    return _cfg.get("ai_im_result_routing_key", "forum.ai.im.result")

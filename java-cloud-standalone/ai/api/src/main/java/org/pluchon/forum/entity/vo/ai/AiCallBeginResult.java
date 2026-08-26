@@ -2,7 +2,7 @@ package org.pluchon.forum.entity.vo.ai;
 
 import lombok.Data;
 
-/** AI 调用预记录 begin 结果 */
+// AI 调用预记录 begin 结果
 @Data
 public class AiCallBeginResult {
 

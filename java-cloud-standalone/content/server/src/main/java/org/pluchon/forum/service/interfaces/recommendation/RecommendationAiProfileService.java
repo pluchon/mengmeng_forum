@@ -16,4 +16,6 @@ public interface RecommendationAiProfileService {
     Map<String, Double> getActiveTopicWeights(Long userId);
 
     Map<String, Double> getAvoidTopicWeights(Long userId);
+
+    String getPreferenceQuery(Long userId);
 }

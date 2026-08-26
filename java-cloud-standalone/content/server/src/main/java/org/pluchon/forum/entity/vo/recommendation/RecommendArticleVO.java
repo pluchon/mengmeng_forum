@@ -14,4 +14,16 @@ public class RecommendArticleVO {
     // 帖子公开信息
     private Article article;
 
+    // 相册图片数量 未删除 ，图文帖角标用
+    private Integer imageCount;
+
+    // 相册第一张图 URL，卡片悬停预览用；无相册时为空
+    private String firstImageUrl;
+
+    // 推荐理由编码
+    private String reasonCode;
+
+    // 推荐理由文案
+    private String reasonMessage;
+
 }

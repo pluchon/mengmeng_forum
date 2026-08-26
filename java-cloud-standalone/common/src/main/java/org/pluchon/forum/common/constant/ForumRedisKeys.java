@@ -1,6 +1,6 @@
 package org.pluchon.forum.common.constant;
 
-// 论坛通用 Redis Key / TTL（游戏见 GameRedisKeys，搜索倒排见 SearchRedisKeys）
+// 论坛通用 Redis Key / TTL 游戏见 GameRedisKeys，搜索倒排见 SearchRedisKeys
 public final class ForumRedisKeys {
 
     public static final String WS_PUSH_CHANNEL = "forum:ws:push";
@@ -25,6 +25,11 @@ public final class ForumRedisKeys {
     public static final String HOT_ARTICLES_PERIOD_SCORE = "hot:articles:period:score";
     public static final String HOT_ARTICLES_TREND = "hot:articles:trend";
     public static final String HOT_ARTICLES_TREND_INITIALIZED = "hot:articles:trend:initialized";
+
+    // 音乐大厅本周热榜（蓝绿 ZSet，member=musicKey）
+    public static final String HOT_MUSIC_ACTIVE = "hot:music:active";
+    public static final String HOT_MUSIC_SLOT_A = "hot:music:a";
+    public static final String HOT_MUSIC_SLOT_B = "hot:music:b";
     public static final String MQ_EVENT_DEDUP = "forum:mq:dedup:";
     public static final long TTL_MQ_EVENT_DEDUP = 86400L;
     public static final String GAME_MATCH_ROOM = "forum:game:match:";
@@ -84,6 +89,13 @@ public final class ForumRedisKeys {
     public static final String AUDIT_RESULT_DEDUP = "ai_audit:result_dedup:";
     public static final long TTL_AUDIT_RESULT_DEDUP = 86400L;
     public static final String AUDIT_TASK_STATE = "ai_audit:task_state:";
+
+    public static final String LOTTERY_PUBLIC_RECENT = "lottery:public:recent:";
+    public static final long TTL_LOTTERY_PUBLIC_RECENT = 20L;
+
+    // 密码登录失败计数 后缀为账号指纹
+    public static final String LOGIN_FAIL = "forum:login:fail:";
+    public static final long TTL_LOGIN_FAIL = 900L;
 
     private ForumRedisKeys() {
     }

@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.lottery.guard;
 
 import org.pluchon.forum.entity.db.LotteryActivity;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.lottery.LotteryDrawDTO;
 
 public class LotteryDrawContext {

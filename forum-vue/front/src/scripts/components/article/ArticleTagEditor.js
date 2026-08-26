@@ -11,7 +11,7 @@ const props = defineProps({
   max: { type: Number, default: 5 },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'ai-generating'])
 
 const pickerOpen = ref(false)
 const loading = ref(false)
@@ -89,6 +89,7 @@ async function runSuggest() {
     return
   }
   aiLoading.value = true
+  emit('ai-generating', true)
   try {
     const res = await suggestArticleTags({
       boardId: props.boardId,
@@ -110,6 +111,7 @@ async function runSuggest() {
     ElMessage.error('推荐失败')
   } finally {
     aiLoading.value = false
+    emit('ai-generating', false)
   }
 }
 

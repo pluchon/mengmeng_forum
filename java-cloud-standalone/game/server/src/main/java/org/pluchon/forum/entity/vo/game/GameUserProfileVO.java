@@ -52,7 +52,7 @@ public class GameUserProfileVO {
     // 平局数
     private Integer drawCount;
 
-    // 胜率百分比，0-100
+    // 胜率百分比，0 100
     private Integer winRate;
 
     // 当前状态

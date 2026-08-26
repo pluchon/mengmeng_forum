@@ -1,3 +1,9 @@
+.tetris-pk-room-page {
+  background:
+    linear-gradient(rgba(8, 14, 28, 0.84), rgba(8, 14, 28, 0.88)),
+    url('https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/forum_images/client/webp/eluosi_background.webp') center / cover no-repeat;
+}
+
 .tetris-pk-room-page .tetris-pk-stage {
   grid-template-columns: 180px minmax(0, 1fr) 248px;
 }
@@ -7,124 +13,127 @@
   min-width: 0;
 }
 
+/* 居中动态对决能量槽 — 与棋盘同宽 */
+.tetris-pk-bar-container {
+  width: 100%;
+  margin: 0 0 16px;
+  display: flex;
+  justify-content: center;
+}
+
 .tetris-pk-bar {
   position: relative;
   display: flex;
-  height: 34px;
-  margin-bottom: 16px;
+  width: 100%;
+  height: 38px;
   border-radius: 999px;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.28);
+  overflow: visible;
+  background: rgba(10, 18, 36, 0.8);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), 0 8px 28px rgba(0, 0, 0, 0.4);
 }
 
 .tetris-pk-bar-red,
 .tetris-pk-bar-blue {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  min-width: 48px;
-  padding: 0 14px;
-  font-size: 13px;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px;
   font-weight: 900;
   color: #fff;
   transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.pk-team-tag {
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.pk-score-num {
+  font-size: 16px;
+  font-family: 'Mochiy Pop One', monospace;
+  font-weight: 900;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .tetris-pk-bar-red {
   justify-content: flex-start;
-  background: linear-gradient(90deg, #ff3b5c 0%, #ff6b4a 100%);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-  margin-right: -6px;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, #e11d48 0%, #f43f5e 70%, #fb7185 100%);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.3);
   z-index: 1;
 }
 
 .tetris-pk-bar-blue {
   justify-content: flex-end;
-  flex: 1;
-  min-width: 48px;
-  background: linear-gradient(270deg, #2f7bff 0%, #4bb4ff 100%);
-  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%);
-  margin-left: -6px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(270deg, #1d4ed8 0%, #3b82f6 70%, #60a5fa 100%);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.3);
   z-index: 1;
 }
 
+.tetris-room-conn.is-warning {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+.tetris-room-conn.is-warning span {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
 .tetris-pk-bar-seam {
-  position: relative;
-  flex: 0 0 14px;
-  align-self: stretch;
-  transform: skewX(-16deg);
-  z-index: 3;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 2;
   pointer-events: none;
-  overflow: hidden;
 }
 
-.tetris-pk-bar-seam-core {
-  position: absolute;
-  inset: 0;
-  border-radius: 2px;
-  background: linear-gradient(
-    125deg,
-    rgba(255, 255, 255, 0.42) 0%,
-    rgba(255, 255, 255, 0.96) 24%,
-    rgba(176, 214, 255, 0.9) 50%,
-    rgba(255, 255, 255, 0.96) 76%,
-    rgba(255, 255, 255, 0.42) 100%
-  );
-  background-size: 220% 220%;
-  box-shadow:
-    0 0 10px rgba(255, 255, 255, 0.95),
-    0 0 20px rgba(140, 196, 255, 0.85),
-    inset 0 0 10px rgba(255, 255, 255, 0.72);
-  animation: tetris-pk-seam-glow 2.4s ease-in-out infinite;
-}
-
-.tetris-pk-bar-seam-shimmer {
-  position: absolute;
-  inset: -2px -4px;
-  background: linear-gradient(
-    115deg,
-    transparent 18%,
-    rgba(255, 255, 255, 0.2) 40%,
-    rgba(255, 255, 255, 1) 50%,
-    rgba(255, 255, 255, 0.2) 60%,
-    transparent 82%
-  );
-  background-size: 260% 100%;
-  mix-blend-mode: screen;
-  animation: tetris-pk-seam-shimmer 1.6s linear infinite;
-}
-
-.tetris-pk-bar-seam-flare {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.95) 0, transparent 62%);
-  animation: tetris-pk-seam-flare 2s ease-in-out infinite;
-}
-
-.tetris-pk-bar-seam-spark {
+.tetris-pk-vs-badge {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 7px;
-  height: 7px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: #fff;
+  background: linear-gradient(135deg, #ffd043, #f59e0b);
+  color: #1a1002;
+  font-size: 13px;
+  font-weight: 900;
+  font-style: italic;
+  pointer-events: none;
   box-shadow:
-    0 0 8px #fff,
-    0 0 16px rgba(120, 190, 255, 0.95),
-    0 0 24px rgba(255, 255, 255, 0.75);
-  animation: tetris-pk-seam-spark 1.4s ease-in-out infinite;
+    0 0 0 3px rgba(10, 18, 36, 0.9),
+    0 0 16px rgba(255, 208, 67, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+  animation: vs-pulse 2s infinite ease-in-out;
 }
 
-@keyframes tetris-pk-seam-glow {
+@keyframes vs-pulse {
   0%, 100% {
-    background-position: 0% 50%;
-    filter: brightness(1);
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow:
+      0 0 0 3px rgba(10, 18, 36, 0.9),
+      0 0 14px rgba(255, 208, 67, 0.7);
   }
   50% {
-    background-position: 100% 50%;
-    filter: brightness(1.18);
+    transform: translate(-50%, -50%) scale(1.12);
+    box-shadow:
+      0 0 0 3px rgba(10, 18, 36, 0.9),
+      0 0 24px rgba(255, 208, 67, 0.95);
   }
 }
 
@@ -163,8 +172,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
   min-height: 0;
 }
 
@@ -173,7 +182,17 @@
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   width: 100%;
-  max-width: 520px;
+  flex: 1;
+  min-height: 0;
+  align-items: start;
+  justify-items: center;
+}
+
+.tetris-pk-duel .tetris-board-canvas {
+  width: 240px;
+  height: 480px;
+  max-width: 100%;
+  flex-shrink: 0;
 }
 
 .tetris-pk-board-col {
@@ -181,6 +200,13 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+.tetris-pk-board-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tetris-pk-board-label {
@@ -370,8 +396,44 @@
 
 .tetris-surrender-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 44px;
+  height: 44px;
   margin-top: 4px;
+  --el-button-text-color: #ffe8a3;
+  --el-button-border-color: #7c3aed;
+  --el-button-bg-color: #120a24;
+  --el-button-hover-text-color: #fff6cc;
+  --el-button-hover-border-color: #a78bfa;
+  --el-button-hover-bg-color: #1a1030;
+  --el-button-active-text-color: #fde68a;
+  --el-button-active-border-color: #c4b5fd;
+  --el-button-active-bg-color: #0d0718;
+  border-radius: 999px !important;
+  border: 1px solid #7c3aed !important;
+  background:
+    radial-gradient(circle at 16% 36%, rgba(167, 139, 250, 0.95) 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 28%, rgba(255, 255, 255, 0.82) 0 1px, transparent 2px),
+    radial-gradient(circle at 86% 72%, rgba(244, 114, 182, 0.76) 0 1px, transparent 2px),
+    linear-gradient(135deg, #120a24 0%, #1e1240 46%, #14082c 100%) !important;
+  color: #ffe8a3 !important;
+  font-weight: 900;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(124, 58, 237, 0.24),
+    0 0 18px rgba(124, 58, 237, 0.22);
+}
+
+.tetris-surrender-btn:hover:not(.is-disabled) {
+  border-color: #a78bfa !important;
+  color: #fff6cc !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(167, 139, 250, 0.34),
+    0 0 24px rgba(167, 139, 250, 0.32);
+}
+
+.tetris-surrender-btn.is-disabled {
+  opacity: 0.45;
 }
 
 .tetris-pk-chat-rail {
@@ -421,9 +483,5 @@
 @media (max-width: 1100px) {
   .tetris-pk-room-page .tetris-pk-stage {
     grid-template-columns: 1fr;
-  }
-
-  .tetris-pk-duel {
-    max-width: 100%;
   }
 }

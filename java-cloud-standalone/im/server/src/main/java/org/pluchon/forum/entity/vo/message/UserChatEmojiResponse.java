@@ -8,9 +8,7 @@ import org.pluchon.forum.entity.db.UserChatEmoji;
 
 import java.util.Date;
 
-/**
- * 用户聊天表情收藏 VO, 隐藏 deleteState 等内部字段.
- */
+// 用户聊天表情收藏 VO, 隐藏 deleteState 等内部字段.
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -3,13 +3,13 @@ package org.pluchon.forum.common.exception;
 import lombok.Getter;
 import org.pluchon.forum.common.result.Result;
 
-//定义自定义异常
+// 定义自定义异常
 @Getter
 public class ApplicationException extends RuntimeException {
-    //自定义错误，拿取结果信息
+    // 自定义错误，拿取结果信息
     protected Result errorResult;
 
-    //自定义构造方法
+    // 自定义构造方法
     public ApplicationException(Result errorResult){
         super(errorResult.getMessage());
         this.errorResult = errorResult;

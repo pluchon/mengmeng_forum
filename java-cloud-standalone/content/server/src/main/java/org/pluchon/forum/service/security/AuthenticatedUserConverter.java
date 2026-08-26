@@ -1,9 +1,9 @@
 package org.pluchon.forum.service.security;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 
-// 将 auth-api 的非敏感内部视图转换为本服务请求主体。
+// 将 auth api 的非敏感内部视图转换为本服务请求主体
 final class AuthenticatedUserConverter {
 
     private AuthenticatedUserConverter() {

@@ -23,7 +23,7 @@ from flask import Flask
 
 from api import api as api_blueprint
 from config import settings
-from workers import audit_worker
+from workers import ai_async_worker, audit_worker
 
 
 def _setup_logging() -> None:
@@ -32,12 +32,10 @@ def _setup_logging() -> None:
     level = getattr(logging, level_name, logging.WARNING)
     log_file = Path(
         logging_cfg.get("file")
-        or "../logs/python-backend/ai-server/ai-server.log"
+        or "../logs/ai-server/ai-server.log"
     )
     log_file.parent.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=int(logging_cfg.get("max_bytes") or 20 * 1024 * 1024),
@@ -47,7 +45,7 @@ def _setup_logging() -> None:
     file_handler.setFormatter(formatter)
     logging.basicConfig(
         level=level,
-        handlers=[stream_handler, file_handler],
+        handlers=[file_handler],
         force=True,
     )
     logging.getLogger("werkzeug").setLevel(level)
@@ -77,6 +75,11 @@ def main() -> None:
         logger.exception("启动 audit_worker 失败, 进程继续仅服务 REST API")
 
     try:
+        ai_async_worker.start_in_background()
+    except Exception:
+        logger.exception("启动 ai_async_worker 失败, 进程继续服务其他能力")
+
+    try:
         from utils.site_help import refresh_site_help_cache
         refresh_site_help_cache()
     except Exception:
@@ -86,7 +89,7 @@ def main() -> None:
     server = settings.server
     host = server.get("host", "0.0.0.0")
     port = int(server.get("port", 5000))
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":

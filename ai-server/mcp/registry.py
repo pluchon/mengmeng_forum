@@ -4,22 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from mcp.base import McpTool
-from mcp.baidu_map_tools import (
-    BaiduMapDirectionsTool,
-    BaiduMapGeocodeTool,
-    BaiduMapSearchPlacesTool,
-    BaiduMapWeatherTool,
-)
 from mcp.datetime_tool import CurrentDatetimeTool
 from mcp.tavily_search import TavilySearchMcpTool
 
 _TOOLS: dict[str, McpTool] = {
     TavilySearchMcpTool.name: TavilySearchMcpTool(),
     CurrentDatetimeTool.name: CurrentDatetimeTool(),
-    BaiduMapGeocodeTool.name: BaiduMapGeocodeTool(),
-    BaiduMapSearchPlacesTool.name: BaiduMapSearchPlacesTool(),
-    BaiduMapDirectionsTool.name: BaiduMapDirectionsTool(),
-    BaiduMapWeatherTool.name: BaiduMapWeatherTool(),
 }
 
 

@@ -1,19 +1,25 @@
 package org.pluchon.forum.service.impl.article;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import jakarta.annotation.Resource;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.entity.db.Board;
 import org.pluchon.forum.entity.db.ForumArticleTag;
 import org.pluchon.forum.entity.db.ForumArticleTagLink;
 import org.pluchon.forum.entity.db.ForumArticleTagRequest;
+import org.pluchon.forum.entity.dto.AiArticleTagCandidateDTO;
+import org.pluchon.forum.entity.dto.AiArticleTagRecommendRequest;
+import org.pluchon.forum.entity.dto.AiArticleTagSimilarityRequest;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagRecommendResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagSimilarityResultVO;
 import org.pluchon.forum.entity.vo.article.ArticleTagFeedbackVO;
 import org.pluchon.forum.entity.vo.article.ArticleTagVO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.ForumArticleTagLinkMapper;
 import org.pluchon.forum.mapper.ForumArticleTagMapper;
@@ -26,9 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -37,24 +45,43 @@ import java.util.stream.Collectors;
 public class ArticleTagServiceImpl implements ArticleTagService {
 
     private static final int MAX_TAGS_PER_ARTICLE = 5;
+    private static final int TAG_PAGE_SIZE = 15;
     private static final byte SCOPE_GLOBAL = 0;
     private static final byte SCOPE_CATEGORY = 1;
     private static final byte SCOPE_BOARD = 2;
     private static final byte TAG_NORMAL = 0;
     private static final byte NOT_DELETED = 0;
+    private static final String DEFAULT_COLOR_KEY = "mint";
+    private static final Set<String> ALLOWED_COLOR_KEYS = Set.of(
+            "sky", "rose", "amber", "mint", "violet", "slate", "orange", "teal");
 
-    @Resource
+    @Autowired
     private ForumArticleTagMapper tagMapper;
-    @Resource
+    @Autowired
     private ForumArticleTagLinkMapper linkMapper;
-    @Resource
+    @Autowired
     private ForumArticleTagRequestMapper requestMapper;
-    @Resource
+    @Autowired
     private BoardMapper boardMapper;
-    @Resource
+    @Autowired
     private ContentSystemMessageInternalFeignClient contentSystemMessageInternalFeignClient;
     @Autowired
     private ContentAiGatewayService contentAiGatewayService;
+
+    @Override
+    public PageResult<ArticleTagVO> pageForBoard(Long boardId, String keyword, Integer pageNum) {
+        int currentPage = PageUtils.getValidPageNum(pageNum);
+        List<ArticleTagVO> allTags = searchTags(boardId, keyword);
+        long total = allTags.size();
+        long pages = total == 0 ? 0 : (total + TAG_PAGE_SIZE - 1) / TAG_PAGE_SIZE;
+        long offset = (long) (currentPage - 1) * TAG_PAGE_SIZE;
+        int fromIndex = (int) Math.min(offset, total);
+        int toIndex = (int) Math.min(offset + TAG_PAGE_SIZE, total);
+        List<ArticleTagVO> records = fromIndex >= toIndex
+                ? List.of()
+                : new ArrayList<>(allTags.subList(fromIndex, toIndex));
+        return new PageResult<>(records, total, currentPage, TAG_PAGE_SIZE, pages, currentPage < pages);
+    }
 
     @Override
     public List<ArticleTagVO> listForBoard(Long boardId) {
@@ -71,8 +98,8 @@ public class ArticleTagServiceImpl implements ArticleTagService {
                                 .eq(ForumArticleTag::getScopeId, categoryId))
                         .or(x -> x.eq(ForumArticleTag::getScopeType, SCOPE_BOARD)
                                 .eq(ForumArticleTag::getScopeId, boardId)))
-                .orderByAsc(ForumArticleTag::getSort)
-                .orderByAsc(ForumArticleTag::getId));
+                .orderByDesc(ForumArticleTag::getCreateTime)
+                .orderByDesc(ForumArticleTag::getId));
         return dedupeVo(rows);
     }
 
@@ -124,38 +151,41 @@ public class ArticleTagServiceImpl implements ArticleTagService {
     }
 
     @Override
-    public List<ArticleTagVO> suggestTags(Long boardId, String title, String contentSnippet) {
-        String snippet = contentSnippet;
-        if (snippet != null && snippet.length() > 200) {
-            snippet = snippet.substring(0, 200);
-        }
+    public List<ArticleTagVO> suggestTags(Long userId, Long boardId, String title, String content, String editorMode) {
         List<ArticleTagVO> pool = listForBoard(boardId);
         if (pool.isEmpty()) {
             return List.of();
         }
-        String blob = ((title != null ? title : "") + " " + (contentSnippet != null ? contentSnippet : ""))
-                .toLowerCase(Locale.ROOT);
-        List<ArticleTagVO> hit = new ArrayList<>();
-        for (ArticleTagVO t : pool) {
-            String n = t.getName().toLowerCase(Locale.ROOT);
-            if (blob.contains(n) || n.length() >= 2 && blob.contains(n.substring(0, 2))) {
-                hit.add(t);
-            }
+        AiArticleTagRecommendRequest request = new AiArticleTagRecommendRequest();
+        request.setUserId(userId);
+        request.setClientRequestId(java.util.UUID.randomUUID().toString());
+        request.setTitle(title == null ? "" : title.trim());
+        request.setContent(content == null ? "" : content);
+        request.setEditorMode("markdown".equalsIgnoreCase(editorMode) ? "markdown" : "rich");
+        request.setCandidates(toAiCandidates(prefilterRecommendCandidates(title, content, pool)));
+        AiHubArticleTagRecommendResultVO result = contentAiGatewayService.recommendArticleTags(request);
+        List<Long> recommendedIds = result == null || result.getTagIds() == null
+                ? List.of() : result.getTagIds();
+        if (recommendedIds.isEmpty()) {
+            return List.of();
         }
-        if (hit.size() >= 3) {
-            return hit.stream().limit(5).toList();
-        }
-        for (ArticleTagVO t : pool) {
-            if (!hit.contains(t) && hit.size() < 5) {
-                hit.add(t);
-            }
-        }
-        return hit;
+        Map<Long, ArticleTagVO> byId = pool.stream().collect(Collectors.toMap(
+                ArticleTagVO::getId, item -> item, (left, right) -> left));
+        return recommendedIds.stream()
+                .distinct()
+                .limit(MAX_TAGS_PER_ARTICLE)
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ArticleTagFeedbackVO submitTagFeedback(Long userId, Long boardId, String proposedName) {
+    public ArticleTagFeedbackVO submitTagFeedback(
+            Long userId,
+            Long boardId,
+            String proposedName,
+            String colorKey) {
         String name = normalizeTagName(proposedName);
         if (name == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "标签名需 2～12 字"));
@@ -181,9 +211,16 @@ public class ArticleTagServiceImpl implements ArticleTagService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_CONTENT_ERROR, audit));
         }
 
+        ArticleTagVO similarTag = findHighlySimilarTag(name, boardId);
+        if (similarTag != null) {
+            throw new ApplicationException(Result.fail(
+                    ResultCode.FAILED_PARAMS_VALIDATE,
+                    String.format("已有高度相近标签「%s」，请直接选用", similarTag.getName())));
+        }
+
         ForumArticleTag tag = new ForumArticleTag();
         tag.setName(name);
-        tag.setColorKey(pickColorKey(name));
+        tag.setColorKey(normalizeColorKey(colorKey));
         tag.setScopeType(SCOPE_BOARD);
         tag.setScopeId(boardId);
         tag.setSort(99);
@@ -255,17 +292,126 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         return s;
     }
 
-    private String pickColorKey(String name) {
-        if (name.contains("旅") || name.contains("拍")) {
-            return "sky";
+    private List<ArticleTagVO> searchTags(Long boardId, String keyword) {
+        List<ArticleTagVO> pool = listForBoard(boardId);
+        if (!StringUtils.hasText(keyword)) {
+            return pool;
         }
-        if (name.contains("食") || name.contains("餐")) {
-            return "amber";
+        String normalized = keyword.trim();
+        List<ArticleTagVO> lexical = pool.stream()
+                .filter(tag -> tag.getName().contains(normalized))
+                .sorted(Comparator
+                        .comparing((ArticleTagVO tag) -> !tag.getName().equals(normalized))
+                        .thenComparingInt(tag -> tag.getName().length()))
+                .toList();
+        if (!lexical.isEmpty()) {
+            return lexical;
         }
-        if (name.contains("宠")) {
-            return "rose";
+        List<Long> semanticIds = contentAiGatewayService.rankSemanticCandidates(
+                normalized,
+                toSemanticCandidates(pool));
+        if (semanticIds.isEmpty()) {
+            return List.of();
         }
-        return "mint";
+        Map<Long, ArticleTagVO> byId = pool.stream().collect(Collectors.toMap(
+                ArticleTagVO::getId, item -> item, (left, right) -> left));
+        return semanticIds.stream()
+                .distinct()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .limit(TAG_PAGE_SIZE)
+                .toList();
+    }
+
+    private List<ArticleTagVO> prefilterRecommendCandidates(
+            String title,
+            String content,
+            List<ArticleTagVO> pool) {
+        if (pool.size() <= 80) {
+            return pool;
+        }
+        String query = ((title == null ? "" : title) + " " + (content == null ? "" : content))
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (query.length() > 1200) {
+            query = query.substring(0, 1200);
+        }
+        List<Long> rankedIds = contentAiGatewayService.rankSemanticCandidates(query, toSemanticCandidates(pool));
+        if (rankedIds.isEmpty()) {
+            return pool.stream().limit(80).toList();
+        }
+        Map<Long, ArticleTagVO> byId = pool.stream().collect(Collectors.toMap(
+                ArticleTagVO::getId, item -> item, (left, right) -> left));
+        return rankedIds.stream()
+                .distinct()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .limit(80)
+                .toList();
+    }
+
+    private ArticleTagVO findHighlySimilarTag(String proposedName, Long boardId) {
+        List<ArticleTagVO> pool = listForBoard(boardId);
+        if (pool.isEmpty()) {
+            return null;
+        }
+        List<Long> rankedIds = contentAiGatewayService.rankSemanticCandidates(
+                proposedName,
+                toSemanticCandidates(pool));
+        if (rankedIds.isEmpty()) {
+            return null;
+        }
+        Map<Long, ArticleTagVO> byId = pool.stream().collect(Collectors.toMap(
+                ArticleTagVO::getId, item -> item, (left, right) -> left));
+        List<ArticleTagVO> candidates = rankedIds.stream()
+                .distinct()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .limit(8)
+                .toList();
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        AiArticleTagSimilarityRequest request = new AiArticleTagSimilarityRequest();
+        request.setProposedName(proposedName);
+        request.setCandidates(toAiCandidates(candidates));
+        AiHubArticleTagSimilarityResultVO result = contentAiGatewayService.checkArticleTagSimilarity(request);
+        return result == null || result.getSimilarTagId() == null
+                ? null : byId.get(result.getSimilarTagId());
+    }
+
+    private List<AiArticleTagCandidateDTO> toAiCandidates(List<ArticleTagVO> tags) {
+        List<AiArticleTagCandidateDTO> result = new ArrayList<>();
+        for (ArticleTagVO tag : tags) {
+            AiArticleTagCandidateDTO candidate = new AiArticleTagCandidateDTO();
+            candidate.setId(tag.getId());
+            candidate.setName(tag.getName());
+            result.add(candidate);
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> toSemanticCandidates(List<ArticleTagVO> tags) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ArticleTagVO tag : tags) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("candidateId", tag.getId());
+            item.put("text", tag.getName());
+            result.add(item);
+        }
+        return result;
+    }
+
+    private String normalizeColorKey(String colorKey) {
+        if (!StringUtils.hasText(colorKey)) {
+            return DEFAULT_COLOR_KEY;
+        }
+        String normalized = colorKey.trim().toLowerCase();
+        if (!ALLOWED_COLOR_KEYS.contains(normalized)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "标签颜色不受支持"));
+        }
+        return normalized;
     }
 
     private List<ArticleTagVO> dedupeVo(List<ForumArticleTag> rows) {

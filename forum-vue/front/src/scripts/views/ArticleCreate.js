@@ -1,7 +1,15 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Picture, Plus } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
+import {
+  Close,
+  MagicStick,
+  Picture,
+  Plus,
+  Upload,
+  VideoCamera,
+} from '@element-plus/icons-vue'
 import { useBoardStore } from '@/stores/board'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
@@ -12,27 +20,36 @@ import {
   uploadCoverFile,
   updateArticleCoverByUrl,
   uploadArticleImage,
+  uploadArticleImages,
   replaceArticleImages,
   uploadArticleVideo,
   setArticleVideo,
   clearArticleVideo,
+  setArticleMusic,
+  clearArticleMusic,
 } from '@/api/article'
 import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
+import { aiArticleCover } from '@/api/ai'
 import { extractApiErrorMessage } from '@/api/httpError'
 import { isArticleEditingLocked } from '@/utils/articleStatus'
 import WangEditor from '@/components/common/WangEditor.vue'
 import { marked } from 'marked'
 import { stripSingleOuterParagraph } from '@/utils/htmlNormalize'
 import { ARTICLE_TYPE } from '@/utils/articleQuestion'
+import { COVER_IMAGE_QUALITY_OPTIONS } from '@/constants/aiModels'
 import {
   openImageUploadLoading,
   validateLocalImageFile,
+  validateLocalImageFileMagic,
 } from '@/utils/imageUploadFeedback'
 import '@/assets/styles/editor.css'
 
 const MAX_ARTICLE_GALLERY = 15
 // 与后端 Constant.ARTICLE_GALLERY_MIN_CONTENT_LEN 保持一致：有相册图时正文纯文本至少 10 字
 const GALLERY_MIN_CONTENT_LEN = 10
+
+const GALLERY_UPLOAD_GAP_MS = 800
+const GALLERY_UPLOAD_RETRY_MS = 1200
 
 export function useArticleCreate() {
   const route = useRoute()
@@ -57,19 +74,24 @@ export function useArticleCreate() {
 
   const coverFile = ref(null)
   const coverPreview = ref('')
+  const coverInputRef = ref(null)
+  const coverImageQuality = ref('normal')
+  const coverAiGenerating = ref(false)
+  const tagAiGenerating = ref(false)
   const mdFileInput = ref(null)
   const mdTextareaRef = ref(null)
-  /** 笔记相册（article_image），与正文独立；顺序即展示顺序 */
+  // 笔记相册 article_image ，与正文独立；顺序即展示顺序
   const galleryUrls = ref([])
-  /** 媒体模式：相册 / 视频（二选一） */
+  // 媒体模式：相册 / 视频 二选一
   const mediaMode = ref('gallery') // gallery | video
-  /** 单视频 URL（服务端落库到 article.video_url） */
+  // 单视频 URL 服务端落库到 article.video_url
   const videoUrl = ref('')
   const videoUploading = ref(false)
   const videoUploadProgress = ref(0)
   const videoUploadError = ref('')
   let pendingVideoUpload = null
   const galleryUploading = ref(false)
+  const galleryPendingCount = ref(0)
   const tagIds = ref([])
   const galleryInputRef = ref(null)
   const videoInputRef = ref(null)
@@ -77,8 +99,20 @@ export function useArticleCreate() {
   const galleryStripOverflow = ref(false)
   const galleryStripFadeLeft = ref(false)
   let galleryResizeObserver = null
+  const selectedMusic = ref(null)
+  const musicHallOpen = ref(false)
 
   const canAddGallery = computed(() => galleryUrls.value.length < MAX_ARTICLE_GALLERY)
+  const imageModelOptions = computed(() => COVER_IMAGE_QUALITY_OPTIONS)
+
+  const isVip = computed(() => {
+    if (Number(userStore.isAdmin) === 1) return true
+    const tier = Number(userStore.vipTier) || 0
+    if (tier <= 0) return false
+    if (!userStore.vipExpireAt) return true
+    const expireAt = new Date(userStore.vipExpireAt).getTime()
+    return Number.isNaN(expireAt) || Date.now() <= expireAt
+  })
 
   const mdUndoStack = ref([])
   const mdRedoStack = ref([])
@@ -134,8 +168,30 @@ export function useArticleCreate() {
     }
   }
 
+  function revokeCoverPreviewIfNeeded() {
+    if (coverPreview.value?.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreview.value)
+    }
+  }
+
+  function resolveAiImageUrl(payload) {
+    if (typeof payload === 'string') return payload
+    if (!payload || typeof payload !== 'object') return ''
+    return payload.url || payload.imageUrl || payload.image_url || ''
+  }
+
   async function runCoverUploadToArticle(articleId) {
-    if (!coverFile.value) return { ok: true }
+    const previewUrl = String(coverPreview.value || '').trim()
+    if (!coverFile.value) {
+      if (!previewUrl || previewUrl === form.coverImg) return { ok: true }
+      const bindRes = await updateArticleCoverByUrl(articleId, previewUrl)
+      if (bindRes.code === 0) {
+        form.coverImg = previewUrl
+        return { ok: true }
+      }
+      ElMessage.error(bindRes.message || '封面绑定失败')
+      return { ok: false }
+    }
     const pre = validateLocalImageFile(coverFile.value)
     if (!pre.ok) {
       ElMessage.warning(pre.message)
@@ -144,9 +200,20 @@ export function useArticleCreate() {
     const loading = openImageUploadLoading(coverFile.value, '正在上传封面，请稍候…')
     try {
       const uploadRes = await uploadCoverFile(coverFile.value)
-      if (uploadRes.code !== 0) return { ok: false }
+      if (uploadRes.code !== 0) {
+        ElMessage.error(uploadRes.message || '封面上传失败')
+        return { ok: false }
+      }
       const bindRes = await updateArticleCoverByUrl(articleId, uploadRes.data)
-      return { ok: bindRes.code === 0 }
+      if (bindRes.code !== 0) {
+        ElMessage.error(bindRes.message || '封面绑定失败')
+        return { ok: false }
+      }
+      revokeCoverPreviewIfNeeded()
+      coverPreview.value = uploadRes.data
+      form.coverImg = uploadRes.data
+      coverFile.value = null
+      return { ok: true }
     } finally {
       loading.close()
     }
@@ -182,11 +249,12 @@ export function useArticleCreate() {
 
   onBeforeUnmount(() => {
     galleryResizeObserver?.disconnect()
+    revokeCoverPreviewIfNeeded()
   })
 
   onMounted(async () => {
     if (blockIfMuted(userStore)) {
-      router.replace('/')
+      router.replace('/community')
       return
     }
     nextTick(() => {
@@ -196,7 +264,7 @@ export function useArticleCreate() {
       }
     })
 
-    if (boardStore.categoryList.length === 0) await boardStore.fetchCategoryList()
+    await boardStore.fetchCategoryList()
 
     if (isEdit.value) {
       const res = await getArticleDetail(route.params.id)
@@ -204,7 +272,7 @@ export function useArticleCreate() {
         const a = res.data.article
         if (isArticleEditingLocked(a.status)) {
           ElMessage.info('该帖子正在审核中，请稍候')
-          router.replace('/')
+          router.replace('/community')
           return
         }
         const ct = Number(a.contentType) || 0
@@ -216,7 +284,7 @@ export function useArticleCreate() {
           articleType: Number(a.articleType) === ARTICLE_TYPE.QUESTION
             ? ARTICLE_TYPE.QUESTION
             : ARTICLE_TYPE.NORMAL,
-          coverImg: a.coverImg || ''
+          coverImg: a.coverImg || '',
         })
         editorMode.value = ct === 1 ? 'markdown' : 'rich'
         coverPreview.value = a.coverImg
@@ -224,13 +292,23 @@ export function useArticleCreate() {
         videoUrl.value = a.videoUrl || ''
         const isVideoPost = Number(a.mediaType) === 1 || Boolean(String(a.videoUrl || '').trim())
         mediaMode.value = isVideoPost ? 'video' : 'gallery'
+        if (a.musicAudioUrl || a.musicKey) {
+          selectedMusic.value = {
+            musicKey: a.musicKey || '',
+            title: a.musicTitle || a.musicKey || '已选配乐',
+            coverUrl: a.musicCoverUrl || '',
+            audioUrl: a.musicAudioUrl || '',
+            lrcUrl: a.musicLrcUrl || '',
+          }
+        } else {
+          selectedMusic.value = null
+        }
         const tags = Array.isArray(res.data.tags) ? res.data.tags : []
         tagIds.value = tags.map((t) => t.id).filter(Boolean)
 
-        // 设置级联选择器回显
         if (form.boardId) {
-          boardStore.categoryList.forEach(cat => {
-            if (cat.boardList?.some(b => b.id === form.boardId)) {
+          boardStore.categoryList.forEach((cat) => {
+            if (cat.boardList?.some((board) => board.id === form.boardId)) {
               selectedBoard.value = [cat.category.id, form.boardId]
             }
           })
@@ -243,7 +321,7 @@ export function useArticleCreate() {
     if (mediaMode.value === mode) return
     if (mode === 'gallery' && videoUrl.value) {
       try {
-        await ElMessageBox.confirm('切换到相册将移除已上传的视频，是否继续？', '切换媒体类型', {
+        await confirmDialog('切换到相册将移除已上传的视频，是否继续？', '切换媒体类型', {
           type: 'warning',
           confirmButtonText: '继续',
           cancelButtonText: '取消',
@@ -254,7 +332,7 @@ export function useArticleCreate() {
       videoUrl.value = ''
     } else if (mode === 'video' && galleryUrls.value.length) {
       try {
-        await ElMessageBox.confirm('切换到视频将清空相册图片，是否继续？', '切换媒体类型', {
+        await confirmDialog('切换到视频将清空相册图片，是否继续？', '切换媒体类型', {
           type: 'warning',
           confirmButtonText: '继续',
           cancelButtonText: '取消',
@@ -301,6 +379,7 @@ export function useArticleCreate() {
   }
 
   function setEditorMode(mode) {
+    if (aiWriting.value) return
     if (editorMode.value === mode) return
     editorMode.value = mode
     switchMode(mode)
@@ -346,10 +425,77 @@ export function useArticleCreate() {
     aiWriting.value = Boolean(value)
   }
 
-  // 封面处理
-  function handleCoverChange(file) {
-    coverFile.value = file.raw
-    coverPreview.value = URL.createObjectURL(file.raw)
+  function setTagAiGenerating(value) {
+    tagAiGenerating.value = Boolean(value)
+  }
+
+  function openCoverPicker() {
+    coverInputRef.value?.click()
+  }
+
+  function onCoverFileSelected(event) {
+    const file = event.target?.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const pre = validateLocalImageFile(file)
+    if (!pre.ok) {
+      ElMessage.warning(pre.message)
+      return
+    }
+    revokeCoverPreviewIfNeeded()
+    coverFile.value = file
+    coverPreview.value = URL.createObjectURL(file)
+  }
+
+  function clearCover() {
+    revokeCoverPreviewIfNeeded()
+    coverFile.value = null
+    coverPreview.value = ''
+    form.coverImg = ''
+  }
+
+  function setCoverImageQuality(value) {
+    if (imageModelOptions.value.some((option) => option.value === value)) {
+      coverImageQuality.value = value
+    }
+  }
+
+  async function generateAiCover() {
+    if (coverAiGenerating.value) return
+    if (!isVip.value) {
+      ElMessage.warning('AI 配图为会员专享（PRO / MAX）')
+      return
+    }
+    const content = String(form.content || '').trim()
+    if (!content) {
+      ElMessage.warning('请先写一点正文，再生成封面')
+      return
+    }
+    coverAiGenerating.value = true
+    try {
+      const res = await aiArticleCover({
+        title: String(form.title || '').trim(),
+        content,
+        editorMode: editorMode.value,
+        quality: coverImageQuality.value,
+        clientRequestId: globalThis.crypto?.randomUUID
+          ? globalThis.crypto.randomUUID()
+          : `cover-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      })
+      const imageUrl = resolveAiImageUrl(res?.data)
+      if (!imageUrl) {
+        ElMessage.error(res?.message || '封面生成失败')
+        return
+      }
+      revokeCoverPreviewIfNeeded()
+      coverFile.value = null
+      coverPreview.value = imageUrl
+      ElMessage.success('已生成封面，提交时会自动保存')
+    } catch (error) {
+      ElMessage.error(extractApiErrorMessage(error, '封面生成失败'))
+    } finally {
+      coverAiGenerating.value = false
+    }
   }
 
   function bindGalleryItemsRef(el) {
@@ -392,29 +538,74 @@ export function useArticleCreate() {
     if (files.length > take.length) {
       ElMessage.warning(`最多再添加 ${room} 张，已自动截取前 ${room} 张`)
     }
+    const validFiles = []
     for (const file of take) {
-      const pre = validateLocalImageFile(file)
+      const pre = await validateLocalImageFileMagic(file)
       if (!pre.ok) {
         ElMessage.warning(`${file.name}：${pre.message}`)
-        return
+      } else {
+        validFiles.push(file)
       }
     }
+    if (!validFiles.length) return
+
+    galleryPendingCount.value = validFiles.length
     galleryUploading.value = true
+    let okCount = 0
+    let failCount = 0
+    let lastError = ''
     try {
-      for (const file of take) {
-        const res = await uploadArticleImage(file)
-        if (res.code === 0 && res.data) {
-          galleryUrls.value.push(String(res.data))
-          nextTick(scrollGalleryToEnd)
-        } else {
-          ElMessage.error(res.message || '图片上传失败')
-          return
+      if (validFiles.length === 1) {
+        try {
+          const res = await uploadArticleImage(validFiles[0], { silentHttpError: true })
+          if (res.code === 0 && res.data) {
+            galleryUrls.value.push(String(res.data))
+            okCount = 1
+            nextTick(scrollGalleryToEnd)
+          } else {
+            failCount = 1
+            lastError = res.message || '图片上传失败'
+          }
+        } catch (err) {
+          failCount = 1
+          lastError = extractApiErrorMessage(err, '图片上传异常')
+        }
+      } else {
+        try {
+          const res = await uploadArticleImages(validFiles, { silentHttpError: true })
+          if (res.code === 0 && res.data) {
+            const successList = Array.isArray(res.data.success) ? res.data.success : []
+            const failedList = Array.isArray(res.data.failed) ? res.data.failed : []
+            successList
+              .slice()
+              .sort((a, b) => Number(a.index) - Number(b.index))
+              .forEach((item) => {
+                if (item?.url) {
+                  galleryUrls.value.push(String(item.url))
+                  okCount += 1
+                }
+              })
+            failCount = failedList.length
+            if (failedList[0]?.reason) lastError = String(failedList[0].reason)
+            if (okCount > 0) nextTick(scrollGalleryToEnd)
+          } else {
+            failCount = validFiles.length
+            lastError = res.message || '图片上传失败'
+          }
+        } catch (err) {
+          failCount = validFiles.length
+          lastError = extractApiErrorMessage(err, '图片上传异常')
         }
       }
-      ElMessage.success('相册图片上传完成')
-    } catch (err) {
-      ElMessage.error(extractApiErrorMessage(err, '图片上传异常'))
+      if (okCount > 0 && failCount === 0) {
+        ElMessage.success(validFiles.length > 1 ? `已成功上传 ${okCount} 张图片` : '相册图片上传完成')
+      } else if (okCount > 0) {
+        ElMessage.warning(`已上传 ${okCount} 张，${failCount} 张失败：${lastError}`)
+      } else {
+        ElMessage.error(lastError || '图片上传失败')
+      }
     } finally {
+      galleryPendingCount.value = 0
       galleryUploading.value = false
     }
   }
@@ -456,6 +647,46 @@ export function useArticleCreate() {
       ElMessage.error('相册保存异常')
       return { ok: false }
     }
+  }
+
+  async function syncMusicToServer(articleId) {
+    const id = Number(articleId)
+    if (!id || Number.isNaN(id)) return { ok: false }
+    try {
+      if (!selectedMusic.value?.audioUrl) {
+        const res = await clearArticleMusic(id)
+        if (res.code === 0) return { ok: true }
+        ElMessage.error(res.message || '清除配乐失败')
+        return { ok: false }
+      }
+      const track = selectedMusic.value
+      const res = await setArticleMusic({
+        articleId: id,
+        musicKey: track.musicKey,
+        musicTitle: track.title || track.musicKey,
+        musicCoverUrl: track.coverUrl || '',
+        musicAudioUrl: track.audioUrl,
+        musicLrcUrl: track.lrcUrl || '',
+      })
+      if (res.code === 0) return { ok: true }
+      ElMessage.error(res.message || '配乐绑定失败')
+      return { ok: false }
+    } catch (err) {
+      ElMessage.error(extractApiErrorMessage(err, '配乐同步异常'))
+      return { ok: false }
+    }
+  }
+
+  function openMusicHall() {
+    musicHallOpen.value = true
+  }
+
+  function onMusicConfirm(track) {
+    selectedMusic.value = track ? { ...track } : null
+  }
+
+  function clearSelectedMusic() {
+    selectedMusic.value = null
   }
 
   function openVideoPicker() {
@@ -594,7 +825,11 @@ export function useArticleCreate() {
       ElMessage.warning('标题、内容和版块缺一不可哦')
       return false
     }
-    // 有相册图的帖子，正文纯文本必须 ≥ 10 字，否则后端相册同步会被拒(1146)
+    if (!coverPreview.value) {
+      ElMessage.warning('请先上传或生成帖子封面')
+      return false
+    }
+    // 有相册图的帖子，正文纯文本必须 ≥ 10 字，否则后端相册同步会被拒 1146
     if (mediaMode.value === 'gallery' && galleryUrls.value.length > 0
         && plainContentLength() < GALLERY_MIN_CONTENT_LEN) {
       ElMessage.warning(`上传了图片的帖子，正文至少需要 ${GALLERY_MIN_CONTENT_LEN} 个字`)
@@ -633,20 +868,24 @@ export function useArticleCreate() {
         const articleId = isEdit.value ? route.params.id : res.data
         const gal = await syncGalleryToServer(articleId)
         if (!gal.ok) {
-          // 相册/视频未同步成功（如正文不足 10 字）时，具体原因已由 syncGalleryToServer 提示；
+          // 相册/视频未同步成功 如正文不足 10 字 时，具体原因已由 syncGalleryToServer 提示
           // 此处中止跳转，避免用户误以为图片已保存
           const mediaHint = mediaMode.value === 'video' ? '视频' : '笔记相册'
           ElMessage.warning(`正文已保存，但${mediaHint}未同步，请按提示修正后重新保存`)
           return
         }
-        // edit 模式下用户若用了内嵌封面 uploader, 先把封面同步上去再跳转, 让 cover 页能展示最新预览
+        const music = await syncMusicToServer(articleId)
+        if (!music.ok) {
+          ElMessage.warning('正文已保存，但配乐未同步，请稍后重试')
+          return
+        }
         const cov = await runCoverUploadToArticle(articleId)
         if (!cov.ok) {
-          ElMessage.warning('正文已保存，但封面上传失败，可在封面页重试')
+          ElMessage.warning('正文已保存，但封面上传失败，请稍后在草稿中重试')
+          return
         }
         ElMessage.success('草稿已保存')
-        const target = `/article/${articleId}/cover`
-        router.replace(target)
+        router.push('/creative')
       } else if (res?.message) {
         ElMessage.error(res.message)
       }
@@ -683,14 +922,20 @@ export function useArticleCreate() {
           ElMessage.warning(`帖子已保存，但${mediaHint}未同步成功，请修正后重新提交审核`)
           return
         }
+        const music = await syncMusicToServer(articleId)
+        if (!music.ok) {
+          ElMessage.warning('帖子已保存，但配乐未同步成功，请稍后重试')
+          return
+        }
         const cov = await runCoverUploadToArticle(articleId)
         if (!cov.ok) {
-          ElMessage.warning('帖子已保存，但封面上传失败，可先到封面页补充后再提交审核')
+          ElMessage.warning('帖子已保存，但封面上传失败，暂未提交审核')
+          return
         }
 
         const audit = await submitArticleForAuditWithPrompt(articleId)
         if (!audit.ok) return
-        router.push('/')
+        router.push('/community')
       }
     } catch (err) {
       ElMessage.error(extractApiErrorMessage(err, '提交审核失败'))
@@ -704,8 +949,12 @@ export function useArticleCreate() {
   }
 
   return {
+    Close,
+    MagicStick,
     Picture,
     Plus,
+    Upload,
+    VideoCamera,
     WangEditor,
     aiWriting,
     applyAiContent,
@@ -715,7 +964,13 @@ export function useArticleCreate() {
     form,
     bindGalleryItemsRef,
     canAddGallery,
+    clearCover,
+    coverAiGenerating,
+    coverImageQuality,
+    coverInputRef,
+    generateAiCover,
     galleryInputRef,
+    imageModelOptions,
     galleryItemsRef,
     galleryMaxCount: MAX_ARTICLE_GALLERY,
     galleryStripFadeLeft,
@@ -723,14 +978,19 @@ export function useArticleCreate() {
     galleryUrls,
     mediaMode,
     videoUrl,
+    selectedMusic,
+    musicHallOpen,
+    openMusicHall,
+    onMusicConfirm,
+    clearSelectedMusic,
     videoUploading,
     videoUploadProgress,
     videoUploadError,
     galleryUploading,
+    galleryPendingCount,
     videoInputRef,
     handleBoardChange,
     handleCancel,
-    handleCoverChange,
     handleMdFileSelected,
     handleMdInsertImage,
     handlePublish,
@@ -740,16 +1000,21 @@ export function useArticleCreate() {
     mdTextareaRef,
     mdWrap,
     onGalleryFilesSelected,
+    onCoverFileSelected,
     openVideoPicker,
     removeVideo,
     onVideoFileSelected,
     openGalleryPicker,
+    openCoverPicker,
     removeGalleryAt,
     renderedPreview,
     selectedBoard,
     submitting,
     tagIds,
+    tagAiGenerating,
+    setTagAiGenerating,
     setEditorMode,
+    setCoverImageQuality,
     setAiWriting,
     setMediaMode,
     onMdKeydown,

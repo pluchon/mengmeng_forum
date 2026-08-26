@@ -67,7 +67,7 @@ public class GameRankRules {
 
     public static double gameWeight(String gameCode) {
         if (GameConstants.JINZI.equals(gameCode)) {
-            return 0.6D;
+            return 0.85D;
         }
         if (GameConstants.TETRIS_PK.equals(gameCode)) {
             return 0.85D;

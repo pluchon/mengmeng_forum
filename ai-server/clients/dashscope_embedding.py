@@ -1,4 +1,4 @@
-"""Dashscope 向量（RAG：qwen3-vl-embedding 多模态 + text-embedding-v3 文本降级）."""
+"""Dashscope 向量（RAG：qwen3-vl-embedding 多模态 + text-embedding-v4 文本降级）."""
 
 from __future__ import annotations
 
@@ -132,18 +132,32 @@ def _embed_openai_compat(texts: list[str], *, model: str) -> list[list[float]] |
 
 
 def embed_rag_document(*, doc_text: str, video_or_image_url: str = "", media_type: int = 0) -> list[float] | None:
-    """帖子入库向量：优先标题文本；封面/视频 URL 可选增强（失败不阻断）."""
+    """帖子入库向量：优先标题文本；封面/视频 URL 可选增强（失败不阻断）。返回向量本身。"""
+    result = embed_rag_document_meta(doc_text=doc_text, video_or_image_url=video_or_image_url, media_type=media_type)
+    return result[0] if result else None
+
+
+def embed_rag_document_meta(
+    *,
+    doc_text: str,
+    video_or_image_url: str = "",
+    media_type: int = 0,
+) -> tuple[list[float], str] | None:
+    """与 embed_rag_document 相同，额外返回实际使用的模型名（供 Redis 打标 / 重建判断）。"""
     doc_text = (doc_text or "").strip()[:2048]
     if not doc_text:
         return None
 
+    mm = embedding_model_name()
+    fb = embedding_text_fallback_model_name()
+
     vec = _embed_multimodal([{"text": doc_text}])
     if vec:
-        return vec
+        return vec, mm
 
     vecs = embed_texts([doc_text])
     if vecs:
-        return vecs[0]
+        return vecs[0], fb
 
     url = (video_or_image_url or "").strip()
     if not url.startswith(("http://", "https://")):
@@ -157,9 +171,9 @@ def embed_rag_document(*, doc_text: str, video_or_image_url: str = "", media_typ
         inputs = [{"text": doc_text}, {"image": url}]
     vec = _embed_multimodal(inputs)
     if vec:
-        return vec
+        return vec, mm
     vecs = embed_texts([doc_text])
-    return vecs[0] if vecs else None
+    return (vecs[0], fb) if vecs else None
 
 
 def embed_query(query: str) -> list[float] | None:

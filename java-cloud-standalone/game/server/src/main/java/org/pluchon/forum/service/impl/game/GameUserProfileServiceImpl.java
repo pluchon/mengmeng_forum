@@ -12,7 +12,7 @@ import org.pluchon.forum.entity.db.GameGobangRoomMove;
 import org.pluchon.forum.entity.db.GameJinziMatchRecord;
 import org.pluchon.forum.entity.db.GameJinziRoomMove;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GameMatchRecordVO;
 import org.pluchon.forum.entity.vo.game.GameUserProfileVO;
@@ -73,11 +73,11 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         profile.setLoseCount(0);
         profile.setDrawCount(0);
         profile.setCurrentStatus(GameConstants.PROFILE_IDLE);
-        profile.setDeleteState((byte) 0);
+        profile.setDeleteState(GameConstants.NOT_DELETED);
         try {
             gameUserProfileMapper.insert(profile);
         } catch (Exception e) {
-            // 并发首次进入时唯一键可能已由另一个请求插入，回查即可。
+            // 并发首次进入时唯一键可能已由另一个请求插入，回查即可
             GameUserProfile concurrent = selectProfile(userId, gameCode);
             if (concurrent != null) {
                 return concurrent;
@@ -157,7 +157,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GameGobangMatchRecord> page = new Page<>(validPageNum, validPageSize);
         LambdaQueryWrapper<GameGobangMatchRecord> wrapper = new LambdaQueryWrapper<GameGobangMatchRecord>()
-                .eq(GameGobangMatchRecord::getDeleteState, (byte) 0)
+                .eq(GameGobangMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                 .and(q -> q.eq(GameGobangMatchRecord::getBlackUserId, userId)
                         .or()
                         .eq(GameGobangMatchRecord::getWhiteUserId, userId))
@@ -180,7 +180,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<GameJinziMatchRecord> page = new Page<>(validPageNum, validPageSize);
         LambdaQueryWrapper<GameJinziMatchRecord> wrapper = new LambdaQueryWrapper<GameJinziMatchRecord>()
-                .eq(GameJinziMatchRecord::getDeleteState, (byte) 0)
+                .eq(GameJinziMatchRecord::getDeleteState, GameConstants.NOT_DELETED)
                 .and(q -> q.eq(GameJinziMatchRecord::getBlackUserId, userId)
                         .or()
                         .eq(GameJinziMatchRecord::getWhiteUserId, userId))
@@ -204,7 +204,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         }
         List<GameGobangRoomMove> moves = gameGobangRoomMoveMapper.selectList(new LambdaQueryWrapper<GameGobangRoomMove>()
                 .eq(GameGobangRoomMove::getRoomId, record.getRoomId())
-                .eq(GameGobangRoomMove::getDeleteState, (byte) 0)
+                .eq(GameGobangRoomMove::getDeleteState, GameConstants.NOT_DELETED)
                 .orderByAsc(GameGobangRoomMove::getMoveNo)
                 .orderByAsc(GameGobangRoomMove::getId));
         List<GobangMoveVO> moveRows = new ArrayList<>(moves.size());
@@ -228,7 +228,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         }
         List<GameJinziRoomMove> moves = gameJinziRoomMoveMapper.selectList(new LambdaQueryWrapper<GameJinziRoomMove>()
                 .eq(GameJinziRoomMove::getRoomId, record.getRoomId())
-                .eq(GameJinziRoomMove::getDeleteState, (byte) 0)
+                .eq(GameJinziRoomMove::getDeleteState, GameConstants.NOT_DELETED)
                 .orderByAsc(GameJinziRoomMove::getMoveNo)
                 .orderByAsc(GameJinziRoomMove::getId));
         List<GobangMoveVO> moveRows = new ArrayList<>(moves.size());
@@ -239,6 +239,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateStatus(Long userId, String gameCode, String status, String roomId) {
         getOrCreateProfile(userId, gameCode);
         gameUserProfileMapper.updatePlayStatus(userId, gameCode, status, roomId);
@@ -248,7 +249,7 @@ public class GameUserProfileServiceImpl implements GameUserProfileService {
         List<GameUserProfile> rows = gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getUserId, userId)
                 .eq(GameUserProfile::getGameCode, gameCode)
-                .eq(GameUserProfile::getDeleteState, (byte) 0));
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED));
         return rows.isEmpty() ? null : rows.get(0);
     }
 }

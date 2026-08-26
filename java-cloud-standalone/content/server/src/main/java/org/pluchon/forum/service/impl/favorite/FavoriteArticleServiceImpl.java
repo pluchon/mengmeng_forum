@@ -9,10 +9,11 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
+import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.converter.FavoriteConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleFavorite;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.UserFavoriteFolder;
 import org.pluchon.forum.entity.dto.favorite.MoveFavoriteRequest;
 import org.pluchon.forum.entity.dto.favorite.SaveFavoriteRequest;
@@ -75,9 +76,9 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
     @Autowired
     private RecommendationAiProfileService recommendationAiProfileService;
 
-    // ============================================================
+    
     // 收藏 / 取消 / 移动
-    // ============================================================
+    
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long saveFavorite(SaveFavoriteRequest req, Long loginUserId) {
@@ -87,7 +88,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         }
         // 帖子必须存在且非禁用 / 删除态
         articleService.selectArticleByArticleId(articleId);
-        // 定位目标夹: 留空 → 默认夹(必要时懒加载)
+        // 定位目标夹: 留空 → 默认夹 必要时懒加载
         Long folderId = req.getFolderId();
         if (folderId == null) {
             folderId = folderService.ensureDefaultFolder(loginUserId);
@@ -106,7 +107,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         if (exist != null && (exist.getDeleteState() == null || exist.getDeleteState() != DELETE_YES)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FAVORITE_ALREADY_EXISTS));
         }
-        // 并发安全: 真正的"新增/复活"必须 +1 计数; 已被别人抢先复活的请求, 直接抛已收藏避免重复加分.
+        // 并发安全: 真正的 新增/复活 必须 +1 计数; 已被别人抢先复活的请求, 直接抛已收藏避免重复加分.
         boolean reallyAdded;
         try {
             if (exist == null) {
@@ -117,14 +118,14 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
                 favoriteMapper.insert(row);
                 reallyAdded = true;
             } else {
-                // 复活旧软删记录: 仅在仍为 delete=1 时才更新; 抢到了才记为真的"新增"
+                // 复活旧软删记录: 仅在仍为 删除 1 时才更新; 抢到了才记为真的 新增
                 int updated = favoriteMapper.update(null, new LambdaUpdateWrapper<ArticleFavorite>()
                         .eq(ArticleFavorite::getId, exist.getId())
                         .eq(ArticleFavorite::getDeleteState, DELETE_YES)
                         .set(ArticleFavorite::getFolderId, folderId)
                         .set(ArticleFavorite::getDeleteState, (byte) 0));
                 if (updated <= 0) {
-                    // 已被并发请求复活了 -> 当前请求按"已收藏"语义返回, 不重复加计数
+                    // 已被并发请求复活了 > 当前请求按 已收藏 语义返回, 不重复加计数
                     throw new ApplicationException(Result.fail(ResultCode.FAILED_FAVORITE_ALREADY_EXISTS));
                 }
                 reallyAdded = true;
@@ -136,10 +137,10 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
             folderMapper.incrementItemCount(folderId);
             articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                     .eq(Article::getId, articleId).setSql("favorite_count = favorite_count + 1"));
-            articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE);
+            TransactionHooks.afterCommit(() ->
+                    articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE));
         }
         recommendationAiProfileService.requestProfileRefresh(loginUserId);
-        log.info("用户 {} 收藏帖子 {} 到夹 {}", loginUserId, articleId, folderId);
         return folderId;
     }
 
@@ -168,9 +169,9 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .setSql("favorite_count = GREATEST(favorite_count - 1, 0)"));
-        articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_FAVORITE);
+        TransactionHooks.afterCommit(() ->
+                articleHotRankingService.incrementScore(articleId, -Constant.HOT_SCORE_WEIGHT_FAVORITE));
         recommendationAiProfileService.requestProfileRefresh(loginUserId);
-        log.info("用户 {} 取消收藏帖子 {}", loginUserId, articleId);
     }
 
     @Override
@@ -210,12 +211,11 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         }
         folderMapper.decrementItemCount(fromFolderId);
         folderMapper.incrementItemCount(toFolderId);
-        log.info("用户 {} 把帖子 {} 从夹 {} 移到夹 {}", loginUserId, articleId, fromFolderId, toFolderId);
     }
 
-    // ============================================================
+    
     // 查询
-    // ============================================================
+    
     @Override
     public boolean isFavorited(Long articleId, Long loginUserId) {
         if (articleId == null || loginUserId == null || loginUserId <= 0) {
@@ -240,7 +240,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
                 .ne(ArticleFavorite::getDeleteState, DELETE_YES)
                 .orderByDesc(ArticleFavorite::getCreateTime));
         List<FolderArticleVO> records = new ArrayList<>(result.getRecords().size());
-        // 批量加载 article + author, 避免 N+1; 详情失败的帖子被跳过(可能被作者删了 / 禁言)
+        // 批量加载 article + author, 避免 N+1; 详情失败的帖子被跳过 可能被作者删了 / 禁言
         List<Long> articleIds = result.getRecords().stream().map(ArticleFavorite::getArticleId).collect(Collectors.toList());
         Map<Long, Article> articleMap = batchLoadArticles(articleIds);
         Map<Long, UserBriefVO> userMap = batchLoadAuthors(articleMap.values());
@@ -253,7 +253,7 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         return new PageResult<>(records, result.getTotal(), p, s, result.getPages(), result.hasNext());
     }
 
-    // ============ 内部 ============
+    
     private Map<Long, Article> batchLoadArticles(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return new HashMap<>();
         List<Article> rows = articleMapper.selectList(new LambdaQueryWrapper<Article>()

@@ -4,7 +4,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 仅用于请求鉴权上下文的用户主体，禁止承载密码、手机号等账户实体字段。
+// 仅用于请求鉴权上下文的用户主体，禁止承载密码、手机号等账户实体字段
 @Data
 public class AuthenticatedUser {
 

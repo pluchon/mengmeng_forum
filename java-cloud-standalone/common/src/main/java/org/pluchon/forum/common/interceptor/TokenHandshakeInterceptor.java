@@ -27,8 +27,8 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
             WebSocketHandler wsHandler, Map<String, Object> attributes) {
-        // 从 URL Query 参数中取 JWT，前端连接格式：ws://host/ws/notify?token=xxx
-        // 按参数名匹配，兼容 token 不在第一位的情况（如 ?foo=bar&token=xxx）
+        // 从 URL 查询 参数中取 JWT，前端连接格式：ws://host/ws/notify?token xxx
+        // 按参数名匹配，兼容 token 不在第一位的情况 如 ?foo bar&token xxx
         String query = request.getURI().getQuery();
         String token = null;
         if (query != null) {

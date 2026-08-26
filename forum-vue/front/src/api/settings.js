@@ -4,7 +4,19 @@ export function updateUserInfo(data) {
   return request({ url: '/user/modifyUser', method: 'put', data })
 }
 
-/** 上传头像文件后，将返回的 OSS URL 写入数据库（勿省略） */
+export function submitProfileChange(data) {
+  return request({ url: '/user/profile/change-request', method: 'post', data })
+}
+
+export function getProfileChangeStatus(fieldType) {
+  return request({
+    url: '/user/profile/change-request/status',
+    method: 'get',
+    params: { fieldType },
+  })
+}
+
+// 上传头像文件后，将返回的 OSS URL 写入数据库 勿省略
 export function updateAvatarUrl(url) {
   return request({
     url: '/user/updateAvatarUrl',
@@ -13,7 +25,7 @@ export function updateAvatarUrl(url) {
   })
 }
 
-/** 上传背景文件后落库 */
+// 上传背景文件后落库
 export function updateBackgroundUrl(url) {
   return request({
     url: '/user/updateBackgroundUrl',
@@ -89,4 +101,8 @@ export function verifyAndBindPhone(phoneNumber, code) {
 
 export function getLoginLogs(limit = 20) {
   return request({ url: '/user/loginLogs', method: 'get', params: { limit } })
+}
+
+export function getSecurityAssessment() {
+  return request({ url: '/user/securityAssessment', method: 'get' })
 }

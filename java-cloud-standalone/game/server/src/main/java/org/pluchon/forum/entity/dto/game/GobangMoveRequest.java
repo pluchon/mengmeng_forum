@@ -6,9 +6,9 @@ import lombok.Data;
 @Data
 public class GobangMoveRequest {
 
-    // 棋盘行号，0-14
+    // 棋盘行号，0 14
     private Integer row;
 
-    // 棋盘列号，0-14
+    // 棋盘列号，0 14
     private Integer col;
 }

@@ -104,9 +104,9 @@ public class FavoriteController {
         return Result.success(favoriteService.queryFolderArticles(folderId, loginUserId, pageNum, pageSize));
     }
 
-    // ============================================================
+    
     // 帖子收藏
-    // ============================================================
+    
     @Operation(summary = "收藏帖子",
             description = "folderId 留空则落到默认夹(自动创建); 同一帖子重复收藏返回 1150")
     @PostMapping("/article/save")
@@ -143,7 +143,7 @@ public class FavoriteController {
         return Result.success("已移动");
     }
 
-    /** 内部：注册后确保默认收藏夹（auth → content） */
+    /** 内部：注册后确保默认收藏夹 auth → content */
     @PostMapping("/internal/{userId}/ensure-default-folder")
     public Long ensureDefaultFolderInternal(@PathVariable("userId") Long userId) {
         return folderService.ensureDefaultFolder(userId);

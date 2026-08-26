@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// AI 用量内部接口（供 economy VIP 配额读取，避免跨域 Mapper）
+// AI 用量内部接口 供 economy VIP 配额读取，避免跨域 Mapper
 @RestController
 public class AiUsageInternalController implements AiUsageInternalApi {
 
@@ -17,7 +17,7 @@ public class AiUsageInternalController implements AiUsageInternalApi {
 
     @Override
     public AiUsageDailyBucketsVO usageSnapshot(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam("periodStartMs") long periodStartMs,
             @RequestParam("periodEndMs") long periodEndMs) {
         return aiUsageInternalService.usageSnapshot(userId, periodStartMs, periodEndMs);

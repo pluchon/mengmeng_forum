@@ -10,10 +10,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.UUID;
 
-/**
- * 验证码一次性凭证票据服务实现类
- * 负责在 Redis 中签发（Issue）和消费（Consume）短期有效的业务安全凭证，防止接口被爬虫/脚本绕过校验直接轰炸
- */
+// 验证码一次性凭证票据服务实现类 负责在 Redis 中签发 Issue 和消费 Consume 短期有效的业务安全凭证，防止接口被爬虫/脚本绕过校验直接轰炸
 @Service
 public class CaptchaTicketServiceImpl implements CaptchaTicketService {
 

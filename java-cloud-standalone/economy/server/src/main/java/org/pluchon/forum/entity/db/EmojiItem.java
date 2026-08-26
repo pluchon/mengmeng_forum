@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 表情包图片表实体, 对应 emoji_item. 单图 delete_state 字段保留, 当前版本不开放增删图接口.
- */
+// 表情包图片表实体, 对应 emoji_item. 单图 delete_state 字段保留, 当前版本不开放增删图接口.
 @Data
 @TableName("emoji_item")
 @Schema(description = "表情包图片实体")

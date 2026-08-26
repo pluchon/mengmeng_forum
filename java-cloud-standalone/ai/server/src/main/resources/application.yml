@@ -1,9 +1,16 @@
 server:
   port: 10106
+  tomcat:
+    # content→forum-ai 的 image-payload JSON（Base64）需大于默认 2MB；本地 classpath 兜底，Nacos forum-ai.yml 可覆盖
+    max-http-post-size: 41943040
+    max-swallow-size: 41943040
 
 spring:
   application:
     name: forum-ai
+  jackson:
+    stream-read-constraints:
+      max-string-length: 52428800
   cloud:
     nacos:
       discovery:
@@ -12,21 +19,45 @@ spring:
       config:
         server-addr: ${NACOS_ADDR:127.0.0.1:8848}
         namespace: ${NACOS_NAMESPACE:}
+    sentinel:
+      filter:
+        enabled: false
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+            namespace: ${NACOS_NAMESPACE:}
+            group-id: ${NACOS_GROUP:FORUM}
+            data-id: sentinel-forum-ai-flow.json
+            data-type: json
+            rule-type: flow
+        degrade:
+          nacos:
+            server-addr: ${NACOS_ADDR:127.0.0.1:8848}
+            namespace: ${NACOS_NAMESPACE:}
+            group-id: ${NACOS_GROUP:FORUM}
+            data-id: sentinel-forum-ai-degrade.json
+            data-type: json
+            rule-type: degrade
   config:
     import:
-      - optional:nacos:forum-common.yml?group=FORUM&refreshEnabled=false
-      - optional:nacos:${spring.application.name}.yml?group=FORUM&refreshEnabled=false
       - optional:classpath:application-core-defaults.yml
       - optional:classpath:application-core-prod-defaults.yml
+      - optional:nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - optional:nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
   # ai 域不使用 Java 侧 RabbitMQ（审核结果由 Python/content 链路承接）
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
     # 用域专属变量，避免全局 DB_PASSWORD/DB_URL 把六个服务密码冲掉
-    url: ${FORUM_AI_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    url: ${FORUM_AI_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_ai_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
     username: ${FORUM_AI_DB_USERNAME:forum_ai}
-    password: ${FORUM_AI_DB_PASSWORD:forum_ai_pass}
+    password: ${FORUM_AI_DB_PASSWORD}
+
+feign:
+  sentinel:
+    enabled: true
 
 management:
   health:

@@ -7,7 +7,7 @@ import { promptLogin } from '@/utils/loginPrompt'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(to, from, savedPosition) {
-    if (to.path === '/' && from.path.match(/^\/article\/[^/]+$/)) {
+    if (to.path === '/community' && from.path.match(/^\/article\/[^/]+$/)) {
       return false
     }
     if (savedPosition) return savedPosition
@@ -39,17 +39,21 @@ const router = createRouter({
       children: [
         {
           path: '',
+          name: 'portal',
+          component: () => import('../views/DoorPortal.vue'),
+          meta: { public: true, portal: true, hideMascot: true },
+        },
+        {
+          path: 'community',
           name: 'home',
           component: () => import('../views/HomeFeed.vue'),
           meta: { public: true },
-          children: [
-            {
-              path: 'article/:id',
-              name: 'articleDetail',
-              component: () => import('../views/ArticleDetail.vue'),
-              meta: { public: true },
-            },
-          ],
+        },
+        {
+          path: 'article/:id',
+          name: 'articleDetail',
+          component: () => import('../views/ArticleDetail.vue'),
+          meta: { public: true },
         },
         {
           path: 'board/:id',
@@ -70,14 +74,8 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
-          path: 'article/:id/cover',
-          name: 'articleCoverSetup',
-          component: () => import('../views/ArticleCoverSetup.vue'),
-          meta: { requiresAuth: true },
-        },
-        {
           path: 'article/:id/audit',
-          redirect: '/',
+          redirect: '/community',
         },
         {
           path: 'profile',
@@ -95,7 +93,7 @@ const router = createRouter({
           path: 'settings',
           name: 'settings',
           component: () => import('../views/Settings.vue'),
-          meta: { requiresAuth: true },
+          meta: { requiresAuth: true, shellBare: true },
         },
         {
           path: 'messages',
@@ -107,7 +105,7 @@ const router = createRouter({
           path: 'creative',
           name: 'creative',
           component: () => import('../views/CreativeCenter.vue'),
-          meta: { requiresAuth: true },
+          meta: { requiresAuth: true, hideShellTopBar: true },
         },
         {
           path: 'emoji-shop/create',
@@ -121,7 +119,7 @@ const router = createRouter({
           path: 'emoji-shop',
           name: 'emojiShop',
           component: () => import('../views/EmojiShop.vue'),
-          meta: { public: true },
+          meta: { public: true, hideShellTopBar: true },
         },
         {
           path: 'points',
@@ -136,18 +134,6 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
-          path: 'drift-bottle',
-          name: 'driftBottle',
-          component: () => import('../views/DriftBottle.vue'),
-          meta: { requiresAuth: true },
-        },
-        {
-          path: 'growth-center',
-          name: 'growthCenter',
-          component: () => import('../views/GrowthCenter.vue'),
-          meta: { requiresAuth: true },
-        },
-        {
           path: 'games',
           name: 'gameCenter',
           component: () => import('../views/GameCenter.vue'),
@@ -156,7 +142,7 @@ const router = createRouter({
         {
           path: 'games/gobang',
           name: 'gobangGame',
-          component: () => import('../views/GobangGame.vue'),
+          redirect: { name: 'gameCenter' },
           meta: { requiresAuth: true, shellBare: true },
         },
         {
@@ -168,7 +154,7 @@ const router = createRouter({
         {
           path: 'games/jinzi',
           name: 'jinziGame',
-          component: () => import('../views/JinziGame.vue'),
+          redirect: { name: 'gameCenter' },
           meta: { requiresAuth: true, shellBare: true },
         },
         {
@@ -186,7 +172,7 @@ const router = createRouter({
         {
           path: 'games/tetris/pk',
           name: 'tetrisPkGame',
-          component: () => import('../views/TetrisPkGame.vue'),
+          redirect: { name: 'gameCenter' },
           meta: { requiresAuth: true, shellBare: true },
         },
         {
@@ -196,16 +182,22 @@ const router = createRouter({
           meta: { requiresAuth: true, shellBare: true, tetrisMode: 'pk' },
         },
         {
-          path: 'vip',
-          name: 'vipCenter',
-          component: () => import('../views/VipCenter.vue'),
-          meta: { requiresAuth: true },
-        },
-        {
           path: 'checkin',
           name: 'checkin',
           component: () => import('../views/Checkin.vue'),
-          meta: { requiresAuth: true },
+          meta: { requiresAuth: true, hideShellTopBar: true },
+        },
+        {
+          path: 'music-hall/mine',
+          name: 'musicHallMine',
+          component: () => import('../views/MusicHallPage.vue'),
+          meta: { requiresAuth: true, hideShellTopBar: true },
+        },
+        {
+          path: 'music-hall',
+          name: 'musicHall',
+          component: () => import('../views/MusicHallPage.vue'),
+          meta: { public: true, hideShellTopBar: true },
         },
         {
           path: 'search/user',
@@ -233,12 +225,18 @@ const router = createRouter({
           path: 'privacy',
           name: 'privacy',
           component: () => import('../views/Privacy.vue'),
-          meta: { public: true, shellBare: true },
+          meta: { public: true, shellBare: true, hideMascot: true },
         },
         {
           path: 'terms',
           name: 'terms',
           component: () => import('../views/Terms.vue'),
+          meta: { public: true, shellBare: true, hideMascot: true },
+        },
+        {
+          path: 'vip-agreement',
+          name: 'vipAgreement',
+          component: () => import('../views/VipAgreement.vue'),
           meta: { public: true, shellBare: true },
         },
         { path: ':pathMatch(.*)*', redirect: '/' },
@@ -249,6 +247,7 @@ const router = createRouter({
 
 function shouldRefreshForumPoints(path) {
   return path === '/'
+    || path === '/community'
     || path === '/points'
     || path === '/lottery'
     || path.startsWith('/games')
@@ -259,7 +258,7 @@ router.beforeEach(async (to, from) => {
   const userStore = useUserStore()
   const isLoggedIn = userStore.isLoggedIn
 
-  if (from.path === '/' && /^\/article\/[^/]+$/.test(to.path)) {
+  if (from.path === '/community' && /^\/article\/[^/]+$/.test(to.path)) {
     captureFeedScroll()
   }
 

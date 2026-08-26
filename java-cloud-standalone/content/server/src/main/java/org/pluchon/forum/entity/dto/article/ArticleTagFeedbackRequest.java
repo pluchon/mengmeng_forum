@@ -7,4 +7,5 @@ import lombok.Data;
 public class ArticleTagFeedbackRequest {
     private Long boardId;
     private String proposedName;
+    private String colorKey;
 }

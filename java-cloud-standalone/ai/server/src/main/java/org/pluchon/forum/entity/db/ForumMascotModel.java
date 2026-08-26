@@ -19,7 +19,7 @@ public class ForumMascotModel {
 
     private String name;
 
-    /** 相对 live2d/live2d-master 根目录的路径 */
+    // 前端静态资源相对路径
     private String modelRelPath;
 
     private BigDecimal modelScale;
@@ -32,7 +32,7 @@ public class ForumMascotModel {
 
     private Integer stageHeight;
 
-    /** 0草稿 1上架 2下架 */
+    // 0草稿 1上架 2下架
     private Byte shelfStatus;
 
     private Integer sortOrder;

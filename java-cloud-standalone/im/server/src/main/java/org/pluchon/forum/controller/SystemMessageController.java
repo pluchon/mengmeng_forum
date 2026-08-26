@@ -1,15 +1,14 @@
 package org.pluchon.forum.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.db.SystemMessage;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.vo.common.PageResult;
+import org.pluchon.forum.entity.vo.message.SystemMessageVO;
 import org.pluchon.forum.service.interfaces.message.SystemMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,10 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 系统消息接口(平台->用户的单向通知, 当前承载帖子审核结果).
- * 与私信模块(/message/**)物理隔离, 前端在站内信页面可同时拉两组接口聚合渲染.
- */
+/** 系统消息接口 平台 >用户的单向通知, 当前承载帖子审核结果 . 与私信模块 /message/** 物理隔离, 前端在站内信页面可同时拉两组接口聚合渲染. */
 @Tag(name = "系统消息", description = "审核结果/公告等系统通知")
 @RestController
 @RequestMapping("/system-message")
@@ -35,20 +31,18 @@ public class SystemMessageController {
     @Operation(summary = "分页查询当前用户的系统消息",
             description = "按创建时间倒序; 包含审核通过/未通过/异常等所有类型. 仅本人可见.")
     @GetMapping("/list")
-    public Result<PageResult<SystemMessage>> list(@RequestParam(required = false) Integer pageNum,
+    public Result<PageResult<SystemMessageVO>> list(
+                                                  @RequestParam(required = false) String category,
+                                                  @RequestParam(required = false) String keyword,
+                                                  @RequestParam(required = false) Integer pageNum,
                                                   @RequestParam(required = false) Integer pageSize,
                                                   HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null) {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
-        Page<SystemMessage> page = systemMessageService.queryByUser(loginUser.getId(), pageNum, pageSize);
-        PageResult<SystemMessage> resp = new PageResult<>(
-                page.getRecords(), page.getTotal(),
-                (int) page.getCurrent(), (int) page.getSize(),
-                page.getPages(), page.hasNext()
-        );
-        return Result.success(resp);
+        return Result.success(systemMessageService.queryByUser(
+                loginUser.getId(), category, keyword, pageNum, pageSize));
     }
 
     @Operation(summary = "查询未读系统消息数量(用于红点)",
@@ -97,7 +91,7 @@ public class SystemMessageController {
         return Result.success("OK");
     }
 
-    /** 内部：跨服务创建系统消息（如内容审核结果） */
+    /** 内部：跨服务创建系统消息 如内容审核结果 */
     @PostMapping("/internal/create")
     public Long internalCreate(
             @RequestParam("receiveUserId") Long receiveUserId,

@@ -7,7 +7,7 @@ import org.pluchon.forum.service.interfaces.user.UserAuthSnapshotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-// auth 域本地补全请求鉴权主体，避免 common 反向依赖认证实现。
+// auth 域本地补全请求鉴权主体，避免 common 反向依赖认证实现
 @Service
 public class AuthLocalSnapshotResolver implements AuthSnapshotResolver {
 

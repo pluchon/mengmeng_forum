@@ -1,48 +1,49 @@
 import request from './request'
 
-/**
- * 封面推荐配图要点（不计入写作配额）
- * @param {{ articleText: string }} data
- */
+// AI 长调用统一放宽：润色 / 标签 / 配图均为上游模型调用，慢属正常
+const AI_LONG_TIMEOUT_MS = 300000
+
+// 封面推荐配图要点 不计入写作配额
 export function aiCoverHints(data) {
   return request({
     url: '/ai/cover-hints',
     method: 'post',
     data,
-    timeout: 120000,
+    timeout: AI_LONG_TIMEOUT_MS,
   })
 }
 
-/**
- * AI 生图（Java BFF -> ai-server）
- * @param {{ prompt: string, quality: 'normal' | 'premium' }} data
- */
+// AI 生图 Java BFF > ai server
 export function aiImage(data) {
   return request({
     url: '/ai/image',
     method: 'post',
     data,
-    timeout: 180000,
+    timeout: AI_LONG_TIMEOUT_MS,
   })
 }
 
-/**
- * 帖子正文一键润色（Java BFF -> ai-server）
- * @param {{ title: string, content: string, editorMode: 'rich' | 'markdown' }} data
- */
+// 帖子正文一键生成封面 理解正文 > 按需检索 > 生图
+export function aiArticleCover(data) {
+  return request({
+    url: '/ai/article-cover',
+    method: 'post',
+    data,
+    timeout: AI_LONG_TIMEOUT_MS,
+  })
+}
+
+// 帖子正文一键润色 Java BFF > ai server
 export function aiPolish(data) {
   return request({
     url: '/ai/polish',
     method: 'post',
     data,
-    timeout: 120000,
+    timeout: AI_LONG_TIMEOUT_MS,
   })
 }
 
-/**
- * 预估 AI 消耗积分
- * @param {{ skill?: string, route?: string, quality?: string }} params
- */
+// 预估 AI 消耗积分
 export function aiPriceEstimate(params) {
   return request({
     url: '/ai/price-estimate',
@@ -51,7 +52,7 @@ export function aiPriceEstimate(params) {
   })
 }
 
-/** 查询 AI 创作工作区版本历史 */
+// 查询 AI 创作工作区版本历史
 export function getAiWorkspaceVersions(workspaceId) {
   return request({
     url: `/ai/workspaces/${workspaceId}/versions`,
@@ -59,7 +60,7 @@ export function getAiWorkspaceVersions(workspaceId) {
   })
 }
 
-/** 选择 AI 创作工作区版本 */
+// 选择 AI 创作工作区版本
 export function selectAiWorkspaceVersion(workspaceId, versionId) {
   return request({
     url: `/ai/workspaces/${workspaceId}/selected-version/${versionId}`,

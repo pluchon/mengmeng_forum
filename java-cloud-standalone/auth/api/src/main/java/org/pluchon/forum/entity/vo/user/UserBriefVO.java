@@ -3,7 +3,7 @@ package org.pluchon.forum.entity.vo.user;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 
 import java.util.Date;
 

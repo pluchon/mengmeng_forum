@@ -12,7 +12,7 @@ public class SaveFavoriteRequest {
     @Schema(description = "要收藏的帖子ID", example = "100")
     private Long articleId;
 
-    /** 留空则落到该用户的默认夹 */
+    // 留空则落到该用户的默认夹
     @Schema(description = "目标收藏夹ID, 留空则自动落到默认夹", example = "1")
     private Long folderId;
 }

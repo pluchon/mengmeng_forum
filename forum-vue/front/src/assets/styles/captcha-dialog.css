@@ -176,7 +176,7 @@
   color: #555;
   white-space: nowrap;
 }
-/* 天爱返回的提示图（包含需要点击的文字图片） */
+/* 天爱返回的提示图 包含需要点击的文字图片 */
 .click-tip-img {
   height: 32px;
   width: auto;

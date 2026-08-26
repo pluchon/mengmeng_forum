@@ -6,9 +6,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Collections;
 
-/**
- * Redis 值原子校验并删除，防止并发下先读后删导致重复消费。
- */
+// Redis 值原子校验并删除，防止并发下先读后删导致重复消费
 public final class RedisAtomicValueConsumer {
 
     private static final DefaultRedisScript<Long> CONSUME_SCRIPT = new DefaultRedisScript<>(
@@ -22,9 +20,7 @@ public final class RedisAtomicValueConsumer {
     private RedisAtomicValueConsumer() {
     }
 
-    /**
-     * 仅当 Redis 中存储值与 expected 完全一致时删除 key 并返回 true。
-     */
+    // 仅当 Redis 中存储值与 expected 完全一致时删除 key 并返回 true
     public static boolean consumeIfMatch(StringRedisTemplate redis, String key, String expected) {
         if (redis == null || !StringUtils.hasText(key) || expected == null) {
             return false;

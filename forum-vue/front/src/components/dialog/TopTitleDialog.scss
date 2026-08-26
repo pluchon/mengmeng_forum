@@ -1,0 +1,41 @@
+.top-title-dialog {
+  .top-title-dialog__shell {
+    position: relative;
+    padding-top: 18px;
+  }
+
+  .top-title-dialog__close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #86909c;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .top-title-dialog__close:hover {
+    color: var(--app-dialog-ink);
+    background: var(--app-dialog-soft);
+  }
+
+  .top-title-dialog__head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .top-title-dialog__body {
+    width: 100%;
+  }
+}

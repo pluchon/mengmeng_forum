@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     class="emoji-shop-detail-dialog"
-    width="620px"
+    width="724px"
     align-center
     destroy-on-close
     :show-close="false"
@@ -38,13 +38,13 @@
               </button>
             </div>
             <div v-if="imageCount > itemPageSize" class="emoji-shop-detail-dialog__pager">
-              <el-pagination
+              <AppPagination
                 v-model:current-page="itemPage"
+                size="small"
                 :page-size="itemPageSize"
                 :total="imageCount"
-                layout="prev, pager, next"
-                small
-                background
+                :pager-count="3"
+                :show-jumper="false"
                 @current-change="onItemPageChange"
               />
             </div>
@@ -79,15 +79,12 @@
 
             <div class="emoji-shop-detail-dialog__stats">
               <span class="emoji-shop-detail-dialog__stat-pill">
-                <el-icon><ShoppingCart /></el-icon>
                 已售 {{ detail.salesCount ?? 0 }}
               </span>
               <span class="emoji-shop-detail-dialog__stat-pill">
-                <el-icon><Picture /></el-icon>
                 共 {{ imageCount }} 张
               </span>
               <span class="emoji-shop-detail-dialog__stat-pill">
-                <el-icon><Calendar /></el-icon>
                 {{ createDateText }}
               </span>
             </div>
@@ -101,16 +98,9 @@
 
             <div class="emoji-shop-detail-dialog__footer">
               <div class="emoji-shop-detail-dialog__price-row">
-                <div>
-                  <div class="emoji-shop-detail-dialog__price-label">价格</div>
-                  <div class="emoji-shop-detail-dialog__price-value">
-                    {{ priceText.main }}
-                    <span v-if="priceText.unit" class="emoji-shop-detail-dialog__price-unit">{{ priceText.unit }}</span>
-                  </div>
-                </div>
-                <div v-if="userStore.isLoggedIn" class="emoji-shop-detail-dialog__balance">
-                  <div class="emoji-shop-detail-dialog__price-label">当前余额</div>
-                  <div class="emoji-shop-detail-dialog__balance-value">{{ wallet.balance }} 积分</div>
+                <div class="emoji-shop-detail-dialog__price-value">
+                  <span class="emoji-shop-detail-dialog__price-label">价格</span>
+                  <span>{{ priceText }}</span>
                 </div>
               </div>
 
@@ -159,7 +149,7 @@
                   :loading="purchasing"
                   @click="onPurchase"
                 >
-                  {{ purchaseLabel }}
+                  立即购买
                 </el-button>
                 <el-button
                   v-else-if="!userStore.isLoggedIn"
@@ -181,8 +171,9 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-import { Close, Picture, ShoppingCart, Calendar } from '@element-plus/icons-vue'
+import { Close, Picture } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useEmojiShopDetailDialog } from '@scripts/components/emoji-shop/EmojiShopDetailDialog'
 
 const router = useRouter()
@@ -213,7 +204,6 @@ const {
   isAuthor,
   canPurchase,
   purchaseDisabled,
-  purchaseLabel,
   setPreview,
   open,
   onItemPageChange,

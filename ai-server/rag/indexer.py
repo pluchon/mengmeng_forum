@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from clients.dashscope_embedding import embed_rag_document
+from clients.dashscope_embedding import embed_rag_document_meta
 from rag.loaders import load_text_article_doc, load_video_article_doc
 from rag.store import save_article_index
 
@@ -39,16 +39,16 @@ def index_published_article(payload: dict) -> dict:
             author_nickname=author,
             user_tags=user_tags,
         )
-        vec = embed_rag_document(doc_text=embed_text, video_or_image_url=embed_input, media_type=1)
+        meta = embed_rag_document_meta(doc_text=embed_text, video_or_image_url=embed_input, media_type=1)
     else:
         doc, tags, embed_text = load_text_article_doc(
             title=title,
             author_nickname=author,
             user_tags=user_tags,
         )
-        vec = embed_rag_document(doc_text=embed_text, video_or_image_url=cover_url, media_type=0)
+        meta = embed_rag_document_meta(doc_text=embed_text, video_or_image_url=cover_url, media_type=0)
 
-    if not vec:
+    if not meta:
         from clients.llm import embedding_model_name, embedding_text_fallback_model_name
 
         raise RuntimeError(
@@ -60,6 +60,7 @@ def index_published_article(payload: dict) -> dict:
             "请查看 ai-server 控制台 MultiModalEmbedding/TextEmbedding 告警与 code/msg"
         )
 
+    vec, model_used = meta
     save_article_index(
         article_id,
         doc=doc,
@@ -67,6 +68,7 @@ def index_published_article(payload: dict) -> dict:
         media_type=media_type,
         embedding=vec,
         video_url=video_url,
+        embedding_model=model_used,
     )
-    logger.info("[rag] indexed articleId=%s mediaType=%s keywords=%s", article_id, media_type, tags)
+    logger.info("[rag] indexed articleId=%s mediaType=%s model=%s keywords=%s", article_id, media_type, model_used, tags)
     return {"articleId": article_id, "tags": tags, "mediaType": media_type}

@@ -1,20 +1,28 @@
 """RAG 向量召回与候选融合服务."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from clients.dashscope_embedding import embed_query
 from config import settings
-from rag.store import vector_search_articles, vector_search_emojis, vector_search_users
+from rag.store import vector_search_articles, vector_search_emojis, vector_search_musics, vector_search_users
 from utils.rag_enhance import hybrid_rank
 
 _RAG = settings.rag
+_TRAILING_DIGIT_NOISE = re.compile(r"(?<=[\u4e00-\u9fa5A-Za-z])\d{3,}$")
+_TRAILING_PUNCT_NOISE = re.compile(r"[\s_~`!@#$%^&*+=|\\/;:\"'<>,.?。！？～]{2,}$")
 
 
 def clean_query(raw: Any) -> str:
-    """清洗检索词并限制长度，避免无界 embedding 输入."""
+    """清洗检索词：限长 + 去掉尾部纯数字噪声（如「饿了66666」→「饿了」）."""
     max_len = int(_RAG.get("query_max_len", 500))
-    return str(raw or "").strip()[:max_len]
+    q = str(raw or "").strip()[:max_len]
+    if not q:
+        return ""
+    cleaned = _TRAILING_DIGIT_NOISE.sub("", q)
+    cleaned = _TRAILING_PUNCT_NOISE.sub("", cleaned).strip()
+    return cleaned or q
 
 
 def search_articles_by_vector(
@@ -22,13 +30,16 @@ def search_articles_by_vector(
     candidates: list[Any] | None,
 ) -> tuple[list[dict[str, Any]], str]:
     """帖子向量召回；存在候选文本时沿用原融合 rerank 逻辑."""
-    qvec = embed_query(query)
+    q = clean_query(query)
+    if not q:
+        return [], "empty query"
+    qvec = embed_query(q)
     if not qvec:
         return [], "embedding unavailable"
 
     vector_hits = vector_search_articles(
         qvec,
-        query_text=query,
+        query_text=q,
         top_k=int(_RAG.get("embedding_top_k", 80)),
     )
     if not vector_hits:
@@ -55,7 +66,7 @@ def search_articles_by_vector(
             docs.append(text[: int(_RAG.get("doc_truncate", 1200))])
             meta.append(article_id)
         if docs:
-            return hybrid_rank(query, docs, meta, id_key="articleId"), "success"
+            return hybrid_rank(q, docs, meta, id_key="articleId"), "success"
 
     return vector_hits, "vector_only"
 
@@ -96,5 +107,17 @@ def search_emojis_by_vector(query: str) -> tuple[list[dict[str, Any]], str]:
     if not qvec:
         return [], "embedding unavailable"
     hits = vector_search_emojis(qvec, top_k=int(_RAG.get("embedding_top_k", 80)))
+    min_score = float(_RAG.get("vector_min_score", 0.12))
+    return [item for item in hits if float(item.get("score") or 0) >= min_score], "vector_only"
+
+
+def search_musics_by_vector(query: str) -> tuple[list[dict[str, Any]], str]:
+    q = clean_query(query)
+    if not q:
+        return [], "empty query"
+    qvec = embed_query(q)
+    if not qvec:
+        return [], "embedding unavailable"
+    hits = vector_search_musics(qvec, top_k=int(_RAG.get("embedding_top_k", 80)))
     min_score = float(_RAG.get("vector_min_score", 0.12))
     return [item for item in hits if float(item.get("score") or 0) >= min_score], "vector_only"

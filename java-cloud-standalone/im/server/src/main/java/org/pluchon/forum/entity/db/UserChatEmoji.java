@@ -9,11 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 用户聊天表情收藏表实体, 对应 user_chat_emoji
- * 来源 1: 用户主动上传(走 /file/uploadChatEmoji)
- * 来源 2: 把对方在聊天里发过来的图片收藏下来(origin_message_id 非空, media_url 直接复用消息 URL)
- */
+// 用户聊天表情收藏表实体, 对应 user_chat_emoji 来源 1: 用户主动上传 走 /file/uploadChatEmoji 来源 2: 把对方在聊天里发过来的图片收藏下来 origin_message_id 非空, media_url 直接复用消息 URL
 @Data
 @TableName("user_chat_emoji")
 @Schema(description = "用户聊天表情收藏实体")

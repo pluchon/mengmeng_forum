@@ -6,8 +6,7 @@ from typing import Any
 
 from clients.dashscope_chat_client import dashscope_chat_completion
 from clients.dashscope_image import dashscope_text_to_image
-from clients.huanapi_client import huanapi_images
-from config import settings
+from clients.llm import flash_model_name
 from graphs.text_generation import run_text_generation
 from utils.image_mcp import enrich_image_prompt
 
@@ -51,24 +50,13 @@ def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:
         {"role": "system", "content": system},
         {"role": "user", "content": article[:12000]},
     ]
-    model = settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash"
+    model = flash_model_name()
     return dashscope_chat_completion(model, messages, temperature=0.3)
 
 
-def generate_image(prompt: str, quality: str) -> tuple[str, dict[str, Any], bool]:
-    enhanced_prompt, mcp_used = enrich_image_prompt(prompt)
-    if quality == "normal":
-        url, usage = dashscope_text_to_image(enhanced_prompt)
-        return url, usage, mcp_used
-
-    hu = settings.huanapi
-    base = str(hu.get("base_url") or "https://www.huanapi.com")
-    image_key = str(hu.get("image_key") or "").strip()
-    if not image_key:
-        raise CreationConfigError("GPT 生图未配置（HUANAPI_IMAGE_KEY）")
-
-    premium_model = str(hu.get("model_image_premium") or "gpt-image-2").strip()
-    if premium_model != "gpt-image-2":
-        logger.warning("huanapi.model_image_premium=%r，将使用官方模型名 gpt-image-2", premium_model)
-    url, usage = huanapi_images(base, image_key, "gpt-image-2", enhanced_prompt)
+def generate_image(prompt: str, quality: str, *, enrich: bool = True) -> tuple[str, dict[str, Any], bool]:
+    enhanced_prompt, mcp_used = enrich_image_prompt(prompt) if enrich else (prompt, False)
+    if quality and quality != "normal":
+        raise CreationConfigError("进阶生图已下线，请使用普通档 Wan 生图")
+    url, usage = dashscope_text_to_image(enhanced_prompt)
     return url, usage, mcp_used

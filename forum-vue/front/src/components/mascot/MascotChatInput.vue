@@ -1,17 +1,19 @@
 <template>
   <div class="mascot-panel-input">
-    <div class="mascot-input-shell">
-      <textarea
-        ref="textareaRef"
-        :value="modelValue"
-        class="mascot-input-box"
-        :placeholder="placeholder"
-        rows="1"
-        maxlength="2000"
-        :disabled="disabled"
-        @input="onInput"
-        @keydown.enter.exact.prevent="onEnter"
-      />
+    <div class="mascot-input-row">
+      <div class="mascot-input-shell">
+        <textarea
+          ref="textareaRef"
+          :value="modelValue"
+          class="mascot-input-box"
+          :placeholder="placeholder"
+          rows="1"
+          maxlength="2000"
+          :disabled="disabled"
+          @input="onInput"
+          @keydown.enter.exact.prevent="onEnter"
+        />
+      </div>
       <button
         type="button"
         class="mascot-send-btn"
@@ -21,6 +23,7 @@
       >
         <el-icon v-if="loading" class="is-loading"><Loading /></el-icon>
         <el-icon v-else><Promotion /></el-icon>
+        <span>发送</span>
       </button>
     </div>
 
@@ -72,12 +75,26 @@
           <button
             type="button"
             class="mascot-context-control__compress"
-            :disabled="contextCompressing || !contextAvailable"
+            :disabled="disabled || loading || contextCompressing || !contextAvailable"
             title="压缩上下文"
             aria-label="压缩上下文"
             @click="emit('compress-context')"
           >
-            <el-icon :class="{ 'is-loading': contextCompressing }"><ScaleToOriginal /></el-icon>
+            <span
+              class="mascot-context-control__compact-icon"
+              :class="{ 'is-loading': contextCompressing }"
+              aria-hidden="true"
+            />
+          </button>
+          <button
+            type="button"
+            class="mascot-context-control__memory"
+            :disabled="disabled || loading"
+            title="查看记忆"
+            aria-label="查看记忆"
+            @click="emit('open-memory')"
+          >
+            <span class="mascot-context-control__memory-icon" aria-hidden="true" />
           </button>
         </div>
 

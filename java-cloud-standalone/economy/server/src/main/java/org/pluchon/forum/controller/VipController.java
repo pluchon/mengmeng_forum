@@ -6,21 +6,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
-import org.pluchon.forum.entity.dto.vip.VipSubscribeDTO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
+import org.pluchon.forum.entity.vo.vip.VipPurchaseRecordVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaPanelVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
-import org.pluchon.forum.entity.vo.vip.VipSubscribeResultVO;
 import org.pluchon.forum.service.interfaces.vip.VipCenterService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "会员 VIP", description = "积分订阅 PRO / MAX")
+@Tag(name = "会员 VIP", description = "会员中心与配额查询")
 @RestController
 @RequestMapping("/vip")
 public class VipController {
@@ -45,17 +44,21 @@ public class VipController {
         return Result.success(vipCenterService.quota(loginUser.getId()));
     }
 
+    /** 查询当前用户的会员购买记录 */
+    @Operation(summary = "会员购买记录")
+    @GetMapping("/purchase-records")
+    public Result<PageResult<VipPurchaseRecordVO>> purchaseRecords(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "6") Integer pageSize,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(vipCenterService.purchaseRecords(loginUser.getId(), pageNum, pageSize));
+    }
+
     @Operation(summary = "当前 VIP 与积分余额")
     @GetMapping("/status")
     public Result<VipStatusVO> status(HttpServletRequest request) {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(vipSubscribeService.status(loginUser.getId()));
-    }
-
-    @Operation(summary = "积分订阅", description = "PRO=900 积分/30 天，MAX=2000 积分/30 天；续费从当前到期日起顺延")
-    @PostMapping("/subscribe")
-    public Result<VipSubscribeResultVO> subscribe(@RequestBody VipSubscribeDTO dto, HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(vipSubscribeService.subscribe(loginUser.getId(), dto));
     }
 }

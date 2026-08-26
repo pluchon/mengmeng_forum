@@ -1,7 +1,9 @@
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import { createAuthRules, digitsOnlyPhone } from '@/utils/authValidators'
 
 export function useSignUp(captchaDialogRef) {
   const router = useRouter()
@@ -17,13 +19,17 @@ export function useSignUp(captchaDialogRef) {
     email: '',
   })
 
+  const base = createAuthRules()
   const rules = {
-    userName: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-    nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
-    password: [
-      { required: true, message: '请输入密码', trigger: 'blur' },
-      { min: 6, max: 12, message: '长度在 6 到 12 个字符', trigger: 'blur' },
-    ],
+    userName: base.userName,
+    nickname: base.nickname,
+    password: base.password,
+    phoneNum: base.phoneOptional,
+    email: base.emailOptional,
+  }
+
+  const onPhoneNumInput = (val) => {
+    regForm.value.phoneNum = digitsOnlyPhone(val)
   }
 
   async function verifyCaptcha(purpose) {
@@ -43,23 +49,34 @@ export function useSignUp(captchaDialogRef) {
     if (!agreed.value) return ElMessage.warning('请先同意用户协议')
     if (!formRef.value) return
 
-    await formRef.value.validate(async (valid) => {
-      if (!valid) return
-      const ticket = await verifyCaptcha('REGISTER')
-      if (!ticket) return
-      loading.value = true
-      try {
-        const res = await register({ ...regForm.value, captchaTicket: ticket })
-        if (res.code === 0) {
-          ElMessage.success('账号创建成功，请登录')
-          router.push('/sign-in?first=1')
-        } else {
-          ElMessage.error(res.message)
-        }
-      } finally {
-        loading.value = false
+    try {
+      await formRef.value.validate()
+    } catch {
+      await nextTick()
+      shakeAuthFormErrors(formRef.value)
+      return
+    }
+
+    const ticket = await verifyCaptcha('REGISTER')
+    if (!ticket) return
+    loading.value = true
+    try {
+      const payload = {
+        ...regForm.value,
+        phoneNum: String(regForm.value.phoneNum || '').trim() || undefined,
+        email: String(regForm.value.email || '').trim() || undefined,
+        captchaTicket: ticket,
       }
-    })
+      const res = await register(payload)
+      if (res.code === 0) {
+        ElMessage.success('账号创建成功，请登录')
+        router.push('/sign-in?first=1')
+      } else {
+        ElMessage.error(res.message)
+      }
+    } finally {
+      loading.value = false
+    }
   }
 
   return {
@@ -67,6 +84,7 @@ export function useSignUp(captchaDialogRef) {
     formRef,
     handleSignUp,
     loading,
+    onPhoneNumInput,
     regForm,
     rules,
   }

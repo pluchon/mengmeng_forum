@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { getCheckinInfo } from '@/api/checkin'
 import { useUserStore } from '@/stores/user'
 
-/** 签到状态快照：供顶栏、首页条、签到页共用，避免签后返回其它页数据不同步 */
+// 签到状态快照：供顶栏、首页条、签到页共用，避免签后返回其它页数据不同步
 export const useCheckinSnapshotStore = defineStore('checkinSnapshot', () => {
   const streakDays = ref(0)
   const totalDays = ref(0)

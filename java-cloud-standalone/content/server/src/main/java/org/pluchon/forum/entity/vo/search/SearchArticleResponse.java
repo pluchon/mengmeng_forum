@@ -7,13 +7,7 @@ import lombok.NoArgsConstructor;
 import org.pluchon.forum.entity.vo.article.ArticleListResponse;
 import org.pluchon.forum.entity.vo.common.PageResult;
 
-/**
- * 帖子搜索响应. source 字段标记本次结果来源:
- *  - db    : 标题 LIKE 匹配
- *  - rag   : DB 未命中, AI 语义召回
- *  - empty : 两路均无结果
- * 前端可据此切换 "为你智能推荐" 之类的提示文案.
- */
+// 帖子搜索响应. source 字段标记本次结果来源: db : 标题 LIKE 匹配 rag : DB 未命中, AI 语义召回 empty : 两路均无结果 前端可据此切换 为你智能推荐 之类的提示文案.
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

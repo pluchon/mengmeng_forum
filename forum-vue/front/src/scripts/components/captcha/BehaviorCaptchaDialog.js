@@ -9,17 +9,18 @@ import {
   WarningFilled,
   Loading,
 } from '@element-plus/icons-vue'
+import SystemUpgradeDialog from '@/components/common/SystemUpgradeDialog.vue'
 
 // ─────────────────────── 常量 ───────────────────────────────────────
 const BTN_W = 40
-/** 松开时与目标 X 偏差容差（px），在此范围自动提交 */
+// 松开时与目标 X 偏差容差 px ，在此范围自动提交
 const SNAP_TOLERANCE = 30
-/** 前端 mode → 天爱 type 字符串（全大写） */
+// 前端 mode → 天爱 type 字符串 全大写
 const MODE_TO_API_TYPE = {
   slider: 'SLIDER',
   click: 'WORD_IMAGE_CLICK',
 }
-/** 天爱 captchaType → 前端 mode */
+// 天爱 captchaType → 前端 mode
 const API_TYPE_TO_MODE = {
   SLIDER: 'slider',
   ROTATE: 'slider',
@@ -33,6 +34,7 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const vo = ref(null)
 const mode = ref('slider')
+const upgradeDialogRef = ref(null)
 let resolvePromise = null
 let rejectPromise = null
 let settled = false
@@ -46,7 +48,7 @@ const dragY = ref(0)
 const bgW = ref(300)
 const bgH = ref(180)
 const tplW = ref(60)
-/** 滑块最大可拖动距离 */
+// 滑块最大可拖动距离
 const maxDx = ref(200)
 const dragging = ref(false)
 
@@ -62,17 +64,13 @@ const trackWidth = computed(() =>
 
 // ─────────────────────── 点击文字状态 ─────────────────────────────────
 const clickImgRef = ref(null)
-/**
- * 需点击的文字数量。
- * 天爱 WORD_IMAGE_CLICK: templateImage = 提示图；理想情况下 data 为校验定义数组，长度即点击次数。
- * 若 data 未下发（常为 null），天爱标准生成器默认 checkClickCount = 4，误用 3 会在第 3 次点击就自动提交并校验失败。
- */
+// 需点击的文字数量。 天爱 WORD_IMAGE_CLICK: templateImage 提示图；理想情况下 data 为校验定义数组，长度即点击次数。 若 data 未下发 常为 null ，天爱标准生成器默认 checkClickCount 4，误用 3 会在第 3 次点击就自动提交并校验失败
 const clickCount = computed(() => {
   const d = vo.value?.data
   if (Array.isArray(d) && d.length > 0) return d.length
   return 4
 })
-/** 已点击记录：{ px, py, x, y }  px/py=显示坐标, x/y=像素坐标（传后端） */
+// 已点击记录：{ px, py, x, y } px/py 显示坐标, x/y 像素坐标 传后端
 const clickDots = ref([])
 let clickImgW = 0
 let clickImgH = 0
@@ -91,6 +89,34 @@ const tplSrc = computed(() => toCaptchaImgSrc(vo.value?.templateImage))
 function isApiSuccess(res) {
   if (!res) return false
   return res.code === 200 || res.code === 0
+}
+
+// 业务拒绝可能是拦截器直接 reject 的 Result，也可能是 HTTP 4xx 包在 AxiosError.response.data 里
+function getBizPayload(err) {
+  if (!err || typeof err !== 'object') return null
+  if (typeof err.code === 'number' && ('message' in err || 'data' in err || 'msg' in err)) {
+    return err
+  }
+  const data = err.response?.data
+  if (data && typeof data === 'object' && typeof data.code === 'number') {
+    return data
+  }
+  return null
+}
+
+function bizFailMessage(err, fallback) {
+  const biz = getBizPayload(err)
+  if (!biz) return fallback
+  return biz.message || biz.msg || fallback
+}
+
+function shouldTreatAsCaptchaUnavailable(err) {
+  if (getBizPayload(err)) return false
+  const status = err?.response?.status
+  if (status === 429) return false
+  if (status === 502 || status === 503 || status === 504) return true
+  // 无 HTTP 响应：断网 / 超时 / 服务彻底挂了
+  return !err?.response
 }
 
 // ─────────────────────── 滑块方法 ────────────────────────────────────
@@ -113,7 +139,7 @@ function applyTemplateOffset() {
   if (ty != null) dragY.value = Number(ty) || 0
 }
 
-/** 等图片 onload 后在 nextTick 里重算尺寸（确保 naturalWidth 可用） */
+// 等图片 onload 后在 nextTick 里重算尺寸 确保 naturalWidth 可用
 function onBgLoad() {
   nextTick(() => {
     const bgEl = bgImgRef.value
@@ -164,7 +190,7 @@ async function onPointerUp(e) {
   dragging.value = false
   window.removeEventListener('pointermove', onPointerMove)
   pushTrack('up', dragX.value, dragY.value)
-  // 自动提交：松开时总是尝试验证（让后端校验是否对准）
+  // 自动提交：松开时总是尝试验证 让后端校验是否对准
   await submitSlider()
 }
 
@@ -183,12 +209,28 @@ function failAndClose(message) {
   resolvePromise = null
 }
 
+// 验证码服务不可用：关闭验证弹窗，改提示系统升级
+function failAsSystemUpgrade() {
+  settled = true
+  submitting.value = false
+  dragging.value = false
+  vo.value = null
+  errorMsg.value = ''
+  resetSlider()
+  resetClick()
+  visible.value = false
+  rejectPromise?.(new Error('captcha_unavailable'))
+  rejectPromise = null
+  resolvePromise = null
+  upgradeDialogRef.value?.open?.()
+}
+
 async function submitSlider() {
   if (!vo.value || submitting.value) return
   submitting.value = true
   try {
     const stopTime = Date.now()
-    // 将显示像素坐标换算为原始图坐标（天爱后端按原始尺寸校验）
+    // 将显示像素坐标换算为原始图坐标 天爱后端按原始尺寸校验
     const origBgW = vo.value.backgroundImageWidth || bgW.value
     const origBgH = vo.value.backgroundImageHeight || bgH.value
     const scaleX = origBgW / bgW.value
@@ -218,7 +260,12 @@ async function submitSlider() {
     try {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
     } catch (err) {
-      failAndClose(err?.message || '验证失败，请重试')
+      // 轨迹不准等业务失败：提示重试；仅服务不可用才走升级弹窗
+      if (shouldTreatAsCaptchaUnavailable(err)) {
+        failAsSystemUpgrade()
+        return
+      }
+      failAndClose(bizFailMessage(err, '验证失败，请重试'))
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
@@ -276,7 +323,7 @@ async function submitClickTrack() {
   submitting.value = true
   try {
     const now = Date.now()
-    // trackList 格式：每次点击是一个 Track 对象，type='click'，x/y 为图片像素坐标
+    // trackList 格式：每次点击是一个 Track 对象，type click ，x/y 为图片像素坐标
     const tList = clickDots.value.map((dot, i) => ({
       x: parseFloat(dot.x.toFixed(1)),
       y: parseFloat(dot.y.toFixed(1)),
@@ -300,7 +347,11 @@ async function submitClickTrack() {
     try {
       res = await checkCaptcha({ id: vo.value.id, purpose: purposeRef.value, data })
     } catch (err) {
-      failAndClose(err?.message || '验证失败，请重试')
+      if (shouldTreatAsCaptchaUnavailable(err)) {
+        failAsSystemUpgrade()
+        return
+      }
+      failAndClose(bizFailMessage(err, '验证失败，请重试'))
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
@@ -329,13 +380,13 @@ async function loadVo() {
   try {
     const apiType = MODE_TO_API_TYPE[mode.value] || 'SLIDER'
     const res = await generateCaptcha({ type: apiType })
-    if (!isApiSuccess(res)) {
-      errorMsg.value = res?.msg || res?.message || '加载验证码失败'
+    if (!isApiSuccess(res) || !res?.data) {
+      failAsSystemUpgrade()
       return
     }
     vo.value = res.data
     // 后端实际返回的类型可能与请求不同，根据 type 字段同步前端渲染模式
-    // ImageCaptchaVO.type 就是生成时用的 captcha 类型字符串（如 "SLIDER"/"WORD_IMAGE_CLICK"）
+    // ImageCaptchaVO.type 就是生成时用的 captcha 类型字符串 如 SLIDER / WORD_IMAGE_CLICK
     const retType = res.data?.type
     if (retType && API_TYPE_TO_MODE[retType]) {
       mode.value = API_TYPE_TO_MODE[retType]
@@ -345,7 +396,13 @@ async function loadVo() {
     }
     // click 模式不需要额外初始化：clickCount 是 computed，tplSrc 是提示图
   } catch (err) {
-    errorMsg.value = err?.message || '加载验证码失败'
+    if (shouldTreatAsCaptchaUnavailable(err)) {
+      failAsSystemUpgrade()
+      return
+    }
+    failAndClose(bizFailMessage(err, err?.response?.status === 429
+      ? '操作过于频繁，请稍后再试'
+      : '验证码加载失败，请重试'))
   }
 }
 
@@ -374,10 +431,7 @@ function run(purpose) {
     resolvePromise = resolve
     rejectPromise = reject
     visible.value = true
-    loadVo().catch(err => {
-      ElMessage.error(err?.message || '加载失败')
-      reject(err)
-    })
+    loadVo()
   })
 }
 

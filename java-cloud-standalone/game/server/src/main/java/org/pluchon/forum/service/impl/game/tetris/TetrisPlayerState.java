@@ -33,13 +33,16 @@ public class TetrisPlayerState {
     // 消行数
     private int clearLines;
 
+    // 连续消行连击数（零消放置后归零）
+    private int combo;
+
     // 当前下落速度档位
     private int speedRun;
 
     // 初始速度档位
     private final int speedStart;
 
-    // 是否锁定中（消行动画）
+    // 是否锁定中 消行动画
     private boolean lock;
 
     // 是否已结束
@@ -81,6 +84,10 @@ public class TetrisPlayerState {
 
     public int getClearLines() {
         return clearLines;
+    }
+
+    public int getCombo() {
+        return combo;
     }
 
     public String[][] getMatrix() {
@@ -269,13 +276,16 @@ public class TetrisPlayerState {
         if (lines != null) {
             matrix = TetrisMatrixUtil.clearLineRows(matrix, lines);
             clearLines += lines.size();
-            points += TetrisEngineConstants.CLEAR_POINTS[lines.size() - 1];
+            combo += 1;
+            points += TetrisEngineConstants.calcClearScore(lines.size(), combo);
             int speedAdd = clearLines / TetrisEngineConstants.EACH_LINES;
             speedRun = Math.min(6, speedStart + speedAdd);
             int garbage = TetrisEngineConstants.garbageLinesForClear(lines.size());
             spawnAfterLock(nowMs);
             return garbage;
         }
+
+        combo = 0;
 
         if (TetrisMatrixUtil.isOver(matrix)) {
             finishGame();

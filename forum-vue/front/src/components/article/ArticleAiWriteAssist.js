@@ -4,6 +4,7 @@ import { MagicStick } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { blockIfMuted } from '@/utils/userMute'
 import { aiPolish } from '@/api/ai'
+import { sanitizeHtml } from '@/utils/security'
 
 const props = defineProps({
   editorMode: {
@@ -18,12 +19,22 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  textOnly: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['apply', 'generating'])
 
 const userStore = useUserStore()
 const loading = ref(false)
+let activeRequestId = ''
+
+function createClientRequestId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return `polish-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
 
 function stripCodeFence(text) {
   let normalized = (text || '').trim()
@@ -42,12 +53,16 @@ async function runPolish() {
   }
   loading.value = true
   emit('generating', true)
+  const requestId = createClientRequestId()
+  activeRequestId = requestId
   try {
     const res = await aiPolish({
       title: props.title?.trim() || '',
       content,
       editorMode: props.editorMode,
+      clientRequestId: requestId,
     })
+    if (activeRequestId !== requestId) return
     if (res.code !== 0) {
       ElMessage.error(res.message || 'AI 写作失败')
       return
@@ -57,12 +72,19 @@ async function runPolish() {
       ElMessage.warning('模型未返回有效正文')
       return
     }
-    emit('apply', text)
+    const normalized = props.editorMode === 'rich' ? sanitizeHtml(text) : text
+    if (!normalized) {
+      ElMessage.warning('润色结果未通过格式校验，已保留原文')
+      return
+    }
+    emit('apply', normalized)
     ElMessage.success('已完成润色，可继续编辑')
   } catch (error) {
     ElMessage.error(error?.message || 'AI 写作请求失败')
   } finally {
-    loading.value = false
-    emit('generating', false)
+    if (activeRequestId === requestId) {
+      loading.value = false
+      emit('generating', false)
+    }
   }
 }

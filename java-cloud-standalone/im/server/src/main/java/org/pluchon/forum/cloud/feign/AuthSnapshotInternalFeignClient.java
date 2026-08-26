@@ -1,9 +1,9 @@
 package org.pluchon.forum.cloud.feign;
 
-import org.pluchon.forum.api.auth.UserInternalApi;
+import org.pluchon.forum.api.UserInternalApi;
 import org.springframework.cloud.openfeign.FeignClient;
 
-// im 域自有的认证用户读取客户端。
+// im 域自有的认证用户读取客户端
 @FeignClient(name = "forum-auth", contextId = "imAuthSnapshotInternalFeignClient")
 public interface AuthSnapshotInternalFeignClient extends UserInternalApi {
 }

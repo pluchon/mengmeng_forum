@@ -6,10 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 
-/**
- * 签到状态查询响应：用于进入签到页时展示日历高亮、是否已签、下一档奖励等
- */
+// 签到状态查询响应：用于进入签到页时展示日历高亮、是否已签、下一档奖励等
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -39,4 +38,10 @@ public class CheckinStatusResponse {
 
     @Schema(description = "距离下一档奖励还差的天数, 已无更高档为 null")
     private Integer nextThresholdLeft;
+
+    @Schema(description = "持有补签卡数量")
+    private Integer makeupCardCount;
+
+    @Schema(description = "完整连签阶梯")
+    private List<CheckinStreakRewardItemVO> streakRewards;
 }
