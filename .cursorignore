@@ -1,6 +1,0 @@
-# 不让 Cursor Agent 索引本项目的 Codex 工作资料与本地构建产物。
-.codex/
-.playwright-cli/
-output/
-nginx/dist/
-nginx/package/

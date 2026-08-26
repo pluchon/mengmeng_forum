@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-_SHANGHAI = ZoneInfo("Asia/Shanghai")
+_TAIPEI = ZoneInfo("Asia/Taipei")
 
 
 def _parse_client_iso(raw: str | None) -> datetime | None:
@@ -23,13 +23,13 @@ def _parse_client_iso(raw: str | None) -> datetime | None:
 
 def build_datetime_context(client_datetime: str | None = None) -> str:
     """
-    优先使用前端传来的用户本地时间（ISO8601），否则用服务器 Asia/Shanghai.
+    优先使用前端传来的用户本地时间（ISO8601），否则用服务器 Asia/Taipei.
     """
     client_dt = _parse_client_iso(client_datetime)
-    server_dt = datetime.now(_SHANGHAI)
+    server_dt = datetime.now(_TAIPEI)
     if client_dt is not None:
         try:
-            local = client_dt.astimezone(_SHANGHAI)
+            local = client_dt.astimezone(_TAIPEI)
         except Exception:
             local = server_dt
         offset = client_dt.utcoffset()
@@ -41,6 +41,6 @@ def build_datetime_context(client_datetime: str | None = None) -> str:
     wd = weekdays[local.weekday()]
     return (
         f"当前参考时间（{tz_note}）：{local.strftime('%Y年%m月%d日')} {wd} "
-        f"{local.strftime('%H:%M')}（Asia/Shanghai 展示）。"
+        f"{local.strftime('%H:%M')}（Asia/Taipei 展示）。"
         f"服务器时间：{server_dt.strftime('%Y-%m-%d %H:%M')}。"
     )

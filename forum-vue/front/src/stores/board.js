@@ -18,8 +18,8 @@ export const useBoardStore = defineStore('board', () => {
       } else {
         ElMessage.error(res.message || '获取版块列表失败')
       }
-    } catch (error) {
-      console.error('获取版块列表异常', error)
+    } catch {
+      ElMessage.error('获取版块列表失败，请稍后重试')
     }
   }
 
@@ -31,8 +31,8 @@ export const useBoardStore = defineStore('board', () => {
       if (res.code === 0) {
         categoryList.value = res.data || []
       }
-    } catch (error) {
-      console.error('获取分类列表异常', error)
+    } catch {
+      ElMessage.error('获取分类列表失败，请稍后重试')
     }
   }
 
@@ -47,5 +47,8 @@ export const useBoardStore = defineStore('board', () => {
 
   return { boardList, categoryList, orderStatus, currentBoardId, fetchBoardList, fetchCategoryList, setOrderStatus, setCurrentBoardId }
 }, {
-  persist: true // 如果需要在刷新后记住当前所在的版块，也可以开启持久化
+  // 分类/版块名会随种子变更，禁止整表持久化，否则会长期卡在旧导航
+  persist: {
+    pick: ['orderStatus', 'currentBoardId'],
+  },
 })

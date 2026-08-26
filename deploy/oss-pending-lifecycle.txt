@@ -1,0 +1,18 @@
+# OSS 上传审图 pending 目录生命周期（控制台配置，应用无需轮询）
+
+上传审图流程会先把图片写入各业务目录下的 `_pending/` 子目录，审图通过后 copy 到正式目录并删除 pending；
+审图失败或 AI 不可用会在同一次 HTTP 请求内 delete pending。
+
+若用户在上传过程中断网，可能残留 pending 对象。请在阿里云 OSS 控制台为 bucket 配置生命周期规则：
+
+- 规则名：forum-upload-pending-expire
+- 前缀（按业务目录分别配置，或一条通配）示例：
+  - forum_article_picture/_pending/
+  - forum_avatar_picture/_pending/
+  - forum_cover_picture/_pending/
+  - music/music_avatar/_pending/
+  - （其它带 _pending/ 的业务前缀同理）
+- 操作：对象过期删除
+- 天数：1（生产可按需改为 1～7 天）
+
+此为 OSS 服务端自动清理，不占用应用 CPU，也不是 Java/Python 定时轮询。

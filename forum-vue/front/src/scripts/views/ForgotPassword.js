@@ -1,17 +1,33 @@
-import { ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { sendSmsCodeForReset, sendMailCodeForReset, findPasswordByMail, findPasswordBySms } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import {
+  AUTH_MSG,
+  createAuthRules,
+  digitsOnlyPhone,
+  isValidEmail,
+  isValidPassword,
+  isValidPhone,
+  isValidMailCode,
+  isValidSmsCode,
+} from '@/utils/authValidators'
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const PHONE_RE = /^1[3-9]\d{9}$/
+const CODE_SUCCESS_FLASH_MS = 650
+const CODE_COUNTDOWN_SEC = 60
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 export function useForgotPassword(captchaDialogRef) {
   const router = useRouter()
 
   const recoverFormRef = ref()
   const loading = ref(false)
-  const sendingCode = ref(false)
+  // idle | sending | success | countdown | expired
+  const codePhase = ref('idle')
   const countdown = ref(0)
   let timer = null
 
@@ -19,20 +35,50 @@ export function useForgotPassword(captchaDialogRef) {
     account: '',
     code: '',
     newPassword: '',
+    confirmPassword: '',
     type: 'EMAIL',
   })
 
+  // Element Plus 自带 show password 仅在有值时显示眼睛，空态像文本框；改为始终可切换
+  const newPasswordVisible = ref(false)
+  const confirmPasswordVisible = ref(false)
+
+  const toggleNewPasswordVisible = () => {
+    newPasswordVisible.value = !newPasswordVisible.value
+  }
+
+  const toggleConfirmPasswordVisible = () => {
+    confirmPasswordVisible.value = !confirmPasswordVisible.value
+  }
+
+  const onAccountInput = (val) => {
+    if (form.value.type === 'PHONE') {
+      form.value.account = digitsOnlyPhone(val)
+      return
+    }
+    form.value.account = String(val || '')
+  }
+
+  const base = createAuthRules()
   const rules = {
     account: [
       { required: true, message: '请输入账号', trigger: 'blur' },
       {
         validator: (_rule, value, callback) => {
-          const pattern = form.value.type === 'PHONE' ? PHONE_RE : EMAIL_RE
-          if (pattern.test(String(value || '').trim())) {
+          const text = String(value || '').trim()
+          if (form.value.type === 'PHONE') {
+            if (isValidPhone(text)) {
+              callback()
+              return
+            }
+            callback(new Error(AUTH_MSG.phone))
+            return
+          }
+          if (isValidEmail(text)) {
             callback()
             return
           }
-          callback(new Error(form.value.type === 'PHONE' ? '手机号格式不正确' : '邮箱格式不正确'))
+          callback(new Error(AUTH_MSG.email))
         },
         trigger: 'blur',
       },
@@ -41,20 +87,83 @@ export function useForgotPassword(captchaDialogRef) {
       { required: true, message: '请输入验证码', trigger: 'blur' },
       {
         validator: (_rule, value, callback) => {
-          const expectedLength = form.value.type === 'PHONE' ? 4 : 6
-          if (String(value || '').trim().length === expectedLength) {
+          if (form.value.type === 'PHONE') {
+            if (isValidSmsCode(value)) {
+              callback()
+              return
+            }
+            callback(new Error(AUTH_MSG.smsCode))
+            return
+          }
+          if (isValidMailCode(value)) {
             callback()
             return
           }
-          callback(new Error(`验证码为 ${expectedLength} 位`))
+          callback(new Error(AUTH_MSG.mailCode))
         },
         trigger: 'blur',
       },
     ],
-    newPassword: [
-      { required: true, message: '请输入新密码', trigger: 'blur' },
-      { min: 6, max: 12, message: '密码长度为 6 到 12 位', trigger: 'blur' },
+    newPassword: base.password,
+    confirmPassword: [
+      { required: true, message: '请再次输入新密码', trigger: 'blur' },
+      {
+        validator: (_rule, value, callback) => {
+          if (!isValidPassword(form.value.newPassword)) {
+            callback(new Error(AUTH_MSG.password))
+            return
+          }
+          if (String(value || '') !== String(form.value.newPassword || '')) {
+            callback(new Error('两次输入的密码不一致'))
+            return
+          }
+          callback()
+        },
+        trigger: 'blur',
+      },
     ],
+  }
+
+  const codeLabel = computed(() => {
+    if (codePhase.value === 'countdown') return String(countdown.value)
+    if (codePhase.value === 'expired') return '验证码已过期，点击重发'
+    if (codePhase.value === 'success') return ''
+    return '获取验证码'
+  })
+
+  const codeBusy = computed(() =>
+    codePhase.value === 'sending'
+    || codePhase.value === 'success'
+    || codePhase.value === 'countdown',
+  )
+
+  const clearTimer = () => {
+    if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
+  }
+
+  const startCountdown = () => {
+    clearTimer()
+    codePhase.value = 'countdown'
+    countdown.value = CODE_COUNTDOWN_SEC
+    timer = setInterval(() => {
+      countdown.value -= 1
+      if (countdown.value <= 0) {
+        clearTimer()
+        countdown.value = 0
+        codePhase.value = 'expired'
+      }
+    }, 1000)
+  }
+
+  const flashSuccessThenCountdown = async () => {
+    codePhase.value = 'success'
+    await sleep(CODE_SUCCESS_FLASH_MS)
+    if (codePhase.value === 'success') {
+      startCountdown()
+    }
   }
 
   const switchRecoveryType = (type) => {
@@ -77,35 +186,37 @@ export function useForgotPassword(captchaDialogRef) {
   }
 
   const handleSendCode = async () => {
-    if (!recoverFormRef.value) return
+    if (codeBusy.value || !recoverFormRef.value) return
     try {
       await recoverFormRef.value.validateField('account')
     } catch {
+      await nextTick()
+      shakeAuthFormErrors(recoverFormRef.value)
       return
     }
 
     const account = form.value.account
     const isPhone = form.value.type === 'PHONE'
 
-    const ticket = await verifyCaptcha('RESET_SEND')
-    if (!ticket) return
-
-    sendingCode.value = true
+    codePhase.value = 'sending'
     try {
+      const ticket = await verifyCaptcha('RESET_SEND')
+      if (!ticket) {
+        codePhase.value = 'idle'
+        return
+      }
+
       const res = isPhone
         ? await sendSmsCodeForReset(account, ticket)
         : await sendMailCodeForReset(account, ticket)
       if (res.code === 0) {
         form.value.code = ''
-        ElMessage.success('验证码已发送')
-        countdown.value = 60
-        timer = setInterval(() => {
-          countdown.value--
-          if (countdown.value <= 0) clearInterval(timer)
-        }, 1000)
+        await flashSuccessThenCountdown()
+      } else {
+        codePhase.value = 'idle'
       }
-    } finally {
-      sendingCode.value = false
+    } catch {
+      codePhase.value = 'idle'
     }
   }
 
@@ -114,6 +225,8 @@ export function useForgotPassword(captchaDialogRef) {
     try {
       await recoverFormRef.value.validate()
     } catch {
+      await nextTick()
+      shakeAuthFormErrors(recoverFormRef.value)
       return
     }
     const ticket = await verifyCaptcha('RESET_SUBMIT')
@@ -135,18 +248,25 @@ export function useForgotPassword(captchaDialogRef) {
   }
 
   onUnmounted(() => {
-    if (timer) clearInterval(timer)
+    clearTimer()
   })
 
   return {
+    codeBusy,
+    codeLabel,
+    codePhase,
+    confirmPasswordVisible,
     countdown,
     form,
     handleSendCode,
     handleSubmit,
     loading,
+    newPasswordVisible,
+    onAccountInput,
     recoverFormRef,
     rules,
-    sendingCode,
     switchRecoveryType,
+    toggleConfirmPasswordVisible,
+    toggleNewPasswordVisible,
   }
 }

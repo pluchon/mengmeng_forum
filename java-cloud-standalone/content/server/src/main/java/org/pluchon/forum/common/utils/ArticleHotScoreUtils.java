@@ -7,7 +7,7 @@ import org.pluchon.forum.entity.db.Article;
 import java.time.Duration;
 import java.time.Instant;
 
-// 热帖综合分纯计算（无 Mapper / Redis），供 content 与 AI 共用
+// 热帖综合分纯计算 无 Mapper / Redis ，供 content 与 AI 共用
 public final class ArticleHotScoreUtils {
 
     private ArticleHotScoreUtils() {

@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "forum.features.mq", havingValue = "true")
 public class RabbitMQConfigure {
 
-    // ========================= 交换机 =========================
+    
     // 主题交换机：业务消息入口，按 RoutingKey 路由到各业务队列
     @Bean("t-exchange")
     public TopicExchange topicExchange() {
@@ -24,7 +24,7 @@ public class RabbitMQConfigure {
         return ExchangeBuilder.topicExchange(Constant.DEATH_EXCHANGE_1).durable(true).build();
     }
 
-    // ========================= 队列 =========================
+    
     // 使用仲裁队列可以达到很好的流量削峰效果，而且也能够自动归档到死信队列，后续也可以拓展我们的分布式
 
     // 仲裁队列 1：帖子回复通知，最多积压 100 条，超限则死信，这样就保证了我们的数据安全与高可用状态
@@ -69,6 +69,33 @@ public class RabbitMQConfigure {
                 .build();
     }
 
+    @Bean("q-ai-async-task")
+    public Queue aiAsyncTaskQueue() {
+        return QueueBuilder.durable(Constant.QUEUE_AI_ASYNC_TASK)
+                .maxLength(500).quorum()
+                .deadLetterExchange(Constant.DEATH_EXCHANGE_1)
+                .deadLetterRoutingKey(Constant.ROUTING_KEY_DEAD)
+                .build();
+    }
+
+    @Bean("q-ai-content-result")
+    public Queue aiContentResultQueue() {
+        return QueueBuilder.durable(Constant.QUEUE_AI_CONTENT_RESULT)
+                .maxLength(500).quorum()
+                .deadLetterExchange(Constant.DEATH_EXCHANGE_1)
+                .deadLetterRoutingKey(Constant.ROUTING_KEY_DEAD)
+                .build();
+    }
+
+    @Bean("q-ai-im-result")
+    public Queue aiImResultQueue() {
+        return QueueBuilder.durable(Constant.QUEUE_AI_IM_RESULT)
+                .maxLength(500).quorum()
+                .deadLetterExchange(Constant.DEATH_EXCHANGE_1)
+                .deadLetterRoutingKey(Constant.ROUTING_KEY_DEAD)
+                .build();
+    }
+
     // 仲裁队列 5：游戏对局结束事件，供通知、统计、榜单等异步链路消费
     @Bean("q-game-finished")
     public Queue gameFinishedQueue() {
@@ -85,43 +112,61 @@ public class RabbitMQConfigure {
         return QueueBuilder.durable(Constant.D_QUORUM_QUEUE_1).build();
     }
 
-    // ========================= 绑定 =========================
+    
 
     // 帖子回复
-    // 仲裁队列1 -> 主题交换机，RoutingKey = forum.notify.reply
+    // 仲裁队列1 > 主题交换机，RoutingKey forum.notify.reply
     @Bean("binding-queue-1")
     public Binding bindingQueue1() {
         return BindingBuilder.bind(quorumQueue1()).to(topicExchange()).with(Constant.ROUTING_KEY_QUEUE_1);
     }
 
     // 私信模块
-    // 仲裁队列2 -> 主题交换机，RoutingKey = forum.notify.message
+    // 仲裁队列2 > 主题交换机，RoutingKey forum.notify.message
     @Bean("binding-queue-2")
     public Binding bindingQueue2() {
         return BindingBuilder.bind(quorumQueue2()).to(topicExchange()).with(Constant.ROUTING_KEY_QUEUE_2);
     }
 
     // Java发送给langgraph任务，通过主题交换机路由到对应的队列
-    // 帖子审核任务: 仲裁队列3 <- 主题交换机, RoutingKey = forum.audit.article
+    // 帖子审核任务: 仲裁队列3 < 主题交换机, RoutingKey forum.audit.article
     @Bean("binding-audit-task")
     public Binding bindingAuditTaskQueue() {
         return BindingBuilder.bind(auditArticleQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_AUDIT_TASK);
     }
 
     // 处理langgraph返回的结果，Python端通过交换机路由到对应的队列
-    // 帖子审核结果: 仲裁队列4 <- 主题交换机, RoutingKey = forum.audit.result
+    // 帖子审核结果: 仲裁队列4 < 主题交换机, RoutingKey forum.audit.result
     @Bean("binding-audit-result")
     public Binding bindingAuditResultQueue() {
         return BindingBuilder.bind(auditResultQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_AUDIT_RESULT);
     }
 
-    // 游戏对局结束事件: 仲裁队列5 <- 主题交换机, RoutingKey = forum.game.finished
+    @Bean("binding-ai-async-task")
+    public Binding bindingAiAsyncTaskQueue() {
+        return BindingBuilder.bind(aiAsyncTaskQueue()).to(topicExchange())
+                .with(Constant.ROUTING_KEY_AI_ASYNC_TASK);
+    }
+
+    @Bean("binding-ai-content-result")
+    public Binding bindingAiContentResultQueue() {
+        return BindingBuilder.bind(aiContentResultQueue()).to(topicExchange())
+                .with(Constant.ROUTING_KEY_AI_CONTENT_RESULT);
+    }
+
+    @Bean("binding-ai-im-result")
+    public Binding bindingAiImResultQueue() {
+        return BindingBuilder.bind(aiImResultQueue()).to(topicExchange())
+                .with(Constant.ROUTING_KEY_AI_IM_RESULT);
+    }
+
+    // 游戏对局结束事件: 仲裁队列5 < 主题交换机, RoutingKey forum.game.finished
     @Bean("binding-game-finished")
     public Binding bindingGameFinishedQueue() {
         return BindingBuilder.bind(gameFinishedQueue()).to(topicExchange()).with(Constant.ROUTING_KEY_GAME_FINISHED);
     }
 
-    // 死信队列 -> 死信交换机，RoutingKey = forum.dead.#
+    // 死信队列 > 死信交换机，RoutingKey forum.dead.#
     @Bean("binding-dead")
     public Binding bindingDeadQueue() {
         return BindingBuilder.bind(deathQueue()).to(deathExchange()).with(Constant.ROUTING_KEY_DEAD);

@@ -1,9 +1,7 @@
-/**
- * 全局常量定义
- */
+// 全局常量定义
 
-// 默认头像
-export const DEFAULT_AVATAR = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
+// 默认头像：未设置头像时使用站点 ICON 与 favicon 一致
+export const DEFAULT_AVATAR = '/logo_small.png'
 
 // 文章状态
 export const ARTICLE_STATE = {

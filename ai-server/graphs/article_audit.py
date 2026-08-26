@@ -10,7 +10,7 @@
      │       │ pass (+ video_url)
      ├─► validate_video  ── reject ──► finalize (REJECTED)  [qwen3-vl-plus]
      │       │ pass
-     ├─► summarize  ────────────────► finalize (APPROVED)
+     ├─► approved  ─────────────────► finalize (APPROVED)
      │
      END
 
@@ -20,10 +20,12 @@ state["final_status"]="AUDIT_ERROR", 直接路由到 finalize.
 PostgresSaver 在每个节点完成后自动 checkpoint:
 - thread_id = f"audit:{article_id}:{task_id}"
 - 服务挂掉重启时, 该 task_id 在 Java 侧通过超时兜底 task 转 AUDIT_ERROR,
-  Postgres 中残留的 checkpoint 仅供事后调试
+  Postgres 中残留的 checkpoint 仅供事后调试，不做断点续跑。
+- 为何只有本图挂 checkpointer：MQ 异步长链路（文本+多图+视频）耗时长，便于事后排查；
+  同步短请求图（润色/摘要/标签等）失败由调用方重试即可，加 checkpoint 只会多写 PG。
 
 输入: AuditState (含 title/content/cover_url/image_urls)
-输出: AuditState (含 final_status / final_reason / summary)
+输出: AuditState (含 final_status / final_reason)
 """
 from __future__ import annotations
 
@@ -40,7 +42,6 @@ from config import settings
 from graphs.prompts import (
     IMAGE_AUDIT_TEMPLATE,
     IMAGE_DESC_PROMPT,
-    SUMMARY_TEMPLATE,
     TEXT_AUDIT_TEMPLATE,
 )
 from graphs.state import AuditState
@@ -68,7 +69,7 @@ def _llm_text(prompt_inputs: dict, *, label: str, trace_id: str) -> str | None:
         resp = _runtime.call_llm(
             lambda: (TEXT_AUDIT_TEMPLATE | text_llm()).invoke(prompt_inputs),
             trace_id=trace_id,
-            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+            model_name=str(settings.dashscope.get("model_text") or "qwen3.7-flash"),
         )
     except Exception:
         logger.exception("[graph:%s] LLM 调用失败", label)
@@ -166,7 +167,7 @@ def _audit_image_bytes(img_bytes: bytes, *, source: str = "", trace_id: str = ""
         resp = _runtime.call_llm(
             lambda: (IMAGE_AUDIT_TEMPLATE | text_llm()).invoke({"desc": desc}),
             trace_id=trace_id,
-            model_name=str(settings.dashscope.get("model_text") or "qwen3.6-flash"),
+            model_name=str(settings.dashscope.get("model_text") or "qwen3.7-flash"),
         )
     except Exception:
         logger.exception("[graph:image] 审核 LLM 失败")
@@ -221,27 +222,6 @@ def node_validate_images(state: AuditState) -> AuditState:
         ):
             results.append(r)
     return {"image_results": results}
-
-
-def node_summarize(state: AuditState) -> AuditState:
-    plain = state.get("plain_text") or clean_html(state.get("content"))
-    min_len = int(settings.audit.get("summary_min_len", 50))
-    if not plain or len(plain) < min_len:
-        return {"summary": plain[:100] if plain else ""}
-    try:
-        flash_model = str(settings.dashscope.get("model_text_flash") or "qwen3.6-flash")
-        resp = _runtime.call_llm(
-            lambda: (SUMMARY_TEMPLATE | text_llm(
-                temperature=0.3,
-                model_name=flash_model,
-            )).invoke({"text": plain}),
-            trace_id=str(state.get("task_id") or ""),
-            model_name=flash_model,
-        )
-    except Exception:
-        logger.exception("[graph:summarize] 摘要 LLM 失败")
-        return {"summary": ""}
-    return {"summary": _extract_text(resp)}
 
 
 def node_finalize(state: AuditState) -> AuditState:
@@ -321,7 +301,7 @@ def node_to_error(state: AuditState) -> AuditState:
 def node_to_approved(state: AuditState) -> AuditState:
     return {"final_status": _FINAL_APPROVED,
             "final_reason": "审核通过",
-            "summary": state.get("summary", "")}
+            "summary": ""}
 
 
 # ────────────────────────────────────────────────────────────
@@ -332,7 +312,6 @@ def build_graph() -> StateGraph:
     g.add_node("validate_text", node_validate_text)
     g.add_node("validate_images", node_validate_images)
     g.add_node("validate_video", node_validate_video)
-    g.add_node("summarize", node_summarize)
     g.add_node("reject_text", node_to_rejected_text)
     g.add_node("reject_image", node_to_rejected_image)
     g.add_node("reject_video", node_to_rejected_video)
@@ -347,17 +326,16 @@ def build_graph() -> StateGraph:
         "error": "error",
     })
     g.add_conditional_edges("validate_images", route_after_images, {
-        "pass": "summarize",
+        "pass": "approved",
         "video": "validate_video",
         "reject": "reject_image",
         "error": "error",
     })
     g.add_conditional_edges("validate_video", route_after_video, {
-        "pass": "summarize",
+        "pass": "approved",
         "reject": "reject_video",
         "error": "error",
     })
-    g.add_edge("summarize", "approved")
     g.add_edge("approved", "finalize")
     g.add_edge("reject_text", "finalize")
     g.add_edge("reject_image", "finalize")

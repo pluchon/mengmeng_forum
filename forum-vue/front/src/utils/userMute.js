@@ -1,6 +1,6 @@
 import { ElMessage } from 'element-plus'
 
-/** 用户 state=1 表示禁言 */
+// 用户 state 1 表示禁言
 export function isUserMuted(userOrState) {
   if (userOrState == null) return false
   if (typeof userOrState === 'object') {

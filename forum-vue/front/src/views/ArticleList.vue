@@ -30,13 +30,10 @@
             </div>
           </div>
         </el-card>
-        <el-pagination
-          v-if="total > pageSize"
+        <AppPagination
           v-model:current-page="page"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next"
-          background
           style="margin-top: 16px; justify-content: center"
           @current-change="fetch"
         />
@@ -48,6 +45,7 @@
 <script setup>
 import { useArticleList } from '@scripts/views/ArticleList'
 import { formatForumDateTimeShanghai } from '@/utils/datetime'
+import AppPagination from '@/components/common/AppPagination.vue'
 
 const {
   articleList,

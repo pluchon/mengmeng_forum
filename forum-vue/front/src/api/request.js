@@ -8,7 +8,7 @@ import { promptLogin } from '@/utils/loginPrompt'
 const request = axios.create({
   // 开发环境下使用代理，因此不需要配置写死的 base URL，由 vite.config 代理
   baseURL: '/', 
-  timeout: 30000 // 增加到 30 秒，防止邮件发送耗时导致误报 500/超时
+  timeout: 30000
 })
 
 // 请求拦截器
@@ -28,11 +28,11 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   response => {
     const res = response.data
-    // 如果返回的是 Blob（比如文件下载），直接返回
+    // 如果返回的是 Blob 比如文件下载 ，直接返回
     if (response.config.responseType === 'blob') {
       return res
     }
-    // 自动从响应头提取 JWT Token（登录接口会返回）
+    // 自动从响应头提取 JWT Token 登录接口会返回
     const newToken = response.headers['authorization'] || response.headers['Authorization']
     if (newToken) {
       const userStore = useUserStore()
@@ -53,25 +53,51 @@ request.interceptors.response.use(
       if (res.code === 1104) {
         ElMessage.warning(res.message || '您已被禁言，无法发表内容，请联系管理员')
       } else if (!silentBusinessCodes.includes(res.code)) {
-        ElMessage.error(res.message || '系统错误')
+        const traceHint = res.traceId ? `（参考编号：${res.traceId}）` : ''
+        ElMessage.error(`${res.message || '操作失败，请稍后重试'}${traceHint}`)
       }
       return Promise.reject(res)
     }
     return res
   },
   async error => {
+    if (error.config?.silentHttpError) {
+      return Promise.reject(error)
+    }
     if (error.response) {
       const status = error.response.status
       if (status === 401) {
         const userStore = useUserStore()
         await userStore.logout({ redirect: false })
+        if (error.config?.publicAnonymousFallback && !error.config?._anonymousRetried) {
+          error.config._anonymousRetried = true
+          if (error.config.headers) {
+            delete error.config.headers.Authorization
+            delete error.config.headers.authorization
+          }
+          return request(error.config)
+        }
+        if (error.config?.publicAnonymousFallback && error.config?._anonymousRetried) {
+          return Promise.reject(error)
+        }
         await promptLogin()
       } else {
-        const msg = extractApiErrorMessage(error, `请求失败（${status}）`)
+        const fallbackByStatus = {
+          400: '请求参数有误，请检查后重试',
+          403: '您没有权限执行此操作',
+          404: '请求的内容不存在或已被删除',
+          413: '上传文件过大，请压缩后重试',
+          429: '操作过于频繁，请稍后再试',
+          500: '服务开小差了，请稍后重试',
+          502: '上游服务暂时不可用，请稍后重试',
+          503: '服务暂时不可用，请稍后重试',
+          504: '服务响应较慢，请稍后重试',
+        }
+        const msg = extractApiErrorMessage(error, fallbackByStatus[status] || '请求失败，请稍后重试')
         ElMessage.error(msg)
       }
-    } else if (error.code !== undefined && typeof error.message === 'string') {
-      ElMessage.error(error.message || '操作失败')
+    } else if (error.code === 'ECONNABORTED') {
+      ElMessage.error('服务响应较慢，请稍后重试')
     } else {
       ElMessage.error('网络错误或服务器无响应，请稍后再试')
     }

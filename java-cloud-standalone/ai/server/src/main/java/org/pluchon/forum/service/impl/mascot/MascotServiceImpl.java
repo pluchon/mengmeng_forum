@@ -5,9 +5,9 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.constant.ForumBusinessConstants;
-import org.pluchon.forum.common.enums.AiCallState;
-import org.pluchon.forum.common.enums.MascotRelatedRecommendationState;
-import org.pluchon.forum.common.enums.MascotRelatedSelectionReason;
+import org.pluchon.forum.common.AiCallState;
+import org.pluchon.forum.common.MascotRelatedRecommendationState;
+import org.pluchon.forum.common.MascotRelatedSelectionReason;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -17,21 +17,24 @@ import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendation;
 import org.pluchon.forum.entity.db.ForumMascotRelatedRecommendationItem;
 import org.pluchon.forum.entity.db.ForumCompanionMessage;
 import org.pluchon.forum.entity.db.UserMascotPreference;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
-import org.pluchon.forum.entity.dto.ai.AiImageRequest;
-import org.pluchon.forum.entity.dto.mascot.MascotChatRequest;
-import org.pluchon.forum.entity.dto.mascot.MascotHistoryTurn;
-import org.pluchon.forum.entity.dto.mascot.MascotRelatedRecommendationRequest;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiImageRequest;
+import org.pluchon.forum.entity.dto.MascotChatRequest;
+import org.pluchon.forum.entity.dto.MascotHistoryTurn;
+import org.pluchon.forum.entity.dto.MascotMemoryEditRequest;
+import org.pluchon.forum.entity.dto.MascotRelatedRecommendationRequest;
+import org.pluchon.forum.converter.AiHubConverter;
 import org.pluchon.forum.converter.MascotConverter;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
-import org.pluchon.forum.entity.vo.mascot.MascotChatResponseVO;
-import org.pluchon.forum.entity.vo.mascot.MascotModelPublicVO;
-import org.pluchon.forum.entity.vo.mascot.MascotRelatedArticleCandidate;
-import org.pluchon.forum.entity.vo.mascot.MascotRelatedRecommendationItemVO;
-import org.pluchon.forum.entity.vo.mascot.MascotRelatedRecommendationVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionContextWindowVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionImageGalleryItemVO;
+import org.pluchon.forum.entity.vo.MascotChatResponseVO;
+import org.pluchon.forum.entity.vo.MascotModelPublicVO;
+import org.pluchon.forum.entity.vo.MascotMemoryVO;
+import org.pluchon.forum.entity.vo.MascotRelatedArticleCandidate;
+import org.pluchon.forum.entity.vo.MascotRelatedRecommendationItemVO;
+import org.pluchon.forum.entity.vo.MascotRelatedRecommendationVO;
+import org.pluchon.forum.entity.vo.CompanionContextWindowVO;
+import org.pluchon.forum.entity.vo.CompanionImageGalleryItemVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ForumMascotModelMapper;
 import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
@@ -80,14 +83,15 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -240,7 +244,7 @@ public class MascotServiceImpl implements MascotService {
         }
         // AI 域本地读日用量；限额与 economy 配额配置对齐的常用默认值
         int limit = Constant.VIP_TIER_MAX.equals(tier.getVipTier()) ? 300 : 100;
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Taipei"));
         List<AiUsageDaily> rows = aiUsageDailyMapper.selectPage(new Page<>(1, 1, false),
                 Wrappers.lambdaQuery(AiUsageDaily.class)
                         .eq(AiUsageDaily::getUserId, userId)
@@ -250,14 +254,14 @@ public class MascotServiceImpl implements MascotService {
         if (!rows.isEmpty() && rows.get(0).getAdvancedLlmUsed() != null) {
             used = rows.get(0).getAdvancedLlmUsed();
         }
-        int percent = limit > 0 ? Math.min(100, (int) Math.round(used * 100.0 / limit)) : 0;
+        int percent = Math.min(100, (int) Math.round(used * 100.0 / limit));
         vo.setPercent(percent);
         vo.setQuotaLabel("Qwen 深度写作");
         vo.setCanUsePointsPay(percent >= 95);
         return vo;
     }
 
-    /** 用户确认后的相关帖子检索；结果项与选择原因在同一事务内保存。 */
+    // 用户确认后的相关帖子检索；结果项与选择原因在同一事务内保存
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MascotRelatedRecommendationVO recommendRelatedArticles(
@@ -597,7 +601,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String quotaKey(Long userId) {
-        String day = LocalDate.now(ZoneId.of("Asia/Shanghai")).format(DateTimeFormatter.BASIC_ISO_DATE);
+        String day = LocalDate.now(ZoneId.of("Asia/Taipei")).format(DateTimeFormatter.BASIC_ISO_DATE);
         return Constant.REDIS_KEY_MASCOT_DAILY_CHAT + day + ":" + userId;
     }
 
@@ -705,7 +709,7 @@ public class MascotServiceImpl implements MascotService {
         if (request.getAppearance() != null && !request.getAppearance().isBlank()) {
             return request.getAppearance().trim();
         }
-        return "snow_miku";
+        return "xiaomeng";
     }
 
     private List<Map<String, String>> toPyHistory(List<MascotHistoryTurn> history) {
@@ -733,7 +737,6 @@ public class MascotServiceImpl implements MascotService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
     private AiModelUsageDTO parseUsage(Map<String, Object> body, String fallbackModel) {
         Object u = body.get("usage");
         AiModelUsageDTO dto = new AiModelUsageDTO();
@@ -776,7 +779,8 @@ public class MascotServiceImpl implements MascotService {
         if (request.getClientRequestId() != null && !request.getClientRequestId().isBlank()) {
             return request.getClientRequestId().trim();
         }
-        return fallback;
+        // 禁止回落到会话级 key：否则同会话后续消息会撞到同一 ai_bill 幂等键而漏扣
+        return "mascot-" + UUID.randomUUID().toString().replace("-", "");
     }
 
     private void rejectDuplicateMascotBegin(AiCallBeginResult begin) {
@@ -795,6 +799,70 @@ public class MascotServiceImpl implements MascotService {
                                  boolean[] reservedQwenFlash, boolean[] reservedAdvanced) {
         if ("writing".equals(skill) || "chat".equals(skill) || "help".equals(skill)) {
             reserveAiQuota(user, route, reservedQwenFlash, reservedAdvanced);
+        }
+    }
+
+    private boolean shouldAutoFallbackToPoints(ApplicationException ex) {
+        return ex != null
+                && ex.getErrorResult() != null
+                && ex.getErrorResult().getCode() == ResultCode.FAILED_AI_QUOTA_EXCEEDED.getCode();
+    }
+
+    private HttpHeaders internalJsonHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (internalKey != null && !internalKey.isBlank()) {
+            headers.set("X-Internal-Key", internalKey);
+        }
+        return headers;
+    }
+
+    private List<String> stringList(Object raw, int limit) {
+        List<String> out = new ArrayList<>();
+        if (!(raw instanceof List<?> rows)) {
+            return out;
+        }
+        for (Object row : rows) {
+            String text = row == null ? "" : String.valueOf(row).trim();
+            if (text.isBlank() || out.contains(text)) {
+                continue;
+            }
+            out.add(text.substring(0, Math.min(40, text.length())));
+            if (out.size() >= limit) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    private MascotMemoryVO loadMascotMemory(Long userId) {
+        try {
+            return companionMemoryService.getMascotMemory(userId);
+        } catch (Exception ex) {
+            log.warn("读取看板娘长期记忆失败 userId={}: {}", userId, ex.getMessage());
+            MascotMemoryVO vo = new MascotMemoryVO();
+            vo.setSummary("");
+            vo.setFacts(List.of());
+            vo.setUpdatedAt("");
+            return vo;
+        }
+    }
+
+    private List<String> loadLikedTitles(Long userId) {
+        try {
+            return articleInternalFeignClient.listLikedTitles(userId, 6);
+        } catch (Exception ex) {
+            log.warn("读取点赞帖子标题失败 userId={}", userId, ex);
+            return List.of();
+        }
+    }
+
+    private List<String> loadFavoriteSongs(Long userId) {
+        try {
+            return articleInternalFeignClient.listFavoriteSongTitles(userId, 6);
+        } catch (Exception ex) {
+            log.warn("读取收藏歌曲失败 userId={}", userId, ex);
+            return List.of();
         }
     }
 
@@ -822,9 +890,6 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String resolveImageQuality(MascotChatRequest request, AiUserContext user) {
-        if ("premium".equalsIgnoreCase(request.getImageQuality()) && isVip(user)) {
-            return "premium";
-        }
         return "normal";
     }
 
@@ -861,6 +926,7 @@ public class MascotServiceImpl implements MascotService {
 
         boolean vip = isVip(user);
         boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
+        boolean autoPointsFallback = false;
         boolean reservedBasic = false;
         String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
@@ -881,12 +947,29 @@ public class MascotServiceImpl implements MascotService {
             try {
                 reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
             } catch (ApplicationException ex) {
-                if (reservedBasic) {
-                    releaseBasicSlot(user.getId());
+                if (shouldAutoFallbackToPoints(ex)) {
+                    usePoints = true;
+                    autoPointsFallback = true;
+                    if (reservedBasic) {
+                        releaseBasicSlot(user.getId());
+                        reservedBasic = false;
+                    }
+                    aiPointsBillingService.ensureBalance(user,
+                            aiPointsBillingService.estimatePoints(fallbackModel,
+                                    Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                                    Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+                } else {
+                    if (reservedBasic) {
+                        releaseBasicSlot(user.getId());
+                    }
+                    throw ex;
                 }
-                throw ex;
             }
         }
+
+        MascotMemoryVO mascotMemory = loadMascotMemory(user.getId());
+        List<String> likedTitles = loadLikedTitles(user.getId());
+        List<String> favoriteSongs = loadFavoriteSongs(user.getId());
 
         Long dbSessionId = null;
         List<MascotHistoryTurn> mergedHistory;
@@ -921,6 +1004,10 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("skill", skill);
         pyBody.put("history", toPyHistory(mergedHistory));
         pyBody.put("llm_provider", route);
+        pyBody.put("memory_summary", mascotMemory.getSummary());
+        pyBody.put("memory_facts", mascotMemory.getFacts());
+        pyBody.put("liked_titles", likedTitles);
+        pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
@@ -985,10 +1072,18 @@ public class MascotServiceImpl implements MascotService {
             releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI));
         }
-        AiModelUsageDTO usage = parseUsage(body, fallbackModel);
+        List<AiModelUsageDTO> usageItems = AiHubConverter.toUsageItems(body.get("usage"));
+        AiModelUsageDTO usage = usageItems.isEmpty()
+                ? parseUsage(body, fallbackModel)
+                : aiPointsBillingService.aggregateUsage(usageItems, fallbackModel);
         Map<String, Object> billing;
         try {
-            billing = billMascotUsage(begin, user, skill, usage, billingRelatedId, usePoints,
+            billing = usageItems.size() > 1
+                    ? aiCallRecordService.settleSuccessBatch(
+                    begin, user, featureCode(skill), usageItems, fallbackModel,
+                    billingRelatedId, Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
+                    System.currentTimeMillis() - startMs)
+                    : billMascotUsage(begin, user, skill, usage, billingRelatedId, usePoints,
                     System.currentTimeMillis() - startMs);
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
@@ -1016,6 +1111,8 @@ public class MascotServiceImpl implements MascotService {
             }
         }
 
+        autoSaveMemoryWrite(user.getId(), moduleData.get("memoryWrite"));
+
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("sessionId", pySessionKey);
         data.put("reply", reply);
@@ -1031,7 +1128,9 @@ public class MascotServiceImpl implements MascotService {
         data.put("estimated", usage.getEstimated());
         data.put("relatedSearchOffer", Boolean.TRUE.equals(moduleData.get("relatedSearchOffer")));
         data.put("relatedSearchQuery", moduleData.get("relatedSearchQuery"));
+        data.put("askConfirmOffer", moduleData.get("askConfirmOffer"));
         data.put("searchImageGallery", parseImageGallery(moduleData.get("searchImageGallery")));
+        data.put("quotaFallbackToPoints", autoPointsFallback);
         return MascotConverter.toChatResponse(data);
     }
 
@@ -1108,6 +1207,13 @@ public class MascotServiceImpl implements MascotService {
                 throw new IllegalStateException("context summary empty");
             }
             companionMemoryService.appendContextSummary(user.getId(), sessionId, summary, window.getUsedTokens());
+            AiModelUsageDTO usage = parseUsage(response.getBody(), "qwen3.7-flash");
+            aiPointsBillingService.bill(
+                    user,
+                    "companion_context_compress",
+                    usage,
+                    "context-compress:" + sessionId + ":" + System.currentTimeMillis(),
+                    Constant.POINTS_SOURCE_AI_COMPANION);
             return companionMemoryService.getContextWindow(user.getId(), sessionId);
         } catch (ApplicationException exception) {
             if (reservedFlash) {
@@ -1120,6 +1226,51 @@ public class MascotServiceImpl implements MascotService {
             }
             log.warn("看板娘上下文压缩失败: {}", exception.getMessage());
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "上下文压缩失败，请稍后重试"));
+        }
+    }
+
+    @Override
+    public MascotMemoryVO getMascotMemory(AiUserContext user) {
+        return companionMemoryService.getMascotMemory(user.getId());
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public MascotMemoryVO editMascotMemory(AiUserContext user, MascotMemoryEditRequest request) {
+        MascotMemoryVO current = companionMemoryService.getMascotMemory(user.getId());
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("memory_summary", current.getSummary());
+        payload.put("memory_facts", current.getFacts());
+        payload.put("memory_edit_instruction", request.getInstruction().trim());
+        ResponseEntity<Map> response = forumRestTemplate.postForEntity(
+                mascotAiUrl,
+                new HttpEntity<>(gatewayRequest(payload, "MEMORY_EDIT"), internalJsonHeaders()),
+                Map.class);
+        Map<String, Object> body = response.getBody();
+        Map<String, Object> data = gatewayModuleData(body);
+        if (data == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "记忆更新失败"));
+        }
+        String summary = data.get("summary") == null ? "" : String.valueOf(data.get("summary")).trim();
+        List<String> facts = stringList(data.get("facts"), 10);
+        companionMemoryService.saveMascotMemory(user.getId(), summary, facts);
+        return companionMemoryService.getMascotMemory(user.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void autoSaveMemoryWrite(Long userId, Object memoryWriteRaw) {
+        if (!(memoryWriteRaw instanceof Map<?, ?> mw) || mw.isEmpty()) {
+            return;
+        }
+        try {
+            String summary = mw.get("summary") == null ? "" : String.valueOf(mw.get("summary")).trim();
+            List<String> facts = stringList(mw.get("facts"), 10);
+            if (summary.isEmpty() && facts.isEmpty()) {
+                return;
+            }
+            companionMemoryService.saveMascotMemory(userId, summary, facts);
+        } catch (Exception ex) {
+            log.warn("自动保存看板娘记忆失败 userId={}: {}", userId, ex.getMessage());
         }
     }
 
@@ -1176,6 +1327,7 @@ public class MascotServiceImpl implements MascotService {
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
         boolean vip = isVip(user);
         boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
+        boolean autoPointsFallback = false;
         boolean reservedBasic = false;
         String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
@@ -1216,18 +1368,45 @@ public class MascotServiceImpl implements MascotService {
             try {
                 reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
             } catch (ApplicationException ex) {
-                if (reservedBasic) {
-                    releaseBasicSlot(user.getId());
+                if (shouldAutoFallbackToPoints(ex)) {
+                    usePoints = true;
+                    autoPointsFallback = true;
+                    if (reservedBasic) {
+                        releaseBasicSlot(user.getId());
+                        reservedBasic = false;
+                    }
+                    try {
+                        aiPointsBillingService.ensureBalance(user,
+                                aiPointsBillingService.estimatePoints(fallbackModel,
+                                        Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
+                                        Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
+                    } catch (ApplicationException balanceEx) {
+                        try {
+                            sendMascotSse(emitter, Map.of("error", balanceEx.getMessage() != null ? balanceEx.getMessage() : "balance"));
+                            emitter.complete();
+                        } catch (Exception e) {
+                            emitter.completeWithError(balanceEx);
+                        }
+                        return;
+                    }
+                } else {
+                    if (reservedBasic) {
+                        releaseBasicSlot(user.getId());
+                    }
+                    try {
+                        sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
+                        emitter.complete();
+                    } catch (Exception e) {
+                        emitter.completeWithError(ex);
+                    }
+                    return;
                 }
-                try {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
-                    emitter.complete();
-                } catch (Exception e) {
-                    emitter.completeWithError(ex);
-                }
-                return;
             }
         }
+
+        MascotMemoryVO mascotMemory = loadMascotMemory(user.getId());
+        List<String> likedTitles = loadLikedTitles(user.getId());
+        List<String> favoriteSongs = loadFavoriteSongs(user.getId());
 
         Long dbSessionId = null;
         List<MascotHistoryTurn> mergedHistory;
@@ -1248,9 +1427,11 @@ public class MascotServiceImpl implements MascotService {
         final String userMessage = request.getMessage().trim();
         final StringBuilder replyBuffer = new StringBuilder();
         final AtomicReference<List<CompanionImageGalleryItemVO>> streamSearchImageGallery = new AtomicReference<>(List.of());
+        final AtomicReference<Object> streamMemoryWrite = new AtomicReference<>(null);
         boolean imageRequested = false;
         String imagePrompt = "";
         final String billingRelatedId = billingRelatedId(request, pySessionKey);
+        final AtomicBoolean terminalHandled = new AtomicBoolean(false);
         final AiCallBeginResult streamBegin = aiCallRecordService.beginCall(
                 user.getId(), featureCode(skill), request.getClientRequestId(), fallbackModel);
         try {
@@ -1292,6 +1473,10 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("skill", skill);
         pyBody.put("history", toPyHistory(mergedHistory));
         pyBody.put("llm_provider", route);
+        pyBody.put("memory_summary", mascotMemory.getSummary());
+        pyBody.put("memory_facts", mascotMemory.getFacts());
+        pyBody.put("liked_titles", likedTitles);
+        pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
@@ -1326,6 +1511,7 @@ public class MascotServiceImpl implements MascotService {
             }
 
             AiModelUsageDTO usage = null;
+            List<AiModelUsageDTO> usageItems = List.of();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
@@ -1340,8 +1526,8 @@ public class MascotServiceImpl implements MascotService {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> chunk = objectMapper.readValue(payload, Map.class);
                     if ("error".equals(chunk.get("type")) && chunk.get("data") instanceof Map<?, ?> errorData) {
-                        Object message = errorData.get("message");
-                        sendMascotSse(emitter, Map.of("error", message != null ? String.valueOf(message) : "AI 服务暂时不可用"));
+                        log.warn("看板娘流式下游返回错误事件 type=error");
+                        sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用，请稍后重试"));
                         break;
                     }
                     String eventType = String.valueOf(chunk.get("type"));
@@ -1371,13 +1557,19 @@ public class MascotServiceImpl implements MascotService {
                         if (!gallery.isEmpty()) {
                             streamSearchImageGallery.set(gallery);
                         }
+                        if (metaMap.containsKey("memoryWrite")) {
+                            streamMemoryWrite.set(metaMap.remove("memoryWrite"));
+                        }
                         sendMascotSse(emitter, Map.of("meta", metaMap));
                         continue;
                     }
                     if ("usage".equals(eventType) && chunk.get("data") instanceof Map<?, ?> eventUsage) {
                         Map<String, Object> usageMap = new HashMap<>();
                         eventUsage.forEach((key, value) -> usageMap.put(String.valueOf(key), value));
-                        usage = parseUsage(Map.of("usage", usageMap), fallbackModel);
+                        usageItems = AiHubConverter.toUsageItems(usageMap);
+                        usage = usageItems.isEmpty()
+                                ? parseUsage(Map.of("usage", usageMap), fallbackModel)
+                                : aiPointsBillingService.aggregateUsage(usageItems, fallbackModel);
                         continue;
                     }
                     if ("final".equals(chunk.get("type")) && chunk.get("data") instanceof Map<?, ?> gateway) {
@@ -1398,6 +1590,31 @@ public class MascotServiceImpl implements MascotService {
                             searchMeta.put("complexity", String.valueOf(finalData.getOrDefault("complexity", "SIMPLE")));
                             sendMascotSse(emitter, Map.of("meta", searchMeta));
                         }
+                        if (finalData.get("askConfirmOffer") instanceof Map<?, ?> askOfferRaw) {
+                            Map<String, Object> askMeta = new LinkedHashMap<>();
+                            Map<String, Object> normalizedOffer = new LinkedHashMap<>();
+                            askOfferRaw.forEach((k, v) -> normalizedOffer.put(String.valueOf(k), v));
+                            if (normalizedOffer.get("questions") instanceof List<?> questions && !questions.isEmpty()) {
+                                askMeta.put("askConfirmOffer", normalizedOffer);
+                                sendMascotSse(emitter, Map.of("meta", askMeta));
+                            }
+                        } else if (finalData.get("drawConfirmOffer") instanceof Map<?, ?> drawOfferRaw) {
+                            // 兼容旧字段：单题生图确认 → 多题 ask
+                            Map<String, Object> normalizedOffer = new LinkedHashMap<>();
+                            drawOfferRaw.forEach((k, v) -> normalizedOffer.put(String.valueOf(k), v));
+                            Object options = normalizedOffer.get("options");
+                            Object question = normalizedOffer.get("question");
+                            if (options instanceof List<?> list && !list.isEmpty() && question != null) {
+                                Map<String, Object> q1 = new LinkedHashMap<>();
+                                q1.put("id", "q1");
+                                q1.put("question", String.valueOf(question));
+                                q1.put("options", list);
+                                Map<String, Object> ask = new LinkedHashMap<>();
+                                ask.put("purpose", "draw");
+                                ask.put("questions", List.of(q1));
+                                sendMascotSse(emitter, Map.of("meta", Map.of("askConfirmOffer", ask)));
+                            }
+                        }
                         List<CompanionImageGalleryItemVO> gallery = parseImageGallery(finalData.get("searchImageGallery"));
                         if (!gallery.isEmpty()) {
                             streamSearchImageGallery.set(gallery);
@@ -1413,12 +1630,16 @@ public class MascotServiceImpl implements MascotService {
                         if (usageObj instanceof Map<?, ?> usageMap) {
                             Map<String, Object> normalizedUsage = new HashMap<>();
                             usageMap.forEach((key, value) -> normalizedUsage.put(String.valueOf(key), value));
-                            usage = parseUsage(Map.of("usage", normalizedUsage), fallbackModel);
+                            usageItems = AiHubConverter.toUsageItems(normalizedUsage);
+                            usage = usageItems.isEmpty()
+                                    ? parseUsage(Map.of("usage", normalizedUsage), fallbackModel)
+                                    : aiPointsBillingService.aggregateUsage(usageItems, fallbackModel);
                         }
                         continue;
                     }
                     if (chunk.get("error") != null) {
-                        sendMascotSse(emitter, Map.of("error", String.valueOf(chunk.get("error"))));
+                        log.warn("看板娘流式下游返回错误字段");
+                        sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用，请稍后重试"));
                         break;
                     }
                     Object textObj = chunk.get("text");
@@ -1443,7 +1664,10 @@ public class MascotServiceImpl implements MascotService {
                     if (usageObj instanceof Map<?, ?> um) {
                         Map<String, Object> usageMap = new HashMap<>();
                         um.forEach((k, v) -> usageMap.put(String.valueOf(k), v));
-                        usage = parseUsage(Map.of("usage", usageMap), fallbackModel);
+                        usageItems = AiHubConverter.toUsageItems(usageMap);
+                        usage = usageItems.isEmpty()
+                                ? parseUsage(Map.of("usage", usageMap), fallbackModel)
+                                : aiPointsBillingService.aggregateUsage(usageItems, fallbackModel);
                     }
                 }
             }
@@ -1454,9 +1678,18 @@ public class MascotServiceImpl implements MascotService {
             }
             Map<String, Object> billing;
             try {
-                billing = billMascotUsage(streamBegin, user, skill, usage, billingRelatedId, usePoints,
+                billing = usageItems.size() > 1
+                        ? aiCallRecordService.settleSuccessBatch(
+                        streamBegin, user, featureCode(skill), usageItems, fallbackModel,
+                        billingRelatedId, Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
+                        System.currentTimeMillis() - streamStartMs)
+                        : billMascotUsage(streamBegin, user, skill, usage, billingRelatedId, usePoints,
                         System.currentTimeMillis() - streamStartMs);
+                terminalHandled.set(true);
             } catch (ApplicationException ex) {
+                if (!terminalHandled.compareAndSet(false, true)) {
+                    return;
+                }
                 if (reservedBasic) {
                     releaseBasicSlot(user.getId());
                 }
@@ -1467,6 +1700,8 @@ public class MascotServiceImpl implements MascotService {
                 emitter.complete();
                 return;
             }
+
+            autoSaveMemoryWrite(user.getId(), streamMemoryWrite.get());
 
             AiImageResponseVO delegatedImage = null;
             if (imageRequested) {
@@ -1497,6 +1732,7 @@ public class MascotServiceImpl implements MascotService {
             meta.put("pointsCost", billing.get("pointsCost"));
             meta.put("balanceAfter", billing.get("balanceAfter"));
             meta.put("billingMode", billing.get("billingMode"));
+            meta.put("quotaFallbackToPoints", autoPointsFallback);
             meta.put("usageStats", billing.get("usageStats"));
             meta.put("modelCode", usage.getModelCode());
             meta.put("llmRoute", route);
@@ -1509,11 +1745,19 @@ public class MascotServiceImpl implements MascotService {
             emitter.complete();
         } catch (Exception e) {
             log.warn("看板娘流式调用失败: {}", e.getMessage());
+            if (!terminalHandled.compareAndSet(false, true)) {
+                try {
+                    emitter.completeWithError(e);
+                } catch (Exception ignored) {
+                    // ignore
+                }
+                return;
+            }
             if (reservedBasic) {
                 releaseBasicSlot(user.getId());
             }
             releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
-            if (replyBuffer.length() > 0) {
+            if (!replyBuffer.isEmpty()) {
                 aiCallRecordService.settlePartialOutput(
                         streamBegin, user, featureCode(skill), fallbackModel,
                         replyBuffer.length(), billingRelatedId,
@@ -1537,7 +1781,7 @@ public class MascotServiceImpl implements MascotService {
 
     private Long persistCompanionAssistantReply(
             boolean ephemeral, Long sessionId, CharSequence reply, List<CompanionImageGalleryItemVO> imageGallery) {
-        if (ephemeral || sessionId == null || reply == null || reply.length() == 0) {
+        if (ephemeral || sessionId == null || reply == null || reply.isEmpty()) {
             return null;
         }
         return companionMemoryService.appendTextMessage(sessionId, "assistant", reply.toString(), imageGallery);

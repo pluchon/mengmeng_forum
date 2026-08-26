@@ -7,7 +7,8 @@
     aria-label="AI 润色"
     @click="runPolish"
   >
-    <el-icon class="article-ai-write-trigger-icon"><MagicStick /></el-icon>
+    <span v-if="textOnly" class="article-ai-write-trigger-text">AI 润色</span>
+    <el-icon v-else class="article-ai-write-trigger-icon"><MagicStick /></el-icon>
   </button>
 </template>
 

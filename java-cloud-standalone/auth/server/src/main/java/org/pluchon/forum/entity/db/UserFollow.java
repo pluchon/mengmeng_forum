@@ -14,10 +14,10 @@ public class UserFollow {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 关注者 */
+    // 关注者
     private Long followerId;
 
-    /** 被关注者 */
+    // 被关注者
     private Long followeeId;
 
     private Date createTime;

@@ -23,6 +23,9 @@ public class LotteryDrawItemVO {
 
     private Boolean jackpot;
 
-    /** 神秘大奖子项说明，如「VIP 体验 7 天」「积分 500」 */
+    // 神秘大奖子项说明，如「VIP 体验 7 天」「积分 500」
     private String rewardDetail;
+
+    // 本抽获得的萌星辉
+    private Integer starlightGranted;
 }

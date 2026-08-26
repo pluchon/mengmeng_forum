@@ -24,7 +24,7 @@
     </div>
 
     <template v-else-if="url">
-      <div class="video-preview">
+      <div class="video-preview" :class="{ 'video-preview--fill': variant === 'grid' }">
         <video
           class="video-preview__player"
           :src="url"
@@ -38,7 +38,7 @@
       </div>
     </template>
 
-    <button v-else type="button" class="editor-gallery-empty-cta" @click="emit('open')">
+    <button v-else type="button" class="video-empty-cta" @click="emit('open')">
       <el-icon :size="28"><VideoCamera /></el-icon>
       <span>点击上传视频</span>
     </button>
@@ -62,8 +62,12 @@ const emit = defineEmits(['open', 'remove'])
 <style scoped>
 .video-section {
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 10px;
+}
+.video-section--grid {
+  flex: 1;
 }
 .video-preview {
   width: 100%;
@@ -77,6 +81,15 @@ const emit = defineEmits(['open', 'remove'])
   border-radius: 12px;
   background: #0b0d12;
 }
+.video-preview--fill {
+  position: relative;
+  height: 178px;
+}
+.video-preview--fill .video-preview__player {
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
 .video-remove {
   height: 40px;
   border: none;
@@ -85,6 +98,19 @@ const emit = defineEmits(['open', 'remove'])
   font-weight: 800;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
+}
+.video-preview--fill .video-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: auto;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
+  background: rgba(21, 18, 24, 0.62);
+  color: #fff;
+  font-size: 11px;
 }
 .video-remove:hover {
   background: var(--primary-pale);
@@ -116,5 +142,25 @@ const emit = defineEmits(['open', 'remove'])
   font-size: 13px;
   color: var(--text-secondary, #666);
 }
-</style>
+.video-empty-cta {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0;
+  border: 1px dashed #eb7da9;
+  border-radius: 10px;
+  background: #fff9fc;
+  color: #e46498;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.video-empty-cta:hover {
+  border-color: #dc5f91;
+  background: #fff1f7;
+}</style>
 

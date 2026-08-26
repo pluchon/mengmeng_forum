@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.game.ai;
 
+import org.pluchon.forum.api.ai.AiGobangBoardInsight;
 import org.pluchon.forum.service.impl.game.GameConstants;
 import org.pluchon.forum.service.impl.game.GobangRuleEngine;
 import org.springframework.stereotype.Component;
@@ -8,7 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-// 五子棋本地 AI：战术手 + 浅层 minimax + 启发式评分
+// 五子棋本地 AI：威胁优先级 + 分桶 minimax + 局面摘要
 @Component
 public class GobangAiEngine {
 
@@ -16,59 +17,99 @@ public class GobangAiEngine {
 
     private static final int PLAYER_CHESS = 1;
 
-    private static final int SEARCH_DEPTH = 2;
-
-    private static final int MAX_CANDIDATES = 10;
-
     private final GobangRuleEngine ruleEngine;
 
-    public GobangAiEngine(GobangRuleEngine ruleEngine) {
+    private final GobangThreatDetector threatDetector;
+
+    public GobangAiEngine(GobangRuleEngine ruleEngine, GobangThreatDetector threatDetector) {
         this.ruleEngine = ruleEngine;
+        this.threatDetector = threatDetector;
     }
 
-    public boolean hasTacticalMove(int[][] board) {
-        return findTacticalMove(board, AI_CHESS) != null || findTacticalMove(board, PLAYER_CHESS) != null;
+    public boolean hasForcedThreat(int[][] board) {
+        return threatDetector.findForcedThreat(board, AI_CHESS, PLAYER_CHESS) != null;
+    }
+
+    public GobangThreatDetector.ThreatHit findForcedThreat(int[][] board) {
+        return threatDetector.findForcedThreat(board, AI_CHESS, PLAYER_CHESS);
+    }
+
+    public GobangThreatDetector.ThreatHit findMustBlock(int[][] board) {
+        return threatDetector.findMustBlock(board, AI_CHESS, PLAYER_CHESS);
     }
 
     public int[] chooseMove(int[][] board) {
-        int[] tactical = findTacticalMove(board, AI_CHESS);
-        if (tactical != null) {
-            return tactical;
+        return chooseMove(board, GobangAiDifficultyProfile.ofScore(0));
+    }
+
+    public int[] chooseMove(int[][] board, GobangAiDifficultyProfile profile) {
+        GobangAiDifficultyProfile safe = profile == null ? GobangAiDifficultyProfile.ofScore(0) : profile;
+        GobangThreatDetector.ThreatHit threat = threatDetector.findBestThreat(board, AI_CHESS, PLAYER_CHESS);
+        if (threat != null) {
+            return new int[] { threat.row(), threat.col() };
         }
-        int[] block = findTacticalMove(board, PLAYER_CHESS);
-        if (block != null) {
-            return block;
-        }
-        int[] searched = searchBestMove(board);
+        int[] searched = searchBestMove(board, safe);
         return searched != null ? searched : firstEmpty(board);
     }
 
-    private int[] searchBestMove(int[][] board) {
-        List<int[]> candidates = rankedCandidates(board);
+    public int candidateScoreSpread(int[][] board, GobangAiDifficultyProfile profile) {
+        List<int[]> ranked = rankedCandidates(board, profile == null ? 12 : profile.maxCandidates());
+        if (ranked.size() < 2) {
+            return 0;
+        }
+        return Math.max(0, ranked.get(0)[2] - ranked.get(1)[2]);
+    }
+
+    public AiGobangBoardInsight buildBoardInsight(int[][] board, GobangAiDifficultyProfile profile) {
+        GobangAiDifficultyProfile safe = profile == null ? GobangAiDifficultyProfile.ofScore(0) : profile;
+        AiGobangBoardInsight insight = new AiGobangBoardInsight();
+        int moveNo = GameAiPlanner.countStones(board);
+        insight.setMoveNo(moveNo);
+        insight.setPhase(GameAiPlanner.phaseOf(moveNo));
+        insight.setStones(collectStones(board));
+        insight.setMyThreats(threatDetector.describeThreats(board, AI_CHESS, "my"));
+        insight.setOppThreats(threatDetector.describeThreats(board, PLAYER_CHESS, "opp"));
+        List<int[]> ranked = rankedCandidates(board, Math.max(5, safe.maxCandidates()));
+        int limit = Math.min(5, Math.max(3, ranked.size()));
+        List<AiGobangBoardInsight.CandidateMove> candidates = new ArrayList<>(limit);
+        for (int i = 0; i < Math.min(limit, ranked.size()); i++) {
+            int[] item = ranked.get(i);
+            int row = item[0];
+            int col = item[1];
+            String reason = threatDetector.reasonForPlacement(board, row, col, AI_CHESS, PLAYER_CHESS);
+            candidates.add(new AiGobangBoardInsight.CandidateMove(row, col, reason, item[2]));
+        }
+        insight.setCandidateMoves(candidates);
+        return insight;
+    }
+
+    private int[] searchBestMove(int[][] board, GobangAiDifficultyProfile profile) {
+        List<int[]> candidates = rankedCandidates(board, profile.maxCandidates());
         if (candidates.isEmpty()) {
             return null;
         }
         int[] bestMove = null;
         int bestScore = Integer.MIN_VALUE;
+        int depth = Math.max(1, profile.depth());
         for (int[] move : candidates) {
             int row = move[0];
             int col = move[1];
             board[row][col] = AI_CHESS;
-            int score = minimax(board, SEARCH_DEPTH - 1, false, Integer.MIN_VALUE, Integer.MAX_VALUE);
+            int score = minimax(board, depth - 1, false, Integer.MIN_VALUE, Integer.MAX_VALUE, profile.maxCandidates());
             board[row][col] = 0;
             if (score > bestScore) {
                 bestScore = score;
-                bestMove = move;
+                bestMove = new int[] { row, col };
             }
         }
         return bestMove;
     }
 
-    private int minimax(int[][] board, int depth, boolean aiTurn, int alpha, int beta) {
+    private int minimax(int[][] board, int depth, boolean aiTurn, int alpha, int beta, int maxCandidates) {
         if (depth <= 0 || isTerminal(board)) {
             return evaluateBoard(board);
         }
-        List<int[]> moves = rankedCandidates(board);
+        List<int[]> moves = rankedCandidates(board, maxCandidates);
         if (moves.isEmpty()) {
             return evaluateBoard(board);
         }
@@ -78,7 +119,7 @@ public class GobangAiEngine {
                 int row = move[0];
                 int col = move[1];
                 board[row][col] = AI_CHESS;
-                value = Math.max(value, minimax(board, depth - 1, false, alpha, beta));
+                value = Math.max(value, minimax(board, depth - 1, false, alpha, beta, maxCandidates));
                 board[row][col] = 0;
                 alpha = Math.max(alpha, value);
                 if (beta <= alpha) {
@@ -92,7 +133,7 @@ public class GobangAiEngine {
             int row = move[0];
             int col = move[1];
             board[row][col] = PLAYER_CHESS;
-            value = Math.min(value, minimax(board, depth - 1, true, alpha, beta));
+            value = Math.min(value, minimax(board, depth - 1, true, alpha, beta, maxCandidates));
             board[row][col] = 0;
             beta = Math.min(beta, value);
             if (beta <= alpha) {
@@ -132,9 +173,10 @@ public class GobangAiEngine {
         return score;
     }
 
-    private List<int[]> rankedCandidates(int[][] board) {
+    private List<int[]> rankedCandidates(int[][] board, int maxCandidates) {
         List<int[]> rows = new ArrayList<>();
         int center = GameConstants.BOARD_SIZE / 2;
+        int limit = Math.max(1, maxCandidates);
         for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
             for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
                 if (board[row][col] != 0 || !hasNeighbor(board, row, col)) {
@@ -146,32 +188,27 @@ public class GobangAiEngine {
             }
         }
         if (rows.isEmpty() && board[center][center] == 0) {
-            return List.of(new int[] { center, center });
+            return List.of(new int[] { center, center, 0 });
         }
         rows.sort(Comparator.comparingInt((int[] item) -> item[2]).reversed());
-        List<int[]> moves = new ArrayList<>(Math.min(MAX_CANDIDATES, rows.size()));
-        for (int i = 0; i < Math.min(MAX_CANDIDATES, rows.size()); i++) {
-            int[] item = rows.get(i);
-            moves.add(new int[] { item[0], item[1] });
+        List<int[]> moves = new ArrayList<>(Math.min(limit, rows.size()));
+        for (int i = 0; i < Math.min(limit, rows.size()); i++) {
+            moves.add(rows.get(i));
         }
         return moves;
     }
 
-    private int[] findTacticalMove(int[][] board, int chess) {
+    private List<AiGobangBoardInsight.Stone> collectStones(int[][] board) {
+        List<AiGobangBoardInsight.Stone> stones = new ArrayList<>();
         for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
             for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
-                if (board[row][col] != 0) {
-                    continue;
-                }
-                board[row][col] = chess;
-                boolean five = ruleEngine.hasFive(board, chess, row, col);
-                board[row][col] = 0;
-                if (five) {
-                    return new int[] { row, col };
+                int cell = board[row][col];
+                if (cell == 1 || cell == 2) {
+                    stones.add(new AiGobangBoardInsight.Stone(row, col, cell));
                 }
             }
         }
-        return null;
+        return stones;
     }
 
     private int scorePoint(int[][] board, int row, int col, int chess) {

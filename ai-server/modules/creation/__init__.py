@@ -2,6 +2,24 @@
 
 from __future__ import annotations
 
-from modules.creation.module import CoverHintsModule, ImageGenerationModule, PostPolishModule
+from modules.creation.module import (
+    ArticleCoverModule,
+    ArticleTagRecommendModule,
+    ArticleTagSimilarityModule,
+    CoverHintsModule,
+    ImageGenerationModule,
+    MusicRecommendModule,
+    MusicSearchModule,
+    PostPolishModule,
+)
 
-__all__ = ["CoverHintsModule", "ImageGenerationModule", "PostPolishModule"]
+__all__ = [
+    "ArticleCoverModule",
+    "ArticleTagRecommendModule",
+    "ArticleTagSimilarityModule",
+    "CoverHintsModule",
+    "ImageGenerationModule",
+    "MusicRecommendModule",
+    "MusicSearchModule",
+    "PostPolishModule",
+]

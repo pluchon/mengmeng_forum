@@ -1,8 +1,13 @@
 import request from './request'
 
-// 获取一级回复列表（分页）
+// 获取一级回复列表 分页
 export function getReplyList(params) {
-  return request({ url: '/articleReply/getArticleReplyByArticleIdWithPage', method: 'get', params })
+  return request({
+    url: '/articleReply/getArticleReplyByArticleIdWithPage',
+    method: 'get',
+    params,
+    publicAnonymousFallback: true,
+  })
 }
 
 // 发表一级回复
@@ -12,7 +17,12 @@ export function submitReply(data) {
 
 // 获取楼中楼子回复列表
 export function getSubReplyList(params) {
-  return request({ url: '/articleSubReply/getSubReplyByReplyId', method: 'get', params })
+  return request({
+    url: '/articleSubReply/getSubReplyByReplyId',
+    method: 'get',
+    params,
+    publicAnonymousFallback: true,
+  })
 }
 
 // 发表楼中楼子回复

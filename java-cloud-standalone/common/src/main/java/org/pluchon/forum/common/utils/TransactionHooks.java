@@ -3,9 +3,7 @@ package org.pluchon.forum.common.utils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/**
- * 事务提交后再执行副作用（Redis、MQ 等），避免主事务回滚后派生数据不一致。
- */
+// 事务提交后再执行副作用 Redis、MQ 等 ，避免主事务回滚后派生数据不一致
 public final class TransactionHooks {
 
     private TransactionHooks() {

@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 积分钱包流水表实体, 对应 points_log. 任何 user.points 变动都要在同一事务里写一条.
- */
+// 积分钱包流水表实体, 对应 points_log. 任何 points_wallet.balance 变动都要在同一事务里写一条.
 @Data
 @TableName("points_log")
 @Schema(description = "积分钱包流水实体")

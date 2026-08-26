@@ -1,6 +1,6 @@
 package org.pluchon.forum.converter;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.search.SearchUserItemVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 

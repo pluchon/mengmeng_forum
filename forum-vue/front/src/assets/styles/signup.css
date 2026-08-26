@@ -1,10 +1,31 @@
 @import './auth-split-layout.css';
 
+/* 注册页：与登录页同一套樱花粉内容区，粒子海保留在页面外层 */
 .form-side--signup {
   justify-content: flex-start;
+  background: linear-gradient(180deg, #ffffff 0%, #fff8fc 60%, #fff0f7 100%);
 }
-.form-side--signup .auth-brand-header {
-  margin-bottom: 22px;
+
+.auth-scene-copy::before {
+  background: #f07ba8;
+  box-shadow: 0 3px 12px rgba(240, 123, 168, 0.42);
+}
+
+:deep(.auth-brand-header) {
+  margin: 0 0 22px;
+}
+
+:deep(.auth-brand-title-img) {
+  display: block;
+  width: min(280px, 82%);
+  height: auto;
+  margin: 0 auto;
+  user-select: none;
+  pointer-events: none;
+}
+
+:deep(.auth-brand-title--fallback) {
+  font-size: 28px;
 }
 
 .signup-form {
@@ -12,119 +33,146 @@
 }
 
 .signup-form :deep(.el-form-item) {
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0 10px;
+  gap: 0 12px;
 }
 
 .flat-form-item :deep(.el-form-item__label) {
   height: auto;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding: 0;
-  color: #55575f;
-  font-size: 12px;
-  font-weight: 700;
+  color: #7a6b80;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.3;
 }
 
+.signup-form :deep(.el-form-item.is-required:not(.is-no-asterisk).asterisk-left > .el-form-item__label::before) {
+  color: #f07ba8;
+}
+
 .flat-form-item :deep(.el-input__wrapper) {
-  min-height: 46px;
-  padding: 0 12px;
-  border: 1px solid #e4e5e9 !important;
-  border-radius: 12px !important;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #f0e0ea !important;
+  border-radius: 10px !important;
   background: #fff !important;
   box-shadow: none !important;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .flat-form-item :deep(.el-input__wrapper:hover) {
-  border-color: rgba(255, 36, 66, 0.38) !important;
+  border-color: #e8c9d8 !important;
 }
 
-.flat-form-item :deep(.el-input__wrapper.is-focus) {
-  border-color: var(--primary-red) !important;
-  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.1) !important;
+/* 有焦点时一律淡粉，盖过 error / success */
+.form-side--signup :deep(.el-input__wrapper.is-focus),
+.form-side--signup :deep(.el-form-item.is-error .el-input__wrapper.is-focus),
+.form-side--signup :deep(.el-form-item.is-success .el-input__wrapper.is-focus) {
+  border-color: #f5b0cb !important;
+  box-shadow: 0 0 0 3px rgba(240, 123, 168, 0.12) !important;
+}
+
+.form-side--signup :deep(.el-form-item.is-error .el-input__wrapper:not(.is-focus)) {
+  border-color: #e85a6b !important;
+  box-shadow: 0 0 0 3px rgba(232, 90, 107, 0.1) !important;
+}
+
+.form-side--signup :deep(.el-form-item.is-success .el-input__wrapper:not(.is-focus)) {
+  border-color: #66a46a !important;
+  box-shadow: 0 0 0 3px rgba(102, 164, 106, 0.12) !important;
 }
 
 .action-section {
   width: 100%;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .form-policy {
-  margin: 0 0 12px;
+  display: flex;
+  margin: 0 0 14px;
+  align-items: center;
+  justify-content: center;
   text-align: center;
 }
 
 .form-policy :deep(.el-checkbox) {
   height: auto;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   white-space: normal;
 }
 
 .form-policy :deep(.el-checkbox__inner) {
-  border-color: #d7d8de;
+  border-color: #f0e0ea;
   border-radius: 4px;
 }
 
 .form-policy :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  border-color: var(--primary-red);
-  background: var(--primary-red);
+  border-color: #f07ba8;
+  background: #f07ba8;
 }
 
 .form-policy :deep(.el-checkbox__label) {
-  padding-left: 6px;
-  color: #8d8f98;
-  font-size: 11px;
+  padding-left: 8px;
+  color: #b0a3b5;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .link {
-  color: var(--primary-red);
+  margin: 0 2px;
+  color: #f07ba8;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 400;
+  text-decoration: none;
 }
 
 .link:hover {
-  color: var(--primary-hover);
+  color: #e36b9a;
 }
 
 .flat-submit-btn {
   display: inline-flex !important;
   width: 100% !important;
-  height: 50px !important;
+  height: 48px !important;
   align-items: center !important;
   justify-content: center !important;
   border: 0 !important;
   border-radius: 12px !important;
-  background: var(--primary-red) !important;
-  box-shadow: 0 12px 24px rgba(255, 36, 66, 0.2) !important;
+  background: #f07ba8 !important;
+  box-shadow: 0 4px 16px rgba(240, 123, 168, 0.25) !important;
   color: #fff !important;
-  font-size: 14px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.06em;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
   transition: transform 0.2s, background 0.2s, box-shadow 0.2s !important;
 }
 
 .flat-submit-btn:hover {
   transform: translateY(-1px);
-  background: var(--primary-hover) !important;
-  box-shadow: 0 15px 28px rgba(255, 36, 66, 0.26) !important;
+  background: #e86f9d !important;
+  box-shadow: 0 8px 20px rgba(240, 123, 168, 0.32) !important;
+}
+
+.flat-submit-btn:active {
+  transform: translateY(0);
 }
 
 .auth-secondary-links {
   display: flex;
   min-height: 26px;
-  margin-top: 14px;
+  margin-top: 16px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #8d8f98;
-  font-size: 12px;
+  color: #b0a3b5;
+  font-size: 13px;
 }
 
 .auth-text-link {
@@ -132,19 +180,38 @@
   padding: 3px 1px;
   border: 0;
   background: transparent;
-  color: var(--primary-red);
+  color: #f07ba8;
   cursor: pointer;
   font: inherit;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .auth-text-link:hover {
-  color: var(--primary-hover);
+  color: #e36b9a;
 }
 
-.auth-text-link:focus-visible {
-  outline: 2px solid rgba(255, 36, 66, 0.58);
+.auth-text-link:focus-visible,
+.link:focus-visible {
+  outline: 2px solid rgba(240, 123, 168, 0.55);
   outline-offset: 2px;
+}
+
+.form-side--signup :deep(.site-icp-link--auth .site-icp-link__a) {
+  color: #b0a3b5;
+}
+
+.form-side--signup :deep(.site-icp-link--auth .site-icp-link__a:hover) {
+  color: #f07ba8;
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  :deep(.auth-brand-title-img) {
+    width: min(240px, 88%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

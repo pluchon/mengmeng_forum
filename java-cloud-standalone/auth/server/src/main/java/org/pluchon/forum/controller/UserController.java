@@ -11,20 +11,24 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
+import org.pluchon.forum.entity.dto.user.ProfileChangeRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
 import org.pluchon.forum.entity.dto.user.UserResigterRequest;
 import org.pluchon.forum.entity.vo.user.AuthLoginResultVO;
 import org.pluchon.forum.entity.vo.user.UserFollowListItemVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.entity.vo.user.UserLoginLogVO;
+import org.pluchon.forum.entity.vo.user.UserSecurityAssessmentVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
+import org.pluchon.forum.entity.vo.user.ProfileChangeStatusVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.cloud.feign.AuthWebSocketInternalFeignClient;
+import org.pluchon.forum.cloud.AuthWebSocketInternalFeignClient;
 import org.pluchon.forum.service.interfaces.captcha.CaptchaTicketService;
 import org.pluchon.forum.service.interfaces.user.UserAuthFlowService;
 import org.pluchon.forum.service.interfaces.user.UserFollowService;
 import org.pluchon.forum.service.interfaces.user.UserLoginLogService;
 import org.pluchon.forum.service.interfaces.user.UserService;
+import org.pluchon.forum.service.interfaces.user.UserProfileChangeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -54,6 +58,9 @@ public class UserController {
 
     @Autowired
     private UserFollowService userFollowService;
+
+    @Autowired
+    private UserProfileChangeService userProfileChangeService;
 
     @Operation(summary = "用户注册", description = "传入用户名、密码、昵称完成注册")
     @PostMapping("/register")
@@ -181,6 +188,32 @@ public class UserController {
         return Result.success(userLoginLogService.listRecent(sessionUser.getId(), limit == null ? 20 : limit));
     }
 
+    /** 提交昵称或个人简介审核 */
+    @PostMapping("/profile/change-request")
+    public Result<ProfileChangeStatusVO> submitProfileChange(
+            @Valid @RequestBody ProfileChangeRequest request,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(userProfileChangeService.submit(sessionUser.getId(), request));
+    }
+
+    /** 查询昵称或个人简介的最新审核状态 */
+    @GetMapping("/profile/change-request/status")
+    public Result<ProfileChangeStatusVO> profileChangeStatus(
+            @RequestParam String fieldType,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(userProfileChangeService.latest(sessionUser.getId(), fieldType));
+    }
+
+    /** 重新评估当前账号的密码与绑定信息 */
+    @Operation(summary = "账号安全评估", description = "基于绑定完备度与近期登录日志风险实时计算")
+    @GetMapping("/securityAssessment")
+    public Result<UserSecurityAssessmentVO> securityAssessment(HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        return Result.success(userService.assessSecurity(sessionUser.getId()));
+    }
+
     @Operation(summary = "关注用户")
     @PutMapping("/followUser")
     public Result<String> followUser(@RequestParam Long followeeId, HttpServletRequest httpServletRequest) {
@@ -211,6 +244,16 @@ public class UserController {
         return Result.success(userFollowService.getStats(userId, viewerId));
     }
 
+    @Operation(summary = "本月新增粉丝", description = "当前登录用户从本月第一天至今新增的粉丝数")
+    @GetMapping("/creator/monthly-new-followers")
+    public Result<Long> currentMonthNewFollowers(HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(userFollowService.getCurrentMonthNewFollowerCount(loginUser.getId()));
+    }
+
     @Operation(summary = "我关注的用户ID列表", description = "用于首页热帖等场景标注「你的关注」")
     @GetMapping("/followingIds")
     public Result<List<Long>> followingIds(HttpServletRequest httpServletRequest) {
@@ -222,26 +265,26 @@ public class UserController {
         return Result.success(ids.stream().sorted().toList());
     }
 
-    @Operation(summary = "关注列表", description = "某用户关注的人；按关注时间降序；keyword 仅在关注范围内按昵称/用户名/简介模糊搜")
+    @Operation(summary = "关注列表", description = "某用户关注的人；按关注时间降序；keyword 仅按昵称模糊搜索")
     @GetMapping("/followingList")
     public Result<PageResult<UserFollowListItemVO>> followingList(
             @RequestParam Long userId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(defaultValue = "5") Integer pageSize,
             HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;
         return Result.success(userFollowService.listFollowingPage(userId, viewerId, keyword, pageNum, pageSize));
     }
 
-    @Operation(summary = "粉丝列表", description = "关注某用户的人；按关注时间降序；keyword 仅在粉丝范围内按昵称/用户名/简介模糊搜")
+    @Operation(summary = "粉丝列表", description = "关注某用户的人；按关注时间降序；keyword 仅按昵称模糊搜索")
     @GetMapping("/followerList")
     public Result<PageResult<UserFollowListItemVO>> followerList(
             @RequestParam Long userId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(defaultValue = "5") Integer pageSize,
             HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long viewerId = loginUser != null ? loginUser.getId() : null;

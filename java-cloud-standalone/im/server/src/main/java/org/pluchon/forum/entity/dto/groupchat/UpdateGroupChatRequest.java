@@ -1,5 +1,6 @@
 package org.pluchon.forum.entity.dto.groupchat;
 
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 // 修改群资料请求
@@ -7,6 +8,7 @@ import lombok.Data;
 public class UpdateGroupChatRequest {
 
     // 群名称
+    @Size(max = 10)
     private String name;
 
     // 群简介

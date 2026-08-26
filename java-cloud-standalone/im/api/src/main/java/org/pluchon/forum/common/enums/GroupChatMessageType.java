@@ -8,7 +8,7 @@ public enum GroupChatMessageType {
     TEXT((byte) 0),
     EMOJI((byte) 1),
     IMAGE((byte) 2),
-    VOICE((byte) 3),
+    ALBUM((byte) 4),
     SYSTEM((byte) 9);
 
     private final Byte code;

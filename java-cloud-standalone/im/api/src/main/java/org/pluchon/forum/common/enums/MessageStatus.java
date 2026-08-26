@@ -7,7 +7,8 @@ import lombok.Getter;
 public enum MessageStatus {
     UN_READ(0, "未读"),
     IS_READ(1, "已读"),
-    RECALLED(2, "已撤回");
+    RECALLED(2, "已撤回"),
+    AUDIT_FAILED(3, "审核未通过");
 
     final int code;
     final String message;

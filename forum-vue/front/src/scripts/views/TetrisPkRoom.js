@@ -1,14 +1,16 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { ChatDotRound, Flag, HomeFilled, MoreFilled, UserFilled } from '@element-plus/icons-vue'
 import { getTetrisPkRoom, surrenderTetrisPkRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { drawBoard, drawPreview } from '@/scripts/games/tetris/canvas'
 
-const CELL_SIZE = 20
+const CELL_SIZE = 24
 const BOARD_WIDTH = 10 * CELL_SIZE
 const BOARD_HEIGHT = 20 * CELL_SIZE
 const KEY_MAP = {
@@ -86,7 +88,11 @@ function useTetrisPkRoom() {
   const opponentBoardRef = ref(null)
   const holdRef = ref(null)
   const nextRef = ref(null)
+  const comboFlash = ref(0)
 
+  const peerStateText = ref('')
+  let comboFlashTimer = null
+  let lastCombo = 0
   const roomSocket = useGameWebSocket(`games/tetris/rooms/${roomId.value}`, {
     onMessage(message) {
       if (!message.ok) {
@@ -103,10 +109,13 @@ function useTetrisPkRoom() {
         chatMessages.value.push(message.data)
       }
       if (message.type === 'peer_disconnected') {
-        ElMessage.info('对手暂时离线')
+        peerStateText.value = '对手暂时离线'
       }
       if (message.type === 'peer_reconnected') {
-        ElMessage.success('对手已重连')
+        peerStateText.value = '对手已重连'
+        window.setTimeout(() => {
+          if (peerStateText.value === '对手已重连') peerStateText.value = ''
+        }, 3000)
       }
     },
   })
@@ -166,7 +175,14 @@ function useTetrisPkRoom() {
     const sec = elapsedTick.value % 60
     return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   })
-  const pkBarLeftPercent = computed(() => room.pkBarLeftPercent ?? 50)
+  const pkBarLeftPercent = computed(() => {
+    const red = Math.max(0, Number(room.redScore) || 0)
+    const blue = Math.max(0, Number(room.blueScore) || 0)
+    const total = red + blue
+    if (total <= 0 || red === blue) return 50
+    const percent = Math.round((red / total) * 100)
+    return Math.max(15, Math.min(85, percent))
+  })
   const amRed = computed(() => room.thisUserId === room.redUserId)
   const leftBoard = computed(() => {
     if (isSpectator.value) {
@@ -188,6 +204,16 @@ function useTetrisPkRoom() {
     if (isSpectator.value) return room.winnerUserId === room.redUserId ? '红方获胜' : '蓝方获胜'
     return room.winnerUserId === room.thisUserId ? '你赢了' : '你输了'
   })
+
+  function triggerComboFlash(comboCount) {
+    if (comboCount < 2) return
+    comboFlash.value = comboCount >= 3 ? 3 : 2
+    if (comboFlashTimer) clearTimeout(comboFlashTimer)
+    comboFlashTimer = window.setTimeout(() => {
+      comboFlash.value = 0
+      comboFlashTimer = null
+    }, 600)
+  }
 
   function applyRoomState(data) {
     Object.assign(room, {
@@ -245,6 +271,16 @@ function useTetrisPkRoom() {
       paintPreview(nextRef.value, room.myBoard.nextType)
     }
   }
+
+  watch(
+    () => room.myBoard?.combo ?? 0,
+    (nextCombo) => {
+      if (nextCombo >= 2 && nextCombo > lastCombo) {
+        triggerComboFlash(nextCombo)
+      }
+      lastCombo = nextCombo
+    },
+  )
 
   watch(
     () => [room.myBoard, room.opponentBoard],
@@ -327,7 +363,7 @@ function useTetrisPkRoom() {
   async function surrender() {
     if (isFinished.value || surrendering.value || isSpectator.value) return
     try {
-      await ElMessageBox.confirm('确认认输并结束本局吗？', '俄罗斯方块 PK', {
+      await confirmDialog('确认认输并结束本局吗？', '俄罗斯方块 PK', {
         type: 'warning',
         confirmButtonText: '认输',
         cancelButtonText: '继续对局',
@@ -385,7 +421,7 @@ function useTetrisPkRoom() {
   async function backGame() {
     if (!isFinished.value && isPlayer.value) {
       try {
-        await ElMessageBox.confirm('确认离开当前对局吗？', '离开对局', {
+        await confirmDialog('确认离开当前对局吗？', '离开对局', {
           type: 'warning',
           confirmButtonText: '离开',
           cancelButtonText: '继续对局',
@@ -413,6 +449,7 @@ function useTetrisPkRoom() {
     window.removeEventListener('keydown', onKeyDown, true)
     if (elapsedTimer) window.clearInterval(elapsedTimer)
     if (finishRedirectTimer) window.clearInterval(finishRedirectTimer)
+    if (comboFlashTimer) window.clearTimeout(comboFlashTimer)
     roomSocket.close()
   })
 
@@ -423,6 +460,7 @@ function useTetrisPkRoom() {
     chatListRef,
     chatMessages,
     chatText,
+    comboFlash,
     elapsedText,
     finishCountdown,
     holdRef,
@@ -441,6 +479,7 @@ function useTetrisPkRoom() {
     opponentScore,
     participantName,
     avatarText,
+    peerStateText,
     pkBarLeftPercent,
     playerStatsTitle,
     playerStatsVisible,
@@ -473,6 +512,7 @@ const {
   chatListRef,
   chatMessages,
   chatText,
+  comboFlash,
   elapsedText,
   finishCountdown,
   holdRef,
@@ -490,6 +530,7 @@ const {
   opponentProfile,
   opponentScore,
   participantName,
+  peerStateText,
   pkBarLeftPercent,
   playerStatsTitle,
   playerStatsVisible,

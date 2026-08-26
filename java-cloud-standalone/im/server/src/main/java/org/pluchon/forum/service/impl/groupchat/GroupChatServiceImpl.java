@@ -5,7 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.ImVipInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
@@ -18,7 +19,6 @@ import org.pluchon.forum.common.enums.GroupChatJoinRequestType;
 import org.pluchon.forum.common.enums.GroupChatMessageStatus;
 import org.pluchon.forum.common.enums.GroupChatMessageType;
 import org.pluchon.forum.common.enums.GroupChatNotifyMode;
-import org.pluchon.forum.common.enums.GroupChatReportStatus;
 import org.pluchon.forum.common.enums.GroupChatStatus;
 import org.pluchon.forum.common.enums.GroupChatType;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -32,11 +32,12 @@ import org.pluchon.forum.entity.db.GroupChat;
 import org.pluchon.forum.entity.db.GroupChatJoinRequest;
 import org.pluchon.forum.entity.db.GroupChatMember;
 import org.pluchon.forum.entity.db.GroupChatMessage;
-import org.pluchon.forum.entity.db.GroupChatReport;
+import org.pluchon.forum.entity.db.GroupChatMessageAlbumImage;
 import org.pluchon.forum.entity.dto.groupchat.CreateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupInviteMemberRequest;
 import org.pluchon.forum.entity.dto.groupchat.GroupMuteMemberRequest;
-import org.pluchon.forum.entity.dto.groupchat.ReportGroupChatMessageRequest;
+import org.pluchon.forum.entity.dto.groupchat.GroupChatAlbumImageRequest;
+import org.pluchon.forum.entity.dto.groupchat.SendGroupChatAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.SendGroupChatMessageRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupChatRequest;
 import org.pluchon.forum.entity.dto.groupchat.UpdateGroupMemberRemarkRequest;
@@ -48,14 +49,17 @@ import org.pluchon.forum.entity.vo.groupchat.GroupChatJoinRequestVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMemberVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatMessageVO;
 import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionVO;
+import org.pluchon.forum.entity.vo.groupchat.GroupChatSessionSearchResponse;
 import org.pluchon.forum.mapper.GroupChatMapper;
 import org.pluchon.forum.mapper.GroupChatJoinRequestMapper;
 import org.pluchon.forum.mapper.GroupChatMemberMapper;
 import org.pluchon.forum.mapper.GroupChatMessageMapper;
-import org.pluchon.forum.mapper.GroupChatReportMapper;
+import org.pluchon.forum.mapper.GroupChatMessageAlbumImageMapper;
 import org.pluchon.forum.service.impl.websocket.WebSocketPushService;
+import org.pluchon.forum.service.impl.message.OutboundMessageTextAuditService;
 import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.pluchon.forum.service.impl.remote.ImUserMuteGuard;
+import org.pluchon.forum.service.remote.ImShopEmojiAvailabilityService;
 import org.pluchon.forum.service.interfaces.groupchat.GroupChatService;
 import org.pluchon.forum.service.interfaces.message.MessageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -97,9 +101,9 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Autowired
     private GroupChatMessageMapper groupChatMessageMapper;
 
-    // 群举报 Mapper
+    // 群聊图集图片 Mapper
     @Autowired
-    private GroupChatReportMapper groupChatReportMapper;
+    private GroupChatMessageAlbumImageMapper groupChatMessageAlbumImageMapper;
 
     // 认证用户查询服务
     @Autowired
@@ -117,6 +121,9 @@ public class GroupChatServiceImpl implements GroupChatService {
     @Autowired
     private WebSocketPushService webSocketPushService;
 
+    @Autowired
+    private OutboundMessageTextAuditService outboundMessageTextAuditService;
+
     // OSS 配置
     @Autowired
     private OssConfig ossConfig;
@@ -124,6 +131,9 @@ public class GroupChatServiceImpl implements GroupChatService {
     // JSON 序列化器
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ImShopEmojiAvailabilityService shopEmojiAvailabilityService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -212,6 +222,43 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     @Override
+    public PageResult<GroupChatSessionSearchResponse> searchSessions(Long loginUserId, String keyword,
+                                                                     Integer pageNum, Integer pageSize) {
+        userLookupService.queryUserByUserId(loginUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        String validKeyword = keyword == null ? "" : keyword.trim();
+        if (!StringUtils.hasText(validKeyword)) {
+            return new PageResult<>(new ArrayList<>(), 0L, validPageNum, validPageSize, 0L, false);
+        }
+        List<Long> activeGroupIds = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
+                        .eq(GroupChatMember::getUserId, loginUserId)
+                        .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
+                        .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE))
+                .stream()
+                .map(GroupChatMember::getGroupId)
+                .distinct()
+                .toList();
+        if (activeGroupIds.isEmpty()) {
+            return new PageResult<>(new ArrayList<>(), 0L, validPageNum, validPageSize, 0L, false);
+        }
+        List<GroupChatMessage> matches = groupChatMessageMapper.selectList(new LambdaQueryWrapper<GroupChatMessage>()
+                .in(GroupChatMessage::getGroupId, activeGroupIds)
+                .eq(GroupChatMessage::getMessageType, GroupChatMessageType.TEXT.getCode())
+                .eq(GroupChatMessage::getStatus, GroupChatMessageStatus.NORMAL.getCode())
+                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .like(GroupChatMessage::getContent, validKeyword)
+                .orderByDesc(GroupChatMessage::getCreateTime)
+                .orderByDesc(GroupChatMessage::getId));
+        Map<Long, GroupChatSessionSearchResponse> byGroup = new LinkedHashMap<>();
+        for (GroupChatMessage message : matches) {
+            byGroup.putIfAbsent(message.getGroupId(), new GroupChatSessionSearchResponse(
+                    message.getGroupId(), message.getId(), message.getContent(), message.getCreateTime()));
+        }
+        return pageList(new ArrayList<>(byGroup.values()), validPageNum, validPageSize);
+    }
+
+    @Override
     public PageResult<GroupChatDetailVO> queryPublicGroups(Long loginUserId, Integer pageNum, Integer pageSize) {
         userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
@@ -225,9 +272,11 @@ public class GroupChatServiceImpl implements GroupChatService {
                         GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByDesc(GroupChat::getUpdateTime));
+        Map<Long, UserInternalVO> ownerUsers = queryOwnerUsers(result.getRecords());
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(group -> refreshAndConvert(group, loginUserId))
+                .map(group -> refreshAndConvert(group, loginUserId, ownerUsers.get(group.getOwnerUserId())))
                 .collect(Collectors.toList());
+        attachOwnerUsers(records, ownerUsers);
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
     }
@@ -248,9 +297,11 @@ public class GroupChatServiceImpl implements GroupChatService {
                         GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByDesc(GroupChat::getCreateTime));
+        Map<Long, UserInternalVO> ownerUsers = queryOwnerUsers(result.getRecords());
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(group -> refreshAndConvert(group, loginUserId))
+                .map(group -> refreshAndConvert(group, loginUserId, ownerUsers.get(group.getOwnerUserId())))
                 .collect(Collectors.toList());
+        attachOwnerUsers(records, ownerUsers);
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
     }
@@ -329,21 +380,20 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     @Override
-    public PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, Integer pageNum, Integer pageSize) {
+    public PageResult<GroupChatJoinRequestVO> queryReceivedJoinRequests(Long loginUserId, String keyword,
+                                                                        Integer pageNum, Integer pageSize) {
         userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<GroupChatJoinRequest> page = PageUtils.getPage(validPageNum, validPageSize);
-        Page<GroupChatJoinRequest> result = groupChatJoinRequestMapper.selectPage(page, new LambdaQueryWrapper<GroupChatJoinRequest>()
+        List<GroupChatJoinRequestVO> filtered = groupChatJoinRequestMapper.selectList(new LambdaQueryWrapper<GroupChatJoinRequest>()
                 .eq(GroupChatJoinRequest::getOwnerUserId, loginUserId)
                 .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
                 .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
-                .orderByDesc(GroupChatJoinRequest::getId));
-        List<GroupChatJoinRequestVO> records = result.getRecords().stream()
+                .orderByDesc(GroupChatJoinRequest::getId)).stream()
                 .map(this::toJoinRequestVO)
+                .filter(vo -> joinRequestMatches(vo, keyword))
                 .collect(Collectors.toList());
-        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
-                result.getPages(), result.hasNext());
+        return pageJoinRequestVOs(filtered, validPageNum, validPageSize);
     }
 
     @Override
@@ -356,6 +406,62 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.UNREAD.getCode())
                 .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .set(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.READ.getCode())
+                .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
+    }
+
+    @Override
+    public PageResult<GroupChatJoinRequestVO> queryAppliedJoinRequests(Long loginUserId, String keyword,
+                                                                       Integer pageNum,
+                                                                       Integer pageSize) {
+        userLookupService.queryUserByUserId(loginUserId);
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        List<GroupChatJoinRequestVO> filtered = groupChatJoinRequestMapper.selectList(
+                new LambdaQueryWrapper<GroupChatJoinRequest>()
+                        .eq(GroupChatJoinRequest::getTargetUserId, loginUserId)
+                        .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
+                        .ne(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                        .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .orderByDesc(GroupChatJoinRequest::getId)).stream()
+                .map(this::toJoinRequestVO)
+                .filter(vo -> joinRequestMatches(vo, keyword))
+                .collect(Collectors.toList());
+        return pageJoinRequestVOs(filtered, validPageNum, validPageSize);
+    }
+
+    private boolean joinRequestMatches(GroupChatJoinRequestVO vo, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return true;
+        }
+        String query = keyword.trim().toLowerCase(java.util.Locale.ROOT);
+        String groupName = vo.getGroup() == null || vo.getGroup().getName() == null
+                ? "" : vo.getGroup().getName().toLowerCase(java.util.Locale.ROOT);
+        String ownerName = vo.getOwnerUser() == null || vo.getOwnerUser().getNickname() == null
+                ? "" : vo.getOwnerUser().getNickname().toLowerCase(java.util.Locale.ROOT);
+        return groupName.contains(query) || ownerName.contains(query);
+    }
+
+    private PageResult<GroupChatJoinRequestVO> pageJoinRequestVOs(
+            List<GroupChatJoinRequestVO> rows, int pageNum, int pageSize) {
+        int fromIndex = Math.min((pageNum - 1) * pageSize, rows.size());
+        int toIndex = Math.min(fromIndex + pageSize, rows.size());
+        long total = rows.size();
+        long pages = total == 0 ? 0 : (total + pageSize - 1) / pageSize;
+        return new PageResult<>(rows.subList(fromIndex, toIndex), total, pageNum, pageSize,
+                pages, toIndex < rows.size());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markAppliedJoinRequestsRead(Long loginUserId) {
+        userLookupService.queryUserByUserId(loginUserId);
+        groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getTargetUserId, loginUserId)
+                .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
+                .ne(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                .eq(GroupChatJoinRequest::getApplicantReadState, GroupChatJoinRequestReadState.UNREAD.getCode())
+                .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .set(GroupChatJoinRequest::getApplicantReadState, GroupChatJoinRequestReadState.READ.getCode())
                 .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
     }
 
@@ -519,6 +625,10 @@ public class GroupChatServiceImpl implements GroupChatService {
         Byte messageType = normalizeMessageType(request.getMessageType());
         String content = normalizeMessageContent(request.getContent());
         validateGroupMediaContent(messageType, content);
+        if (GroupChatMessageType.EMOJI.getCode().equals(messageType)
+                && ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_EMOJI_SHOP)) {
+            shopEmojiAvailabilityService.assertAvailable(loginUserId, request.getEmojiShopId(), content);
+        }
         if (GroupChatMessageType.TEXT.getCode().equals(messageType) && content.contains("@所有人")) {
             assertGroupManager(group, member);
         }
@@ -544,22 +654,39 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
         markRead(group.getId(), message.getId(), loginUserId);
         pushGroupMessage(group, message, loginUserId);
+        if (GroupChatMessageType.TEXT.getCode().equals(messageType)) {
+            scheduleGroupTextAudit(group, message, loginUserId);
+        }
         return GroupChatConverter.toMessageVO(message, sender, loginUserId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public GroupChatMessageVO appendVoiceCallSummary(Long groupId, Long senderUserId, String durationText) {
-        UserInternalVO sender = userLookupService.queryUserByUserId(senderUserId);
-        GroupChat group = refreshGroupLimitStatus(queryGroup(groupId));
+    public GroupChatMessageVO sendAlbum(SendGroupChatAlbumMessageRequest request, Long loginUserId) {
+        validateGroupAlbumRequest(request);
+        UserInternalVO sender = userLookupService.queryUserByUserId(loginUserId);
+        ImUserMuteGuard.assertCanPost(sender);
+        GroupChat group = refreshGroupLimitStatus(queryGroup(request.getGroupId()));
         assertChatAvailable(group);
-        assertActiveMember(group.getId(), senderUserId);
+        GroupChatMember member = assertActiveMember(group.getId(), loginUserId);
+        assertNotMuted(member);
+        GroupChatMessage repliedMessage = queryReplyMessage(group.getId(), request.getReplyMessageId());
+        String content = normalizeOptional(request.getContent());
+        if (content != null && content.length() > Constant.GROUP_CHAT_MESSAGE_MAX_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图集说明文字过长"));
+        }
+
         Date now = ForumDateTimes.now();
         GroupChatMessage message = new GroupChatMessage();
         message.setGroupId(group.getId());
-        message.setSenderUserId(senderUserId);
-        message.setMessageType(GroupChatMessageType.VOICE.getCode());
-        message.setContent(durationText == null ? "00:00" : durationText);
+        message.setSenderUserId(loginUserId);
+        message.setMessageType(GroupChatMessageType.ALBUM.getCode());
+        message.setContent(content == null ? "" : content);
+        if (repliedMessage != null) {
+            message.setReplyMessageId(repliedMessage.getId());
+            message.setReplySenderName(replySenderName(repliedMessage));
+            message.setReplyContent(replyContent(repliedMessage));
+        }
         message.setStatus(GroupChatMessageStatus.NORMAL.getCode());
         message.setDeleteState(Constant.DELETE_STATE_FALSE);
         message.setCreateTime(now);
@@ -567,9 +694,66 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (groupChatMessageMapper.insert(message) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
-        markRead(group.getId(), message.getId(), senderUserId);
-        pushGroupMessage(group, message, senderUserId, false);
-        return GroupChatConverter.toMessageVO(message, sender, senderUserId);
+
+        for (int index = 0; index < request.getImages().size(); index++) {
+            GroupChatAlbumImageRequest source = request.getImages().get(index);
+            GroupChatMessageAlbumImage image = new GroupChatMessageAlbumImage();
+            image.setMessageId(message.getId());
+            image.setMediaUrl(source.getMediaUrl().trim());
+            image.setMediaMime(normalizeOptional(source.getMediaMime()));
+            image.setMediaSize(source.getMediaSize());
+            image.setMediaWidth(source.getMediaWidth());
+            image.setMediaHeight(source.getMediaHeight());
+            image.setSortOrder(index);
+            image.setCreateTime(now);
+            image.setUpdateTime(now);
+            image.setDeleteState(Constant.DELETE_STATE_FALSE);
+            if (groupChatMessageAlbumImageMapper.insert(image) <= 0) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
+            }
+        }
+        markRead(group.getId(), message.getId(), loginUserId);
+        pushGroupMessage(group, message, loginUserId);
+        scheduleGroupTextAudit(group, message, loginUserId);
+        return GroupChatConverter.toMessageVO(message, sender, loginUserId, queryAlbumImages(message.getId()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recallMessage(Long messageId, Long loginUserId) {
+        GroupChatMessage message = groupChatMessageMapper.selectOne(new LambdaQueryWrapper<GroupChatMessage>()
+                .eq(GroupChatMessage::getId, messageId)
+                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE));
+        if (message == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        GroupChat group = queryGroup(message.getGroupId());
+        assertActiveMember(message.getGroupId(), loginUserId);
+        boolean senderRecall = Objects.equals(message.getSenderUserId(), loginUserId);
+        boolean ownerModerationRecall = Objects.equals(group.getOwnerUserId(), loginUserId) && !senderRecall;
+        if (!senderRecall && !ownerModerationRecall) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        if (GroupChatMessageStatus.RECALLED.getCode().equals(message.getStatus())) {
+            return;
+        }
+        if (GroupChatMessageType.SYSTEM.getCode().equals(message.getMessageType())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "系统消息不能撤回"));
+        }
+        long secondsElapsed = (System.currentTimeMillis() - message.getCreateTime().getTime()) / 1000;
+        if (senderRecall && secondsElapsed > Constant.MESSAGE_RECALL_WINDOW_SECONDS) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "超过撤回时间窗口（2分钟），无法撤回"));
+        }
+        int affected = groupChatMessageMapper.update(null, new LambdaUpdateWrapper<GroupChatMessage>()
+                .eq(GroupChatMessage::getId, messageId)
+                .eq(GroupChatMessage::getStatus, GroupChatMessageStatus.NORMAL.getCode())
+                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .set(GroupChatMessage::getStatus, GroupChatMessageStatus.RECALLED.getCode())
+                .set(GroupChatMessage::getUpdateTime, ForumDateTimes.now()));
+        if (affected <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "撤回失败，可能已超时或无权限"));
+        }
+        pushGroupRecall(group, messageId, loginUserId, message.getSenderUserId());
     }
 
     @Override
@@ -582,9 +766,14 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatMessage::getGroupId, groupId)
                 .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
                 .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .and(w -> w.ne(GroupChatMessage::getStatus, GroupChatMessageStatus.AUDIT_FAILED.getCode())
+                        .or(o -> o.eq(GroupChatMessage::getStatus, GroupChatMessageStatus.AUDIT_FAILED.getCode())
+                                .eq(GroupChatMessage::getSenderUserId, loginUserId)))
                 .orderByAsc(GroupChatMessage::getCreateTime));
+        Map<Long, List<GroupChatMessageAlbumImage>> albumImages = queryAlbumImages(result.getRecords());
         List<GroupChatMessageVO> records = result.getRecords().stream()
-                .map(message -> GroupChatConverter.toMessageVO(message, queryUserNullable(message.getSenderUserId()), loginUserId))
+                .map(message -> GroupChatConverter.toMessageVO(message, queryUserNullable(message.getSenderUserId()),
+                        loginUserId, albumImages.get(message.getId())))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -609,40 +798,17 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void reportMessage(Long groupId, ReportGroupChatMessageRequest request, Long loginUserId) {
+    public PageResult<GroupChatMemberVO> queryMembers(Long groupId,
+                                                       Long loginUserId,
+                                                       String keyword,
+                                                       String sortMode,
+                                                       Integer pageNum,
+                                                       Integer pageSize) {
         assertActiveMember(groupId, loginUserId);
-        GroupChatMessage message = groupChatMessageMapper.selectOne(new LambdaQueryWrapper<GroupChatMessage>()
-                .eq(GroupChatMessage::getId, request.getMessageId())
-                .eq(GroupChatMessage::getGroupId, groupId)
-                .ne(GroupChatMessage::getDeleteState, Constant.DELETE_STATE_TRUE));
-        if (message == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-        if (message.getSenderUserId() == null || Objects.equals(message.getSenderUserId(), loginUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "不能举报该消息"));
-        }
-        String reason = normalizeReportReason(request.getReason());
-        Date now = ForumDateTimes.now();
-        GroupChatReport report = new GroupChatReport();
-        report.setGroupId(groupId);
-        report.setMessageId(message.getId());
-        report.setReporterUserId(loginUserId);
-        report.setTargetUserId(message.getSenderUserId());
-        report.setReason(reason);
-        report.setStatus(GroupChatReportStatus.PENDING.getCode());
-        report.setDeleteState(Constant.DELETE_STATE_FALSE);
-        report.setCreateTime(now);
-        report.setUpdateTime(now);
-        if (groupChatReportMapper.insert(report) <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
-        }
-    }
-
-    @Override
-    public List<GroupChatMemberVO> queryMembers(Long groupId, Long loginUserId) {
-        assertActiveMember(groupId, loginUserId);
-        return groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
+        int validPageNum = PageUtils.getValidPageNum(pageNum);
+        int validPageSize = PageUtils.getValidPageSize(pageSize);
+        String normalizedKeyword = normalizeOptional(keyword);
+        List<GroupChatMemberVO> members = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
                         .eq(GroupChatMember::getGroupId, groupId)
                         .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
                         .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE)
@@ -657,7 +823,16 @@ public class GroupChatServiceImpl implements GroupChatService {
                     }
                     return vo;
                 })
+                .filter(Objects::nonNull)
+                .filter(member -> memberNicknameMatches(member, normalizedKeyword))
                 .collect(Collectors.toList());
+        Comparator<GroupChatMemberVO> comparator = "nicknameInitial".equalsIgnoreCase(sortMode)
+                ? nicknameComparator(normalizedKeyword)
+                : Comparator.comparingInt((GroupChatMemberVO member) -> roleSortWeight(member.getRole()))
+                        .thenComparing(GroupChatMemberVO::getJoinTime, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(GroupChatMemberVO::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+        members.sort(comparator);
+        return pageList(members, validPageNum, validPageSize);
     }
 
     @Override
@@ -744,6 +919,43 @@ public class GroupChatServiceImpl implements GroupChatService {
         return 2;
     }
 
+    private boolean memberNicknameMatches(GroupChatMemberVO member, String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return true;
+        }
+        return memberNickname(member).toLowerCase().contains(keyword.toLowerCase());
+    }
+
+    private Comparator<GroupChatMemberVO> nicknameComparator(String keyword) {
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.toLowerCase() : null;
+        return Comparator
+                .comparingInt((GroupChatMemberVO member) -> normalizedKeyword != null
+                        && memberNickname(member).equalsIgnoreCase(normalizedKeyword) ? 0 : 1)
+                .thenComparing(member -> pinyinSortKey(memberNickname(member)))
+                .thenComparing(this::memberNickname, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(GroupChatMemberVO::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    private String memberNickname(GroupChatMemberVO member) {
+        if (member == null || member.getUser() == null || !StringUtils.hasText(member.getUser().getNickname())) {
+            return "";
+        }
+        return member.getUser().getNickname().trim();
+    }
+
+    private String pinyinSortKey(String nickname) {
+        StringBuilder key = new StringBuilder();
+        for (char ch : nickname.toCharArray()) {
+            String[] syllables = PinyinHelper.toHanyuPinyinStringArray(ch);
+            if (syllables != null && syllables.length > 0) {
+                key.append(syllables[0].replaceAll("[0-9]", ""));
+            } else {
+                key.append(Character.toLowerCase(ch));
+            }
+        }
+        return key.toString();
+    }
+
     private void assertCertifiedCreator(UserInternalVO user) {
         if (user == null || !Constant.CREATOR_STATE_CERTIFIED.equals(user.getCreatorState())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "只有认证创作者可以创建群聊"));
@@ -794,7 +1006,14 @@ public class GroupChatServiceImpl implements GroupChatService {
                 || GroupChatStatus.BANNED.getCode().equals(group.getStatus())) {
             return group;
         }
-        UserInternalVO owner = userLookupService.queryUserByUserId(group.getOwnerUserId());
+        return refreshGroupLimitStatus(group, userLookupService.queryUserByUserId(group.getOwnerUserId()));
+    }
+
+    private GroupChat refreshGroupLimitStatus(GroupChat group, UserInternalVO owner) {
+        if (GroupChatStatus.DISSOLVED.getCode().equals(group.getStatus())
+                || GroupChatStatus.BANNED.getCode().equals(group.getStatus())) {
+            return group;
+        }
         int limit = memberLimitFor(owner);
         int count = group.getMemberCount() == null ? 0 : group.getMemberCount();
         Byte status = GroupChatStatus.NORMAL.getCode();
@@ -821,6 +1040,12 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     private GroupChatDetailVO refreshAndConvert(GroupChat group, Long loginUserId) {
         GroupChatDetailVO vo = GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group));
+        fillViewerRelation(vo, loginUserId);
+        return vo;
+    }
+
+    private GroupChatDetailVO refreshAndConvert(GroupChat group, Long loginUserId, UserInternalVO owner) {
+        GroupChatDetailVO vo = GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group, owner));
         fillViewerRelation(vo, loginUserId);
         return vo;
     }
@@ -859,6 +1084,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         request.setRequestType(requestType);
         request.setStatus(GroupChatJoinRequestStatus.PENDING.getCode());
         request.setOwnerReadState(GroupChatJoinRequestReadState.UNREAD.getCode());
+        request.setApplicantReadState(GroupChatJoinRequestReadState.READ.getCode());
         request.setHandledByUserId(null);
         request.setHandleTime(null);
         request.setDeleteState(Constant.DELETE_STATE_FALSE);
@@ -905,9 +1131,11 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setGroup(refreshAndConvert(queryGroup(request.getGroupId()), request.getTargetUserId()));
         vo.setTargetUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userLookupService.queryUserByUserId(request.getTargetUserId())));
         vo.setInitiatorUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userLookupService.queryUserByUserId(request.getInitiatorUserId())));
+        vo.setOwnerUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(userLookupService.queryUserByUserId(request.getOwnerUserId())));
         vo.setRequestType(request.getRequestType());
         vo.setStatus(request.getStatus());
         vo.setOwnerReadState(request.getOwnerReadState());
+        vo.setApplicantReadState(request.getApplicantReadState());
         vo.setTargetJoined(isActiveMember(request.getGroupId(), request.getTargetUserId()));
         vo.setCreateTime(request.getCreateTime());
         vo.setHandleTime(request.getHandleTime());
@@ -915,11 +1143,15 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     private void updateJoinRequestStatus(Long requestId, Byte status, Long handledByUserId) {
+        GroupChatJoinRequest request = queryJoinRequestEntity(requestId);
+        boolean notifyApplicant = GroupChatJoinRequestType.APPLY.getCode().equals(request.getRequestType());
         int affected = groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
                 .eq(GroupChatJoinRequest::getId, requestId)
                 .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
                 .set(GroupChatJoinRequest::getStatus, status)
                 .set(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.READ.getCode())
+                .set(notifyApplicant, GroupChatJoinRequest::getApplicantReadState,
+                        GroupChatJoinRequestReadState.UNREAD.getCode())
                 .set(GroupChatJoinRequest::getHandledByUserId, handledByUserId)
                 .set(GroupChatJoinRequest::getHandleTime, ForumDateTimes.now())
                 .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
@@ -1021,6 +1253,22 @@ public class GroupChatServiceImpl implements GroupChatService {
         groupChatMessageMapper.insert(message);
     }
 
+
+    private void scheduleGroupTextAudit(GroupChat group, GroupChatMessage message, Long sendUserId) {
+        if (group == null || message == null || !org.springframework.util.StringUtils.hasText(message.getContent())) {
+            return;
+        }
+        List<Long> memberIds = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
+                        .eq(GroupChatMember::getGroupId, group.getId())
+                        .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
+                        .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE))
+                .stream()
+                .map(GroupChatMember::getUserId)
+                .toList();
+        outboundMessageTextAuditService.scheduleGroupTextAudit(
+                message.getId(), group.getId(), message.getContent(), sendUserId, memberIds);
+    }
+
     private void pushGroupMessage(GroupChat group, GroupChatMessage message, Long senderUserId) {
         pushGroupMessage(group, message, senderUserId, true);
     }
@@ -1056,6 +1304,31 @@ public class GroupChatServiceImpl implements GroupChatService {
         });
     }
 
+    private void pushGroupRecall(GroupChat group,
+                                 Long messageId,
+                                 Long operatorUserId,
+                                 Long originalSenderUserId) {
+        List<GroupChatMember> members = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
+                .eq(GroupChatMember::getGroupId, group.getId())
+                .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
+                .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
+        TransactionHooks.afterCommit(() -> {
+            for (GroupChatMember member : members) {
+                try {
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("type", "group_message_recalled");
+                    payload.put("groupId", group.getId());
+                    payload.put("messageId", messageId);
+                    payload.put("operatorUserId", operatorUserId);
+                    payload.put("originalSenderUserId", originalSenderUserId);
+                    webSocketPushService.push(member.getUserId(), objectMapper.writeValueAsString(payload));
+                } catch (Exception exception) {
+                    log.warn("群消息撤回 WebSocket 推送失败 groupId={} userId={}", group.getId(), member.getUserId(), exception);
+                }
+            }
+        });
+    }
+
     private GroupChatSessionVO buildSession(GroupChatMember member, Long loginUserId) {
         GroupChat group = groupChatMapper.selectById(member.getGroupId());
         if (group == null || Constant.DELETE_STATE_TRUE.equals(group.getDeleteState())) {
@@ -1069,6 +1342,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setGroupName(group.getName());
         vo.setRemarkName(member.getRemarkName());
         vo.setNotifyMode(safeNotifyMode(member.getNotifyMode()));
+        vo.setMyRole(member.getRole());
         vo.setAvatarUrl(group.getAvatarUrl());
         vo.setIntro(group.getIntro());
         vo.setGroupType(group.getGroupType());
@@ -1079,7 +1353,34 @@ public class GroupChatServiceImpl implements GroupChatService {
         vo.setLastMessage(messageSummary(latest));
         vo.setLastMessageTime(latest == null ? group.getUpdateTime() : latest.getCreateTime());
         vo.setUnreadCount(unreadCount(group.getId(), safeLong(member.getLastReadMessageId()), member, loginUserId));
+        vo.setCreateTime(group.getCreateTime());
         return vo;
+    }
+
+    private Map<Long, UserInternalVO> queryOwnerUsers(List<GroupChat> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ownerIds = groups.stream()
+                .map(GroupChat::getOwnerUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return userLookupService.queryUsersByIds(ownerIds).stream()
+                .filter(user -> user != null && user.getId() != null)
+                .collect(Collectors.toMap(UserInternalVO::getId, user -> user, (left, right) -> left));
+    }
+
+    private void attachOwnerUsers(List<GroupChatDetailVO> records, Map<Long, UserInternalVO> owners) {
+        if (records == null || records.isEmpty() || owners == null || owners.isEmpty()) {
+            return;
+        }
+        records.forEach(record -> {
+            UserInternalVO owner = owners.get(record.getOwnerUserId());
+            if (owner != null) {
+                record.setOwnerUser(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(owner));
+            }
+        });
     }
 
     private GroupChatMessage latestMessage(Long groupId) {
@@ -1104,6 +1405,7 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .eq(GroupChatMessage::getGroupId, groupId)
                 .gt(GroupChatMessage::getId, lastReadMessageId)
                 .ne(GroupChatMessage::getMessageType, GroupChatMessageType.SYSTEM.getCode())
+                .eq(GroupChatMessage::getStatus, GroupChatMessageStatus.NORMAL.getCode())
                 .and(w -> w.isNull(GroupChatMessage::getSenderUserId)
                         .or()
                         .ne(GroupChatMessage::getSenderUserId, loginUserId))
@@ -1117,14 +1419,18 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (message == null) {
             return "暂无消息";
         }
+        if (GroupChatMessageStatus.RECALLED.getCode().equals(message.getStatus())) {
+            return "[消息已被撤回]";
+        }
         if (GroupChatMessageType.EMOJI.getCode().equals(message.getMessageType())) {
-            return "[表情]";
+            return "[表情符号]";
         }
         if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
             return "[图片]";
         }
-        if (GroupChatMessageType.VOICE.getCode().equals(message.getMessageType())) {
-            return "[语音聊天] " + (message.getContent() == null ? "" : message.getContent());
+        if (GroupChatMessageType.ALBUM.getCode().equals(message.getMessageType())) {
+            String albumText = message.getContent() == null ? "" : message.getContent().trim();
+            return albumText.isEmpty() ? "[图集]" : "[图集] " + albumText;
         }
         return message.getContent() == null ? "" : message.getContent();
     }
@@ -1175,7 +1481,7 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     private Byte normalizeMessageType(Byte messageType) {
         GroupChatMessageType type = GroupChatMessageType.fromCode(messageType);
-        if (type == null || GroupChatMessageType.SYSTEM.equals(type) || GroupChatMessageType.VOICE.equals(type)) {
+        if (type == null || GroupChatMessageType.SYSTEM.equals(type)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群消息类型不合法"));
         }
         return messageType;
@@ -1229,8 +1535,8 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (GroupChatMessageType.IMAGE.getCode().equals(message.getMessageType())) {
             return "[图片]";
         }
-        if (GroupChatMessageType.VOICE.getCode().equals(message.getMessageType())) {
-            return "[语音聊天]";
+        if (GroupChatMessageType.ALBUM.getCode().equals(message.getMessageType())) {
+            return "[图集]";
         }
         String content = message.getContent() == null ? "" : message.getContent().trim();
         return content.length() > 120 ? content.substring(0, 120) : content;
@@ -1279,23 +1585,52 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
     }
 
+    private void validateGroupAlbumRequest(SendGroupChatAlbumMessageRequest request) {
+        if (request.getImages() == null || request.getImages().isEmpty() || request.getImages().size() > 10) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图集需包含1至10张图片"));
+        }
+        for (GroupChatAlbumImageRequest image : request.getImages()) {
+            if (image == null || !StringUtils.hasText(image.getMediaUrl())
+                    || !ossConfig.matchesPublicObjectUrl(image.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+            }
+        }
+    }
+
+    private List<GroupChatMessageAlbumImage> queryAlbumImages(Long messageId) {
+        if (messageId == null) {
+            return List.of();
+        }
+        return groupChatMessageAlbumImageMapper.selectList(new LambdaQueryWrapper<GroupChatMessageAlbumImage>()
+                .eq(GroupChatMessageAlbumImage::getMessageId, messageId)
+                .ne(GroupChatMessageAlbumImage::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .orderByAsc(GroupChatMessageAlbumImage::getSortOrder));
+    }
+
+    private Map<Long, List<GroupChatMessageAlbumImage>> queryAlbumImages(List<GroupChatMessage> messages) {
+        List<Long> albumMessageIds = messages.stream()
+                .filter(message -> GroupChatMessageType.ALBUM.getCode().equals(message.getMessageType()))
+                .map(GroupChatMessage::getId)
+                .toList();
+        if (albumMessageIds.isEmpty()) {
+            return Map.of();
+        }
+        return groupChatMessageAlbumImageMapper.selectList(new LambdaQueryWrapper<GroupChatMessageAlbumImage>()
+                        .in(GroupChatMessageAlbumImage::getMessageId, albumMessageIds)
+                        .ne(GroupChatMessageAlbumImage::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .orderByAsc(GroupChatMessageAlbumImage::getMessageId)
+                        .orderByAsc(GroupChatMessageAlbumImage::getSortOrder))
+                .stream()
+                .collect(Collectors.groupingBy(GroupChatMessageAlbumImage::getMessageId,
+                        LinkedHashMap::new, Collectors.toList()));
+    }
+
     private String normalizeRemarkName(String rawRemarkName) {
         String remarkName = normalizeOptional(rawRemarkName);
         if (remarkName != null && remarkName.length() > 24) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "群备注过长"));
         }
         return remarkName;
-    }
-
-    private String normalizeReportReason(String rawReason) {
-        String reason = normalizeOptional(rawReason);
-        if (!StringUtils.hasText(reason)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "举报原因不能为空"));
-        }
-        if (reason.length() > 200) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "举报原因过长"));
-        }
-        return reason;
     }
 
     private String normalizeOptional(String raw) {

@@ -20,6 +20,9 @@ public class HotArticleListItemVO {
     // 当前登录用户是否关注作者
     private Boolean fromFollowing;
 
+    // 当前热度综合分 来自 Redis ZSet，缺失时回退即时计算
+    private Double hotScore;
+
     // 相对上一统计周期的热度方向
     private HotArticleTrendDirection trendDirection;
 }

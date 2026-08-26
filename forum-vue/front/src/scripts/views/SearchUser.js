@@ -81,7 +81,7 @@ export function useSearchUser() {
       if (preferAiRag.value) nextQuery.ai = '1'
       router.replace({ path: '/search/user', query: nextQuery })
     } catch {
-      /* ignore */
+      // 忽略
     }
   }
 

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="gemFill" x1="74" y1="48" x2="194" y2="206" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF9E6"/>
+      <stop offset="0.34" stop-color="#FFE6A8"/>
+      <stop offset="0.7" stop-color="#FFD5E8"/>
+      <stop offset="1" stop-color="#D8D0FF"/>
+    </linearGradient>
+    <linearGradient id="facetA" x1="94" y1="72" x2="144" y2="134" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#FFF8DA" stop-opacity="0.62"/>
+    </linearGradient>
+    <linearGradient id="facetB" x1="142" y1="94" x2="186" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE4F0" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#E7DEFF" stop-opacity="0.68"/>
+    </linearGradient>
+    <linearGradient id="facetC" x1="92" y1="118" x2="138" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF4BF" stop-opacity="0.62"/>
+      <stop offset="1" stop-color="#FFC9E1" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="petalFill" x1="178" y1="56" x2="203" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC3D8"/>
+      <stop offset="1" stop-color="#FF9ABB"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#CDBFD8" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- small sparkle companions -->
+  <path d="M60 84L64 94L74 98L64 102L60 112L56 102L46 98L56 94L60 84Z" fill="#F6C96D"/>
+  <path d="M196 182L199 189L206 192L199 195L196 202L193 195L186 192L193 189L196 182Z" fill="#F6DCA0"/>
+  <circle cx="55" cy="147" r="4" fill="#F8D788"/>
+
+  <!-- main crystal -->
+  <g>
+    <path d="M126 33C132 33 138 36 142 41L183 81C188 86 190 93 188 100L171 181C169 189 163 196 156 200L140 208C132 212 123 212 115 208L99 200C92 196 87 189 85 181L68 100C66 93 68 86 73 81L114 41C118 36 120 33 126 33Z" fill="url(#gemFill)" stroke="#6E6272" stroke-width="10" stroke-linejoin="round"/>
+
+    <!-- internal facets -->
+    <path d="M127 47L103 86L126 118L149 86L127 47Z" fill="url(#facetA)" stroke="#D9CCD6" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M103 86L80 99L104 175L126 118L103 86Z" fill="url(#facetC)" stroke="#D9CCD6" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M149 86L172 99L148 175L126 118L149 86Z" fill="url(#facetB)" stroke="#D9CCD6" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M104 175L126 118L148 175L127 197L104 175Z" fill="#FFF7E7" fill-opacity="0.66" stroke="#D9CCD6" stroke-width="4" stroke-linejoin="round"/>
+
+    <!-- center star glint -->
+    <path d="M127 90L134 108L152 115L134 122L127 140L120 122L102 115L120 108L127 90Z" fill="#FFFDF2" stroke="#6E6272" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+
+  <!-- blossom hint -->
+  <g transform="rotate(-18 190 68)">
+    <path d="M181 54C188 47 198 47 204 54C197 61 190 69 183 78C178 71 176 61 181 54Z" fill="url(#petalFill)" stroke="#6E6272" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M186 60C190 62 193 64 196 68" stroke="#FFEAF2" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- highlights -->
+  <path d="M103 57C114 49 129 47 139 50" stroke="white" stroke-width="8" stroke-linecap="round" opacity="0.78"/>
+  <path d="M91 99L99 91" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.65"/>
+  <path d="M146 179C140 184 133 187 126 188" stroke="white" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+</svg>

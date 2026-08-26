@@ -5,9 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * 积分按"自然日"聚合, 给前端 ECharts 折线/柱状图直接喂数据.
- */
+// 积分按 自然日 聚合, 给前端 ECharts 折线/柱状图直接喂数据.
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

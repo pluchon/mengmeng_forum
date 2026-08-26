@@ -4,7 +4,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  /* 梦幻柔和的渐变底色 */
+/* 梦幻柔和的渐变底色 */
   background: linear-gradient(135deg, #ffd1df 0%, #fff0f5 50%, #e0f2fe 100%);
   z-index: -2; /* 沉于页面最底部 */
 }

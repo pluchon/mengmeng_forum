@@ -1,6 +1,6 @@
 package org.pluchon.forum.service.security;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.cloud.feign.GameUserInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// game 域读取 auth 用户内部视图，禁止构造或依赖 User 实体壳。
+// game 域读取 auth 用户内部视图，禁止构造或依赖 User 实体壳
 @Service
 public class GameUserLookupService {
 

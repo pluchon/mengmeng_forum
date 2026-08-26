@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TetrisRoom {
 
     // 房间 ID
-    private final String roomId = UUID.randomUUID().toString();
+    private final String roomId = GameRoomIdGenerator.generateRoomId();
 
     // 玩家1用户 ID
     private final Long player1UserId;

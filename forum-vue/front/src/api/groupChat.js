@@ -5,6 +5,11 @@ export function getGroupChatSessions(params) {
   return request({ url: '/group-chat/sessions', method: 'get', params })
 }
 
+// 搜索群聊文本消息所在会话
+export function searchGroupChatSessions(params) {
+  return request({ url: '/group-chat/searchSessions', method: 'get', params })
+}
+
 // 我创建的群聊
 export function getOwnedGroupChats(params) {
   return request({ url: '/group-chat/owned', method: 'get', params })
@@ -40,6 +45,16 @@ export function getGroupChatMessages(groupId, params) {
 // 发送群聊消息
 export function sendGroupChatMessage(data) {
   return request({ url: '/group-chat/messages', method: 'post', data })
+}
+
+// 发送群聊图集
+export function sendGroupChatAlbum(data) {
+  return request({ url: '/group-chat/messages/album', method: 'post', data })
+}
+
+// 撤回群聊消息
+export function recallGroupChatMessage(messageId) {
+  return request({ url: `/group-chat/messages/${messageId}/recall`, method: 'put' })
 }
 
 // 标记群聊已读
@@ -81,6 +96,16 @@ export function markReceivedGroupJoinRequestsRead() {
   return request({ url: '/group-chat/requests/received/read', method: 'put' })
 }
 
+// 查询本人发起的进群申请结果
+export function getAppliedGroupJoinRequests(params) {
+  return request({ url: '/group-chat/requests/applied', method: 'get', params })
+}
+
+// 标记本人发起的进群申请结果已读
+export function markAppliedGroupJoinRequestsRead() {
+  return request({ url: '/group-chat/requests/applied/read', method: 'put' })
+}
+
 // 批准进群申请
 export function approveGroupJoinRequest(requestId) {
   return request({ url: `/group-chat/requests/${requestId}/approve`, method: 'put' })
@@ -102,8 +127,8 @@ export function declineGroupInvite(requestId) {
 }
 
 // 查询群成员
-export function getGroupChatMembers(groupId) {
-  return request({ url: `/group-chat/${groupId}/members`, method: 'get' })
+export function getGroupChatMembers(groupId, params) {
+  return request({ url: `/group-chat/${groupId}/members`, method: 'get', params })
 }
 
 // 修改我的群内备注
@@ -151,29 +176,4 @@ export function updateGroupMemberRole(groupId, targetUserId, role) {
 // 解散群聊
 export function dissolveGroupChat(groupId) {
   return request({ url: `/group-chat/${groupId}`, method: 'delete' })
-}
-
-// 举报群消息
-export function reportGroupChatMessage(groupId, data) {
-  return request({ url: `/group-chat/${groupId}/messages/report`, method: 'post', data })
-}
-
-// 查询群语音状态
-export function getGroupVoiceSession(groupId) {
-  return request({ url: `/group-chat/${groupId}/voice`, method: 'get' })
-}
-
-// 发起群语音
-export function startGroupVoiceSession(groupId) {
-  return request({ url: `/group-chat/${groupId}/voice/start`, method: 'post' })
-}
-
-// 加入群语音
-export function joinGroupVoiceSession(groupId) {
-  return request({ url: `/group-chat/${groupId}/voice/join`, method: 'post' })
-}
-
-// 离开群语音
-export function leaveGroupVoiceSession(groupId) {
-  return request({ url: `/group-chat/${groupId}/voice/leave`, method: 'post' })
 }

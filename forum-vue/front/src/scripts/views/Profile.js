@@ -1,6 +1,7 @@
 import { ref, onMounted, onActivated, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Star, Camera, Plus, Lock, Unlock } from '@element-plus/icons-vue'
+import { Star, Camera, Plus, ZoomIn } from '@element-plus/icons-vue'
+import { Bookmark, MessageCircle, ThumbsUp, Trash2 } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { getArticleListWithUser } from '@/api/article'
@@ -10,6 +11,8 @@ import {
   getMyFavoriteFolders,
   getUserFavoriteFolders,
   createFavoriteFolder,
+  deleteFavoriteFolder,
+  uploadFavoriteFolderCover,
   updateFavoriteFolder,
 } from '@/api/favorite'
 import { uploadProfileBackground, updateBackgroundUrl } from '@/api/settings'
@@ -23,16 +26,19 @@ import {
 import { getNotInterestedArticles, restoreRecommendationInterested } from '@/api/recommendation'
 import { useNotInterestedArticleStore } from '@/stores/notInterestedArticle'
 import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
 import { parseForumDateTime } from '@/utils/datetime'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
+import { captureFeedOpenFrom, getFeedReturnPath } from '@/utils/feedNavigation'
+import emptyFavoriteArticleUrl from '@/assets/images/shoucang_article_not.png'
 
-const PROFILE_PAGE_SIZE = 12
+const PROFILE_PAGE_SIZE = 8
 const FAVORITE_FOLDER_PAGE_SIZE = 5
-const FAVORITE_DIALOG_PAGE_SIZE = 10
-const PUBLIC_GROUP_PAGE_SIZE = 10
+const FAVORITE_DIALOG_PAGE_SIZE = 5
+const PUBLIC_GROUP_PAGE_SIZE = 5
 const PROFILE_RETURN_KEY = 'profile-return-state'
 
 export function useProfile() {
@@ -44,6 +50,28 @@ export function useProfile() {
   const defaultAvatar = DEFAULT_AVATAR
   const defaultBg = clientOssUrl('profileb_back.webp')
 
+  // 详情路由下 params.id 是帖子 ID，背景态个人主页必须改读来源用户
+  function resolveProfileUserId() {
+    if (route.name === 'articleDetail') {
+      try {
+        const raw = sessionStorage.getItem(PROFILE_RETURN_KEY)
+        if (raw) {
+          const state = JSON.parse(raw)
+          if (state?.profileUserId != null && String(state.profileUserId).trim() !== '') {
+            return state.profileUserId
+          }
+        }
+      } catch {
+        // 忽略
+      }
+      const returnPath = getFeedReturnPath()
+      const matched = returnPath.match(/^\/profile\/(\d+)/)
+      if (matched) return matched[1]
+      return userStore.id
+    }
+    return route.params.id || userStore.id
+  }
+
   const userInfo = ref(null)
   const articles = ref([])
   const loading = ref(true)
@@ -51,33 +79,33 @@ export function useProfile() {
   const total = ref(0)
   const notesPageNum = ref(1)
   const notesTotal = ref(0)
-  const notesPageInput = ref('1')
 
   const bgFileInput = ref(null)
+  const bannerDialogRef = ref(null)
   const likedArticles = ref([])
   const likedPageNum = ref(1)
   const likedTotal = ref(0)
-  const likedPageInput = ref('1')
 
   const favoriteFolders = ref([])
   const loadingFavorites = ref(false)
   const favoriteFolderError = ref('')
   const favoriteFolderPageNum = ref(1)
   const favoriteFolderTotal = ref(0)
-  const favoriteFolderPageInput = ref('1')
   const favoriteDialogVisible = ref(false)
   const favoriteDialogLoading = ref(false)
   const favoriteDialogTitle = ref('收藏')
   const favoriteDialogItems = ref([])
   const favoriteDialogPageNum = ref(1)
   const favoriteDialogTotal = ref(0)
-  const favoriteDialogPageInput = ref('1')
   const favoriteFolderRenaming = ref(false)
   const favoriteFolderRenameValue = ref('')
   const favoriteFolderRenameSaving = ref(false)
   const activeFavoriteFolder = ref(null)
   const favoriteFolderPublic = ref(1)
   const favoriteVisibilitySaving = ref(false)
+  const favoriteCoverInputRef = ref(null)
+  const favoriteCoverTarget = ref(null)
+  const favoriteCoverUploadingId = ref(null)
 
   const favoriteCreateVisible = ref(false)
   const favoriteCreateSaving = ref(false)
@@ -87,7 +115,6 @@ export function useProfile() {
   const publicGroupsLoading = ref(false)
   const publicGroupsPageNum = ref(1)
   const publicGroupsTotal = ref(0)
-  const publicGroupsPageInput = ref('1')
   const myGroupSessions = ref([])
   const joiningGroupId = ref(null)
 
@@ -95,7 +122,6 @@ export function useProfile() {
   const notInterestedLoading = ref(false)
   const notInterestedPageNum = ref(1)
   const notInterestedTotal = ref(0)
-  const notInterestedPageInput = ref('1')
   const notInterestedRestoringId = ref(null)
 
   const followingCount = ref(0)
@@ -109,52 +135,39 @@ export function useProfile() {
     return ''
   })
   watch(activeTab, (tab) => {
-    if (tab === 'liked' && likedArticles.value.length === 0) {
-      loadLikedArticles(1)
-    }
+    // 笔记/点赞/不感兴趣由 selectProfileTab 主动刷新；其它 Tab 仍懒加载
     if (tab === 'collect' && favoriteFolders.value.length === 0) {
       loadFavoriteFolders(1)
     }
     if (tab === 'groups' && publicGroups.value.length === 0) {
       loadPublicGroups(1)
     }
-    if (tab === 'not-interested' && isMe.value && notInterestedArticles.value.length === 0) {
-      loadNotInterestedArticles(1)
-    }
   })
 
-  const notesTotalPages = computed(() =>
-    Math.max(1, Math.ceil((notesTotal.value || 0) / PROFILE_PAGE_SIZE)),
-  )
-
-  const likedTotalPages = computed(() =>
-    Math.max(1, Math.ceil((likedTotal.value || 0) / PROFILE_PAGE_SIZE)),
-  )
-
-  const favoriteDialogTotalPages = computed(() =>
-    Math.max(1, Math.ceil((favoriteDialogTotal.value || 0) / FAVORITE_DIALOG_PAGE_SIZE)),
-  )
-
-  const favoriteFolderTotalPages = computed(() =>
-    Math.max(1, Math.ceil((favoriteFolderTotal.value || 0) / FAVORITE_FOLDER_PAGE_SIZE)),
-  )
-
-  const publicGroupsTotalPages = computed(() =>
-    Math.max(1, Math.ceil((publicGroupsTotal.value || 0) / PUBLIC_GROUP_PAGE_SIZE)),
-  )
-
-  const notInterestedTotalPages = computed(() =>
-    Math.max(1, Math.ceil((notInterestedTotal.value || 0) / PROFILE_PAGE_SIZE)),
-  )
+  function selectProfileTab(tab) {
+    const next = String(tab || '')
+    if (!next) return
+    activeTab.value = next
+    if (next === 'notes') {
+      void loadProfile(notesPageNum.value || 1)
+      return
+    }
+    if (next === 'liked') {
+      void loadLikedArticles(likedPageNum.value || 1)
+      return
+    }
+    if (next === 'not-interested' && isMe.value) {
+      void loadNotInterestedArticles(notInterestedPageNum.value || 1)
+    }
+  }
 
   const joinedGroupIds = computed(() =>
     new Set(myGroupSessions.value.map((item) => String(item.groupId))),
   )
 
   async function loadLikedArticles(page = 1) {
-    const userId = route.params.id || userStore.id
+    const userId = resolveProfileUserId()
     likedPageNum.value = page
-    likedPageInput.value = String(page)
     try {
       const params = {
         pageNum: likedPageNum.value,
@@ -167,15 +180,14 @@ export function useProfile() {
         likedArticles.value = res.data?.records || []
         likedTotal.value = Number(res.data?.total) || 0
       }
-    } catch (e) {
-      console.warn('加载点赞列表失败:', e)
+    } catch {
+      ElMessage.error('加载点赞列表失败，请稍后重试')
     }
   }
 
   async function loadFavoriteFolders(page = 1) {
-    const userId = route.params.id || userStore.id
+    const userId = resolveProfileUserId()
     favoriteFolderPageNum.value = page
-    favoriteFolderPageInput.value = String(page)
     loadingFavorites.value = true
     favoriteFolderError.value = ''
     try {
@@ -199,29 +211,71 @@ export function useProfile() {
     }
   }
 
-  function goFavoriteFoldersFirst() {
-    loadFavoriteFolders(1)
+
+  function displayAuthorNickname(name) {
+    const text = String(name || '').trim() || '匿名用户'
+    const chars = Array.from(text)
+    if (chars.length <= 6) return text
+    return `${chars.slice(0, 6).join('')}…`
   }
 
-  function goFavoriteFoldersPrev() {
-    if (favoriteFolderPageNum.value > 1) loadFavoriteFolders(favoriteFolderPageNum.value - 1)
+  function favoriteFolderInitial(folder) {
+    const name = String(folder?.name || '收').trim()
+    return name.charAt(0) || '收'
   }
 
-  function goFavoriteFoldersNext() {
-    if (favoriteFolderPageNum.value < favoriteFolderTotalPages.value) {
-      loadFavoriteFolders(favoriteFolderPageNum.value + 1)
+  async function triggerFavoriteCoverUpload(folder) {
+    if (!isMe.value || !folder?.id) return
+    if (!(await ensureLoggedIn('上传收藏夹封面需要登录'))) return
+    favoriteCoverTarget.value = folder
+    favoriteCoverInputRef.value?.click()
+  }
+
+  async function handleFavoriteCoverFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    const folder = favoriteCoverTarget.value
+    if (!file || !folder?.id) return
+    const check = validateLocalImageFile(file)
+    if (!check.ok) {
+      ElMessage.warning(check.message)
+      return
     }
-  }
-
-  function jumpFavoriteFolderPage() {
-    const n = Number(favoriteFolderPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadFavoriteFolders(Math.min(favoriteFolderTotalPages.value, Math.max(1, Math.floor(n))))
+    favoriteCoverUploadingId.value = folder.id
+    try {
+      const uploadRes = await uploadFavoriteFolderCover(file)
+      if (uploadRes.code !== 0 || !uploadRes.data) {
+        ElMessage.error(uploadRes.message || '封面上传失败')
+        return
+      }
+      const updateRes = await updateFavoriteFolder({
+        folderId: folder.id,
+        coverUrl: uploadRes.data,
+      })
+      if (updateRes.code !== 0) {
+        ElMessage.error(updateRes.message || '封面保存失败')
+        return
+      }
+      folder.coverUrl = uploadRes.data
+      if (Number(activeFavoriteFolder.value?.id) === Number(folder.id)) {
+        activeFavoriteFolder.value.coverUrl = uploadRes.data
+      }
+      ElMessage.success('收藏夹封面已更新')
+    } catch {
+      ElMessage.error('封面上传失败，请稍后重试')
+    } finally {
+      favoriteCoverUploadingId.value = null
+      favoriteCoverTarget.value = null
+    }
   }
 
   function openCreateFavoriteFolder() {
     favoriteCreateForm.value = { name: '', isPublic: 1 }
     favoriteCreateVisible.value = true
+  }
+
+  function setFavoriteCreateVisibility(isPublic) {
+    favoriteCreateForm.value.isPublic = Number(isPublic) === 1 ? 1 : 0
   }
 
   async function saveFavoriteFolder() {
@@ -266,9 +320,15 @@ export function useProfile() {
   })
 
   const isMe = computed(() => {
-    const targetId = route.params.id || userStore.id
+    const targetId = resolveProfileUserId()
     return String(targetId) === String(userStore.id)
   })
+
+  const canDeleteActiveFavoriteFolder = computed(() =>
+    isMe.value
+      && activeFavoriteFolder.value?.id != null
+      && Number(activeFavoriteFolder.value?.isDefault) !== 1,
+  )
 
   onMounted(async () => {
     await loadProfile(1)
@@ -279,23 +339,36 @@ export function useProfile() {
     await tryRestoreProfileState()
   })
 
-  watch(() => route.params.id, async () => {
-    resetPublicGroups()
-    await loadProfile(1)
-    if (activeTab.value === 'groups') {
-      await loadPublicGroups(1)
-    }
-    if (activeTab.value === 'not-interested' && isMe.value) {
-      await loadNotInterestedArticles(1)
-    }
-    await tryRestoreProfileState()
-  })
+  watch(
+    () => [route.name, String(route.params.id || '')],
+    async ([name], prev) => {
+      if (name !== 'profile' && name !== 'myProfile') return
+      // 从帖子详情返回：keep-alive 已保留列表，禁止重拉打乱顺序
+      if (prev?.[0] === 'articleDetail') return
+      // 首次进入由 onMounted 加载，避免双拉
+      if (prev == null) return
+      resetPublicGroups()
+      await loadProfile(1)
+      if (activeTab.value === 'liked') {
+        await loadLikedArticles(1)
+      }
+      if (activeTab.value === 'groups') {
+        await loadPublicGroups(1)
+      }
+      if (activeTab.value === 'not-interested' && isMe.value) {
+        await loadNotInterestedArticles(1)
+      }
+      if (activeTab.value === 'collect') {
+        await loadFavoriteFolders(1)
+      }
+      await tryRestoreProfileState()
+    },
+  )
 
   async function loadProfile(page = 1) {
     loading.value = true
-    const userId = route.params.id || userStore.id
+    const userId = resolveProfileUserId()
     notesPageNum.value = page
-    notesPageInput.value = String(page)
     try {
       const res = await getArticleListWithUser({
         userId,
@@ -309,48 +382,13 @@ export function useProfile() {
         notesTotal.value = Number(res.data.total) || 0
       }
       await loadFollowStats(userId)
-    } catch (e) {
-      console.error('加载个人主页失败:', e)
+    } catch {
+      ElMessage.error('加载个人主页失败，请稍后重试')
     } finally {
       loading.value = false
     }
   }
 
-  function goNotesFirst() {
-    loadProfile(1)
-  }
-
-  function goNotesPrev() {
-    if (notesPageNum.value > 1) loadProfile(notesPageNum.value - 1)
-  }
-
-  function goNotesNext() {
-    if (notesPageNum.value < notesTotalPages.value) loadProfile(notesPageNum.value + 1)
-  }
-
-  function jumpNotesPage() {
-    const n = Number(notesPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadProfile(Math.min(notesTotalPages.value, Math.max(1, Math.floor(n))))
-  }
-
-  function goLikedFirst() {
-    loadLikedArticles(1)
-  }
-
-  function goLikedPrev() {
-    if (likedPageNum.value > 1) loadLikedArticles(likedPageNum.value - 1)
-  }
-
-  function goLikedNext() {
-    if (likedPageNum.value < likedTotalPages.value) loadLikedArticles(likedPageNum.value + 1)
-  }
-
-  function jumpLikedPage() {
-    const n = Number(likedPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadLikedArticles(Math.min(likedTotalPages.value, Math.max(1, Math.floor(n))))
-  }
 
   async function loadMyGroupSessions() {
     try {
@@ -364,9 +402,8 @@ export function useProfile() {
   }
 
   async function loadPublicGroups(page = 1) {
-    const userId = route.params.id || userStore.id
+    const userId = resolveProfileUserId()
     publicGroupsPageNum.value = page
-    publicGroupsPageInput.value = String(page)
     publicGroupsLoading.value = true
     try {
       const [groupsRes] = await Promise.all([
@@ -387,7 +424,6 @@ export function useProfile() {
   async function loadNotInterestedArticles(page = 1) {
     if (!isMe.value) return
     notInterestedPageNum.value = page
-    notInterestedPageInput.value = String(page)
     notInterestedLoading.value = true
     try {
       const res = await getNotInterestedArticles({ pageNum: page, pageSize: PROFILE_PAGE_SIZE })
@@ -400,25 +436,6 @@ export function useProfile() {
     }
   }
 
-  function goNotInterestedFirst() {
-    loadNotInterestedArticles(1)
-  }
-
-  function goNotInterestedPrev() {
-    if (notInterestedPageNum.value > 1) loadNotInterestedArticles(notInterestedPageNum.value - 1)
-  }
-
-  function goNotInterestedNext() {
-    if (notInterestedPageNum.value < notInterestedTotalPages.value) {
-      loadNotInterestedArticles(notInterestedPageNum.value + 1)
-    }
-  }
-
-  function jumpNotInterestedPage() {
-    const n = Number(notInterestedPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadNotInterestedArticles(Math.min(notInterestedTotalPages.value, Math.max(1, Math.floor(n))))
-  }
 
   async function restoreNotInterestedArticle(item) {
     const articleId = item?.article?.id
@@ -432,7 +449,8 @@ export function useProfile() {
       notInterestedTotal.value = Math.max(0, notInterestedTotal.value - 1)
       ElMessage.success('已恢复兴趣')
       if (notInterestedArticles.value.length === 0 && notInterestedPageNum.value > 1) {
-        await loadNotInterestedArticles(Math.min(notInterestedPageNum.value - 1, notInterestedTotalPages.value))
+        const maxPage = Math.max(1, Math.ceil((notInterestedTotal.value || 0) / PROFILE_PAGE_SIZE))
+        await loadNotInterestedArticles(Math.min(notInterestedPageNum.value - 1, maxPage))
       }
     } finally {
       notInterestedRestoringId.value = null
@@ -443,28 +461,8 @@ export function useProfile() {
     publicGroups.value = []
     publicGroupsTotal.value = 0
     publicGroupsPageNum.value = 1
-    publicGroupsPageInput.value = '1'
   }
 
-  function goPublicGroupsFirst() {
-    loadPublicGroups(1)
-  }
-
-  function goPublicGroupsPrev() {
-    if (publicGroupsPageNum.value > 1) loadPublicGroups(publicGroupsPageNum.value - 1)
-  }
-
-  function goPublicGroupsNext() {
-    if (publicGroupsPageNum.value < publicGroupsTotalPages.value) {
-      loadPublicGroups(publicGroupsPageNum.value + 1)
-    }
-  }
-
-  function jumpPublicGroupsPage() {
-    const n = Number(publicGroupsPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadPublicGroups(Math.min(publicGroupsTotalPages.value, Math.max(1, Math.floor(n))))
-  }
 
   async function applyJoinPublicGroup(group) {
     const gid = group?.id
@@ -551,7 +549,6 @@ export function useProfile() {
     const fid = activeFavoriteFolder.value?.id
     if (!fid) return
     favoriteDialogPageNum.value = page
-    favoriteDialogPageInput.value = String(page)
     favoriteDialogLoading.value = true
     try {
       const res = await getFavoriteFolderArticles(fid, {
@@ -567,25 +564,6 @@ export function useProfile() {
     }
   }
 
-  function goFavoriteDialogFirst() {
-    loadFavoriteDialogArticles(1)
-  }
-
-  function goFavoriteDialogPrev() {
-    if (favoriteDialogPageNum.value > 1) loadFavoriteDialogArticles(favoriteDialogPageNum.value - 1)
-  }
-
-  function goFavoriteDialogNext() {
-    if (favoriteDialogPageNum.value < favoriteDialogTotalPages.value) {
-      loadFavoriteDialogArticles(favoriteDialogPageNum.value + 1)
-    }
-  }
-
-  function jumpFavoriteDialogPage() {
-    const n = Number(favoriteDialogPageInput.value)
-    if (!Number.isFinite(n)) return
-    loadFavoriteDialogArticles(Math.min(favoriteDialogTotalPages.value, Math.max(1, Math.floor(n))))
-  }
 
   function startFavoriteFolderRename() {
     if (!isMe.value) return
@@ -622,7 +600,7 @@ export function useProfile() {
   function saveProfileReturnState(extra = {}) {
     const state = {
       tab: activeTab.value,
-      profileUserId: route.params.id || userStore.id,
+      profileUserId: resolveProfileUserId(),
       scrollY: window.scrollY,
       ...extra,
     }
@@ -639,18 +617,12 @@ export function useProfile() {
       sessionStorage.removeItem(PROFILE_RETURN_KEY)
       return
     }
-    if (String(state.profileUserId) !== String(route.params.id || userStore.id)) return
+    if (String(state.profileUserId) !== String(resolveProfileUserId())) return
     sessionStorage.removeItem(PROFILE_RETURN_KEY)
+    // 只还原 Tab / 滚动 / 收藏夹弹层，不重拉笔记与点赞（避免关闭详情后顺序变化）
     const restoredTab = state.tab || 'notes'
-    if (restoredTab) activeTab.value = restoredTab
-    if (restoredTab === 'notes' && state.page) {
-      await loadProfile(Number(state.page) || 1)
-    }
-    if (restoredTab === 'liked' && state.page) {
-      await loadLikedArticles(Number(state.page) || 1)
-    }
-    if (restoredTab === 'not-interested' && isMe.value && state.page) {
-      await loadNotInterestedArticles(Number(state.page) || 1)
+    if (restoredTab && restoredTab !== activeTab.value) {
+      activeTab.value = restoredTab
     }
     if (restoredTab === 'collect' && state.folderId) {
       if (!favoriteFolders.value.length) {
@@ -661,7 +633,9 @@ export function useProfile() {
         activeFavoriteFolder.value = folder
         favoriteDialogTitle.value = folder.name || '收藏'
         favoriteDialogVisible.value = true
-        await loadFavoriteDialogArticles(Number(state.page) || 1)
+        if (!favoriteDialogItems.value.length) {
+          await loadFavoriteDialogArticles(Number(state.page) || 1)
+        }
       }
     }
     await nextTick()
@@ -694,6 +668,43 @@ export function useProfile() {
     }
   }
 
+  async function deleteCurrentFavoriteFolder() {
+    const folder = activeFavoriteFolder.value
+    if (!canDeleteActiveFavoriteFolder.value || favoriteDialogLoading.value) return
+    try {
+      await confirmDialog(
+        `删除“${folder.name}”后不可恢复，收藏记录也会一并移除。`,
+        '删除收藏夹',
+        {
+          showCancelButton: false,
+          confirmButtonText: '确定删除',
+          closeOnClickModal: false,
+          closeOnPressEscape: true,
+          customClass: 'profile-fav-delete-confirm',
+          type: 'warning',
+        },
+      )
+    } catch {
+      return
+    }
+    favoriteDialogLoading.value = true
+    try {
+      const res = await deleteFavoriteFolder(folder.id)
+      if (res.code !== 0) {
+        ElMessage.error(res.message || '删除失败')
+        return
+      }
+      favoriteDialogVisible.value = false
+      activeFavoriteFolder.value = null
+      const remaining = Math.max(0, favoriteFolderTotal.value - 1)
+      const lastPage = Math.max(1, Math.ceil(remaining / FAVORITE_FOLDER_PAGE_SIZE))
+      await loadFavoriteFolders(Math.min(favoriteFolderPageNum.value, lastPage))
+      ElMessage.success('收藏夹已删除')
+    } finally {
+      favoriteDialogLoading.value = false
+    }
+  }
+
   function favoriteCoverStyle(article) {
     if (article?.coverImg) {
       return {
@@ -705,6 +716,13 @@ export function useProfile() {
     return { background: 'hsl(330, 70%, 94%)' }
   }
 
+  function captureProfileOpenFrom() {
+    const profilePath = route.fullPath?.startsWith('/profile')
+      ? route.fullPath
+      : `/profile/${resolveProfileUserId() || ''}`
+    captureFeedOpenFrom(profilePath)
+  }
+
   function openArticleFromFavorite(row) {
     const id = row?.article?.id
     if (!id) return
@@ -714,6 +732,7 @@ export function useProfile() {
       folderPage: favoriteFolderPageNum.value,
       page: favoriteDialogPageNum.value,
     })
+    captureProfileOpenFrom()
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
@@ -721,6 +740,7 @@ export function useProfile() {
     const id = item?.article?.id || item?.id
     if (!id) return
     saveProfileReturnState({ tab: 'notes', page: notesPageNum.value })
+    captureProfileOpenFrom()
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
@@ -728,6 +748,7 @@ export function useProfile() {
     const id = item?.article?.id || item?.id
     if (!id) return
     saveProfileReturnState({ tab: 'liked', page: likedPageNum.value })
+    captureProfileOpenFrom()
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
@@ -735,6 +756,7 @@ export function useProfile() {
     const id = item?.article?.id
     if (!id) return
     saveProfileReturnState({ tab: 'not-interested', page: notInterestedPageNum.value })
+    captureProfileOpenFrom()
     router.push({ path: `/article/${id}`, query: { from: 'profile' } })
   }
 
@@ -805,18 +827,32 @@ export function useProfile() {
     bgFileInput.value?.click()
   }
 
+  function openBannerPreview() {
+    const url = userInfo.value?.backgroundUrl || defaultBg
+    bannerDialogRef.value?.openView(url)
+  }
+
   async function handleBgUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
       ElMessage.warning('请选择图片文件')
+      e.target.value = ''
       return
     }
     const pre = validateLocalImageFile(file)
     if (!pre.ok) {
       ElMessage.warning(pre.message)
+      e.target.value = ''
       return
     }
+    bannerDialogRef.value?.openCrop(file)
+    e.target.value = ''
+  }
+
+  async function onBannerCropConfirm(blob) {
+    if (!blob) return
+    const file = new File([blob], 'profile-banner.jpg', { type: blob.type || 'image/jpeg' })
     const formData = new FormData()
     formData.append('file', file)
     const loadingOverlay = openImageUploadLoading(file, '正在上传背景图…')
@@ -838,124 +874,114 @@ export function useProfile() {
     } finally {
       loadingOverlay.close()
     }
-    e.target.value = ''
   }
 
   return {
+    Bookmark,
     Camera,
-    Lock,
+    FAVORITE_DIALOG_PAGE_SIZE,
+    FAVORITE_FOLDER_PAGE_SIZE,
+    MessageCircle,
+    PROFILE_PAGE_SIZE,
+    PUBLIC_GROUP_PAGE_SIZE,
     Plus,
+    selectProfileTab,
     Star,
-    Unlock,
+    ThumbsUp,
+    Trash2,
+    ZoomIn,
     activeTab,
     applyJoinPublicGroup,
     articles,
     avatarSrc,
+    bannerDialogRef,
     bgFileInput,
     bgStyle,
+    canDeleteActiveFavoriteFolder,
     confirmFavoriteFolderRename,
     coverStyle,
-    favoriteDialogPageInput,
-    favoriteDialogPageNum,
-    favoriteDialogTotalPages,
-    favoriteFolderError,
-    favoriteFolderPageInput,
-    favoriteFolderPageNum,
-    favoriteFolderRenaming,
-    favoriteFolderRenameSaving,
-    favoriteFolderRenameValue,
-    favoriteFolderTotalPages,
-    goFavoriteDialogFirst,
-    goFavoriteDialogNext,
-    goFavoriteDialogPrev,
-    goFavoriteFoldersFirst,
-    goFavoriteFoldersNext,
-    goFavoriteFoldersPrev,
-    goLikedFirst,
-    goLikedNext,
-    goLikedPrev,
-    goNotesFirst,
-    goNotesNext,
-    goNotesPrev,
-    goNotInterestedFirst,
-    goNotInterestedNext,
-    goNotInterestedPrev,
-    handleBgUpload,
-    handleChat,
-    toggleFollow,
-    isMe,
-    isFollowing,
-    followSaving,
-    followingCount,
-    followerCount,
-    jumpFavoriteDialogPage,
-    jumpFavoriteFolderPage,
-    jumpLikedPage,
-    jumpNotesPage,
-    jumpNotInterestedPage,
-    likedArticles,
-    likedPageInput,
-    likedPageNum,
-    likedTotal,
-    likedTotalPages,
-    loadLikedArticles,
-    loadNotInterestedArticles,
+    defaultAvatar,
+    deleteCurrentFavoriteFolder,
+    displayAuthorNickname,
+    displayVipExpireAt,
+    displayVipTier,
+    emptyFavoriteArticleUrl,
+    favoriteCoverInputRef,
+    favoriteCoverStyle,
+    favoriteCoverUploadingId,
     favoriteCreateForm,
     favoriteCreateSaving,
     favoriteCreateVisible,
-    favoriteCoverStyle,
     favoriteDialogItems,
     favoriteDialogLoading,
+    favoriteDialogPageNum,
     favoriteDialogTitle,
+    favoriteDialogTotal,
     favoriteDialogVisible,
+    favoriteFolderError,
+    favoriteFolderInitial,
+    favoriteFolderPageNum,
     favoriteFolderPublic,
+    favoriteFolderRenaming,
+    favoriteFolderRenameSaving,
+    favoriteFolderRenameValue,
+    favoriteFolderTotal,
     favoriteFolders,
     favoriteVisibilitySaving,
+    followSaving,
+    followerCount,
+    followingCount,
     formatProfileDate,
+    groupAvatarText,
+    handleBgUpload,
+    handleChat,
+    handleFavoriteCoverFile,
+    isFollowing,
+    isJoinedPublicGroup,
+    isMe,
+    isPendingPublicGroup,
+    joiningGroupId,
+    likedArticles,
+    likedPageNum,
+    likedTotal,
+    loadFavoriteDialogArticles,
     loadFavoriteFolders,
+    loadLikedArticles,
+    loadNotInterestedArticles,
+    loadProfile,
     loadPublicGroups,
-    loadingFavorites,
     loading,
-  notesPageInput,
+    loadingFavorites,
     notesPageNum,
-    notesTotalPages,
+    notesTotal,
     notInterestedArticles,
     notInterestedLoading,
-    notInterestedPageInput,
     notInterestedPageNum,
     notInterestedRestoringId,
     notInterestedTotal,
-    notInterestedTotalPages,
+    onBannerCropConfirm,
     openArticleFromFavorite,
     openArticleFromLiked,
     openArticleFromNotInterested,
     openArticleFromNotes,
+    openBannerPreview,
     openCreateFavoriteFolder,
     openFavoriteDialog,
+    openPublicGroupCard,
+    profileIpRegion,
     publicGroups,
     publicGroupsLoading,
-    publicGroupsPageInput,
     publicGroupsPageNum,
-    publicGroupsTotalPages,
-    profileIpRegion,
-    goPublicGroupsFirst,
-    goPublicGroupsNext,
-    goPublicGroupsPrev,
-    groupAvatarText,
-    isJoinedPublicGroup,
-    isPendingPublicGroup,
-    joiningGroupId,
-    jumpPublicGroupsPage,
-    openPublicGroupCard,
-    saveFavoriteFolder,
+    publicGroupsTotal,
     restoreNotInterestedArticle,
+    saveFavoriteFolder,
+    setFavoriteCreateVisibility,
     startFavoriteFolderRename,
     toggleFavoriteFolderPublic,
-    loading,
+    toggleFollow,
     total,
     triggerBgUpload,
+    triggerFavoriteCoverUpload,
     userInfo,
-    displayVipTier,
-    displayVipExpireAt,
   }
 }

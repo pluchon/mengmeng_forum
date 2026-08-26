@@ -5,9 +5,10 @@ import java.util.Set;
 // 登录拦截器的游客与预登录接口白名单
 public final class AuthApiPaths {
 
-    // 游客可读接口：精确匹配 GET，携带 Token 时仍会解析并注入 USER_SESSION。
+    // 游客可读接口：精确匹配 GET，携带 Token 时仍会解析并注入 USER_SESSION
     private static final Set<String> OPTIONAL_GET_PATHS = Set.of(
             "/article/selectArticleDetailByArticleId",
+            "/article/summary",
             "/article/getArticleListByUserIdWithPageAndUserInfo",
             "/article/getHotArticleList",
             "/article/getHotArticleListWithPage",
@@ -22,7 +23,6 @@ public final class AuthApiPaths {
             "/board/selectBoardByBoardId",
             "/board/selectBoardBy",
             "/board/selectBoardListByBoardIdWithPage",
-            "/recommend/feed",
             "/shop/list",
             "/shop/detail",
             "/favorite/folder/userList",
@@ -37,7 +37,7 @@ public final class AuthApiPaths {
             "/mascot/public/models"
     );
 
-    // 无登录态即可发起、但依赖验证码票据或验证码本身保护的预登录接口。
+    // 无登录态即可发起、但依赖验证码票据或验证码本身保护的预登录接口
     private static final Set<String> OPTIONAL_POST_PATHS = Set.of(
             "/user/login",
             "/user/register",
@@ -62,7 +62,7 @@ public final class AuthApiPaths {
         return "POST".equalsIgnoreCase(method) && OPTIONAL_POST_PATHS.contains(uri);
     }
 
-    /** WebMvc 注册用：静态资源、文档和 WebSocket 由各自机制处理。 */
+    // WebMvc 注册用：静态资源、文档和 WebSocket 由各自机制处理
     public static String[] interceptorExcludePatterns() {
         return new String[]{
                 "/*.html",
@@ -77,7 +77,6 @@ public final class AuthApiPaths {
                 "/ws/**",
                 "/user/internal/**",
                 "/points/internal/**",
-                "/growth/internal/**",
                 "/vip/internal/**",
                 "/shop/internal/**",
                 "/mascot/internal/**",

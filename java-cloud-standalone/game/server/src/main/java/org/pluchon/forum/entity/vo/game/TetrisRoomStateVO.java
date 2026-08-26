@@ -57,7 +57,7 @@ public class TetrisRoomStateVO {
     // 蓝方分数
     private Integer blueScore;
 
-    // PK 进度条左侧占比（0-100）
+    // PK 进度条左侧占比 0 100
     private Integer pkBarLeftPercent;
 
     // 对手展示信息

@@ -4,9 +4,14 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 70% 18%, rgba(88, 84, 214, 0.18), transparent 26%),
-    linear-gradient(135deg, #0b1720 0%, #12252f 54%, #0a141c 100%);
+  position: relative;
+  background-color: #0b1720;
+  background-image:
+    linear-gradient(rgba(11, 23, 32, 0.78), rgba(10, 20, 28, 0.88)),
+    url('https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/forum_images/client/webp/wuziqi_background.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: #edf5f3;
 }
 
@@ -101,6 +106,17 @@
 
 .gobang-room-conn.is-online span {
   background: #4fd08d;
+}
+
+.gobang-room-conn.is-warning {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+.gobang-room-conn.is-warning span {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
 }
 
 .gobang-room-grid {
@@ -203,13 +219,15 @@
 .gobang-side-piece.is-black,
 .gobang-turn-piece.is-black,
 .gobang-piece.is-black {
-  background: radial-gradient(circle at 32% 28%, #69737c, #12171e 62%, #050607);
+  background: radial-gradient(circle at 35% 28%, #5a6470, #14181f 65%, #050608);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45), inset 0 -1px 2px rgba(255, 255, 255, 0.12);
 }
 
 .gobang-side-piece.is-white,
 .gobang-turn-piece.is-white,
 .gobang-piece.is-white {
-  background: radial-gradient(circle at 32% 28%, #fff, #eef0e8 58%, #c8cec4);
+  background: radial-gradient(circle at 35% 28%, #ffffff, #edf0eb 60%, #c9d0c6);
+  box-shadow: 0 4px 10px rgba(40, 32, 28, 0.28), inset 0 -1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .gobang-spectator-count {
@@ -414,6 +432,38 @@
   font-weight: 900;
 }
 
+.gobang-player-panel :deep(.el-button--danger.is-plain) {
+  --el-button-text-color: #c41e3a;
+  --el-button-border-color: #7c5d3b;
+  --el-button-bg-color: transparent;
+  --el-button-hover-text-color: #e11d48;
+  --el-button-hover-border-color: #9a7348;
+  --el-button-hover-bg-color: rgba(92, 64, 51, 0.32);
+  --el-button-active-text-color: #991b1b;
+  --el-button-active-border-color: #6b4f32;
+  --el-button-active-bg-color: rgba(61, 42, 26, 0.48);
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border-width: 1px;
+  background:
+    radial-gradient(circle at 22% 38%, rgba(255, 220, 180, 0.12) 0 1px, transparent 2px),
+    linear-gradient(135deg, #3d2a1a 0%, #5c4033 52%, #4a3228 100%) !important;
+  color: #c41e3a !important;
+  font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 180, 0.14), 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.gobang-player-panel :deep(.el-button--danger.is-plain:hover:not(.is-disabled)) {
+  color: #e11d48 !important;
+  border-color: #9a7348 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 180, 0.18), 0 6px 18px rgba(0, 0, 0, 0.34);
+}
+
+.gobang-player-panel :deep(.el-button--danger.is-plain.is-disabled) {
+  opacity: 0.42;
+}
+
 .gobang-board-shell {
   position: relative;
   min-width: 0;
@@ -479,17 +529,17 @@
   max-width: 720px;
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 1px solid #82673f;
+  border: 1px solid #7c5d3b;
   border-radius: 8px;
   background:
-    linear-gradient(#b98549 1px, transparent 1px),
-    linear-gradient(90deg, #b98549 1px, transparent 1px),
-    #ddb46d;
+    linear-gradient(#b68249 1px, transparent 1px),
+    linear-gradient(90deg, #b68249 1px, transparent 1px),
+    linear-gradient(135deg, #f0dbaa 0%, #dfc38f 100%);
   background-size:
     calc((100% - var(--board-pad) * 2) / 14)
     calc((100% - var(--board-pad) * 2) / 14);
   background-position: var(--board-pad) var(--board-pad);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32), inset 0 0 12px rgba(110, 75, 40, 0.15);
   overflow: hidden;
 }
 

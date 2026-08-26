@@ -11,7 +11,7 @@ public class TetrisBlock {
     // 当前形状矩阵
     private final int[][] shape;
 
-    // 棋盘坐标 [row, col]
+    // 棋盘坐标 row, col
     private final int[] xy;
 
     // 旋转索引

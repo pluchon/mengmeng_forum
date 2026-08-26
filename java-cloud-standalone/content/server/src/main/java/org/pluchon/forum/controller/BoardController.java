@@ -20,11 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
-/**
- * @author pluchon
- * @create 2026-03-08-11:22
- *         作者代码水平一般，难免难看，请见谅
- */
+// 作者代码水平一般，难免难看，请见谅
 // 板块模块
 @Tag(name = "板块模块", description = "板块的增删改查接口")
 @RestController

@@ -16,6 +16,9 @@ public class UserLoginLogVO {
     @Schema(description = "IP 地址")
     private String ipAddress;
 
+    @Schema(description = "IP 归属地省份")
+    private String ipRegion;
+
     @Schema(description = "设备/浏览器摘要")
     private String deviceSummary;
 }

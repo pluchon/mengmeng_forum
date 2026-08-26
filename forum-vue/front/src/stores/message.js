@@ -8,13 +8,14 @@ const recentIncomingMessageIds = new Set()
 export const useMessageStore = defineStore('message', () => {
   const unreadCount = ref(0)
   const incomingMessage = ref(null)
-  /** 可靠触发通知（避免 incomingMessage 引用未变导致 watch 不触发） */
+  // 可靠触发通知 避免 incomingMessage 引用未变导致 watch 不触发
   const incomingSignal = ref(null)
   const readReceiptSignal = ref(null)
   const auditResultSignal = ref(null)
   const systemUnreadCount = ref(0)
   const systemMessageSignal = ref(null)
   const groupMessageSignal = ref(null)
+  const privateMessageMutationSignal = ref(null)
   const showTip = ref(false)
   const tipText = ref('')
   const incomingPreview = ref(null)
@@ -119,6 +120,9 @@ export const useMessageStore = defineStore('message', () => {
 
   function onGroupMessage(payload) {
     groupMessageSignal.value = { ...payload, seq: Date.now() }
+    if (['group_message_recalled', 'group_message_deleted', 'group_message_audit_failed', 'private_message_deleted'].includes(payload?.type)) {
+      return
+    }
     if (payload?.notify === false) {
       return
     }
@@ -138,6 +142,10 @@ export const useMessageStore = defineStore('message', () => {
     tipText.value = `${sender}：${preview}`
   }
 
+  function onPrivateMessageMutation(payload) {
+    privateMessageMutationSignal.value = { ...payload, seq: Date.now() }
+  }
+
   return {
     unreadCount,
     incomingMessage,
@@ -148,6 +156,7 @@ export const useMessageStore = defineStore('message', () => {
     systemUnreadCount,
     systemMessageSignal,
     groupMessageSignal,
+    privateMessageMutationSignal,
     showTip,
     tipText,
     setUnreadCount,
@@ -161,9 +170,10 @@ export const useMessageStore = defineStore('message', () => {
     setSystemUnreadCount,
     onSystemMessage,
     onGroupMessage,
+    onPrivateMessageMutation,
   }
 }, {
   persist: {
-    omit: ['readReceiptSignal', 'auditResultSignal', 'systemMessageSignal', 'groupMessageSignal', 'incomingPreview', 'incomingSignal'],
+    omit: ['readReceiptSignal', 'auditResultSignal', 'systemMessageSignal', 'groupMessageSignal', 'privateMessageMutationSignal', 'incomingPreview', 'incomingSignal'],
   },
 })

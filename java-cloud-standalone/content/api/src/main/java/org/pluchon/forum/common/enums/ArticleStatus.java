@@ -24,7 +24,7 @@ public enum ArticleStatus {
         return status != null && status == PUBLISHED.code;
     }
 
-    /** 可发起"提交审核"的状态: 草稿 / 审核未通过 / 审核异常 / 已发布(回审) */
+    // 可发起 提交审核 的状态: 草稿 / 审核未通过 / 审核异常 / 已发布 回审
     public static boolean canSubmitForAudit(Byte status) {
         if (status == null){
             return false;
@@ -32,7 +32,7 @@ public enum ArticleStatus {
         return status == DRAFT.code || status == REJECTED.code || status == AUDIT_ERROR.code || status == PUBLISHED.code;
     }
 
-    /** 不允许在以下状态下修改帖子主体内容(标题/正文/封面/相册) */
+    // 不允许在以下状态下修改帖子主体内容 标题/正文/封面/相册
     public static boolean isEditingLocked(Byte status) {
         return status != null && status == PENDING_AUDIT.code;
     }

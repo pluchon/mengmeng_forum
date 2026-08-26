@@ -13,8 +13,8 @@ import java.time.LocalDate;
 public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
 
     @Insert("INSERT INTO ai_usage_daily (user_id, usage_date, qwen_flash_used, advanced_llm_used, "
-            + "image_normal_used, image_premium_used, companion_normal_used, companion_premium_used, "
-            + "cover_hint_used, delete_state) VALUES (#{userId}, #{usageDate}, 0, 0, 0, 0, 0, 0, 0, 0) "
+            + "image_normal_used, companion_normal_used, "
+            + "cover_hint_used, delete_state) VALUES (#{userId}, #{usageDate}, 0, 0, 0, 0, 0, 0) "
             + "ON DUPLICATE KEY UPDATE user_id = user_id")
     void ensureUsageRow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 
@@ -36,12 +36,6 @@ public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
     int incrementImageNormalIfBelow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate,
                                     @Param("cap") int cap);
 
-    @Update("UPDATE ai_usage_daily SET image_premium_used = image_premium_used + 1 "
-            + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "
-            + "AND image_premium_used < #{cap}")
-    int incrementImagePremiumIfBelow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate,
-                                     @Param("cap") int cap);
-
     @Update("UPDATE ai_usage_daily SET cover_hint_used = cover_hint_used + 1 "
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0")
     int incrementCoverHint(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
@@ -60,9 +54,4 @@ public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
             + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "
             + "AND image_normal_used > 0")
     int decrementImageNormal(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
-
-    @Update("UPDATE ai_usage_daily SET image_premium_used = image_premium_used - 1 "
-            + "WHERE user_id = #{userId} AND usage_date = #{usageDate} AND delete_state = 0 "
-            + "AND image_premium_used > 0")
-    int decrementImagePremium(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 }

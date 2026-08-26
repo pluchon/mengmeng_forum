@@ -39,31 +39,3 @@
   min-height: 0;
   overflow: hidden;
 }
-
-.mascot-scale-popper {
-  z-index: 5000 !important;
-}
-
-.mascot-session-rename-dialog .el-message-box__header {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-
-.mascot-session-rename-dialog .el-message-box__title {
-  display: flex;
-  flex: 1;
-  justify-content: center;
-  color: var(--el-text-color-primary, #303133);
-  font-weight: 700;
-  text-align: center;
-}
-
-.mascot-session-rename-dialog .el-message-box__headerbtn {
-  position: absolute;
-  right: 15px;
-}
-
-.mascot-session-rename-dialog .el-message-box__message:empty {
-  display: none;
-}

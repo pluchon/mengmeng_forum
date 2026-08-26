@@ -1,16 +1,31 @@
 package org.pluchon.forum.service.interfaces.ai;
 
-import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
-import org.pluchon.forum.entity.dto.ai.AiImageRequest;
-import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationArticleFeatureRequest;
-import org.pluchon.forum.entity.dto.ai.AiRecommendationProfileRequest;
-import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
+import org.pluchon.forum.entity.dto.AiArticleCoverRequest;
+import org.pluchon.forum.entity.dto.AiArticleTagRecommendRequest;
+import org.pluchon.forum.entity.dto.AiArticleTagSimilarityRequest;
+import org.pluchon.forum.entity.dto.AiCoverHintsRequest;
+import org.pluchon.forum.entity.dto.AiCreatorInsightRequest;
+import org.pluchon.forum.entity.dto.AiImageModerationBatchUrlRequest;
+import org.pluchon.forum.entity.dto.AiImageRequest;
+import org.pluchon.forum.entity.dto.AiMusicRecommendRequest;
+import org.pluchon.forum.entity.dto.AiMusicSearchRequest;
+import org.pluchon.forum.entity.dto.AiMusicTasteRecommendRequest;
+import org.pluchon.forum.entity.dto.AiPolishRequest;
+import org.pluchon.forum.entity.dto.AiRecommendationArticleFeatureRequest;
+import org.pluchon.forum.entity.dto.AiRecommendationProfileRequest;
+import org.pluchon.forum.entity.dto.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.RagEmojiIndexDTO;
+import org.pluchon.forum.entity.dto.RagMusicIndexDTO;
+import org.pluchon.forum.entity.dto.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubCreatorInsightResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleCoverResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagRecommendResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagSimilarityResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubMusicMatchResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
+import org.pluchon.forum.entity.vo.ai.AiImageModerationItemResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
@@ -21,11 +36,19 @@ import org.pluchon.forum.api.ai.AiGobangMoveVO;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.web.multipart.MultipartFile;
-
 public interface AiHubService {
 
     AiHubPolishResultVO polish(Long userId, AiPolishRequest request);
+
+    AiHubArticleCoverResultVO articleCover(Long userId, AiArticleCoverRequest request);
+
+    AiHubArticleTagRecommendResultVO recommendArticleTags(AiArticleTagRecommendRequest request);
+
+    AiHubArticleTagSimilarityResultVO checkArticleTagSimilarity(AiArticleTagSimilarityRequest request);
+
+    AiHubMusicMatchResultVO recommendMusic(AiMusicRecommendRequest request);
+
+    AiHubMusicMatchResultVO searchMusic(AiMusicSearchRequest request);
 
     AiHubCoverHintsResultVO coverHints(Long userId, AiCoverHintsRequest request);
 
@@ -35,11 +58,17 @@ public interface AiHubService {
 
     AiRecommendationProfileResultVO generateRecommendationProfile(Long userId, AiRecommendationProfileRequest request);
 
+    AiHubMusicMatchResultVO recommendMusicTaste(Long userId, AiMusicTasteRecommendRequest request);
+
     String summarize(String content);
+
+    AiHubCreatorInsightResultVO generateCreatorInsight(AiCreatorInsightRequest request);
 
     void indexArticleRag(RagArticleIndexDTO payload);
 
     void indexEmojiRag(RagEmojiIndexDTO payload);
+
+    void indexMusicRag(RagMusicIndexDTO payload);
 
     void indexUserRag(RagUserIndexDTO payload);
 
@@ -48,6 +77,8 @@ public interface AiHubService {
     List<Long> ragVectorSearchArticles(String query, List<Map<String, Object>> candidates);
 
     List<Long> ragVectorSearchEmojis(String query);
+
+    List<String> ragVectorSearchMusic(String query);
 
     List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates);
 
@@ -59,7 +90,11 @@ public interface AiHubService {
 
     String validateText(String content);
 
-    boolean validateImage(MultipartFile file);
+    boolean validateImageUrl(String imageUrl, String objectKey);
+
+    List<AiImageModerationItemResultVO> validateImageUrls(AiImageModerationBatchUrlRequest request);
+
+    boolean validateImagePayload(String contentBase64, String filename, String contentType);
 
     AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request);
 }

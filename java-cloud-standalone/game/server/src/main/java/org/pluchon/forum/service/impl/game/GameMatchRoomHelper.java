@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-/** 匹配建房幂等：同一对用户并发匹配只保留一个房间 */
+// 匹配建房幂等：同一对用户并发匹配只保留一个房间
 @Component
 public class GameMatchRoomHelper {
 

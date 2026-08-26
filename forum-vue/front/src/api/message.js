@@ -1,6 +1,6 @@
 import request from './request'
 
-// 获取站内信会话列表（按联系人聚合）
+// 获取站内信会话列表 按联系人聚合
 export function getSessionList(params) {
   return request({ url: '/message/queryMessageSessionWithPage', method: 'get', params })
 }
@@ -11,7 +11,7 @@ export function getMessageList(params) {
   return request({ url: '/message/queryMessageDetailWithPage', method: 'get', params })
 }
 
-/** WebSocket 收到 dbMessageId 后拉取完整气泡（MessageDetailResponse） */
+// WebSocket 收到 dbMessageId 后拉取完整气泡 MessageDetailResponse
 export function getMessageDetailById(messageId) {
   return request({
     url: '/message/queryMessageDetailById',
@@ -21,7 +21,7 @@ export function getMessageDetailById(messageId) {
   })
 }
 
-/** 单条状态更新（如需精确单条已读；常态用 markRead 批量即可） */
+// 单条状态更新 如需精确单条已读；常态用 markRead 批量即可
 export function updateMessageStatusByMessageId(messageId, status = 1) {
   return request({
     url: '/message/updateMessageStatusByMessageId',
@@ -50,19 +50,39 @@ export function recallMessage(messageId) {
   return request({ url: '/message/recallMessage', method: 'put', params: { messageId } })
 }
 
-/** 上传聊天图片（OSS …/message/），成功后需再调 sendImageMessage */
-export function uploadChatImage(file, { onUploadProgress } = {}) {
+// 上传聊天图片 OSS …/message/ ，成功后需再调 sendImageMessage
+export function uploadChatImage(file, { onUploadProgress, silentBizCodes } = {}) {
   const formData = new FormData()
   formData.append('file', file)
   return request({
     url: '/file/uploadChatImage',
     method: 'post',
     data: formData,
+    timeout: 300000,
     onUploadProgress,
+    silentBizCodes,
   })
 }
 
-/** 上传自定义表情（OSS …/emoji/），成功后需再调 favoriteEmoji */
+// 批量上传聊天图片（一次最多 9 张，支持部分成功）
+export function uploadChatImages(files, { onUploadProgress, silentBizCodes, silentHttpError } = {}) {
+  const formData = new FormData()
+  const list = Array.isArray(files) ? files : [files]
+  list.forEach((file) => {
+    if (file) formData.append('files', file)
+  })
+  return request({
+    url: '/file/uploadChatImages',
+    method: 'post',
+    data: formData,
+    timeout: 300000,
+    onUploadProgress,
+    silentBizCodes,
+    silentHttpError: !!silentHttpError,
+  })
+}
+
+// 上传自定义表情 OSS …/emoji/ ，成功后需再调 favoriteEmoji
 export function uploadChatEmoji(file, { onUploadProgress } = {}) {
   const formData = new FormData()
   formData.append('file', file)
@@ -74,12 +94,34 @@ export function uploadChatEmoji(file, { onUploadProgress } = {}) {
   })
 }
 
-/** 发送图片 / GIF 私信（不含正文） */
+// 批量上传自定义表情（一次最多 9 张，支持部分成功；成功后再逐张 favorite）
+export function uploadChatEmojis(files, { onUploadProgress, silentHttpError } = {}) {
+  const formData = new FormData()
+  const list = Array.isArray(files) ? files : [files]
+  list.forEach((file) => {
+    if (file) formData.append('files', file)
+  })
+  return request({
+    url: '/file/uploadChatEmojis',
+    method: 'post',
+    data: formData,
+    timeout: 300000,
+    onUploadProgress,
+    silentHttpError: !!silentHttpError,
+  })
+}
+
+// 发送图片 / GIF 私信 不含正文
 export function sendImageMessage(data) {
   return request({ url: '/message/sendImage', method: 'post', data })
 }
 
-/** 收藏表情（自上传 url 或聊天消息引用） */
+// 发送一至十张图片组成的私信图集，可附带文字
+export function sendAlbumMessage(data) {
+  return request({ url: '/message/sendAlbum', method: 'post', data })
+}
+
+// 收藏表情 自上传 url 或聊天消息引用
 export function favoriteEmoji(data) {
   return request({ url: '/message/emoji/favorite', method: 'post', data })
 }
@@ -88,31 +130,26 @@ export function deleteFavoriteEmoji(emojiId) {
   return request({ url: `/message/emoji/${emojiId}`, method: 'delete' })
 }
 
-export function getEmojiList() {
-  return request({ url: '/message/emoji/list', method: 'get' })
+export function getEmojiList(params) {
+  return request({ url: '/message/emoji/list', method: 'get', params })
 }
 
-// 查询私聊语音状态
-export function getPrivateVoiceSession(peerUserId) {
-  return request({ url: `/message/private-voice/${peerUserId}`, method: 'get' })
+export function searchMessageSessions(params) {
+  return request({ url: '/message/searchSessions', method: 'get', params })
 }
 
-// 发起私聊语音
-export function startPrivateVoiceSession(peerUserId) {
-  return request({ url: `/message/private-voice/${peerUserId}/start`, method: 'post' })
+export function hideMessageSession(peerUserId) {
+  return request({ url: '/message/session/hide', method: 'post', data: { peerUserId } })
 }
 
-// 接听私聊语音
-export function acceptPrivateVoiceSession(peerUserId) {
-  return request({ url: `/message/private-voice/${peerUserId}/accept`, method: 'post' })
+export function restoreMessageSession(peerUserId) {
+  return request({ url: '/message/session/restore', method: 'post', data: { peerUserId } })
 }
 
-// 拒绝私聊语音
-export function declinePrivateVoiceSession(peerUserId) {
-  return request({ url: `/message/private-voice/${peerUserId}/decline`, method: 'post' })
+export function getHiddenMessageSessions(params) {
+  return request({ url: '/message/session/hidden', method: 'get', params })
 }
 
-// 离开私聊语音
-export function leavePrivateVoiceSession(peerUserId) {
-  return request({ url: `/message/private-voice/${peerUserId}/leave`, method: 'post' })
+export function reportChatMessage(data) {
+  return request({ url: '/message/report', method: 'post', data })
 }

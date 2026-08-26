@@ -5,9 +5,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 帖子审核状态响应. 前端在"审核中"页面用此接口轮询兜底.
- */
+// 帖子审核状态响应. 前端在 审核中 页面用此接口轮询兜底.
 @Data
 @Schema(description = "帖子审核状态查询响应")
 public class AuditStatusResponse {

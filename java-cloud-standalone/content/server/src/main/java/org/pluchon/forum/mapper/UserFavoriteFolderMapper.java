@@ -9,12 +9,12 @@ import org.pluchon.forum.entity.db.UserFavoriteFolder;
 @Mapper
 public interface UserFavoriteFolderMapper extends BaseMapper<UserFavoriteFolder> {
 
-    /** 收藏数原子 +1 (仅未删除夹) */
+    // 收藏数原子 +1 仅未删除夹
     @Update("UPDATE user_favorite_folder SET item_count = item_count + 1 "
             + "WHERE id = #{folderId} AND delete_state = 0")
     int incrementItemCount(@Param("folderId") Long folderId);
 
-    /** 收藏数原子 -1 (item_count 已 >0 才扣, 避免变负值) */
+    // 收藏数原子 1 item_count 已 >0 才扣, 避免变负值
     @Update("UPDATE user_favorite_folder SET item_count = item_count - 1 "
             + "WHERE id = #{folderId} AND delete_state = 0 AND item_count > 0")
     int decrementItemCount(@Param("folderId") Long folderId);

@@ -1,0 +1,14 @@
+spring:
+  cloud:
+    gateway:
+      # Spring Cloud Gateway 4：超时挂在 server.webflux 下；旧 httpclient 路径可能不生效
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 5000
+            # 需大于 AI 长调用（润色 / 标签 / 配图约 300s）
+            response-timeout: 320s
+
+logging:
+  level:
+    org.springframework.cloud.gateway: WARN

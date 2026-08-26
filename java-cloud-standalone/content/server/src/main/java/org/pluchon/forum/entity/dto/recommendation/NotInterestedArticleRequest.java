@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-// 提交“不想看这篇”反馈请求
+// 提交 不想看这篇 反馈请求
 @Data
 public class NotInterestedArticleRequest {
 

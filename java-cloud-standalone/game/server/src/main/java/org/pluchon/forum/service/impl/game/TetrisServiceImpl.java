@@ -2,7 +2,6 @@ package org.pluchon.forum.service.impl.game;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.constant.GameRedisKeys;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -11,8 +10,7 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.TetrisConverter;
 import org.pluchon.forum.entity.db.GameTetrisRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.TetrisSettleRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.TetrisProfileVO;
@@ -30,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -52,9 +49,6 @@ public class TetrisServiceImpl implements TetrisService {
     private TetrisScoreValidator tetrisScoreValidator;
 
     @Autowired
-    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
-
-    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     @Override
@@ -73,7 +67,7 @@ public class TetrisServiceImpl implements TetrisService {
         LambdaQueryWrapper<GameTetrisRecord> wrapper = new LambdaQueryWrapper<GameTetrisRecord>()
                 .eq(GameTetrisRecord::getUserId, userId)
                 .eq(GameTetrisRecord::getGameCode, TetrisConstants.GAME_CODE)
-                .eq(GameTetrisRecord::getDeleteState, (byte) 0)
+                .eq(GameTetrisRecord::getDeleteState, GameConstants.NOT_DELETED)
                 .eq(GameTetrisRecord::getValidationStatus, TetrisConstants.VALIDATION_VALID)
                 .orderByDesc(GameTetrisRecord::getEndedAt)
                 .orderByDesc(GameTetrisRecord::getId);
@@ -99,7 +93,7 @@ public class TetrisServiceImpl implements TetrisService {
         Page<GameUserProfile> page = new Page<>(validPageNum, validPageSize);
         LambdaQueryWrapper<GameUserProfile> wrapper = new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, TetrisConstants.GAME_CODE)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
                 .orderByDesc(GameUserProfile::getScore)
                 .orderByDesc(GameUserProfile::getTotalCount)
                 .orderByAsc(GameUserProfile::getId);
@@ -128,7 +122,6 @@ public class TetrisServiceImpl implements TetrisService {
         ensureTetrisProfile(userId);
         GameUserProfile before = selectTetrisProfile(userId);
         int previousBest = before == null || before.getScore() == null ? 0 : before.getScore();
-        int forumPoints = tetrisScoreValidator.resolveForumPoints(request.getScore());
         Date endedAt = new Date();
         Date startedAt = request.getStartedAtMs() != null
                 ? new Date(request.getStartedAtMs())
@@ -143,25 +136,14 @@ public class TetrisServiceImpl implements TetrisService {
         record.setDurationMs(request.getDurationMs());
         record.setSeed(request.getSeed());
         record.setReplayPayload(request.getReplayPayload());
-        record.setForumPointsAwarded(forumPoints);
+        record.setForumPointsAwarded(0);
         record.setValidationStatus(TetrisConstants.VALIDATION_VALID);
         record.setStartedAt(startedAt);
         record.setEndedAt(endedAt);
-        record.setDeleteState((byte) 0);
+        record.setDeleteState(GameConstants.NOT_DELETED);
         gameTetrisRecordMapper.insert(record);
 
         gameUserProfileMapper.applyTetrisFinish(userId, TetrisConstants.GAME_CODE, request.getScore());
-        if (forumPoints > 0) {
-            gamePointsInternalFeignClient.addPoints(
-                    userId,
-                    forumPoints,
-                    Constant.POINTS_SOURCE_TETRIS,
-                    record.getId(),
-                    "俄罗斯方块单局奖励",
-                    "game:tetris:solo:" + record.getId()
-            );
-        }
-
         GameUserProfile after = selectTetrisProfile(userId);
         int bestScore = after == null ? request.getScore() : after.getScore();
         boolean newBest = request.getScore() > previousBest;
@@ -169,7 +151,7 @@ public class TetrisServiceImpl implements TetrisService {
                 record.getId(),
                 request.getScore(),
                 bestScore,
-                forumPoints,
+                0,
                 newBest
         );
     }
@@ -207,7 +189,7 @@ public class TetrisServiceImpl implements TetrisService {
         profile.setLoseCount(0);
         profile.setDrawCount(0);
         profile.setCurrentStatus(GameConstants.PROFILE_IDLE);
-        profile.setDeleteState((byte) 0);
+        profile.setDeleteState(GameConstants.NOT_DELETED);
         try {
             gameUserProfileMapper.insert(profile);
         } catch (Exception e) {
@@ -224,7 +206,7 @@ public class TetrisServiceImpl implements TetrisService {
         List<GameUserProfile> rows = gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getUserId, userId)
                 .eq(GameUserProfile::getGameCode, TetrisConstants.GAME_CODE)
-                .eq(GameUserProfile::getDeleteState, (byte) 0));
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED));
         return rows.isEmpty() ? null : rows.get(0);
     }
 

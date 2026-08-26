@@ -1,30 +1,39 @@
-﻿import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, DataLine, Promotion, Trophy, VideoPlay } from '@element-plus/icons-vue'
+import { ArrowLeft, DataLine, Medal, Promotion, Trophy, VideoPlay, View } from '@element-plus/icons-vue'
 import {
   getGameCenterOverview,
+  getGameCategories,
+  getGamePage,
+  getGameStatisticsRecords,
+  getGameStatisticsSummary,
   getGobangActiveRooms,
-  getGobangRecords,
-  getJinziRecords,
+  getGobangReplay,
   getTetrisLeaderboard,
   getTetrisPkActiveRooms,
   getTetrisPkLeaderboard,
   getTetrisPkProfile,
-  getTetrisPkRecords,
   getTetrisProfile,
-  getTetrisRecords,
   getTetrisReplay,
 } from '@/api/game'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { useForumPointsBalance } from '@/composables/useForumPointsBalance'
-import TetrisCoverBoard from '@/components/game/TetrisCoverBoard.vue'
+import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { drawBoard } from '@/scripts/games/tetris/canvas'
 import { createReplayRunner } from '@/scripts/games/tetris/replayRunner'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
 import { DEFAULT_AVATAR } from '@/utils/constants'
+import {
+  ELUOSI_ALONE_WEBP_URL as eluosiAloneImg,
+  ELUOSI_PK_WEBP_URL as eluosiPkImg,
+  GAME_CARD_WEBP_URL as gameCardImg,
+  JINZI_COVER_WEBP_URL as jinziImg,
+  WUZIQI_COVER_WEBP_URL as wuziqiImg,
+} from '@/utils/clientOss'
 
 const TETRIS_REPLAY_CELL = 20
 let refreshTimer = null
@@ -47,13 +56,6 @@ function endReasonText(reason) {
   return reason || '正常结束'
 }
 
-function formatDateTime(value) {
-  const d = parseForumDateTime(value)
-  if (!d) return '—'
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function formatRecordTime(value) {
   const d = parseForumDateTime(value)
   if (!d) return '刚刚'
@@ -65,8 +67,57 @@ const router = useRouter()
 const { pointsBalance, refreshForumPointsBalance } = useForumPointsBalance()
 const loading = ref(false)
 const statsVisible = ref(false)
-const recentVisible = ref(false)
 const leaderboardVisible = ref(false)
+const gameCategory = ref('all')
+const gameCategories = ref([
+  { code: 'all', label: '全部' },
+  { code: 'pvp', label: '双人/多人对战' },
+  { code: 'solo', label: '单人休闲' },
+])
+const gamePageNum = ref(1)
+const gamePageSize = ref(8)
+const gameTotal = ref(0)
+const pagedGames = ref([])
+const gameListLoading = ref(false)
+
+const GAME_PRESETS = {
+  gobang: {
+    name: '五子棋',
+    sub: '黑白交锋 · 五子连珠',
+    cover: wuziqiImg,
+    btnClass: 'btn--gobang',
+    idleText: '开始匹配',
+  },
+  jinzi: {
+    name: '井字棋',
+    sub: '九宫对决 · 五局三胜',
+    cover: jinziImg,
+    btnClass: 'btn--jinzi',
+    idleText: '开始匹配',
+  },
+  tetris: {
+    name: '俄罗斯方块单人',
+    sub: '经典堆叠 · 极限下落',
+    cover: eluosiAloneImg,
+    btnClass: 'btn--tetris',
+    idleText: '开始游戏',
+  },
+  tetris_pk: {
+    name: '俄罗斯方块 PK',
+    sub: '动态发牌 · 实时竞速',
+    cover: eluosiPkImg,
+    btnClass: 'btn--tetris-pk',
+    idleText: '在线 PK',
+  },
+}
+
+const matchingGameCode = ref('')
+const currentMatchRooms = reactive({
+  gobang: '',
+  jinzi: '',
+  tetris_pk: '',
+})
+const pendingMatchPayloads = new Map()
 const statsGameCode = ref('gobang')
 const leaderboardGameCode = ref('tetris')
 const watchGameCode = ref('gobang')
@@ -78,10 +129,6 @@ const statRecords = ref([])
 const statTotal = ref(0)
 const statPage = ref(1)
 const statPageSize = ref(5)
-const recentRecords = ref([])
-const recentTotal = ref(0)
-const recentPage = ref(1)
-const recentPageSize = ref(10)
 const leaderboardPage = ref(1)
 const leaderboardPageSize = ref(5)
 const leaderboardTotal = ref(0)
@@ -117,6 +164,12 @@ const overview = reactive({
   jinziProfile: null,
   lobbyOnlineCount: 0,
 })
+const statisticsSummary = reactive({
+  totalCount: 0,
+  winCount: 0,
+  loseCount: 0,
+  games: [],
+})
 
 const lobbySocket = useGameWebSocket('game-center/lobby', {
   onMessage(message) {
@@ -147,15 +200,6 @@ const jinziGame = computed(() =>
   },
 )
 
-const tetrisGame = computed(() =>
-  overview.games.find((item) => item?.gameCode === 'tetris') || {
-    gameCode: 'tetris',
-    gameName: '俄罗斯方块',
-    enabled: true,
-    onlineCount: 0,
-  },
-)
-
 const tetrisPkGame = computed(() =>
   overview.games.find((item) => item?.gameCode === 'tetris_pk') || {
     gameCode: 'tetris_pk',
@@ -166,6 +210,8 @@ const tetrisPkGame = computed(() =>
 )
 
 const statsProfile = computed(() => {
+  const summary = statisticsSummary.games.find((item) => item?.gameCode === statsGameCode.value)
+  if (summary) return summary
   if (statsGameCode.value === 'jinzi') return overview.jinziProfile || {}
   if (statsGameCode.value === 'tetris') return tetrisProfile
   if (statsGameCode.value === 'tetris_pk') return tetrisPkProfile
@@ -175,16 +221,15 @@ const gobangProfile = computed(() => overview.gobangProfile || {})
 const statsTotalCount = computed(() => Number(statsProfile.value.totalCount) || 0)
 const statsWinRateText = computed(() => `${Number(statsProfile.value.winRate) || 0}%`)
 const homeWinRateText = computed(() => `${Number(gobangProfile.value.winRate) || 0}%`)
-const lobbyOnlineText = computed(() => `${Number(overview.lobbyOnlineCount) || 0}人`)
+const lobbyOnlineText = computed(() => `${Number(overview.lobbyOnlineCount) || 0} 人`)
 const gameOnlineCount = computed(() => Number(gobangGame.value.onlineCount) || 0)
-const gameOnlineText = computed(() => `${gameOnlineCount.value}人在线`)
-const jinziOnlineText = computed(() => `${Number(jinziGame.value.onlineCount) || 0}人在线`)
-const tetrisOnlineText = computed(() => `${Number(tetrisGame.value.onlineCount) || 0}人在线`)
-const tetrisPkOnlineText = computed(() => `${Number(tetrisPkGame.value.onlineCount) || 0}人在线`)
-const gobangTotalText = computed(() => `共游玩了 ${Number(gobangProfile.value.totalCount) || 0} 局`)
-const jinziTotalText = computed(() => `共游玩了 ${Number(overview.jinziProfile?.totalCount) || 0} 局`)
-const tetrisTotalText = computed(() => `共游玩了 ${Number(tetrisProfile.totalCount) || 0} 局`)
-const tetrisPkTotalText = computed(() => `共游玩了 ${Number(tetrisPkProfile.totalCount) || 0} 局`)
+const gameOnlineText = computed(() => `${gameOnlineCount.value} 人在线`)
+const jinziOnlineText = computed(() => `${Number(jinziGame.value.onlineCount) || 0} 人在线`)
+const tetrisPkOnlineText = computed(() => `${Number(tetrisPkGame.value.onlineCount) || 0} 人在线`)
+const gobangTotalText = computed(() => `共游玩 ${Number(gobangProfile.value.totalCount) || 0} 局`)
+const jinziTotalText = computed(() => `共游玩 ${Number(overview.jinziProfile?.totalCount) || 0} 局`)
+const tetrisTotalText = computed(() => `共游玩 ${Number(tetrisProfile.totalCount) || 0} 局`)
+const tetrisPkTotalText = computed(() => `共游玩 ${Number(tetrisPkProfile.totalCount) || 0} 局`)
 const rankText = computed(() => {
   return gobangProfile.value.rankName || '青铜 III'
 })
@@ -203,21 +248,13 @@ const rankProgressText = computed(() => {
   const total = Math.max(1, nextScore - minScore)
   return `${current} / ${total}`
 })
-const rankNextText = computed(() => {
-  const distance = Number(gobangProfile.value.nextRankDistance) || 0
-  return distance > 0 ? `距离下一段还差 ${distance} 分` : '已达顶段'
-})
-const winRateTrendText = computed(() => {
-  const total = Number(gobangProfile.value.totalCount) || 0
-  return total > 0 ? `${total} 局` : '暂无对局'
-})
 const watchRooms = computed(() => (watchGameCode.value === 'tetris_pk' ? tetrisPkRooms.value : activeRooms.value))
-const watchCountText = computed(() => `${watchRooms.value.length} 间可观战`)
+const watchCountText = computed(() => `${watchRooms.value.length} 场可观战`)
 const filteredWatchRooms = computed(() => {
   const keyword = normalizeWatchKeyword(watchSearchKeyword.value)
   if (!keyword) return watchRooms.value
   return watchRooms.value.filter((row) => {
-    return [watchRoomTitle(row)]
+    return [watchRoomTitle(row), row?.roomId]
       .some((text) => normalizeWatchKeyword(text).includes(keyword))
   })
 })
@@ -272,6 +309,120 @@ function watchRoomTitle(row) {
   return `${watchPlayerName(row, 'left')} VS ${watchPlayerName(row, 'right')}`
 }
 
+async function loadGameCategories() {
+  try {
+    const res = await getGameCategories()
+    if (res.code !== 0 || !Array.isArray(res.data) || !res.data.length) return
+    gameCategories.value = res.data
+      .map((item) => ({
+        code: String(item?.code || '').trim(),
+        label: String(item?.label || '').trim(),
+      }))
+      .filter((item) => item.code && item.label)
+    if (!gameCategories.value.some((item) => item.code === gameCategory.value)) {
+      gameCategory.value = gameCategories.value[0]?.code || 'all'
+    }
+  } catch {
+    // 保留本地兜底分类
+  }
+}
+
+async function loadGamePage(page = gamePageNum.value) {
+  gameListLoading.value = true
+  try {
+    const res = await getGamePage({
+      pageNum: page,
+      pageSize: gamePageSize.value,
+      category: gameCategory.value,
+    })
+    if (res.code === 0 && res.data) {
+      pagedGames.value = unwrapPageRecords(res.data)
+      gameTotal.value = Number(res.data.total) || pagedGames.value.length
+      gamePageNum.value = page
+    }
+  } finally {
+    gameListLoading.value = false
+  }
+}
+
+function onGamePageChange(page) {
+  loadGamePage(page)
+}
+
+function setGameCategory(category) {
+  gameCategory.value = category
+  gamePageNum.value = 1
+  loadGamePage(1)
+}
+
+function gamePreset(gameCode) {
+  return GAME_PRESETS[gameCode] || {
+    name: gameCode,
+    sub: '',
+    cover: gameCardImg,
+    btnClass: 'btn--gobang',
+    idleText: '开始游戏',
+  }
+}
+
+function gameCardModifierClass(gameCode) {
+  if (gameCode === 'tetris_pk') return 'game-card--tetris-pk'
+  if (gameCode === 'tetris') return 'game-card--tetris'
+  if (gameCode === 'jinzi') return 'game-card--jinzi'
+  return 'game-card--gobang'
+}
+
+function gameCoverUrl(game) {
+  const remote = String(game?.coverUrl || '').trim()
+  if (remote) return remote
+  return gamePreset(game?.gameCode).cover
+}
+
+function gameDisplayName(game) {
+  return String(game?.gameName || '').trim() || gamePreset(game?.gameCode).name
+}
+
+function gameSubText(game) {
+  return gamePreset(game?.gameCode).sub
+}
+
+function gameOnlineBadgeText(game) {
+  const code = game?.gameCode
+  if (code === 'tetris') return '单人模式'
+  if (code === 'jinzi') return jinziOnlineText.value
+  if (code === 'tetris_pk') return tetrisPkOnlineText.value
+  if (code === 'gobang') return gameOnlineText.value
+  const count = Number(game?.onlineCount) || 0
+  return `${count} 人在线`
+}
+
+function gameOnlineBadgeSolo(game) {
+  return game?.gameCode === 'tetris'
+}
+
+function gameMetaText(game) {
+  if (game?.gameCode === 'tetris') {
+    return `最高 ${formatNumber(tetrisProfile.bestScore || 0)} 分`
+  }
+  return gameSubText(game)
+}
+
+function gamePlayButtonClass(game) {
+  return gamePreset(game?.gameCode).btnClass
+}
+
+function gamePlayIdleText(game) {
+  return gamePreset(game?.gameCode).idleText
+}
+
+function enterGame(game) {
+  const code = game?.gameCode
+  if (code === 'gobang') return enterGobang()
+  if (code === 'jinzi') return enterJinzi()
+  if (code === 'tetris') return enterTetris()
+  if (code === 'tetris_pk') return enterTetrisPk()
+}
+
 async function loadOverview(silent = false) {
   if (!silent) loading.value = true
   try {
@@ -281,6 +432,8 @@ async function loadOverview(silent = false) {
       overview.gobangProfile = res.data.gobangProfile || null
       overview.jinziProfile = res.data.jinziProfile || null
       overview.lobbyOnlineCount = Number(res.data.lobbyOnlineCount) || 0
+      syncMatchProfile('gobang', overview.gobangProfile || {})
+      syncMatchProfile('jinzi', overview.jinziProfile || {})
     }
   } finally {
     if (!silent) loading.value = false
@@ -320,29 +473,102 @@ function resolveLeaderboardRequest(gameCode) {
 async function refreshLobby(silent = false) {
   await Promise.all([
     loadOverview(silent),
+    loadGamePage(gamePageNum.value),
+    loadStatisticsSummary(),
     loadActiveRooms(),
     loadProfileByGame('tetris'),
     loadProfileByGame('tetris_pk'),
-    refreshForumPointsBalance(),
   ])
 }
 
-async function loadRecentRecords(page = recentPage.value) {
-  const res = await getTetrisRecords({ pageNum: page, pageSize: recentPageSize.value })
-  if (res.code === 0 && res.data) {
-    recentRecords.value = unwrapPageRecords(res.data)
-    recentTotal.value = Number(res.data.total) || recentRecords.value.length
-    recentPage.value = page
+function watchViewerCount(row) {
+  return Number(row?.spectatorCount ?? row?.viewerCount ?? row?.watchCount ?? row?.onlineCount) || 0
+}
+
+function syncMatchProfile(gameCode, profile) {
+  const status = String(profile?.currentStatus || '').toUpperCase()
+  currentMatchRooms[gameCode] = status === 'PLAYING' && profile?.currentRoomId
+    ? String(profile.currentRoomId)
+    : ''
+  if (status === 'MATCHING' && !matchingGameCode.value) {
+    matchingGameCode.value = gameCode
+    matchSockets[gameCode]?.connect()
   }
 }
 
-async function openRecentMatches() {
-  recentVisible.value = true
-  await loadRecentRecords(1)
+function cancelGameMatch(gameCode) {
+  const socket = matchSockets[gameCode]
+  if (socket?.connected.value) {
+    socket.send('stop_match', {})
+  }
+  pendingMatchPayloads.delete(gameCode)
+  if (matchingGameCode.value === gameCode) {
+    matchingGameCode.value = ''
+  }
+  ElMessage.info('已取消匹配')
 }
 
-function onRecentPageChange(page) {
-  loadRecentRecords(page)
+function handleMatchButtonClick(gameCode, mode = 'RANKED') {
+  if (matchingGameCode.value === gameCode) {
+    cancelGameMatch(gameCode)
+    return
+  }
+  if (matchingGameCode.value && matchingGameCode.value !== gameCode) {
+    ElMessage.warning('正在匹配中，请先取消当前匹配')
+    return
+  }
+  startGameMatch(gameCode, { mode })
+}
+
+function startGameMatch(gameCode, payload = null) {
+  if (currentMatchRooms[gameCode]) {
+    const roomRouteName = gameCode === 'gobang'
+      ? 'gobangRoom'
+      : gameCode === 'jinzi'
+        ? 'jinziRoom'
+        : 'tetrisPkRoom'
+    router.push({ name: roomRouteName, params: { roomId: currentMatchRooms[gameCode] } })
+    return
+  }
+  if (matchingGameCode.value && matchingGameCode.value !== gameCode) {
+    ElMessage.warning('一次只能匹配一个游戏')
+    return
+  }
+  const socket = matchSockets[gameCode]
+  matchingGameCode.value = gameCode
+  if (!socket?.connected.value) {
+    pendingMatchPayloads.set(gameCode, payload)
+    if (!socket?.connect()) {
+      pendingMatchPayloads.delete(gameCode)
+      matchingGameCode.value = ''
+    }
+    return
+  }
+  if (!socket.send('start_match', payload)) {
+    matchingGameCode.value = ''
+  }
+}
+
+function matchButtonText(gameCode, idleText) {
+  if (matchingGameCode.value === gameCode) return '匹配中 · 点击取消'
+  if (currentMatchRooms[gameCode]) return '继续对局'
+  if (matchingGameCode.value && matchingGameCode.value !== gameCode) return '其他匹配中'
+  return idleText
+}
+
+function matchButtonDisabled(gameCode) {
+  if (!matchingGameCode.value) return false
+  return matchingGameCode.value !== gameCode
+}
+
+async function loadStatisticsSummary() {
+  const res = await getGameStatisticsSummary()
+  if (res.code === 0 && res.data) {
+    statisticsSummary.totalCount = Number(res.data.totalCount) || 0
+    statisticsSummary.winCount = Number(res.data.winCount) || 0
+    statisticsSummary.loseCount = Number(res.data.loseCount) || 0
+    statisticsSummary.games = Array.isArray(res.data.games) ? res.data.games : []
+  }
 }
 
 function stopTetrisReplay() {
@@ -417,23 +643,28 @@ async function openTetrisReplay(row) {
   paintTetrisReplayFrame()
 }
 
+const statsLoading = ref(false)
+
 async function loadStatRecords(gameCode = statsGameCode.value, page = statPage.value) {
   const requestSequence = ++statsRequestSequence
-  const request = resolveRecordsRequest(gameCode)
-  const res = await request({ pageNum: page, pageSize: statPageSize.value })
-  if (requestSequence !== statsRequestSequence || gameCode !== statsGameCode.value) return
-  if (res.code === 0 && res.data) {
-    statRecords.value = unwrapPageRecords(res.data)
-    statTotal.value = Number(res.data.total) || statRecords.value.length
-    statPage.value = page
+  statsLoading.value = true
+  try {
+    const res = await getGameStatisticsRecords({
+      gameCode,
+      pageNum: page,
+      pageSize: statPageSize.value,
+    })
+    if (requestSequence !== statsRequestSequence || gameCode !== statsGameCode.value) return
+    if (res.code === 0 && res.data) {
+      statRecords.value = unwrapPageRecords(res.data)
+      statTotal.value = Number(res.data.total) || statRecords.value.length
+      statPage.value = page
+    }
+  } finally {
+    if (requestSequence === statsRequestSequence) {
+      statsLoading.value = false
+    }
   }
-}
-
-function resolveRecordsRequest(gameCode) {
-  if (gameCode === 'jinzi') return getJinziRecords
-  if (gameCode === 'tetris') return getTetrisRecords
-  if (gameCode === 'tetris_pk') return getTetrisPkRecords
-  return getGobangRecords
 }
 
 async function loadProfileByGame(gameCode) {
@@ -448,16 +679,18 @@ async function loadProfileByGame(gameCode) {
     const res = await getTetrisPkProfile()
     if (res.code === 0 && res.data) {
       Object.assign(tetrisPkProfile, res.data)
+      syncMatchProfile('tetris_pk', res.data)
     }
   }
 }
 
 async function openStats(gameCode = 'gobang') {
-  statsGameCode.value = gameCode
+  const targetCode = gameCode === 'tetris' ? 'gobang' : gameCode
+  statsGameCode.value = targetCode
   statPage.value = 1
   statsVisible.value = true
-  await loadProfileByGame(gameCode)
-  await loadStatRecords(gameCode, 1)
+  await loadProfileByGame(targetCode)
+  await loadStatRecords(targetCode, 1)
 }
 
 async function openLeaderboard(gameCode = 'tetris') {
@@ -469,6 +702,7 @@ async function openLeaderboard(gameCode = 'tetris') {
 
 async function onStatsGameChange(gameCode) {
   statsGameCode.value = gameCode
+  statRecords.value = []
   statPage.value = 1
   await loadProfileByGame(gameCode)
   await loadStatRecords(gameCode, 1)
@@ -522,8 +756,9 @@ function recordResultText(row) {
   if (statsGameCode.value === 'tetris') {
     return `得分 ${row.score ?? 0}`
   }
-  if (!row.winnerUserId) return '平局'
-  return String(row.winnerUserId) === String(statsProfile.value.userId) ? '胜利' : '失败'
+  if (row?.resultCode === 'WIN') return '胜利'
+  if (row?.resultCode === 'LOSE') return '失败'
+  return '平局'
 }
 
 function recordEndReasonText(row) {
@@ -532,22 +767,56 @@ function recordEndReasonText(row) {
 }
 
 function recordScoreDelta(row) {
-  if (row?.viewerScoreDelta !== null && row?.viewerScoreDelta !== undefined) {
-    return Number(row.viewerScoreDelta) || 0
-  }
-  if (statsGameCode.value === 'tetris_pk') return Number(row.scoreDelta) || 0
-  if (!row?.winnerUserId) return 0
-  const delta = Number(row.scoreDelta) || 0
-  return String(row.winnerUserId) === String(statsProfile.value.userId) ? delta : -delta
+  return Number(row?.scoreDelta) || 0
 }
 
 function formatScoreDelta(row) {
   if (statsGameCode.value === 'tetris') {
-    const points = Number(row?.forumPointsAwarded) || 0
-    return points > 0 ? `+${points}` : String(points)
+    return `${Number(row?.score) || 0} 分`
   }
   const delta = recordScoreDelta(row)
   return delta > 0 ? `+${delta}` : String(delta)
+}
+
+function recordRoleText(row) {
+  if (statsGameCode.value === 'gobang') {
+    const isWhite = row?.playerRole === 'WHITE' || row?.pieceColor === 'WHITE' || row?.chess === 2
+    return isWhite ? '白子 (后手)' : '黑子 (先手)'
+  }
+  if (statsGameCode.value === 'jinzi') {
+    const isO = row?.playerRole === 'WHITE' || row?.pieceColor === 'WHITE' || row?.chess === 2
+    return isO ? '○ 棋 (后手)' : '× 棋 (先手)'
+  }
+  return '-'
+}
+
+function recordOpponentText(row) {
+  if (row?.opponentNickname) return row.opponentNickname
+  if (row?.opponentName) return row.opponentName
+  if (row?.aiRoom || row?.isAi) return 'AI 对手'
+  if (row?.opponentUserId) return `用户 ${row.opponentUserId}`
+  return '对局玩家'
+}
+
+function recordScoreRatioText(row) {
+  if (row?.scoreText) return row.scoreText
+  if (row?.myWins != null && row?.opponentWins != null) {
+    return `${row.myWins} : ${row.opponentWins}`
+  }
+  if (row?.blackWins != null && row?.whiteWins != null) {
+    return `${row.blackWins} : ${row.whiteWins}`
+  }
+  return '-'
+}
+
+function recordLinesText(row) {
+  const lines = row?.linesCleared ?? row?.lines ?? row?.clearedLines
+  return lines != null ? `${lines} 行` : '-'
+}
+
+function recordLevelText(row) {
+  const level = row?.level ?? row?.maxLevel
+  return level != null ? `Lv.${level}` : '-'
 }
 
 function onLeaderboardAvatarError(event) {
@@ -557,19 +826,23 @@ function onLeaderboardAvatarError(event) {
 }
 
 function enterGobang() {
-  router.push('/games/gobang')
+  handleMatchButtonClick('gobang', 'RANKED')
 }
 
 function enterJinzi() {
-  router.push({ name: 'jinziGame' })
+  handleMatchButtonClick('jinzi', 'RANKED')
 }
 
 function enterTetris() {
+  if (matchingGameCode.value) {
+    ElMessage.warning('正在匹配中，请先取消当前匹配')
+    return
+  }
   router.push('/games/tetris')
 }
 
 function enterTetrisPk() {
-  router.push('/games/tetris/pk')
+  handleMatchButtonClick('tetris_pk', 'RANKED')
 }
 
 function watchRoom(row) {
@@ -583,13 +856,18 @@ function watchTetrisPkRoom(row) {
 }
 
 function backHome() {
-  router.push('/')
+  router.push('/community')
+}
+
+function openPointsCenter() {
+  router.push('/points')
 }
 
 const defaultAvatar = DEFAULT_AVATAR
 
 onMounted(async () => {
-  await refreshLobby()
+  await loadGameCategories()
+  await Promise.all([refreshLobby(), refreshForumPointsBalance()])
   gameCenterInitialized = true
   lobbySocket.connect()
   refreshTimer = window.setInterval(() => {
@@ -600,11 +878,172 @@ onMounted(async () => {
 onActivated(() => {
   if (gameCenterInitialized) {
     void refreshLobby(true)
+    void refreshForumPointsBalance()
   }
 })
+
+function createMatchSocket(gameCode, socketPath, roomRouteName) {
+  return useGameWebSocket(socketPath, {
+    onOpen() {
+      if (!pendingMatchPayloads.has(gameCode)) return
+      const payload = pendingMatchPayloads.get(gameCode)
+      pendingMatchPayloads.delete(gameCode)
+      if (!matchSockets[gameCode].send('start_match', payload)
+        && matchingGameCode.value === gameCode) {
+        matchingGameCode.value = ''
+      }
+    },
+    onMessage(message) {
+      if (!message?.ok) {
+        if (message?.type === 'match_failed' || message?.type === 'match_rejected') {
+          if (matchingGameCode.value === gameCode) matchingGameCode.value = ''
+        }
+        if (message?.message) ElMessage.warning(message.message)
+        return
+      }
+      if (message.type === 'game_ready') {
+        syncMatchProfile(gameCode, message.data || {})
+        return
+      }
+      if (message.type === 'match_started') {
+        matchingGameCode.value = gameCode
+        return
+      }
+      if (message.type === 'match_stopped') {
+        if (matchingGameCode.value === gameCode) matchingGameCode.value = ''
+        return
+      }
+      if (message.type === 'match_success' && message.data?.roomId) {
+        currentMatchRooms[gameCode] = String(message.data.roomId)
+        matchingGameCode.value = ''
+        router.push({ name: roomRouteName, params: { roomId: String(message.data.roomId) } })
+      }
+    },
+    onClose() {
+      pendingMatchPayloads.delete(gameCode)
+      if (matchingGameCode.value === gameCode) matchingGameCode.value = ''
+    },
+    onError() {
+      pendingMatchPayloads.delete(gameCode)
+      if (matchingGameCode.value === gameCode) matchingGameCode.value = ''
+    },
+  })
+}
+
+const matchSockets = {
+  gobang: createMatchSocket('gobang', 'games/gobang', 'gobangRoom'),
+  jinzi: createMatchSocket('jinzi', 'games/jinzi', 'jinziRoom'),
+  tetris_pk: createMatchSocket('tetris_pk', 'games/tetris', 'tetrisPkRoom'),
+}
+
+const gobangReplayVisible = ref(false)
+const gobangReplayMoves = ref([])
+const gobangReplayStep = ref(0)
+const gobangReplayPlaying = ref(false)
+const currentGobangReplayRow = ref(null)
+let gobangReplayTimer = null
+
+const gobangReplayRoleLines = computed(() => {
+  const row = currentGobangReplayRow.value
+  const isWhite = row?.playerRole === 'WHITE' || row?.pieceColor === 'WHITE' || row?.chess === 2
+  if (isWhite) {
+    return {
+      mine: '我方执白棋 ○ (后手)',
+      opponent: '对手执黑棋 ● (先手)',
+    }
+  }
+  return {
+    mine: '我方执黑棋 ● (先手)',
+    opponent: '对手执白棋 ○ (后手)',
+  }
+})
+
+async function openGobangReplay(row) {
+  const recordId = row?.sourceRecordId || row?.id
+  if (!recordId) return
+  stopGobangReplay()
+  currentGobangReplayRow.value = row
+  try {
+    const res = await getGobangReplay(recordId)
+    if (res.code !== 0 || !res.data) {
+      ElMessage.warning(res?.message || '五子棋对局回放数据不可用')
+      return
+    }
+    const moves = Array.isArray(res.data) ? res.data : (res.data.moves || [])
+    if (!moves.length) {
+      ElMessage.info('暂无落子记录可回放')
+      return
+    }
+    gobangReplayMoves.value = moves
+    gobangReplayStep.value = moves.length
+    gobangReplayVisible.value = true
+  } catch (err) {
+    ElMessage.warning('加载回放失败，请稍后重试')
+  }
+}
+
+function stopGobangReplay() {
+  if (gobangReplayTimer) {
+    clearInterval(gobangReplayTimer)
+    gobangReplayTimer = null
+  }
+  gobangReplayPlaying.value = false
+}
+
+function stepGobangReplay(delta) {
+  stopGobangReplay()
+  const next = gobangReplayStep.value + delta
+  gobangReplayStep.value = Math.max(0, Math.min(gobangReplayMoves.value.length, next))
+}
+
+function toggleGobangReplayAuto() {
+  if (gobangReplayPlaying.value) {
+    stopGobangReplay()
+    return
+  }
+  if (gobangReplayStep.value >= gobangReplayMoves.value.length) {
+    gobangReplayStep.value = 0
+  }
+  gobangReplayPlaying.value = true
+  gobangReplayTimer = setInterval(() => {
+    if (gobangReplayStep.value < gobangReplayMoves.value.length) {
+      gobangReplayStep.value++
+    } else {
+      stopGobangReplay()
+    }
+  }, 700)
+}
+
+const gobangReplayBoard = computed(() => {
+  const board = Array.from({ length: 15 }, () => Array(15).fill(null))
+  const steps = gobangReplayMoves.value.slice(0, gobangReplayStep.value)
+  steps.forEach((m, idx) => {
+    const r = m.row ?? m.x
+    const c = m.col ?? m.y
+    if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+      board[r][c] = {
+        chess: m.chess || (idx % 2 === 0 ? 1 : 2),
+        step: idx + 1,
+      }
+    }
+  })
+  return board
+})
+
+function formatNumber(num) {
+  if (num == null) return '0'
+  return Number(num).toLocaleString()
+}
+
+function avatarText(row) {
+  const name = row?.opponentNickname || row?.opponentName || row?.nickname || row?.username || '玩'
+  return name.slice(0, 1).toUpperCase()
+}
 
 onUnmounted(() => {
   if (refreshTimer) window.clearInterval(refreshTimer)
   stopTetrisReplay()
+  stopGobangReplay()
   lobbySocket.close()
+  Object.values(matchSockets).forEach((socket) => socket.close())
 })

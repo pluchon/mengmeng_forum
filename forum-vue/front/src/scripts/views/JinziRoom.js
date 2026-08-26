@@ -1,6 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer } from '@element-plus/icons-vue'
 import { getJinziRoom, surrenderJinziRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
@@ -9,6 +10,24 @@ import { usePointsWalletStore } from '@/stores/pointsWallet'
 
 let timer = null
 let finishRedirectTimer = null
+let roundNextTimer = null
+const roundNextCountdown = ref(5)
+
+function startRoundNextCountdown() {
+  if (roundNextTimer) clearInterval(roundNextTimer)
+  roundNextCountdown.value = 5
+  roundNextTimer = window.setInterval(() => {
+    roundNextCountdown.value = Math.max(1, roundNextCountdown.value - 1)
+  }, 1000)
+}
+
+function stopRoundNextCountdown() {
+  if (roundNextTimer) {
+    clearInterval(roundNextTimer)
+    roundNextTimer = null
+  }
+  roundNextCountdown.value = 5
+}
 
 function emptyBoard() {
   return Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0))
@@ -65,6 +84,14 @@ const room = reactive({
   board: emptyBoard(),
   winnerUserId: null,
   endReason: '',
+  blackWins: 0,
+  whiteWins: 0,
+  drawRounds: 0,
+  currentRound: 1,
+  roundStartingChess: 1,
+  roundFinished: false,
+  roundWinnerUserId: null,
+  roundEndReason: '',
   blackRemainingMs: 120000,
   whiteRemainingMs: 120000,
   moveRemainingMs: 20000,
@@ -75,10 +102,21 @@ const room = reactive({
   roomOnlineCount: 0,
 })
 
+const roundToastText = ref('')
+
 const roomSocket = useGameWebSocket(`games/jinzi/rooms/${roomId.value}`, {
   onMessage(message) {
     if (!message.ok) {
       if (message.message) ElMessage.warning(message.message)
+      return
+    }
+    if (message.type === 'round_started' && message.data) {
+      stopRoundNextCountdown()
+      applyRoomState(message.data)
+      roundToastText.value = `第 ${room.currentRound} 小局开始！`
+      window.setTimeout(() => {
+        if (roundToastText.value.startsWith('第')) roundToastText.value = ''
+      }, 2000)
       return
     }
     if ((message.type === 'room_ready' || message.type === 'room_state_updated' || message.type === 'game_finished') && message.data) {
@@ -104,7 +142,7 @@ const roomSocket = useGameWebSocket(`games/jinzi/rooms/${roomId.value}`, {
 
 const boardRows = computed(() => room.board || emptyBoard())
 const isFinished = computed(() => room.roomStatus === 'FINISHED')
-const isMyTurn = computed(() => !isFinished.value && room.currentTurnUserId === room.thisUserId)
+const isMyTurn = computed(() => !isFinished.value && !room.roundFinished && room.currentTurnUserId === room.thisUserId)
 const currentTurnChess = computed(() => {
   if (room.currentTurnUserId === room.blackUserId) return 1
   if (room.currentTurnUserId === room.whiteUserId) return 2
@@ -118,11 +156,14 @@ const myChess = computed(() => {
 const blackPlayer = computed(() => room.blackPlayer || fallbackParticipant(room.blackUserId, '×方'))
 const whitePlayer = computed(() => room.whitePlayer || fallbackParticipant(room.whiteUserId, '○方'))
 const opponentProfile = computed(() => room.opponentPlayer || (myChess.value === 1 ? whitePlayer.value : blackPlayer.value))
+const myWins = computed(() => myChess.value === 1 ? room.blackWins : room.whiteWins)
+const opponentWins = computed(() => myChess.value === 1 ? room.whiteWins : room.blackWins)
 const primaryPlayerCard = computed(() => ({
   label: '我方',
   title: myChess.value === 1 ? '×' : '○',
   time: myTimeText.value,
   chess: myChess.value || 0,
+  wins: myWins.value,
   turn: isMyTurn.value,
 }))
 const secondaryPlayerCard = computed(() => ({
@@ -130,15 +171,24 @@ const secondaryPlayerCard = computed(() => ({
   title: myChess.value === 1 ? '○' : '×',
   time: opponentTimeText.value,
   chess: myChess.value === 1 ? 2 : 1,
-  turn: !isMyTurn.value && !isFinished.value,
+  wins: opponentWins.value,
+  turn: !isMyTurn.value && !isFinished.value && !room.roundFinished,
 }))
 const winnerText = computed(() => {
   if (!isFinished.value) return ''
-  if (!room.winnerUserId) return '平局'
-  return room.winnerUserId === room.thisUserId ? '你赢了' : '你输了'
+  if (room.winnerUserId) {
+    return room.winnerUserId === room.thisUserId ? '恭喜获胜！' : '惜败对手'
+  }
+  if (myWins.value > opponentWins.value) return '恭喜获胜！'
+  if (myWins.value < opponentWins.value) return '惜败对手'
+  return myChess.value === 1 ? '恭喜获胜！' : '惜败对手'
 })
-const boardStatusText = computed(() => {
+const roundStatusText = computed(() => {
   if (isFinished.value) return winnerText.value
+  if (room.roundFinished) {
+    if (!room.roundWinnerUserId) return '本小局平局，即将开始下一局'
+    return room.roundWinnerUserId === room.thisUserId ? '本小局胜利！' : '本小局失利！'
+  }
   if (isMyTurn.value) return '轮到你落子'
   return '等待对手落子'
 })
@@ -209,6 +259,14 @@ function applyRoomState(data) {
   room.board = normalizeBoard(data.board)
   room.winnerUserId = data.winnerUserId ?? null
   room.endReason = data.endReason || ''
+  room.blackWins = Number(data.blackWins) || 0
+  room.whiteWins = Number(data.whiteWins) || 0
+  room.drawRounds = Number(data.drawRounds) || 0
+  room.currentRound = Number(data.currentRound) || 1
+  room.roundStartingChess = Number(data.roundStartingChess) || 1
+  room.roundFinished = Boolean(data.roundFinished)
+  room.roundWinnerUserId = data.roundWinnerUserId ?? null
+  room.roundEndReason = data.roundEndReason || ''
   room.blackRemainingMs = data.blackRemainingMs == null ? room.blackRemainingMs : Number(data.blackRemainingMs)
   room.whiteRemainingMs = data.whiteRemainingMs == null ? room.whiteRemainingMs : Number(data.whiteRemainingMs)
   room.moveRemainingMs = data.moveRemainingMs == null ? room.moveRemainingMs : Number(data.moveRemainingMs)
@@ -218,7 +276,15 @@ function applyRoomState(data) {
   room.opponentPlayer = data.opponentPlayer || null
   room.roomOnlineCount = Number(data.roomOnlineCount) || 0
   syncedAt.value = Date.now()
+
+  if (room.roundFinished && room.roomStatus !== 'FINISHED') {
+    startRoundNextCountdown()
+  } else if (!room.roundFinished) {
+    stopRoundNextCountdown()
+  }
+
   if (room.roomStatus === 'FINISHED') {
+    stopRoundNextCountdown()
     void pointsWalletStore.refresh()
     startFinishRedirect()
   }
@@ -236,11 +302,25 @@ function applyMove(move) {
   room.currentTurnUserId = move.nextTurnUserId ?? null
   room.moveRemainingMs = 20000
   syncedAt.value = Date.now()
-  if (move.endReason) {
+
+  if (move.blackWins != null) room.blackWins = Number(move.blackWins)
+  if (move.whiteWins != null) room.whiteWins = Number(move.whiteWins)
+  if (move.drawRounds != null) room.drawRounds = Number(move.drawRounds)
+  if (move.currentRound != null) room.currentRound = Number(move.currentRound)
+  if (move.winningLine) room.winningLine = Array.isArray(move.winningLine) ? move.winningLine : []
+
+  if (move.roundFinished && !move.matchFinished) {
+    room.roundFinished = true
+    room.roundWinnerUserId = move.roundWinnerUserId ?? null
+    room.roundEndReason = move.roundEndReason || ''
+    startRoundNextCountdown()
+  }
+
+  if (move.matchFinished) {
+    stopRoundNextCountdown()
     room.roomStatus = 'FINISHED'
-    room.winnerUserId = move.winnerUserId ?? null
-    room.endReason = move.endReason
-    room.winningLine = Array.isArray(move.winningLine) ? move.winningLine : []
+    room.winnerUserId = move.matchWinnerUserId ?? null
+    room.endReason = move.matchEndReason || ''
     void pointsWalletStore.refresh()
     startFinishRedirect()
   }
@@ -329,7 +409,7 @@ function openOpponentStats() {
 async function surrender() {
   if (isFinished.value || surrendering.value) return
   try {
-    await ElMessageBox.confirm('确认认输并结束本局吗？', '井字', {
+    await confirmDialog('确认认输并结束本局吗？', '井字', {
       type: 'warning',
       confirmButtonText: '认输',
       cancelButtonText: '继续对局',
@@ -351,7 +431,7 @@ async function surrender() {
 async function backGame() {
   if (!isFinished.value) {
     try {
-      await ElMessageBox.confirm('确认离开当前对局吗？离开后本局仍会继续进行。', '离开对局', {
+      await confirmDialog('确认离开当前对局吗？离开后本局仍会继续进行。', '离开对局', {
         type: 'warning',
         confirmButtonText: '离开',
         cancelButtonText: '继续对局',
@@ -374,5 +454,6 @@ onMounted(async () => {
 onUnmounted(() => {
   if (timer) window.clearInterval(timer)
   if (finishRedirectTimer) window.clearInterval(finishRedirectTimer)
+  stopRoundNextCountdown()
   roomSocket.close()
 })

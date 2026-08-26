@@ -15,6 +15,7 @@ import org.pluchon.forum.service.interfaces.game.GameMqEventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -38,6 +39,7 @@ public class GameMqEventServiceImpl implements GameMqEventService {
     private ForumProducer forumProducer;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void handleGameFinished(GameFinishedMqVO event) {
         if (event == null || event.getEventId() == null || event.getEventId().isBlank()) {
             log.warn("[游戏MQ] 对局结束事件缺少 eventId，已忽略");
@@ -64,7 +66,7 @@ public class GameMqEventServiceImpl implements GameMqEventService {
     public void retryPendingGameEvents() {
         List<GameSettlementEvent> events = gameSettlementEventMapper.selectList(
                 new LambdaQueryWrapper<GameSettlementEvent>()
-                        .eq(GameSettlementEvent::getDeleteState, (byte) 0)
+                        .eq(GameSettlementEvent::getDeleteState, GameConstants.NOT_DELETED)
                         .in(GameSettlementEvent::getStatus,
                                 List.of(GameConstants.SETTLEMENT_EVENT_CREATED, GameConstants.SETTLEMENT_EVENT_MQ_PENDING))
         );

@@ -3,28 +3,32 @@ package org.pluchon.forum.entity.dto.message;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-/**
- * 收藏表情请求.
- * 两种来源:
- * 1) 自上传: 先调 /file/uploadChatEmoji 拿 URL, 再调 /message/emoji/favorite, originMessageId 留空;
- * 2) 收藏他人聊天图片: 直接传消息中的 mediaUrl + originMessageId；URL 可为会话临时图目录或表情库目录（与对方发送方式一致）.
- */
+// 收藏表情请求
 @Data
 @Schema(description = "收藏表情请求")
 public class FavoriteEmojiRequest {
 
-    @Schema(description = "表情图URL, 必须是本站 OSS 上的 URL")
+    // 表情图片链接
+    @Schema(description = "表情图片链接")
     private String mediaUrl;
 
-    @Schema(description = "类型: 0静态图 1GIF", example = "0")
+    // 媒体类型
+    @Schema(description = "类型，0静态图 1GIF", example = "0")
     private Byte mediaType;
 
-    @Schema(description = "MIME, 例如 image/jpeg")
+    // 媒体 MIME 类型
+    @Schema(description = "媒体类型，例如 image/jpeg")
     private String mediaMime;
 
-    @Schema(description = "字节大小, 可选")
+    // 字节大小
+    @Schema(description = "字节大小")
     private Long mediaSize;
 
-    @Schema(description = "来源消息ID, 自上传则不传")
+    // 来源私信消息ID
+    @Schema(description = "来源私信消息ID")
     private Long originMessageId;
+
+    // 来源群聊消息ID
+    @Schema(description = "来源群聊消息ID")
+    private Long originGroupMessageId;
 }

@@ -11,12 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/**
- * 热帖榜兜底任务.
- *  - 每天凌晨 3:00 全量重算 (cron: 0 0 3 * * ?), 纠正长期增量漂移
- *  - 应用启动完成后也跑一次, 保证 Redis 重启 / 新部署后 ZSet 恢复
- * 触发时段错开业务高峰; Redis ZSet 重建期间 getHotArticleList 仍能命中老快照, 用户无感知.
- */
+// 热帖榜兜底任务. 每天凌晨 3:00 全量重算 cron: 0 0 3 * * ? , 纠正长期增量漂移 应用启动完成后也跑一次, 保证 Redis 重启 / 新部署后 ZSet 恢复 触发时段错开业务高峰; Redis ZSet 重建期间 getHotArticleList 仍能命中老快照, 用户无感知.
 @Slf4j
 @ConditionalOnProperty(name = "forum.domain", havingValue = "content")
 @Component

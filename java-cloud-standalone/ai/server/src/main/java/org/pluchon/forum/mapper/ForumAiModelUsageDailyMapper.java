@@ -26,5 +26,6 @@ public interface ForumAiModelUsageDailyMapper extends BaseMapper<ForumAiModelUsa
             @Param("pointsSpent") long pointsSpent,
             @Param("inputTokens") long inputTokens,
             @Param("outputTokens") long outputTokens,
-            @Param("imageCount") int imageCount);
+            @Param("imageCount") int imageCount
+    );
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from modules.game.service import generate_gobang_move
@@ -14,7 +15,15 @@ class GobangMoveModule:
         ai_chess = _parse_ai_chess(request)
         model_code = str(request.payload.get("modelCode") or request.payload.get("model_code") or "").strip()
         use_llm = bool(request.payload.get("useLlm", request.payload.get("use_llm", True)))
-        move = await asyncio.to_thread(generate_gobang_move, board, ai_chess, model_code, use_llm=use_llm)
+        insight = _parse_insight(request.payload.get("insight"))
+        move = await asyncio.to_thread(
+            generate_gobang_move,
+            board,
+            ai_chess,
+            model_code,
+            use_llm=use_llm,
+            insight=insight,
+        )
         return ModuleResult(success=True, data=move, usage=move.get("usage") or {})
 
 
@@ -26,3 +35,11 @@ def _parse_ai_chess(request: ModuleRequest) -> int:
     if value not in {1, 2}:
         raise ModuleRequestError("INVALID_GAME_PAYLOAD", "aiChess 必须为 1 或 2")
     return value
+
+
+def _parse_insight(raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    return None

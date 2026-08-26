@@ -1,9 +1,9 @@
 package org.pluchon.forum.service.interfaces.ai;
 
-import org.pluchon.forum.entity.dto.ai.AiMemoryCreateRequest;
-import org.pluchon.forum.entity.dto.ai.AiTaskHandoffRequest;
-import org.pluchon.forum.entity.dto.ai.AiWorkspaceArtifactRequest;
-import org.pluchon.forum.entity.dto.ai.AiWorkspaceCreateRequest;
+import org.pluchon.forum.entity.dto.AiMemoryCreateRequest;
+import org.pluchon.forum.entity.dto.AiTaskHandoffRequest;
+import org.pluchon.forum.entity.dto.AiWorkspaceArtifactRequest;
+import org.pluchon.forum.entity.dto.AiWorkspaceCreateRequest;
 import org.pluchon.forum.entity.vo.ai.AiLongTermMemoryVO;
 import org.pluchon.forum.entity.vo.ai.AiTaskSessionVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVO;

@@ -10,7 +10,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/** MQ 本地消息表：与业务同事务写入，异步投递 RabbitMQ */
+// MQ 本地消息表：与业务同事务写入，异步投递 RabbitMQ
 @Data
 @TableName("forum_outbox_message")
 public class ForumOutboxMessage {
@@ -24,7 +24,7 @@ public class ForumOutboxMessage {
 
     private String payloadJson;
 
-    /** 0=待投递 1=已投递 2=已消费 3=失败 4=死信 */
+    // 0 待投递 1 已投递 2 已消费 3 失败 4 死信
     private Integer messageState;
 
     private Integer retryCount;

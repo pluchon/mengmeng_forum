@@ -6,9 +6,9 @@ import org.pluchon.forum.entity.vo.game.GameRankInfoVO;
 
 public interface GameRankService {
 
-    /** 构建段位展示信息 */
+    // 构建段位展示信息
     GameRankInfoVO buildRankInfo(String gameCode, Integer score);
 
-    /** 结算真人 PK 排位分 */
+    // 结算真人 PK 排位分
     GameRankSettlementResult settleRank(GameRankSettlementCommand command);
 }

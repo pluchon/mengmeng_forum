@@ -8,7 +8,7 @@ public final class TetrisRng {
 
     private long state;
 
-    // 7-Bag 随机袋，保证每袋七种方块各出现一次
+    // 7 Bag 随机袋，保证每袋七种方块各出现一次
     private final List<String> blockBag = new ArrayList<>();
 
     private TetrisRng(long seed) {

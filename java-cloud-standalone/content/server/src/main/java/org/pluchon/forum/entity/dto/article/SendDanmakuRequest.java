@@ -15,7 +15,7 @@ public class SendDanmakuRequest {
     // 预设颜色编码
     private Byte colorCode;
 
-    // 视频时间点（毫秒）
+    // 视频时间点 毫秒
     private Integer videoTimeMs;
 
     // 弹幕模式：0 滚动 1 顶部 2 底部

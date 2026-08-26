@@ -1,6 +1,6 @@
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 
-/** 从路由 query 打开消息中心（兼容 /messages?targetUserId=） */
+// 从路由 查询 打开消息中心 兼容 /messages?targetUserId
 export function openMessageCenterFromRoute(router, query) {
   const ui = useMessageCenterUiStore()
   const rawId = query?.targetUserId

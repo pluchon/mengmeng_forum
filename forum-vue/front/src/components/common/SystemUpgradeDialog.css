@@ -1,0 +1,37 @@
+/* append to body 弹层：不用 scoped，保证样式落到 teleported 节点 */
+.system-upgrade-dialog.el-dialog {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.system-upgrade-dialog .el-dialog__header {
+  padding: 12px 16px 0;
+  margin: 0;
+}
+
+.system-upgrade-dialog .el-dialog__title {
+  display: none;
+}
+
+.system-upgrade-dialog .el-dialog__body {
+  padding: 8px 22px 20px;
+}
+
+.system-upgrade-dialog__title {
+  margin: 4px 0 18px;
+  color: #3a3550;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.system-upgrade-dialog__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  user-select: none;
+  pointer-events: none;
+}

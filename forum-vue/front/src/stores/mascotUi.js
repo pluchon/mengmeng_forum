@@ -11,7 +11,7 @@ export const useMascotUiStore = defineStore('mascotUi', () => {
     if (raw === '0') visible.value = false
   }
   catch {
-    /* ignore */
+    // 忽略
   }
 
   watch(visible, (value) => {
@@ -19,7 +19,7 @@ export const useMascotUiStore = defineStore('mascotUi', () => {
       localStorage.setItem(VISIBLE_KEY, value ? '1' : '0')
     }
     catch {
-      /* ignore */
+      // 忽略
     }
   })
 

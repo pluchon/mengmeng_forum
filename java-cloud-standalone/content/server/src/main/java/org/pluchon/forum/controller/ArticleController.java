@@ -14,12 +14,18 @@ import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.ReplaceArticleImagesRequest;
 import org.pluchon.forum.entity.dto.article.SubmitForAuditRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
+import org.pluchon.forum.entity.dto.article.SetArticleMusicRequest;
 import org.pluchon.forum.entity.dto.article.ValidateTextRequest;
 import org.pluchon.forum.entity.vo.article.ArticleDetailResponse;
 import org.pluchon.forum.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
 import org.pluchon.forum.entity.vo.article.HotArticleListItemVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
+import org.pluchon.forum.entity.vo.creator.CreatorDashboardVO;
+import org.pluchon.forum.entity.vo.creator.CreatorInsightVO;
+import org.pluchon.forum.entity.vo.creator.CreatorInsightDataVO;
+import org.pluchon.forum.service.interfaces.creator.CreatorDashboardService;
+import org.pluchon.forum.service.interfaces.creator.CreatorInsightService;
 import org.pluchon.forum.service.interfaces.article.ArticleGuideStreamService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +33,13 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import jakarta.validation.Valid;
+import org.pluchon.forum.entity.dto.article.ArticleSummaryRegenerateRequest;
+import org.pluchon.forum.entity.vo.article.ArticleSummaryVO;
+import org.pluchon.forum.entity.dto.article.ContentReportRequest;
+import org.pluchon.forum.entity.vo.article.ContentReportVO;
+import org.pluchon.forum.service.interfaces.moderation.ContentReportService;
+import org.pluchon.forum.service.interfaces.article.ArticleSummaryService;
 
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -35,11 +48,23 @@ import java.util.concurrent.Executor;
 @RestController
 @RequestMapping("/article")
 public class ArticleController {
+
+    @Autowired
+    private ArticleSummaryService articleSummaryService;
+
+    @Autowired
+    private ContentReportService contentReportService;
     @Autowired
     private ArticleService articleService;
 
     @Autowired
     private ArticleGuideStreamService articleGuideStreamService;
+
+    @Autowired
+    private CreatorDashboardService creatorDashboardService;
+
+    @Autowired
+    private CreatorInsightService creatorInsightService;
 
     @Autowired
     @Qualifier("sseExecutor")
@@ -127,7 +152,7 @@ public class ArticleController {
         return Result.success("删除帖子成功");
     }
 
-    // 根据用户ID查询该用户的帖子列表->带分页
+    // 根据用户ID查询该用户的帖子列表 >带分页
     @Operation(summary = "查询用户帖子列表->分页", description = "传入用户ID和分页参数")
     @GetMapping("/getArticleListByUserIdWithPage")
     public Result<PageResult<ArticleBriefVO>> getArticleListByUserIdWithPage(Long userId, @RequestParam(defaultValue = "1") Integer pageNum,
@@ -139,7 +164,45 @@ public class ArticleController {
                 status, keyword));
     }
 
-    // 根据用户ID查询该用户的帖子列表->带分页，包含用户信息
+    /** 获取当前登录用户的创作中心统计 */
+    @Operation(summary = "创作中心统计", description = "按自然周返回阅读与点赞趋势，并返回本月新增数据")
+    @GetMapping("/creator/dashboard")
+    public Result<CreatorDashboardVO> creatorDashboard(
+            @RequestParam(defaultValue = "0") Integer weekOffset,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        return Result.success(creatorDashboardService.getDashboard(loginUser.getId(), weekOffset));
+    }
+
+    /** 生成当前登录用户的创作数据小结 */
+    @Operation(summary = "创作数据 AI 小结", description = "支持近一周、近半个月、近一个月和近半年，统计数据不变时复用缓存")
+    @PostMapping("/creator/insight")
+    public Result<CreatorInsightVO> creatorInsight(
+            @RequestParam(defaultValue = "WEEK") String period,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        return Result.success(creatorInsightService.generate(loginUser.getId(), period));
+    }
+
+    /** 查询创作趋势和已缓存小结 */
+    @GetMapping("/creator/insight-data")
+    public Result<CreatorInsightDataVO> creatorInsightData(
+            @RequestParam(value = "period", required = false) String period,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        return Result.success(creatorInsightService.loadData(loginUser.getId(), period));
+    }
+
+    // 根据用户ID查询该用户的帖子列表 >带分页，包含用户信息
     @Operation(summary = "查询用户帖子列表->分页，包含用户信息", description = "传入用户ID和分页参数，返回包含用户信息和owner标志")
     @GetMapping("/getArticleListByUserIdWithPageAndUserInfo")
     public Result<ArticleListByUserIdPageResponse> getArticleListByUserIdWithPageAndUserInfo(Long userId, @RequestParam(defaultValue = "1") Integer pageNum,
@@ -155,8 +218,8 @@ public class ArticleController {
         return Result.success(articleService.getHotArticleList(topN));
     }
 
-    /** 分页查询热帖榜，最多返回排名前 50 条。 */
-    @Operation(summary = "分页查询热帖榜", description = "后端按热度排名分页，每页最多10条，总榜最多50条")
+    /** 分页查询热帖榜，最多返回排名前 28 条 */
+    @Operation(summary = "分页查询热帖榜", description = "后端按热度排名分页，每页最多14条，总榜最多28条")
     @GetMapping("/getHotArticleListWithPage")
     public Result<PageResult<HotArticleListItemVO>> getHotArticleListWithPage(
             @RequestParam(defaultValue = "1") Integer pageNum,
@@ -191,6 +254,38 @@ public class ArticleController {
     @GetMapping("/getSummary")
     public Result<String> getSummary(Long articleId) {
         return Result.successData(articleService.getArticleSummary(articleId));
+    }
+
+    /** 查询帖子AI总结状态与内容 */
+    @Operation(summary = "查询帖子AI总结状态与内容")
+    @GetMapping("/summary")
+    public Result<ArticleSummaryVO> getSummaryState(@RequestParam Long articleId) {
+        return Result.success(articleSummaryService.getSummary(articleId));
+    }
+
+    /** 重新生成帖子AI总结 */
+    @Operation(summary = "重新生成帖子AI总结")
+    @PostMapping("/summary/regenerate")
+    public Result<ArticleSummaryVO> regenerateSummary(
+            @Valid @RequestBody ArticleSummaryRegenerateRequest request,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        return Result.success(articleSummaryService.regenerate(request.getArticleId(), loginUser.getId()));
+    }
+
+    /** 举报帖子或评论 */
+    @PostMapping("/report")
+    public Result<ContentReportVO> reportContent(
+            @Valid @RequestBody ContentReportRequest request,
+            HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        return Result.success(contentReportService.report(loginUser.getId(), request));
     }
 
     @Operation(summary = "流式生成帖子 AI 智能导读")
@@ -247,5 +342,34 @@ public class ArticleController {
         }
         articleService.clearArticleVideo(articleId, loginUser.getId());
         return Result.success("视频已清空");
+    }
+
+    @Operation(summary = "绑定帖子配乐", description = "与相册/视频正交；URL 须落在 music/music_* 目录")
+    @PostMapping("/setArticleMusic")
+    public Result<String> setArticleMusic(@Valid @RequestBody SetArticleMusicRequest req, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        articleService.setArticleMusic(
+                req.getArticleId(),
+                loginUser.getId(),
+                req.getMusicKey(),
+                req.getMusicTitle(),
+                req.getMusicCoverUrl(),
+                req.getMusicAudioUrl(),
+                req.getMusicLrcUrl());
+        return Result.success("配乐已绑定");
+    }
+
+    @Operation(summary = "清空帖子配乐")
+    @PostMapping("/clearArticleMusic")
+    public Result<String> clearArticleMusic(@RequestParam Long articleId, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        if (loginUser == null) {
+            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
+        }
+        articleService.clearArticleMusic(articleId, loginUser.getId());
+        return Result.success("配乐已清空");
     }
 }

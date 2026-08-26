@@ -1,20 +1,24 @@
-import { ref, onMounted, computed, shallowRef, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Star } from '@element-plus/icons-vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { blockIfMuted } from '@/utils/userMute'
-import { getArticleListByUser, deleteArticle } from '@/api/article'
 import {
-  articleStatusMeta,
-  ARTICLE_STATUS,
-} from '@/utils/articleStatus'
+  getArticleListByUser,
+  deleteArticle,
+  generateCreatorInsight,
+  getCreatorInsightData,
+  getCreatorDashboard,
+} from '@/api/article'
+import { searchCreatorArticles } from '@/api/search'
+import { getCreatorMonthlyNewFollowers, getFollowStats } from '@/api/userFollow'
+import { blockIfMuted } from '@/utils/userMute'
+import { ARTICLE_STATUS, articleStatusMeta } from '@/utils/articleStatus'
+import { formatForumDateOnlyShanghai } from '@/utils/datetime'
+import { captureFeedOpenFrom } from '@/utils/feedNavigation'
 import editIconUrl from '@/assets/svg/编辑.svg?url'
 import deleteIconUrl from '@/assets/svg/删除.svg?url'
-import { formatForumDateOnlyShanghai } from '@/utils/datetime'
 
-const LIST_PAGE_SIZE = 10
-
+const LIST_PAGE_SIZE = 6
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: '全部状态' },
   { value: String(ARTICLE_STATUS.PUBLISHED), label: '已发布' },
@@ -24,258 +28,257 @@ const STATUS_FILTER_OPTIONS = [
   { value: String(ARTICLE_STATUS.AUDIT_ERROR), label: '审核异常' },
 ]
 
-function pad2(n) {
-  return String(n).padStart(2, '0')
-}
+const INSIGHT_PERIOD_OPTIONS = [
+  { value: 'WEEK', label: '近一周' },
+  { value: 'HALF_MONTH', label: '近半个月' },
+  { value: 'MONTH', label: '近一个月' },
+  { value: 'HALF_YEAR', label: '近半年' },
+]
 
-function toDateKey(input) {
-  if (!input) return ''
-  const d = new Date(input)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
-
-function isCurrentMonth(input) {
-  const key = toDateKey(input)
-  if (!key) return false
-  const now = new Date()
-  const prefix = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`
-  return key.startsWith(prefix)
-}
-
-function last30DayKeys() {
-  const keys = []
-  const end = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(end)
-    d.setDate(end.getDate() - i)
-    keys.push(toDateKey(d))
-  }
-  return keys
-}
-
-function buildTrendFromArticles(rows) {
-  const keys = last30DayKeys()
-  const reads = keys.map(() => 0)
-  const likes = keys.map(() => 0)
-  for (const row of rows) {
-    const a = row.article || row
-    const key = toDateKey(a.createTime)
-    const idx = keys.indexOf(key)
-    if (idx < 0) continue
-    reads[idx] += Number(a.visitCount ?? a.readCount ?? 0) || 0
-    likes[idx] += Number(a.likeCount ?? 0) || 0
-  }
-  return {
-    dates: keys.map((k) => k.slice(5)),
-    reads,
-    likes,
-  }
-}
-
-function buildTrendChartOption(series) {
-  const { dates, reads, likes } = series
-  const hasData = dates.length && (reads.some((v) => v > 0) || likes.some((v) => v > 0))
-  if (!hasData) {
-    return {
-      title: {
-        text: '暂无足够数据绘制趋势',
-        left: 'center',
-        top: 'center',
-        textStyle: { color: '#86909c', fontSize: 13, fontWeight: 500 },
-      },
-      xAxis: { type: 'category', show: false },
-      yAxis: { type: 'value', show: false },
-      series: [],
-    }
-  }
-  return {
-    animation: true,
-    animationDuration: 700,
-    grid: { left: 48, right: 16, top: 36, bottom: dates.length > 14 ? 72 : 40 },
-    legend: {
-      top: 0,
-      right: 0,
-      itemWidth: 12,
-      itemHeight: 8,
-      textStyle: { fontSize: 11, color: '#86909c' },
-    },
-    tooltip: { trigger: 'axis' },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: dates,
-      axisLabel: { fontSize: 10, color: '#86909c' },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { opacity: 0.25 } },
-      axisLabel: { fontSize: 10, color: '#86909c' },
-    },
-    series: [
-      {
-        name: '阅读',
-        type: 'line',
-        smooth: 0.35,
-        symbol: 'circle',
-        symbolSize: 5,
-        lineStyle: { width: 2, color: '#185fa5' },
-        itemStyle: { color: '#185fa5' },
-        data: reads,
-      },
-      {
-        name: '点赞',
-        type: 'line',
-        smooth: 0.35,
-        symbol: 'circle',
-        symbolSize: 5,
-        lineStyle: { width: 2, color: '#d4537e' },
-        itemStyle: { color: '#d4537e' },
-        data: likes,
-      },
-    ],
-  }
-}
-
-export function useCreativeCenter() {
+export function useCreativeCenter(iconSet) {
   const router = useRouter()
   const userStore = useUserStore()
-  const loading = ref(false)
+  const loading = ref(true)
+  const listLoading = ref(false)
   const articles = ref([])
+  const followerCount = ref(0)
+  const monthNewFollowerCount = ref(0)
+  const dashboard = ref(null)
   const statusFilter = ref('')
   const keyword = ref('')
+  const searchMode = ref('traditional')
   const pageNum = ref(1)
-  const trendChartOption = shallowRef(null)
+  const listTotal = ref(0)
+  const deletingArticleId = ref(null)
+  const insightPeriod = ref('WEEK')
+  const insightLoading = ref(false)
+  const creatorInsights = ref({})
+  const insightData = ref({})
+  const insightPage = ref(0)
+  const insightDataLoading = ref(false)
+  let searchTimer = null
 
   const isVipMember = computed(() => {
-    const t = Number(userStore.vipTier) || 0
-    if (t <= 0) return false
-    const exp = userStore.vipExpireAt
-    if (!exp) return true
-    const ms = new Date(exp).getTime()
-    if (Number.isNaN(ms)) return true
-    return Date.now() <= ms
+    const tier = Number(userStore.vipTier) || 0
+    if (tier <= 0) return false
+    if (!userStore.vipExpireAt) return true
+    const expireAt = new Date(userStore.vipExpireAt).getTime()
+    return Number.isNaN(expireAt) || Date.now() <= expireAt
   })
 
-  const totalPosts = computed(() => articles.value.length)
-
-  const totalLikes = computed(() =>
-    articles.value.reduce((acc, cur) => acc + (Number(cur.article?.likeCount) || 0), 0),
-  )
-
-  const totalReads = computed(() =>
-    articles.value.reduce(
-      (acc, cur) => acc + (Number(cur.article?.visitCount ?? cur.article?.readCount) || 0),
-      0,
-    ),
-  )
-
-  const monthNewPosts = computed(
-    () => articles.value.filter((r) => isCurrentMonth(r.article?.createTime)).length,
-  )
-
-  const monthNewLikes = computed(() =>
-    articles.value
-      .filter((r) => isCurrentMonth(r.article?.createTime))
-      .reduce((acc, cur) => acc + (Number(cur.article?.likeCount) || 0), 0),
-  )
-
-  const monthNewReads = computed(() =>
-    articles.value
-      .filter((r) => isCurrentMonth(r.article?.createTime))
-      .reduce(
-        (acc, cur) => acc + (Number(cur.article?.visitCount ?? cur.article?.readCount) || 0),
-        0,
-      ),
-  )
-
-  const listTotal = ref(0)
+  const weeklyReads = computed(() => (dashboard.value?.trendDays || [])
+    .reduce((total, day) => total + (Number(day.readCount) || 0), 0))
+  const dataGardenItems = computed(() => [
+    { kind: 'read', label: '本周阅读', value: weeklyReads.value, monthIncrease: Number(dashboard.value?.monthNewReadCount) || 0, changeTone: 'read', icon: iconSet.View, changeIcon: iconSet.TrendCharts },
+    { kind: 'like', label: '收到喜欢', value: Number(dashboard.value?.totalLikeCount) || 0, monthIncrease: Number(dashboard.value?.monthNewLikeCount) || 0, changeTone: 'like', icon: iconSet.Star, changeIcon: iconSet.TrendCharts },
+    { kind: 'fan', label: '新粉丝', value: followerCount.value, monthIncrease: monthNewFollowerCount.value, changeTone: 'fan', icon: iconSet.User, changeIcon: iconSet.User },
+    { kind: 'work', label: '发布作品', value: Number(dashboard.value?.totalWorkCount) || 0, monthIncrease: Number(dashboard.value?.monthNewWorkCount) || 0, changeTone: 'work', icon: iconSet.Picture, changeIcon: iconSet.Picture },
+  ])
   const pagedArticles = computed(() => articles.value)
+  const currentInsight = computed(() => creatorInsights.value[insightPeriod.value] || null)
+  const currentTrendPoints = computed(() => insightData.value[insightPeriod.value]?.trendPoints || [])
+  const insightPages = [
+    { key: 'readCount', title: '阅读变化', color: '#64a4d8' },
+    { key: 'likeCount', title: '喜欢变化', color: '#ef78a9' },
+    { key: 'followerCount', title: '粉丝变化', color: '#75c59c' },
+    { key: 'workCount', title: '作品变化', color: '#9a82dc' },
+  ]
+  const activeInsightPage = computed(() => insightPages[insightPage.value] || null)
+  const insightChartOption = computed(() => {
+    const page = activeInsightPage.value
+    if (!page) return null
+    const points = currentTrendPoints.value
+    return {
+      animationDuration: 520,
+      color: [page.color],
+      grid: { left: 14, right: 18, top: 18, bottom: 12, containLabel: true },
+      tooltip: { trigger: 'axis', confine: true },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: points.map((item) => formatTrendLabel(item.label)),
+        axisLine: { lineStyle: { color: '#eadfe8' } },
+        axisTick: { show: false },
+        axisLabel: { color: '#aa97a6', fontSize: 11, hideOverlap: true, margin: 10 },
+      },
+      yAxis: {
+        type: 'value', min: 0, minInterval: 1,
+        splitLine: { lineStyle: { color: '#f2eaf0' } },
+        axisLabel: { color: '#aa97a6', fontSize: 11 },
+      },
+      series: [{
+        name: page.title,
+        type: 'line',
+        smooth: false,
+        clip: true,
+        showSymbol: points.length <= 31,
+        symbolSize: 4,
+        data: points.map((item) => Number(item[page.key]) || 0),
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.1 },
+      }],
+    }
+  })
+  const insightPeriodLabel = computed(() => INSIGHT_PERIOD_OPTIONS
+    .find((option) => option.value === insightPeriod.value)?.label || '近一周')
 
-  function refreshTrendChart() {
-    trendChartOption.value = buildTrendChartOption(buildTrendFromArticles(articles.value))
+  async function fetchDashboard() {
+    if (!userStore.id) {
+      dashboard.value = null
+      return
+    }
+    try {
+      const response = await getCreatorDashboard({ weekOffset: 0 })
+      if (response.code !== 0) return
+      dashboard.value = response.data || null
+    } catch {
+      dashboard.value = null
+    }
   }
 
-  const fetchArticles = async () => {
+  async function fetchArticles() {
     if (!userStore.id) return
-    loading.value = true
+    listLoading.value = true
     try {
-      const res = await getArticleListByUser({
-        userId: userStore.id,
+      const searchKeyword = keyword.value.trim()
+      const params = {
         pageNum: pageNum.value,
         pageSize: LIST_PAGE_SIZE,
         status: statusFilter.value === '' ? undefined : Number(statusFilter.value),
-        keyword: keyword.value.trim() || undefined,
-      })
-      if (res.code === 0) {
-        const rawList = res.data.records || res.data.list || res.data || []
-        articles.value = Array.isArray(rawList)
-          ? rawList.map((item) => (item.article ? item : { article: item }))
-          : []
-        listTotal.value = Number(res.data.total) || articles.value.length
-        refreshTrendChart()
       }
+      const response = searchKeyword
+        ? await searchCreatorArticles({
+            ...params,
+            keyword: searchKeyword,
+            ai: searchMode.value === 'ai' ? 1 : undefined,
+          })
+        : await getArticleListByUser({ ...params, userId: userStore.id })
+      if (response.code !== 0) return
+      const payload = searchKeyword ? (response.data?.page || {}) : (response.data || {})
+      const rawList = payload.records || payload.list || payload || []
+      const apiRows = Array.isArray(rawList)
+        ? rawList.map((item) => (item.article ? item : { article: item }))
+        : []
+      articles.value = apiRows
+      listTotal.value = Number(payload.total) || apiRows.length
     } finally {
-      loading.value = false
+      listLoading.value = false
     }
   }
 
-  watch([statusFilter, keyword], () => {
-    pageNum.value = 1
-    fetchArticles()
-  })
-
-  watch(pageNum, () => fetchArticles())
-
-  const handleDelete = (id) => {
-    ElMessageBox.confirm('确定要删除这篇帖子吗？该操作不可撤销', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    }).then(async () => {
-      const res = await deleteArticle(id)
-      if (res.code === 0) {
-        ElMessage.success('删除成功')
-        fetchArticles()
-      }
-    })
+  function formatTrendLabel(value) {
+    const raw = String(value || '')
+    return raw.length >= 10 ? `${Number(raw.slice(5, 7))}/${Number(raw.slice(8, 10))}` : raw
   }
 
-  const formatDate = (dateStr) => formatForumDateOnlyShanghai(dateStr)
+  async function fetchInsightData(period = insightPeriod.value) {
+    insightDataLoading.value = true
+    try {
+      const response = await getCreatorInsightData(period)
+      if (response.code !== 0 || !response.data) return
+      insightData.value = { ...insightData.value, [period]: response.data }
+      if (response.data.insight) {
+        creatorInsights.value = { ...creatorInsights.value, [period]: response.data.insight }
+      }
+    } finally {
+      insightDataLoading.value = false
+    }
+  }
+
+  async function fetchFollowerCount() {
+    if (!userStore.id) return
+    try {
+      const [statsResponse, monthlyResponse] = await Promise.all([
+        getFollowStats(userStore.id),
+        getCreatorMonthlyNewFollowers(),
+      ])
+      if (statsResponse.code === 0) followerCount.value = Number(statsResponse.data?.followerCount) || 0
+      if (monthlyResponse.code === 0) monthNewFollowerCount.value = Number(monthlyResponse.data) || 0
+    } catch {
+      followerCount.value = 0
+      monthNewFollowerCount.value = 0
+    }
+  }
+
+  async function requestCreatorInsight() {
+    if (insightLoading.value) return
+    insightLoading.value = true
+    try {
+      const response = await generateCreatorInsight(insightPeriod.value)
+      if (response.code !== 0 || !response.data) {
+        throw new Error(response.message || response.msg || 'AI 小结生成失败')
+      }
+      creatorInsights.value = {
+        ...creatorInsights.value,
+        [insightPeriod.value]: response.data,
+      }
+      insightPage.value = 4
+    } catch (error) {
+      ElMessage.error(error?.message || 'AI 暂时走神了，请稍后再试')
+    } finally {
+      insightLoading.value = false
+    }
+  }
+
+  function selectInsightPeriod(period) {
+    if (!INSIGHT_PERIOD_OPTIONS.some((option) => option.value === period) || insightLoading.value) return
+    insightPeriod.value = period
+    insightPage.value = 0
+    if (!insightData.value[period]) void fetchInsightData(period)
+  }
+
+  function selectInsightPage(index) {
+    insightPage.value = Math.max(0, Math.min(4, Number(index) || 0))
+  }
+
+  function moveInsightPage(delta) {
+    insightPage.value = (insightPage.value + delta + 5) % 5
+  }
+
+  function toggleSearchMode() {
+    searchMode.value = searchMode.value === 'ai' ? 'traditional' : 'ai'
+  }
 
   function postTitle(row) {
-    const a = row.article
-    const meta = articleStatusMeta(a.status)
-    const title = (a.title || '').trim()
-    if (meta.isDraft && !title) return '— 草稿：未命名帖子 —'
-    return title || '无标题'
+    const article = row.article
+    const title = (article.title || '').trim()
+    return articleStatusMeta(article.status).isDraft && !title ? '— 草稿：未命名帖子 —' : (title || '无标题')
   }
 
   function postTitleClass(row) {
     return articleStatusMeta(row.article.status).isDraft ? 'creative-post-title--draft' : ''
   }
 
+  function postStatus(row) {
+    if (Number(row.article?.state) === 1) return { label: '已下架', tone: 'offline' }
+    const meta = articleStatusMeta(row.article?.status)
+    return { label: meta.tip.replace('（待发布）', ''), tone: meta.isDraft ? 'draft' : 'published' }
+  }
+
+  function postMetrics(row) {
+    if (articleStatusMeta(row.article.status).isDraft) return null
+    return {
+      reads: Number(row.article.visitCount ?? 0) || 0,
+      likes: Number(row.article.likeCount ?? 0) || 0,
+      favorites: Number(row.article.favoriteCount ?? 0) || 0,
+    }
+  }
+
+  function postCoverUrl(row) {
+    return String(row.article?.coverImg || '').trim()
+  }
+
+  function formatShortDate(date) {
+    const value = formatForumDateOnlyShanghai(date)
+    return value && value.length >= 5 ? value.slice(-5) : value
+  }
+
   function editTargetPath(row) {
-    const id = row.article?.id
-    const s = Number(row.article?.status)
-    if (s === ARTICLE_STATUS.PENDING_AUDIT) return `/creative`
-    return `/article/edit/${id}`
+    return Number(row.article?.status) === ARTICLE_STATUS.PENDING_AUDIT ? '/creative' : `/article/edit/${row.article.id}`
   }
 
   function editTip(row) {
-    const s = Number(row.article?.status)
-    if (s === ARTICLE_STATUS.PENDING_AUDIT) return '审核中，请留意站内信'
-    return '编辑'
-  }
-
-  function interactDisplay(row) {
-    const a = row.article
-    const meta = articleStatusMeta(a.status)
-    if (meta.isDraft) return null
-    return {
-      reads: Number(a.visitCount ?? a.readCount ?? 0) || 0,
-      likes: Number(a.likeCount ?? 0) || 0,
-    }
+    return Number(row.article?.status) === ARTICLE_STATUS.PENDING_AUDIT ? '审核中，请留意站内信' : '编辑'
   }
 
   function goCreatePost() {
@@ -283,42 +286,111 @@ export function useCreativeCenter() {
     router.push('/article/create')
   }
 
+  function openArticle(row) {
+    if (articleStatusMeta(row.article.status).isDraft) return
+    const id = row.article?.id
+    if (id == null) return
+    // 与个人主页一致：详情叠在整理台上，关闭后回到 /creative，不经首页
+    captureFeedOpenFrom('/creative')
+    router.push({ path: `/article/${id}`, query: { from: 'creative' } })
+  }
+
+  function requestDelete(id) {
+    deletingArticleId.value = id
+  }
+
+  function cancelDelete() {
+    deletingArticleId.value = null
+  }
+
+  async function confirmDelete(id) {
+    if (deletingArticleId.value !== id) return
+    try {
+      const response = await deleteArticle(id)
+      if (response.code !== 0) return
+      const removedLastItem = articles.value.length === 1 && pageNum.value > 1
+      articles.value = articles.value.filter((row) => row.article.id !== id)
+      listTotal.value = Math.max(0, listTotal.value - 1)
+      deletingArticleId.value = null
+      ElMessage.success('删除成功')
+      if (removedLastItem) {
+        pageNum.value -= 1
+      } else {
+        await fetchArticles()
+      }
+      await fetchDashboard()
+    } finally {
+      if (deletingArticleId.value === id) deletingArticleId.value = null
+    }
+  }
+
+  watch([statusFilter, searchMode], () => {
+    pageNum.value = 1
+    void fetchArticles()
+  })
+
+  watch(keyword, () => {
+    if (searchTimer) clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      pageNum.value = 1
+      void fetchArticles()
+    }, 320)
+  })
+
+  watch(pageNum, () => {
+    void fetchArticles()
+  })
+
   onMounted(async () => {
-    await fetchArticles()
-    refreshTrendChart()
+    try {
+      await Promise.all([fetchArticles(), fetchFollowerCount(), fetchDashboard(), fetchInsightData()])
+    } finally {
+      loading.value = false
+    }
   })
 
   return {
-    Plus,
-    Star,
-    View,
+    INSIGHT_PERIOD_OPTIONS,
     STATUS_FILTER_OPTIONS,
-    articleStatusMeta,
-    articles,
+    dataGardenItems,
+    currentInsight,
+    deletingArticleId,
     deleteIconUrl,
     editIconUrl,
     editTargetPath,
     editTip,
-    fetchArticles,
-    formatDate,
-    handleDelete,
-    interactDisplay,
+    formatShortDate,
+    goCreatePost,
+    insightLoading,
+    insightDataLoading,
+    insightPage,
+    insightPages,
+    activeInsightPage,
+    insightChartOption,
+    selectInsightPage,
+    moveInsightPage,
+    insightPeriod,
+    insightPeriodLabel,
+    cancelDelete,
+    confirmDelete,
     isVipMember,
     keyword,
+    searchMode,
     listTotal,
     loading,
-    monthNewLikes,
-    monthNewPosts,
-    monthNewReads,
+    listLoading,
     pageNum,
     pagedArticles,
+    postStatus,
+    postCoverUrl,
+    postMetrics,
     postTitle,
     postTitleClass,
+    openArticle,
+    requestCreatorInsight,
+    requestDelete,
     statusFilter,
-    totalLikes,
-    totalPosts,
-    totalReads,
-    trendChartOption,
-    goCreatePost,
+    selectInsightPeriod,
+    toggleSearchMode,
   }
 }

@@ -1,32 +1,30 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ZoomIn } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import {
-  getMascotPublicModels,
   getMascotQuotaHint,
   getMascotRelatedRecommendations,
   listMascotRelatedRecommendations,
   streamMascotChat,
-  setMascotModel,
   getCompanionSessions,
   getCompanionMessages,
   deleteCompanionSession,
   renameCompanionSession,
   getCompanionContextWindow,
   compressCompanionContext,
+  getMascotMemory,
+  editMascotMemory,
 } from '@/api/mascot'
 import { aiPriceEstimate } from '@/api/ai'
+import { getVipQuota } from '@/api/vip'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import {
   MASCOT_IMAGE_QUALITY_OPTIONS,
   findImageQualityOption,
 } from '@/constants/aiModels'
-import { clientOssUrl } from '@/utils/clientOss'
-import { pickThinkingPhrase, startThinkingRotation } from '@/utils/mascotThinking'
-import { pickMascotIdlePhrase } from '@/utils/mascotIdleTips'
 import { formatAiUsageLine, usageStatsFromApi } from '@/utils/aiUsageDisplay'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { marked } from 'marked'
@@ -42,7 +40,7 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
-/** 看板娘 AI 回复：Markdown → HTML（表格、列表、加粗等） */
+// 看板娘 AI 回复：Markdown → HTML 表格、列表、加粗等
 function renderMascotMarkdown(content, stripInlineImages = false) {
   let raw = (content || '').trim()
   if (!raw) return ''
@@ -66,28 +64,43 @@ function streamStatusText(status) {
     preparing: '正在准备对话…',
     routing: '正在理解你的问题…',
     supervising: '正在分析请求…',
-    assessing: '正在准备上下文…',
-    searching: '正在搜索网络…',
+    planning: '正在想要不要查资料…',
+    using_tools: '正在查资料…',
     composing: '正在组织回复…',
     drawing: '正在准备绘图…',
   }
-  return labels[String(status || '').trim()] || ''
+  const key = String(status || '').trim()
+  if (!key) return ''
+  return labels[key] || '正在处理…'
 }
 
-const companionXiaomai = clientOssUrl('xiaomai.webp')
-const companionMiku = clientOssUrl('miku.webp')
+function streamSpriteState(status) {
+  const normalized = String(status || '').trim()
+  if (['supervising', 'planning', 'using_tools'].includes(normalized)) return 'review'
+  if (normalized) return 'running'
+  return ''
+}
+
+const MASCOT_CODE = 'xiaomeng'
+const SPRITE_WIDTH = 96
+const SPRITE_EDGE_MARGIN = 16
+const SPRITE_SPEED_PX_PER_SECOND = 32
+const SPRITE_MIN_TRAVEL = 80
+const SPRITE_MAX_TRAVEL = 180
+const MASCOT_IDLE_TIP_TEXT = '可以点击我，和我来聊聊天哦'
+const IDLE_TIP_FIRST_DELAY_MS = 90_000
+const IDLE_TIP_MIN_INTERVAL_MS = 180_000
+const IDLE_TIP_MAX_INTERVAL_MS = 300_000
+const IDLE_TIP_TRIGGER_WEIGHT = 0.12
+const SPRITE_IDLE_MIN_MS = 18_000
+const SPRITE_IDLE_MAX_MS = 36_000
+const SPRITE_PATROL_CHANCE = 0.28
 
 export function useMascotDock() {
-  const OFFSET_KEY = 'mascot_dock_offset_v1'
-  const SCALE_KEY = 'mascot_stage_scale_v2'
-  const ANCHOR_KEY = 'mascot_stage_anchored_v2'
   const LLM_CHAT_KEY = 'mascot_llm_chat_v1'
   const LLM_WRITING_KEY = 'mascot_llm_writing_v3'
   const LLM_HELP_KEY = 'mascot_llm_help_v3'
   const IMAGE_QUALITY_KEY = 'mascot_image_quality_v1'
-  const GUEST_MASCOT_CODE_KEY = 'mascot_guest_model_code_v1'
-  const STAGE_BASE_W = 400
-  const STAGE_BASE_H = 460
   const relatedDialogVisible = ref(false)
   const relatedDialogItems = ref([])
   const searchGalleryVisible = ref(false)
@@ -95,8 +108,6 @@ export function useMascotDock() {
 
   const uiLabels = {
     ariaRoot: '看板娘',
-    scaleTitle: '缩放显示',
-    scaleHint: '拖动滑块调整看板娘显示大小',
     brandTitle: '小萌',
     statusOnline: '在线',
     statusOffline: '不在线',
@@ -104,8 +115,6 @@ export function useMascotDock() {
     sessionListTitle: '会话',
     newSession: '新建会话',
     guest: '未登录',
-    appearanceEmpty: '暂无上架模型，请管理员在后台配置并上架。',
-    applyAppearance: '选用此形象',
     today: '今天',
     openImageInNewTab: '在新标签打开',
     typing: '正在输入',
@@ -115,7 +124,7 @@ export function useMascotDock() {
     alreadyNewSession: '当前已是新会话，直接输入即可开始对话',
     deleteSession: '删除会话',
     renameSession: '编辑会话名称',
-    chatEmptyHint: '暂无消息，在下方输入开始对话',
+    chatEmptyHint: '你还没有和AI开始聊呢喵~',
   }
 
   const LOCAL_SESSIONS_KEY_PREFIX = 'mascot_local_sessions_v3'
@@ -129,30 +138,27 @@ export function useMascotDock() {
     return `${LOCAL_SESSIONS_KEY_PREFIX}_guest`
   }
   
-  /** 文本模型由服务端按会员档位自动选择；前端不提供切换。 */
+  // 文本模型由服务端按会员档位自动选择；前端不提供切换
   const ALL_LLM_OPTIONS = [{ id: 'qwen-flash' }]
   const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
   const userStore = useUserStore()
   const router = useRouter()
   const pointsWallet = usePointsWalletStore()
-  const stageHost = ref(null)
-  const stageUseFallback = ref(false)
   const scrollbarFs = ref(null)
-  const oml2d = ref(null)
   
   const assistantOpen = ref(false)
-  /** chat | drawing | appearance */
+  // chat | drawing
   const activeNav = ref('chat')
-  const catalog = ref([])
-  const activeCode = ref('lafei')
-  const pendingCode = ref('lafei')
   const messages = ref([])
   const draft = ref('')
   const loading = ref(false)
   const imageGenerating = ref(false)
   const deletingSessionId = ref('')
   const renamingSessionId = ref('')
+  const renameDraft = ref('')
+  const renameInputRef = ref(null)
+  const renameSubmitting = ref(false)
   const sessionId = ref('')
   const localSessionsByMode = ref({
     chat: [],
@@ -170,33 +176,106 @@ export function useMascotDock() {
   const estimateLoading = ref(false)
   const usePointsBilling = ref(false)
   const quotaHint = ref({ percent: 0, canUsePointsPay: false, quotaLabel: '' })
+  const quotaPanel = ref(null)
   const contextWindow = ref({ usedTokens: 0, maxTokens: 128000, canCompress: false })
   const contextCompressing = ref(false)
+  const memoryDialogVisible = ref(false)
+  const memorySummary = ref('')
+  const memoryFacts = ref([])
+  const memoryEditDraft = ref('')
+  const memorySaving = ref(false)
+  // 摘要/事实/修改指令上限：兼顾弹窗可读性与模型输出稳定
+  const MEMORY_SUMMARY_MAX = 240
+  const MEMORY_FACTS_MAX = 10
+  const MEMORY_FACT_ITEM_MAX = 40
+  const MEMORY_EDIT_MAX = 200
+
+  const displayMemorySummary = computed(() =>
+    String(memorySummary.value || '').trim().slice(0, MEMORY_SUMMARY_MAX),
+  )
+  const displayMemoryFacts = computed(() => {
+    const rows = Array.isArray(memoryFacts.value) ? memoryFacts.value : []
+    const out = []
+    for (const item of rows) {
+      const text = String(item || '').trim().slice(0, MEMORY_FACT_ITEM_MAX)
+      if (!text || out.includes(text)) continue
+      out.push(text)
+      if (out.length >= MEMORY_FACTS_MAX) break
+    }
+    return out
+  })
 
   const estimateHintText = computed(() => {
     if (estimateLoading.value) return '正在估算…'
     if (usePointsBilling.value && estimatePoints.value != null) {
       return `萌币扣费模式：预估约 ${estimatePoints.value} 积分/次`
     }
-    if (isVip.value) {
+    if (userStore.isLoggedIn) {
       const p = quotaHint.value?.percent ?? 0
-      const label = quotaHint.value?.quotaLabel || '会员额度'
-      return p > 0 ? `${label} 已用 ${p}%（默认走额度，不扣萌币）` : '默认使用会员额度，不扣萌币'
+      const label = quotaHint.value?.quotaLabel || '通用额度'
+      return p > 0 ? `${label} 已用 ${p}%（默认走额度，不扣萌币）` : '默认使用方案额度，不扣萌币'
     }
-    return '默认使用每日免费次数，不扣萌币'
+    return '登录后使用免费方案额度'
   })
 
   const showPointsPayButton = computed(() => {
-    return isVip.value
-      && activeNav.value !== 'drawing'
-      && activeNav.value !== 'appearance'
-      && Boolean(quotaHint.value?.canUsePointsPay)
+    if (!userStore.isLoggedIn) return false
+    if (activeNav.value === 'drawing') {
+      return quotaRows.value.find((row) => row.key === 'wan')?.exhausted === true
+    }
+    return quotaRows.value.find((row) => row.key === 'qwen')?.exhausted === true
   })
-  const stageHovered = ref(false)
+  const quotaRows = computed(() => {
+    const panel = quotaPanel.value || {}
+    const qwenLimit = Number(panel.qwenBudgetMicros) || 0
+    const qwenUsed = Math.min(qwenLimit, Number(panel.qwenUsedMicros) || 0)
+    const qwenRemaining = Math.max(0, Number(panel.qwenRemainingMicros ?? (qwenLimit - qwenUsed)) || 0)
+    const wanLimit = Number(panel.wanImageLimit) || 0
+    const wanUsed = Math.min(wanLimit, Number(panel.wanImageUsed) || 0)
+    const wanRemaining = Math.max(0, Number(panel.wanImageRemaining ?? (wanLimit - wanUsed)) || 0)
+    const remainingPercent = (remaining, limit) => (
+      limit > 0 ? Math.max(0, Math.min(100, Math.round(remaining * 100 / limit))) : 0
+    )
+    return [
+      {
+        key: 'qwen', label: '通用', tone: 'qwen',
+        text: `${remainingPercent(qwenRemaining, qwenLimit)}%`,
+        remainingPercent: remainingPercent(qwenRemaining, qwenLimit),
+        exhausted: qwenLimit > 0 && qwenRemaining <= 0,
+      },
+      {
+        key: 'wan', label: 'Wan 2.7', tone: 'wan',
+        text: `${remainingPercent(wanRemaining, wanLimit)}%`,
+        remainingPercent: remainingPercent(wanRemaining, wanLimit),
+        exhausted: wanLimit > 0 && wanRemaining <= 0,
+      },
+    ]
+  })
+  const quotaExhausted = computed(() => showPointsPayButton.value)
+  const spriteHovered = ref(false)
+  const spriteReady = ref(false)
+  const spriteX = ref(SPRITE_EDGE_MARGIN)
+  const patrolDirection = ref('')
+  const agentSpriteState = ref('')
+  const reactionSpriteState = ref('')
+  const pageHidden = ref(false)
+  const spriteState = computed(() => {
+    // 打开面板保持正常待机(idle)；仅 AI 作答时由 agentSpriteState 进入思考/忙碌态
+    if (reactionSpriteState.value) return reactionSpriteState.value
+    if (agentSpriteState.value) return agentSpriteState.value
+    if (patrolDirection.value) return patrolDirection.value
+    return 'idle'
+  })
+  const spritePaused = computed(() => spriteHovered.value || pageHidden.value)
   let chatStreamAbort = null
   let stopThinkingRotation = null
   let idleTipsTimer = null
+  let idleFirstTipTimer = null
   let stageTipTimer = null
+  let patrolDelayTimer = null
+  let patrolAnimationFrame = 0
+  let patrolTargetX = SPRITE_EDGE_MARGIN
+  let patrolLastTimestamp = 0
   const stageTipText = ref('')
 
   function clearStageCloudTip() {
@@ -205,11 +284,6 @@ export function useMascotDock() {
       stageTipTimer = null
     }
     stageTipText.value = ''
-    try {
-      oml2d.value?.tipsMessage?.('', 0, 0)
-    } catch {
-      /* ignore */
-    }
   }
 
   function showStageCloudTip(text, durationMs = 3000) {
@@ -218,7 +292,7 @@ export function useMascotDock() {
       clearStageCloudTip()
       return
     }
-    if (assistantOpen.value || stageUseFallback.value) return
+    if (assistantOpen.value || loading.value || spriteState.value !== 'idle') return
     clearStageCloudTip()
     stageTipText.value = msg
     if (durationMs > 0) {
@@ -230,20 +304,35 @@ export function useMascotDock() {
   }
 
   function stopMascotIdleTips() {
+    if (idleFirstTipTimer) {
+      clearTimeout(idleFirstTipTimer)
+      idleFirstTipTimer = null
+    }
     if (idleTipsTimer) {
       clearInterval(idleTipsTimer)
+      clearTimeout(idleTipsTimer)
       idleTipsTimer = null
     }
   }
 
   function startMascotIdleTips() {
     stopMascotIdleTips()
-    const show = () => {
-      if (assistantOpen.value || stageUseFallback.value) return
-      showStageCloudTip(pickMascotIdlePhrase(), 4200)
+    const randomDelay = () => {
+      return IDLE_TIP_MIN_INTERVAL_MS + Math.floor(Math.random() * Math.max(1, IDLE_TIP_MAX_INTERVAL_MS - IDLE_TIP_MIN_INTERVAL_MS + 1))
     }
-    setTimeout(show, 4000)
-    idleTipsTimer = setInterval(show, 26000 + Math.floor(Math.random() * 14000))
+
+    const tick = () => {
+      if (assistantOpen.value || loading.value || spriteState.value !== 'idle') {
+        idleTipsTimer = setTimeout(tick, randomDelay())
+        return
+      }
+      if (Math.random() <= IDLE_TIP_TRIGGER_WEIGHT) {
+        showStageCloudTip(MASCOT_IDLE_TIP_TEXT, 4200)
+      }
+      idleTipsTimer = setTimeout(tick, randomDelay())
+    }
+
+    idleFirstTipTimer = setTimeout(tick, IDLE_TIP_FIRST_DELAY_MS)
   }
 
   function clearThinkingRotation() {
@@ -274,15 +363,6 @@ export function useMascotDock() {
 
   const activeImageOption = computed(() => findImageQualityOption(imageQuality.value) || IMAGE_MODEL_OPTIONS[0])
 
-  const scalePopoverOpen = ref(false)
-  
-  const dragOffset = ref({ x: 0, y: 0 })
-  const stageScale = ref(0.5)
-  
-  let stageGesture = false
-  let stageMoved = false
-  let stageStart = { px: 0, py: 0, ox: 0, oy: 0 }
-  
   const inputPlaceholder = computed(() => {
     return '随心输入'
   })
@@ -327,7 +407,6 @@ export function useMascotDock() {
   
   const sessionListForNav = computed(() => {
     const nav = activeNav.value
-    if (nav === 'appearance') return []
     return [...(localSessionsByMode.value[nav] || [])]
   })
 
@@ -394,7 +473,6 @@ export function useMascotDock() {
       })
       localStorage.setItem(localSessionsStorageKey(), payload)
     } catch {
-      /* ignore */
     }
   }
 
@@ -411,13 +489,11 @@ export function useMascotDock() {
       applySessionsPayload(JSON.parse(raw))
       saveLocalSessionsToStorage()
     } catch {
-      /* ignore */
     }
   }
 
   function persistCurrentMessages() {
     const nav = activeNav.value
-    if (nav === 'appearance') return
     const id = activeLocalSessionId.value[nav]
     if (!id) return
     const list = [...(localSessionsByMode.value[nav] || [])]
@@ -439,7 +515,6 @@ export function useMascotDock() {
 
   function ensureActiveSession(nav) {
     const n = nav || activeNav.value
-    if (n === 'appearance') return ''
     let list = [...(localSessionsByMode.value[n] || [])]
     let id = activeLocalSessionId.value[n]
     if (!id || !list.some((s) => s.id === id)) {
@@ -482,46 +557,65 @@ export function useMascotDock() {
       try {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
-          messages.value = mapVoToMessages(res.data)
+          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), sess.messages || [])
           await restoreRelatedRecommendations(id)
+          restoreAskWizardFromMessages()
           cacheSessionMessages(nav, id, messages.value)
           scrollFsToBottom()
           await refreshContextWindow()
           return
         }
       } catch {
-        /* fallback local */
       }
     }
     messages.value = (sess.messages || []).map((m) => ({ ...m }))
     await restoreRelatedRecommendations(id)
+    restoreAskWizardFromMessages()
     scrollFsToBottom()
     await refreshContextWindow()
   }
 
-  async function renameSession(session) {
+  function startRenameSession(session) {
     const id = String(session?.id || '')
     const nav = activeNav.value
-    if (!id || nav === 'appearance' || renamingSessionId.value || deletingSessionId.value) return
-    let title = ''
-    try {
-      const result = await ElMessageBox.prompt('', uiLabels.renameSession, {
-        inputValue: String(session.title || '').trim(),
-        inputPlaceholder: '',
-        customClass: 'mascot-session-rename-dialog',
-        inputValidator: (value) => {
-          const text = String(value || '').trim()
-          if (!text) return '会话名称不能为空'
-          if (text.length > 48) return '会话名称最长 48 个字符'
-          return true
-        },
-      })
-      title = String(result.value || '').trim()
-    } catch {
+    if (!id || renamingSessionId.value || deletingSessionId.value) return
+    renamingSessionId.value = id
+    renameDraft.value = String(session.title || '').trim()
+    nextTick(() => {
+      focusRenameInput()
+    })
+  }
+
+  function focusRenameInput() {
+    const input = Array.isArray(renameInputRef.value)
+      ? renameInputRef.value[0]
+      : renameInputRef.value
+    input?.focus()
+    input?.select()
+  }
+
+  function cancelRenameSession() {
+    if (renameSubmitting.value) return
+    renamingSessionId.value = ''
+    renameDraft.value = ''
+  }
+
+  async function commitRenameSession(session) {
+    const id = String(session?.id || '')
+    const nav = activeNav.value
+    if (!id || String(renamingSessionId.value) !== id || renameSubmitting.value) return
+    const title = String(renameDraft.value || '').trim()
+    if (!title) {
+      ElMessage.warning('会话名称不能为空')
+      cancelRenameSession()
+      return
+    }
+    if (title === String(session.title || '').trim()) {
+      cancelRenameSession()
       return
     }
 
-    renamingSessionId.value = id
+    renameSubmitting.value = true
     try {
       if (userStore.isLoggedIn && /^\d+$/.test(id)) {
         const res = await renameCompanionSession(id, { title })
@@ -537,19 +631,22 @@ export function useMascotDock() {
         saveLocalSessionsToStorage()
       }
       ElMessage.success('会话名称已更新')
+      renamingSessionId.value = ''
+      renameDraft.value = ''
     } catch (error) {
       ElMessage.error(error?.message || '修改失败')
+      nextTick(focusRenameInput)
     } finally {
-      renamingSessionId.value = ''
+      renameSubmitting.value = false
     }
   }
 
   async function deleteSession(session) {
     const id = String(session?.id || '')
     const nav = activeNav.value
-    if (!id || nav === 'appearance' || deletingSessionId.value) return
+    if (!id || deletingSessionId.value) return
     try {
-      await ElMessageBox.confirm(
+      await confirmDialog(
         '删除后会话记录无法恢复，确认继续？',
         '删除会话',
         {
@@ -625,6 +722,48 @@ export function useMascotDock() {
     })
   }
 
+  // 服务端消息无用量字段；用本地缓存按 messageId / url / 位置合并，保证重新进入仍显示
+  function mergeLocalMessageExtras(serverRows, localRows) {
+    const locals = Array.isArray(localRows) ? localRows : []
+    const byId = new Map()
+    const byUrl = new Map()
+    locals.forEach((item) => {
+      if (item?.messageId != null && item.messageId !== '') {
+        byId.set(String(item.messageId), item)
+      }
+      if (item?.type === 'image' && item?.url) {
+        byUrl.set(String(item.url), item)
+      }
+    })
+    let localAssistantIdx = 0
+    const localAssistants = locals.filter((item) => item?.role === 'assistant')
+    return (serverRows || []).map((row) => {
+      let local = null
+      if (row.messageId != null && row.messageId !== '') {
+        local = byId.get(String(row.messageId)) || null
+      }
+      if (!local && row.type === 'image' && row.url) {
+        local = byUrl.get(String(row.url)) || null
+      }
+      if (!local && row.role === 'assistant') {
+        local = localAssistants[localAssistantIdx] || null
+        localAssistantIdx += 1
+      } else if (row.role === 'assistant') {
+        localAssistantIdx += 1
+      }
+      if (!local) return row
+      const next = { ...row }
+      if (local.usageStats && !next.usageStats) next.usageStats = local.usageStats
+      if (local.relatedSearchOffer && !next.relatedSearchOffer) {
+        next.relatedSearchOffer = { ...local.relatedSearchOffer, loading: false }
+      }
+      if (local.askConfirmOffer && !next.askConfirmOffer) {
+        next.askConfirmOffer = { ...local.askConfirmOffer }
+      }
+      return next
+    })
+  }
+
   function isLatestRegeneratableAssistant(index) {
     if (loading.value) return false
     const lastIdx = messages.value.length - 1
@@ -634,7 +773,7 @@ export function useMascotDock() {
   }
   
   async function syncServerSessions(nav) {
-    if (!userStore.isLoggedIn || nav === 'appearance' || nav === 'drawing') return
+    if (!userStore.isLoggedIn || nav === 'drawing') return
     try {
       const res = await getCompanionSessions('chat')
       if (res.code !== 0 || !Array.isArray(res.data) || !res.data.length) return
@@ -659,35 +798,55 @@ export function useMascotDock() {
       localSessionsByMode.value = { ...localSessionsByMode.value, chat: merged }
       saveLocalSessionsToStorage()
     } catch {
-      /* ignore */
     }
   }
 
   async function loadMessagesForNav(nav) {
-    if (nav === 'appearance') {
-      messages.value = []
-      return
-    }
     ensureActiveSession(nav)
     const id = activeLocalSessionId.value[nav]
+    const localSess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
+    const localMsgs = localSess ? (localSess.messages || []) : []
     if (userStore.isLoggedIn && /^\d+$/.test(String(id))) {
       try {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
-          messages.value = mapVoToMessages(res.data)
+          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), localMsgs)
           await restoreRelatedRecommendations(id)
+          restoreAskWizardFromMessages()
           cacheSessionMessages(nav, id, messages.value)
           scrollFsToBottom()
           return
         }
       } catch {
-        /* fallback local */
       }
     }
-    const sess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
-    messages.value = sess ? (sess.messages || []).map((m) => ({ ...m })) : []
+    messages.value = localMsgs.map((m) => ({ ...m }))
     await restoreRelatedRecommendations(id)
+    restoreAskWizardFromMessages()
     scrollFsToBottom()
+  }
+
+  function restoreAskWizardFromMessages() {
+    askWizard.value = null
+    for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+      const message = messages.value[i]
+      if (message?.askConfirmOffer?.questions?.length) {
+        openAskWizard(message, message.askConfirmOffer)
+        return
+      }
+      // 旧缓存：单题 drawConfirmOffer
+      if (message?.drawConfirmOffer?.options?.length) {
+        openAskWizard(message, {
+          purpose: 'draw',
+          questions: [{
+            id: 'q1',
+            question: message.drawConfirmOffer.question || '想画哪个主题？',
+            options: message.drawConfirmOffer.options,
+          }],
+        })
+        return
+      }
+    }
   }
 
   async function restoreRelatedRecommendations(id) {
@@ -728,7 +887,7 @@ export function useMascotDock() {
         })
       }
     } catch {
-      /* 已加载会话消息时，推荐恢复失败不影响对话 */
+      // 已加载会话消息时，推荐恢复失败不影响对话
     }
   }
 
@@ -755,22 +914,204 @@ export function useMascotDock() {
     const sid = String(meta.sessionId)
     if (!/^\d+$/.test(sid)) return
     const nav = activeNav.value
-    if (nav === 'appearance') return
+    const previousId = String(sessionId.value || activeLocalSessionId.value[nav] || '')
     sessionId.value = sid
     activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: sid }
     const list = [...(localSessionsByMode.value[nav] || [])]
-    const idx = list.findIndex((s) => String(s.id) === sid)
-    if (idx < 0) {
-      const firstUser = messages.value.find((m) => m.role === 'user' && m.type !== 'image')
-      list.push({
+    const serverIndex = list.findIndex((session) => String(session.id) === sid)
+    const provisionalIndex = /^\d+$/.test(previousId)
+      ? -1
+      : list.findIndex((session) => String(session.id) === previousId)
+    const firstUser = messages.value.find((message) => message.role === 'user' && message.type !== 'image')
+    const currentTitle = (firstUser?.content || '').trim().slice(0, 28) || uiLabels.untitledSession
+    if (serverIndex >= 0) {
+      list[serverIndex] = {
+        ...list[serverIndex],
+        title: list[serverIndex].title || currentTitle,
+        messages: messages.value.map((message) => ({ ...message })),
+        updateTime: Date.now(),
+      }
+      if (provisionalIndex >= 0 && provisionalIndex !== serverIndex) {
+        list.splice(provisionalIndex, 1)
+      }
+    } else if (provisionalIndex >= 0) {
+      list[provisionalIndex] = {
+        ...list[provisionalIndex],
         id: sid,
-        title: (firstUser?.content || '').trim().slice(0, 28) || uiLabels.untitledSession,
-        messages: [],
+        title: currentTitle,
+        messages: messages.value.map((message) => ({ ...message })),
+        updateTime: Date.now(),
+      }
+    } else {
+      list.unshift({
+        id: sid,
+        title: currentTitle,
+        messages: messages.value.map((message) => ({ ...message })),
         updateTime: Date.now(),
       })
     }
     localSessionsByMode.value = { ...localSessionsByMode.value, [nav]: list }
     saveLocalSessionsToStorage()
+  }
+
+  const ASK_LETTERS = ['A', 'B', 'C', 'D']
+  /** 分步 Ask 向导：挂在最新 askConfirmOffer 上，答完再一次性发给模型 */
+  const askWizard = ref(null)
+  // { message, purpose, questions, index, answers: [{label,value}|null], customText, submitting }
+
+  function normalizeAskQuestions(rawQuestions) {
+    if (!Array.isArray(rawQuestions)) return []
+    return rawQuestions.slice(0, 5).map((item, index) => {
+      const options = (Array.isArray(item?.options) ? item.options : [])
+        .map((opt) => {
+          const label = String(opt?.label || '').trim().slice(0, 40)
+          if (!label || /自定义|其他|其它|都不是/.test(label)) return null
+          const value = String(opt?.value || opt?.prompt || label).trim().slice(0, 800)
+          if (!label || !value) return null
+          return { label, value }
+        })
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((opt, oi) => ({ ...opt, letter: ASK_LETTERS[oi] }))
+      if (options.length < 2) return null
+      return {
+        id: String(item?.id || `q${index + 1}`).slice(0, 32),
+        question: String(item?.question || '').trim().slice(0, 120),
+        options,
+      }
+    }).filter((item) => item && item.question)
+  }
+
+  function openAskWizard(message, offer) {
+    const questions = normalizeAskQuestions(offer?.questions)
+    if (!questions.length) return
+    askWizard.value = {
+      message,
+      purpose: String(offer?.purpose || 'clarify'),
+      questions,
+      index: 0,
+      answers: questions.map(() => null),
+      customText: '',
+      submitting: false,
+    }
+  }
+
+  const activeAsk = computed(() => {
+    const wizard = askWizard.value
+    if (!wizard?.questions?.length) return null
+    // 流式未结束不展示，避免抢在正文前面
+    if (wizard.message?.streaming) return null
+    const q = wizard.questions[wizard.index]
+    if (!q) return null
+    return {
+      ...wizard,
+      current: q,
+      total: wizard.questions.length,
+      step: wizard.index + 1,
+      isFirst: wizard.index <= 0,
+      isLast: wizard.index >= wizard.questions.length - 1,
+    }
+  })
+
+  function clearAskOffersAndWizard() {
+    let changed = false
+    messages.value.forEach((item) => {
+      if (item?.askConfirmOffer || item?.drawConfirmOffer) {
+        item.askConfirmOffer = null
+        item.drawConfirmOffer = null
+        changed = true
+      }
+    })
+    askWizard.value = null
+    if (changed) persistCurrentMessages()
+  }
+
+  function dismissActiveAsk() {
+    clearAskOffersAndWizard()
+  }
+
+  function askGoBack() {
+    const wizard = askWizard.value
+    if (!wizard || wizard.submitting || loading.value || wizard.index <= 0) return
+    wizard.index -= 1
+    const prev = wizard.answers[wizard.index]
+    wizard.customText = prev?.custom ? String(prev.value || '') : ''
+  }
+
+  function buildAskConfirmMessage(wizard) {
+    const lines = ['【用户澄清回答】']
+    wizard.questions.forEach((q, i) => {
+      const ans = wizard.answers[i]
+      if (!ans) return
+      lines.push(`Q${i + 1}：${q.question}`)
+      lines.push(`选择：${ans.label}`)
+      if (ans.value && ans.value !== ans.label) {
+        lines.push(`说明：${ans.value}`)
+      }
+      lines.push('')
+    })
+    lines.push('请根据以上澄清继续处理我之前的请求，不要再重复同样的问题。')
+    return lines.join('\n').trim()
+  }
+
+  async function commitAskAnswer(answer) {
+    const wizard = askWizard.value
+    if (!wizard || wizard.submitting || loading.value || !answer) return
+    wizard.answers[wizard.index] = answer
+    wizard.customText = ''
+    if (wizard.index < wizard.questions.length - 1) {
+      wizard.index += 1
+      const next = wizard.answers[wizard.index]
+      wizard.customText = next?.custom ? String(next.value || '') : ''
+      return
+    }
+    wizard.submitting = true
+    const snapshot = {
+      purpose: wizard.purpose,
+      questions: wizard.questions.map((q) => ({
+        id: q.id,
+        question: q.question,
+        options: q.options.map(({ label, value }) => ({ label, value })),
+      })),
+      answers: wizard.answers.map((a) => (a ? { ...a } : null)),
+      message: wizard.message,
+    }
+    const text = buildAskConfirmMessage(wizard)
+    clearAskOffersAndWizard()
+    try {
+      await sendInternal(text)
+    } catch {
+      if (snapshot.message) {
+        snapshot.message.askConfirmOffer = {
+          purpose: snapshot.purpose,
+          questions: snapshot.questions,
+        }
+      }
+      askWizard.value = {
+        message: snapshot.message,
+        purpose: snapshot.purpose,
+        questions: normalizeAskQuestions(snapshot.questions),
+        index: Math.max(0, snapshot.questions.length - 1),
+        answers: snapshot.answers,
+        customText: '',
+        submitting: false,
+      }
+      persistCurrentMessages()
+    }
+  }
+
+  function pickAskOption(option) {
+    const label = String(option?.label || '').trim()
+    const value = String(option?.value || '').trim()
+    if (!label || !value) return
+    commitAskAnswer({ label, value, custom: false })
+  }
+
+  function submitAskCustom() {
+    const wizard = askWizard.value
+    const custom = String(wizard?.customText || '').trim()
+    if (!wizard || !custom) return
+    commitAskAnswer({ label: '补充说明', value: custom, custom: true })
   }
 
   function dismissRelatedSearchOffer(message) {
@@ -876,7 +1217,8 @@ export function useMascotDock() {
 
   async function compressContext({ automatic = false } = {}) {
     const id = String(sessionId.value || '')
-    if (!/^\d+$/.test(id) || contextCompressing.value) return
+    // AI 作答中禁止压缩，避免与流式会话抢状态
+    if (!/^\d+$/.test(id) || contextCompressing.value || loading.value) return
     contextCompressing.value = true
     try {
       const res = await compressCompanionContext(id)
@@ -885,13 +1227,67 @@ export function useMascotDock() {
         contextWindow.value = res.data
       }
       await loadMessagesForNav(activeNav.value)
-      // 压缩后始终从服务端回读，避免只刷新消息列表而上下文进度条仍是旧值。
+      // 压缩后始终从服务端回读，避免只刷新消息列表而上下文进度条仍是旧值
       await refreshContextWindow({ autoCompress: false })
       if (!automatic) ElMessage.success('上下文已压缩')
     } catch (error) {
       ElMessage.error(error?.message || '上下文压缩失败')
     } finally {
       contextCompressing.value = false
+    }
+  }
+
+  async function refreshMascotMemory() {
+    if (!userStore.isLoggedIn) {
+      memorySummary.value = ''
+      memoryFacts.value = []
+      return
+    }
+    try {
+      const res = await getMascotMemory()
+      const data = res?.data || {}
+      memorySummary.value = String(data.summary || '').trim().slice(0, MEMORY_SUMMARY_MAX)
+      const facts = Array.isArray(data.facts) ? data.facts : []
+      memoryFacts.value = facts
+        .map((item) => String(item || '').trim().slice(0, MEMORY_FACT_ITEM_MAX))
+        .filter(Boolean)
+        .slice(0, MEMORY_FACTS_MAX)
+    } catch {
+      memorySummary.value = ''
+      memoryFacts.value = []
+    }
+  }
+
+  async function openMemoryDialog() {
+    if (!await ensureLoggedIn({ message: '登录后才能查看记忆' })) return
+    memoryEditDraft.value = ''
+    memoryDialogVisible.value = true
+    await refreshMascotMemory()
+  }
+
+  async function submitMemoryEdit() {
+    const instruction = String(memoryEditDraft.value || '').trim()
+    if (!instruction || memorySaving.value) return
+    if (instruction.length > MEMORY_EDIT_MAX) {
+      ElMessage.warning(`修改说明不能超过 ${MEMORY_EDIT_MAX} 字`)
+      return
+    }
+    memorySaving.value = true
+    try {
+      const res = await editMascotMemory({ instruction })
+      const data = res?.data || {}
+      memorySummary.value = String(data.summary || '').trim().slice(0, MEMORY_SUMMARY_MAX)
+      const facts = Array.isArray(data.facts) ? data.facts : []
+      memoryFacts.value = facts
+        .map((item) => String(item || '').trim().slice(0, MEMORY_FACT_ITEM_MAX))
+        .filter(Boolean)
+        .slice(0, MEMORY_FACTS_MAX)
+      memoryEditDraft.value = ''
+      ElMessage.success('记忆已更新')
+    } catch (error) {
+      ElMessage.error(error?.message || '记忆更新失败')
+    } finally {
+      memorySaving.value = false
     }
   }
 
@@ -932,6 +1328,9 @@ export function useMascotDock() {
 
   function notifyAiBilling(payload) {
     if (!payload) return
+    if (payload.quotaFallbackToPoints) {
+      ElMessage.success('额度已用完，已自动改用萌币')
+    }
     if (payload.billingMode === 'points' && Number(payload.pointsCost) > 0) {
       ElMessage.success(`已扣 ${payload.pointsCost} 萌币`)
       pointsWallet.refresh?.()
@@ -939,7 +1338,8 @@ export function useMascotDock() {
   }
 
   async function refreshQuotaHint() {
-    if (!userStore.isLoggedIn || !isVip.value || activeNav.value === 'drawing') {
+    void refreshQuotaPanel()
+    if (!userStore.isLoggedIn || activeNav.value === 'drawing') {
       quotaHint.value = { percent: 0, canUsePointsPay: false, quotaLabel: '' }
       return
     }
@@ -951,26 +1351,38 @@ export function useMascotDock() {
     }
   }
 
+  async function refreshQuotaPanel() {
+    if (!userStore.isLoggedIn) {
+      quotaPanel.value = null
+      return
+    }
+    try {
+      const res = await getVipQuota()
+      quotaPanel.value = res?.data || null
+    } catch {
+      quotaPanel.value = null
+    }
+  }
+
   async function togglePointsPay() {
     if (usePointsBilling.value) {
       usePointsBilling.value = false
       return
     }
     try {
-      await ElMessageBox.confirm(
-        '当前模型会员额度即将用尽。开启后将按实际 token 消耗萌币积分，费用可能较高，请谨慎开启。确认继续？',
+      await confirmDialog(
+        '当前所选能力的方案额度已用尽。开启后将按实际用量消耗萌币，确认继续？',
         '使用萌币积分',
         { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' },
       )
       usePointsBilling.value = true
       refreshEstimate()
     } catch {
-      /* cancelled */
     }
   }
   
   async function refreshEstimate() {
-    if (!userStore.isLoggedIn || activeNav.value === 'appearance') {
+    if (!userStore.isLoggedIn) {
       estimatePoints.value = null
       return
     }
@@ -998,7 +1410,6 @@ export function useMascotDock() {
 
   function startNewSession() {
     const nav = activeNav.value
-    if (nav === 'appearance') return
     if (isCurrentSessionEmpty()) {
       ElMessage.info(uiLabels.alreadyNewSession)
       return
@@ -1015,14 +1426,7 @@ export function useMascotDock() {
     saveLocalSessionsToStorage()
   }
   
-  const companionAvatarSrc = computed(() => {
-    const code = (activeCode.value || '').toLowerCase()
-    if (code === 'xiaomai')
-      return companionXiaomai
-    if (code === 'snow_miku' || code.includes('miku'))
-      return companionMiku
-    return companionMiku
-  })
+  const companionAvatarSrc = DEFAULT_AVATAR
   
   const ringVipTier = computed(() => {
     if (!userStore.isLoggedIn || !isVip.value)
@@ -1033,50 +1437,13 @@ export function useMascotDock() {
     return t > 0 ? t : 1
   })
   
-  function anchorStageToViewportBottomRight() {
-    dragOffset.value = { x: 0, y: 0 }
-  }
-
-  function clampDragOffset() {
-    if (typeof window === 'undefined') return
-    const wrapW = stageSize.value.w
-    const wrapH = stageSize.value.h
-    const margin = 12
-    const minX = -(window.innerWidth - wrapW - margin * 2)
-    const minY = -(window.innerHeight - wrapH - margin * 2)
-    dragOffset.value = {
-      x: Math.min(0, Math.max(minX, dragOffset.value.x)),
-      y: Math.min(0, Math.max(minY, dragOffset.value.y)),
-    }
-  }
-
-  function loadSavedOffset() {
+  function loadSavedPreferences() {
     try {
-      const anchored = sessionStorage.getItem(ANCHOR_KEY)
-      if (!anchored) {
-        anchorStageToViewportBottomRight()
-        sessionStorage.setItem(ANCHOR_KEY, '1')
-      } else {
-        const raw = sessionStorage.getItem(OFFSET_KEY)
-        if (raw) {
-          const o = JSON.parse(raw)
-          if (typeof o.x === 'number' && typeof o.y === 'number') {
-            dragOffset.value = { x: o.x, y: o.y }
-          }
-        }
-      }
-      const rawS = sessionStorage.getItem(SCALE_KEY)
-      if (rawS) {
-        const s = parseFloat(rawS)
-        if (!Number.isNaN(s) && s >= 0.35 && s <= 1.45) {
-          stageScale.value = s
-        }
-      }
       const chat = localStorage.getItem(LLM_CHAT_KEY)
       const w = localStorage.getItem(LLM_WRITING_KEY)
       const h = localStorage.getItem(LLM_HELP_KEY)
       const legacy = localStorage.getItem('mascot_llm_provider_v1')
-      const legacyMap = { qwen: 'qwen-flash', openai: 'qwen-flash' }
+      const legacyMap = { qwen: 'qwen-flash' }
       const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
       const pick = chat || w || h || leg
       if (pick && ALL_LLM_OPTIONS.some(x => x.id === pick))
@@ -1084,28 +1451,10 @@ export function useMascotDock() {
       else
         selectedLlmChat.value = 'qwen-flash'
       const q = localStorage.getItem(IMAGE_QUALITY_KEY)
-      if (q === 'normal' || q === 'premium')
+      if (q === 'normal')
         imageQuality.value = q
     }
     catch {
-      /* ignore */
-    }
-    clampDragOffset()
-  }
-  
-  function saveOffset() {
-    try {
-      sessionStorage.setItem(OFFSET_KEY, JSON.stringify(dragOffset.value))
-    } catch {
-      /* ignore */
-    }
-  }
-  
-  function saveScale() {
-    try {
-      sessionStorage.setItem(SCALE_KEY, String(stageScale.value))
-    } catch {
-      /* ignore */
     }
   }
   
@@ -1115,7 +1464,6 @@ export function useMascotDock() {
       localStorage.setItem(IMAGE_QUALITY_KEY, imageQuality.value)
     }
     catch {
-      /* ignore */
     }
   }
   
@@ -1146,276 +1494,183 @@ export function useMascotDock() {
     }
   }, { immediate: false })
 
-  watch(stageScale, () => {
-    applyStageScaleToLib()
-    clampDragOffset()
-  })
-  
-  const stageSize = computed(() => ({
-    w: Math.round(STAGE_BASE_W * stageScale.value),
-    h: Math.round(STAGE_BASE_H * stageScale.value),
-  }))
-
-  const stageWrapStyle = computed(() => ({
-    width: `${stageSize.value.w}px`,
-    height: `${stageSize.value.h}px`,
-  }))
-
-  const stageHostStyle = computed(() => ({
-    width: `${stageSize.value.w}px`,
-    height: `${stageSize.value.h}px`,
-  }))
-  
-  const rootStyle = computed(() => ({
-    transform: `translate(${dragOffset.value.x}px, ${dragOffset.value.y}px)`,
-  }))
-
   watch(assistantOpen, (open) => {
     if (open) {
       stopMascotIdleTips()
       clearStageCloudTip()
-    } else if (!stageUseFallback.value) {
-      startMascotIdleTips()
-    }
-  })
-  
-  function applyStageScaleToLib() {
-    const { w, h } = stageSize.value
-    try {
-      oml2d.value?.setStageStyle?.({ width: w, height: h })
-    } catch {
-      /* ignore */
-    }
-    const idx = catalog.value.findIndex((m) => m.code === activeCode.value)
-    if (idx >= 0) applyModelMetricsForIndex(idx)
-  }
-  
-  function onScaleSliderChange() {
-    saveScale()
-    applyStageScaleToLib()
-    clampDragOffset()
-    saveOffset()
-  }
-  
-  function onStageLeave() {
-    if (!scalePopoverOpen.value)
-      stageHovered.value = false
-  }
-  
-  function onStagePointerDown(e) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.preventDefault()
-    stageGesture = true
-    stageMoved = false
-    stageStart = {
-      px: e.clientX,
-      py: e.clientY,
-      ox: dragOffset.value.x,
-      oy: dragOffset.value.y,
-    }
-    window.addEventListener('pointermove', onStagePointerMove)
-    window.addEventListener('pointerup', onStagePointerUp)
-    window.addEventListener('pointercancel', onStagePointerUp)
-    try {
-      e.currentTarget?.setPointerCapture?.(e.pointerId)
-    } catch {
-      /* ignore */
-    }
-  }
-  
-  function onStagePointerMove(e) {
-    if (!stageGesture) return
-    const dx = e.clientX - stageStart.px
-    const dy = e.clientY - stageStart.py
-    if (Math.hypot(dx, dy) > 7)
-      stageMoved = true
-    if (stageMoved) {
-      dragOffset.value = {
-        x: stageStart.ox + dx,
-        y: stageStart.oy + dy,
-      }
-    }
-  }
-  
-  function onStagePointerUp() {
-    if (!stageGesture) return
-    stageGesture = false
-    window.removeEventListener('pointermove', onStagePointerMove)
-    window.removeEventListener('pointerup', onStagePointerUp)
-    window.removeEventListener('pointercancel', onStagePointerUp)
-    if (stageMoved) {
-      clampDragOffset()
-      saveOffset()
+      cancelPatrol()
     }
     else {
-      if (!userStore.isLoggedIn) {
-        void ensureLoggedIn('与看板娘互动需要登录')
-        return
-      }
-      assistantOpen.value = !assistantOpen.value
+      startMascotIdleTips()
+      schedulePatrol()
     }
-    stageMoved = false
+  })
+
+  function viewportMaxX() {
+    if (typeof window === 'undefined') return SPRITE_EDGE_MARGIN
+    return Math.max(SPRITE_EDGE_MARGIN, window.innerWidth - SPRITE_WIDTH - SPRITE_EDGE_MARGIN)
   }
-  
-  function live2dAssetUrl(rel) {
-    const raw = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '')
-    const prefix = raw ? `${raw}/live2d-assets` : '/live2d-assets'
-    return `${prefix}/${rel.split('/').filter(Boolean).map((s) => encodeURIComponent(s)).join('/')}`
+
+  function clampSpriteX() {
+    spriteX.value = Math.min(viewportMaxX(), Math.max(SPRITE_EDGE_MARGIN, spriteX.value))
   }
-  
-  function modelStageMetrics(m) {
-    const s = stageScale.value
-    const needsBoost = m.code === 'xiaomai'
-    const baseScale = Number(m.modelScale) || 0.1
-    let scale = needsBoost
-      ? Math.min(0.35, Math.max(baseScale * 1.45, baseScale + 0.04))
-      : baseScale
-    scale *= s
-    const posY = (needsBoost ? Math.max(0, (m.posY ?? 72) - 10) : (m.posY ?? 72)) * s
-    let posX = (m.posX ?? 0) * s
-    if (m.code === 'snow_miku')
-      posX -= 90 * s
-    return {
-      scale,
-      position: [posX, posY],
+
+  function randomBetween(min, max) {
+    return min + Math.random() * Math.max(0, max - min)
+  }
+
+  function canPatrol() {
+    return spriteReady.value
+      && !assistantOpen.value
+      && !loading.value
+      && !agentSpriteState.value
+      && !reactionSpriteState.value
+      && !pageHidden.value
+  }
+
+  function clearPatrolDelay() {
+    if (patrolDelayTimer) {
+      clearTimeout(patrolDelayTimer)
+      patrolDelayTimer = null
     }
   }
 
-  function buildModelsPayload() {
-    return catalog.value.map((m) => {
-      const { scale, position } = modelStageMetrics(m)
-      return {
-        name: m.code,
-        path: live2dAssetUrl(m.modelRelPath),
-        scale,
-        position,
-        stageStyle: { width: stageSize.value.w, height: stageSize.value.h },
-      }
-    })
+  function cancelPatrol() {
+    clearPatrolDelay()
+    if (patrolAnimationFrame) {
+      cancelAnimationFrame(patrolAnimationFrame)
+      patrolAnimationFrame = 0
+    }
+    patrolDirection.value = ''
+    patrolLastTimestamp = 0
   }
 
-  let oml2dLoadChain = Promise.resolve()
-
-  function runOml2dLoad(task) {
-    const next = oml2dLoadChain.then(() => task())
-    oml2dLoadChain = next.catch(() => {})
-    return next
+  function schedulePatrol(delayMs = randomBetween(SPRITE_IDLE_MIN_MS, SPRITE_IDLE_MAX_MS)) {
+    cancelPatrol()
+    if (!canPatrol()) return
+    patrolDelayTimer = setTimeout(beginPatrol, delayMs)
   }
 
-  function seedOml2dModelIndex(idx) {
-    try {
-      localStorage.setItem('OML2D_MODEL_INDEX', String(Math.max(0, idx)))
-      localStorage.setItem('OML2D_MODEL_CLOTHES_INDEX', '0')
+  function beginPatrol() {
+    patrolDelayTimer = null
+    if (!canPatrol()) return
+    if (Math.random() > SPRITE_PATROL_CHANCE) {
+      schedulePatrol()
+      return
     }
-    catch {
-      /* Edge 跟踪防护等场景可能禁用 localStorage */
+    const minX = SPRITE_EDGE_MARGIN
+    const maxX = viewportMaxX()
+    if (maxX <= minX) return
+    const distance = Math.min(maxX - minX, randomBetween(SPRITE_MIN_TRAVEL, SPRITE_MAX_TRAVEL))
+    let direction = Math.random() < 0.5 ? -1 : 1
+    if (spriteX.value - distance < minX) direction = 1
+    if (spriteX.value + distance > maxX) direction = -1
+    patrolTargetX = Math.min(maxX, Math.max(minX, spriteX.value + direction * distance))
+    if (Math.abs(patrolTargetX - spriteX.value) < 1) {
+      schedulePatrol()
+      return
     }
+    patrolDirection.value = direction > 0 ? 'running-right' : 'running-left'
+    clearStageCloudTip()
+    patrolLastTimestamp = 0
+    patrolAnimationFrame = requestAnimationFrame(stepPatrol)
   }
 
-  function applyModelMetricsForIndex(idx) {
-    const payload = buildModelsPayload()[idx]
-    if (!payload || !oml2d.value) return
-    try {
-      oml2d.value.setModelScale?.(payload.scale)
-      oml2d.value.setModelPosition?.(payload.position)
+  function stepPatrol(timestamp) {
+    if (!canPatrol()) {
+      cancelPatrol()
+      return
     }
-    catch {
-      /* ignore */
+    if (spriteHovered.value) {
+      patrolLastTimestamp = timestamp
+      patrolAnimationFrame = requestAnimationFrame(stepPatrol)
+      return
     }
+    if (!patrolLastTimestamp) patrolLastTimestamp = timestamp
+    const elapsedSeconds = Math.min(0.05, (timestamp - patrolLastTimestamp) / 1000)
+    patrolLastTimestamp = timestamp
+    const direction = patrolTargetX >= spriteX.value ? 1 : -1
+    const nextX = spriteX.value + direction * SPRITE_SPEED_PX_PER_SECOND * elapsedSeconds
+    const arrived = direction > 0 ? nextX >= patrolTargetX : nextX <= patrolTargetX
+    spriteX.value = arrived ? patrolTargetX : nextX
+    if (arrived) {
+      patrolAnimationFrame = 0
+      patrolDirection.value = ''
+      patrolLastTimestamp = 0
+      schedulePatrol()
+      return
+    }
+    patrolAnimationFrame = requestAnimationFrame(stepPatrol)
   }
 
-  function waitOml2dLoad(inst, timeoutMs = 25000) {
-    return new Promise((resolve, reject) => {
-      if (!inst?.onLoad) {
-        resolve()
-        return
-      }
-      let settled = false
-      const timer = setTimeout(() => {
-        if (settled) return
-        settled = true
-        reject(new Error('oml2d load timeout'))
-      }, timeoutMs)
-      inst.onLoad((status) => {
-        if (settled) return
-        if (status === 'success') {
-          settled = true
-          clearTimeout(timer)
-          resolve()
-        }
-        else if (status === 'fail') {
-          settled = true
-          clearTimeout(timer)
-          reject(new Error('oml2d load fail'))
-        }
-      })
-    })
+  function playSpriteReaction(state) {
+    cancelPatrol()
+    agentSpriteState.value = ''
+    reactionSpriteState.value = state
   }
 
-  async function switchMascotModelByCode(code) {
-    return runOml2dLoad(async () => {
-      const idx = catalog.value.findIndex((m) => m.code === code)
-      if (idx < 0 || !oml2d.value?.loadModelByIndex) return
-      if (stageUseFallback.value) {
-        activeCode.value = code
-        return
-      }
-      const cur = Number(oml2d.value.modelIndex)
-      if (Number.isFinite(cur) && cur === idx) {
-        applyStageScaleToLib()
-        applyModelMetricsForIndex(idx)
-        return
-      }
-      await oml2d.value.loadModelByIndex(idx)
-      applyStageScaleToLib()
-      applyModelMetricsForIndex(idx)
-    })
+  function setAgentSpriteState(state) {
+    if (reactionSpriteState.value === 'failed') return
+    cancelPatrol()
+    reactionSpriteState.value = ''
+    agentSpriteState.value = state
   }
-  
-  async function fetchCatalog() {
-    try {
-      const res = await getMascotPublicModels()
-      catalog.value = Array.isArray(res?.data) ? res.data : []
-    }
-    catch {
-      catalog.value = []
-    }
+
+  function clearAgentSpriteState() {
+    agentSpriteState.value = ''
   }
-  
-  function resolveInitialCode() {
-    const list = catalog.value
-    if (!list.length)
-      return ''
-    const mid = userStore.mascotModelId
-    if (mid != null && mid !== '') {
-      const hit = list.find((r) => String(r.id) === String(mid))
-      if (hit)
-        return hit.code
+
+  function onSpriteAnimationComplete(state) {
+    if (reactionSpriteState.value !== state) return
+    reactionSpriteState.value = ''
+    if (!assistantOpen.value) schedulePatrol()
+  }
+
+  function onSpriteHoverChange(hovered) {
+    spriteHovered.value = Boolean(hovered)
+  }
+
+  function onSpriteReady() {
+    spriteReady.value = true
+    spriteX.value = viewportMaxX()
+    clampSpriteX()
+    startMascotIdleTips()
+    schedulePatrol()
+  }
+
+  async function openAssistantFromSprite() {
+    if (!await ensureLoggedIn('与看板娘互动需要登录')) return
+    assistantOpen.value = true
+  }
+
+  function onViewportResize() {
+    clampSpriteX()
+    if (!assistantOpen.value && !loading.value) schedulePatrol()
+  }
+
+  function onVisibilityChange() {
+    pageHidden.value = document.hidden
+    if (pageHidden.value) {
+      cancelPatrol()
     }
-    const g = localStorage.getItem(GUEST_MASCOT_CODE_KEY)
-    if (g && list.some((r) => r.code === g))
-      return g
-    return list[0].code
+    else if (!assistantOpen.value && !loading.value) {
+      schedulePatrol()
+    }
   }
   
   function navToSkill(nav) {
     const map = {
       chat: 'chat',
       drawing: 'drawing',
-      appearance: 'chat',
     }
     activeSkill.value = map[nav] || 'chat'
   }
   
   async function selectNav(nav) {
-    if (activeNav.value !== 'appearance' && activeNav.value !== nav) {
+    if (activeNav.value !== nav) {
       persistCurrentMessages()
     }
     activeNav.value = nav
-    if (nav === 'appearance') {
-      pendingCode.value = activeCode.value || resolveInitialCode() || (catalog.value[0]?.code ?? '')
-      return
-    }
     navToSkill(nav)
     draft.value = ''
     if (userStore.isLoggedIn) {
@@ -1424,147 +1679,6 @@ export function useMascotDock() {
     await loadMessagesForNav(nav)
     refreshEstimate()
     refreshQuotaHint()
-  }
-  
-  async function onPreviewPick(code) {
-    pendingCode.value = code
-    if (stageUseFallback.value) {
-      activeCode.value = code
-      return
-    }
-    try {
-      await switchMascotModelByCode(code)
-      activeCode.value = code
-    } catch {
-      /* ignore preview failure */
-    }
-  }
-  
-  async function applyAppearance() {
-    const m = catalog.value.find((x) => x.code === pendingCode.value)
-    if (!m) {
-      ElMessage.warning('请选择形象')
-      return
-    }
-    activeCode.value = m.code
-    if (userStore.isLoggedIn) {
-      try {
-        await setMascotModel(m.id)
-        await userStore.fetchUserInfo()
-      }
-      catch {
-        ElMessage.error('保存失败')
-        return
-      }
-    }
-    else {
-      localStorage.setItem(GUEST_MASCOT_CODE_KEY, m.code)
-    }
-    if (stageUseFallback.value) {
-      ElMessage.success('形象已更新')
-      return
-    }
-    try {
-      await switchMascotModelByCode(m.code)
-      ElMessage.success('形象已更新')
-    }
-    catch {
-      ElMessage.warning('形象已保存，舞台加载失败')
-    }
-  }
-
-  async function switchMascot(code) {
-    if (!code || code === activeCode.value) return
-    await onPreviewPick(code)
-    await applyAppearance()
-  }
-  
-  function isWebGLAvailable() {
-    try {
-      const canvas = document.createElement('canvas')
-      const attrs = { stencil: true, failIfMajorPerformanceCaveat: false }
-      const gl =
-        canvas.getContext('webgl2', attrs)
-        || canvas.getContext('webgl', attrs)
-        || canvas.getContext('experimental-webgl', attrs)
-      if (!gl) return false
-      const hasStencil = !!(gl.getContextAttributes()?.stencil)
-      const lose = gl.getExtension('WEBGL_lose_context')
-      lose?.loseContext()
-      return hasStencil
-    }
-    catch {
-      return false
-    }
-  }
-
-  function clearOml2dStageHost() {
-    oml2d.value = null
-    if (!stageHost.value) return
-    try {
-      stageHost.value.innerHTML = ''
-      document
-        .querySelectorAll('#oml2d-stage, #oml2d-canvas, #oml2d-tips, #oml2d-statusBar')
-        .forEach((node) => node.remove())
-    }
-    catch {
-      /* ignore */
-    }
-  }
-
-  function enableStageFallback(reason, { notify = true } = {}) {
-    stageUseFallback.value = true
-    clearOml2dStageHost()
-    console.warn('mascot stage fallback', reason)
-    if (notify) {
-      ElMessage.warning('当前环境不支持 Live2D（WebGL），已使用静态形象显示')
-    }
-  }
-
-  // 主舞台 #oml2d-stage 挂在页面右下角
-
-  async function initOml2dStage() {
-    await fetchCatalog()
-    await nextTick()
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-    if (!stageHost.value) return
-    if (!catalog.value.length) {
-      ElMessage.warning('暂无上架模型，请管理员在后台配置并上架')
-      return
-    }
-    const code = resolveInitialCode() || catalog.value[0].code
-    let idx = catalog.value.findIndex((m) => m.code === code)
-    if (idx < 0) idx = 0
-    activeCode.value = catalog.value[idx].code
-    pendingCode.value = activeCode.value
-    seedOml2dModelIndex(idx)
-
-    if (!isWebGLAvailable()) {
-      enableStageFallback('webgl unavailable')
-      return
-    }
-
-    const models = buildModelsPayload()
-    try {
-      stageUseFallback.value = false
-      clearOml2dStageHost()
-      const { loadOml2d } = await import('oh-my-live2d')
-      oml2d.value = loadOml2d({
-        parentElement: stageHost.value,
-        sayHello: false,
-        menus: { disable: true },
-        statusBar: { disable: true },
-        models,
-        initialStatus: 'active',
-      })
-      await waitOml2dLoad(oml2d.value)
-      applyStageScaleToLib()
-      applyModelMetricsForIndex(idx)
-      startMascotIdleTips()
-    }
-    catch (e) {
-      enableStageFallback(e)
-    }
   }
   
   function ensureSessionId() {
@@ -1584,7 +1698,6 @@ export function useMascotDock() {
       try {
         scrollbarFs.value?.setScrollTop?.(1e9)
       } catch {
-        /* ignore */
       }
     })
   }
@@ -1598,10 +1711,8 @@ export function useMascotDock() {
       pointsWallet.refresh()
     }
     loadLocalSessionsFromStorage()
-    if (activeNav.value !== 'appearance') {
-      await syncServerSessions(activeNav.value)
-      await loadMessagesForNav(activeNav.value)
-    }
+    await syncServerSessions(activeNav.value)
+    await loadMessagesForNav(activeNav.value)
     scrollFsToBottom()
     refreshEstimate()
     refreshQuotaHint()
@@ -1643,6 +1754,15 @@ export function useMascotDock() {
     ensureActiveSession(activeNav.value)
     const sid = sessionId.value
     loading.value = true
+    setAgentSpriteState('running')
+    // 用户另发消息时收起未完成的 Ask 面板，避免卡在输入框上方
+    if (!skipPushUser) {
+      messages.value.forEach((item) => {
+        if (item?.askConfirmOffer) item.askConfirmOffer = null
+        if (item?.drawConfirmOffer) item.drawConfirmOffer = null
+      })
+      askWizard.value = null
+    }
     const now = Date.now()
     if (!skipPushUser) {
       messages.value.push({ role: 'user', content: text, type: 'text', at: now })
@@ -1651,8 +1771,9 @@ export function useMascotDock() {
 
     const history = buildChatHistory()
 
-    const skill = 'chat'
+    const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
     let streamHadError = false
+    let streamProducedImage = false
     let assistantIdx = -1
 
     try {
@@ -1662,28 +1783,21 @@ export function useMascotDock() {
       }
       clearThinkingRotation()
       assistantIdx = messages.value.length
-      const llmForThinking = selectedLlm.value
       messages.value.push({
         role: 'assistant',
         content: '',
         type: 'text',
         at: Date.now(),
         streaming: true,
-        thinkingText: pickThinkingPhrase(llmForThinking),
+        thinkingText: streamStatusText('preparing'),
         imageGallery: [],
-      })
-      stopThinkingRotation = startThinkingRotation(llmForThinking, (text) => {
-        const row = messages.value[assistantIdx]
-        if (row?.streaming && !(row.content || '').length) {
-          row.thinkingText = text
-        }
       })
       await new Promise((resolve, reject) => {
         chatStreamAbort = streamMascotChat(
           {
             message: text,
             sessionId: sid,
-            mascotModelCode: activeCode.value,
+            mascotModelCode: MASCOT_CODE,
             llmProvider: selectedLlm.value,
             skill,
             imageQuality: imageQuality.value,
@@ -1691,6 +1805,10 @@ export function useMascotDock() {
             ephemeral: !userStore.isLoggedIn,
             clientDatetime: new Date().toISOString(),
             usePointsBilling: usePointsBilling.value,
+            // 单次请求幂等键：重试 / 重新生成须换新 id，避免计费撞车
+            clientRequestId: (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+              ? crypto.randomUUID().replace(/-/g, '')
+              : `${Date.now()}${Math.random().toString(16).slice(2)}`,
           },
           {
             onChunk(piece) {
@@ -1698,6 +1816,7 @@ export function useMascotDock() {
               if (!row) return
               if (row.thinkingText) row.thinkingText = ''
               clearThinkingRotation()
+              setAgentSpriteState('running')
               row.content = (row.content || '') + piece
               scrollFsToBottom()
             },
@@ -1705,18 +1824,22 @@ export function useMascotDock() {
               applyServerSessionId(meta)
               const row = messages.value[assistantIdx]
               const statusText = streamStatusText(meta?.status)
+              const nextSpriteState = streamSpriteState(meta?.status)
+              if (nextSpriteState) setAgentSpriteState(nextSpriteState)
               if (statusText && row?.streaming && !(row.content || '').length) {
                 clearThinkingRotation()
                 row.thinkingText = statusText
               }
               if (meta?.imageGenerating) {
                 imageGenerating.value = true
+                setAgentSpriteState('running')
                 if (row?.streaming && !(row.content || '').length) {
                   row.thinkingText = '正在绘制画面…'
                 }
               }
               if (meta?.imageUrl && isSafeMascotImageUrl(meta.imageUrl)) {
-                // 工具可组合：保留同一轮的文字回答，再追加 Java 已授权并生成的图片。
+                streamProducedImage = true
+                // 工具可组合：保留同一轮的文字回答，再追加 Java 已授权并生成的图片
                 messages.value.push({
                   role: 'assistant',
                   type: 'image',
@@ -1731,6 +1854,42 @@ export function useMascotDock() {
                 row.relatedSearchOffer = {
                   query: String(meta.relatedSearchQuery).slice(0, 500),
                   loading: false,
+                }
+              }
+              if (meta?.askConfirmOffer && row) {
+                const questions = normalizeAskQuestions(meta.askConfirmOffer.questions)
+                if (questions.length) {
+                  row.askConfirmOffer = {
+                    purpose: String(meta.askConfirmOffer.purpose || 'clarify'),
+                    questions: questions.map((q) => ({
+                      id: q.id,
+                      question: q.question,
+                      options: q.options.map(({ label, value }) => ({ label, value })),
+                    })),
+                  }
+                  // 等本轮文字流式结束后再弹出，避免抢在回答前面
+                }
+              } else if (meta?.drawConfirmOffer && row) {
+                // 兼容旧 SSE：单题生图确认
+                const legacy = meta.drawConfirmOffer
+                const ask = {
+                  purpose: 'draw',
+                  questions: [{
+                    id: 'q1',
+                    question: String(legacy.question || '想画哪个主题？'),
+                    options: Array.isArray(legacy.options) ? legacy.options : [],
+                  }],
+                }
+                const questions = normalizeAskQuestions(ask.questions)
+                if (questions.length) {
+                  row.askConfirmOffer = {
+                    purpose: 'draw',
+                    questions: questions.map((q) => ({
+                      id: q.id,
+                      question: q.question,
+                      options: q.options.map(({ label, value }) => ({ label, value })),
+                    })),
+                  }
                 }
               }
               if (meta?.assistantMessageId && row) {
@@ -1753,18 +1912,24 @@ export function useMascotDock() {
                 row.streaming = false
                 row.thinkingText = ''
                 if (!streamHadError && !row.content?.trim()) row.content = '…'
+                if (!streamHadError && row.askConfirmOffer?.questions?.length) {
+                  openAskWizard(row, row.askConfirmOffer)
+                }
               }
               chatStreamAbort = null
               refreshEstimate()
               refreshContextWindow()
               persistCurrentMessages()
               if (!streamHadError) {
+                clearAgentSpriteState()
+                playSpriteReaction(streamProducedImage ? 'jumping' : 'waving')
                 showStageCloudTip('回复好了，点我查看～', 2800)
                 resolve()
               }
             },
             onError(msg) {
               streamHadError = true
+              playSpriteReaction('failed')
               clearThinkingRotation()
               chatStreamAbort = null
               const row = messages.value[assistantIdx]
@@ -1786,6 +1951,7 @@ export function useMascotDock() {
       })
     } catch (e) {
       if (!streamHadError) {
+        playSpriteReaction('failed')
         if (!skipPushUser) messages.value.pop()
         else if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'assistant') {
           messages.value.pop()
@@ -1797,6 +1963,7 @@ export function useMascotDock() {
     } finally {
       loading.value = false
       imageGenerating.value = false
+      clearAgentSpriteState()
       if (assistantIdx >= 0) {
         const row = messages.value[assistantIdx]
         if (row?.streaming) {
@@ -1832,30 +1999,11 @@ export function useMascotDock() {
   }
   
   watch(
-    () => userStore.mascotModelId,
-    async (mid) => {
-      if (!oml2d.value?.loadModelByIndex || !catalog.value.length || mid == null || mid === '')
-        return
-      const hit = catalog.value.find((r) => String(r.id) === String(mid))
-      if (hit && hit.code !== activeCode.value) {
-        activeCode.value = hit.code
-        pendingCode.value = hit.code
-        try {
-          await switchMascotModelByCode(hit.code)
-        }
-        catch {
-          /* ignore */
-        }
-      }
-    },
-  )
-  
-  watch(
     () => userStore.id,
     async (id, prev) => {
       if (id && id !== prev) {
         loadLocalSessionsFromStorage()
-        if (assistantOpen.value && activeNav.value !== 'appearance') {
+        if (assistantOpen.value) {
           await syncServerSessions(activeNav.value)
           await loadMessagesForNav(activeNav.value)
         }
@@ -1863,13 +2011,12 @@ export function useMascotDock() {
     },
   )
 
-  onMounted(async () => {
+  onMounted(() => {
     loadLocalSessionsFromStorage()
-    loadSavedOffset()
-    await nextTick()
-    await initOml2dStage()
-    clampDragOffset()
-    saveOffset()
+    loadSavedPreferences()
+    pageHidden.value = document.hidden
+    window.addEventListener('resize', onViewportResize)
+    document.addEventListener('visibilitychange', onVisibilityChange)
   })
   
   onBeforeUnmount(() => {
@@ -1880,121 +2027,90 @@ export function useMascotDock() {
       chatStreamAbort()
       chatStreamAbort = null
     }
-    onStagePointerUp()
-    clearOml2dStageHost()
+    cancelPatrol()
+    window.removeEventListener('resize', onViewportResize)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   })
 
   return {
-    DEFAULT_AVATAR,
-    ALL_LLM_OPTIONS,
-    IMAGE_MODEL_OPTIONS,
-    activeImageOption,
-    imageModelOptions,
-    FLASH_LLM,
-    GUEST_MASCOT_CODE_KEY,
-    IMAGE_QUALITY_KEY,
-    LLM_CHAT_KEY,
-    LLM_HELP_KEY,
-    LLM_WRITING_KEY,
-    OFFSET_KEY,
-    SCALE_KEY,
-    STAGE_BASE_H,
-    STAGE_BASE_W,
-    activeCode,
-    activeNav,
-    activeSkill,
     acceptRelatedSearchOffer,
-    applyAppearance,
-    applyStageScaleToLib,
+    activeAsk,
+    askGoBack,
+    askWizard,
     assistantOpen,
-    buildModelsPayload,
-    catalog,
-    startNewSession,
-    switchMascot,
+    cancelRenameSession,
     companionAvatarSrc,
-    currentLlmStorageKey,
-    draft,
-    deleteSession,
-    deletingSessionId,
-    dismissRelatedSearchOffer,
-    dragOffset,
-    ensureSessionId,
-    estimateHintText,
-    estimateLoading,
-    estimatePoints,
+    commitRenameSession,
+    compressContext,
     contextCompressing,
     contextWindow,
-    compressContext,
-    showPointsPayButton,
-    usePointsBilling,
-    togglePointsPay,
-    fetchCatalog,
+    deleteSession,
+    deletingSessionId,
+    dismissActiveAsk,
+    dismissRelatedSearchOffer,
+    draft,
+    pickAskOption,
+    submitAskCustom,
     formatAiUsageLine,
     formatMessageDay,
     formatSessionTime,
-    shouldShowDateDivider,
-    isLatestRegeneratableAssistant,
-    imageQuality,
     imageGenerating,
-    initOml2dStage,
+    imageModelOptions,
+    imageQuality,
     inputPlaceholder,
     isVip,
-    live2dAssetUrl,
-    llmOptions,
-    llmStorageKey,
-    loadMessagesForNav,
-    loadSavedOffset,
+    isLatestRegeneratableAssistant,
     loading,
-    mapVoToMessages,
+    memoryDialogVisible,
+    memoryEditDraft,
+    memoryFacts,
+    memorySaving,
+    memorySummary,
+    MEMORY_EDIT_MAX,
+    MEMORY_FACTS_MAX,
+    MEMORY_SUMMARY_MAX,
+    displayMemoryFacts,
+    displayMemorySummary,
     messages,
-    navToSkill,
-    oml2d,
     onAssistantOpened,
-    onPreviewPick,
+    onSpriteAnimationComplete,
+    onSpriteHoverChange,
+    onSpriteReady,
+    openAssistantFromSprite,
+    openMemoryDialog,
     openRelatedArticle,
     openRelatedRecommendation,
     openSearchGallery,
-    onScaleSliderChange,
-    onSkillForSend,
-    onStageLeave,
-    onStagePointerDown,
-    onStagePointerMove,
-    onStagePointerUp,
+    quotaExhausted,
+    quotaRows,
     regenerateAssistant,
-    renameSession,
-    renamingSessionId,
-    renderMascotMarkdown,
-    pendingCode,
-    pointsWallet,
-    refreshEstimate,
-    resolveInitialCode,
-    ringVipTier,
-    rootStyle,
     relatedDialogItems,
     relatedDialogVisible,
+    renameDraft,
+    renameInputRef,
+    renameSubmitting,
+    renamingSessionId,
+    renderMascotMarkdown,
+    ringVipTier,
     searchGalleryItems,
     searchGalleryVisible,
-    saveLlmPrefs,
-    saveOffset,
-    saveScale,
-    scalePopoverOpen,
-    scrollFsToBottom,
     scrollbarFs,
     selectLocalSession,
-    selectNav,
-    selectedLlm,
-    selectedLlmChat,
     send,
     sessionId,
     sessionListForNav,
-    stageHost,
-    stageHovered,
-    stageHostStyle,
-    stageScale,
+    shouldShowDateDivider,
+    showPointsPayButton,
+    spritePaused,
+    spriteState,
+    spriteX,
     stageTipText,
-    stageUseFallback,
-    stageWrapStyle,
+    startRenameSession,
+    startNewSession,
+    togglePointsPay,
+    submitMemoryEdit,
     uiLabels,
+    usePointsBilling,
     userStore,
   }
 }

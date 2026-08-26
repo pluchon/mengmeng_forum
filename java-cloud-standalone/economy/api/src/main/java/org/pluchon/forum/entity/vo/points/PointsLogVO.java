@@ -7,9 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
-/**
- * 积分流水条目. 给前端"积分明细"分页列表用.
- */
+// 积分流水条目. 给前端 积分明细 分页列表用.
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

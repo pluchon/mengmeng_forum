@@ -1,0 +1,6 @@
+[
+  {"resource": "content.ai.fast", "grade": 0, "count": 8, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "content.ai.standard", "grade": 0, "count": 4, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "content.ai.long", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "content.ai.index", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0, "clusterMode": false}
+]

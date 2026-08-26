@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 连续签到奖励表实体类
- */
+// 连续签到奖励表实体类
 @Data
 @TableName("checkin_streak_reward")
 @Schema(description = "连续签到奖励实体")
@@ -24,8 +22,26 @@ public class CheckinStreakReward {
     @Schema(description = "连续签到天数门槛")
     private Integer streakDays;
 
+    @Schema(description = "奖励类型: POINTS/STARLIGHT/MAKEUP_CARD/MIXED")
+    private String rewardType;
+
     @Schema(description = "额外奖励积分")
     private Integer bonusPoints;
+
+    @Schema(description = "发放萌星辉数量")
+    private Integer starlightAmount;
+
+    @Schema(description = "发放补签卡数量")
+    private Integer makeupCardAmount;
+
+    @Schema(description = "发放 VIP 体验天数")
+    private Integer vipDays;
+
+    @Schema(description = "前端主文案")
+    private String title;
+
+    @Schema(description = "前端副文案")
+    private String subtitle;
 
     @Schema(description = "奖励描述")
     private String description;

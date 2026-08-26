@@ -3,7 +3,7 @@
     <div class="header-inner">
       <div class="header-left">
         <router-link to="/" class="logo">
-          <img src="/logo.ico" alt="logo">
+          <img src="/login_big.png" alt="logo">
           <span class="logo-text">{{ siteName }}</span>
         </router-link>
       </div>
@@ -21,9 +21,6 @@
 
       <div class="header-right">
         <template v-if="userStore.isLoggedIn">
-          <el-tooltip content="站点公告" placement="bottom">
-            <el-icon class="icon-btn notice-icon" @click="showAnnouncement"><Notification /></el-icon>
-          </el-tooltip>
           <el-tooltip content="游戏中心" placement="bottom">
             <el-icon class="icon-btn game-center-header-icon" @click="$router.push('/games')"><Trophy /></el-icon>
           </el-tooltip>
@@ -36,17 +33,7 @@
             <span class="header-moebi-num">{{ checkinTotalPoints }}</span>
             <span class="header-moebi-label">萌币</span>
           </router-link>
-          <el-button link class="nav-link" @click="$router.push('/checkin')">每日签到</el-button>
-          <el-button
-            v-if="!isLegalDocPage"
-            link
-            class="nav-link"
-            @click="$router.push('/emoji-shop')"
-          >表情商城</el-button>
-          <el-button link class="nav-link" @click="$router.push('/points')">我的积分</el-button>
-          <el-button link class="nav-link vip-nav-link" @click="$router.push('/vip')">会员中心</el-button>
-          <el-button link class="nav-link" @click="$router.push('/lottery')">积分抽奖</el-button>
-          <el-button link class="nav-link" @click="goToCreative">创作中心</el-button>
+          <el-button link class="nav-link" @click="$router.push('/points')">萌币中心</el-button>
 
           <div class="header-msg-notify-wrap">
             <el-badge :value="msgUnread" :hidden="msgUnread === 0" class="red-badge">
@@ -55,6 +42,23 @@
             <MessageIncomingBubble />
           </div>
 
+          <button
+            type="button"
+            class="vip-status-pill"
+            :class="vipStatusPillClass"
+            :aria-label="vipStatusLabel"
+            @click="openVipPurchase"
+          >
+            <svg
+              class="vip-status-pill__icon"
+              viewBox="0 0 14 14"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path :d="vipStatusIcon.d" :fill="vipStatusIcon.fill" />
+            </svg>
+            <span>{{ vipStatusLabel }}</span>
+          </button>
           <el-dropdown trigger="hover">
             <div class="user-trigger">
               <UserAvatarVip
@@ -85,12 +89,6 @@
         </template>
 
         <div v-else class="auth-btns">
-          <el-button
-            v-if="!isLegalDocPage"
-            link
-            class="nav-link"
-            @click="$router.push('/emoji-shop')"
-          >表情商城</el-button>
           <el-button type="primary" round @click="$router.push('/sign-in')">
             登录 / 注册
           </el-button>
@@ -98,7 +96,7 @@
       </div>
     </div>
 
-    <AnnouncementBoard ref="announcementRef" />
+    <VipSubscribeDialog v-model="vipDialogVisible" />
   </header>
 </template>
 
@@ -106,29 +104,30 @@
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
+import VipSubscribeDialog from '@/components/vip/VipSubscribeDialog/VipSubscribeDialog.vue'
 import { useTheHeader } from '@scripts/components/layout/TheHeader'
 import { SITE_NAME as siteName } from '@/constants/site'
 
 const {
-  AnnouncementBoard,
   checkinLoaded,
   checkinTotalPoints,
   Message,
-  Notification,
   Search,
-  announcementRef,
+  Trophy,
   defaultAvatar,
-  goToCreative,
   openMessageCenter,
+  openVipPurchase,
   handleLogout,
-  isLegalDocPage,
   messageStore,
   msgUnread,
   route,
   searchQuery,
   submitSearch,
-  showAnnouncement,
   userStore,
+  vipDialogVisible,
+  vipStatusIcon,
+  vipStatusLabel,
+  vipStatusPillClass,
 } = useTheHeader()
 </script>
 

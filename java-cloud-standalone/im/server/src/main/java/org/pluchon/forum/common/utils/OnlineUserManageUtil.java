@@ -6,11 +6,11 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-// 在线用户管理：维护 userId -> WebSocketSession 的映射，单设备登录
+// 在线用户管理：维护 userId > WebSocketSession 的映射，单设备登录
 @Component
 public class OnlineUserManageUtil {
 
-    // key=userId，value=对应的 WebSocket 会话
+    // key userId，value 对应的 WebSocket 会话
     private final ConcurrentHashMap<Long, WebSocketSession> manage = new ConcurrentHashMap<>();
 
     // 用户上线：新连接覆盖旧连接，避免消息继续推到旧页面
@@ -23,7 +23,7 @@ public class OnlineUserManageUtil {
             try {
                 existing.close(CloseStatus.NORMAL);
             } catch (Exception ignored) {
-                // 旧连接关闭失败不影响新连接接管推送。
+                // 旧连接关闭失败不影响新连接接管推送
             }
         }
     }
@@ -37,7 +37,7 @@ public class OnlineUserManageUtil {
         manage.remove(userId);
     }
 
-    /** 用户是否在线（WebSocket 已连接） */
+    // 用户是否在线 WebSocket 已连接
     public boolean isOnline(Long userId) {
         if (userId == null) {
             return false;

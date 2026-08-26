@@ -4,7 +4,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 帖子列表项（不含逻辑删除等内部字段）
+// 帖子列表项 不含逻辑删除等内部字段
 @Data
 public class ArticleBriefVO {
 

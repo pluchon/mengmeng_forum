@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${FORUM_AUTH_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_auth_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_AUTH_DB_USERNAME:forum_auth}
+    password: ${FORUM_AUTH_DB_PASSWORD}
+
+forum:
+  domain: auth
+  features:
+    scheduling: false
+    mq: false
+    mq-consumer: false
+    websocket: false
+    game-runtime: false

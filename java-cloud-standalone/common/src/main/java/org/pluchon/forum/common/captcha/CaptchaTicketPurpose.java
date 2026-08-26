@@ -1,7 +1,7 @@
 package org.pluchon.forum.common.captcha;
 
-// 验证码票据，存入缓存，前端拿着这个票据才可以进行验证码的调用~
-// 尽可能减少人机刷验证码接口~
+// 验证码票据，存入缓存，前端拿着这个票据才可以进行验证码的调用
+// 尽可能减少人机刷验证码接口
 public final class CaptchaTicketPurpose {
 
     public static final String SMS_SEND = "SMS_SEND";

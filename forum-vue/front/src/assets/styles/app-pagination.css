@@ -1,0 +1,132 @@
+.app-pagination-host {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.app-pagination {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  user-select: none;
+}
+
+.app-pagination.is-disabled {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.app-pagination__btn {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: #e8eaed;
+  color: #4e5969;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.app-pagination__btn:hover:not(:disabled):not(.is-active) {
+  background: #dfe3e8;
+  color: #1d2129;
+}
+
+.app-pagination__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.app-pagination__btn.is-active {
+  background: var(--primary-red, #ff2442);
+  color: #fff;
+  cursor: default;
+}
+
+.app-pagination__ellipsis {
+  flex: 0 0 auto;
+  min-width: 16px;
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 32px;
+}
+
+.app-pagination__jumper {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: 2px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.app-pagination__jumper-label {
+  white-space: nowrap;
+}
+
+.app-pagination__jumper-input {
+  box-sizing: border-box;
+  width: 40px;
+  height: 32px;
+  padding: 0 4px;
+  border: 1px solid #c9cdd4;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+}
+
+.app-pagination__jumper-input:focus {
+  border-color: var(--primary-red, #ff2442);
+}
+
+.app-pagination__jumper-input:disabled {
+  background: #f2f3f5;
+  cursor: not-allowed;
+}
+
+/* 窄容器 / 显式 small */
+.app-pagination.is-small {
+  gap: 4px;
+}
+
+.app-pagination.is-small .app-pagination__btn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.app-pagination.is-small .app-pagination__ellipsis {
+  min-width: 12px;
+  font-size: 12px;
+  line-height: 26px;
+}
+
+.app-pagination.is-small .app-pagination__jumper {
+  gap: 4px;
+  font-size: 12px;
+}
+
+.app-pagination.is-small .app-pagination__jumper-input {
+  width: 34px;
+  height: 26px;
+  font-size: 12px;
+}

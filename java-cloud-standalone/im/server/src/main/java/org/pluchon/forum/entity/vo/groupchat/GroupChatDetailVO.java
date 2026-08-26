@@ -1,6 +1,7 @@
 package org.pluchon.forum.entity.vo.groupchat;
 
 import lombok.Data;
+import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 import java.util.Date;
 
@@ -11,6 +12,8 @@ public class GroupChatDetailVO {
     private Long id;
     // 群主用户 ID
     private Long ownerUserId;
+    // 群主公开资料
+    private UserBriefVO ownerUser;
     // 群名称
     private String name;
     // 群头像 URL

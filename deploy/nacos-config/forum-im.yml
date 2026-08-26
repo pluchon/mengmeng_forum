@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${FORUM_IM_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_im_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_IM_DB_USERNAME:forum_im}
+    password: ${FORUM_IM_DB_PASSWORD}
+
+forum:
+  domain: im
+  features:
+    scheduling: true
+    mq: true
+    mq-consumer: true
+    websocket: true
+    game-runtime: false

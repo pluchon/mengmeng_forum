@@ -1,13 +1,18 @@
 package org.pluchon.forum.service.security;
 
-import org.pluchon.forum.api.auth.UserInternalVO;
+import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.cloud.feign.AuthSnapshotInternalFeignClient;
+import org.pluchon.forum.common.enums.ResultCode;
+import org.pluchon.forum.common.exception.ApplicationException;
+import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.common.security.AuthSnapshotResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-// im 域通过自身 Feign 客户端取得认证快照，失败时默认拒绝。
+// im 域认证快照：无用户→null(401)；auth 不可用→503
+@Slf4j
 @Service
 public class ImAuthSnapshotResolver implements AuthSnapshotResolver {
 
@@ -28,8 +33,11 @@ public class ImAuthSnapshotResolver implements AuthSnapshotResolver {
             principal.setCreatorState(source.getCreatorState());
             principal.setState(source.getState());
             return principal;
-        } catch (Exception ignored) {
-            return null;
+        } catch (ApplicationException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("auth 快照不可用 userId={}: {}", userId, ex.getMessage());
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_UNAVAILABLE));
         }
     }
 }

@@ -8,9 +8,11 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
-import org.pluchon.forum.entity.dto.ai.AiCoverHintsRequest;
-import org.pluchon.forum.entity.dto.ai.AiImageRequest;
-import org.pluchon.forum.entity.dto.ai.AiPolishRequest;
+import org.pluchon.forum.entity.dto.AiArticleCoverRequest;
+import org.pluchon.forum.entity.dto.AiCoverHintsRequest;
+import org.pluchon.forum.entity.dto.AiImageRequest;
+import org.pluchon.forum.entity.dto.AiPolishRequest;
+import org.pluchon.forum.entity.vo.ai.AiArticleCoverResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiPriceEstimateVO;
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "AI 能力", description = "写作 / 封面要点 / 生图（经配额后转发 ai-server）")
+@Tag(name = "AI 能力", description = "写作 / 封面要点 / 生图 ")
 @RestController
 @RequestMapping("/ai")
 public class AiController {
@@ -50,6 +52,16 @@ public class AiController {
         return Result.success(aiCompanionApiService.polish(user.getId(), req));
     }
 
+    /** 一键生成帖子封面 */
+    @Operation(summary = "一键生成帖子封面", description = "理解正文、按需检索并按 quality 生成封面")
+    @PostMapping("/article-cover")
+    public Result<AiArticleCoverResponseVO> articleCover(
+            @RequestBody AiArticleCoverRequest req,
+            HttpServletRequest request) {
+        AuthenticatedUser user = requireLoginUser(request);
+        return Result.success(aiCompanionApiService.articleCover(user.getId(), req));
+    }
+
     @Operation(summary = "封面推荐配图要点", description = "不计入文本写作日额，仅审计")
     @PostMapping("/cover-hints")
     public Result<AiHubCoverHintsResultVO> coverHints(@RequestBody AiCoverHintsRequest req, HttpServletRequest request) {
@@ -57,7 +69,7 @@ public class AiController {
         return Result.success(aiCompanionApiService.coverHints(user.getId(), req));
     }
 
-    @Operation(summary = "AI 生图", description = "quality: normal | premium")
+    @Operation(summary = "AI 生图", description = "质量: 普通 | 进阶")
     @PostMapping("/image")
     public Result<AiImageResponseVO> image(@RequestBody AiImageRequest req, HttpServletRequest request) {
         AuthenticatedUser user = requireLoginUser(request);

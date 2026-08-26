@@ -1,7 +1,7 @@
 package org.pluchon.forum.entity.vo.ai;
 
 import lombok.Data;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
 
 // AI Hub 生图接口响应
 @Data

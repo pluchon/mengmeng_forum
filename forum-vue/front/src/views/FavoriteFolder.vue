@@ -31,12 +31,11 @@
       </div>
 
       <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next, jumper"
-          background
+          :show-jumper="true"
           @current-change="loadArticles"
         />
       </div>
@@ -66,6 +65,7 @@
 
 <script setup>
 import { useFavoriteFolder } from '@scripts/views/FavoriteFolder'
+import AppPagination from '@/components/common/AppPagination.vue'
 
 const {
   confirmMove,
@@ -120,6 +120,5 @@ const {
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
-}
-</style>
+}</style>
 

@@ -1,28 +1,37 @@
 <template>
   <el-card
-    class="note-card note-card--masonry animate-fade-up"
+    class="note-card note-card--masonry"
     :class="{ 'note-card--question': isQuestion }"
     :body-style="{ padding: '0px' }"
     shadow="hover"
-    @click="emitOpen"
+    @click="emitOpen($event)"
   >
-    <div class="note-cover note-cover--fluid">
+    <div
+      class="note-cover note-cover--fluid"
+      :class="{ 'is-aspect-locked': !!coverAspect }"
+      :style="coverAspectStyle"
+      @mouseenter="onCoverHoverEnter"
+      @mouseleave="onCoverHoverLeave"
+    >
       <img
-        v-if="coverImageUrl"
+        v-if="hasCoverImage"
         class="note-cover-img"
+        :class="{ 'is-loaded': coverLoaded }"
         :src="coverImageUrl"
         :alt="article.title || ''"
         loading="lazy"
+        @load="markCoverLoaded"
+        @error="handleCoverError"
       >
       <div
         v-else
         class="note-cover-placeholder"
-        :class="{ 'note-cover-placeholder--video': Number(article.mediaType) === 1 }"
+        :class="{ 'note-cover-placeholder--video': isVideo }"
         :style="placeholderStyle"
       >
         <span class="cover-title">{{ shortTitle }}</span>
       </div>
-      <div v-if="Number(article.mediaType) === 1" class="note-cover-play" aria-hidden="true" />
+      <div v-if="isVideo" class="note-cover-play" aria-hidden="true" />
     </div>
     <div
       class="note-info"

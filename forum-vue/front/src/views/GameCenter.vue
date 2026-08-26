@@ -8,121 +8,121 @@
         <div>
           <h1>游戏中心</h1>
         </div>
-        <div class="game-points-balance">
-          <span>积分余额</span>
+        <button type="button" class="game-points-balance" title="前往萌币中心" @click="openPointsCenter">
+          <PawCoinIcon />
+          <span>萌币余额</span>
           <strong>{{ pointsBalance }}</strong>
-        </div>
+        </button>
       </header>
 
       <section class="game-center-dashboard">
         <article class="game-rank-hero">
-          <div class="game-rank-mark">★</div>
-          <div class="game-rank-copy">
-            <h2>{{ rankText }}</h2>
+          <div class="game-rank-main">
+            <div class="game-rank-mark"><el-icon><Medal /></el-icon></div>
+            <div class="game-rank-copy">
+              <h2>{{ rankText }}</h2>
+              <div class="game-rank-progress-row">
+                <span>段位进度</span>
+                <strong>{{ rankProgressText }}</strong>
+              </div>
+              <div class="game-rank-track">
+                <i :style="{ width: `${rankProgressPercent}%` }" />
+              </div>
+            </div>
           </div>
-          <div class="game-rank-progress-row">
-            <span>段位进度</span>
-            <strong>{{ rankProgressText }}</strong>
+          <div class="game-rank-metrics">
+            <div>
+              <span>胜率</span>
+              <strong class="is-rate">{{ homeWinRateText }}</strong>
+            </div>
+            <div>
+              <span>大厅在线</span>
+              <strong class="is-online">{{ lobbyOnlineText }}</strong>
+            </div>
+            <div>
+              <span>已玩对局</span>
+              <strong>{{ statisticsSummary.totalCount || 0 }} 局</strong>
+            </div>
           </div>
-          <div class="game-rank-track">
-            <i :style="{ width: `${rankProgressPercent}%` }" />
-          </div>
-          <em class="game-rank-streak">{{ winRateTrendText }}</em>
+          <img class="game-rank-illustration" :src="gameCardImg" alt="" aria-hidden="true">
         </article>
-
-        <div class="game-dashboard-stack">
-          <article class="game-metric-card">
-            <span>胜率</span>
-            <strong>{{ homeWinRateText }}</strong>
-          </article>
-          <article class="game-metric-card">
-            <span>大厅在线</span>
-            <strong>{{ lobbyOnlineText }}</strong>
-          </article>
-        </div>
       </section>
 
       <main class="game-center-main">
         <section class="game-play-section">
           <div class="game-section-bar">
             <h2>推荐对局</h2>
-            <div>
-              <el-button :icon="DataLine" @click="openStats('gobang')">对局统计</el-button>
-              <el-button :icon="Trophy" @click="openLeaderboard('tetris')">天梯榜</el-button>
+            <div class="game-category-switch" aria-label="游戏分类">
+              <button
+                v-for="item in gameCategories"
+                :key="item.code"
+                type="button"
+                :class="{ 'is-active': gameCategory === item.code }"
+                @click="setGameCategory(item.code)"
+              >{{ item.label }}</button>
             </div>
           </div>
 
-          <div class="game-card-grid">
-            <article class="game-card game-card--gobang">
-              <div class="game-cover-board gobang-cover-board" aria-hidden="true">
-                <span class="game-card-piece is-black card-piece-a" />
-                <span class="game-card-piece is-white card-piece-b" />
-                <span class="game-card-piece is-black card-piece-c" />
-                <span class="game-card-piece is-white card-piece-d" />
-                <span class="game-card-piece is-black card-piece-e" />
-                <span class="game-card-piece is-white card-piece-f" />
+          <div class="game-card-grid" v-loading="gameListLoading">
+            <article
+              v-for="game in pagedGames"
+              :key="game.gameCode"
+              class="game-card"
+              :class="gameCardModifierClass(game.gameCode)"
+            >
+              <div class="game-cover-wrap">
+                <img :src="gameCoverUrl(game)" :alt="gameDisplayName(game)" class="game-cover-img" />
               </div>
               <div class="game-card-content">
-                <div class="game-card-title-row">
-                  <h3>{{ gobangGame.gameName || '五子棋' }}</h3>
-                  <span>{{ gobangTotalText }}</span>
+                <div class="game-card-head">
+                  <h3 class="game-card-name">{{ gameDisplayName(game) }}</h3>
+                  <span
+                    class="game-card-online-badge"
+                    :class="{ 'is-solo': gameOnlineBadgeSolo(game) }"
+                  ><i />{{ gameOnlineBadgeText(game) }}</span>
+                </div>
+                <div class="game-card-meta">
+                  <span
+                    :class="game.gameCode === 'tetris' ? 'game-card-score-pill' : 'game-card-sub'"
+                  >{{ gameMetaText(game) }}</span>
                 </div>
                 <div class="game-card-foot">
-                  <em>博弈 · {{ gameOnlineText }}</em>
-                  <el-button type="primary" :icon="Promotion" @click="enterGobang">进入匹配</el-button>
+                  <el-button
+                    type="primary"
+                    :icon="Promotion"
+                    :disabled="game.gameCode === 'tetris' ? Boolean(matchingGameCode) : matchButtonDisabled(game.gameCode)"
+                    class="game-play-btn"
+                    :class="[
+                      gamePlayButtonClass(game),
+                      { 'is-matching': matchingGameCode === game.gameCode },
+                    ]"
+                    @click="enterGame(game)"
+                  >{{
+                    game.gameCode === 'tetris'
+                      ? (matchingGameCode ? '匹配中' : gamePlayIdleText(game))
+                      : matchButtonText(game.gameCode, gamePlayIdleText(game))
+                  }}</el-button>
                 </div>
               </div>
             </article>
+            <div v-if="!gameListLoading && !pagedGames.length" class="game-category-empty">
+              <img src="@/assets/images/game_category_not_found.png" alt="该分类暂无游戏">
+              <p>该分类下暂时没有可玩的游戏……</p>
+            </div>
+          </div>
 
-            <article class="game-card game-card--jinzi">
-              <div class="game-cover-board jinzi-cover-board" aria-hidden="true">
-                <span class="jinzi-cover-mark is-x jinzi-piece-a">×</span>
-                <span class="jinzi-cover-mark is-o jinzi-piece-b">○</span>
-                <span class="jinzi-cover-mark is-x jinzi-piece-c">×</span>
-              </div>
-              <div class="game-card-content">
-                <div class="game-card-title-row">
-                  <h3>{{ jinziGame.gameName || '井字棋' }}</h3>
-                  <span>{{ jinziTotalText }}</span>
-                </div>
-                <div class="game-card-foot">
-                  <em>速战 · {{ jinziOnlineText }}</em>
-                  <el-button type="primary" :icon="Promotion" @click="enterJinzi">进入匹配</el-button>
-                </div>
-              </div>
-            </article>
-
-            <article class="game-card game-card--tetris">
-              <TetrisCoverBoard wrapper-class="game-cover-board game-cover-board--tetris" />
-              <div class="game-card-content">
-                <div class="game-card-title-row">
-                  <h3>俄罗斯方块单人版</h3>
-                  <span>{{ tetrisTotalText }}</span>
-                </div>
-                <div class="game-card-foot">
-                  <em>消除 · 单人模式</em>
-                  <el-button type="primary" :icon="Promotion" @click="enterTetris">进入游戏</el-button>
-                </div>
-              </div>
-            </article>
-
-            <article class="game-card game-card--tetris-pk">
-              <div class="game-cover-board tetris-pk-cover-board" aria-hidden="true">
-                <TetrisCoverBoard wrapper-class="pk-tetris-board" />
-                <b>PK</b>
-                <TetrisCoverBoard wrapper-class="pk-tetris-board" />
-              </div>
-              <div class="game-card-content">
-                <div class="game-card-title-row">
-                  <h3>俄罗斯方块PK版</h3>
-                  <span>{{ tetrisPkTotalText }}</span>
-                </div>
-                <div class="game-card-foot">
-                  <em>排位 · {{ tetrisPkOnlineText }}</em>
-                  <el-button type="primary" :icon="Promotion" @click="enterTetrisPk">在线 PK</el-button>
-                </div>
-              </div>
-            </article>
+          <!-- 底部分页器 就算只有一页也展示 -->
+          <div class="game-card-pagination">
+            <AppPagination
+              :current-page="gamePageNum"
+              size="small"
+              :page-size="gamePageSize"
+              :total="gameTotal"
+              :hide-on-single-page="false"
+              :pager-count="5"
+              :show-jumper="false"
+              @current-change="onGamePageChange"
+            />
           </div>
         </section>
 
@@ -132,20 +132,11 @@
             <span>{{ watchCountText }}</span>
           </div>
 
-          <div class="game-watch-switch">
-            <button type="button" :class="{ 'is-active': watchGameCode === 'gobang' }" @click="setWatchGame('gobang')">
-              五子棋
-            </button>
-            <button type="button" :class="{ 'is-active': watchGameCode === 'tetris_pk' }" @click="setWatchGame('tetris_pk')">
-              俄罗斯方块
-            </button>
-          </div>
-
           <div class="game-watch-search">
             <el-input
               v-model="watchKeyword"
               clearable
-              placeholder="搜索昵称"
+              placeholder="搜索房间号"
               @clear="searchWatchRooms"
               @keyup="handleWatchSearchKeyup"
             />
@@ -153,6 +144,14 @@
           </div>
 
           <div class="game-watch-group">
+            <div class="game-watch-switch">
+              <button type="button" :class="{ 'is-active': watchGameCode === 'gobang' }" @click="setWatchGame('gobang')">
+                五子棋
+              </button>
+              <button type="button" :class="{ 'is-active': watchGameCode === 'tetris_pk' }" @click="setWatchGame('tetris_pk')">
+                俄罗斯方块 PK
+              </button>
+            </div>
             <div v-if="pagedWatchRooms.length" class="game-room-list">
               <div class="game-room-list-body">
                 <button
@@ -164,158 +163,381 @@
                 >
                   <span>
                     <strong>{{ watchRoomTitle(roomRow) }}</strong>
+                    <small>
+                      <b>#{{ roomRow.roomId }}</b>
+                      <el-icon><View /></el-icon>
+                      {{ watchViewerCount(roomRow) }} 人观战
+                    </small>
                   </span>
                   <i class="game-room-row__watch">观战</i>
                 </button>
               </div>
-              <div v-if="watchTotal > watchPageSize" class="game-watch-pager">
-                <el-pagination
+              <div class="game-watch-pager">
+                <AppPagination
                   v-model:current-page="watchPage"
-                  small
-                  background
-                  layout="prev, pager, next"
+                  size="small"
                   :page-size="watchPageSize"
                   :total="watchTotal"
+                  :pager-count="5"
+                  :show-jumper="false"
                   @current-change="onWatchPageChange"
                 />
               </div>
             </div>
             <div v-else class="game-room-empty">
-              <el-empty :image-size="54" description="" />
+              <img src="@/assets/images/no_game_room.png" alt="暂无对局中的房间">
+              <p>暂无对局中的房间......</p>
             </div>
           </div>
+
+          <footer class="game-watch-footer">
+            <button type="button" @click="openStats('gobang')"><el-icon><DataLine /></el-icon>对局统计</button>
+            <button type="button" @click="openLeaderboard('tetris')"><el-icon><Trophy /></el-icon>天梯榜</button>
+          </footer>
         </aside>
       </main>
     </div>
 
-    <el-dialog v-model="leaderboardVisible" class="game-center-dialog" width="680px" destroy-on-close>
+    <!-- 天梯榜弹窗 参照 UI/游戏中心/天梯榜.html 760px 还原 -->
+    <el-dialog v-model="leaderboardVisible" class="game-pencil-dialog" width="760px" destroy-on-close :show-close="true">
       <template #header>
-        <div class="game-dialog-title">天梯榜</div>
+        <div class="pencil-dialog-header">
+          <h2 class="pencil-dialog-title">天梯榜</h2>
+        </div>
       </template>
-      <el-tabs v-model="leaderboardGameCode" @tab-change="onLeaderboardGameChange">
-        <el-tab-pane label="俄罗斯方块" name="tetris" />
-        <el-tab-pane label="俄罗斯方块PK" name="tetris_pk" />
-      </el-tabs>
-      <ol v-if="leaderboardRows.length" class="game-rank-list" :class="`is-${leaderboardGameCode}`">
-        <li v-for="(row, index) in leaderboardRows" :key="row.userId">
-          <span class="game-rank-list__position">{{ (leaderboardPage - 1) * leaderboardPageSize + index + 1 }}</span>
-          <img
-            :src="row.avatarUrl || defaultAvatar"
-            alt=""
-            class="game-rank-list__avatar"
-            @error="onLeaderboardAvatarError"
+
+      <!-- 游戏 Tab 切换 -->
+      <div class="pencil-dialog-tabs">
+        <button
+          type="button"
+          class="pencil-tab-btn"
+          :class="{ active: leaderboardGameCode === 'tetris' }"
+          @click="onLeaderboardGameChange('tetris')"
+        >
+          俄罗斯方块
+        </button>
+        <button
+          type="button"
+          class="pencil-tab-btn"
+          :class="{ active: leaderboardGameCode === 'tetris_pk' }"
+          @click="onLeaderboardGameChange('tetris_pk')"
+        >
+          俄罗斯方块 PK
+        </button>
+      </div>
+
+      <!-- 排行榜列表 -->
+      <div class="pencil-rank-body">
+        <div v-if="!leaderboardRows.length" class="pencil-empty-box">
+          <div class="pencil-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-4.5a2.5 2.5 0 01-2.5 2.5h-2a2.5 2.5 0 01-2.5-2.5H4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="pencil-empty-text">还没有玩家上榜</p>
+        </div>
+
+        <ol v-else class="pencil-rank-list">
+          <li
+            v-for="(row, index) in leaderboardRows"
+            :key="row.userId"
+            class="pencil-rank-item"
           >
-          <strong class="game-rank-list__name">{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
-          <em v-if="leaderboardGameCode === 'tetris_pk'" class="game-rank-list__rate">胜率 {{ row.winRate ?? 0 }}%</em>
-          <b class="game-rank-list__score">最高得分：{{ row.bestScore ?? 0 }}</b>
-        </li>
-      </ol>
-      <p v-else class="game-stats-empty">还没有玩家上榜。</p>
-      <div v-if="leaderboardTotal > leaderboardPageSize" class="game-dialog-pager">
-        <el-pagination
+            <span
+              class="pencil-rank-badge"
+              :class="`rank-badge--${(leaderboardPage - 1) * leaderboardPageSize + index + 1 <= 3 ? (leaderboardPage - 1) * leaderboardPageSize + index + 1 : 'other'}`"
+            >
+              {{ (leaderboardPage - 1) * leaderboardPageSize + index + 1 }}
+            </span>
+            <div class="pencil-rank-user">
+              <img
+                v-if="row.avatarUrl"
+                :src="row.avatarUrl"
+                alt=""
+                class="pencil-rank-avatar"
+                @error="onLeaderboardAvatarError"
+              />
+              <span v-else class="pencil-rank-avatar-fallback">
+                {{ avatarText(row) }}
+              </span>
+              <strong class="pencil-rank-name">{{ row.nickname || row.username || `用户 ${row.userId}` }}</strong>
+            </div>
+            <div class="pencil-rank-score-wrap">
+              <span v-if="leaderboardGameCode === 'tetris_pk'" class="pencil-rank-pk-rate">
+                胜率 {{ row.winRate ?? 0 }}%
+              </span>
+              <b class="pencil-rank-score">
+                {{ leaderboardGameCode === 'tetris' ? '最高得分：' : '' }}{{ formatNumber(row.bestScore ?? row.score ?? 0) }} 分
+              </b>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <!-- 分页器 -->
+      <div class="pencil-dialog-pager">
+        <AppPagination
           v-model:current-page="leaderboardPage"
-          layout="prev, pager, next"
+          size="small"
           :total="leaderboardTotal"
           :page-size="leaderboardPageSize"
-          size="small"
+          :pager-count="5"
+          :show-jumper="false"
           @current-change="onLeaderboardPageChange"
         />
       </div>
     </el-dialog>
 
-    <el-dialog v-model="statsVisible" class="game-center-dialog" width="680px" destroy-on-close>
+    <!-- 对局统计弹窗 参照 UI/游戏中心/对局统计.html 760px 还原 -->
+    <el-dialog v-model="statsVisible" class="game-pencil-dialog" width="760px" destroy-on-close :show-close="true">
       <template #header>
-        <div class="game-dialog-title">对局统计</div>
+        <div class="pencil-dialog-header">
+          <h2 class="pencil-dialog-title">对局统计</h2>
+        </div>
       </template>
-      <el-tabs v-model="statsGameCode" @tab-change="onStatsGameChange">
-        <el-tab-pane label="五子棋" name="gobang" />
-        <el-tab-pane label="井字棋" name="jinzi" />
-        <el-tab-pane label="俄罗斯方块" name="tetris" />
-        <el-tab-pane label="俄罗斯方块PK" name="tetris_pk" />
-      </el-tabs>
-      <div class="game-stats-summary" :class="{ 'is-tetris': statsGameCode === 'tetris' }">
-        <div v-if="statsGameCode !== 'tetris'">
-          <span>胜 / 负</span>
-          <strong>{{ statsProfile.winCount ?? 0 }} / {{ statsProfile.loseCount ?? 0 }}</strong>
+
+      <div class="pencil-stats-shell">
+      <!-- 游戏 Tab 切换 保留五子棋、井字棋、俄罗斯方块 PK 3个 -->
+      <div class="pencil-dialog-tabs">
+        <button
+          type="button"
+          class="pencil-tab-btn"
+          :class="{ active: statsGameCode === 'gobang' }"
+          @click="onStatsGameChange('gobang')"
+        >
+          五子棋
+        </button>
+        <button
+          type="button"
+          class="pencil-tab-btn"
+          :class="{ active: statsGameCode === 'jinzi' }"
+          @click="onStatsGameChange('jinzi')"
+        >
+          井字棋
+        </button>
+        <button
+          type="button"
+          class="pencil-tab-btn"
+          :class="{ active: statsGameCode === 'tetris_pk' }"
+          @click="onStatsGameChange('tetris_pk')"
+        >
+          俄罗斯方块 PK
+        </button>
+      </div>
+
+      <!-- 3 个指标卡片 -->
+      <div class="pencil-stats-cards">
+        <div class="pencil-stat-card">
+          <span class="pencil-stat-card__label">胜 / 负</span>
+          <strong class="pencil-stat-card__val val--purple">
+            {{ `${statsProfile.winCount ?? 0} / ${statsProfile.loseCount ?? 0}` }}
+          </strong>
         </div>
-        <div>
-          <span>总局数</span>
-          <strong>{{ statsTotalCount }}</strong>
+        <div class="pencil-stat-card">
+          <span class="pencil-stat-card__label">总局数</span>
+          <strong class="pencil-stat-card__val val--green">{{ statsTotalCount }}</strong>
         </div>
-        <div>
-          <span>{{ statsGameCode === 'tetris' ? '最高得分' : '胜率' }}</span>
-          <strong>{{ statsGameCode === 'tetris' ? (tetrisProfile.bestScore ?? 0) : statsWinRateText }}</strong>
+        <div class="pencil-stat-card">
+          <span class="pencil-stat-card__label">胜率</span>
+          <strong class="pencil-stat-card__val val--pink">
+            {{ statsWinRateText }}
+          </strong>
         </div>
       </div>
 
-      <div class="game-stats-record-columns" aria-hidden="true">
-        <span>游戏判决结果</span>
-        <span>游戏结束原因</span>
-        <span>时间</span>
-        <span>积分加减情况</span>
+      <!-- 对局记录区域 -->
+      <div class="pencil-stats-body" v-loading="statsLoading">
+        <div v-if="!statsLoading && !statRecords.length" class="pencil-empty-box">
+          <div class="pencil-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-4.5a2.5 2.5 0 01-2.5 2.5h-2a2.5 2.5 0 01-2.5-2.5H4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="pencil-empty-text">暂时没有对局记录</p>
+        </div>
+
+        <div v-else-if="statRecords.length" class="pencil-record-container" :class="`grid--${statsGameCode}`">
+          <!-- 五子棋专属列头 -->
+          <div v-if="statsGameCode === 'gobang'" class="pencil-record-head record-head--gobang">
+            <span class="col-result">对局结果</span>
+            <span class="col-role">执子</span>
+            <span class="col-opponent">对手</span>
+            <span class="col-reason">结束原因</span>
+            <span class="col-time">对局时间</span>
+            <span class="col-delta">段位分变动</span>
+            <span class="col-action">操作</span>
+          </div>
+
+          <!-- 井字棋专属列头 仅保留 5 列：对局结果、比分、对手、对局时间、段位分变化 -->
+          <div v-else-if="statsGameCode === 'jinzi'" class="pencil-record-head record-head--jinzi">
+            <span class="col-result">对局结果</span>
+            <span class="col-score">比分</span>
+            <span class="col-opponent">对手</span>
+            <span class="col-time">对局时间</span>
+            <span class="col-delta">段位分变化</span>
+          </div>
+
+          <!-- 俄罗斯方块 PK 专属列头 无回放操作 -->
+          <div v-else class="pencil-record-head record-head--tetris-pk">
+            <span class="col-result">对局结果</span>
+            <span class="col-opponent">对手</span>
+            <span class="col-reason">结束原因</span>
+            <span class="col-time">对局时间</span>
+            <span class="col-delta">段位分变化</span>
+          </div>
+
+          <!-- 记录列表 -->
+          <ul class="pencil-record-list">
+            <li
+              v-for="row in statRecords"
+              :key="`${row.gameCode || statsGameCode}-${row.sourceRecordId || row.id}`"
+              class="pencil-record-item"
+              :class="[`record-item--${statsGameCode}`, `record-item--${statsGameCode.replace('_', '-')}`]"
+            >
+              <!-- 五子棋行 -->
+              <template v-if="(row.gameCode || statsGameCode) === 'gobang'">
+                <span class="record-badge col-result" :class="`badge--${(row.resultCode || 'DRAW').toLowerCase()}`">
+                  {{ recordResultText(row) }}
+                </span>
+                <span class="col-role">{{ recordRoleText(row) }}</span>
+                <div class="col-opponent record-user-cell">
+                  <span class="record-mini-avatar">
+                    <img v-if="row.opponentAvatarUrl" :src="row.opponentAvatarUrl" alt="" @error="onLeaderboardAvatarError" />
+                    <b v-else>{{ avatarText(row) }}</b>
+                  </span>
+                  <span class="record-user-name" :title="recordOpponentText(row)">{{ recordOpponentText(row) }}</span>
+                </div>
+                <span class="record-reason col-reason">{{ recordEndReasonText(row) }}</span>
+                <span class="record-time col-time">{{ formatRecordTime(row.endedAt) }}</span>
+                <span class="record-delta col-delta" :class="{ 'is-positive': recordScoreDelta(row) > 0, 'is-negative': recordScoreDelta(row) < 0 }">
+                  {{ formatScoreDelta(row) }}
+                </span>
+                <span class="record-action col-action">
+                  <button type="button" class="pencil-replay-btn" @click="openGobangReplay(row)">
+                    复盘
+                  </button>
+                </span>
+              </template>
+
+              <!-- 井字棋行 5 列：对局结果、比分、对手头像昵称、对局时间、段位分变化 -->
+              <template v-else-if="(row.gameCode || statsGameCode) === 'jinzi'">
+                <span class="record-badge col-result" :class="`badge--${(row.resultCode || 'DRAW').toLowerCase()}`">
+                  {{ recordResultText(row) }}
+                </span>
+                <span class="col-score font-bold">{{ recordScoreRatioText(row) }}</span>
+                <div class="col-opponent record-user-cell">
+                  <span class="record-mini-avatar">
+                    <img v-if="row.opponentAvatarUrl" :src="row.opponentAvatarUrl" alt="" @error="onLeaderboardAvatarError" />
+                    <b v-else>{{ avatarText(row) }}</b>
+                  </span>
+                  <span class="record-user-name" :title="recordOpponentText(row)">{{ recordOpponentText(row) }}</span>
+                </div>
+                <span class="record-time col-time">{{ formatRecordTime(row.endedAt) }}</span>
+                <span class="record-delta col-delta" :class="{ 'is-positive': recordScoreDelta(row) > 0, 'is-negative': recordScoreDelta(row) < 0 }">
+                  {{ formatScoreDelta(row) }}
+                </span>
+              </template>
+
+              <!-- 俄罗斯方块 PK 行 5 列：对局结果、对手头像昵称、结束原因、对局时间、段位分变化，无回放 -->
+              <template v-else>
+                <span class="record-badge col-result" :class="`badge--${(row.resultCode || 'DRAW').toLowerCase()}`">
+                  {{ recordResultText(row) }}
+                </span>
+                <div class="col-opponent record-user-cell">
+                  <span class="record-mini-avatar">
+                    <img v-if="row.opponentAvatarUrl" :src="row.opponentAvatarUrl" alt="" @error="onLeaderboardAvatarError" />
+                    <b v-else>{{ avatarText(row) }}</b>
+                  </span>
+                  <span class="record-user-name" :title="recordOpponentText(row)">{{ recordOpponentText(row) }}</span>
+                </div>
+                <span class="record-reason col-reason">{{ recordEndReasonText(row) }}</span>
+                <span class="record-time col-time">{{ formatRecordTime(row.endedAt) }}</span>
+                <span class="record-delta col-delta" :class="{ 'is-positive': recordScoreDelta(row) > 0, 'is-negative': recordScoreDelta(row) < 0 }">
+                  {{ formatScoreDelta(row) }}
+                </span>
+              </template>
+            </li>
+          </ul>
+        </div>
       </div>
-      <ul v-if="statRecords.length" class="game-stats-record-list">
-        <li v-for="row in statRecords" :key="row.id" class="game-stats-record-item">
-          <strong>{{ recordResultText(row) }}</strong>
-          <span>{{ recordEndReasonText(row) }}</span>
-          <span>{{ formatRecordTime(row.endedAt) }}</span>
-          <em :class="{ 'is-win': recordScoreDelta(row) > 0 }">
-            {{ formatScoreDelta(row) }}
-          </em>
-        </li>
-      </ul>
-      <p v-else class="game-stats-empty">还没有对局记录。</p>
-      <div v-if="statTotal > statPageSize" class="game-dialog-pager">
-        <el-pagination
+
+      <!-- 分页器：固定在底部，少数据时不上移 -->
+      <div class="pencil-dialog-pager">
+        <AppPagination
           v-model:current-page="statPage"
-          layout="prev, pager, next"
+          size="small"
           :total="statTotal"
           :page-size="statPageSize"
-          size="small"
+          :pager-count="5"
+          :show-jumper="false"
           @current-change="onStatPageChange"
         />
       </div>
+      </div>
     </el-dialog>
 
-    <el-drawer v-model="recentVisible" title="俄罗斯方块 · 最近对局" size="720px" destroy-on-close>
-      <el-table class="gobang-record-table tetris-record-table" :data="recentRecords" size="small" stripe empty-text="暂无对局记录">
-        <el-table-column label="局号" prop="id" min-width="88" show-overflow-tooltip />
-        <el-table-column label="得分" width="108">
-          <template #default="{ row }">
-            <span class="gobang-result-tag is-win">{{ row.score ?? 0 }} 分</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="论坛积分" width="96">
-          <template #default="{ row }">
-            <span :class="['gobang-score-delta', { 'is-plus': (row.forumPointsAwarded ?? 0) > 0 }]">
-              +{{ row.forumPointsAwarded ?? 0 }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="消行" width="108">
-          <template #default="{ row }">{{ row.linesCleared ?? 0 }} 行 · Lv{{ row.level ?? 1 }}</template>
-        </el-table-column>
-        <el-table-column label="结束时间" min-width="150">
-          <template #default="{ row }">{{ formatDateTime(row.endedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="86" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openTetrisReplay(row)">回放</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="recentTotal > recentPageSize" class="gobang-record-pager">
-        <el-pagination
-          v-model:current-page="recentPage"
-          layout="prev, pager, next"
-          :total="recentTotal"
-          :page-size="recentPageSize"
-          size="small"
-          @current-change="onRecentPageChange"
-        />
+    <!-- 五子棋回放 Drawer -->
+    <el-drawer
+      v-model="gobangReplayVisible"
+      title="五子棋对局复盘"
+      size="540px"
+      destroy-on-close
+      @closed="stopGobangReplay"
+    >
+      <div class="gobang-replay-wrap">
+        <div class="gobang-replay-meta">
+          <span>进度：第 <strong>{{ gobangReplayStep }}</strong> / {{ gobangReplayMoves.length }} 步</span>
+        </div>
+        <div class="gobang-replay-board">
+          <div v-for="(rowArr, r) in gobangReplayBoard" :key="r" class="gobang-replay-row">
+            <div
+              v-for="(cell, c) in rowArr"
+              :key="`${r}-${c}`"
+              class="gobang-replay-cell"
+            >
+              <div
+                v-if="cell"
+                class="gobang-replay-piece"
+                :class="cell.chess === 1 ? 'is-black' : 'is-white'"
+              >
+                <span>{{ cell.step }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="gobang-replay-controls">
+          <button
+            type="button"
+            class="gobang-replay-nav-btn"
+            :disabled="gobangReplayStep <= 0"
+            @click="stepGobangReplay(-1)"
+          >
+            上一步
+          </button>
+          <button
+            type="button"
+            class="gobang-replay-play-btn"
+            @click="toggleGobangReplayAuto"
+          >
+            {{ gobangReplayPlaying ? '暂停' : '自动播放' }}
+          </button>
+          <button
+            type="button"
+            class="gobang-replay-nav-btn"
+            :disabled="gobangReplayStep >= gobangReplayMoves.length"
+            @click="stepGobangReplay(1)"
+          >
+            下一步
+          </button>
+        </div>
+        <div class="gobang-replay-roles">
+          <div class="gobang-replay-role is-mine">{{ gobangReplayRoleLines.mine }}</div>
+          <div class="gobang-replay-role is-opponent">{{ gobangReplayRoleLines.opponent }}</div>
+        </div>
       </div>
     </el-drawer>
 
+    <!-- 俄罗斯方块回放 Drawer -->
     <el-drawer
       v-model="tetrisReplayVisible"
       title="俄罗斯方块回放"

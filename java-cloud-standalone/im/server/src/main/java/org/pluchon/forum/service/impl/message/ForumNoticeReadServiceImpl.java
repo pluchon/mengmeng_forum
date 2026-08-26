@@ -20,7 +20,7 @@ public class ForumNoticeReadServiceImpl implements ForumNoticeReadService {
 
     private static final ThreadLocal<SimpleDateFormat> CN_TS = ThreadLocal.withInitial(() -> {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        f.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
+        f.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
         return f;
     });
 

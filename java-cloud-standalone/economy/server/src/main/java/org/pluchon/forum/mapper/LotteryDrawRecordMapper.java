@@ -21,6 +21,20 @@ public interface LotteryDrawRecordMapper extends BaseMapper<LotteryDrawRecord> {
                                                   @Param("activityId") Long activityId,
                                                   @Param("limit") int limit);
 
+    @Select("SELECT id, user_id AS userId, prize_name AS prizeName, prize_type AS prizeType, "
+            + "create_time AS createTime "
+            + "FROM lottery_draw_record "
+            + "WHERE activity_id = #{activityId} AND delete_state = 0 "
+            + "AND prize_type <> 0 "
+            + "ORDER BY id DESC LIMIT #{limit}")
+    List<LotteryDrawRecord> selectRecentPublicByActivity(@Param("activityId") Long activityId,
+                                                         @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM lottery_draw_record "
+            + "WHERE activity_id = #{activityId} AND delete_state = 0 "
+            + "AND prize_type <> 0")
+    long countPublicByActivity(@Param("activityId") Long activityId);
+
     @Select("SELECT COUNT(DISTINCT user_id) FROM lottery_draw_record "
             + "WHERE activity_id = #{activityId} AND delete_state = 0")
     long countDistinctDrawUsers(@Param("activityId") Long activityId);
@@ -30,4 +44,19 @@ public interface LotteryDrawRecordMapper extends BaseMapper<LotteryDrawRecord> {
             + "ORDER BY id ASC")
     List<LotteryDrawRecord> selectByUserAndBatchKey(@Param("userId") Long userId,
                                                     @Param("batchKey") String batchKey);
+
+    @Select("""
+            <script>
+            SELECT * FROM lottery_draw_record
+             WHERE user_id = #{userId}
+               AND delete_state = 0
+               AND draw_batch_key IN
+               <foreach collection="batchKeys" item="batchKey" open="(" separator="," close=")">
+                 #{batchKey}
+               </foreach>
+             ORDER BY id ASC
+            </script>
+            """)
+    List<LotteryDrawRecord> selectByUserAndBatchKeys(@Param("userId") Long userId,
+                                                      @Param("batchKeys") List<String> batchKeys);
 }

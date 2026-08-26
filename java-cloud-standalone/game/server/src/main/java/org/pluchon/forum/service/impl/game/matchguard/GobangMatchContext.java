@@ -1,7 +1,7 @@
 package org.pluchon.forum.service.impl.game.matchguard;
 
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 
 public class GobangMatchContext {
 

@@ -20,7 +20,22 @@ _USER_IDS_KEY = _RAG.get("redis_user_ids_key", "forum_rag:user:ids")
 _USER_DOC_PREFIX = _RAG.get("redis_user_doc_prefix", "forum_rag:user:")
 _EMOJI_IDS_KEY = _RAG.get("redis_emoji_ids_key", "forum_rag:emoji:ids")
 _EMOJI_DOC_PREFIX = _RAG.get("redis_emoji_doc_prefix", "forum_rag:emoji:")
+_MUSIC_IDS_KEY = _RAG.get("redis_music_ids_key", "forum_rag:music:ids")
+_MUSIC_DOC_PREFIX = _RAG.get("redis_music_doc_prefix", "forum_rag:music:")
 VECTOR_SCAN_LIMIT = int(_RAG.get("vector_scan_limit", 800))
+
+
+def _take_scan_ids(raw_ids: list[Any], *, index_name: str) -> list[Any]:
+    """截断扫描集合；超限时打 warning，避免静默丢召回。"""
+    total = len(raw_ids)
+    if total > VECTOR_SCAN_LIMIT:
+        logger.warning(
+            "[rag] %s 索引量=%s 已超 vector_scan_limit=%s，召回可能不完整",
+            index_name,
+            total,
+            VECTOR_SCAN_LIMIT,
+        )
+    return raw_ids[:VECTOR_SCAN_LIMIT]
 
 
 def _doc_key(article_id: int | str) -> str:
@@ -35,6 +50,10 @@ def _emoji_doc_key(shop_id: int | str) -> str:
     return f"{_EMOJI_DOC_PREFIX}{shop_id}"
 
 
+def _music_doc_key(music_key: str) -> str:
+    return f"{_MUSIC_DOC_PREFIX}{music_key}"
+
+
 def save_article_index(
     article_id: int,
     *,
@@ -43,6 +62,7 @@ def save_article_index(
     media_type: int,
     embedding: list[float],
     video_url: str = "",
+    embedding_model: str = "",
 ) -> None:
     key = _doc_key(article_id)
     payload = {
@@ -51,6 +71,7 @@ def save_article_index(
         "media_type": str(media_type),
         "embedding": json.dumps(embedding),
         "video_url": video_url or "",
+        "embedding_model": embedding_model or "",
     }
     pipe = redis_client.pipeline()
     pipe.hset(key, mapping=payload)
@@ -70,11 +91,13 @@ def save_user_index(
     *,
     doc: str,
     embedding: list[float],
+    embedding_model: str = "",
 ) -> None:
     key = _user_doc_key(user_id)
     payload = {
         "doc": doc[: int(_RAG.get("doc_truncate", 1200))],
         "embedding": json.dumps(embedding),
+        "embedding_model": embedding_model or "",
     }
     pipe = redis_client.pipeline()
     pipe.hset(key, mapping=payload)
@@ -89,13 +112,56 @@ def remove_user_index(user_id: int) -> None:
     pipe.execute()
 
 
-def save_emoji_index(shop_id: int, *, doc: str, embedding: list[float]) -> None:
+def save_emoji_index(
+    shop_id: int,
+    *,
+    doc: str,
+    embedding: list[float],
+    embedding_model: str = "",
+) -> None:
     pipe = redis_client.pipeline()
-    pipe.hset(_emoji_doc_key(shop_id), mapping={
-        "doc": doc[: int(_RAG.get("doc_truncate", 1200))],
-        "embedding": json.dumps(embedding),
-    })
+    pipe.hset(
+        _emoji_doc_key(shop_id),
+        mapping={
+            "doc": doc[: int(_RAG.get("doc_truncate", 1200))],
+            "embedding": json.dumps(embedding),
+            "embedding_model": embedding_model or "",
+        },
+    )
     pipe.sadd(_EMOJI_IDS_KEY, str(shop_id))
+    pipe.execute()
+
+
+def save_music_index(
+    music_key: str,
+    *,
+    doc: str,
+    embedding: list[float],
+    embedding_model: str = "",
+) -> None:
+    key = str(music_key or "").strip()
+    if not key:
+        raise ValueError("musicKey required")
+    pipe = redis_client.pipeline()
+    pipe.hset(
+        _music_doc_key(key),
+        mapping={
+            "doc": doc[: int(_RAG.get("doc_truncate", 1200))],
+            "embedding": json.dumps(embedding),
+            "embedding_model": embedding_model or "",
+        },
+    )
+    pipe.sadd(_MUSIC_IDS_KEY, key)
+    pipe.execute()
+
+
+def remove_music_index(music_key: str) -> None:
+    key = str(music_key or "").strip()
+    if not key:
+        return
+    pipe = redis_client.pipeline()
+    pipe.delete(_music_doc_key(key))
+    pipe.srem(_MUSIC_IDS_KEY, key)
     pipe.execute()
 
 
@@ -108,6 +174,32 @@ def _cosine(a: list[float], b: list[float]) -> float:
     if na <= 0 or nb <= 0:
         return 0.0
     return dot / (na * nb)
+
+
+def _as_text(value: Any) -> str:
+    """Redis 返回值可能是 bytes 或 str，统一解码为 str."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    return str(value)
+
+
+def _decode_embedding(raw: Any) -> list[float] | None:
+    """解析入库的 JSON 向量；空值/非法/非列表一律返回 None."""
+    text = _as_text(raw)
+    if not text:
+        return None
+    try:
+        vec = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(vec, list):
+        return None
+    try:
+        return [float(x) for x in vec]
+    except (TypeError, ValueError):
+        return None
 
 
 def _user_profile_keyword_boost(query: str, doc: str) -> float:
@@ -158,35 +250,35 @@ def vector_search_articles(
     if not query_vec:
         return []
     try:
-        ids = list(redis_client.smembers(IDS_KEY))[:VECTOR_SCAN_LIMIT]
+        ids = _take_scan_ids(list(redis_client.smembers(IDS_KEY)), index_name="article")
     except Exception:
         logger.exception("读取 RAG 索引 ID 集合失败")
         return []
-    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
-    scored: list[tuple[float, int]] = []
+    # 先归一化合法 articleId，再用 pipeline 批量取 doc，避免逐条 round-trip
+    aids: list[int] = []
     for raw_id in ids:
         try:
-            aid = int(raw_id)
+            aids.append(int(raw_id))
         except (TypeError, ValueError):
             continue
-        try:
-            row = redis_client.hgetall(_doc_key(aid))
-        except Exception:
-            continue
+    if not aids:
+        return []
+    try:
+        pipe = redis_client.pipeline()
+        for aid in aids:
+            pipe.hgetall(_doc_key(aid))
+        rows = pipe.execute()
+    except Exception:
+        logger.exception("批量读取帖子 RAG 条目失败")
+        return []
+    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
+    scored: list[tuple[float, int]] = []
+    for aid, row in zip(aids, rows):
         if not row:
             continue
-        emb_raw = row.get("embedding") or row.get(b"embedding")
-        if isinstance(emb_raw, bytes):
-            emb_raw = emb_raw.decode("utf-8", errors="ignore")
-        if not emb_raw:
+        doc_vec = _decode_embedding(row.get("embedding") or row.get(b"embedding"))
+        if doc_vec is None:
             continue
-        try:
-            vec = json.loads(emb_raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(vec, list):
-            continue
-        doc_vec = [float(x) for x in vec]
         if len(doc_vec) != len(query_vec):
             logger.warning(
                 "[rag] 向量维度不一致 articleId=%s query_dim=%s doc_dim=%s，请重新索引该帖",
@@ -197,11 +289,9 @@ def vector_search_articles(
             continue
         sim = _cosine(query_vec, doc_vec)
         if query_text:
-            tags_raw = row.get("tags") or row.get(b"tags")
-            if isinstance(tags_raw, bytes):
-                tags_raw = tags_raw.decode("utf-8", errors="ignore")
+            tags_text = _as_text(row.get("tags") or row.get(b"tags"))
             try:
-                tags = json.loads(tags_raw) if tags_raw else []
+                tags = json.loads(tags_text) if tags_text else []
             except json.JSONDecodeError:
                 tags = []
             if isinstance(tags, list):
@@ -222,32 +312,35 @@ def vector_search_users(
     if not query_vec:
         return []
     try:
-        ids = list(redis_client.smembers(_USER_IDS_KEY))[:VECTOR_SCAN_LIMIT]
+        ids = _take_scan_ids(list(redis_client.smembers(_USER_IDS_KEY)), index_name="user")
     except Exception:
         logger.exception("读取用户 RAG 索引失败")
         return []
-    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
-    scored: list[tuple[float, int]] = []
+    uids: list[int] = []
     for raw_id in ids:
         try:
-            uid = int(raw_id)
+            uids.append(int(raw_id))
         except (TypeError, ValueError):
             continue
-        try:
-            emb_raw = redis_client.hget(_user_doc_key(uid), "embedding")
-        except Exception:
+    if not uids:
+        return []
+    # 每个用户同时取 embedding 与 doc（昵称/用户名加分用），一次 pipeline 批量拉取
+    try:
+        pipe = redis_client.pipeline()
+        for uid in uids:
+            pipe.hget(_user_doc_key(uid), "embedding")
+            pipe.hget(_user_doc_key(uid), "doc")
+        results = pipe.execute()
+    except Exception:
+        logger.exception("批量读取用户 RAG 条目失败")
+        return []
+    scored: list[tuple[float, int]] = []
+    for idx, uid in enumerate(uids):
+        emb_raw = results[idx * 2]
+        doc_raw = results[idx * 2 + 1]
+        doc_vec = _decode_embedding(emb_raw)
+        if doc_vec is None:
             continue
-        if not emb_raw:
-            continue
-        if isinstance(emb_raw, bytes):
-            emb_raw = emb_raw.decode("utf-8", errors="ignore")
-        try:
-            vec = json.loads(emb_raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(vec, list):
-            continue
-        doc_vec = [float(x) for x in vec]
         if len(doc_vec) != len(query_vec):
             logger.warning(
                 "[rag] 用户向量维度不一致 userId=%s query_dim=%s doc_dim=%s",
@@ -259,10 +352,7 @@ def vector_search_users(
         cosine = _cosine(query_vec, doc_vec)
         boost = 0.0
         if query_text and len(query_text) >= 2:
-            doc_raw = redis_client.hget(_user_doc_key(uid), "doc")
-            if isinstance(doc_raw, bytes):
-                doc_raw = doc_raw.decode("utf-8", errors="ignore")
-            boost = _user_profile_keyword_boost(query_text, doc_raw or "")
+            boost = _user_profile_keyword_boost(query_text, _as_text(doc_raw))
         sim = cosine + boost
         # 无昵称/用户名命中时，要求更高纯向量分，避免地域词误召回无关用户
         if boost > 0:
@@ -279,27 +369,70 @@ def vector_search_emojis(query_vec: list[float], *, top_k: int = 80) -> list[dic
     if not query_vec:
         return []
     try:
-        ids = list(redis_client.smembers(_EMOJI_IDS_KEY))[:VECTOR_SCAN_LIMIT]
+        ids = _take_scan_ids(list(redis_client.smembers(_EMOJI_IDS_KEY)), index_name="emoji")
     except Exception:
         logger.exception("读取表情包 RAG 索引失败")
         return []
-    scored: list[tuple[float, int]] = []
-    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
+    shop_ids: list[int] = []
     for raw_id in ids:
         try:
-            shop_id = int(raw_id)
-            emb_raw = redis_client.hget(_emoji_doc_key(shop_id), "embedding")
-            if isinstance(emb_raw, bytes):
-                emb_raw = emb_raw.decode("utf-8", errors="ignore")
-            vec = json.loads(emb_raw) if emb_raw else []
-            if not isinstance(vec, list):
-                continue
-            similarity = _cosine(query_vec, [float(item) for item in vec])
-            if similarity >= min_sim:
-                scored.append((similarity, shop_id))
-        except (TypeError, ValueError, json.JSONDecodeError):
+            shop_ids.append(int(raw_id))
+        except (TypeError, ValueError):
             continue
-        except Exception:
-            logger.debug("读取表情包 RAG 条目失败 shopId=%s", raw_id)
+    if not shop_ids:
+        return []
+    try:
+        pipe = redis_client.pipeline()
+        for shop_id in shop_ids:
+            pipe.hget(_emoji_doc_key(shop_id), "embedding")
+        embeddings = pipe.execute()
+    except Exception:
+        logger.exception("批量读取表情包 RAG 条目失败")
+        return []
+    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
+    scored: list[tuple[float, int]] = []
+    for shop_id, emb_raw in zip(shop_ids, embeddings):
+        doc_vec = _decode_embedding(emb_raw)
+        if doc_vec is None:
+            continue
+        similarity = _cosine(query_vec, doc_vec)
+        if similarity >= min_sim:
+            scored.append((similarity, shop_id))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [{"shopId": shop_id, "score": round(score, 4)} for score, shop_id in scored[:top_k]]
+
+
+def vector_search_musics(query_vec: list[float], *, top_k: int = 80) -> list[dict[str, Any]]:
+    if not query_vec:
+        return []
+    try:
+        ids = _take_scan_ids(list(redis_client.smembers(_MUSIC_IDS_KEY)), index_name="music")
+    except Exception:
+        logger.exception("读取曲目 RAG 索引失败")
+        return []
+    music_keys: list[str] = []
+    for raw_id in ids:
+        key = _as_text(raw_id).strip()
+        if key:
+            music_keys.append(key)
+    if not music_keys:
+        return []
+    try:
+        pipe = redis_client.pipeline()
+        for music_key in music_keys:
+            pipe.hget(_music_doc_key(music_key), "embedding")
+        embeddings = pipe.execute()
+    except Exception:
+        logger.exception("批量读取曲目 RAG 条目失败")
+        return []
+    min_sim = float(_RAG.get("vector_min_sim_floor", 0.04))
+    scored: list[tuple[float, str]] = []
+    for music_key, emb_raw in zip(music_keys, embeddings):
+        doc_vec = _decode_embedding(emb_raw)
+        if doc_vec is None:
+            continue
+        similarity = _cosine(query_vec, doc_vec)
+        if similarity >= min_sim:
+            scored.append((similarity, music_key))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [{"musicKey": music_key, "score": round(score, 4)} for score, music_key in scored[:top_k]]

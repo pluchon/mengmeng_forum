@@ -1,6 +1,6 @@
 const SCROLL_KEY = 'forum_feed_scroll_y'
 
-/** 首页信息流滚动容器 */
+// 首页信息流滚动容器
 export function getFeedScrollEl() {
   return (
     document.querySelector('.shell-main-outlet .shell-page-scroll')

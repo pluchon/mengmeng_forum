@@ -9,14 +9,17 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.ForumCompanionMessage;
+import org.pluchon.forum.entity.db.ForumMascotMemory;
 import org.pluchon.forum.entity.db.ForumCompanionSession;
-import org.pluchon.forum.entity.dto.mascot.MascotHistoryTurn;
-import org.pluchon.forum.entity.vo.mascot.CompanionMessageVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionSessionVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionContextWindowVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionImageGalleryItemVO;
+import org.pluchon.forum.entity.dto.MascotHistoryTurn;
+import org.pluchon.forum.entity.vo.CompanionMessageVO;
+import org.pluchon.forum.entity.vo.CompanionSessionVO;
+import org.pluchon.forum.entity.vo.CompanionContextWindowVO;
+import org.pluchon.forum.entity.vo.CompanionImageGalleryItemVO;
+import org.pluchon.forum.entity.vo.MascotMemoryVO;
 import org.pluchon.forum.mapper.ForumCompanionMessageMapper;
 import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
+import org.pluchon.forum.mapper.ForumMascotMemoryMapper;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,9 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Autowired
     private ForumCompanionMessageMapper companionMessageMapper;
+
+    @Autowired
+    private ForumMascotMemoryMapper forumMascotMemoryMapper;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -69,7 +75,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
                     return existing.getId();
                 }
             } catch (NumberFormatException ignored) {
-                /* create new */
+                // 创建新记录
             }
         }
         ForumCompanionSession row = new ForumCompanionSession();
@@ -100,7 +106,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         if (latestSummary != null) {
             query.gt(ForumCompanionMessage::getId, latestSummary.getId());
         }
-        List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2, false),
+        List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2L, false),
                 query).getRecords();
         List<MascotHistoryTurn> turns = new ArrayList<>();
         if (latestSummary != null && latestSummary.getContent() != null && !latestSummary.getContent().isBlank()) {
@@ -159,7 +165,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
             try {
                 m.setMetadataJson(objectMapper.writeValueAsString(gallery));
             } catch (Exception ignored) {
-                /* 图集持久化失败时，至少保留首图兼容旧会话。 */
+                // 图集持久化失败时，至少保留首图兼容旧会话
             }
         }
         m.setDeleteState((byte) 0);
@@ -333,6 +339,52 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         touchSession(sessionId, null);
     }
 
+    @Override
+    public MascotMemoryVO getMascotMemory(Long userId) {
+        MascotMemoryVO vo = new MascotMemoryVO();
+        ForumMascotMemory row = forumMascotMemoryMapper.selectByUserId(userId);
+        if (row == null) {
+            vo.setSummary("");
+            vo.setFacts(List.of());
+            vo.setUpdatedAt("");
+            return vo;
+        }
+        vo.setSummary(row.getSummary() == null ? "" : row.getSummary().trim());
+        vo.setFacts(readFacts(row.getFactsJson()));
+        vo.setUpdatedAt(row.getUpdateTime() == null ? "" : String.valueOf(row.getUpdateTime().getTime()));
+        return vo;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveMascotMemory(Long userId, String summary, List<String> facts) {
+        if (userId == null || userId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        String normalizedSummary = summary == null ? "" : summary.trim();
+        if (normalizedSummary.length() > 240) {
+            normalizedSummary = normalizedSummary.substring(0, 240);
+        }
+        List<String> normalizedFacts = sanitizeFacts(facts);
+        ForumMascotMemory row = forumMascotMemoryMapper.selectByUserId(userId);
+        Date now = new Date();
+        if (row == null) {
+            row = new ForumMascotMemory();
+            row.setUserId(userId);
+            row.setCreateTime(now);
+            row.setDeleteState((byte) 0);
+            row.setSummary(normalizedSummary);
+            row.setFactsJson(writeFacts(normalizedFacts));
+            row.setUpdateTime(now);
+            forumMascotMemoryMapper.insert(row);
+            return;
+        }
+        row.setSummary(normalizedSummary);
+        row.setFactsJson(writeFacts(normalizedFacts));
+        row.setUpdateTime(now);
+        forumMascotMemoryMapper.updateById(row);
+    }
+
     private void requireOwnedSession(Long userId, Long sessionId) {
         ForumCompanionSession session = companionSessionMapper.selectOne(
                 new LambdaQueryWrapper<ForumCompanionSession>()
@@ -378,6 +430,40 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         } catch (Exception ignored) {
             return List.of();
         }
+    }
+
+    private List<String> readFacts(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            return sanitizeFacts(objectMapper.readValue(raw, new TypeReference<List<String>>() { }));
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private String writeFacts(List<String> facts) {
+        try {
+            return objectMapper.writeValueAsString(sanitizeFacts(facts));
+        } catch (Exception ex) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "记忆保存失败"));
+        }
+    }
+
+    private List<String> sanitizeFacts(List<String> raw) {
+        List<String> out = new ArrayList<>();
+        for (String item : raw == null ? List.<String>of() : raw) {
+            String text = item == null ? "" : item.trim();
+            if (text.isBlank() || out.contains(text)) {
+                continue;
+            }
+            out.add(text.substring(0, Math.min(40, text.length())));
+            if (out.size() >= 10) {
+                break;
+            }
+        }
+        return out;
     }
 
     private long estimateTokens(List<MascotHistoryTurn> turns) {

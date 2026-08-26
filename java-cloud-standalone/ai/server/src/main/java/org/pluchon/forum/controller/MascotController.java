@@ -8,16 +8,18 @@ import jakarta.validation.constraints.Positive;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.entity.dto.mascot.CompanionSessionRenameRequest;
-import org.pluchon.forum.entity.dto.mascot.MascotChatRequest;
-import org.pluchon.forum.entity.dto.mascot.MascotRelatedRecommendationRequest;
-import org.pluchon.forum.entity.vo.mascot.CompanionMessageVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionContextWindowVO;
-import org.pluchon.forum.entity.vo.mascot.CompanionSessionVO;
-import org.pluchon.forum.entity.vo.mascot.MascotChatResponseVO;
-import org.pluchon.forum.entity.vo.mascot.MascotModelPublicVO;
+import org.pluchon.forum.entity.dto.CompanionSessionRenameRequest;
+import org.pluchon.forum.entity.dto.MascotChatRequest;
+import org.pluchon.forum.entity.dto.MascotMemoryEditRequest;
+import org.pluchon.forum.entity.dto.MascotRelatedRecommendationRequest;
+import org.pluchon.forum.entity.vo.CompanionMessageVO;
+import org.pluchon.forum.entity.vo.CompanionContextWindowVO;
+import org.pluchon.forum.entity.vo.CompanionSessionVO;
+import org.pluchon.forum.entity.vo.MascotChatResponseVO;
+import org.pluchon.forum.entity.vo.MascotMemoryVO;
+import org.pluchon.forum.entity.vo.MascotModelPublicVO;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
-import org.pluchon.forum.entity.vo.mascot.MascotRelatedRecommendationVO;
+import org.pluchon.forum.entity.vo.MascotRelatedRecommendationVO;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
 import org.pluchon.forum.service.security.AiUserContext;
@@ -36,11 +38,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.concurrent.Executor;
 
-@Tag(name = "看板娘", description = "Live2D 看板娘对话 (Java 转发 Python)")
+@Slf4j
+@Tag(name = "看板娘", description = "Live2D 看板娘对话")
 @Validated
 @RestController
 @RequestMapping("/mascot")
@@ -59,7 +63,7 @@ public class MascotController {
     @Qualifier("sseExecutor")
     private Executor sseExecutor;
 
-    @Operation(summary = "当前模型配额使用率", description = "会员 PRO/MAX：用于「使用萌币积分」按钮（≥95% 可开启）")
+    @Operation(summary = "当前模型配额使用率", description = "会员 PRO/MAX 用于使用萌币积分")
     @GetMapping("/quota-hint")
     public Result<MascotQuotaHintVO> quotaHint(
             @RequestParam(required = false) String llmProvider,
@@ -77,7 +81,7 @@ public class MascotController {
         return Result.success(mascotService.listPublicModels());
     }
 
-    @Operation(summary = "看板娘对话", description = "单次 JSON 返回; 普通用户有每日次数上限 (见 application.yml)")
+    @Operation(summary = "看板娘对话", description = "单次 JSON 返回; 普通用户有每日次数上限")
     @PostMapping("/chat")
     public Result<MascotChatResponseVO> chat(
             @Valid @RequestBody MascotChatRequest request,
@@ -108,7 +112,19 @@ public class MascotController {
             return emitter;
         }
         String clientIp = resolveClientIp(httpServletRequest);
-        sseExecutor.execute(() -> mascotService.streamChat(user, request, clientIp, emitter));
+        sseExecutor.execute(() -> {
+            try {
+                mascotService.streamChat(user, request, clientIp, emitter);
+            } catch (Exception ex) {
+                log.warn("看板娘 SSE 线程未捕获异常: {}", ex.getMessage());
+                try {
+                    emitter.send(SseEmitter.event().data("{\"error\":\"对话失败，请稍后重试\"}"));
+                    emitter.complete();
+                } catch (Exception ignored) {
+                    emitter.completeWithError(ex);
+                }
+            }
+        });
         return emitter;
     }
 
@@ -163,7 +179,7 @@ public class MascotController {
         return Result.success(companionMemoryService.listMessages(user.getId(), sessionId));
     }
 
-    /** 读取当前会话的上下文估算占用。 */
+    /** 读取当前会话的上下文估算占用 */
     @GetMapping("/companion/sessions/{sessionId}/context-window")
     public Result<CompanionContextWindowVO> contextWindow(
             @PathVariable @Positive Long sessionId,
@@ -175,7 +191,7 @@ public class MascotController {
         return Result.success(mascotService.getContextWindow(user, sessionId));
     }
 
-    /** 压缩当前会话的历史上下文。 */
+    /** 压缩当前会话的历史上下文 */
     @PostMapping("/companion/sessions/{sessionId}/compress-context")
     public Result<CompanionContextWindowVO> compressContext(
             @PathVariable @Positive Long sessionId,
@@ -185,6 +201,26 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotService.compressContext(user, sessionId));
+    }
+
+    @GetMapping("/companion/memory")
+    public Result<MascotMemoryVO> mascotMemory(HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotService.getMascotMemory(user));
+    }
+
+    @PostMapping("/companion/memory")
+    public Result<MascotMemoryVO> editMascotMemory(
+            @Valid @RequestBody MascotMemoryEditRequest request,
+            HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotService.editMascotMemory(user, request));
     }
 
     /** 修改陪伴助手会话名称 */

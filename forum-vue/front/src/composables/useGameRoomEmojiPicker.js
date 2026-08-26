@@ -57,7 +57,7 @@ export function useGameRoomEmojiPicker() {
       }
       nextTick(updatePackBarScrollState)
     } catch {
-      /* 已提示 */
+      // 已提示
     }
   }
 

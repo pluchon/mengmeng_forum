@@ -7,7 +7,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 用户对推荐帖子的“不感兴趣”反馈
+// 用户对推荐帖子的 不感兴趣 反馈
 @Data
 @TableName("user_recommend_feedback")
 public class UserRecommendFeedback {

@@ -1,0 +1,167 @@
+.music-hall-recommend {
+  // 3 列 × 2 行：68*2 + 10 = 146
+  $list-height: 146px;
+
+  .music-hall-module-card__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__viewport {
+    height: $list-height;
+    min-height: $list-height;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  &__loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: $list-height;
+    height: $list-height;
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    height: $list-height;
+    min-height: $list-height;
+    align-content: start;
+    box-sizing: border-box;
+  }
+
+  &__viewport :deep(.music-hall-empty) {
+    flex: 1;
+    min-height: $list-height;
+    height: $list-height;
+    padding: 12px 8px;
+    box-sizing: border-box;
+
+    img {
+      width: 96px;
+    }
+  }
+
+  &__card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 68px;
+    min-height: 68px;
+    padding: 10px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid #f0e0ea;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &.is-active {
+      border-color: #f07ba8;
+      box-shadow: 0 0 0 1px rgba(240, 123, 168, 0.18);
+    }
+  }
+
+  &__cover {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: linear-gradient(-135deg, #ff9ebf 15%, #9b8eea 85%);
+    background-size: cover;
+    background-position: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  &__meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #423243;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__artist {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #9d8798;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__stats {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 52px;
+  }
+
+  &__duration {
+    font-size: 12px;
+    font-weight: 600;
+    color: #423243;
+  }
+
+  &__plays {
+    font-size: 11px;
+    color: #b0a3b5;
+    white-space: nowrap;
+  }
+
+  &__play {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: #fff0f7;
+    color: #f07ba8;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    .el-icon {
+      font-size: 14px;
+    }
+
+    &:hover {
+      background: #f07ba8;
+      color: #fff;
+    }
+  }
+
+  &__pager {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    // 始终预留翻页槽，避免有/无分页时卡片高度跳动
+    margin-top: 16px;
+    height: 32px;
+  }
+}

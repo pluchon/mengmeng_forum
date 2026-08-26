@@ -1,0 +1,40 @@
+.border-glow {
+  position: relative;
+  display: grid;
+  isolation: isolate;
+  min-width: 0;
+  border: none;
+  box-shadow: none;
+  transform: translate3d(0, 0, 0.01px);
+}
+
+.border-glow__border,
+.border-glow__fill {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.border-glow__outer {
+  position: absolute;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.border-glow__outer-inner {
+  position: absolute;
+  border-radius: inherit;
+}
+
+.border-glow__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: visible;
+}

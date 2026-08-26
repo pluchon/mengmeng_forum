@@ -1,0 +1,48 @@
+/* 对齐 UI/vip/vip_status.html 会员胶囊 */
+.vip-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 13px;
+  margin: 0;
+  border: none;
+  border-radius: 99px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
+  outline: 1px solid #f8d783;
+  outline-offset: -0.5px;
+/* 购买 VIP： 90deg 粉→紫→金，视觉上金在左、粉在右 */
+  background-image: linear-gradient(-90deg, #df5e89 0%, #9e496d 65%, #d6a44f 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: #ffffff;
+}
+
+.vip-status-pill--pro {
+/* PRO：实色底 + 金描边 稿面 */
+  background: #4a344b;
+  background-image: none;
+  color: #fff1d0;
+  outline-color: #dcb45a;
+}
+
+.vip-status-pill--max {
+  background-image: linear-gradient(-90deg, #40315d 0%, #69538c 60%, #c49948 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: #fff1d0;
+  outline-color: #f0c86d;
+}
+
+.vip-status-pill__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: block;
+}

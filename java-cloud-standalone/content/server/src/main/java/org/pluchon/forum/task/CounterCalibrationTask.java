@@ -17,9 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * 定时校准帖子 like_count 与 article_like 实际行数，防止并发漂移长期累积。
- */
+// 定时校准帖子 like_count 与 article_like 实际行数，防止并发漂移长期累积
 @Slf4j
 @ConditionalOnProperty(name = "forum.domain", havingValue = "content")
 @Component

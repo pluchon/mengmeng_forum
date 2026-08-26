@@ -16,12 +16,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.math.BigDecimal;
 
 // AI 域内部用量查询服务
 @Service
 public class AiUsageInternalService {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
     @Autowired
     private AiUsageDailyMapper aiUsageDailyMapper;
@@ -31,7 +32,7 @@ public class AiUsageInternalService {
 
     public AiUsageDailyBucketsVO usageSnapshot(Long userId, long periodStartMs, long periodEndMs) {
         AiUsageDailyBucketsVO vo = new AiUsageDailyBucketsVO();
-        LocalDate today = LocalDate.now(SHANGHAI);
+        LocalDate today = LocalDate.now(TAIPEI);
         List<AiUsageDaily> rows = aiUsageDailyMapper.selectPage(new Page<>(1, 1, false),
                 Wrappers.lambdaQuery(AiUsageDaily.class)
                         .eq(AiUsageDaily::getUserId, userId)
@@ -42,9 +43,7 @@ public class AiUsageInternalService {
             vo.setQwenFlashUsed(daily.getQwenFlashUsed());
             vo.setAdvancedLlmUsed(daily.getAdvancedLlmUsed());
             vo.setImageNormalUsed(daily.getImageNormalUsed());
-            vo.setImagePremiumUsed(daily.getImagePremiumUsed());
             vo.setCompanionNormalUsed(daily.getCompanionNormalUsed());
-            vo.setCompanionPremiumUsed(daily.getCompanionPremiumUsed());
         }
         Date periodStart = new Date(periodStartMs);
         Date periodEnd = new Date(periodEndMs);
@@ -60,6 +59,11 @@ public class AiUsageInternalService {
         }
         vo.setTokenByModel(tokenByModel);
         vo.setTotalCalls(forumAiUsageLogMapper.countCallsBetween(userId, periodStart, periodEnd));
+        BigDecimal textCost = forumAiUsageLogMapper.sumBillableTextCostBetween(userId, periodStart, periodEnd);
+        vo.setQwenCostMicros(textCost == null ? 0L
+                : textCost.multiply(BigDecimal.valueOf(1_000_000)).longValue());
+        vo.setWanImageUsed(forumAiUsageLogMapper.sumImageCountByModelBetween(
+                userId, "wan2.7-image", periodStart, periodEnd));
         return vo;
     }
 

@@ -1,6 +1,6 @@
 <template>
   <div class="user-avatar-vip">
-    <div v-if="effectiveTier > 0" class="vip-chrome-ring">
+    <div v-if="showVipRing && effectiveTier > 0" class="vip-chrome-ring">
       <div class="vip-chrome-inner">
         <el-avatar :size="size" :src="src || defaultAvatar" />
       </div>
@@ -16,10 +16,12 @@ import { DEFAULT_AVATAR } from '@/utils/constants'
 const props = defineProps({
   src: { type: String, default: '' },
   size: { type: Number, default: 32 },
-  /** 0 普通 1 PRO 2 MAX（仅用于是否展示会员环；环样式统一为七彩） */
+  // 0 普通 1 PRO 2 MAX 仅用于是否展示会员环；环样式统一为七彩
   vipTier: { type: Number, default: 0 },
-  /** ISO 日期字符串或 null */
+  // ISO 日期字符串或 null
   vipExpireAt: { type: String, default: null },
+  // 是否展示会员七彩环 首页等场景可关闭
+  showVipRing: { type: Boolean, default: true },
 })
 
 const defaultAvatar = DEFAULT_AVATAR
@@ -41,7 +43,7 @@ const effectiveTier = computed(() => {
   line-height: 0;
 }
 
-/* Google 系分段色环：conic-gradient + 内圈留白形成环宽 */
+/* Google 系分段色环：conic gradient + 内圈留白形成环宽 */
 .vip-chrome-ring {
   flex-shrink: 0;
   border-radius: 50%;
@@ -67,5 +69,4 @@ const effectiveTier = computed(() => {
 
 .vip-chrome-inner :deep(.el-avatar) {
   display: block;
-}
-</style>
+}</style>

@@ -12,9 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 热帖榜 ZSet 蓝绿切换读写：重建写入 inactive slot，再原子切换 active 指针，避免 delete 全 key 的空榜窗口。
- */
+// 热帖榜 ZSet 蓝绿切换读写：重建写入 inactive slot，再原子切换 active 指针，避免 删除 全 key 的空榜窗口
 @Component
 public class HotArticleRedisOps {
 
@@ -58,13 +56,34 @@ public class HotArticleRedisOps {
         return stringRedisTemplate.opsForZSet().reverseRange(resolveActiveKey(), start, end);
     }
 
+    // 批量读取当前活跃热榜 ZSet 分值
+    public Map<Long, Double> readScores(List<Long> articleIds) {
+        if (articleIds == null || articleIds.isEmpty()) {
+            return Map.of();
+        }
+        String key = resolveActiveKey();
+        Map<Long, Double> scores = new HashMap<>();
+        for (Long articleId : articleIds) {
+            if (articleId == null || articleId <= 0) {
+                continue;
+            }
+            Double score = stringRedisTemplate.opsForZSet().score(key, String.valueOf(articleId));
+            if (score != null) {
+                scores.put(articleId, score);
+            }
+        }
+        return scores;
+    }
+
     public void rebuildBlueGreen(Map<String, Double> memberScores) {
+        // 窗口内无合格帖时保留当前活跃榜，避免启动重算把热榜刷成空列表
+        if (memberScores == null || memberScores.isEmpty()) {
+            return;
+        }
         String inactiveKey = resolveInactiveKey();
         stringRedisTemplate.delete(inactiveKey);
-        if (memberScores != null && !memberScores.isEmpty()) {
-            for (Map.Entry<String, Double> entry : memberScores.entrySet()) {
-                stringRedisTemplate.opsForZSet().add(inactiveKey, entry.getKey(), entry.getValue());
-            }
+        for (Map.Entry<String, Double> entry : memberScores.entrySet()) {
+            stringRedisTemplate.opsForZSet().add(inactiveKey, entry.getKey(), entry.getValue());
         }
         String newPointer = ForumRedisKeys.HOT_ARTICLES_SLOT_A.equals(inactiveKey) ? POINTER_A : POINTER_B;
         stringRedisTemplate.opsForValue().set(ForumRedisKeys.HOT_ARTICLES_ACTIVE, newPointer);

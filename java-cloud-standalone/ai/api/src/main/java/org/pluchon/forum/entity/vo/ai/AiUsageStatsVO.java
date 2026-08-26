@@ -2,7 +2,7 @@ package org.pluchon.forum.entity.vo.ai;
 
 import lombok.Data;
 
-// AI 调用用量与计费统计（写入响应 VO）
+// AI 调用用量与计费统计 写入响应 VO
 @Data
 public class AiUsageStatsVO {
 

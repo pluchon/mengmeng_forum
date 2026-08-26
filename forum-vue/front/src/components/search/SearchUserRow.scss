@@ -1,10 +1,13 @@
 .search-user-row {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 64px minmax(180px, 1fr) minmax(260px, 0.9fr) 112px;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  grid-template-rows: minmax(24px, auto) minmax(22px, auto);
+  column-gap: 10px;
+  row-gap: 2px;
   align-items: center;
-  min-height: 92px;
-  padding: 14px 18px;
+  min-height: 96px;
+  padding: 15px 16px;
   border: 1px solid rgba(29, 33, 41, 0.08);
   border-radius: 16px;
   background: #fff;
@@ -13,6 +16,7 @@
 }
 
 .search-user-row__avatar {
+  grid-row: 1 / span 2;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -34,47 +38,45 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 28px;
+  gap: 14px;
   color: #86909c;
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .search-user-row__follow {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   justify-self: end;
-  width: 128px;
-  min-height: 38px;
-  border-color: #e5e6eb !important;
-  background: #f2f3f5 !important;
-  color: #4e5969 !important;
-  font-weight: 750;
+  min-width: 66px;
+  min-height: 30px;
+  padding: 0 12px !important;
+  border-color: #d9cffd !important;
+  border-radius: 10px !important;
+  background: #f2eeff !important;
+  color: #7658dc !important;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .search-user-row__follow:not(.is-following):hover {
-  border-color: #dcdfe5 !important;
-  background: #e8eaed !important;
-  color: #1d2129 !important;
+  border-color: #8467e9 !important;
+  background: #8467e9 !important;
+  color: #fff !important;
 }
 
 .search-user-row__follow.is-following {
-  border-color: #cdebd4 !important;
-  background: #edf8ef !important;
-  color: #3f8f50 !important;
+  border-color: #ffd1e2 !important;
+  background: #fff1f6 !important;
+  color: #e85d96 !important;
 }
 
 .search-user-row__self {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   justify-self: end;
-  width: 128px;
+  min-width: 66px;
   color: #86909c;
-  font-size: 13px;
+  font-size: 12px;
   text-align: center;
-}
-
-:root[data-theme='dark'] .search-user-row {
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(17, 24, 39, 0.78);
-}
-
-:root[data-theme='dark'] .search-user-row__name {
-  color: #eef4ff;
 }

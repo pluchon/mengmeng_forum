@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.util.Date;
+import java.math.BigDecimal;
 
 @Data
 @TableName("forum_ai_usage_log")
@@ -37,6 +38,15 @@ public class ForumAiUsageLog {
     private Integer pointsCost;
 
     private Byte estimated;
+
+    @TableField("billable_state")
+    private Byte billableState;
+
+    @TableField("cost_yuan")
+    private BigDecimal costYuan;
+
+    @TableField("quota_period_key")
+    private String quotaPeriodKey;
 
     @TableField("related_id")
     private String relatedId;

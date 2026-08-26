@@ -1,7 +1,7 @@
 package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.db.ArticleVideoDanmaku;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.article.DanmakuItemVO;
 
 import java.util.ArrayList;
@@ -27,6 +27,7 @@ public final class DanmakuConverter {
         vo.setColorCode(entity.getColorCode());
         vo.setMode(entity.getMode());
         vo.setFontSize(entity.getFontSize());
+        vo.setLikeCount(entity.getLikeCount() == null ? 0 : entity.getLikeCount());
         vo.setCreateTime(entity.getCreateTime());
         if (user != null) {
             vo.setNickname(user.getNickname());

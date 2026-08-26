@@ -1,0 +1,10 @@
+[
+  {"resource": "ai.python.fast", "grade": 0, "count": 15000, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000, "slowRatioThreshold": 0.6},
+  {"resource": "ai.python.standard", "grade": 0, "count": 35000, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000, "slowRatioThreshold": 0.6},
+  {"resource": "ai.python.long", "grade": 0, "count": 90000, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000, "slowRatioThreshold": 0.6},
+  {"resource": "ai.python.index", "grade": 0, "count": 30000, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000, "slowRatioThreshold": 0.6},
+  {"resource": "ai.python.fast", "grade": 1, "count": 0.5, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000},
+  {"resource": "ai.python.standard", "grade": 1, "count": 0.5, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000},
+  {"resource": "ai.python.long", "grade": 1, "count": 0.5, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000},
+  {"resource": "ai.python.index", "grade": 1, "count": 0.5, "timeWindow": 30, "minRequestAmount": 5, "statIntervalMs": 60000}
+]

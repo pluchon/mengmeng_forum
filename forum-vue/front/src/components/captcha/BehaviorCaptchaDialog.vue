@@ -123,6 +123,8 @@
       <el-skeleton :rows="3" animated />
     </div>
   </el-dialog>
+
+  <SystemUpgradeDialog ref="upgradeDialogRef" />
 </template>
 
 <script setup src="@/scripts/components/captcha/BehaviorCaptchaDialog.js"></script>

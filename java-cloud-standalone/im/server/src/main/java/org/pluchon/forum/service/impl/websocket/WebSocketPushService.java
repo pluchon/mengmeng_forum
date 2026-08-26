@@ -56,9 +56,7 @@ public class WebSocketPushService {
         redisMessageListenerContainer.addMessageListener(listener, new ChannelTopic(Constant.WS_PUSH_CHANNEL));
     }
 
-    /**
-     * 向目标用户推送（经 Redis 广播，各节点对本机在线 Session 投递）
-     */
+    // 向目标用户推送 经 Redis 广播，各节点对本机在线 Session 投递
     public void push(Long userId, String payload) {
         if (userId == null || payload == null) {
             return;
@@ -77,9 +75,7 @@ public class WebSocketPushService {
         }
     }
 
-    /**
-     * 仅本机投递（不经 Redis，供订阅回调使用）
-     */
+    // 仅本机投递 不经 Redis，供订阅回调使用
     public boolean pushLocal(Long userId, String payload) {
         boolean result = onlineUserManageUtil.sendMessage(userId, payload);
         if (!result) {

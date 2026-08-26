@@ -30,6 +30,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDate;
+import org.pluchon.forum.api.FollowDailyCountInternalVO;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +42,7 @@ public class UserFollowServiceImpl implements UserFollowService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
+    private static final ZoneId ZONE_TAIPEI = ZoneId.of("Asia/Taipei");
 
     @Autowired
     private UserFollowMapper userFollowMapper;
@@ -63,7 +68,6 @@ public class UserFollowServiceImpl implements UserFollowService {
         } catch (DuplicateKeyException ex) {
             return;
         }
-        log.info("用户 {} 关注了 {}", followerId, followeeId);
     }
 
     @Override
@@ -76,7 +80,6 @@ public class UserFollowServiceImpl implements UserFollowService {
         if (deleted <= 0) {
             return;
         }
-        log.info("用户 {} 取消关注 {}", followerId, followeeId);
     }
 
     @Override
@@ -111,6 +114,51 @@ public class UserFollowServiceImpl implements UserFollowService {
             isFollowing = isFollowing(viewerId, userId);
         }
         return new UserFollowStatsVO(userId, followingCount, followerCount, isFollowing);
+    }
+
+    @Override
+    public long getCurrentMonthNewFollowerCount(Long userId) {
+        validateProfileUser(userId);
+        LocalDate monthStart = LocalDate.now(ZONE_TAIPEI).withDayOfMonth(1);
+        return countNewFollowers(userId, monthStart, LocalDate.now(ZONE_TAIPEI));
+    }
+
+    @Override
+    public long countNewFollowers(Long userId, LocalDate startDate, LocalDate endDate) {
+        validateProfileUser(userId);
+        if (startDate == null || endDate == null || endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("粉丝统计日期范围无效");
+        }
+        Date startTime = Date.from(startDate.atStartOfDay(ZONE_TAIPEI).toInstant());
+        Date endTime = Date.from(endDate.plusDays(1).atStartOfDay(ZONE_TAIPEI).toInstant());
+        Long count = userFollowMapper.selectCount(new LambdaQueryWrapper<UserFollow>()
+                .eq(UserFollow::getFolloweeId, userId)
+                .ge(UserFollow::getCreateTime, startTime)
+                .lt(UserFollow::getCreateTime, endTime));
+        return count == null ? 0L : count;
+    }
+
+    @Override
+    public List<FollowDailyCountInternalVO> listDailyNewFollowers(Long userId, LocalDate startDate, LocalDate endDate) {
+        validateProfileUser(userId);
+        if (startDate == null || endDate == null || endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("粉丝统计日期范围无效");
+        }
+        Date startTime = Date.from(startDate.atStartOfDay(ZONE_TAIPEI).toInstant());
+        Date endTime = Date.from(endDate.plusDays(1).atStartOfDay(ZONE_TAIPEI).toInstant());
+        Map<LocalDate, Long> counts = new HashMap<>();
+        List<UserFollow> rows = userFollowMapper.selectList(new LambdaQueryWrapper<UserFollow>()
+                .eq(UserFollow::getFolloweeId, userId)
+                .ge(UserFollow::getCreateTime, startTime)
+                .lt(UserFollow::getCreateTime, endTime)
+                .select(UserFollow::getCreateTime));
+        for (UserFollow row : rows) {
+            LocalDate date = row.getCreateTime().toInstant().atZone(ZONE_TAIPEI).toLocalDate();
+            counts.merge(date, 1L, Long::sum);
+        }
+        return startDate.datesUntil(endDate.plusDays(1))
+                .map(date -> new FollowDailyCountInternalVO(date.toString(), counts.getOrDefault(date, 0L)))
+                .toList();
     }
 
     @Override
@@ -179,7 +227,8 @@ public class UserFollowServiceImpl implements UserFollowService {
         int s = normalizeListPageSize(pageSize);
         LambdaQueryWrapper<UserFollow> wrapper = new LambdaQueryWrapper<UserFollow>()
                 .eq(UserFollow::getFollowerId, profileUserId)
-                .orderByDesc(UserFollow::getCreateTime);
+                .orderByDesc(UserFollow::getCreateTime)
+                .orderByDesc(UserFollow::getId);
         applyKeywordFilter(wrapper, keyword, profileUserId, true);
         Page<UserFollow> page = userFollowMapper.selectPage(PageUtils.getPage(p, s), wrapper);
         List<UserFollowListItemVO> records = buildListItems(page.getRecords(), profileUserId, viewerId, false);
@@ -194,7 +243,8 @@ public class UserFollowServiceImpl implements UserFollowService {
         int s = normalizeListPageSize(pageSize);
         LambdaQueryWrapper<UserFollow> wrapper = new LambdaQueryWrapper<UserFollow>()
                 .eq(UserFollow::getFolloweeId, profileUserId)
-                .orderByDesc(UserFollow::getCreateTime);
+                .orderByDesc(UserFollow::getCreateTime)
+                .orderByDesc(UserFollow::getId);
         applyKeywordFilter(wrapper, keyword, profileUserId, false);
         Page<UserFollow> page = userFollowMapper.selectPage(PageUtils.getPage(p, s), wrapper);
         List<UserFollowListItemVO> records = buildListItems(page.getRecords(), profileUserId, viewerId, true);
@@ -202,7 +252,7 @@ public class UserFollowServiceImpl implements UserFollowService {
     }
 
     private int normalizeListPageSize(Integer pageSize) {
-        int s = pageSize == null || pageSize < 1 ? 10 : pageSize;
+        int s = pageSize == null || pageSize < 1 ? 5 : pageSize;
         return Math.min(s, 50);
     }
 
@@ -216,7 +266,7 @@ public class UserFollowServiceImpl implements UserFollowService {
         }
     }
 
-    /** 在关注/粉丝范围内按昵称、用户名或简介模糊匹配（不走 AI / 分词扩展） */
+    // 在关注/粉丝范围内仅按昵称模糊匹配 不走 AI / 分词扩展
     private void applyKeywordFilter(LambdaQueryWrapper<UserFollow> wrapper, String keyword,
             Long profileUserId, boolean followingList) {
         if (!StringUtils.hasText(keyword)) {
@@ -232,9 +282,7 @@ public class UserFollowServiceImpl implements UserFollowService {
                 .in(User::getId, scopedIds)
                 .ne(User::getDeleteState, DELETE_TRUE)
                 .ne(User::getState, STATE_FORBIDDEN)
-                .and(q -> q.like(User::getNickname, kw)
-                        .or().like(User::getUsername, kw)
-                        .or().like(User::getRemark, kw))
+                .like(User::getNickname, kw)
                 .select(User::getId))
                 .stream()
                 .map(User::getId)

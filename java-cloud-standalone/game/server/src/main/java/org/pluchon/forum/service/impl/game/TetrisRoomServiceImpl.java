@@ -3,7 +3,6 @@ package org.pluchon.forum.service.impl.game;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -13,8 +12,7 @@ import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.db.GameTetrisPkMatchRecord;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
-import org.pluchon.forum.cloud.feign.GamePointsInternalFeignClient;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.TetrisChatRequest;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
 import org.pluchon.forum.entity.vo.game.TetrisActiveRoomVO;
@@ -91,9 +89,6 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     @Autowired
     private GameUserLookupService gameUserLookupService;
-
-    @Autowired
-    private GamePointsInternalFeignClient gamePointsInternalFeignClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -473,27 +468,14 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             record.setEndReason(endReason);
             GameRankSettlementResult rankResult = gameRankService.settleRank(createRankCommand(room, winnerId, loserId, endReason));
             int scoreDelta = winnerDelta(rankResult);
-            int loserPenalty = Math.abs(loserDelta(rankResult));
             record.setScoreDelta(scoreDelta);
             record.setWinnerScoreDelta(scoreDelta);
             record.setLoserScoreDelta(loserDelta(rankResult));
             record.setReplayPayload(buildReplayPayload(room));
             record.setStartedAt(room.getStartedAt());
             record.setEndedAt(new Date());
-            record.setDeleteState((byte) 0);
+            record.setDeleteState(GameConstants.NOT_DELETED);
             gameTetrisPkMatchRecordMapper.insert(record);
-            if (winnerId != null && loserId != null && scoreDelta > 0) {
-                gamePointsInternalFeignClient.addPoints(winnerId, scoreDelta,
-                        Constant.POINTS_SOURCE_GAME_WIN, record.getId(), "俄罗斯方块PK胜利奖励",
-                        "game:tetrispk:win:" + room.getRoomId());
-                Integer balance = gamePointsInternalFeignClient.getBalance(loserId);
-                int loserPoints = balance == null ? 0 : balance;
-                if (loserPenalty > 0 && loserPoints >= loserPenalty) {
-                    gamePointsInternalFeignClient.deductPoints(loserId, loserPenalty,
-                            Constant.POINTS_SOURCE_GAME_LOSE, record.getId(), "俄罗斯方块PK对局扣除",
-                            "game:tetrispk:lose:" + room.getRoomId());
-                }
-            }
             return null;
         });
         broadcastState(room, "game_finished", null);
@@ -628,6 +610,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     null,
                     0,
                     0,
+                    0,
                     true,
                     revealHoldNext
             );
@@ -647,6 +630,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 revealHoldNext ? state.getHoldType() : null,
                 state.getPoints(),
                 state.getClearLines(),
+                state.getCombo(),
                 state.isGameOver(),
                 revealHoldNext
         );
@@ -667,7 +651,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         Map<Long, GameUserProfile> profileMap = new HashMap<>();
         gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
                 .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
-                .eq(GameUserProfile::getDeleteState, (byte) 0)
+                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
                 .in(GameUserProfile::getUserId, userIds))
                 .forEach(profile -> profileMap.put(profile.getUserId(), profile));
         return profileMap;
@@ -749,7 +733,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 String payload = objectMapper.writeValueAsString(GameWsResponse.ok(type, requestId, toStateVO(room, uid)));
                 gameConnectionRegistry.send(session, payload);
             } catch (Exception e) {
-                log.debug("广播俄罗斯方块房间状态失败 roomId={}, userId={}", room.getRoomId(), uid);
+                log.debug("广播俄罗斯方块房间状态失败 roomId={}, userId={}, error={}", room.getRoomId(), uid, e.getMessage());
             }
         });
         publishPlayerRoomState(room, type, requestId);
@@ -761,7 +745,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             gameConnectionRegistry.broadcastRoom(roomId, payload);
             gameRoomEventBusService.publishRoomEvent(roomId, payload);
         } catch (Exception e) {
-            log.debug("广播俄罗斯方块房间消息失败 roomId={}", roomId);
+            log.debug("广播俄罗斯方块房间消息失败 roomId={}, error={}", roomId, e.getMessage());
         }
     }
 
@@ -798,7 +782,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             ));
             gameRoomEventBusService.publishRoomUserEvent(room.getRoomId(), room.getPlayer2UserId(), player2Payload);
         } catch (Exception e) {
-            log.debug("发布俄罗斯方块定向状态失败 roomId={}", room.getRoomId());
+            log.debug("发布俄罗斯方块定向状态失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
         }
     }
 
@@ -810,7 +794,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     objectMapper.writeValueAsString(GameWsResponse.fail("room_error", requestId, message))
             );
         } catch (Exception e) {
-            log.debug("发送俄罗斯方块房间错误失败 roomId={}, userId={}", roomId, userId);
+            log.debug("发送俄罗斯方块房间错误失败 roomId={}, userId={}, error={}", roomId, userId, e.getMessage());
         }
     }
 }

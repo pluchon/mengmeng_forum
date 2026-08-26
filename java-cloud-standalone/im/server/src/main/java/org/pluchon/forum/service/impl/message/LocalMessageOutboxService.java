@@ -12,9 +12,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Date;
 
-/**
- * MQ 本地消息表：与业务同事务写入，由 {@link org.pluchon.forum.task.OutboxDispatchTask} 异步投递。
- */
+// MQ 本地消息表：与业务同事务写入，由 {@link org.pluchon.forum.task.OutboxDispatchTask} 异步投递
 @Slf4j
 @Service
 public class LocalMessageOutboxService {

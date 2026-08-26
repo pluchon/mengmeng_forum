@@ -8,13 +8,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 用户收藏夹.
- * 业务规则:
- *   - is_default=1 在同一用户名下最多一条, 注册时由 FavoriteFolderService.ensureDefaultFolder 创建
- *   - 默认夹禁止删除; 允许改名 / 改公开性
- *   - item_count 是快照, 收藏/取消/移动时维护
- */
+// 用户收藏夹. 业务规则: is_default 1 在同一用户名下最多一条, 注册时由 FavoriteFolderService.ensureDefaultFolder 创建 默认夹禁止删除; 允许改名 / 改公开性 item_count 是快照, 收藏/取消/移动时维护
 @Data
 @TableName("user_favorite_folder")
 @Schema(description = "用户收藏夹实体")
@@ -29,6 +23,9 @@ public class UserFavoriteFolder {
 
     @Schema(description = "收藏夹名称", example = "我的精选")
     private String name;
+
+    @Schema(description = "收藏夹封面URL")
+    private String coverUrl;
 
     @Schema(description = "公开性: 0私密 1公开", example = "1")
     private Byte isPublic;

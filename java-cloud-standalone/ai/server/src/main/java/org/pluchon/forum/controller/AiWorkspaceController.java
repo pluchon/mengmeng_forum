@@ -1,6 +1,5 @@
 package org.pluchon.forum.controller;
 
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
@@ -8,9 +7,9 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
-import org.pluchon.forum.entity.dto.ai.AiMemoryCreateRequest;
-import org.pluchon.forum.entity.dto.ai.AiWorkspaceArtifactRequest;
-import org.pluchon.forum.entity.dto.ai.AiWorkspaceCreateRequest;
+import org.pluchon.forum.entity.dto.AiMemoryCreateRequest;
+import org.pluchon.forum.entity.dto.AiWorkspaceArtifactRequest;
+import org.pluchon.forum.entity.dto.AiWorkspaceCreateRequest;
 import org.pluchon.forum.entity.vo.ai.AiLongTermMemoryVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVersionVO;

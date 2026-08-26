@@ -3,12 +3,15 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useUserStore } from '@/stores/user'
 import { followUser, unfollowUser, getFollowingList, getFollowerList } from '@/api/userFollow'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { unwrapPageRecords } from '@/utils/apiData'
+import followingEmptyImage from '@/assets/images/guanzhu.png'
+import followerEmptyImage from '@/assets/images/fensi.png'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 5
 const REMARK_MAX = 56
 
 function remarkSummary(text) {
@@ -34,6 +37,7 @@ function useUserFollowListDialog() {
   let searchTimer = null
 
   const dialogTitle = computed(() => (mode.value === 'following' ? '关注列表' : '粉丝列表'))
+  const emptyImage = computed(() => (mode.value === 'following' ? followingEmptyImage : followerEmptyImage))
 
   const isProfileOwner = computed(() => {
     const pid = Number(profileUserId.value)
@@ -167,6 +171,7 @@ function useUserFollowListDialog() {
     visible,
     mode,
     dialogTitle,
+    emptyImage,
     keyword,
     loading,
     items,
@@ -192,6 +197,7 @@ const defaultAvatar = DEFAULT_AVATAR
 const {
   visible,
   dialogTitle,
+  emptyImage,
   keyword,
   loading,
   items,

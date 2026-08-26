@@ -1,19 +1,28 @@
 package org.pluchon.forum.converter;
 
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
-import org.pluchon.forum.entity.dto.ai.RagArticleIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagEmojiIndexDTO;
-import org.pluchon.forum.entity.dto.ai.RagUserIndexDTO;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiArticleTagCandidateDTO;
+import org.pluchon.forum.entity.dto.RagArticleIndexDTO;
+import org.pluchon.forum.entity.dto.RagEmojiIndexDTO;
+import org.pluchon.forum.entity.dto.RagMusicIndexDTO;
+import org.pluchon.forum.entity.dto.RagUserIndexDTO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubCreatorInsightResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleCoverResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagRecommendResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubArticleTagSimilarityResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
+import org.pluchon.forum.entity.vo.ai.AiHubMusicMatchResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationFeatureResultVO;
 import org.pluchon.forum.entity.vo.ai.AiRecommendationProfileResultVO;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
+import org.pluchon.forum.entity.vo.ai.AiArticleCoverResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiUsageStatsVO;
 import org.pluchon.forum.entity.vo.ai.AiPolishResponseVO;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.ai.RagUserVectorHitVO;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +48,109 @@ public final class AiHubConverter {
         vo.setModel(stringVal(data.get("model")));
         vo.setProvider(stringVal(data.get("provider")));
         vo.setUsage(parseUsage(data.get("usage")));
+        vo.setUsageItems(parseUsageItems(data.get("usage")));
         return vo;
+    }
+
+    public static AiHubArticleCoverResultVO toArticleCoverResult(Map<String, Object> data) {
+        AiHubArticleCoverResultVO vo = new AiHubArticleCoverResultVO();
+        if (data == null) {
+            return vo;
+        }
+        vo.setUrl(stringVal(data.get("url")));
+        vo.setPrompt(stringVal(data.get("prompt")));
+        vo.setModel(stringVal(data.get("model")));
+        Object mcpUsed = data.get("mcpUsed");
+        vo.setMcpUsed(mcpUsed instanceof Boolean b ? b : Boolean.parseBoolean(String.valueOf(mcpUsed)));
+        vo.setUsage(parseUsage(data.get("usage")));
+        vo.setUsageItems(parseUsageItems(data.get("usage")));
+        return vo;
+    }
+
+    public static AiHubArticleTagRecommendResultVO toArticleTagRecommendResult(Map<String, Object> data) {
+        AiHubArticleTagRecommendResultVO vo = new AiHubArticleTagRecommendResultVO();
+        if (data == null) {
+            vo.setTagIds(List.of());
+            vo.setUsageItems(List.of());
+            return vo;
+        }
+        vo.setTagIds(longList(data.get("tagIds")));
+        vo.setSummary(stringVal(data.get("summary")));
+        Object deepUsed = data.get("deepUsed");
+        vo.setDeepUsed(deepUsed instanceof Boolean b
+                ? b : Boolean.parseBoolean(String.valueOf(deepUsed)));
+        vo.setUsageItems(parseUsageItems(data.get("usage")));
+        return vo;
+    }
+
+    public static AiHubMusicMatchResultVO toMusicMatchResult(Map<String, Object> data) {
+        AiHubMusicMatchResultVO vo = new AiHubMusicMatchResultVO();
+        if (data == null) {
+            vo.setMusicKeys(List.of());
+            vo.setMoods(List.of());
+            vo.setUsageItems(List.of());
+            return vo;
+        }
+        vo.setMusicKeys(stringList(data.get("musicKeys")));
+        vo.setRationale(stringVal(data.get("rationale")));
+        vo.setMoods(stringList(data.get("moods")));
+        vo.setUsageItems(parseUsageItems(data.get("usage")));
+        return vo;
+    }
+
+    public static List<Map<String, Object>> musicCandidatesToMaps(
+            List<org.pluchon.forum.entity.dto.AiMusicCandidateDTO> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (org.pluchon.forum.entity.dto.AiMusicCandidateDTO candidate : candidates) {
+            if (candidate == null || !StringUtils.hasText(candidate.getMusicKey())) {
+                continue;
+            }
+            Map<String, Object> row = new HashMap<>();
+            row.put("musicKey", candidate.getMusicKey());
+            row.put("name", candidate.getName());
+            if (StringUtils.hasText(candidate.getTitle())) {
+                row.put("title", candidate.getTitle());
+            }
+            if (StringUtils.hasText(candidate.getArtist())) {
+                row.put("artist", candidate.getArtist());
+            }
+            if (StringUtils.hasText(candidate.getAlbum())) {
+                row.put("album", candidate.getAlbum());
+            }
+            result.add(row);
+        }
+        return result;
+    }
+
+    public static AiHubArticleTagSimilarityResultVO toArticleTagSimilarityResult(Map<String, Object> data) {
+        AiHubArticleTagSimilarityResultVO vo = new AiHubArticleTagSimilarityResultVO();
+        if (data == null) {
+            return vo;
+        }
+        vo.setSimilarTagId(longVal(data.get("similarTagId")));
+        vo.setReason(stringVal(data.get("reason")));
+        return vo;
+    }
+
+    public static List<Map<String, Object>> articleTagCandidatesToMaps(
+            List<AiArticleTagCandidateDTO> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (AiArticleTagCandidateDTO candidate : candidates) {
+            if (candidate == null || candidate.getId() == null || !StringUtils.hasText(candidate.getName())) {
+                continue;
+            }
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", candidate.getId());
+            item.put("name", candidate.getName().trim());
+            result.add(item);
+        }
+        return result;
     }
 
     public static AiHubCoverHintsResultVO toCoverHintsResult(Map<String, Object> data) {
@@ -92,6 +203,7 @@ public final class AiHubConverter {
         vo.setTopics(mapList(data.get("topics")));
         vo.setAvoidTopics(mapList(data.get("avoidTopics")));
         vo.setSummary(stringVal(data.get("summary")));
+        vo.setPreferenceQuery(stringVal(data.get("preferenceQuery")));
         vo.setGeneratedBy(stringVal(data.get("generatedBy")));
         return vo;
     }
@@ -122,6 +234,38 @@ public final class AiHubConverter {
         return vo;
     }
 
+    public static AiHubCreatorInsightResultVO toCreatorInsightResult(Map<String, Object> data) {
+        AiHubCreatorInsightResultVO vo = new AiHubCreatorInsightResultVO();
+        if (data == null) {
+            return vo;
+        }
+        vo.setHeadline(stringVal(data.get("headline")));
+        vo.setOverview(stringVal(data.get("overview")));
+        vo.setHighlight(stringVal(data.get("highlight")));
+        Object highlights = data.get("highlights");
+        if (highlights instanceof List<?> values) {
+            vo.setHighlights(values.stream().map(AiHubConverter::stringVal)
+                    .filter(value -> value != null && !value.isBlank()).limit(3).toList());
+        }
+        return vo;
+    }
+
+    public static AiArticleCoverResponseVO toArticleCoverResponse(
+            AiHubArticleCoverResultVO hub,
+            String storedUrl,
+            Map<String, Object> billing) {
+        AiArticleCoverResponseVO vo = new AiArticleCoverResponseVO();
+        if (hub != null) {
+            vo.setPrompt(hub.getPrompt());
+            vo.setModel(hub.getModel());
+            vo.setMcpUsed(hub.getMcpUsed());
+            vo.setUsage(hub.getUsage());
+        }
+        vo.setUrl(storedUrl);
+        applyBilling(vo, billing);
+        return vo;
+    }
+
     private static void applyBilling(AiPolishResponseVO vo, Map<String, Object> billing) {
         if (vo == null || billing == null) {
             return;
@@ -133,6 +277,16 @@ public final class AiHubConverter {
     }
 
     private static void applyBilling(AiImageResponseVO vo, Map<String, Object> billing) {
+        if (vo == null || billing == null) {
+            return;
+        }
+        vo.setPointsCost(intVal(billing.get("pointsCost")));
+        vo.setBalanceAfter(intVal(billing.get("balanceAfter")));
+        vo.setBillingMode(stringVal(billing.get("billingMode")));
+        vo.setUsageStats(toUsageStatsVO(billing.get("usageStats")));
+    }
+
+    private static void applyBilling(AiArticleCoverResponseVO vo, Map<String, Object> billing) {
         if (vo == null || billing == null) {
             return;
         }
@@ -200,7 +354,22 @@ public final class AiHubConverter {
         map.put("shopId", dto.getShopId());
         map.put("name", dto.getName());
         map.put("description", dto.getDescription());
+        map.put("category", dto.getCategory());
         map.put("coverUrl", dto.getCoverUrl());
+        return map;
+    }
+
+    public static Map<String, Object> ragMusicIndexToMap(RagMusicIndexDTO dto) {
+        Map<String, Object> map = new HashMap<>();
+        if (dto == null) {
+            return map;
+        }
+        map.put("musicKey", dto.getMusicKey());
+        map.put("title", dto.getTitle());
+        map.put("artist", dto.getArtist());
+        map.put("genre", dto.getGenre());
+        map.put("moodTags", dto.getMoodTags());
+        map.put("aiProfile", dto.getAiProfile());
         return map;
     }
 
@@ -254,6 +423,7 @@ public final class AiHubConverter {
             return null;
         }
         AiModelUsageDTO dto = new AiModelUsageDTO();
+        dto.setStage(stringVal(um.get("stage")));
         Object mc = um.get("model_code");
         if (mc == null) {
             mc = um.get("model");
@@ -263,8 +433,46 @@ public final class AiHubConverter {
         }
         dto.setInputTokens(intVal(um.get("input_tokens")));
         dto.setOutputTokens(intVal(um.get("output_tokens")));
-        dto.setImageCount(intVal(um.get("image_count")));
+        Integer images = intVal(um.get("image_count"));
+        if (images == null) {
+            images = intVal(um.get("images"));
+        }
+        dto.setImageCount(images);
+        Object estimated = um.get("estimated");
+        if (estimated != null) {
+            dto.setEstimated(estimated instanceof Boolean b
+                    ? b : Boolean.parseBoolean(String.valueOf(estimated)));
+        }
+        dto.setLatencyMs(intVal(um.get("latency_ms")));
         return dto;
+    }
+
+    private static List<AiModelUsageDTO> parseUsageItems(Object raw) {
+        if (!(raw instanceof Map<?, ?> usageMap)) {
+            return List.of();
+        }
+        Object totals = usageMap.get("model_totals");
+        List<?> list;
+        if (totals instanceof List<?> modelTotals) {
+            list = modelTotals;
+        } else if (usageMap.get("items") instanceof List<?> callItems) {
+            list = callItems;
+        } else {
+            AiModelUsageDTO single = parseUsage(raw);
+            return single == null ? List.of() : List.of(single);
+        }
+        List<AiModelUsageDTO> result = new ArrayList<>();
+        for (Object item : list) {
+            AiModelUsageDTO usage = parseUsage(item);
+            if (usage != null && StringUtils.hasText(usage.getModelCode())) {
+                result.add(usage);
+            }
+        }
+        return result;
+    }
+
+    public static List<AiModelUsageDTO> toUsageItems(Object raw) {
+        return parseUsageItems(raw);
     }
 
     private static String stringVal(Object raw) {
@@ -324,6 +532,20 @@ public final class AiHubConverter {
             }
         }
         return out;
+    }
+
+    private static List<Long> longList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Long> result = new ArrayList<>();
+        for (Object item : list) {
+            Long value = longVal(item);
+            if (value != null && value > 0 && !result.contains(value)) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private static List<Map<String, Object>> mapList(Object raw) {

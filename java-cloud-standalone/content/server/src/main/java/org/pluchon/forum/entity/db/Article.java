@@ -9,9 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-/**
- * 帖子表实体类，对应 article
- */
+// 帖子表实体类，对应 article
 @Data
 @TableName("article")
 @Schema(description = "帖子实体")
@@ -50,6 +48,27 @@ public class Article {
 
     @Schema(description = "视频URL(仅 media_type=1 时有效)")
     private String videoUrl;
+
+    @Schema(description = "HLS m3u8地址(仅 media_type=1 时有效)")
+    private String hlsUrl;
+
+    @Schema(description = "HLS转码状态: 0NONE 1PROCESSING 2READY 3FAILED")
+    private Byte videoTranscodeStatus;
+
+    @Schema(description = "曲库键(与 OSS music_info 文件名 stem 对齐)")
+    private String musicKey;
+
+    @Schema(description = "帖子配乐歌名")
+    private String musicTitle;
+
+    @Schema(description = "配乐封面URL")
+    private String musicCoverUrl;
+
+    @Schema(description = "配乐音频URL")
+    private String musicAudioUrl;
+
+    @Schema(description = "配乐歌词URL")
+    private String musicLrcUrl;
 
     @Schema(description = "内容类型: 0富文本 1Markdown", example = "0")
     private Byte contentType;

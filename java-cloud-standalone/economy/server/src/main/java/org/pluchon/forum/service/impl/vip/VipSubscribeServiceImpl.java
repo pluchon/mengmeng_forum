@@ -11,14 +11,19 @@ import org.pluchon.forum.entity.dto.vip.VipSubscribeDTO;
 import org.pluchon.forum.entity.vo.points.PointsWalletVO;
 import org.pluchon.forum.entity.vo.vip.VipSubscribeResultVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
+import org.pluchon.forum.entity.vo.vip.VipTrialGrantResultVO;
+import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
+import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.UUID;
 
+// VIP 订阅：扫码支付开通；积分扣款路径已关闭
 @Service
 public class VipSubscribeServiceImpl implements VipSubscribeService {
 
@@ -31,20 +36,8 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
     @Resource
     private VipEntitlementService vipEntitlementService;
 
-    private boolean vipActive(UserVipSubscription sub) {
-        if (sub == null) {
-            return false;
-        }
-        Byte tier = sub.getVipTier();
-        if (tier == null || tier == 0) {
-            return false;
-        }
-        Date exp = sub.getVipExpireAt();
-        if (exp == null) {
-            return true;
-        }
-        return exp.after(new Date());
-    }
+    @Resource
+    private VipQuotaBonusService vipQuotaBonusService;
 
     private void requireUserExists(Long userId) {
         Boolean exists = userInternalFeignClient.existsById(userId);
@@ -56,57 +49,46 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VipSubscribeResultVO subscribe(Long userId, VipSubscribeDTO dto) {
-        Byte tier = dto.getTier();
-        if (tier == null || (!Constant.VIP_TIER_PRO.equals(tier) && !Constant.VIP_TIER_MAX.equals(tier))) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        requireUserExists(userId);
-
-        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
-        Byte cur = sub != null && sub.getVipTier() != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
-        boolean active = vipActive(sub);
-
-        int curOrd = cur == null ? 0 : cur.intValue();
-        int wantOrd = tier.intValue();
-        if (active && curOrd > wantOrd) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_VIP_SUBSCRIBE_TIER));
-        }
-
-        int price = Constant.VIP_TIER_PRO.equals(tier) ? Constant.VIP_PRICE_PRO_MONTH : Constant.VIP_PRICE_MAX_MONTH;
-        String remark = Constant.VIP_TIER_PRO.equals(tier) ? "订阅 VIP PRO（30 天）" : "订阅 VIP MAX（30 天）";
-        String idempotencyKey = buildSubscribeIdempotencyKey(userId, dto.getRequestId());
-        if (idempotencyKey != null && pointsService.hasIdempotencyRecord(userId, idempotencyKey)) {
-            return buildSubscribeResult(userId, tier);
-        }
-
-        pointsService.deductPoints(userId, price, Constant.POINTS_SOURCE_VIP_SUBSCRIBE, userId, remark, idempotencyKey);
-        Date newExpire = vipEntitlementService.extendVipDays(userId, tier, 30);
-
-        VipSubscribeResultVO vo = new VipSubscribeResultVO();
-        vo.setVipTier(tier);
-        vo.setVipExpireAt(newExpire);
-        vo.setPointsBalance(pointsService.getWallet(userId).getBalance());
-        return vo;
+        throw new ApplicationException(Result.fail(ResultCode.FAILED_VIP_SUBSCRIBE_UNAVAILABLE));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void grantTrialVipDays(Long userId, int days) {
-        if (days <= 0) {
-            return;
-        }
-        requireUserExists(userId);
-        vipEntitlementService.extendVipDays(userId, Constant.VIP_TIER_PRO, days);
+    public VipTrialGrantResultVO grantTrialVipDays(Long userId, int days) {
+        return grantTrialVipDays(userId, days, "TRIAL_VIP", UUID.randomUUID().toString());
     }
 
-    private VipSubscribeResultVO buildSubscribeResult(Long userId, Byte tier) {
-        UserVipSubscription sub = vipEntitlementService.getSubscription(userId);
-        PointsWalletVO wallet = pointsService.getWallet(userId);
-        VipSubscribeResultVO vo = new VipSubscribeResultVO();
-        vo.setVipTier(sub != null && sub.getVipTier() != null ? sub.getVipTier() : tier);
-        vo.setVipExpireAt(sub != null ? sub.getVipExpireAt() : null);
-        vo.setPointsBalance(wallet.getBalance());
-        return vo;
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public VipTrialGrantResultVO grantTrialVipDays(Long userId, int days, String sourceType, String idempotencyKey) {
+        if (days <= 0) {
+            return null;
+        }
+        requireUserExists(userId);
+        UserVipSubscription current = vipEntitlementService.ensureCurrentBaseQuotaPeriod(userId);
+        boolean maxActive = current != null
+                && Constant.VIP_TIER_MAX.equals(current.getVipTier())
+                && (current.getVipExpireAt() == null || current.getVipExpireAt().after(new Date()));
+        Byte actualTier = maxActive ? Constant.VIP_TIER_MAX : Constant.VIP_TIER_PRO;
+        int actualHours = maxActive ? Math.multiplyExact(days, 12) : Math.multiplyExact(days, 24);
+        Date newExpire = vipEntitlementService.extendVipHours(userId, actualTier, actualHours);
+        VipQuotaBonusGrant bonus = vipQuotaBonusService.grantTrialBonus(
+                userId, days, sourceType, idempotencyKey);
+
+        VipTrialGrantResultVO result = new VipTrialGrantResultVO();
+        result.setActualTier(actualTier);
+        result.setActualDurationHours(actualHours);
+        result.setVipExpireAt(newExpire);
+        if (bonus != null) {
+            result.setQwenBonusMicros(bonus.getQwenGrantedMicros());
+            result.setWanBonusCredits(bonus.getWanGrantedCredits().stripTrailingZeros().toPlainString());
+            result.setBonusExpireAt(bonus.getExpireTime());
+        }
+        String duration = actualHours % 24 == 0
+                ? (actualHours / 24) + "天"
+                : actualHours + "小时";
+        result.setSummary((maxActive ? "MAX" : "PRO") + "会员延长" + duration);
+        return result;
     }
 
     @Override
@@ -119,12 +101,5 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         vo.setVipExpireAt(sub != null ? sub.getVipExpireAt() : null);
         vo.setPoints(wallet.getBalance());
         return vo;
-    }
-
-    private String buildSubscribeIdempotencyKey(Long userId, String requestId) {
-        if (requestId == null || requestId.isBlank()) {
-            return null;
-        }
-        return "vip_sub:" + userId + ":" + requestId.trim();
     }
 }

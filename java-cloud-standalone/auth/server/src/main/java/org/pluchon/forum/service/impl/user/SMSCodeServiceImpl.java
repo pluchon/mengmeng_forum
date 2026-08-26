@@ -7,7 +7,7 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.CaptchaUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
-import org.pluchon.forum.common.utils.SMSUtils;
+import org.pluchon.forum.common.SMSUtils;
 import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.utils.PiiUtils;
@@ -20,9 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * 短信验证服务实现
- */
+// 短信验证服务实现
 @Service
 public class SMSCodeServiceImpl implements SMSCodeService {
 
@@ -136,7 +134,7 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Override
     public boolean consumeVerificationCode(String phoneNumber, String code) {
-        if (!RegexUtil.checkMobile(phoneNumber) || code == null || code.isBlank()) {
+        if (!RegexUtil.checkMobile(phoneNumber) || !RegexUtil.checkSmsCode(code)) {
             return false;
         }
         return RedisAtomicValueConsumer.consumeIfMatch(
@@ -145,7 +143,7 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Override
     public boolean consumeResetCode(String phoneNumber, String code) {
-        if (!RegexUtil.checkMobile(phoneNumber) || code == null || code.isBlank()) {
+        if (!RegexUtil.checkMobile(phoneNumber) || !RegexUtil.checkSmsCode(code)) {
             return false;
         }
         return RedisAtomicValueConsumer.consumeIfMatch(

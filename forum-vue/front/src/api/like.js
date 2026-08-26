@@ -10,12 +10,12 @@ export function unlikeArticle(articleId) {
   return request({ url: '/like/unlikeArticle', method: 'put', params: { articleId } })
 }
 
-// 获取我的点赞列表（分页）
+// 获取我的点赞列表 分页
 export function getMyLikeList(params) {
   return request({ url: '/like/queryArticleListForLikeWithPage', method: 'get', params })
 }
 
-// 获取指定用户公开展示的点赞列表（分页）
+// 获取指定用户公开展示的点赞列表 分页
 export function getUserLikeList(userId, params) {
   return request({
     url: '/like/queryArticleListForUserLikeWithPage',

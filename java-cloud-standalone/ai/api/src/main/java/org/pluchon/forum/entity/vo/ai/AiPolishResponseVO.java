@@ -1,7 +1,7 @@
 package org.pluchon.forum.entity.vo.ai;
 
 import lombok.Data;
-import org.pluchon.forum.entity.dto.ai.AiModelUsageDTO;
+import org.pluchon.forum.entity.dto.AiModelUsageDTO;
 
 // 帖子正文一键润色响应
 @Data

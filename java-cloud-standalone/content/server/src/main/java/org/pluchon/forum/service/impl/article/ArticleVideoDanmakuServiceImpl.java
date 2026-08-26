@@ -1,7 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.enums.DanmakuColorCode;
@@ -10,25 +9,26 @@ import org.pluchon.forum.common.enums.DanmakuMode;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
 import org.pluchon.forum.converter.DanmakuConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleVideoDanmaku;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.entity.db.ArticleVideoDanmakuLike;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.article.SendDanmakuRequest;
 import org.pluchon.forum.entity.vo.article.DanmakuItemVO;
 import org.pluchon.forum.mapper.ArticleVideoDanmakuMapper;
+import org.pluchon.forum.mapper.ArticleVideoDanmakuLikeMapper;
 import org.pluchon.forum.service.impl.remote.ContentUserLookupService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.pluchon.forum.service.interfaces.article.ArticleVideoDanmakuService;
+import org.pluchon.forum.service.interfaces.moderation.ContentModerationTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
-@Slf4j
 public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuService {
 
     private static final byte DELETE_TRUE = 1;
@@ -44,6 +43,9 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
 
     @Autowired
     private ArticleVideoDanmakuMapper articleVideoDanmakuMapper;
+
+    @Autowired
+    private ArticleVideoDanmakuLikeMapper articleVideoDanmakuLikeMapper;
 
     @Autowired
     private ArticleService articleService;
@@ -55,7 +57,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
     private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    private ContentAiGatewayService contentAiGatewayService;
+    private ContentModerationTaskService contentModerationTaskService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -93,7 +95,6 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
         assertDanmakuRateLimit(loginUserId, req.getArticleId());
         assertDanmakuMinuteLimit(loginUserId, req.getArticleId());
         assertNotDuplicateContent(loginUserId, req.getArticleId(), content);
-        assertTextAllowed(content);
         ArticleVideoDanmaku row = new ArticleVideoDanmaku();
         row.setArticleId(req.getArticleId());
         row.setUserId(loginUserId);
@@ -106,11 +107,12 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
         if (articleVideoDanmakuMapper.insert(row) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
+        contentModerationTaskService.scheduleDanmaku(row.getId(), content);
         return DanmakuConverter.toItemVO(row, loginUser);
     }
 
     @Override
-    public List<DanmakuItemVO> listByTimeWindow(Long articleId, Integer fromMs, Integer toMs) {
+    public List<DanmakuItemVO> listByTimeWindow(Long articleId, Integer fromMs, Integer toMs, Long loginUserId) {
         if (articleId == null || fromMs == null || toMs == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -130,32 +132,41 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
                         .le(ArticleVideoDanmaku::getVideoTimeMs, toMs)
                         .orderByAsc(ArticleVideoDanmaku::getVideoTimeMs)
                         .orderByAsc(ArticleVideoDanmaku::getId));
-        return toItemVOListWithUsers(rows);
+        return toItemVOListWithUsers(rows, loginUserId);
     }
 
-    private List<DanmakuItemVO> toItemVOListWithUsers(List<ArticleVideoDanmaku> rows) {
+    private List<DanmakuItemVO> toItemVOListWithUsers(List<ArticleVideoDanmaku> rows, Long loginUserId) {
         if (rows == null || rows.isEmpty()) {
             return List.of();
         }
         Set<Long> userIds = rows.stream().map(ArticleVideoDanmaku::getUserId).collect(Collectors.toSet());
         Map<Long, UserInternalVO> userMap = userIds.isEmpty() ? Map.of() : userInternalLookupService.loadActiveUsers(userIds);
-        return DanmakuConverter.toItemVOList(rows, userMap);
+        Set<Long> likedIds = loadLikedDanmakuIds(loginUserId, rows);
+        List<DanmakuItemVO> list = DanmakuConverter.toItemVOList(rows, userMap);
+        for (int i = 0; i < rows.size(); i++) {
+            DanmakuItemVO vo = list.get(i);
+            ArticleVideoDanmaku row = rows.get(i);
+            if (vo == null || row == null || row.getId() == null) {
+                continue;
+            }
+            vo.setLiked(likedIds.contains(row.getId()));
+        }
+        return list;
     }
 
-    // 全部长度走文本审核；审核服务异常时降级放行
-    private void assertTextAllowed(String content) {
-        try {
-            String violation = contentAiGatewayService.validateText(content);
-            if (violation != null) {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_CONTENT_VIOLATION, violation));
-            }
-        } catch (ApplicationException ex) {
-            if (ex.getErrorResult() != null
-                    && ResultCode.FAILED_CONTENT_VIOLATION.getCode() == ex.getErrorResult().getCode()) {
-                throw ex;
-            }
-            log.warn("弹幕文本审核服务不可用，降级放行: {}", ex.getMessage());
+    private Set<Long> loadLikedDanmakuIds(Long loginUserId, List<ArticleVideoDanmaku> rows) {
+        if (loginUserId == null || rows == null || rows.isEmpty()) {
+            return Set.of();
         }
+        List<Long> ids = rows.stream().map(ArticleVideoDanmaku::getId).filter(id -> id != null && id > 0).toList();
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        List<ArticleVideoDanmakuLike> likes = articleVideoDanmakuLikeMapper.selectList(
+                new LambdaQueryWrapper<ArticleVideoDanmakuLike>()
+                        .eq(ArticleVideoDanmakuLike::getUserId, loginUserId)
+                        .in(ArticleVideoDanmakuLike::getDanmakuId, ids));
+        return likes.stream().map(ArticleVideoDanmakuLike::getDanmakuId).collect(Collectors.toSet());
     }
 
     // 仅已发布视频帖允许弹幕

@@ -1,0 +1,6 @@
+[
+  {"resource": "ai.python.fast", "grade": 0, "count": 8, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "ai.python.standard", "grade": 0, "count": 4, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "ai.python.long", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0, "clusterMode": false},
+  {"resource": "ai.python.index", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0, "clusterMode": false}
+]

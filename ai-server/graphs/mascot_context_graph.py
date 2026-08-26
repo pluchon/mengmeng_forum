@@ -24,7 +24,7 @@ def _summarize(state: ContextState) -> ContextState:
         content = str(item.get("content") or "").strip()
         if role in {"user", "assistant"} and content:
             history_lines.append(f"{role}: {content[:3000]}")
-    model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.6-flash")
+    model = str(settings.dashscope.get("model_text_flash") or settings.dashscope.get("model_text") or "qwen3.7-flash")
     messages = [
         SystemMessage(content=(
             "将论坛看板娘对话压缩成简洁中文记忆。只保留用户偏好、已确认事实、未完成请求、"

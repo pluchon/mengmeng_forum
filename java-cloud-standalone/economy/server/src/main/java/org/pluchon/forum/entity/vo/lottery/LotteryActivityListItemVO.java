@@ -18,4 +18,7 @@ public class LotteryActivityListItemVO {
     private String coverImageUrl;
 
     private Integer costPointsPerDraw;
+
+    // 活动结束时间；为空表示常驻卡池
+    private java.util.Date endTime;
 }

@@ -100,11 +100,4 @@ public class GobangRuleEngine {
         }
         return result;
     }
-
-    private boolean inBoard(int row, int col) {
-        return row >= 0
-                && row < GameConstants.BOARD_SIZE
-                && col >= 0
-                && col < GameConstants.BOARD_SIZE;
-    }
 }

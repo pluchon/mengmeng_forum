@@ -1,9 +1,6 @@
-/* 
-  全局美化样式 theme-beautify.css 
-  旨在打破默认 Tabler 扁平化呆板感，注入现代玻璃拟态与活力。
-*/
+/* 全局美化样式 theme beautify.css 旨在打破默认 Tabler 扁平化呆板感，注入现代玻璃拟态与活力 */
 
-/* --- Navbar (顶部导航) 透明与磨砂玻璃化 --- */
+/* Navbar 顶部导航 透明与磨砂玻璃化 */
 .navbar {
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -13,7 +10,7 @@
 }
 
 
-/* --- Card (帖子主体区) 毛玻璃与立体漂浮感 --- */
+/* Card 帖子主体区 毛玻璃与立体漂浮感 */
 .card {
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -25,7 +22,7 @@
 }
 
 
-/* --- List Group (帖子列表项) 交互动效改进 --- */
+/* List Group 帖子列表项 交互动效改进 */
 .list-group-item {
   background-color: transparent !important;
   border-color: rgba(0, 0, 0, 0.05) !important;
@@ -43,7 +40,7 @@
 }
 
 
-/* 列表里的标题文本（增加质感） */
+/* 列表里的标题文本 增加质感 */
 .list-group-item .text-body.d-block {
   font-weight: 600;
   font-size: 1.05rem;
@@ -56,7 +53,7 @@
   color: #ff6b81 !important; /* 主题色猛男粉点缀 */
 }
 
-/* --- Avatar (头像) 圆润与外发光 --- */
+/* Avatar 头像 圆润与外发光 */
 .avatar {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border: 2px solid #fff;
@@ -69,7 +66,7 @@
   box-shadow: 0 6px 16px rgba(255, 105, 180, 0.4);
 }
 
-/* --- offcanvas (右侧私信弹窗) 玻璃化 --- */
+/* offcanvas 右侧私信弹窗 玻璃化 */
 .offcanvas {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -79,7 +76,7 @@
 }
 
 
-/* --- 全局隐藏滚动条 (保持可滚动但不可见) --- */
+/* 全局隐藏滚动条 保持可滚动但不可见 */
 html {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;     /* Firefox */
@@ -90,7 +87,7 @@ html {
 }
 
 
-/* --- 解决多层 Navbar 下拉菜单被遮挡的 Z-index 问题 --- */
+/* 解决多层 Navbar 下拉菜单被遮挡的 Z index 问题 */
 header, .navbar {
   position: relative;
 }
@@ -102,7 +99,7 @@ body > .page > header:nth-of-type(2) {
   z-index: 1040 !important;
 }
 
-/* --- 统一的主题渐变按钮增强与颜色全局替换 --- */
+/* 统一的主题渐变按钮增强与颜色全局替换 */
 /* 将蓝色的主要按钮或元素全局统一为粉色调 */
 .btn-primary, .bg-blue, .bg-primary, .btn-info {
   background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%) !important;
@@ -117,7 +114,7 @@ body > .page > header:nth-of-type(2) {
   box-shadow: 0 6px 20px rgba(255, 117, 140, 0.6) !important;
 }
 
-/* 描边按钮统一：例如 btn-outline-primary */
+/* 描边按钮统一：例如 btn outline primary */
 .btn-outline-primary, .btn-outline-blue, .btn-outline-info {
   color: #ff758c !important;
   border-color: #ff758c !important;
@@ -137,7 +134,7 @@ a.text-blue, a.text-primary,
   color: #ff758c !important;
 }
 
-/* --- 发光标签增强 (红点) --- */
+/* 发光标签增强 红点 */
 .badge.bg-red {
   box-shadow: 0 0 10px rgba(214, 57, 57, 0.6);
   animation: pulse 2s infinite;
@@ -149,7 +146,7 @@ a.text-blue, a.text-primary,
   100% { box-shadow: 0 0 0 0 rgba(214, 57, 57, 0); }
 }
 
-/* --- 私信列表层级提升 (确保在最顶层) --- */
+/* 私信列表层级提升 确保在最顶层 */
 .offcanvas {
   z-index: 2500 !important;
 }

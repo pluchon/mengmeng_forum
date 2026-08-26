@@ -1,4 +1,4 @@
-/* 三个认证页共用同一张 2:1 分栏卡片，页面保持透明以透出粒子海。 */
+/* 三个认证页共用同一张 2:1 分栏卡片，页面保持透明以透出粒子海 */
 .auth-page {
   width: 100vw;
   min-height: 100vh;
@@ -34,12 +34,96 @@
     0 8px 24px rgba(40, 44, 60, 0.1);
 }
 
+/* 慢网：卡片内顶部进度条，资源就绪后再自上而下渐显内容 */
+.auth-shell-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(255, 232, 240, 0.95) 0%, rgba(255, 250, 251, 0.98) 62%, #fffafb 100%);
+  transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+
+.auth-shell-loader.is-leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auth-shell-loader__track {
+  width: min(220px, 56%);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(240, 123, 168, 0.16);
+}
+
+.auth-shell-loader__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f5a0c2 0%, #f07ba8 48%, #e85f96 100%);
+  box-shadow: 0 0 12px rgba(240, 123, 168, 0.35);
+  transition: width 0.18s ease-out;
+}
+
+.auth-shell-loader__hint {
+  margin: 0;
+  color: #c48aa3;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
 .auth-layout {
   display: grid;
   width: 100%;
   height: 100%;
   min-height: 0;
   grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+}
+
+.auth-layout--pending {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auth-layout--revealing {
+  opacity: 1;
+  visibility: visible;
+  animation: auth-shell-reveal-down 0.72s ease forwards;
+}
+
+.auth-layout--ready {
+  opacity: 1;
+  visibility: visible;
+}
+
+@keyframes auth-shell-reveal-down {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell-loader {
+    transition: none;
+  }
+
+  .auth-layout--revealing {
+    animation: none;
+  }
 }
 
 .brand-side {
@@ -138,6 +222,40 @@
   box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.1) !important;
 }
 
+/* 校验失败：输入框左右轻抖一下 */
+@keyframes auth-field-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  16% {
+    transform: translateX(-7px);
+  }
+  32% {
+    transform: translateX(7px);
+  }
+  48% {
+    transform: translateX(-5px);
+  }
+  64% {
+    transform: translateX(5px);
+  }
+  80% {
+    transform: translateX(-3px);
+  }
+}
+
+/* 仅由 JS 临时挂上 auth shake，便于连续校验失败时重复播放 */
+.form-side :deep(.el-form-item.auth-shake .el-input__wrapper) {
+  animation: auth-field-shake 0.42s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form-side :deep(.el-form-item.auth-shake .el-input__wrapper) {
+    animation: none;
+  }
+}
+
 .auth-brand-header {
   flex: 0 0 auto;
   margin: 0 0 18px;
@@ -151,6 +269,12 @@
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.auth-brand-title--fallback {
+  margin: 0 auto;
+  max-width: 100%;
 }
 
 .auth-page-title {

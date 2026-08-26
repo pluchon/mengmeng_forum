@@ -9,7 +9,7 @@
     />
     <Editor :defaultConfig="editorConfig" v-model="content" mode="simple" class="wang-editor"
       :style="{ height: editorHeight }"
-      @onCreated="handleCreated" @onChange="handleChange" />
+      @onCreated="handleCreated" @onChange="handleChange" @customPaste="handleCustomPaste" />
   </div>
 </template>
 
@@ -20,9 +20,9 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '请输入内容...' },
   minHeight: { type: String, default: '400px' },
-  /** 隐藏图片相关能力（发帖富文本：禁止插入/粘贴图片） */
+  // 隐藏图片相关能力 发帖富文本：禁止插入/粘贴图片
   toolbarSuppressImage: { type: Boolean, default: false },
-  /** 使用精简工具栏（发帖推荐） */
+  // 使用精简工具栏 发帖推荐
   toolbarSlim: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
@@ -36,6 +36,7 @@ const {
   editorRef,
   handleChange,
   handleCreated,
+  handleCustomPaste,
   toolbarConfig,
 } = useWangEditor(props, emit)
 </script>

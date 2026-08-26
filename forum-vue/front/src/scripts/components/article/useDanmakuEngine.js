@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { listDanmakuByTimeWindow } from '@/api/danmaku'
 import {
   DANMAKU_FIXED_DURATION_MS,
@@ -70,11 +70,15 @@ export function useDanmakuEngine(options) {
     pendingBufferMs = null
   }
 
-  function resetPlaybackState() {
-    clearBufferTimer()
+  function clearActiveItems() {
     spawnedIds.value = new Set()
     activeItems.value = []
     laneReleaseAt.value = []
+  }
+
+  function resetPlaybackState() {
+    clearBufferTimer()
+    clearActiveItems()
     loadedChunkIds.value = new Set()
     catalog.value = new Map()
     lastVideoMs = 0
@@ -82,6 +86,30 @@ export function useDanmakuEngine(options) {
     bufferLoading = false
     seekInFlight = false
   }
+
+  function settingsFilterFingerprint(settings) {
+    if (!settings) return ''
+    return JSON.stringify({
+      enabled: settings.enabled,
+      showScroll: settings.showScroll,
+      showTop: settings.showTop,
+      showBottom: settings.showBottom,
+      coloredOnly: settings.coloredOnly,
+      density: settings.density,
+      areaPercent: settings.areaPercent,
+    })
+  }
+
+  watch(
+    () => options.settings?.value,
+    (next, prev) => {
+      if (!prev) return
+      if (settingsFilterFingerprint(next) !== settingsFilterFingerprint(prev)) {
+        clearActiveItems()
+      }
+    },
+    { deep: true },
+  )
 
   function mergeCatalog(items) {
     if (!items?.length) return
@@ -257,6 +285,8 @@ export function useDanmakuEngine(options) {
       x: startX,
       y,
       width,
+      likeCount: Number(record.likeCount) || 0,
+      liked: !!record.liked,
       expiresAtVideoMs: null,
     })
   }
@@ -280,6 +310,8 @@ export function useDanmakuEngine(options) {
       x,
       y,
       width,
+      likeCount: Number(record.likeCount) || 0,
+      liked: !!record.liked,
       expiresAtVideoMs: Number(record.videoTimeMs) + DANMAKU_FIXED_DURATION_MS,
     })
   }
@@ -338,7 +370,8 @@ export function useDanmakuEngine(options) {
       return true
     })
 
-    if (playing && readSettings().enabled !== false) {
+    const scrollPaused = !!options.scrollPaused?.value
+    if (playing && readSettings().enabled !== false && !scrollPaused) {
       const prev = lastFrameTs || ts
       const deltaSec = Math.min(0.05, Math.max(0, (ts - prev) / 1000)) * playbackRate
       lastFrameTs = ts
@@ -385,19 +418,51 @@ export function useDanmakuEngine(options) {
     maybeEnsureBuffer(0)
   }
 
+  function updateDanmakuLike(danmakuId, nextLiked) {
+    const catalogItem = catalog.value.get(danmakuId)
+    if (catalogItem) {
+      const prevLiked = !!catalogItem.liked
+      const base = Number(catalogItem.likeCount) || 0
+      const delta = nextLiked ? (prevLiked ? 0 : 1) : (prevLiked ? -1 : 0)
+      mergeCatalog([{
+        ...catalogItem,
+        liked: nextLiked,
+        likeCount: Math.max(0, base + delta),
+      }])
+    }
+    activeItems.value = activeItems.value.map((item) => {
+      if (item.id !== danmakuId) return item
+      const prevLiked = !!item.liked
+      const base = Number(item.likeCount) || 0
+      const delta = nextLiked ? (prevLiked ? 0 : 1) : (prevLiked ? -1 : 0)
+      return {
+        ...item,
+        liked: nextLiked,
+        likeCount: Math.max(0, base + delta),
+      }
+    })
+  }
+
   const visibleItems = computed(() => {
     if (readSettings().enabled === false) return []
     const s = readSettings()
     return activeItems.value
       .filter((item) => shouldShowDanmakuRecord({ mode: item.mode, colorCode: item.colorCode }, s))
-      .map((item) => ({
-        ...item,
-        style: {
-          transform: `translate3d(${item.x}px, ${item.y}px, 0)`,
-          color: item.color,
-          fontSize: `${getDanmakuFontSizePx(item.fontSize)}px`,
-        },
-      }))
+      .map((item) => {
+        const catalogItem = catalog.value.get(item.id)
+        const likeCount = Number(catalogItem?.likeCount ?? item.likeCount) || 0
+        const liked = catalogItem?.liked ?? item.liked ?? false
+        return {
+          ...item,
+          likeCount,
+          liked,
+          style: {
+            transform: `translate3d(${item.x}px, ${item.y}px, 0)`,
+            color: item.color,
+            fontSize: `${getDanmakuFontSizePx(item.fontSize)}px`,
+          },
+        }
+      })
   })
 
   const layerStyle = computed(() => {
@@ -423,6 +488,7 @@ export function useDanmakuEngine(options) {
 
   return {
     activeItems,
+    clearActiveItems,
     layerStyle,
     onReplay,
     pushLocalDanmaku,
@@ -431,6 +497,7 @@ export function useDanmakuEngine(options) {
     setLayerSize,
     start,
     stop,
+    updateDanmakuLike,
     visibleItems,
   }
 }

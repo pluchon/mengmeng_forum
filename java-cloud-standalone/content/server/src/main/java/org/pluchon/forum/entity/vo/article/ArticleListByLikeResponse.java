@@ -8,12 +8,8 @@ import org.pluchon.forum.entity.vo.user.UserBriefVO;
 
 import java.util.List;
 
-/**
- * @author pluchon
- * @create 2026-04-18-10:09
- * 作者代码水平一般，难免难看，请见谅
- */
-//只用来展示用户点赞过的帖子的预览，具体详情要点进去看
+// 作者代码水平一般，难免难看，请见谅
+// 只用来展示用户点赞过的帖子的预览，具体详情要点进去看
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

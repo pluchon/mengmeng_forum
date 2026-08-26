@@ -1,7 +1,4 @@
-/**
- * 认证页背景：对齐智慧树 wallbgcanvas（src/sea/wallbgcanvas.js）
- * 使用现代 three.js：BufferGeometry + Points + WebGLRenderer（原仓库为旧版 Particle + CanvasRenderer）
- */
+// 认证页背景：对齐智慧树 wallbgcanvas src/sea/wallbgcanvas.js 使用现代 three.js：BufferGeometry + Points + WebGLRenderer 原仓库为旧版 Particle + CanvasRenderer
 export async function createAuthWallThree(canvas) {
   const THREE = await import('three')
 

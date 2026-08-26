@@ -7,7 +7,7 @@ import org.pluchon.forum.common.websocket.game.GameWsResponse;
 import org.pluchon.forum.entity.bo.game.GameMatchBucket;
 import org.pluchon.forum.entity.bo.game.GameMatchPair;
 import org.pluchon.forum.entity.db.GameUserProfile;
-import org.pluchon.forum.api.auth.UserInternalVO;
+import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.vo.game.GameMatchSuccessVO;
 import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameMatchQueueService;
@@ -93,6 +93,19 @@ public class GobangMatchServiceImpl implements GobangMatchService {
         }
         boolean enqueued = gameMatchQueueService.enqueue(GameConstants.GOBANG, userId, bucketOf(points));
         if (!enqueued) {
+            String matchingGameCode = gameMatchQueueService.matchingGameCode(userId);
+            if (matchingGameCode != null && !GameConstants.GOBANG.equals(matchingGameCode)) {
+                sendToSession(session, GameWsResponse.fail(
+                        "match_failed",
+                        requestId,
+                        "一次只能匹配一个游戏"
+                ));
+                return;
+            }
+            if (gameMatchQueueService.contains(GameConstants.GOBANG, userId)) {
+                sendToSession(session, GameWsResponse.ok("match_started", requestId, null));
+                return;
+            }
             sendToSession(session, GameWsResponse.fail("match_failed", requestId, "匹配服务暂时不可用，请稍后再试"));
             return;
         }

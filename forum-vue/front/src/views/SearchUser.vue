@@ -33,12 +33,11 @@
       </div>
 
       <div v-if="total > pageSize" class="pagination-wrap">
-        <el-pagination
+        <AppPagination
           v-model:current-page="pageNum"
           :total="total"
           :page-size="pageSize"
-          layout="prev, pager, next, jumper"
-          background
+          :show-jumper="true"
           @current-change="doSearch"
         />
       </div>
@@ -49,6 +48,7 @@
 <script setup>
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { useSearchUser } from '@scripts/views/SearchUser'
+import AppPagination from '@/components/common/AppPagination.vue'
 
 const {
   bannerText,
@@ -118,5 +118,4 @@ const {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-</style>
+}</style>

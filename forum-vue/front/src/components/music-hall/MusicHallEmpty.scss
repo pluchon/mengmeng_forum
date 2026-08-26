@@ -1,0 +1,29 @@
+.music-hall-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  padding: 24px 16px;
+  text-align: center;
+  box-sizing: border-box;
+
+  img {
+    width: 148px;
+    height: auto;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  p {
+    margin: 0;
+    color: #b0a3b5;
+    font-size: 13px;
+  }
+
+  &--compact {
+    min-height: 140px;
+    padding: 16px 12px;
+  }
+}

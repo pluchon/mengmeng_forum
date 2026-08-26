@@ -1,9 +1,8 @@
 import { ref, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search, Message, Notification, Trophy } from '@element-plus/icons-vue'
+import { Search, Message, Picture, Trophy } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
-import AnnouncementBoard from '@/components/common/AnnouncementBoard.vue'
 import { getUnReadCount } from '@/api/message'
 import { getSystemMessageUnreadCount } from '@/api/systemMessage'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -11,7 +10,9 @@ import { useMessageStore } from '@/stores/message'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { blockIfMuted } from '@/utils/userMute'
+import { useVipStatusEntry } from '@/composables/useVipStatusEntry'
 import '@/assets/styles/layout.css'
+import '@/assets/styles/vip-status-pill.css'
 
 export function useTheHeader() {
   const router = useRouter()
@@ -22,6 +23,13 @@ export function useTheHeader() {
 
   const checkinLoaded = computed(() => checkinSnapshotStore.loaded)
   const checkinTotalPoints = computed(() => checkinSnapshotStore.totalPoints)
+  const {
+    vipDialogVisible,
+    vipStatusIcon,
+    vipStatusLabel,
+    vipStatusPillClass,
+    openVipPurchase,
+  } = useVipStatusEntry(userStore)
 
   const searchQuery = ref('')
   const { initWebSocket, closeWebSocket } = useWebSocket()
@@ -36,9 +44,8 @@ export function useTheHeader() {
   const msgUnread = computed(
     () => (Number(messageStore.unreadCount) || 0) + (Number(messageStore.systemUnreadCount) || 0),
   )
-  /** 用户协议 / 隐私政策页：导航不出现表情商城等入口 */
+  // 用户协议 / 隐私政策页：导航不出现表情商城等入口
   const isLegalDocPage = computed(() => route.path === '/terms' || route.path === '/privacy')
-  const announcementRef = ref()
   let timer = null
 
   const fetchUnread = async () => {
@@ -103,10 +110,6 @@ export function useTheHeader() {
     userStore.logout({ remote: true })
   }
 
-  const showAnnouncement = () => {
-    announcementRef.value?.show()
-  }
-
   const goToCreative = () => {
     if (blockIfMuted(userStore)) return
     router.push('/creative')
@@ -121,31 +124,33 @@ export function useTheHeader() {
         query.ai = '1'
       }
     } catch {
-      /* ignore */
+      // 忽略
     }
     router.push({ path: '/search', query })
   }
 
   return {
-    AnnouncementBoard,
     checkinLoaded,
     checkinTotalPoints,
     Message,
-    Notification,
+    Picture,
     Search,
     Trophy,
-    announcementRef,
     defaultAvatar,
     goToCreative,
     handleLogout,
     openMessageCenter,
+    openVipPurchase,
     messageStore,
     msgUnread,
     isLegalDocPage,
     route,
     searchQuery,
     submitSearch,
-    showAnnouncement,
     userStore,
+    vipDialogVisible,
+    vipStatusIcon,
+    vipStatusLabel,
+    vipStatusPillClass,
   }
 }

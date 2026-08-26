@@ -5,9 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * 单日签到规则项：当月第几天可获得多少积分
- */
+// 单日签到规则项：当月第几天可获得多少积分
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,4 +17,7 @@ public class CheckinRuleDayResponse {
 
     @Schema(description = "签到可得积分")
     private Integer points;
+
+    @Schema(description = "是否惊喜日")
+    private Boolean surpriseDay;
 }

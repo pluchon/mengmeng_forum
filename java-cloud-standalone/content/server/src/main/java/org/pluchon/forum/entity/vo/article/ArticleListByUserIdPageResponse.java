@@ -8,12 +8,7 @@ import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 
-/**
- * 用户帖子列表分页响应（包含用户信息和owner标志）
- *
- * @author pluchon
- * @create 2026-04-18
- */
+// 用户帖子列表分页响应 包含用户信息和owner标志
 @EqualsAndHashCode(callSuper = true)
 @Data
 @AllArgsConstructor

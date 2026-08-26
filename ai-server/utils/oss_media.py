@@ -43,6 +43,33 @@ def object_key_from_public_url(url: str) -> str | None:
     return None
 
 
+def get_object_bytes(object_key: str) -> bytes | None:
+    """通过 OSS SDK 直读对象（上传审图推荐，避免 HTTP 拉图偶发失败）。"""
+    key = (object_key or "").strip().lstrip("/")
+    if not key:
+        return None
+    if not is_oss_configured():
+        logger.warning("[oss] 未配置 SDK 凭据，无法直读 key=%s", key[:80])
+        return None
+    try:
+        import oss2
+
+        cfg = _oss_cfg()
+        auth = oss2.Auth(cfg["access_key_id"], cfg["access_key_secret"])
+        endpoint = (cfg.get("endpoint") or "https://oss-cn-shenzhen.aliyuncs.com").strip()
+        bucket = oss2.Bucket(auth, endpoint, cfg["bucket_name"])
+        result = bucket.get_object(key)
+        data = result.read()
+        if not data:
+            logger.warning("[oss] get_object 空 body key=%s", key[:80])
+            return None
+        logger.info("[oss] get_object ok key=%s bytes=%d", key[:80], len(data))
+        return data
+    except Exception:
+        logger.exception("[oss] get_object 失败 key=%s", key[:80])
+        return None
+
+
 def presign_get_url(url: str, *, expires: int = 3600) -> str:
     """私有桶生成临时可读 URL；未配置 OSS 或解析失败则原样返回."""
     if not is_oss_configured():

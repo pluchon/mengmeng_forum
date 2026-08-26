@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${FORUM_ECONOMY_DB_URL:jdbc:mysql://127.0.0.1:33306/forum_economy_db?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Taipei&allowPublicKeyRetrieval=true}
+    username: ${FORUM_ECONOMY_DB_USERNAME:forum_economy}
+    password: ${FORUM_ECONOMY_DB_PASSWORD}
+
+forum:
+  domain: economy
+  features:
+    scheduling: false
+    mq: false
+    mq-consumer: false
+    websocket: false
+    game-runtime: false

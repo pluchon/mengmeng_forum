@@ -1,0 +1,5 @@
+spring:
+  config:
+    import:
+      - nacos:forum-common.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false
+      - nacos:${spring.application.name}.yml?group=${NACOS_GROUP:FORUM}&refreshEnabled=false

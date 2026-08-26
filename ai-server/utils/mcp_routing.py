@@ -65,7 +65,7 @@ def _llm_route_decision(
 ) -> tuple[bool, str, bool]:
     """用 Flash 模型生成联网检索计划。"""
     ds = settings.dashscope
-    model = str(ds.get("model_text_flash") or ds.get("model_text") or "qwen3.6-flash")
+    model = str(ds.get("model_text_flash") or ds.get("model_text") or "qwen3.7-flash")
     if mode == "image":
         sys = (
             "你是生图助手的检索路由器。判断用户描述是否包含你不确定具体外观/含义的主体"

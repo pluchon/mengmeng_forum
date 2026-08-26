@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-// 帖子域内部契约（纯 API，无 @FeignClient；供 AI 看板娘等跨域回表）
+// 帖子域内部契约 纯 API，无 @FeignClient；供 AI 看板娘等跨域回表
 public interface ArticleInternalApi {
 
     @GetMapping("/article/internal/batch")
@@ -15,5 +15,17 @@ public interface ArticleInternalApi {
     List<ArticleInternalVO> searchCandidates(
             @RequestParam("keyword") String keyword,
             @RequestParam(value = "limit", defaultValue = "40") Integer limit
+    );
+
+    @GetMapping("/article/internal/liked-titles")
+    List<String> listLikedTitles(
+            @RequestParam("userId") Long userId,
+            @RequestParam(value = "limit", defaultValue = "6") Integer limit
+    );
+
+    @GetMapping("/article/internal/favorite-song-titles")
+    List<String> listFavoriteSongTitles(
+            @RequestParam("userId") Long userId,
+            @RequestParam(value = "limit", defaultValue = "6") Integer limit
     );
 }

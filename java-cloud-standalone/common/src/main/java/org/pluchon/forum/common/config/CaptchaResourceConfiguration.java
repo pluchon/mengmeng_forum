@@ -10,10 +10,7 @@ import cloud.tianai.captcha.resource.impl.LocalMemoryResourceStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * 天爱行为验证码背景图。
- * 全部背景在生成拼图前统一为 600x360，避免不同原图尺寸导致拼图块视觉大小不一致。
- */
+// 天爱行为验证码背景图。 全部背景在生成拼图前统一画布尺寸，并叠加黑色半透明遮罩，保证点选文字可读、拼图块相对尺寸一致
 @Configuration
 public class CaptchaResourceConfiguration {
 
@@ -21,13 +18,11 @@ public class CaptchaResourceConfiguration {
 
     private static final String[] BACKGROUNDS = {
         "captcha-bg/c1.png",
-        "captcha-bg/c2.jpg",
+        "captcha-bg/c2.png",
         "captcha-bg/c3.png",
+        "captcha-bg/c4.png",
+        "captcha-bg/c5.png",
     };
-
-    private static final String REMOTE_BACKGROUND =
-            "https://item-for-picture-with-zhanglihong.oss-cn-shenzhen.aliyuncs.com/forum_images/client/webp/c4.webp"
-                    + "?x-oss-process=image/resize,m_fill,w_600,h_360/format,jpg/quality,q_85";
 
     private static final String[] TYPES = {
         CaptchaTypeConstant.SLIDER,
@@ -43,7 +38,6 @@ public class CaptchaResourceConfiguration {
             for (String path : BACKGROUNDS) {
                 store.addResource(type, new Resource(UniformCaptchaImageResourceProvider.NAME, "classpath:" + path, TAG));
             }
-            store.addResource(type, new Resource(UniformCaptchaImageResourceProvider.NAME, REMOTE_BACKGROUND, TAG));
         }
         return store;
     }

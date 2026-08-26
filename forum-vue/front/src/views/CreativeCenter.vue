@@ -2,224 +2,330 @@
   <div class="creative-center-page shell-page-scroll animate-fade-in" v-loading="loading">
     <div class="creative-center-inner">
       <header class="creative-center-header">
-        <h1 class="creative-center-title">创作中心</h1>
+        <div class="creative-center-heading">
+          <span class="creative-center-heading-icon"><img :src="creationCenterIconUrl" alt="" /></span>
+          <h1 class="creative-center-title">创作中心</h1>
+        </div>
         <button type="button" class="creative-center-create-btn" @click="goCreatePost">
-          <el-icon :size="14"><Plus /></el-icon>
+          <el-icon><Plus /></el-icon>
           发表新帖
         </button>
       </header>
 
-      <div class="creative-stats-grid">
-        <div class="creative-stat-card">
-          <div class="creative-stat-head">
-            <span class="creative-stat-label">总发帖数</span>
-            <el-icon class="creative-stat-icon"><Document /></el-icon>
-          </div>
-          <div class="creative-stat-value-row">
-            <div class="creative-stat-value">{{ totalPosts }}</div>
-            <div class="creative-stat-sub">本月 +{{ monthNewPosts }}</div>
-          </div>
+      <section class="creative-center-hero">
+        <div class="creative-center-hero-copy">
+          <h2>今天想分享什么？</h2>
+          <p>灵感不用很完整，先从一张图或一句话开始</p>
         </div>
-        <div class="creative-stat-card">
-          <div class="creative-stat-head">
-            <span class="creative-stat-label">总点赞数</span>
-            <el-icon class="creative-stat-icon"><Star /></el-icon>
-          </div>
-          <div class="creative-stat-value-row">
-            <div class="creative-stat-value creative-stat-value--pink">{{ totalLikes }}</div>
-            <div class="creative-stat-sub">本月 +{{ monthNewLikes }}</div>
-          </div>
-        </div>
-        <div class="creative-stat-card">
-          <div class="creative-stat-head">
-            <span class="creative-stat-label">总阅读数</span>
-            <el-icon class="creative-stat-icon"><View /></el-icon>
-          </div>
-          <div class="creative-stat-value-row">
-            <div class="creative-stat-value creative-stat-value--blue">{{ totalReads }}</div>
-            <div class="creative-stat-sub">本月 +{{ monthNewReads }}</div>
-          </div>
-        </div>
-        <div class="creative-stat-card">
-          <div class="creative-stat-head">
-            <span class="creative-stat-label">粉丝数</span>
-            <el-icon class="creative-stat-icon"><User /></el-icon>
-          </div>
-          <div class="creative-stat-value-row">
-            <div class="creative-stat-value">0</div>
-            <div class="creative-stat-sub">暂无新增</div>
-          </div>
-        </div>
-      </div>
-
-      <section class="creative-trend-card">
-        <h2 class="creative-sec-title">
-          <el-icon class="creative-sec-title-icon creative-sec-title-icon--pink"><TrendCharts /></el-icon>
-          近 30 天阅读 / 点赞趋势
-        </h2>
-        <EChart v-if="trendChartOption" class="creative-trend-echart" :option="trendChartOption" />
+        <div class="creative-center-hero-illustration" aria-hidden="true"></div>
       </section>
 
-      <section class="creative-posts-card">
-        <div class="creative-posts-toolbar">
-          <h2 class="creative-sec-title" style="margin: 0">
-            <img src="@/assets/svg/文章.svg" alt="" class="creative-sec-title-icon" width="14" height="14" />
-            帖子管理
-          </h2>
-          <div class="creative-posts-toolbar-right">
-            <el-select
-              v-model="statusFilter"
-              class="creative-status-select"
-              size="small"
-              placeholder="全部状态"
-            >
-              <el-option
-                v-for="opt in STATUS_FILTER_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-            <div class="creative-search-wrap" :class="{ 'is-vip': isVipMember }">
-              <el-input
-                v-model="keyword"
-                class="creative-search"
-                size="small"
-                clearable
-                placeholder="搜索帖子..."
-              />
+      <section class="creative-dashboard">
+        <BorderGlow
+          class="creative-card-glow"
+          :animated="insightLoading"
+          :edge-sensitivity="30"
+          glow-color="320 84 72"
+          background-color="#ffffff"
+          :border-radius="18"
+          :glow-radius="42"
+          :glow-intensity="1.1"
+          :cone-spread="28"
+          :sweep-speed="100"
+          :colors="['#f8b5d6', '#d8bcff', '#a3d7ff']"
+        >
+          <div class="creative-trend-card">
+            <div class="creative-panel-head">
+              <div class="creative-insight-heading">
+                <h2 class="creative-panel-title">
+                  <span class="creative-panel-title-icon is-insight"><el-icon><TrendCharts /></el-icon></span>
+                  {{ insightPage < 4 ? activeInsightPage?.title : 'AI 创作小结' }}
+                </h2>
+                <div class="creative-insight-period" aria-label="AI总结周期">
+                  <button
+                    v-for="option in INSIGHT_PERIOD_OPTIONS"
+                    :key="option.value"
+                    type="button"
+                    :class="{ 'is-active': insightPeriod === option.value }"
+                    :disabled="insightLoading"
+                    @click="selectInsightPeriod(option.value)"
+                  >{{ option.label }}</button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <hr class="creative-posts-divider" />
-
-        <div class="creative-posts-head">
-          <span>标题</span>
-          <span>状态</span>
-          <span>互动</span>
-          <span>日期</span>
-          <span>操作</span>
-        </div>
-
-        <template v-if="pagedArticles.length">
-          <div v-for="row in pagedArticles" :key="row.article.id" class="creative-post-row">
-            <div
-              class="creative-post-title"
-              :class="postTitleClass(row)"
-            >
-              {{ postTitle(row) }}
-            </div>
-            <div class="creative-post-status">
-              <el-tooltip v-if="row.article.state === 1" content="已下架" placement="top">
-                <img
-                  :src="articleStatusMeta(ARTICLE_STATUS.PUBLISHED).icon"
-                  alt="已下架"
-                  class="creative-post-status-icon"
-                />
-              </el-tooltip>
-              <el-tooltip
-                v-else
-                :content="articleStatusMeta(row.article.status).tip"
-                placement="top"
-              >
-                <img
-                  :src="articleStatusMeta(row.article.status).icon"
-                  :alt="articleStatusMeta(row.article.status).tip"
-                  class="creative-post-status-icon"
-                />
-              </el-tooltip>
-            </div>
-            <div class="creative-post-interact">
-              <template v-if="interactDisplay(row)">
-                <span class="creative-post-interact-item">
-                  <el-icon :size="12"><View /></el-icon>
-                  {{ interactDisplay(row).reads }}
-                </span>
-                <span class="creative-post-interact-item">
-                  <el-icon :size="12"><Star /></el-icon>
-                  {{ interactDisplay(row).likes }}
-                </span>
+            <div class="creative-insight-stage">
+              <div v-if="insightDataLoading" class="creative-trend-loading">正在整理趋势...</div>
+              <template v-else-if="insightPage < 4">
+                <EChart v-if="insightChartOption" class="creative-insight-chart" :option="insightChartOption" />
               </template>
-              <span v-else>—</span>
+              <div v-else-if="insightLoading" class="creative-insight-loading" aria-live="polite">
+                <div class="creative-insight-orbit" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                  <el-icon><MagicStick /></el-icon>
+                </div>
+                <div class="creative-insight-loading-mask">
+                  <strong>AI 正在整理创作足迹...</strong>
+                  <span>正在回望{{ insightPeriodLabel }}的数据变化</span>
+                </div>
+              </div>
+              <div v-else-if="currentInsight" class="creative-insight-result">
+                <div class="creative-insight-summary">
+                  <span class="creative-insight-kicker">小结</span>
+                  <h3>{{ currentInsight.headline }}</h3>
+                  <p>{{ currentInsight.overview }}</p>
+                </div>
+                <div class="creative-insight-notes">
+                  <span>亮点</span>
+                  <ul>
+                    <li v-for="item in (currentInsight.highlights || [currentInsight.highlight]).filter(Boolean)" :key="item">{{ item }}</li>
+                  </ul>
+                </div>
+              </div>
+              <button v-else type="button" class="creative-insight-prompt" @click="requestCreatorInsight">
+                <span class="creative-insight-starlight" aria-hidden="true">
+                  <i v-for="index in 9" :key="index"></i>
+                </span>
+                <strong>使用 AI 总结{{ insightPeriodLabel }}的创作数据</strong>
+              </button>
             </div>
-            <div class="creative-post-date">{{ formatDate(row.article.createTime) }}</div>
-            <div class="creative-post-actions">
-              <el-tooltip :content="editTip(row)" placement="top">
-                <router-link
-                  :to="editTargetPath(row)"
-                  class="creative-post-action-btn"
-                  :aria-label="editTip(row)"
-                >
-                  <img :src="editIconUrl" alt="" />
-                </router-link>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <button
-                  type="button"
-                  class="creative-post-action-btn"
-                  aria-label="删除"
-                  @click="handleDelete(row.article.id)"
-                >
-                  <img :src="deleteIconUrl" alt="" />
-                </button>
-              </el-tooltip>
+            <div class="creative-insight-nav">
+              <button type="button" aria-label="上一页" @click="moveInsightPage(-1)"><el-icon><ArrowLeft /></el-icon></button>
+              <button
+                v-for="index in 5"
+                :key="index"
+                type="button"
+                class="creative-insight-dot"
+                :class="{ 'is-active': insightPage === index - 1 }"
+                :aria-label="`第${index}页`"
+                @click="selectInsightPage(index - 1)"
+              />
+              <button type="button" aria-label="下一页" @click="moveInsightPage(1)"><el-icon><ArrowRight /></el-icon></button>
             </div>
           </div>
-        </template>
-        <div v-else class="creative-posts-empty">暂无帖子</div>
+        </BorderGlow>
 
-        <div v-if="listTotal > LIST_PAGE_SIZE" class="creative-posts-pagination">
-          <el-pagination
-            v-model:current-page="pageNum"
-            :page-size="LIST_PAGE_SIZE"
-            layout="prev, pager, next"
-            :total="listTotal"
-          />
-        </div>
+        <aside class="creative-data-garden">
+          <div class="creative-panel-head">
+            <h2 class="creative-panel-title">
+              <span class="creative-panel-title-icon is-garden"><el-icon><MagicStick /></el-icon></span>
+              数据花园
+            </h2>
+          </div>
+          <div class="creative-data-garden-list">
+            <div v-for="item in dataGardenItems" :key="item.label" class="creative-data-garden-item">
+              <div class="creative-data-garden-label" :class="`is-${item.kind}`">
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.label }}</span>
+              </div>
+              <span v-if="item.monthIncrease > 0" class="creative-data-garden-change" :class="`is-${item.changeTone}`">
+                <el-icon><component :is="item.changeIcon" /></el-icon>
+                <span>本月 +{{ item.monthIncrease }}</span>
+              </span>
+              <strong :class="`is-${item.kind}`">{{ item.value }}</strong>
+            </div>
+          </div>
+        </aside>
       </section>
+
+      <BorderGlow
+        class="creative-card-glow creative-card-glow--posts"
+        :animated="listLoading && searchMode === 'ai'"
+        :edge-sensitivity="30"
+        glow-color="320 84 72"
+        background-color="#ffffff"
+        :border-radius="18"
+        :glow-radius="42"
+        :glow-intensity="1.1"
+        :cone-spread="28"
+        :sweep-speed="100"
+        :colors="['#f8b5d6', '#d8bcff', '#a3d7ff']"
+      >
+        <section
+          class="creative-posts-card"
+          v-loading="listLoading && searchMode !== 'ai'"
+        >
+          <div class="creative-posts-toolbar">
+            <h2 class="creative-panel-title">
+              <span class="creative-panel-title-icon is-posts"><el-icon><ChatDotRound /></el-icon></span>
+              帖子整理台
+            </h2>
+            <div class="creative-posts-toolbar-right">
+              <el-select v-model="statusFilter" class="creative-status-select" size="small" placeholder="已发布">
+                <el-option
+                  v-for="opt in STATUS_FILTER_OPTIONS"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+              <div class="creative-search-wrap" :class="{ 'is-vip': isVipMember, 'is-ai': searchMode === 'ai' }">
+                <el-input
+                  v-model="keyword"
+                  class="creative-search"
+                  size="small"
+                  clearable
+                  placeholder="找找你的帖子"
+                  :disabled="listLoading && searchMode === 'ai'"
+                >
+                  <template #prefix>
+                    <button
+                      type="button"
+                      class="creative-search-ai-mode"
+                      :class="{ 'is-ai': searchMode === 'ai' }"
+                      :disabled="listLoading && searchMode === 'ai'"
+                      :aria-label="searchMode === 'ai' ? '切换到普通搜索' : '切换到AI搜索'"
+                      @click.stop="toggleSearchMode"
+                    >AI</button>
+                    <el-icon class="creative-search-prefix-icon"><Search /></el-icon>
+                  </template>
+                </el-input>
+              </div>
+            </div>
+          </div>
+
+          <div class="creative-posts-body">
+            <div
+              v-if="listLoading && searchMode === 'ai'"
+              class="creative-ai-search-mask"
+              role="status"
+              aria-live="polite"
+            >
+              <span class="creative-ai-search-star creative-ai-search-star--one" aria-hidden="true">✦</span>
+              <span class="creative-ai-search-star creative-ai-search-star--two" aria-hidden="true">✧</span>
+              <span class="creative-ai-search-star creative-ai-search-star--three" aria-hidden="true">✦</span>
+              <span class="creative-ai-search-star creative-ai-search-star--four" aria-hidden="true">✧</span>
+              <strong>AI 正在帮你找帖…</strong>
+            </div>
+            <div v-if="pagedArticles.length" class="creative-post-list">
+              <article v-for="row in pagedArticles" :key="row.article.id" class="creative-post-item" @click="openArticle(row)">
+                <div class="creative-post-cover">
+                  <img v-if="postCoverUrl(row)" :src="postCoverUrl(row)" :alt="postTitle(row)" />
+                  <el-icon v-else><Picture /></el-icon>
+                </div>
+                <div class="creative-post-item-main">
+                  <h3 class="creative-post-title" :class="postTitleClass(row)">{{ postTitle(row) }}</h3>
+                  <div class="creative-post-meta">
+                    <template v-if="postMetrics(row)">
+                      <span class="creative-post-metric"><el-icon><View /></el-icon>{{ postMetrics(row).reads }}</span>
+                      <span class="creative-post-metric"><LikeCountIcon class="creative-post-metric-icon" />{{ postMetrics(row).likes }}</span>
+                      <span class="creative-post-metric"><el-icon><Star /></el-icon>{{ postMetrics(row).favorites }}</span>
+                    </template>
+                    <span v-else>草稿未发布</span>
+                    <i class="creative-post-meta-divider"></i>
+                    <span>{{ formatShortDate(row.article.createTime) }}</span>
+                  </div>
+                </div>
+                <div class="creative-post-status" :class="`is-${postStatus(row).tone}`">{{ postStatus(row).label }}</div>
+                <div class="creative-post-actions">
+                  <el-tooltip :content="editTip(row)" placement="top">
+                  <router-link :to="editTargetPath(row)" class="creative-post-action-btn" :aria-label="editTip(row)" @click.stop>
+                    <img :src="editIconUrl" alt="" />
+                  </router-link>
+                </el-tooltip>
+                  <template v-if="deletingArticleId === row.article.id">
+                    <button type="button" class="creative-post-delete-confirm is-confirm" aria-label="确定删除" @click.stop="confirmDelete(row.article.id)">
+                      ✓ 确定
+                    </button>
+                    <button type="button" class="creative-post-delete-confirm" aria-label="取消删除" @click.stop="cancelDelete">
+                      ✕ 取消
+                    </button>
+                  </template>
+                  <el-tooltip v-else content="删除" placement="top">
+                    <button type="button" class="creative-post-action-btn" aria-label="删除" @click.stop="requestDelete(row.article.id)">
+                      <img :src="deleteIconUrl" alt="" />
+                    </button>
+                  </el-tooltip>
+                </div>
+              </article>
+            </div>
+            <div v-else class="creative-posts-empty">
+              <img :src="creativePostsEmptyImageUrl" alt="暂无帖子" />
+              <p>暂无此类型帖子......</p>
+            </div>
+          </div>
+
+          <div class="creative-posts-pagination">
+            <AppPagination
+              v-model:current-page="pageNum"
+              :page-size="LIST_PAGE_SIZE"
+              :total="listTotal"
+            />
+          </div>
+        </section>
+      </BorderGlow>
     </div>
   </div>
 </template>
 
 <script setup>
-import { Document, TrendCharts, User } from '@element-plus/icons-vue'
+defineOptions({ name: 'CreativeCenter' })
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChatDotRound,
+  MagicStick,
+  Picture,
+  Plus,
+  Search,
+  Star,
+  StarFilled,
+  TrendCharts,
+  User,
+  View,
+} from '@element-plus/icons-vue'
+import BorderGlow from '@/components/common/BorderGlow.vue'
 import EChart from '@/components/common/EChart.vue'
+import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
+import AppPagination from '@/components/common/AppPagination.vue'
 import { useCreativeCenter } from '@scripts/views/CreativeCenter'
-import { ARTICLE_STATUS } from '@/utils/articleStatus'
+import creationCenterIconUrl from '@/assets/svg/11_creation_center.svg?url'
+import creativePostsEmptyImageUrl from '@/assets/images/search_chat_empty.png'
 
-const LIST_PAGE_SIZE = 10
+const LIST_PAGE_SIZE = 6
 
 const {
-  Plus,
-  Star,
-  View,
+  INSIGHT_PERIOD_OPTIONS,
   STATUS_FILTER_OPTIONS,
-  articleStatusMeta,
+  dataGardenItems,
+  currentInsight,
+  deletingArticleId,
   deleteIconUrl,
   editIconUrl,
   editTargetPath,
   editTip,
-  formatDate,
-  handleDelete,
-  interactDisplay,
+  formatShortDate,
+  goCreatePost,
+  insightLoading,
+  insightDataLoading,
+  insightPage,
+  activeInsightPage,
+  insightChartOption,
+  selectInsightPage,
+  moveInsightPage,
+  insightPeriod,
+  insightPeriodLabel,
+  cancelDelete,
+  confirmDelete,
   isVipMember,
   keyword,
+  searchMode,
   listTotal,
   loading,
-  monthNewLikes,
-  monthNewPosts,
-  monthNewReads,
+  listLoading,
   pageNum,
   pagedArticles,
+  postStatus,
+  openArticle,
+  requestCreatorInsight,
+  requestDelete,
+  postCoverUrl,
+  postMetrics,
   postTitle,
   postTitleClass,
   statusFilter,
-  totalLikes,
-  totalPosts,
-  totalReads,
-  trendChartOption,
-  goCreatePost,
-} = useCreativeCenter()
+  selectInsightPeriod,
+  toggleSearchMode,
+} = useCreativeCenter({ Picture, View, Star, TrendCharts, User })
 </script>
 
 <style scoped src="@/assets/styles/creative-center.css"></style>

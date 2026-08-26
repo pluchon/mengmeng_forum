@@ -1,6 +1,4 @@
-/**
- * 若正文仅为单层 <p>...</p> 且内部无块级标签，则去掉外层 p，减轻「落库多一层 p」的困扰。
- */
+// 若正文仅为单层 <p>...</p> 且内部无块级标签，则去掉外层 p，减轻「落库多一层 p」的困扰
 export function stripSingleOuterParagraph(html) {
   if (!html || typeof html !== 'string') return html
   const t = html.trim()
