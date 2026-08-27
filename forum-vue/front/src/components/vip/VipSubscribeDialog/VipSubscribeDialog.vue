@@ -178,10 +178,6 @@
           <div class="vip-island__line" />
           <p class="vip-island__tip">购买后若权益没到账，立即联系客服补偿</p>
           <div class="vip-island__contacts">
-            <a href="mailto:3110272243@qq.com" class="vip-island__contact">
-              <img :src="qqmailIconUrl" alt="" />
-              <span>QQ邮箱：3110272243@qq.com</span>
-            </a>
             <a href="mailto:zlh8232@outlook.com" class="vip-island__contact">
               <img :src="outlookIconUrl" alt="" />
               <span>Outlook邮箱：zlh8232@outlook.com</span>
@@ -275,7 +271,6 @@ const {
   vipBgUrl,
   alipayIconUrl,
   wechatPayIconUrl,
-  qqmailIconUrl,
   outlookIconUrl,
   visible,
   loading,

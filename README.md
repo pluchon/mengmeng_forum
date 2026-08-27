@@ -2,7 +2,7 @@
 
 ![ChatGPT Image 2026年8月26日 上午09_29_19](https://zlhimage.oss-cn-guangzhou.aliyuncs.com/20260826092951866.png)
 
-> 提醒：线上地址为：`www.nuonuoya.cn`，最近由于服务器过期了，暂时没有线上可以体验  
+> 提醒：线上服务暂时不可用（服务器过期），本地可按本文档启动体验。  
 
 </div>
 

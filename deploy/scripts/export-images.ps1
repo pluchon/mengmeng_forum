@@ -123,8 +123,8 @@ foreach ($dir in @("dist", "conf.d")) {
 
 $sslDst = Join-Path $pkg "ssl"
 New-Item -ItemType Directory -Force -Path $sslDst | Out-Null
-Copy-Item -LiteralPath (Join-Path $deployRoot "ssl\www.nuonuoya.cn.pem") -Destination $sslDst -Force
-Copy-Item -LiteralPath (Join-Path $deployRoot "ssl\www.nuonuoya.cn.key") -Destination $sslDst -Force
+Copy-Item -LiteralPath (Join-Path $deployRoot "ssl\www.example.com.pem") -Destination $sslDst -Force
+Copy-Item -LiteralPath (Join-Path $deployRoot "ssl\www.example.com.key") -Destination $sslDst -Force
 
 $scriptsDir = $PSScriptRoot
 $verifySh = Join-Path $scriptsDir "verify-frontend-dist.sh"

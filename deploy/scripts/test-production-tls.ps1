@@ -4,8 +4,8 @@ param(
     [string]$SslRoot,
     [Parameter(Mandatory = $true)]
     [string]$NginxConfig,
-    [string]$CertificateName = "www.nuonuoya.cn",
-    [string[]]$RequiredDnsNames = @("nuonuoya.cn", "www.nuonuoya.cn"),
+    [string]$CertificateName = "www.example.com",
+    [string[]]$RequiredDnsNames = @("example.com", "www.example.com"),
     [ValidateRange(1, 90)]
     [int]$MinimumRemainingDays = 14
 )

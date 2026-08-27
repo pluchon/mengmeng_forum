@@ -32,8 +32,8 @@ $required = @(
     "sql\economy-create.sql",
     "sql\ai-create.sql",
     "sql\postgres_ai_session.sql",
-    "ssl\www.nuonuoya.cn.pem",
-    "ssl\www.nuonuoya.cn.key"
+    "ssl\www.example.com.pem",
+    "ssl\www.example.com.key"
 )
 $optional = @("ffmpeg\Dockerfile")
 
@@ -82,7 +82,7 @@ $sslRoot = Join-Path $PkgRoot "ssl"
     -SslRoot $sslRoot `
     -NginxConfig (Join-Path $PkgRoot "conf.d\20-prod-https.conf")
 if (-not $?) { throw "Packaged production domain and TLS verification failed" }
-$expectedTlsFiles = @("www.nuonuoya.cn.key", "www.nuonuoya.cn.pem")
+$expectedTlsFiles = @("www.example.com.key", "www.example.com.pem")
 $actualTlsFiles = @(Get-ChildItem -LiteralPath $sslRoot -File | Select-Object -ExpandProperty Name | Sort-Object)
 if (Compare-Object -ReferenceObject $expectedTlsFiles -DifferenceObject $actualTlsFiles) {
     throw "Package ssl directory must contain only the Nginx production certificate and key"

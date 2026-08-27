@@ -613,7 +613,7 @@
                   "id": "s9D8l",
                   "name": "ICP Text",
                   "fill": "$foreground-muted",
-                  "content": "湘ICP备2026019722号-1",
+                  "content": "请填写备案号",
                   "fontFamily": "$font-body",
                   "fontSize": 11,
                   "fontWeight": "normal"
@@ -1283,7 +1283,7 @@
                   "id": "bhrG9",
                   "name": "ICP Text",
                   "fill": "$foreground-muted",
-                  "content": "湘ICP备2026019722号-1",
+                  "content": "请填写备案号",
                   "fontFamily": "$font-body",
                   "fontSize": 11,
                   "fontWeight": "normal"
@@ -1811,7 +1811,7 @@
                   "id": "roa9z",
                   "name": "ICP Text",
                   "fill": "$foreground-muted",
-                  "content": "湘ICP备2026019722号-1",
+                  "content": "请填写备案号",
                   "fontFamily": "$font-body",
                   "fontSize": 11,
                   "fontWeight": "normal"
@@ -41415,7 +41415,7 @@
                           "y": 27,
                           "name": "资料邮箱值",
                           "fill": "#776579",
-                          "content": "3110272243@qq.com",
+                          "content": "contact@example.com",
                           "fontFamily": "Noto Sans SC",
                           "fontSize": 14,
                           "fontWeight": "normal"

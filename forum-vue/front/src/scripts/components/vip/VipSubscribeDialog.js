@@ -13,7 +13,6 @@ import {
 } from '@/utils/clientOss'
 import alipayIconUrl from '@/assets/svg/alipay.svg'
 import wechatPayIconUrl from '@/assets/svg/WeChat_pay.svg'
-import qqmailIconUrl from '@/assets/svg/qqmail.svg'
 import outlookIconUrl from '@/assets/svg/outlook.svg'
 import '@/assets/styles/vip-subscribe-dialog.css'
 
@@ -234,7 +233,6 @@ export function useVipSubscribeDialog(props, emit) {
     vipBgUrl,
     alipayIconUrl,
     wechatPayIconUrl,
-    qqmailIconUrl,
     outlookIconUrl,
     visible,
     loading,

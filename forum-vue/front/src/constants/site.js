@@ -2,7 +2,7 @@
 export const SITE_NAME = '萌部落'
 export const SITE_TAGLINE = '一个交友阔谈的地方'
 export const SITE_DESC = "萌部落社区，一个交友阔谈的地方，欢迎你的加入🎉('ω')🎉"
-export const SITE_ICP_NUMBER = '湘ICP备2026019722号-1'
+export const SITE_ICP_NUMBER = '请填写备案号'
 export const SITE_ICP_URL = 'https://beian.miit.gov.cn/'
 
 // 抽奖页演示声明
