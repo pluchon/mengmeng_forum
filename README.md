@@ -676,3 +676,11 @@ FORUM_ENV_FILE=/opt/forum-config/prod.env bash init-db.sh
 | `deploy/scripts/make-package.ps1` | 打发布包 |
 | `deploy/scripts/init-db.sh` | 服务器空库初始化 |
 | `deploy/scripts/server-up.sh` | 打成包内 `up.sh` |
+## 贡献者
+
+| 贡献者 | 参与内容 |
+| --- | --- |
+| [pluchon](https://github.com/pluchon) | 项目发起与全部功能实现 |
+| Claude (Opus 5) | 文档整理、脱敏检查、协作约定 `.claude/CLAUDE.md` |
+
+欢迎提 issue 和 PR，一起把这个论坛做得更好玩。
