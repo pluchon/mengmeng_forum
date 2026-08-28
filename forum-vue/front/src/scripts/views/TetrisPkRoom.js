@@ -108,6 +108,17 @@ function useTetrisPkRoom() {
       if (message.type === 'room_chat' && message.data) {
         chatMessages.value.push(message.data)
       }
+      if (message.type === 'garbage_received' && message.data) {
+        const lines = Number(message.data.lines) || 0
+        if (lines > 0) {
+          const hitOpponent = Number(message.data.targetUserId) === Number(room.opponentUserId)
+          const text = hitOpponent ? `攻击对手 ${lines} 行` : `被对手攻击 ${lines} 行`
+          peerStateText.value = text
+          window.setTimeout(() => {
+            if (peerStateText.value === text) peerStateText.value = ''
+          }, 2000)
+        }
+      }
       if (message.type === 'peer_disconnected') {
         peerStateText.value = '对手暂时离线'
       }

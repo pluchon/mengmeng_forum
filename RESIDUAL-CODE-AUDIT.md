@@ -90,6 +90,26 @@ P2 的后端改动仍然有效但性质不同：它摘掉了 `MascotServiceImpl`
 
 顺带发现一处待确认的语义不一致：`quotaHint.percent` 表示**已用**百分比，而前端进度条按**剩余**百分比渲染。本次未改，登记待产品确认。
 
+**四、1.7「四类 WebSocket 错误消息被静默丢弃」大部分不成立。** 审计按类型字符串 grep 前端，零命中即判定丢弃。但三个房间页面（`GobangRoom.js:85`、`JinziRoom.js:109`、`TetrisPkRoom.js:98`）的 `onMessage` 开头都有通用兜底：
+
+```84:88:forum-vue/front/src/scripts/views/GobangRoom.js
+  onMessage(message) {
+    if (!message.ok) {
+      if (message.message) ElMessage.warning(message.message)
+      return
+    }
+```
+
+`room_error` / `game_error` / `move_rejected` 全部由 `GameWsResponse.fail(...)` 产生，带 `ok:false` 与 `message`，因此**一直会弹提示**，只是不按类型名分派。`GameCenter.js:897` 同理。
+
+真实缺口只有一个：`garbage_received` 是 `GameWsResponse.ok(...)`（`ok:true`），走不到兜底，又没有对应类型分支，所以被垃圾行攻击时确实没有任何反馈。已在 `TetrisPkRoom.js` 补一条分支，用 `room.opponentUserId` 区分攻守后写入既有的 `peerStateText` 状态行。
+
+**五、1.8「ReceiverExistsGuard 永远放行」不成立。** 判定依据是「返回值被丢弃」，但这条链路是靠副作用生效的：auth 侧 `UserServiceImpl.queryUserByUserId`（:203/:214）对不存在用户抛 `FAILED_USER_NOT_EXISTS` → `GlobalExceptionHandler.resolveStatus` 落到 `BAD_REQUEST`（400）→ IM 侧 `ForumFeignErrorDecoder` 解析出非成功码后重新抛 `ApplicationException`。所以给不存在的 userId 发私信**是被拦住的**，那次跨服务调用也不是「白跑」，它就是存在性校验本身。
+
+真实缺口很窄但确实存在：`ImUserLookupService.queryUserByUserId` 对 `null` 或非正数 id **本地直接返回 null，不发起调用**，而纯文本的 `SendMessageRequest.receiveUserId` 没有 `@NotNull`（`SendAlbumMessageRequest` 有，图片走 `ImagePayloadGuard` 的 null 判断）。已把 Guard 改为显式判空并返回 `FAILED_USER_NOT_EXISTS`，既补上缺口，也让语义不再依赖下游抛异常。
+
+> **方法论教训**：1.1、1.7、1.8 三项「功能失效」都源于同一种错误——按标识符/类型名 grep 前端，零命中就判定「未接通」，而没有读通用兜底分支与副作用链路。凡结论是「前端零处理」，必须再确认一次是否存在按 `ok` / 状态码统一处理的上游分支。
+
 ### 一处表述修正：`ai_usage_daily` 不能整表下线
 
 我此前建议「连整表一起下线」，数据显示这个建议**不成立**。该表的六列要分开看：
@@ -280,6 +300,8 @@ auth 域对 `user.vip_tier` 的 5 条读取链路属 1.4，**不要动**——`A
 `AiPointsBillingService.priceCache` 靠双检锁懒加载，唯一刷新入口 `refreshPriceCache()` 跨仓库零调用，且无 `@Scheduled` / `@EventListener` / `@PostConstruct`。修改 `forum_ai_model_price` 必须重启服务才生效。
 
 **按「其他按建议来」处理**：这是「缺一个刷新钩子」而非「多一个方法」。建议**保留方法**并补一个定时刷新或缓存 TTL，而不是删掉它。
+
+> **已修复（P4）**：ai 域全域没有任何 `@Scheduled`，为此单开调度设施不划算，改为给缓存加 5 分钟 TTL（`PRICE_CACHE_TTL_MS`），多实例部署下各实例自行过期重载。`refreshPriceCache()` 保留为手动刷新入口。
 
 ## 1.12 两个 AI 功能漏进计费白名单（ai 域）
 

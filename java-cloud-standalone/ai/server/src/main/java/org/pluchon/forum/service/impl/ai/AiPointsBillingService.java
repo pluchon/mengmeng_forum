@@ -68,7 +68,12 @@ public class AiPointsBillingService {
     @Resource
     private AiQuotaService aiQuotaService;
 
+    // 价格缓存存活时长；改 forum_ai_model_price 后最迟 5 分钟生效，无需重启
+    private static final long PRICE_CACHE_TTL_MS = 5 * 60 * 1000L;
+
     private volatile Map<String, Map<String, BigDecimal>> priceCache;
+
+    private volatile long priceCacheLoadedAt;
 
     private Map<String, Map<String, BigDecimal>> loadPriceCache() {
         Map<String, Map<String, BigDecimal>> map = new HashMap<>();
@@ -82,18 +87,25 @@ public class AiPointsBillingService {
     }
 
     private Map<String, BigDecimal> pricesForModel(String modelCode) {
-        if (priceCache == null) {
+        Map<String, Map<String, BigDecimal>> cache = priceCache;
+        if (isPriceCacheStale()) {
             synchronized (this) {
-                if (priceCache == null) {
-                    priceCache = loadPriceCache();
+                if (isPriceCacheStale()) {
+                    refreshPriceCache();
                 }
+                cache = priceCache;
             }
         }
-        return priceCache.getOrDefault(modelCode, Map.of());
+        return cache.getOrDefault(modelCode, Map.of());
+    }
+
+    private boolean isPriceCacheStale() {
+        return priceCache == null || System.currentTimeMillis() - priceCacheLoadedAt >= PRICE_CACHE_TTL_MS;
     }
 
     public void refreshPriceCache() {
         priceCache = loadPriceCache();
+        priceCacheLoadedAt = System.currentTimeMillis();
     }
 
     // 估算积分 不扣费 ，用于前端展示
