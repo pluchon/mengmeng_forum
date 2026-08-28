@@ -138,21 +138,29 @@ public class AiQuotaServiceImpl implements AiQuotaService {
         forumAiQuotaPeriodUsageMapper.ensurePeriod(user.getId(), window.key);
     }
 
+    // 周期锚点以 economy 域的 user_vip_subscription.quota_period_* 为准。
+    // 不能从 vip_expire_at 反推：续期只延长到期时间，反推会让周期键随之漂移，
+    // 每次续期都换出一个计数全零的新桶，等于白送一次额度重置。
     private PeriodWindow periodWindow(AiUserContext user) {
-        ZonedDateTime now = ZonedDateTime.now(TAIPEI);
         PeriodWindow window = new PeriodWindow();
-        if (!vipActive(user) || user.getVipExpireAt() == null) {
-            window.start = Date.from(now.withDayOfMonth(1).toLocalDate().atStartOfDay(TAIPEI).toInstant());
-            window.end = Date.from(now.plusMonths(1).withDayOfMonth(1).toLocalDate()
-                    .atStartOfDay(TAIPEI).toInstant());
-            window.key = now.toLocalDate().toString().substring(0, 7);
+        if (user != null && user.getQuotaPeriodStart() != null && user.getQuotaPeriodEnd() != null) {
+            window.start = user.getQuotaPeriodStart();
+            window.end = user.getQuotaPeriodEnd();
+            window.key = periodKey(window.start, window.end);
             return window;
         }
-        ZonedDateTime end = user.getVipExpireAt().toInstant().atZone(TAIPEI);
-        window.end = user.getVipExpireAt();
-        window.start = Date.from(end.minusDays(30).toInstant());
-        window.key = end.minusDays(30).toLocalDate() + "_" + end.toLocalDate();
+        // 兜底：拿不到锚点时按自然月，避免判定链路直接失败
+        ZonedDateTime now = ZonedDateTime.now(TAIPEI);
+        window.start = Date.from(now.withDayOfMonth(1).toLocalDate().atStartOfDay(TAIPEI).toInstant());
+        window.end = Date.from(now.plusMonths(1).withDayOfMonth(1).toLocalDate()
+                .atStartOfDay(TAIPEI).toInstant());
+        window.key = periodKey(window.start, window.end);
         return window;
+    }
+
+    private static String periodKey(Date start, Date end) {
+        return start.toInstant().atZone(TAIPEI).toLocalDate()
+                + "_" + end.toInstant().atZone(TAIPEI).toLocalDate();
     }
 
     private static class PeriodWindow {

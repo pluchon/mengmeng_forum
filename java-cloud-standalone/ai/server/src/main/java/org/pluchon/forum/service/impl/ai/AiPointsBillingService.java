@@ -477,12 +477,15 @@ public class AiPointsBillingService {
                 logRow.getImageCount());
     }
 
+    // 与 AiQuotaServiceImpl.periodWindow 保持同一口径：锚点取自 economy 域，不从到期时间反推
     private String quotaPeriodKey(AiUserContext user) {
-        if (user == null || !user.isVipActive() || user.getVipExpireAt() == null) {
-            return LocalDate.now(ZONE).toString().substring(0, 7);
+        if (user == null || user.getQuotaPeriodStart() == null || user.getQuotaPeriodEnd() == null) {
+            ZonedDateTime now = ZonedDateTime.now(ZONE);
+            return now.withDayOfMonth(1).toLocalDate()
+                    + "_" + now.plusMonths(1).withDayOfMonth(1).toLocalDate();
         }
-        ZonedDateTime end = user.getVipExpireAt().toInstant().atZone(ZONE);
-        return end.minusDays(30).toLocalDate() + "_" + end.toLocalDate();
+        return user.getQuotaPeriodStart().toInstant().atZone(ZONE).toLocalDate()
+                + "_" + user.getQuotaPeriodEnd().toInstant().atZone(ZONE).toLocalDate();
     }
 
     private void settleQuotaUsage(AiUserContext user, String featureCode, List<AiModelUsageDTO> usages) {

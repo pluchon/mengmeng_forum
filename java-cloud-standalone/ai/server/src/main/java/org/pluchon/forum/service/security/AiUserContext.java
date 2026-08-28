@@ -27,4 +27,13 @@ public class AiUserContext {
     private Date vipExpireAt;
 
     private boolean vipActive;
+
+    // 基础配额档位
+    private Byte baseQuotaTier;
+
+    // 配额周期起点 由 economy 域权威维护 续期不移动
+    private Date quotaPeriodStart;
+
+    // 配额周期终点
+    private Date quotaPeriodEnd;
 }

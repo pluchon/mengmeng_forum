@@ -86,6 +86,9 @@ public class AiUserLookupService {
             context.setVipTier(vip.getVipTier());
             context.setVipExpireAt(vip.getVipExpireAt());
             context.setVipActive(vip.isVipActive());
+            context.setBaseQuotaTier(vip.getBaseQuotaTier());
+            context.setQuotaPeriodStart(vip.getQuotaPeriodStart());
+            context.setQuotaPeriodEnd(vip.getQuotaPeriodEnd());
         }
     }
 }
