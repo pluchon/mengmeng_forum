@@ -228,7 +228,6 @@ public final class Constant {
     public static final String LOTTERY_COLLECT_REWARD_RANDOM = ForumBusinessConstants.LOTTERY_COLLECT_REWARD_RANDOM;
     public static final String LOTTERY_COLLECT_REWARD_VOUCHER = ForumBusinessConstants.LOTTERY_COLLECT_REWARD_VOUCHER;
     public static final String LOTTERY_COLLECT_REWARD_POINTS = ForumBusinessConstants.LOTTERY_COLLECT_REWARD_POINTS;
-    public static final String LOTTERY_COLLECT_REWARD_VIP_DAYS = ForumBusinessConstants.LOTTERY_COLLECT_REWARD_VIP_DAYS;
     public static final int EMOJI_SHOP_ITEM_MAX = ForumBusinessConstants.EMOJI_SHOP_ITEM_MAX;
     public static final int EMOJI_SHOP_PRICE_MIN = ForumBusinessConstants.EMOJI_SHOP_PRICE_MIN;
     public static final int EMOJI_SHOP_PRICE_MAX = ForumBusinessConstants.EMOJI_SHOP_PRICE_MAX;

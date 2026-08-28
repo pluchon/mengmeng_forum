@@ -1153,10 +1153,6 @@ public class LotteryServiceImpl implements LotteryService {
                     activityId, "收集册里程·" + displayLabel, idem);
             return displayLabel;
         }
-        if (Constant.LOTTERY_COLLECT_REWARD_VIP_DAYS.equals(rewardType) && rewardValue > 0) {
-            vipSubscribeService.grantTrialVipDays(userId, rewardValue, "LOTTERY_COLLECT", idem);
-            return displayLabel;
-        }
         throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "里程奖励配置无效"));
     }
 

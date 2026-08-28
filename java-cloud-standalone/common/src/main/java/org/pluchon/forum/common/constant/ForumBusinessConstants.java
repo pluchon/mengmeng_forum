@@ -168,7 +168,6 @@ public final class ForumBusinessConstants {
     public static final String LOTTERY_COLLECT_REWARD_RANDOM = "RANDOM";
     public static final String LOTTERY_COLLECT_REWARD_VOUCHER = "VOUCHER";
     public static final String LOTTERY_COLLECT_REWARD_POINTS = "POINTS";
-    public static final String LOTTERY_COLLECT_REWARD_VIP_DAYS = "VIP_DAYS";
     public static final Byte POINTS_SOURCE_LOTTERY_COLLECT = 16;
 
     public static final int EMOJI_SHOP_ITEM_MAX = 60;

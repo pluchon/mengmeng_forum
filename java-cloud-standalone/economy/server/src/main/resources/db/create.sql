@@ -54,7 +54,6 @@ CREATE TABLE `checkin_streak_reward` (
   `bonus_points` int NOT NULL DEFAULT '0' COMMENT '额外奖励积分',
   `starlight_amount` int NOT NULL DEFAULT '0' COMMENT '发放萌星辉数量',
   `makeup_card_amount` int NOT NULL DEFAULT '0' COMMENT '发放补签卡数量',
-  `vip_days` int NOT NULL DEFAULT '0' COMMENT '发放 VIP 体验天数',
   `title` varchar(64) DEFAULT NULL COMMENT '前端主文案',
   `subtitle` varchar(128) DEFAULT NULL COMMENT '前端副文案',
   `description` varchar(100) DEFAULT NULL COMMENT '奖励描述',
@@ -88,7 +87,7 @@ CREATE TABLE `checkin_grant_log` (
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `checkin_surprise_pool` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号, 主键, 自增',
-  `reward_type` varchar(32) NOT NULL COMMENT '奖励类型: POINTS/VIP_DAYS/STARLIGHT/MAKEUP_CARD/LOTTERY_VOUCHER',
+  `reward_type` varchar(32) NOT NULL COMMENT '奖励类型: POINTS/STARLIGHT/MAKEUP_CARD/LOTTERY_VOUCHER',
   `reward_value` int NOT NULL DEFAULT '0' COMMENT '奖励数值',
   `weight` int NOT NULL DEFAULT '1' COMMENT '抽取权重',
   `label` varchar(64) NOT NULL COMMENT '展示文案',
@@ -502,7 +501,7 @@ CREATE TABLE `user_lottery_task_claim` (
 CREATE TABLE `lottery_collect_milestone` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `threshold_count` int NOT NULL COMMENT '达成所需收集数',
-  `reward_type` varchar(20) NOT NULL COMMENT '奖励: RANDOM/VOUCHER/POINTS/VIP_DAYS',
+  `reward_type` varchar(20) NOT NULL COMMENT '奖励: RANDOM/VOUCHER/POINTS',
   `reward_value` int NOT NULL DEFAULT '0' COMMENT '主奖励数值(券张数/积分数/VIP天数)',
   `alt_reward_value` int DEFAULT NULL COMMENT 'RANDOM 备选积分数',
   `label` varchar(40) NOT NULL COMMENT '展示文案',
@@ -590,8 +589,8 @@ CREATE TABLE `starlight_shop_item` (
   `category` varchar(20) NOT NULL COMMENT '分类: HOT/LIMITED/COSMETIC/UTILITY',
   `tag` varchar(20) DEFAULT NULL COMMENT '展示角标: 热门/限定/新品等',
   `price_starlight` int NOT NULL COMMENT '兑换所需萌星辉',
-  `reward_type` varchar(30) NOT NULL COMMENT '奖励类型: VIP_DAYS/LOTTERY_VOUCHER',
-  `reward_value` int NOT NULL COMMENT '奖励数值(如 VIP 天数)',
+  `reward_type` varchar(30) NOT NULL COMMENT '奖励类型: QUOTA_RESET/LOTTERY_VOUCHER/MAKEUP_CARD',
+  `reward_value` int NOT NULL COMMENT '奖励数值(如券张数)',
   `stock_remaining` int NOT NULL DEFAULT '-1' COMMENT '剩余库存,-1不限量',
   `daily_limit` int NOT NULL DEFAULT '0' COMMENT '每日限购次数,0不限',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '展示排序,越小越靠前',
@@ -673,14 +672,16 @@ INSERT INTO checkin_rule (month, day_number, points, is_surprise) VALUES
 (0,29,32,0),(0,30,45,1),(0,31,32,0);
 
 INSERT INTO `checkin_streak_reward`
-(`streak_days`, `reward_type`, `bonus_points`, `starlight_amount`, `makeup_card_amount`, `vip_days`, `title`, `subtitle`, `description`)
+(`streak_days`, `reward_type`, `bonus_points`, `starlight_amount`, `makeup_card_amount`, `title`, `subtitle`, `description`)
 VALUES
-(3,  'STARLIGHT',   0, 100, 0, 0, '连续签到 3 天', '萌星辉 + 100', '连续签到3天萌星辉奖励'),
-(7,  'MAKEUP_CARD', 0, 0, 3, 0, '连续签到 7 天', '补签卡 ×3', '连续签到7天补签卡奖励'),
-(15, 'MIXED',       0, 300, 0, 1, '连续签到 15 天', '一日会员体验 + 300 萌星辉', '连续签到15天混合奖励'),
-(30, 'MIXED',       0, 500, 0, 3, '连续签到 30 天', '三日会员体验 + 500 萌星辉', '连续签到30天混合奖励');
+(3,  'STARLIGHT',   0, 100, 0, '连续签到 3 天', '萌星辉 + 100', '连续签到3天萌星辉奖励'),
+(7,  'MAKEUP_CARD', 0, 0, 3, '连续签到 7 天', '补签卡 ×3', '连续签到7天补签卡奖励'),
+-- 会员体验卡统一只从抽奖池发放，签到侧只给星辉，故 15/30 天档由 MIXED 退回 STARLIGHT
+(15, 'STARLIGHT',   0, 300, 0, '连续签到 15 天', '萌星辉 + 300', '连续签到15天萌星辉奖励'),
+(30, 'STARLIGHT',   0, 500, 0, '连续签到 30 天', '萌星辉 + 500', '连续签到30天萌星辉奖励');
 
--- 惊喜奖池：类间权重 积分30/星辉25/补签卡20/抵扣券15/VIP10；类内低≈70/中≈20/高≈10（绝对权重合计 1000）
+-- 惊喜奖池：类间权重 积分30/星辉25/补签卡20/抵扣券15；类内低≈70/中≈20/高≈10（绝对权重合计 900）
+-- 会员体验卡已移出惊喜奖池（原占 100），剩余四类的相对概率不变
 INSERT INTO `checkin_surprise_pool` (`reward_type`, `reward_value`, `weight`, `label`, `sort_order`) VALUES
 ('POINTS', 200, 70, '+200 积分', 10),
 ('POINTS', 250, 70, '+250 积分', 11),
@@ -709,14 +710,7 @@ INSERT INTO `checkin_surprise_pool` (`reward_type`, `reward_value`, `weight`, `l
 ('LOTTERY_VOUCHER', 50, 15, '+50 张抽奖抵扣券', 44),
 ('LOTTERY_VOUCHER', 60, 15, '+60 张抽奖抵扣券', 45),
 ('LOTTERY_VOUCHER', 80, 7, '+80 张抽奖抵扣券', 46),
-('LOTTERY_VOUCHER', 100, 8, '+100 张抽奖抵扣券', 47),
-('VIP_DAYS', 1, 23, 'PRO 体验 1 日', 50),
-('VIP_DAYS', 2, 24, 'PRO 体验 2 日', 51),
-('VIP_DAYS', 3, 23, 'PRO 体验 3 日', 52),
-('VIP_DAYS', 4, 10, 'PRO 体验 4 日', 53),
-('VIP_DAYS', 5, 10, 'PRO 体验 5 日', 54),
-('VIP_DAYS', 6, 5, 'PRO 体验 6 日', 55),
-('VIP_DAYS', 7, 5, 'PRO 体验 7 日', 56);
+('LOTTERY_VOUCHER', 100, 8, '+100 张抽奖抵扣券', 47);
 
 -- 抽奖演示数据（phase=1 进行中，供用户端 / 首页趋势）
 -- ----------------------------
@@ -727,8 +721,7 @@ INSERT INTO `lottery_prize` (`id`, `name`, `prize_type`, `prize_value`, `stock_q
     (4, '安慰奖', 3, 0, -1, 1, 0, NULL),
     (5, '10~50随机积分', 4, -1, -1, 1, 0, NULL),
     (6, '50积分', 4, 50, -1, 0, 0, NULL),
-    (7, 'PRO会员体验卡·30天', 5, 30, -1, 1, 0, NULL),
-    (8, 'VIP体验3天', 5, 3, -1, 2, 0, NULL);
+    (7, 'PRO会员体验卡·30天', 5, 30, -1, 1, 0, NULL);
 
 -- 神秘大奖子奖项：会员奖项只保留一个 MAX 30 天，权重压到千分之一
 INSERT INTO `lottery_prize_mystery_item` (`id`, `prize_id`, `item_type`, `item_value`, `vip_tier`, `weight`) VALUES
@@ -772,5 +765,6 @@ INSERT INTO `lottery_collect_milestone`
 (10, 'RANDOM', 1, 30, '抵扣券×1', 10, 1, 0),
 (25, 'POINTS', 50, NULL, '积分×50', 20, 1, 0),
 (50, 'VOUCHER', 3, NULL, '抵扣券×3', 30, 1, 0),
-(80, 'VIP_DAYS', 1, NULL, 'VIP·1天', 40, 1, 0);
+-- 会员体验卡只从抽奖池发放，80 档改为延续抵扣券递进（券×1 → ×3 → ×5）
+(80, 'VOUCHER', 5, NULL, '抵扣券×5', 40, 1, 0);
 

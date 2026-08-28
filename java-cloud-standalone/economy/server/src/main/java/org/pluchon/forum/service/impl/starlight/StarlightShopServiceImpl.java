@@ -18,7 +18,6 @@ import org.pluchon.forum.entity.vo.starlight.StarlightExchangeRecordVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightExchangeResultVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightShopItemVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightUseResultVO;
-import org.pluchon.forum.entity.vo.vip.VipTrialGrantResultVO;
 import org.pluchon.forum.mapper.StarlightExchangeRecordMapper;
 import org.pluchon.forum.mapper.StarlightShopItemMapper;
 import org.pluchon.forum.service.interfaces.checkin.CheckinService;
@@ -58,8 +57,6 @@ public class StarlightShopServiceImpl implements StarlightShopService {
 
     private static final int DEFAULT_EXCHANGE_PAGE_SIZE = 5;
 
-    private static final String REWARD_VIP_DAYS = "VIP_DAYS";
-
     private static final String REWARD_LOTTERY_VOUCHER = "LOTTERY_VOUCHER";
 
     private static final String REWARD_MAKEUP_CARD = "MAKEUP_CARD";
@@ -74,10 +71,10 @@ public class StarlightShopServiceImpl implements StarlightShopService {
     private static final Set<String> VALID_CATEGORIES = Set.of("HOT", "LIMITED", "COSMETIC", "UTILITY");
 
     private static final Set<String> SUPPORTED_REWARDS = Set.of(
-            REWARD_VIP_DAYS, REWARD_LOTTERY_VOUCHER, REWARD_MAKEUP_CARD, REWARD_QUOTA_RESET);
+            REWARD_LOTTERY_VOUCHER, REWARD_MAKEUP_CARD, REWARD_QUOTA_RESET);
 
     // 兑换后入背包、需用户主动点「使用」才生效的类型
-    private static final Set<String> USABLE_REWARDS = Set.of(REWARD_VIP_DAYS, REWARD_QUOTA_RESET);
+    private static final Set<String> USABLE_REWARDS = Set.of(REWARD_QUOTA_RESET);
 
     @Autowired
     private StarlightShopItemMapper starlightShopItemMapper;
@@ -87,9 +84,6 @@ public class StarlightShopServiceImpl implements StarlightShopService {
 
     @Autowired
     private StarlightService starlightService;
-
-    @Autowired
-    private VipSubscribeService vipSubscribeService;
 
     @Autowired
     private LotteryVoucherService lotteryVoucherService;
@@ -267,11 +261,6 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         if (!USABLE_REWARDS.contains(rewardType)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "暂不支持使用该奖励类型"));
         }
-        int vipDays = record.getRewardValue() == null ? 0 : record.getRewardValue();
-        if (REWARD_VIP_DAYS.equals(rewardType) && vipDays <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "奖励配置无效"));
-        }
-
         Date now = new Date();
         int updated = starlightExchangeRecordMapper.markUsed(record.getId(), userId, now);
         if (updated != 1) {
@@ -282,19 +271,7 @@ public class StarlightShopServiceImpl implements StarlightShopService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "使用失败，请刷新后重试"));
         }
 
-        if (REWARD_QUOTA_RESET.equals(rewardType)) {
-            applyQuotaReset(userId, record);
-        } else {
-            VipTrialGrantResultVO grantResult = vipSubscribeService.grantTrialVipDays(
-                    userId, vipDays, "STARLIGHT", "STARLIGHT:" + record.getId());
-            record.setActualGrantTier(grantResult.getActualTier());
-            record.setActualDurationHours(grantResult.getActualDurationHours());
-            // 礼包额度已下线，过期时间直接取会员到期时间
-            Date vipExpireAt = grantResult.getVipExpireAt();
-            record.setGrantSummary(vipExpireAt == null
-                    ? grantResult.getSummary()
-                    : "会员有效至：" + formatExpireText(vipExpireAt));
-        }
+        applyQuotaReset(userId, record);
         record.setUseStatus(USE_STATUS_USED);
         record.setUseTime(now);
         starlightExchangeRecordMapper.updateById(record);
@@ -464,9 +441,6 @@ public class StarlightShopServiceImpl implements StarlightShopService {
     }
 
     private String buildRewardSummary(String rewardType, Integer rewardValue) {
-        if (REWARD_VIP_DAYS.equals(rewardType)) {
-            return "VIP 体验 " + Math.max(0, rewardValue == null ? 0 : rewardValue) + " 天";
-        }
         if (REWARD_LOTTERY_VOUCHER.equals(rewardType)) {
             return "抵扣券 ×" + Math.max(0, rewardValue == null ? 0 : rewardValue);
         }

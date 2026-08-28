@@ -164,8 +164,8 @@ export function useCheckin() {
   const STREAK_CARD_COPY = {
     3: { title: '连续签到 3 天', subtitle: '萌星辉 + 100' },
     7: { title: '连续签到 7 天', subtitle: '补签卡 ×3' },
-    15: { title: '连续签到 15 天', subtitle: '一日会员体验 + 300 萌星辉' },
-    30: { title: '连续签到 30 天', subtitle: '三日会员体验 + 500 萌星辉' },
+    15: { title: '连续签到 15 天', subtitle: '萌星辉 + 300' },
+    30: { title: '连续签到 30 天', subtitle: '萌星辉 + 500' },
   }
 
   function normalizeStreakCard(item) {

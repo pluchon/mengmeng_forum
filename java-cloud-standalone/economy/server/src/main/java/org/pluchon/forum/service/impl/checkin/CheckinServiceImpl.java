@@ -38,7 +38,6 @@ import org.pluchon.forum.service.interfaces.checkin.CheckinService;
 import org.pluchon.forum.service.interfaces.lottery.LotteryVoucherService;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightService;
-import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -77,7 +76,6 @@ public class CheckinServiceImpl implements CheckinService {
     private static final String REWARD_POINTS = "POINTS";
     private static final String REWARD_STARLIGHT = "STARLIGHT";
     private static final String REWARD_MAKEUP_CARD = "MAKEUP_CARD";
-    private static final String REWARD_VIP_DAYS = "VIP_DAYS";
     private static final String REWARD_LOTTERY_VOUCHER = "LOTTERY_VOUCHER";
 
     @Autowired
@@ -109,9 +107,6 @@ public class CheckinServiceImpl implements CheckinService {
 
     @Autowired
     private StarlightService starlightService;
-
-    @Autowired
-    private VipSubscribeService vipSubscribeService;
 
     @Autowired
     private LotteryVoucherService lotteryVoucherService;
@@ -528,7 +523,6 @@ public class CheckinServiceImpl implements CheckinService {
         int points = reward.getBonusPoints() == null ? 0 : reward.getBonusPoints();
         int starlight = reward.getStarlightAmount() == null ? 0 : reward.getStarlightAmount();
         int cards = reward.getMakeupCardAmount() == null ? 0 : reward.getMakeupCardAmount();
-        int vipDays = reward.getVipDays() == null ? 0 : reward.getVipDays();
         if (points > 0) {
             pointsService.addPoints(userId, points, Constant.POINTS_SOURCE_CHECKIN_BONUS,
                     logId, "连签奖励 +" + points, "checkin_streak_pts:" + userId + ":" + reward.getStreakDays());
@@ -540,10 +534,6 @@ public class CheckinServiceImpl implements CheckinService {
         }
         if (cards > 0) {
             addMakeupCards(userId, cards);
-        }
-        if (vipDays > 0) {
-            vipSubscribeService.grantTrialVipDays(userId, vipDays, "CHECKIN_STREAK",
-                    "CHECKIN_STREAK:" + userId + ":" + reward.getStreakDays());
         }
     }
 
@@ -573,8 +563,6 @@ public class CheckinServiceImpl implements CheckinService {
             case REWARD_STARLIGHT -> starlightService.credit(userId, value, StarlightServiceImpl.SOURCE_CHECKIN,
                     logId, idempotencyKey, remark);
             case REWARD_MAKEUP_CARD -> addMakeupCards(userId, value);
-            case REWARD_VIP_DAYS -> vipSubscribeService.grantTrialVipDays(
-                    userId, value, "CHECKIN_SURPRISE", idempotencyKey);
             case REWARD_LOTTERY_VOUCHER -> lotteryVoucherService.credit(
                     userId, value, logId, idempotencyKey, remark, Constant.LOTTERY_VOUCHER_SOURCE_CHECKIN);
             default -> log.warn("未知签到奖励类型: {}", type);

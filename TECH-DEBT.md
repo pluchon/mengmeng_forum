@@ -24,12 +24,6 @@ mock 期间「所有人都能看到首月优惠价 3.9 / 6.9」是预期行为�
 
 保留清单（支付接通后的写入落点，勿删）：`VipPurchaseRecord` 实体、`VipPurchaseRecordMapper`、`VipPurchaseRecordConverter`、`VipCenterServiceImpl.purchaseRecords`、`/vip/purchase-records` 端点、`UserVipSubscriptionMapper.updatePaidSubscription`、`VipSubscribeResultVO`、`VipSubscribeDTO`。
 
-### 3. 孤立奖品定义 `lottery_prize` id=8「VIP体验3天」
-
-不在任何活动奖池（`lottery_activity_prize` 无该行），`lottery_draw_record` 里也零抽中记录，属于奖池改版前的遗留定义。按「奖池只保留 PRO 30 天体验卡 + 神秘大奖内的 MAX 30 天」的口径，它已无位置。
-
-删除风险为零（无引用、无历史记录），但奖品定义属数据而非代码，等下次奖池调整时一并处理。同一张表的 id=6「50积分」虽然也不在当前奖池，但有 34 条历史抽中记录，**必须保留**用于历史展示。
-
 ---
 
 ## 附：已解决项备忘
@@ -39,6 +33,7 @@ mock 期间「所有人都能看到首月优惠价 3.9 / 6.9」是预期行为�
 - **举报理由接进 AI 审核**：两个域的 `taskPayload` 增加 `reportReason`，多人共享任务时按 `taskId` 聚合去重（上限若干条，`；` 拼接）；Python 侧 `ai_async_worker` 透传，`moderation/graph.py` 的 prompt 以 `<untrusted_report_reason>` 呈现并明确「仅提示审核视角、本身不是证据、不得因此降低判定标准」。带理由的举报**整体绕过语义缓存**——缓存按内容取键不含理由，复用会让理由白传，写回则会污染普通自动审核。
 - **VIP 礼包额外额度显示得到用不到**：不再做独立额度池结算，改为**额度重置卡**（星辉商城 600 星辉，PRO/MAX 同价、重置效果随档位不同）。`vip_quota_bonus_grant` 整套表/服务/跨域契约已下线。
 - **AI 周期键随续期漂移**：周期锚点改取 economy 域 `user_vip_subscription.quota_period_*`，不再从 `vip_expire_at` 反推，续期不再等于白送一次额度重置。
+- **会员体验卡发放来源统一**：体验卡**只从抽奖池发放**——常规池 PRO 30 天（权重 20、限量 30），神秘大奖池 MAX 30 天（权重 1）。其余四个来源全部下线：连续签到 15/30 天档退回纯星辉（`MIXED`→`STARLIGHT`，`vip_days` 列已删）、签到惊喜奖池移除 VIP 档位（类间权重 1000→900，其余四类相对概率不变）、星辉商城改卖额度重置卡、收集册 80 档改为抵扣券×5。相应地 `CheckinServiceImpl` / `StarlightShopServiceImpl` / `LotteryServiceImpl` 的体验卡发放分支与 `LOTTERY_COLLECT_REWARD_VIP_DAYS` 常量一并移除，规则由代码强制而非仅靠数据。
 
 ---
 

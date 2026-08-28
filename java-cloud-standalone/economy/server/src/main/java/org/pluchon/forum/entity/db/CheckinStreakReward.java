@@ -34,9 +34,6 @@ public class CheckinStreakReward {
     @Schema(description = "发放补签卡数量")
     private Integer makeupCardAmount;
 
-    @Schema(description = "发放 VIP 体验天数")
-    private Integer vipDays;
-
     @Schema(description = "前端主文案")
     private String title;
 
