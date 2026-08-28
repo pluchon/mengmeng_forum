@@ -56,11 +56,6 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public boolean hasAdvancedQwenAccess(AiUserContext user) {
-        return user != null && user.getId() != null;
-    }
-
-    @Override
     public void consumeQwenFlash(AiUserContext user) {
         ensureTextBudget(user);
     }

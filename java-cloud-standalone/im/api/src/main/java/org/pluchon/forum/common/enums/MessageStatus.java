@@ -27,9 +27,4 @@ public enum MessageStatus {
         }
         return null;
     }
-
-    @Override
-    public String toString() {
-        return "MessageStatus:" + code + ",Message:" + message + ".\n";
-    }
 }

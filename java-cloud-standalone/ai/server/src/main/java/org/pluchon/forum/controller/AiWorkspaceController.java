@@ -9,7 +9,6 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.AiMemoryCreateRequest;
 import org.pluchon.forum.entity.dto.AiWorkspaceArtifactRequest;
-import org.pluchon.forum.entity.dto.AiWorkspaceCreateRequest;
 import org.pluchon.forum.entity.vo.ai.AiLongTermMemoryVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVersionVO;
@@ -35,13 +34,6 @@ public class AiWorkspaceController {
 
     @Autowired
     private AiWorkspaceService aiWorkspaceService;
-
-    /** 创建 AI 创作工作区 */
-    @PostMapping
-    public Result<AiWorkspaceVO> create(@RequestBody(required = false) AiWorkspaceCreateRequest request,
-                                         HttpServletRequest httpServletRequest) {
-        return Result.success(aiWorkspaceService.createWorkspace(requireUser(httpServletRequest).getId(), request));
-    }
 
     /** 分页查询当前用户的 AI 工作区 */
     @GetMapping
@@ -73,14 +65,6 @@ public class AiWorkspaceController {
                                       @PathVariable Long versionId,
                                       HttpServletRequest httpServletRequest) {
         aiWorkspaceService.selectVersion(requireUser(httpServletRequest).getId(), workspaceId, versionId);
-        return Result.success();
-    }
-
-    /** 逻辑删除工作区及其可见版本 */
-    @DeleteMapping("/{workspaceId}")
-    public Result<Void> deleteWorkspace(@PathVariable Long workspaceId,
-                                        HttpServletRequest httpServletRequest) {
-        aiWorkspaceService.deleteWorkspace(requireUser(httpServletRequest).getId(), workspaceId);
         return Result.success();
     }
 

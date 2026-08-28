@@ -66,10 +66,6 @@ public class TetrisBlock {
         return Arrays.copyOf(xy, 2);
     }
 
-    public int getRotateIndex() {
-        return rotateIndex;
-    }
-
     private static int[][] rotateShape(int[][] shape) {
         int rows = shape.length;
         int cols = shape[0].length;

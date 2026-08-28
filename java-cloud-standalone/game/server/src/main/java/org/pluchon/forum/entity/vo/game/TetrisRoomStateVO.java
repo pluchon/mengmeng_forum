@@ -78,9 +78,6 @@ public class TetrisRoomStateVO {
     // 房间在线人数
     private Integer roomOnlineCount;
 
-    // 服务器时间戳
-    private Long serverNowMs;
-
     // 最近聊天记录
     private List<TetrisChatVO> recentChats;
 }

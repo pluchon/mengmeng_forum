@@ -1,12 +1,10 @@
 package org.pluchon.forum.service.interfaces.checkin;
 
-import org.pluchon.forum.entity.db.CheckinLog;
 import org.pluchon.forum.entity.vo.checkin.CheckinMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinResultResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinStatusResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinLogVO;
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 
 // 签到模块
@@ -23,9 +21,6 @@ public interface CheckinService {
 
     // 查询指定月份签到积分规则
     CheckinRuleMonthResponse getRule(Integer month);
-
-    // 游标分页查询签到流水
-    CursorPageResult<CheckinLog> getLogWithCursor(Long userId, String cursor, Integer pageSize);
 
     // 查询月度签到摘要 日历 + 周统计
     CheckinMonthResponse getMonth(Long userId, Integer year, Integer month);

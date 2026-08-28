@@ -404,10 +404,6 @@ public class ChatMessageReportServiceImpl implements ChatMessageReportService {
         return TASK_FAILED == safeByte(task.getStatus()) ? REPORT_ERROR : REPORT_PROCESSING;
     }
 
-    private static int safeRetryCount(ImAiTask task) {
-        return task.getRetryCount() == null ? 0 : task.getRetryCount();
-    }
-
     private byte parseConversationType(String value) {
         return switch (value.trim().toUpperCase(Locale.ROOT)) {
             case "PRIVATE" -> PRIVATE;

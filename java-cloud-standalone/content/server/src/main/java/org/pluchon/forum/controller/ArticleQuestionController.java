@@ -9,14 +9,11 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.AcceptQuestionAnswerRequest;
 import org.pluchon.forum.entity.dto.article.SetQuestionResolvedRequest;
-import org.pluchon.forum.entity.vo.article.QuestionAnswerVO;
 import org.pluchon.forum.service.interfaces.article.ArticleQuestionService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 // 问答帖状态与采纳接口 关闭问题已移除
@@ -57,15 +54,5 @@ public class ArticleQuestionController {
         boolean resolved = Boolean.TRUE.equals(request.getResolved());
         articleQuestionService.setResolved(request.getArticleId(), resolved, loginUser.getId());
         return Result.success(resolved ? "已标记为已解决" : "已标记为未解决");
-    }
-
-    /** 查询问答帖代表采纳回答 兼容旧客户端 */
-    @GetMapping("/acceptedAnswer")
-    public Result<QuestionAnswerVO> getAcceptedAnswer(
-            @RequestParam Long articleId,
-            HttpServletRequest httpServletRequest) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        Long loginUserId = loginUser == null ? null : loginUser.getId();
-        return Result.success(articleQuestionService.queryAcceptedAnswer(articleId, loginUserId));
     }
 }

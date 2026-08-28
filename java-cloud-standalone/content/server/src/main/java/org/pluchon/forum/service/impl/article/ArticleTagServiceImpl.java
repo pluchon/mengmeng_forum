@@ -83,7 +83,6 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         return new PageResult<>(records, total, currentPage, TAG_PAGE_SIZE, pages, currentPage < pages);
     }
 
-    @Override
     public List<ArticleTagVO> listForBoard(Long boardId) {
         if (boardId == null || boardId <= 0) {
             return List.of();

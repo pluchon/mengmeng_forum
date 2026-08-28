@@ -105,25 +105,6 @@ public class UserController {
         return Result.success(userAuthFlowService.modifyUser(modifyUserRequest, sessionUser.getId()));
     }
 
-    @Operation(summary = "修改密码", description = "已登录用户基于旧密码改新密码")
-    @PutMapping("/modifyPassword")
-    public Result<String> modifyPassword(String oldPassword, String newPassword, HttpServletRequest httpServletRequest) {
-        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        userService.updatePawssword(sessionUser.getId(), oldPassword, newPassword);
-        return Result.success("密码修改成功");
-    }
-
-    @Operation(summary = "设置当前用户看板娘模型", description = "modelId 须为 forum_mascot_model 已上架记录")
-    @PostMapping("/setMascotModel")
-    public Result<String> setMascotModel(@RequestParam Long modelId, HttpServletRequest httpServletRequest) {
-        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        if (sessionUser == null) {
-            return Result.fail(ResultCode.USER_UNLOGIN);
-        }
-        userService.setMascotModel(sessionUser.getId(), modelId);
-        return Result.success("已更新看板娘");
-    }
-
     @Operation(summary = "更新用户头像 URL", description = "前端先调 /file/uploadAvatar 拿到 URL，再调用此接口写入数据库")
     @PostMapping("/updateAvatarUrl")
     public Result<String> updateAvatarUrl(@RequestParam String url, HttpServletRequest httpServletRequest) {

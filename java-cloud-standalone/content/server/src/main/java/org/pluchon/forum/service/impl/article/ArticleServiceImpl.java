@@ -24,11 +24,9 @@ import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.UserRecommendFeedback;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
-import org.pluchon.forum.entity.dto.article.ValidateTextRequest;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
 import org.pluchon.forum.entity.vo.article.ArticleDetailResponse;
 import org.pluchon.forum.entity.vo.article.ArticleListByUserIdPageResponse;
-import org.pluchon.forum.entity.vo.article.ArticleValidateTextVO;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
 import org.pluchon.forum.entity.vo.article.HotArticleListItemVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -168,40 +166,6 @@ public class ArticleServiceImpl implements ArticleService {
         }
         articleTagService.bindArticleTags(add.getId(), req.getBoardId(), req.getTagIds());
         return add.getId();
-    }
-
-    // 异步审核版本的发布: 仅允许 APPROVED 状态 > PUBLISHED 即 审核通过后用户手动点发布 若想直接发布草稿, 请改用 submitForAudit 内部默认自动发布
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void publishArticle(Long articleId, Long userId) {
-        Article article = selectArticleByArticleId(articleId);
-        if (!Objects.equals(article.getUserId(), userId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
-        }
-        if (ArticleStatus.isPublished(article.getStatus())) {
-            return;
-        }
-        if (article.getStatus() == null || article.getStatus() != ArticleStatus.APPROVED.getCode()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PUBLISH_NEED_APPROVED));
-        }
-        String ipRegion = ipRegionService.resolveRegion(RequestIpUtils.resolveClientIp());
-        LambdaUpdateWrapper<Article> publishUpdate = new LambdaUpdateWrapper<Article>()
-                .eq(Article::getId, articleId)
-                .eq(Article::getStatus, ArticleStatus.APPROVED.getCode())
-                .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .set(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .set(Article::getAuditFinishedAt, new Date());
-        if (StringUtils.hasText(ipRegion)) {
-            publishUpdate.set(Article::getIpRegion, ipRegion);
-        }
-        int result = articleMapper.update(null, publishUpdate);
-        if (result <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_UPDATE_ARTICLE));
-        }
-        articlePublishSideEffectService.promotePublishedExposure(articleId, userId, article.getBoardId());
-        articleHotRankingService.addToHotRanking(articleId);
-        articleSearchIndexService.syncPublishedArticle(articleId);
     }
 
     
@@ -539,31 +503,9 @@ public class ArticleServiceImpl implements ArticleService {
         return wrapper;
     }
 
-    @Override
-    public PageResult<ArticleBriefVO> queryDeletedArticleListWithPage(Long loginUserId, Integer pageNum, Integer pageSize) {
-        if (loginUserId == null || loginUserId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<Article> page = PageUtils.getPage(validPageNum, validPageSize);
-        LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Article::getUserId, loginUserId)
-                .eq(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .orderByDesc(Article::getUpdateTime);
-        Page<Article> result = articleMapper.selectPage(page, wrapper);
-        return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
-    }
-
     
     // 热帖榜
     
-    @Override
-    public List<Long> getHotArticleList(Integer topN) {
-        return articleHotRankingService.getHotArticleList(topN);
-    }
-
     @Override
     public PageResult<HotArticleListItemVO> queryHotArticleListWithPage(Integer pageNum, Integer pageSize,
             Long loginUserId) {
@@ -625,82 +567,11 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     
-    // AI 摘要 + 内容审核
+    // 内容审核
     
-    @Override
-    public String getArticleSummary(Long articleId) {
-        String cacheKey = Constant.REDIS_KEY_ARTICLE_SUMMARY + articleId;
-        Article article = selectArticleByArticleId(articleId);
-        if (article == null) {
-            return Constant.SUMMARY_ARTICLE_NOT_FOUND;
-        }
-        String content = article.getContent();
-        String plainText = (content == null) ? "" : content.replaceAll("<[^>]+>", "").trim();
-        if (plainText.length() < 50) {
-            stringRedisTemplate.delete(cacheKey);
-            return String.format(Constant.SUMMARY_ARTICLE_TOO_SHORT, plainText.length());
-        }
-        String cached = stringRedisTemplate.opsForValue().get(cacheKey);
-        if (cached != null && !cached.isBlank()) {
-            if (!isSummaryTooSimilarToBody(cached, plainText)) {
-                return cached;
-            }
-            stringRedisTemplate.delete(cacheKey);
-        }
-        String summary;
-        try {
-            summary = contentAiGatewayService.summarize(content);
-        } catch (ApplicationException ex) {
-            log.warn("帖子 {} AI 摘要调用失败: {}", articleId, ex.getMessage());
-            return Constant.SUMMARY_AI_SERVICE_UNAVAILABLE;
-        }
-        if (summary != null && !summary.trim().isEmpty()) {
-            if (isSummaryTooSimilarToBody(summary, plainText)) {
-                log.warn("帖子 {} AI 摘要与正文高度重合，不写入缓存", articleId);
-                return "AI 返回内容与正文过于相似，请充实正文后再尝试智能导读。";
-            }
-            stringRedisTemplate.opsForValue().set(cacheKey, summary, Constant.REDIS_TTL_ARTICLE_SUMMARY, TimeUnit.SECONDS);
-            return summary;
-        }
-        log.warn("帖子 {} AI 摘要生成失败或返回为空", articleId);
-        return "AI 未能生成有效摘要，请稍后重试或充实正文后再试。";
-    }
-
-    private static boolean isSummaryTooSimilarToBody(String summary, String plainText) {
-        if (summary == null || plainText == null) {
-            return false;
-        }
-        String sNorm = summary.replaceAll("\\s+", "");
-        String pNorm = plainText.replaceAll("\\s+", "");
-        if (sNorm.isEmpty() || pNorm.isEmpty()) {
-            return false;
-        }
-        if (sNorm.equals(pNorm)) {
-            return true;
-        }
-        int minLen = Math.min(sNorm.length(), pNorm.length());
-        if (minLen < 20) {
-            return false;
-        }
-        return pNorm.length() > 40 && (sNorm.contains(pNorm) || pNorm.contains(sNorm));
-    }
-
     @Override
     public String validateContent(String content) {
         return contentAiGatewayService.validateText(content);
-    }
-
-    @Override
-    public ArticleValidateTextVO validateContentResult(String content) {
-        String violation = validateContent(content);
-        return ArticleConverter.toValidateTextVO(violation == null, violation);
-    }
-
-    @Override
-    public ArticleValidateTextVO validateContentResult(ValidateTextRequest request) {
-        String content = request != null && request.getContent() != null ? request.getContent()
-                : request == null ? null : request.getText();
-        return validateContentResult(content);
     }
 
     

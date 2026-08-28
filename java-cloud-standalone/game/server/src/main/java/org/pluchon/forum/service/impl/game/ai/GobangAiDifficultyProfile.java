@@ -7,26 +7,23 @@ public final class GobangAiDifficultyProfile {
 
     private final int maxCandidates;
 
-    private final int scoreBucket;
-
-    private GobangAiDifficultyProfile(int depth, int maxCandidates, int scoreBucket) {
+    private GobangAiDifficultyProfile(int depth, int maxCandidates) {
         this.depth = depth;
         this.maxCandidates = maxCandidates;
-        this.scoreBucket = scoreBucket;
     }
 
     public static GobangAiDifficultyProfile ofScore(int score) {
         if (score < 1200) {
-            return new GobangAiDifficultyProfile(2, 12, 0);
+            return new GobangAiDifficultyProfile(2, 12);
         }
         if (score < 1600) {
-            return new GobangAiDifficultyProfile(3, 15, 1);
+            return new GobangAiDifficultyProfile(3, 15);
         }
-        return new GobangAiDifficultyProfile(4, 18, 2);
+        return new GobangAiDifficultyProfile(4, 18);
     }
 
     public static GobangAiDifficultyProfile of(int depth, int maxCandidates) {
-        return new GobangAiDifficultyProfile(Math.max(1, depth), Math.max(1, maxCandidates), 0);
+        return new GobangAiDifficultyProfile(Math.max(1, depth), Math.max(1, maxCandidates));
     }
 
     public int depth() {
@@ -35,9 +32,5 @@ public final class GobangAiDifficultyProfile {
 
     public int maxCandidates() {
         return maxCandidates;
-    }
-
-    public int scoreBucket() {
-        return scoreBucket;
     }
 }

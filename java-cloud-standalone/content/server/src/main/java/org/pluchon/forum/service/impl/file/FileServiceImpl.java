@@ -9,7 +9,6 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.LotteryImagePathUtils;
 import org.pluchon.forum.common.utils.OssFolderSupport;
 import org.pluchon.forum.common.utils.ImageCompressor;
 import org.pluchon.forum.common.utils.ImageMagicValidator;
@@ -293,61 +292,6 @@ public class FileServiceImpl implements FileService {
             return ".png";
         }
         return ".jpg";
-    }
-
-    @Override
-    public String uploadLotteryPrizePicture(MultipartFile file, long activityId, long prizeId) {
-        ensureOssReady();
-        validateImageFile(file);
-        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
-        String ext = extFromOriginalName(uploadFile.getOriginalFilename());
-        String ts = LotteryImagePathUtils.nowTs();
-        String fileName = LotteryImagePathUtils.prizeImageObjectName(activityId, prizeId, ts, ext);
-        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_LOTTERY_PRIZE, fileName);
-    }
-
-    @Override
-    public String uploadLotteryActivityPicture(MultipartFile file, long activityId, long publisherUserId) {
-        ensureOssReady();
-        validateImageFile(file);
-        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
-        String ext = extFromOriginalName(uploadFile.getOriginalFilename());
-        String ts = LotteryImagePathUtils.nowTs();
-        String fileName = LotteryImagePathUtils.activityCoverObjectName(activityId, publisherUserId, ts, ext);
-        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_LOTTERY_ACTIVITY, fileName);
-    }
-
-    @Override
-    public String uploadNoticePicture(MultipartFile file, Long publisherUserId, Long noticeId) {
-        ensureOssReady();
-        validateImageFile(file);
-        MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
-        String fileName = buildNoticePictureObjectName(uploadFile, publisherUserId, noticeId != null ? noticeId : 0L);
-        return auditedOssImageUploader.upload(uploadFile, Constant.OSS_PATH_NOTICE_PICTURE, fileName);
-    }
-
-    // 不含点的扩展名，供 lottery 对象名 {@code xxx.yyy} 使用
-    private static String extFromOriginalName(String originalFilename) {
-        if (originalFilename == null || !originalFilename.contains(".")) {
-            return "jpg";
-        }
-        String e = originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase();
-        if (e.isEmpty() || e.length() > 8) {
-            return "jpg";
-        }
-        return e;
-    }
-
-    // 发布者ID + 公告ID + 东八区发布时间 到秒 + 扩展名
-    private String buildNoticePictureObjectName(MultipartFile file, Long publisherUserId, long noticeId) {
-        String originalFilename = file.getOriginalFilename();
-        String extName = "";
-        if (originalFilename != null && originalFilename.contains(".")) {
-            extName = originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
-        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Taipei"))
-                .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        return publisherUserId + "_" + noticeId + "_" + timeStr + extName;
     }
 
     private void ensureOssReady() {

@@ -149,15 +149,15 @@ public class JinziMatchServiceImpl implements JinziMatchService {
 
     private GameMatchBucket bucketOf(int score) {
         if (score < 1200) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_BRONZE, 0);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_BRONZE);
         }
         if (score < 1600) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_SILVER, 1200);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_SILVER);
         }
         if (score < 2000) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_GOLD, 1600);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_GOLD);
         }
-        return new GameMatchBucket(GameConstants.MATCH_BUCKET_MASTER, 2000);
+        return new GameMatchBucket(GameConstants.MATCH_BUCKET_MASTER);
     }
 
     private void sendToGame(Long userId, GameWsResponse<?> response) {

@@ -7,7 +7,6 @@ public final class ForumDomainNames {
     public static final String IM = "im";
     public static final String GAME = "game";
     public static final String ECONOMY = "economy";
-    public static final String AI = "ai";
 
     private ForumDomainNames() {
     }

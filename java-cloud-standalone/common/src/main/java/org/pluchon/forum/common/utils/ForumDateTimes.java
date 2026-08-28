@@ -8,7 +8,7 @@ import java.util.TimeZone;
 // 论坛统一使用东八区墙钟
 public final class ForumDateTimes {
 
-    public static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Taipei");
 
     private ForumDateTimes() {
     }

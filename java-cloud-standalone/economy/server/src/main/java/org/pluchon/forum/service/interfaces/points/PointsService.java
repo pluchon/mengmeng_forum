@@ -1,16 +1,12 @@
 package org.pluchon.forum.service.interfaces.points;
 
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.entity.vo.points.PointsDailyVO;
 import org.pluchon.forum.entity.dto.points.PointsLogQueryDTO;
 import org.pluchon.forum.entity.vo.points.PointsCenterOverviewVO;
 import org.pluchon.forum.entity.vo.points.PointsCenterChartVO;
 import org.pluchon.forum.entity.vo.points.PointsCenterTrendVO;
 import org.pluchon.forum.entity.vo.points.PointsLogVO;
 import org.pluchon.forum.entity.vo.points.PointsWalletVO;
-
-import java.util.List;
 
 // 积分钱包统一入口. 任何 points_wallet 变动都必须经此服务, 同时落 points_log. 所有 add/deduct 方法都是原子操作: SQL 层 WHERE 条件保证扣减不会出现负余额.
 public interface PointsService {
@@ -29,13 +25,6 @@ public interface PointsService {
     boolean hasIdempotencyRecord(Long userId, String idempotencyKey);
 
     PointsWalletVO getWallet(Long userId);
-
-    PageResult<PointsLogVO> getLogWithPage(Long userId, Integer pageNum, Integer pageSize, Byte sourceType);
-
-    // 游标分页积分流水，适用于深分页
-    CursorPageResult<PointsLogVO> getLogWithCursor(Long userId, String cursor, Integer pageSize, Byte sourceType);
-
-    List<PointsDailyVO> getDailyAggregation(Long userId, Integer days);
 
     PointsCenterOverviewVO getCenterOverview(Long userId, Integer weekOffset);
 

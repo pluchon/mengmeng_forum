@@ -62,14 +62,12 @@ public class CreatorDashboardServiceImpl implements CreatorDashboardService {
                 .orderByAsc(CreatorDailyMetric::getStatDate));
 
         CreatorDashboardVO dashboard = new CreatorDashboardVO();
-        dashboard.setTotalReadCount(sumArticleMetric(articles, true));
         dashboard.setTotalLikeCount(sumArticleMetric(articles, false));
         dashboard.setTotalWorkCount(articles.size());
         dashboard.setMonthNewReadCount(sumMetric(metrics, monthStart, today, MetricType.READ));
         dashboard.setMonthNewLikeCount(sumMetric(metrics, monthStart, today, MetricType.LIKE));
         dashboard.setMonthNewWorkCount(sumMetric(metrics, monthStart, today, MetricType.PUBLISH));
         dashboard.setWeekStart(weekStart.toString());
-        dashboard.setWeekEnd(weekEnd.toString());
         dashboard.setTrendDays(buildTrendDays(metrics, weekStart, weekEnd));
         return dashboard;
     }

@@ -70,8 +70,6 @@ public class AiHubServiceImpl implements AiHubService {
 
     // 站点搜索：帖子向量最低相关度 与 ai server rag.vector_min_score 对齐
     private static final double ARTICLE_SEARCH_MIN_SCORE = 0.20;
-    // 站点搜索：用户向量最低相关度
-    private static final double USER_SEARCH_MIN_SCORE = 0.28;
 
     @Autowired
     private AiPythonGatewayClient aiPythonGatewayClient;
@@ -515,40 +513,6 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
-    public List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates) {
-        if (query == null || query.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            Map<String, Object> body = new HashMap<>();
-            body.put("query", query.trim());
-            body.put("candidates", candidates != null ? candidates : Collections.emptyList());
-            Object results = searchResults("USER", body);
-            if (!(results instanceof List<?> list)) {
-                return Collections.emptyList();
-            }
-            List<Long> sorted = new ArrayList<>();
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> m) {
-                    Object scoreObj = m.get("score");
-                    double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
-                    if (score < USER_SEARCH_MIN_SCORE) {
-                        continue;
-                    }
-                }
-                Long id = parseVectorHitId(item, "userId", "user_id");
-                if (id != null) {
-                    sorted.add(id);
-                }
-            }
-            return sorted;
-        } catch (Exception e) {
-            log.warn("RAG 用户向量检索失败 keyword={}: {}", query.trim(), e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    @Override
     public List<Long> rankSemanticCandidates(String query, List<Map<String, Object>> candidates) {
         if (query == null || query.trim().isEmpty() || candidates == null || candidates.isEmpty()) {
             return Collections.emptyList();
@@ -739,41 +703,6 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
-    public boolean validateImagePayload(String contentBase64, String filename, String contentType) {
-        if (contentBase64 == null || contentBase64.isBlank()) {
-            return false;
-        }
-        byte[] imageBytes;
-        try {
-            imageBytes = Base64.getDecoder().decode(contentBase64);
-        } catch (IllegalArgumentException exception) {
-            log.warn("图片 Base64 解码失败 filename={} b64Len={}", filename, contentBase64.length());
-            throw new ApplicationException(
-                    Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED, "图片数据不完整，请重试"));
-        }
-        if (imageBytes.length < 32) {
-            log.warn("图片字节过短 filename={} bytes={} b64Len={}", filename, imageBytes.length, contentBase64.length());
-            throw new ApplicationException(
-                    Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED, "图片数据不完整，请重试"));
-        }
-        log.warn("图片审核载荷 filename={} bytes={}KB b64Len={} head={}",
-                filename, imageBytes.length / 1024, contentBase64.length(), hexHead(imageBytes));
-        try {
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("contentBase64", Base64.getEncoder().encodeToString(imageBytes));
-            payload.put("filename", filename);
-            payload.put("contentType", contentType != null && !contentType.isBlank() ? contentType : "image/jpeg");
-            Map<String, Object> data = invokeGateway("CONTENT_MODERATION", "IMAGE_AUDIT", null, payload);
-            return Boolean.TRUE.equals(data.get("allowed"));
-        } catch (ApplicationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("图片 AI 审核不可用: {}", e.getMessage());
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_IMAGE_ERROR));
-        }
-    }
-
-    @Override
     public AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request) {
         if (request == null || request.getBoard() == null || request.getBoard().length == 0) {
             return null;
@@ -843,17 +772,5 @@ public class AiHubServiceImpl implements AiHubService {
         }
         String text = String.valueOf(key).trim();
         return text.isEmpty() ? null : text;
-    }
-
-    private static String hexHead(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) {
-            return "";
-        }
-        int end = Math.min(8, bytes.length);
-        StringBuilder builder = new StringBuilder(end * 2);
-        for (int i = 0; i < end; i++) {
-            builder.append(String.format("%02x", bytes[i]));
-        }
-        return builder.toString();
     }
 }

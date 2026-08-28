@@ -10,8 +10,6 @@ public interface ArticleTagService {
 
     PageResult<ArticleTagVO> pageForBoard(Long boardId, String keyword, Integer pageNum);
 
-    List<ArticleTagVO> listForBoard(Long boardId);
-
     void bindArticleTags(Long articleId, Long boardId, List<Long> tagIds);
 
     List<ArticleTagVO> listByArticleId(Long articleId);

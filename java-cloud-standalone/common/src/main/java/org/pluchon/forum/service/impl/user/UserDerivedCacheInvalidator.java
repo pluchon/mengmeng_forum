@@ -23,11 +23,4 @@ public class UserDerivedCacheInvalidator {
         });
     }
 
-    public void invalidateUserCachesNow(Long userId) {
-        if (userId == null || userId <= 0) {
-            return;
-        }
-        stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
-        stringRedisTemplate.delete(Constant.REDIS_KEY_CHECKIN_STATUS + userId);
-    }
 }

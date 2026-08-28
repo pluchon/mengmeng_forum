@@ -63,9 +63,6 @@ public final class ForumRedisKeys {
     public static final String DANMAKU_MINUTE = "forum:danmaku:minute:";
     public static final long TTL_DANMAKU_MINUTE = 60L;
 
-    public static final String ARTICLE_GUIDE = "article_guide:";
-    public static final long TTL_ARTICLE_GUIDE = 604800L;
-
     public static final String CHECKIN_STATUS = "checkin:status:";
     public static final long TTL_CHECKIN_STATUS = 600L;
     public static final String CHECKIN_RULE = "checkin:rule:m";

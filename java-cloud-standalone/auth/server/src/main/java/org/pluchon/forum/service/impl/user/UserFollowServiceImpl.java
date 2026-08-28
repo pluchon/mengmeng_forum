@@ -82,8 +82,7 @@ public class UserFollowServiceImpl implements UserFollowService {
         }
     }
 
-    @Override
-    public boolean isFollowing(Long followerId, Long followeeId) {
+    private boolean isFollowing(Long followerId, Long followeeId) {
         if (followerId == null || followeeId == null || followerId <= 0 || followeeId <= 0) {
             return false;
         }
@@ -335,7 +334,6 @@ public class UserFollowServiceImpl implements UserFollowService {
             item.setUser(toBrief(user));
             item.setFollowTime(row.getCreateTime());
             item.setIsFollowing(viewerFollowing.contains(uid));
-            item.setFollowsProfileUser(followersList);
             out.add(item);
         }
         return out;

@@ -73,7 +73,7 @@ public class ContentUserLookupService {
         return contentUserInternalFeignClient.searchByKeyword(keyword, pageNum, pageSize);
     }
 
-    public boolean isMuted(UserInternalVO user) {
+    private boolean isMuted(UserInternalVO user) {
         return user != null && user.getState() != null && user.getState() == STATE_FORBIDDEN;
     }
 

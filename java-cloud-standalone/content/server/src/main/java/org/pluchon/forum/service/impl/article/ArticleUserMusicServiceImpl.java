@@ -42,14 +42,10 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 // 用户歌曲上传落库、我的列表与收藏
@@ -416,30 +412,6 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
                 track.setFavorited(liked.contains(track.getMusicKey()));
             }
         }
-    }
-
-    @Override
-    public Map<String, UserMusic> findByMusicKeys(Collection<String> musicKeys) {
-        if (musicKeys == null || musicKeys.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        List<UserMusic> rows = userMusicMapper.selectList(new LambdaQueryWrapper<UserMusic>()
-                .in(UserMusic::getMusicKey, musicKeys));
-        Map<String, UserMusic> out = new HashMap<>();
-        for (UserMusic row : rows) {
-            if (row != null && StringUtils.hasText(row.getMusicKey())) {
-                out.put(row.getMusicKey(), row);
-            }
-        }
-        return out;
-    }
-
-    @Override
-    public List<UserMusic> listPublished() {
-        return userMusicMapper.selectList(new LambdaQueryWrapper<UserMusic>()
-                .eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_PUBLISHED)
-                .ne(UserMusic::getDeleteState, DELETE_TRUE)
-                .orderByDesc(UserMusic::getUpdateTime));
     }
 
     @Override

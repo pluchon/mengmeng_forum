@@ -22,10 +22,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -88,7 +86,6 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
         entity.setUserId(userId);
         entity.setFieldType(fieldType);
         entity.setCandidateContent(content);
-        entity.setContentHash(DigestUtils.md5DigestAsHex(content.getBytes(StandardCharsets.UTF_8)));
         entity.setReviewStatus(STATUS_PENDING);
         entity.setRetryCount(0);
         entity.setDeleteState(DELETE_FALSE);
@@ -135,7 +132,7 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
         }
     }
 
-    protected void approve(UserProfileChangeRequest request) {
+    private void approve(UserProfileChangeRequest request) {
         UserProfileChangeRequest current = requestMapper.selectById(request.getId());
         if (current == null || current.getReviewStatus() == null || current.getReviewStatus() != STATUS_PROCESSING) {
             return;

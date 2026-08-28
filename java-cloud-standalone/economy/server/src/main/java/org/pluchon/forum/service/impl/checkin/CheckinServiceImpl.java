@@ -10,7 +10,6 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.CursorUtils;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.CheckinGrantLog;
 import org.pluchon.forum.entity.db.CheckinLog;
@@ -27,7 +26,6 @@ import org.pluchon.forum.entity.vo.checkin.CheckinStatusResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinLogVO;
 import org.pluchon.forum.entity.vo.checkin.CheckinStreakRewardItemVO;
 import org.pluchon.forum.entity.vo.checkin.CheckinWeekStatVO;
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.CheckinGrantLogMapper;
 import org.pluchon.forum.mapper.CheckinLogMapper;
@@ -506,46 +504,6 @@ public class CheckinServiceImpl implements CheckinService {
         monthRule.forEach((day, rule) -> days.add(new CheckinRuleDayResponse(day, rule.points(), rule.surprise())));
         days.sort(Comparator.comparingInt(CheckinRuleDayResponse::getDayNumber));
         return new CheckinRuleMonthResponse(target, days);
-    }
-
-    @Override
-    public CursorPageResult<CheckinLog> getLogWithCursor(Long userId, String cursor, Integer pageSize) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int size = PageUtils.getValidPageSize(pageSize);
-        LambdaQueryWrapper<CheckinLog> wrapper = new LambdaQueryWrapper<CheckinLog>()
-                .eq(CheckinLog::getUserId, userId)
-                .ne(CheckinLog::getDeleteState, 1);
-        if (cursor != null && !cursor.isBlank()) {
-            CursorUtils.CursorToken token = CursorUtils.decode(cursor);
-            Date cursorTime;
-            if (token != null) {
-                cursorTime = new Date(token.timeMillis());
-            } else {
-                cursorTime = null;
-            }
-            wrapper.and(w -> w.lt(CheckinLog::getCheckinDate, cursorTime)
-                    .or(w2 -> {
-                        if (token != null) {
-                            w2.eq(CheckinLog::getCheckinDate, cursorTime)
-                                    .lt(CheckinLog::getId, token.id());
-                        }
-                    }));
-        }
-        wrapper.orderByDesc(CheckinLog::getCheckinDate).orderByDesc(CheckinLog::getId);
-        Page<CheckinLog> page = new Page<>(1, size + 1, false);
-        List<CheckinLog> rows = checkinLogMapper.selectPage(page, wrapper).getRecords();
-        boolean hasNext = rows.size() > size;
-        if (hasNext) {
-            rows = new ArrayList<>(rows.subList(0, size));
-        }
-        String nextCursor = null;
-        if (hasNext && !rows.isEmpty()) {
-            CheckinLog last = rows.get(rows.size() - 1);
-            nextCursor = CursorUtils.encode(last.getCheckinDate(), last.getId());
-        }
-        return new CursorPageResult<>(rows, nextCursor, hasNext, size);
     }
 
     private String grantCrossedStreakRewards(Long userId, int oldStreak, int newStreak, Long logId) {

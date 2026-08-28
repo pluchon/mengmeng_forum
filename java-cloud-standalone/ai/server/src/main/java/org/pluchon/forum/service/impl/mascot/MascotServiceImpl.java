@@ -28,7 +28,6 @@ import org.pluchon.forum.converter.MascotConverter;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
 import org.pluchon.forum.entity.vo.MascotChatResponseVO;
-import org.pluchon.forum.entity.vo.MascotModelPublicVO;
 import org.pluchon.forum.entity.vo.MascotMemoryVO;
 import org.pluchon.forum.entity.vo.MascotRelatedArticleCandidate;
 import org.pluchon.forum.entity.vo.MascotRelatedRecommendationItemVO;
@@ -173,29 +172,6 @@ public class MascotServiceImpl implements MascotService {
 
     @Resource
     private AiVipInternalFeignClient vipInternalFeignClient;
-
-    @Override
-    public List<MascotModelPublicVO> listPublicModels() {
-        List<ForumMascotModel> list = forumMascotModelMapper.selectList(
-                Wrappers.lambdaQuery(ForumMascotModel.class)
-                        .eq(ForumMascotModel::getDeleteState, (byte) 0)
-                        .eq(ForumMascotModel::getShelfStatus, (byte) 1)
-                        .orderByAsc(ForumMascotModel::getSortOrder)
-                        .orderByDesc(ForumMascotModel::getId));
-        return list.stream().map(m -> {
-            MascotModelPublicVO v = new MascotModelPublicVO();
-            v.setId(m.getId());
-            v.setCode(m.getCode());
-            v.setName(m.getName());
-            v.setModelRelPath(m.getModelRelPath());
-            v.setModelScale(m.getModelScale());
-            v.setPosX(m.getPosX());
-            v.setPosY(m.getPosY());
-            v.setStageWidth(m.getStageWidth());
-            v.setStageHeight(m.getStageHeight());
-            return v;
-        }).toList();
-    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -877,7 +853,7 @@ public class MascotServiceImpl implements MascotService {
         }
         AiImageRequest imageRequest = new AiImageRequest();
         imageRequest.setPrompt(imagePrompt);
-        imageRequest.setQuality(resolveImageQuality(request, user));
+        imageRequest.setQuality("normal");
         imageRequest.setSessionId(sessionKey);
         imageRequest.setEphemeral(true);
         imageRequest.setUsePointsBilling(Boolean.TRUE.equals(request.getUsePointsBilling()));
@@ -887,10 +863,6 @@ public class MascotServiceImpl implements MascotService {
             companionMemoryService.appendImageMessage(dbSessionId, "assistant", image.getUrl(), imagePrompt);
         }
         return image;
-    }
-
-    private String resolveImageQuality(MascotChatRequest request, AiUserContext user) {
-        return "normal";
     }
 
     private String imageRequestId(MascotChatRequest request, String sessionKey) {

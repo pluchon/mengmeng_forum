@@ -1239,21 +1239,6 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .set(GroupChat::getUpdateTime, ForumDateTimes.now()));
     }
 
-    private void appendSystemMessage(Long groupId, String content) {
-        Date now = ForumDateTimes.now();
-        GroupChatMessage message = new GroupChatMessage();
-        message.setGroupId(groupId);
-        message.setSenderUserId(null);
-        message.setMessageType(GroupChatMessageType.SYSTEM.getCode());
-        message.setContent(content);
-        message.setStatus(GroupChatMessageStatus.NORMAL.getCode());
-        message.setDeleteState(Constant.DELETE_STATE_FALSE);
-        message.setCreateTime(now);
-        message.setUpdateTime(now);
-        groupChatMessageMapper.insert(message);
-    }
-
-
     private void scheduleGroupTextAudit(GroupChat group, GroupChatMessage message, Long sendUserId) {
         if (group == null || message == null || !org.springframework.util.StringUtils.hasText(message.getContent())) {
             return;

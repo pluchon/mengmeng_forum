@@ -31,15 +31,6 @@ public interface FileService {
     // 批量上传表情商城包内图，允许部分成功，最多9张
     BatchImageUploadResultVO uploadEmojiShopImages(MultipartFile[] files, Long userId);
 
-    // 公告卡片配图：路径 forum_notice_picture/，文件名 发布者ID_公告ID_东八区时间戳
-    String uploadNoticePicture(MultipartFile file, Long publisherUserId, Long noticeId);
-
-    // 抽奖奖品库配图：路径 forum_db_item/forum_prize_picture/， 文件名 活动ID_奖品ID_yyyyMMddHHmmss.ext 奖品库未关联活动时可传 activityId 0；新建奖品 prizeId 0
-    String uploadLotteryPrizePicture(MultipartFile file, long activityId, long prizeId);
-
-    // 抽奖活动封面：路径 forum_db_item/forum_activity_picture/， 文件名 活动ID_发布者ID_yyyyMMddHHmmss.ext 新建活动可传 activityId 0
-    String uploadLotteryActivityPicture(MultipartFile file, long activityId, long publisherUserId);
-
     // 将 AI 生图结果 https 或 data URL 转存 OSS，返回适合入库的短链接
     String uploadAiGeneratedImageFromRemote(Long userId, String sourceUrl, String ossPath, String baseName);
 

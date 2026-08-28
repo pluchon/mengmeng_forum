@@ -141,7 +141,6 @@ CREATE TABLE `user_profile_change_request` (
   `user_id` bigint NOT NULL COMMENT '用户ID',
   `field_type` varchar(20) NOT NULL COMMENT 'NICKNAME/BIO',
   `candidate_content` varchar(255) NOT NULL DEFAULT '' COMMENT '待审核内容',
-  `content_hash` varchar(32) NOT NULL COMMENT '内容MD5',
   `review_status` tinyint NOT NULL DEFAULT '0' COMMENT '0待审核 1审核中 2通过 3拒绝 4失败 5被新申请替代',
   `retry_count` int NOT NULL DEFAULT '0' COMMENT '审核重试次数',
   `review_reason` varchar(500) DEFAULT NULL COMMENT '审核原因',

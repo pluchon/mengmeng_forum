@@ -6,9 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.entity.vo.points.PointsDailyVO;
 import org.pluchon.forum.entity.dto.points.PointsLogQueryDTO;
 import org.pluchon.forum.entity.vo.points.PointsCenterOverviewVO;
 import org.pluchon.forum.entity.vo.points.PointsCenterChartVO;
@@ -24,9 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
-@Tag(name = "积分钱包", description = "余额查询 / 流水分页 / 按日聚合(ECharts)")
+@Tag(name = "积分钱包", description = "余额查询 / 萌币中心流水与趋势")
 @RestController
 @RequestMapping("/points")
 public class PointsController {
@@ -39,35 +35,6 @@ public class PointsController {
     public Result<PointsWalletVO> getWallet(HttpServletRequest request) {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         return Result.success(pointsService.getWallet(loginUser.getId()));
-    }
-
-    @Operation(summary = "积分流水分页", description = "倒序按时间返回, 用于「我的积分 -> 流水」明细页")
-    @GetMapping("/log")
-    public Result<PageResult<PointsLogVO>> getLogWithPage(@RequestParam(defaultValue = "1") Integer pageNum,
-                                                          @RequestParam(defaultValue = "10") Integer pageSize,
-                                                          @RequestParam(required = false) Byte sourceType,
-                                                          HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(pointsService.getLogWithPage(loginUser.getId(), pageNum, pageSize, sourceType));
-    }
-
-    @Operation(summary = "积分流水游标分页", description = "深分页推荐；cursor 取自上一页 nextCursor")
-    @GetMapping("/log/cursor")
-    public Result<CursorPageResult<PointsLogVO>> getLogWithCursor(
-            @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) Byte sourceType,
-            HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(pointsService.getLogWithCursor(loginUser.getId(), cursor, pageSize, sourceType));
-    }
-
-    @Operation(summary = "积分按日聚合", description = "最近 N 天的入账 / 消费 / 净变动, 给前端 ECharts 直接喂数据. days 默认 30, 上限 365")
-    @GetMapping("/daily")
-    public Result<List<PointsDailyVO>> getDaily(@RequestParam(required = false) Integer days,
-                                                HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(pointsService.getDailyAggregation(loginUser.getId(), days));
     }
 
     /** 萌币中心概览：自然周趋势、里程碑与收支来源 */

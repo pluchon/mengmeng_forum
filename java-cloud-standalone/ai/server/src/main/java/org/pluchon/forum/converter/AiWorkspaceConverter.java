@@ -3,9 +3,7 @@ package org.pluchon.forum.converter;
 import org.pluchon.forum.entity.db.ForumAiCreationVersion;
 import org.pluchon.forum.entity.db.ForumAiCreationWorkspace;
 import org.pluchon.forum.entity.db.ForumAiLongTermMemory;
-import org.pluchon.forum.entity.db.ForumAiTaskSession;
 import org.pluchon.forum.entity.vo.ai.AiLongTermMemoryVO;
-import org.pluchon.forum.entity.vo.ai.AiTaskSessionVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVersionVO;
 
@@ -46,20 +44,6 @@ public final class AiWorkspaceConverter {
         vo.setMemoryType(row.getMemoryType());
         vo.setContent(row.getContent());
         vo.setEnabled(Byte.valueOf((byte) 1).equals(row.getEnabled()));
-        vo.setUpdateTime(row.getUpdateTime());
-        return vo;
-    }
-
-    public static AiTaskSessionVO toTaskSessionVO(ForumAiTaskSession row) {
-        AiTaskSessionVO vo = new AiTaskSessionVO();
-        vo.setId(row.getId());
-        vo.setCompanionSessionId(row.getCompanionSessionId());
-        vo.setWorkspaceId(row.getWorkspaceId());
-        vo.setActiveModule(row.getActiveModule());
-        vo.setActiveWorker(row.getActiveWorker());
-        vo.setCheckpointId(row.getCheckpointId());
-        vo.setTaskMode(row.getTaskMode());
-        vo.setTaskState(row.getTaskState());
         vo.setUpdateTime(row.getUpdateTime());
         return vo;
     }

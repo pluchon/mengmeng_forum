@@ -34,7 +34,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,19 +107,6 @@ public class BoardServiceImpl implements BoardService {
     }
 
     @Override
-    public BoardPublicVO queryBoardByBoardId(Long boardId) {
-        if (boardId == null || boardId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        Board board = boardMapper.selectOne(new LambdaQueryWrapper<Board>()
-                .eq(Board::getId, boardId).eq(Board::getDeleteState, (byte) 0));
-        if (board == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-        return BoardConverter.toPublicVO(board);
-    }
-
-    @Override
     public Board requireBoardEntity(Long boardId) {
         if (boardId == null || boardId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -131,19 +117,6 @@ public class BoardServiceImpl implements BoardService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
         return board;
-    }
-
-    @Override
-    public Map<Long, Long> selectBoardNotById() {
-        Long boardCount = boardMapper.selectCount(new LambdaQueryWrapper<Board>()
-                .eq(Board::getDeleteState, 0).eq(Board::getState, 0));
-        Long articleCount = articleMapper.selectCount(new LambdaQueryWrapper<Article>()
-                .ne(Article::getDeleteState, 1)
-                .ne(Article::getState, 1)
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode()));
-        Map<Long, Long> result = new HashMap<>();
-        result.put(boardCount, articleCount);
-        return result;
     }
 
     

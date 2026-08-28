@@ -260,10 +260,6 @@ public class VipQuotaBonusServiceImpl implements VipQuotaBonusService {
         return number == null ? 0L : number;
     }
 
-    private int value(Integer number) {
-        return number == null ? 0 : number;
-    }
-
     private BigDecimal decimal(BigDecimal number) {
         return number == null ? BigDecimal.ZERO : number;
     }

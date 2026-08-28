@@ -45,8 +45,6 @@ public class UserMusic {
 
     private Date aiAnalyzedAt;
 
-    private String audioFingerprint;
-
     // 0未发布 1审核中 2已发布 3未通过
     private Byte status;
 

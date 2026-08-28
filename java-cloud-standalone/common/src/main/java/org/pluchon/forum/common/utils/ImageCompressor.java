@@ -65,45 +65,4 @@ public final class ImageCompressor {
         }
     }
 
-    // 审图跨服务 JSON 载荷专用：大图压到安全体积，避免 forum-ai Tomcat 默认 2MB 截断
-    public static byte[] compressForAudit(byte[] original) {
-        if (original == null || original.length == 0) {
-            return original;
-        }
-        long target = Constant.IMAGE_AUDIT_COMPRESS_TARGET_BYTES;
-        if (original.length <= target) {
-            return original;
-        }
-        try {
-            BufferedImage src;
-            try (ByteArrayInputStream in = new ByteArrayInputStream(original)) {
-                src = ImageIO.read(in);
-            }
-            if (src == null) {
-                log.warn("审图压缩解码失败 bytes={}", original.length);
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED));
-            }
-            int maxDim = Constant.IMAGE_AUDIT_COMPRESS_MAX_DIMENSION;
-            for (float q : QUALITY_STEPS) {
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                Thumbnails.of(src)
-                        .size(maxDim, maxDim)
-                        .keepAspectRatio(true)
-                        .outputFormat("jpg")
-                        .outputQuality(q)
-                        .toOutputStream(out);
-                byte[] compressed = out.toByteArray();
-                if (compressed.length <= target) {
-                    log.info("审图压缩成功: {}KB → {}KB q={}",
-                            original.length / 1024, compressed.length / 1024, q);
-                    return compressed;
-                }
-            }
-            log.warn("审图压缩未达目标体积 origin={}KB", original.length / 1024);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_COMPRESS));
-        } catch (IOException e) {
-            log.error("审图压缩 IO 异常 origin={}KB", original.length / 1024, e);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_COMPRESS));
-        }
-    }
 }

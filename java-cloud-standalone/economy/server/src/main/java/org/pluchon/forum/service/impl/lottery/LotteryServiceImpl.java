@@ -177,14 +177,7 @@ public class LotteryServiceImpl implements LotteryService {
     @Autowired
     private StarlightService starlightService;
 
-    private LotteryDrawGuardChain lotteryDrawGuardChain = LotteryDrawGuardChain.defaultChain();
-
-    @Autowired(required = false)
-    public void setLotteryDrawGuardChain(LotteryDrawGuardChain lotteryDrawGuardChain) {
-        if (lotteryDrawGuardChain != null) {
-            this.lotteryDrawGuardChain = lotteryDrawGuardChain;
-        }
-    }
+    private final LotteryDrawGuardChain lotteryDrawGuardChain = LotteryDrawGuardChain.defaultChain();
 
     @Override
     public PageResult<LotteryActivityListItemVO> pageSelectableActivities(Integer pageNum, Integer pageSize) {
@@ -530,24 +523,6 @@ public class LotteryServiceImpl implements LotteryService {
         vo.setStarlightGranted(starlightGranted);
         vo.setStarlightBalanceAfter(starlightService.getBalance(userId));
         return vo;
-    }
-
-    private List<LotteryDrawRecordVO> buildDrawRecordRows(Long userId, List<LotteryDrawRecord> records) {
-        if (records == null || records.isEmpty()) {
-            return List.of();
-        }
-        List<String> batchKeys = records.stream()
-                .map(LotteryDrawRecord::getDrawBatchKey)
-                .filter(Objects::nonNull)
-                .filter(key -> !key.isBlank())
-                .distinct()
-                .collect(Collectors.toList());
-        Map<String, Integer> drawTimesByBatchKey = loadDrawTimesByBatchKey(userId, batchKeys);
-        List<LotteryDrawRecordVO> rows = new ArrayList<>(records.size());
-        for (LotteryDrawRecord record : records) {
-            rows.add(toDrawRecordVO(record, drawTimesByBatchKey));
-        }
-        return rows;
     }
 
     private Map<String, Integer> loadDrawTimesByBatchKey(Long userId, List<String> batchKeys) {

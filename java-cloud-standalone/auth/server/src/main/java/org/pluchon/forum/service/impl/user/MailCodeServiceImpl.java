@@ -85,18 +85,6 @@ public class MailCodeServiceImpl implements MailCodeService {
     }
 
     @Override
-    public String getForReset(String email) {
-        return getInternal(email);
-    }
-
-    private String getInternal(String email) {
-        if (!RegexUtil.checkMail(email)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        return stringRedisTemplate.opsForValue().get(Constant.REDIS_KEY_MAIL_VERIFY_RESET + email);
-    }
-
-    @Override
     public User loginByMail(String email, String code) {
         if (!consumeVerificationCode(email, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));

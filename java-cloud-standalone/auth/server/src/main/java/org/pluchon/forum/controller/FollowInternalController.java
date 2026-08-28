@@ -1,13 +1,12 @@
 package org.pluchon.forum.controller;
 
+import org.pluchon.forum.api.FollowInternalApi;
 import org.pluchon.forum.api.FollowStatsInternalVO;
 import org.pluchon.forum.api.FollowDailyCountInternalVO;
 import org.pluchon.forum.entity.vo.user.UserFollowStatsVO;
 import org.pluchon.forum.service.interfaces.user.UserFollowService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,15 +16,14 @@ import java.util.Map;
 import java.util.Set;
 import java.time.LocalDate;
 
-// 关注域内部接口：供 content 等域 Feign 调用
+// 关注域内部接口：契约路径已是 /user/internal/follow/**，勿再叠加 @RequestMapping
 @RestController
-@RequestMapping("/user/internal/follow")
-public class FollowInternalController {
+public class FollowInternalController implements FollowInternalApi {
 
     @Autowired
     private UserFollowService userFollowService;
 
-    @GetMapping("/batch-stats")
+    @Override
     public List<FollowStatsInternalVO> batchStats(
             @RequestParam("userIds") List<Long> userIds,
             @RequestParam(value = "viewerId", required = false) Long viewerId) {
@@ -42,12 +40,12 @@ public class FollowInternalController {
         return out;
     }
 
-    @GetMapping("/{followerId}/following-ids")
-    public Set<Long> listFollowingIds(@PathVariable Long followerId) {
+    @Override
+    public Set<Long> listFollowingIds(@PathVariable("followerId") Long followerId) {
         return userFollowService.listFollowingIds(followerId);
     }
 
-    @GetMapping("/{userId}/new-count")
+    @Override
     public Long countNewFollowers(
             @PathVariable("userId") Long userId,
             @RequestParam("startDate") String startDate,
@@ -56,7 +54,7 @@ public class FollowInternalController {
                 userId, LocalDate.parse(startDate), LocalDate.parse(endDate));
     }
 
-    @GetMapping("/{userId}/daily-new-counts")
+    @Override
     public List<FollowDailyCountInternalVO> listDailyNewFollowers(
             @PathVariable("userId") Long userId,
             @RequestParam("startDate") String startDate,

@@ -5,7 +5,6 @@ import org.pluchon.forum.entity.dto.MascotMemoryEditRequest;
 import org.pluchon.forum.entity.dto.MascotRelatedRecommendationRequest;
 import org.pluchon.forum.entity.vo.MascotChatResponseVO;
 import org.pluchon.forum.entity.vo.MascotMemoryVO;
-import org.pluchon.forum.entity.vo.MascotModelPublicVO;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.MascotRelatedRecommendationVO;
 import org.pluchon.forum.entity.vo.CompanionContextWindowVO;
@@ -37,8 +36,6 @@ public interface MascotService {
 
     // 读取当前用户在指定会话中已保存的相关帖子检索结果
     List<MascotRelatedRecommendationVO> listRelatedRecommendations(AiUserContext user, Long sessionId);
-
-    List<MascotModelPublicVO> listPublicModels();
 
     // 写入用户看板娘偏好 权威表 user_mascot_preference
     void setUserMascotPreference(Long userId, Long mascotModelId);

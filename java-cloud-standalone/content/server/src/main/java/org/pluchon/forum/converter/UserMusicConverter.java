@@ -119,28 +119,6 @@ public final class UserMusicConverter {
         return vo;
     }
 
-    public static void overlayPublished(MusicTrackVO vo, UserMusic row) {
-        if (vo == null || row == null) {
-            return;
-        }
-        vo.setId(row.getId());
-        vo.setTitle(row.getTitle());
-        vo.setArtist(row.getArtist());
-        vo.setAlbum(row.getAlbum());
-        vo.setDurationText(row.getDurationText());
-        vo.setMoodTags(parseMoodTags(row.getMoodTags()));
-        if (row.getCoverUrl() != null && !row.getCoverUrl().isBlank()) {
-            vo.setCoverUrl(row.getCoverUrl());
-        }
-        if (row.getAudioUrl() != null && !row.getAudioUrl().isBlank()) {
-            vo.setAudioUrl(row.getAudioUrl());
-        }
-        if (row.getLrcUrl() != null && !row.getLrcUrl().isBlank()) {
-            vo.setLrcUrl(row.getLrcUrl());
-        }
-        vo.setStatus("published");
-    }
-
     private static List<String> parseMoodTags(String raw) {
         if (raw == null || raw.isBlank()) {
             return List.of();

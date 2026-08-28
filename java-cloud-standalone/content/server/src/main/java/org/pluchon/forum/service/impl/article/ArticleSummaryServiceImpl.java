@@ -334,7 +334,6 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
         byte status = feature == null ? SUMMARY_NOT_READY : safeByte(feature.getSummaryStatus());
         vo.setStatus(statusName(status));
         vo.setSummary(feature == null ? null : feature.getSummaryText());
-        vo.setGeneratedAt(feature == null ? null : feature.getSummaryGeneratedAt());
         vo.setCanExpand(status == SUMMARY_READY || status == SUMMARY_TOO_SHORT
                 || (status == SUMMARY_PROCESSING && StringUtils.hasText(vo.getSummary())));
         ContentAiTask recent = taskMapper.selectOne(new LambdaQueryWrapper<ContentAiTask>()

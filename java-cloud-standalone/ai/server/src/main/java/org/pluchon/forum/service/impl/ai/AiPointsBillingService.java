@@ -411,12 +411,6 @@ public class AiPointsBillingService {
         return bill(user, featureCode, usage, relatedId, pointsSource, false);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public int charge(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId, Byte pointsSource) {
-        Map<String, Object> r = bill(user, featureCode, usage, relatedId, pointsSource);
-        return (int) r.get("balanceAfter");
-    }
-
     private void recordUsageOnly(AiUserContext user, String featureCode, AiModelUsageDTO u, String relatedId) {
         persistUsageLog(user, featureCode, u, relatedId, 0);
     }

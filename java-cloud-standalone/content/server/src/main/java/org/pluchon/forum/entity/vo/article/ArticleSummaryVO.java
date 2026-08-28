@@ -12,8 +12,6 @@ public class ArticleSummaryVO {
 
     private String summary;
 
-    private Date generatedAt;
-
     private Boolean canExpand;
 
     private Boolean canRegenerate;

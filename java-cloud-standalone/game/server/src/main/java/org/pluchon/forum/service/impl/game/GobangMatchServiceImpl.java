@@ -60,14 +60,7 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     @Autowired
     private GameUserLookupService gameUserLookupService;
 
-    private GobangMatchGuardChain gobangMatchGuardChain = GobangMatchGuardChain.defaultChain();
-
-    @Autowired(required = false)
-    public void setGobangMatchGuardChain(GobangMatchGuardChain gobangMatchGuardChain) {
-        if (gobangMatchGuardChain != null) {
-            this.gobangMatchGuardChain = gobangMatchGuardChain;
-        }
-    }
+    private final GobangMatchGuardChain gobangMatchGuardChain = GobangMatchGuardChain.defaultChain();
 
     @Override
     public void startMatch(Long userId, String requestId, WebSocketSession session) {
@@ -174,15 +167,15 @@ public class GobangMatchServiceImpl implements GobangMatchService {
 
     private GameMatchBucket bucketOf(int score) {
         if (score < 1200) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_BRONZE, 0);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_BRONZE);
         }
         if (score < 1600) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_SILVER, 1200);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_SILVER);
         }
         if (score < 2000) {
-            return new GameMatchBucket(GameConstants.MATCH_BUCKET_GOLD, 1600);
+            return new GameMatchBucket(GameConstants.MATCH_BUCKET_GOLD);
         }
-        return new GameMatchBucket(GameConstants.MATCH_BUCKET_MASTER, 2000);
+        return new GameMatchBucket(GameConstants.MATCH_BUCKET_MASTER);
     }
 
     private void sendToGame(Long userId, GameWsResponse<?> response) {

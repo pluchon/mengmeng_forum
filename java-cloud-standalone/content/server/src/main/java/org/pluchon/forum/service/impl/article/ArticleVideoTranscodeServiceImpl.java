@@ -48,7 +48,6 @@ public class ArticleVideoTranscodeServiceImpl implements ArticleVideoTranscodeSe
         }));
     }
 
-    @Override
     public void processTranscode(Long articleId, String sourceVideoUrl) {
         if (articleId == null || articleId <= 0 || !StringUtils.hasText(sourceVideoUrl)) {
             return;

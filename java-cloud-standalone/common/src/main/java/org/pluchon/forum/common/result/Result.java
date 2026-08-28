@@ -26,14 +26,6 @@ public class Result<T> {
         this.data = data;
     }
 
-    public Result(String message){
-        this.message = message;
-    }
-
-    public Result(int code){
-        this.code = code;
-    }
-
     public Result(int code,String message){
         this.code = code;
         this.message = message;
@@ -54,10 +46,6 @@ public class Result<T> {
 
     public static <T> Result<T> successData(T data){
         return new Result(ResultCode.SUCCESS.getCode(),ResultCode.SUCCESS.getMessage(),data);
-    }
-
-    public static <T> Result<T> success(ResultCode resultCode){
-        return new Result<>(resultCode.getCode(),resultCode.getMessage());
     }
 
     // 定义失败方法

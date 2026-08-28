@@ -51,9 +51,6 @@ public class GobangRoomStateVO {
     // 当前步剩余毫秒
     private Long moveRemainingMs;
 
-    // 服务器当前时间戳
-    private Long serverNowMs;
-
     // 当前用户是否观众
     private Boolean spectator;
 

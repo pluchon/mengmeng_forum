@@ -38,7 +38,7 @@ public class JWTUtils {
     }
 
     // 加密我们的信息，我们前面的接口传入我们的载荷信息，最后返回一个字符串
-    public static String genJwt(Map<String,Object> claim){
+    private static String genJwt(Map<String,Object> claim){
         return Jwts.builder().setClaims(claim)// 我们的载荷内容
                 .setIssuedAt(new Date())// 设置现在的时间，以便后期核对有效期
                 .setExpiration(new Date(System.currentTimeMillis()+TIME))// 设置过期时间

@@ -39,7 +39,6 @@ import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendMessageRequest;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.message.MessageDetailResponse;
-import org.pluchon.forum.entity.vo.message.MessageListResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionSearchResponse;
 import org.pluchon.forum.entity.vo.message.MessageVO;
@@ -138,14 +137,8 @@ public class MessageServiceImpl implements MessageService {
     @Autowired
     private OutboundMessageTextAuditService outboundMessageTextAuditService;
 
+    @Autowired
     private MessageSendGuardChain messageSendGuardChain;
-
-    @Autowired(required = false)
-    public void setMessageSendGuardChain(MessageSendGuardChain messageSendGuardChain) {
-        if (messageSendGuardChain != null) {
-            this.messageSendGuardChain = messageSendGuardChain;
-        }
-    }
 
     
     // 发送 / 撤回 / 回复
@@ -437,21 +430,6 @@ public class MessageServiceImpl implements MessageService {
     
     // 私信列表 / 会话列表 / 聊天详情：全部分页
     
-    @Override
-    public PageResult<MessageListResponse> selectMessageListByUserIdWithPage(Long userId, Integer pageNum, Integer pageSize) {
-        int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<Message> page = PageUtils.getPage(validPageNum, validPageSize);
-        Page<Message> result = messageMapper.selectPage(page, new LambdaQueryWrapper<Message>().eq(Message::getReceiveUserId, userId)
-                .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE).orderByDesc(Message::getCreateTime));
-        List<MessageListResponse> records = result.getRecords().stream().map(msg -> {
-            UserInternalVO user = userService.queryUserByUserId(msg.getPostUserId());
-            return new MessageListResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(user), msg);
-        }).collect(Collectors.toList());
-        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
-                result.getPages(), result.hasNext());
-    }
-
     // 我的会话列表 按对方聚合 会话计算需要扫描全部消息，因此先通过 buildAllSessions 取出完整聚合结果 自带 5 分钟缓存 ， 再在内存中切页返回，避免高频用户每次都扫表
     @Override
     public PageResult<MessageSessionResponse> queryMessageSessionWithPage(Long userId, Integer pageNum, Integer pageSize) {
@@ -767,10 +745,7 @@ public class MessageServiceImpl implements MessageService {
     
 
     private void checkMessageSendGuard(MessageSendContext context) {
-        MessageSendGuardChain chain = messageSendGuardChain != null
-                ? messageSendGuardChain
-                : MessageSendGuardChain.defaultChain(userService, ossConfig);
-        MessageSendGuardResult result = chain.check(context);
+        MessageSendGuardResult result = messageSendGuardChain.check(context);
         if (!result.isPassed()) {
             throw new ApplicationException(result.getErrorResult());
         }
@@ -782,7 +757,7 @@ public class MessageServiceImpl implements MessageService {
         if (safeSummary.length() > 50) {
             safeSummary = safeSummary.substring(0, 50);
         }
-        UserInternalVO sender = userService.getUserInfoById(sendUserId);
+        UserInternalVO sender = userService.queryUserByUserId(sendUserId);
         String senderLabel = sender != null && StringUtils.hasLength(sender.getNickname())
                 ? sender.getNickname() : (sender != null ? sender.getUsername() : "用户");
         String eventId = "msg:" + messageId;

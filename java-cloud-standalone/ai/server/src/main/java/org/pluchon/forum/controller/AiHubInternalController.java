@@ -162,11 +162,6 @@ public class AiHubInternalController implements AiHubInternalApi {
     }
 
     @Override
-    public List<Long> ragVectorSearchUsers(@Valid @RequestBody AiRagSearchRequest request) {
-        return aiHubService.ragVectorSearchUsers(request.getQuery(), request.getCandidates());
-    }
-
-    @Override
     public List<RagUserVectorHitVO> ragUserVectorRanked(@RequestParam("query") String query) {
         return aiHubService.ragUserVectorRanked(query);
     }
@@ -192,14 +187,6 @@ public class AiHubInternalController implements AiHubInternalApi {
     public List<AiImageModerationItemResultVO> validateImageUrls(
             @Valid @RequestBody AiImageModerationBatchUrlRequest request) {
         return aiHubService.validateImageUrls(request);
-    }
-
-    @Override
-    public Boolean validateImagePayload(@Valid @RequestBody AiImageModerationRequest request) {
-        return aiHubService.validateImagePayload(
-                request.getContentBase64(),
-                request.getFilename(),
-                request.getContentType());
     }
 
     @Override

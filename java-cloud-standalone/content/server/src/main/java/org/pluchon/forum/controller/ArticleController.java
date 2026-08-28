@@ -8,14 +8,12 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
-import org.pluchon.forum.entity.vo.article.ArticleValidateTextVO;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.ReplaceArticleImagesRequest;
 import org.pluchon.forum.entity.dto.article.SubmitForAuditRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
 import org.pluchon.forum.entity.dto.article.SetArticleMusicRequest;
-import org.pluchon.forum.entity.dto.article.ValidateTextRequest;
 import org.pluchon.forum.entity.vo.article.ArticleDetailResponse;
 import org.pluchon.forum.entity.vo.article.ArticleListByUserIdPageResponse;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
@@ -26,13 +24,9 @@ import org.pluchon.forum.entity.vo.creator.CreatorInsightVO;
 import org.pluchon.forum.entity.vo.creator.CreatorInsightDataVO;
 import org.pluchon.forum.service.interfaces.creator.CreatorDashboardService;
 import org.pluchon.forum.service.interfaces.creator.CreatorInsightService;
-import org.pluchon.forum.service.interfaces.article.ArticleGuideStreamService;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.pluchon.forum.entity.dto.article.ArticleSummaryRegenerateRequest;
 import org.pluchon.forum.entity.vo.article.ArticleSummaryVO;
 import org.pluchon.forum.entity.dto.article.ContentReportRequest;
@@ -40,8 +34,6 @@ import org.pluchon.forum.entity.vo.article.ContentReportVO;
 import org.pluchon.forum.service.interfaces.moderation.ContentReportService;
 import org.pluchon.forum.service.interfaces.article.ArticleSummaryService;
 
-import java.util.List;
-import java.util.concurrent.Executor;
 
 @Tag(name = "帖子模块", description = "帖子的增删改查接口")
 @RestController
@@ -57,17 +49,10 @@ public class ArticleController {
     private ArticleService articleService;
 
     @Autowired
-    private ArticleGuideStreamService articleGuideStreamService;
-
-    @Autowired
     private CreatorDashboardService creatorDashboardService;
 
     @Autowired
     private CreatorInsightService creatorInsightService;
-
-    @Autowired
-    @Qualifier("sseExecutor")
-    private Executor sseExecutor;
 
     @Operation(summary = "创建帖子草稿", description = "文章内容先入库为草稿，返回帖子ID；封面上传和发布动作走独立接口")
     @PostMapping("/createDraft")
@@ -78,20 +63,6 @@ public class ArticleController {
         }
         Long id = articleService.createDraft(publishArticleRequest, loginUser.getId());
         return Result.success(id);
-    }
-
-    @Operation(summary = "发布帖子(仅审核通过状态)",
-            description = "异步审核版本: 当前仅允许 APPROVED 状态 -> PUBLISHED. " +
-                    "草稿 / 拒绝 / 异常状态请改用 /article/submitForAudit. " +
-                    "通常用户无需手动调本接口, 因为审核通过会自动发布; 此接口给未来切手动模式预留.")
-    @PutMapping("/publishArticle")
-    public Result<String> publishArticle(@RequestParam Long articleId, HttpServletRequest httpServletRequest) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        if (loginUser == null){
-            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
-        }
-        articleService.publishArticle(articleId, loginUser.getId());
-        return Result.success("发布成功");
     }
 
     @Operation(summary = "提交帖子进入异步审核流程",
@@ -211,12 +182,6 @@ public class ArticleController {
         return Result.success(articleService.queryArticleListByUserIdWithPageAndUserInfo(userId, loginUserId, pageNum, pageSize));
     }
 
-    @Operation(summary = "查询热帖榜单TopN", description = "从RedisZSet中取点赞数最高的N篇帖子ID，文章在发布时就以score=0入库，因此若ZSe为空会抛异常")
-    @GetMapping("/getHotArticleList")
-    public Result<List<Long>> getHotArticleList(@RequestParam(defaultValue = "10") Integer topN) {
-        return Result.success(articleService.getHotArticleList(topN));
-    }
-
     /** 分页查询热帖榜，最多返回排名前 28 条 */
     @Operation(summary = "分页查询热帖榜", description = "后端按热度排名分页，每页最多14条，总榜最多28条")
     @GetMapping("/getHotArticleListWithPage")
@@ -227,32 +192,6 @@ public class ArticleController {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         Long loginUserId = loginUser == null ? null : loginUser.getId();
         return Result.success(articleService.queryHotArticleListWithPage(pageNum, pageSize, loginUserId));
-    }
-
-    @Operation(summary = "回收站：查看自己已删除的帖子（分页）",
-            description = "依据 delete_state=1 过滤出当前登录用户已删除的帖子，按更新时间倒序返回，仅本人可见")
-    @GetMapping("/getDeletedArticleListWithPage")
-    public Result<PageResult<ArticleBriefVO>> getDeletedArticleListWithPage(
-            @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize,
-            HttpServletRequest httpServletRequest) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        if (loginUser == null) {
-            return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
-        }
-        return Result.success(articleService.queryDeletedArticleListWithPage(loginUser.getId(), pageNum, pageSize));
-    }
-
-    @Operation(summary = "文章内容安全审核")
-    @PostMapping("/validateText")
-    public Result<ArticleValidateTextVO> validateText(@RequestBody ValidateTextRequest body) {
-        return Result.success(articleService.validateContentResult(body));
-    }
-
-    @Operation(summary = "获取帖子 AI 摘要")
-    @GetMapping("/getSummary")
-    public Result<String> getSummary(Long articleId) {
-        return Result.successData(articleService.getArticleSummary(articleId));
     }
 
     /** 查询帖子AI总结状态与内容 */
@@ -285,16 +224,6 @@ public class ArticleController {
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);
         }
         return Result.success(contentReportService.report(loginUser.getId(), request));
-    }
-
-    @Operation(summary = "流式生成帖子 AI 智能导读")
-    @GetMapping(value = "/streamGuide", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamGuide(@RequestParam Long articleId) {
-        SseEmitter emitter = new SseEmitter(180_000L);
-        emitter.onTimeout(emitter::complete);
-        emitter.onError((e) -> emitter.complete());
-        sseExecutor.execute(() -> articleGuideStreamService.streamArticleGuide(articleId, emitter));
-        return emitter;
     }
 
     @Operation(summary = "通过URL直接更新帖子封面", description = "传入帖子ID和已上传的图片URL，直接写入数据库")

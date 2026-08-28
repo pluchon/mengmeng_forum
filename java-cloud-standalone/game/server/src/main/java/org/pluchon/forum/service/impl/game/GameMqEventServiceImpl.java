@@ -126,9 +126,7 @@ public class GameMqEventServiceImpl implements GameMqEventService {
                     event.getRecordId(),
                     winnerUserId,
                     loserUserId,
-                    endReason,
-                    null,
-                    endedAtMs
+                    endReason
             ));
             LambdaUpdateWrapper<GameSettlementEvent> wrapper = new LambdaUpdateWrapper<>();
             wrapper.eq(GameSettlementEvent::getEventId, event.getEventId())

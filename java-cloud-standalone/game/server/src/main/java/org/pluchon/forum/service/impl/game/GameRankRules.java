@@ -11,8 +11,6 @@ public class GameRankRules {
 
     private static final int TIER_SCORE = 100;
 
-    private static final double GOBANG_AI_RANK_WEIGHT = 0.8D;
-
     private static final String[] MAJOR_NAMES = {"青铜", "白银", "黄金", "铂金", "钻石"};
 
     private static final String[] TIER_NAMES = {"III", "II", "I"};
@@ -73,10 +71,6 @@ public class GameRankRules {
             return 0.85D;
         }
         return 1.0D;
-    }
-
-    public static int gobangAiWeighted(int value) {
-        return Math.max(1, (int) Math.round(value * GOBANG_AI_RANK_WEIGHT));
     }
 
     public static String rankName(String majorName, String tierName) {

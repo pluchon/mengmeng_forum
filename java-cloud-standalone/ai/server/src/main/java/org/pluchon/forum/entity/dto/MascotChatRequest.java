@@ -31,12 +31,6 @@ public class MascotChatRequest {
     @Schema(description = "功能：chat（对话与帮助，服务端自动路由）| writing | help | drawing")
     private String skill;
 
-    @Schema(description = "看板娘委派生图档位：仅 normal（Wan）")
-    private String imageQuality;
-
-    @Schema(description = "已废弃：文本模型由服务端自动选择 Qwen 档位")
-    private String llmProvider;
-
     @Schema(description = "为 true 时不写入陪伴助手会话表，仅依赖 history 维持上下文")
     private Boolean ephemeral;
 

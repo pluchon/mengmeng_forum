@@ -1,13 +1,8 @@
 package org.pluchon.forum.service.interfaces.search;
 
-import org.pluchon.forum.entity.db.Article;
-
 import java.util.List;
 
 public interface ArticleSearchIndexService {
-
-    // 为已发布帖子建立/刷新倒排与正排
-    void indexPublishedArticle(Article article, List<String> tagNames);
 
     // 按 ID 从库加载并同步索引 发布/重建用
     void syncPublishedArticle(Long articleId);

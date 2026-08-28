@@ -9,9 +9,6 @@ import java.util.List;
 
 public interface CategoryService {
 
-    // 获取所有的分类
-    List<Category> queryAllCategories();
-
     // 获取所有分类，并带有其下的版块列表
     List<CategoryWithBoards> getCategoryWithBoards();
 

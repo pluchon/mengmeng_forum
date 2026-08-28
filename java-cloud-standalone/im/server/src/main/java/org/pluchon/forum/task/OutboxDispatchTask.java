@@ -11,7 +11,6 @@ import org.pluchon.forum.common.mq.ForumProducer;
 import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
 import org.pluchon.forum.entity.db.ForumOutboxMessage;
 import org.pluchon.forum.entity.vo.mq.MessageNotifyMqVO;
-import org.pluchon.forum.entity.vo.mq.ReplyNotifyMqVO;
 import org.pluchon.forum.mapper.ForumOutboxMessageMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -100,19 +99,12 @@ public class OutboxDispatchTask {
         if (Constant.ROUTING_KEY_QUEUE_2.equals(row.getRoutingKey())) {
             return objectMapper.readValue(row.getPayloadJson(), MessageNotifyMqVO.class);
         }
-        if (Constant.ROUTING_KEY_QUEUE_1.equals(row.getRoutingKey())) {
-            return objectMapper.readValue(row.getPayloadJson(), ReplyNotifyMqVO.class);
-        }
         return objectMapper.readValue(row.getPayloadJson(), Object.class);
     }
 
     private void sendByRoutingKey(String routingKey, Object payload) {
         if (Constant.ROUTING_KEY_QUEUE_2.equals(routingKey)) {
             forumProducer.sendMessageNotify(payload);
-            return;
-        }
-        if (Constant.ROUTING_KEY_QUEUE_1.equals(routingKey)) {
-            forumProducer.sendReplyNotify(payload);
             return;
         }
         throw new IllegalArgumentException("未知 routingKey: " + routingKey);

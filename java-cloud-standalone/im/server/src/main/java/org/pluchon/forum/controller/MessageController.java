@@ -15,7 +15,6 @@ import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendMessageRequest;
 import org.pluchon.forum.entity.dto.message.ChatMessageReportRequest;
 import org.pluchon.forum.entity.vo.message.MessageDetailResponse;
-import org.pluchon.forum.entity.vo.message.MessageListResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionSearchResponse;
 import org.pluchon.forum.entity.vo.message.MessageVO;
@@ -103,15 +102,6 @@ public class MessageController {
     public Result<Long> getUnReadMessage(HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         return Result.success(messageService.selectMessageUnRead(sessionUser.getId()));
-    }
-
-    @Operation(summary = "查看当前登录用户的站内信列表(分页)", description = "获取当前登录的用户ID和分页参数")
-    @GetMapping("/selectMessageListByUserIdWithPage")
-    public Result<PageResult<MessageListResponse>> selectMessageListByUserIdWithPage(
-            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize,
-            HttpServletRequest httpServletRequest) {
-        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(messageService.selectMessageListByUserIdWithPage(sessionUser.getId(), pageNum, pageSize));
     }
 
     @Operation(summary = "安全更新单条私信状态",

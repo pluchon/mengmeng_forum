@@ -24,7 +24,4 @@ public class JinziChatVO {
 
     // 表情包图片 URL
     private String emojiUrl;
-
-    // 发送时间戳
-    private Long sentAtMs;
 }

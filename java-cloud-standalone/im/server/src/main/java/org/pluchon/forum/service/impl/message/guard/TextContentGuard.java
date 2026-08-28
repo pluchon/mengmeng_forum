@@ -12,8 +12,7 @@ public class TextContentGuard implements MessageSendGuard {
     @Override
     public boolean supports(MessageSendType sendType) {
         return sendType == MessageSendType.TEXT
-                || sendType == MessageSendType.REPLY
-                || sendType == MessageSendType.ALBUM;
+                || sendType == MessageSendType.REPLY;
     }
 
     @Override
@@ -23,9 +22,6 @@ public class TextContentGuard implements MessageSendGuard {
 
     @Override
     public MessageSendGuardResult check(MessageSendContext context) {
-        if (context.getSendType() == MessageSendType.ALBUM) {
-            return MessageSendGuardResult.pass();
-        }
         if (context.getSendType() == MessageSendType.REPLY && !StringUtils.hasLength(context.getContent())) {
             return MessageSendGuardResult.fail(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }

@@ -78,8 +78,6 @@ public final class ForumBusinessConstants {
     public static final long IMAGE_COMPRESS_TARGET_SIZE = (long) (4.8 * 1024 * 1024);
     public static final long IMAGE_COMPRESS_MAX_OUTPUT_SIZE = OSS_MAX_IMAGE_SIZE;
     public static final int IMAGE_COMPRESS_MAX_DIMENSION = 2560;
-    public static final long IMAGE_AUDIT_COMPRESS_TARGET_BYTES = 800_000L;
-    public static final int IMAGE_AUDIT_COMPRESS_MAX_DIMENSION = 1920;
     public static final Set<String> IMAGE_SUPPORTED_TYPES = Set.of(
             "image/jpeg", "image/jpg", "image/png", "image/gif");
     public static final String IMAGE_TYPE_GIF = "image/gif";
@@ -101,10 +99,6 @@ public final class ForumBusinessConstants {
     public static final int DANMAKU_MAX_PER_MINUTE = 20;
     public static final int DANMAKU_QUERY_MAX_WINDOW_MS = 120_000;
     public static final int DANMAKU_MAX_CONTENT_LEN = 30;
-
-    public static final String SUMMARY_ARTICLE_NOT_FOUND = "帖子不存在或已被删除。";
-    public static final String SUMMARY_ARTICLE_TOO_SHORT = "当前帖子内容较少（共 %d 字），建议包含更多内容后再尝试 AI 智能总结。";
-    public static final String SUMMARY_AI_SERVICE_UNAVAILABLE = "AI 摘要生成暂时不可用，请稍后再试。";
 
     public static final Byte SHOP_STATUS_PENDING = 0;
     public static final Byte SHOP_STATUS_ONLINE = 1;

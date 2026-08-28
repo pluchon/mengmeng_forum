@@ -12,6 +12,4 @@ public interface ArticleReplyService {
     // 帖子楼层列表 分页
     PageResult<ArticleReplyListResponse> queryReplyByArticleIdWithPage(
             Long articleId, Integer pageNum, Integer pageSize, Long loginUserId);
-
-    void deleteReply(Long replyId, Long loginUserId);
 }

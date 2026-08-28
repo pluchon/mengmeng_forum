@@ -170,50 +170,6 @@ public class FileController {
         return Result.successData(fileService.uploadEmojiShopImages(files, loginUser.getId()));
     }
 
-    @Operation(summary = "上传公告中心卡片配图", description = "落库路径 forum_notice_picture/，文件名：发布者ID_公告ID_东八区时间；新建公告传 noticeId=0")
-    @PostMapping("/uploadNoticePicture")
-    public Result<String> uploadNoticePicture(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "noticeId", required = false) Long noticeId,
-            HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        if (loginUser == null) {
-            return Result.fail("您尚未登录");
-        }
-        long nid = noticeId != null ? noticeId : 0L;
-        return Result.successData(fileService.uploadNoticePicture(file, loginUser.getId(), nid));
-    }
-
-    @Operation(summary = "上传抽奖奖品库配图", description = "路径 forum_db_item/forum_prize_picture/；文件名 活动ID_奖品ID_时间戳.ext。奖品库未绑活动传 activityId=0；新建未落库传 prizeId=0")
-    @PostMapping("/uploadLotteryPrizePicture")
-    public Result<String> uploadLotteryPrizePicture(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "activityId", required = false) Long activityId,
-            @RequestParam(value = "prizeId", required = false) Long prizeId,
-            HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        if (loginUser == null) {
-            return Result.fail("您尚未登录");
-        }
-        long aid = activityId != null ? activityId : 0L;
-        long pid = prizeId != null ? prizeId : 0L;
-        return Result.successData(fileService.uploadLotteryPrizePicture(file, aid, pid));
-    }
-
-    @Operation(summary = "上传抽奖活动封面", description = "路径 forum_db_item/forum_activity_picture/；新建活动传 activityId=0")
-    @PostMapping("/uploadLotteryActivityPicture")
-    public Result<String> uploadLotteryActivityPicture(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "activityId", required = false) Long activityId,
-            HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        if (loginUser == null) {
-            return Result.fail("您尚未登录");
-        }
-        long aid = activityId != null ? activityId : 0L;
-        return Result.successData(fileService.uploadLotteryActivityPicture(file, aid, loginUser.getId()));
-    }
-
     /** 内部：AI 域生图结果转存 OSS ai → content */
     @PostMapping("/internal/upload-ai-generated")
     public String uploadAiGeneratedInternal(@RequestBody AiGeneratedImageUploadRequest request) {

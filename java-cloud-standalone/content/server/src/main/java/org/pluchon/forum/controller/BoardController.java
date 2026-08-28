@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 // 作者代码水平一般，难免难看，请见谅
 // 板块模块
@@ -34,21 +33,6 @@ public class BoardController {
     @GetMapping("/topBoardList")
     public Result<List<BoardPublicVO>> topBoardList(@NotNull Integer orderByStatus) {
         return Result.success(boardService.queryBoardListByOrder(orderByStatus));
-    }
-
-    // 根据板块ID查询板块信息，不包括首页
-    @Operation(summary = "板块信息展示", description = "传入首页参数")
-    @GetMapping("/selectBoardByBoardId")
-    public Result<BoardPublicVO> selectBoardByBoardId(Long boardId) {
-        return Result.success(boardService.queryBoardByBoardId(boardId));
-    }
-
-    // 特殊查询，首页板块信息展示模块，前端拿取到板块数量和总的帖子数量
-    // 返回值：板块ID,板块内帖子数量
-    @Operation(summary = "首页板块信息展示", description = "不传入首页参数")
-    @GetMapping("/selectBoardBy")
-    public Result<Map<Long, Long>> selectBoardBy() {
-        return Result.success(boardService.selectBoardNotById());
     }
 
     @Operation(summary = "根据板块Id展示对应模块的帖子内容(分页)", description = "传入对应的板块ID查询，支持分页")

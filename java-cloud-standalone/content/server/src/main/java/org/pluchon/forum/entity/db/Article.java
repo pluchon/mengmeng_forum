@@ -100,9 +100,6 @@ public class Article {
     @Schema(description = "当前审核任务ID(UUID), 与 Python LangGraph thread_id 关联")
     private String auditTaskId;
 
-    @Schema(description = "审核结果是否额外推邮件: 0否 1是", example = "0")
-    private Byte auditNotifyEmail;
-
     @Schema(description = "当前累计提交审核次数(0~3)", example = "0")
     private Integer auditRetryCount;
 

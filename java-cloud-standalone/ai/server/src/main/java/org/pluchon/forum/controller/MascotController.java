@@ -17,7 +17,6 @@ import org.pluchon.forum.entity.vo.CompanionContextWindowVO;
 import org.pluchon.forum.entity.vo.CompanionSessionVO;
 import org.pluchon.forum.entity.vo.MascotChatResponseVO;
 import org.pluchon.forum.entity.vo.MascotMemoryVO;
-import org.pluchon.forum.entity.vo.MascotModelPublicVO;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.MascotRelatedRecommendationVO;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
@@ -73,12 +72,6 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotService.quotaHintForLlmRoute(user.getId(), llmProvider));
-    }
-
-    @Operation(summary = "上架中的看板娘模型列表", description = "无需登录；前端用于 Live2D 选择与展示")
-    @GetMapping("/public/models")
-    public Result<List<MascotModelPublicVO>> publicModels() {
-        return Result.success(mascotService.listPublicModels());
     }
 
     @Operation(summary = "看板娘对话", description = "单次 JSON 返回; 普通用户有每日次数上限")

@@ -21,9 +21,9 @@ final class UniformCaptchaImageResourceProvider implements ResourceProvider {
     static final String NAME = "uniform-captcha-image";
 
     // 画布略大于默认模板参考尺寸，使拼图块相对背景稍小。 默认模板约 110px；720 宽时相对 600 宽缩小约 17%
-    static final int WIDTH = 720;
+    private static final int WIDTH = 720;
 
-    static final int HEIGHT = 432;
+    private static final int HEIGHT = 432;
 
     // 黑色半透明遮罩不透明度：压暗背景纹理，便于点选文字辨认
     private static final float OVERLAY_ALPHA = 0.34f;

@@ -90,9 +90,8 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             out = 0;
             img = 1;
         } else {
-            AiUserContext user = requireUser(userId);
-            model = aiQuotaService.hasAdvancedQwenAccess(user)
-                    ? Constant.AI_MODEL_QWEN_DEEP : "qwen3.7-flash";
+            requireUser(userId);
+            model = Constant.AI_MODEL_QWEN_DEEP;
         }
         AiPriceEstimateVO vo = new AiPriceEstimateVO();
         vo.setModelCode(model);
@@ -115,7 +114,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             req.setClientRequestId(UUID.randomUUID().toString());
         }
         String modelCode = Constant.AI_MODEL_QWEN_FLASH;
-        boolean useAdvancedQuota = aiQuotaService.hasAdvancedQwenAccess(user);
         boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
         Long workspaceId = req.getWorkspaceId();
         if (workspaceId != null) {
@@ -128,7 +126,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                             Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
         }
 
-        boolean reservedQwenFlash = false;
         boolean reservedAdvanced = false;
         AiCallBeginResult begin = aiCallRecordService.beginCall(
                 user.getId(), "ai_polish", req.getClientRequestId(), modelCode);
@@ -136,13 +133,8 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         long startMs = System.currentTimeMillis();
         try {
             if (!usePoints) {
-                if (useAdvancedQuota) {
-                    aiQuotaService.consumeAdvancedLlm(user);
-                    reservedAdvanced = true;
-                } else {
-                    aiQuotaService.consumeQwenFlash(user);
-                    reservedQwenFlash = true;
-                }
+                aiQuotaService.consumeAdvancedLlm(user);
+                reservedAdvanced = true;
             }
             AiHubPolishResultVO hubResult = aiHubService.polish(user.getId(), req);
             List<AiModelUsageDTO> usages = normalizeUsageItems(
@@ -166,7 +158,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             return response;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releasePolishReservation(user, reservedQwenFlash, reservedAdvanced);
+            releasePolishReservation(user, reservedAdvanced);
             throw ex;
         }
     }
@@ -395,10 +387,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         return user;
     }
 
-    private void releasePolishReservation(AiUserContext user, boolean reservedQwenFlash, boolean reservedAdvanced) {
-        if (reservedQwenFlash) {
-            aiQuotaService.releaseQwenFlash(user);
-        }
+    private void releasePolishReservation(AiUserContext user, boolean reservedAdvanced) {
         if (reservedAdvanced) {
             aiQuotaService.releaseAdvancedLlm(user);
         }

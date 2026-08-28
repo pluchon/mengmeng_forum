@@ -50,8 +50,6 @@ public class SearchServiceImpl implements SearchService {
     private static final double ARTICLE_AI_VECTOR_MIN_SCORE = 0.36;
     // 帖子正文未命中时，作者语义回退的高相似度阈值
     private static final double ARTICLE_AUTHOR_VECTOR_MIN_SCORE = 0.72;
-    // AI 用户搜索：候选集 hybrid_rank 最低分
-    private static final double USER_AI_HYBRID_MIN_SCORE = 0.22;
     // AI 用户搜索：纯向量兜底最低分
     private static final double USER_AI_VECTOR_MIN_SCORE = 0.38;
     private static final int RAG_TEXT_TRUNCATE = 1200;
@@ -630,36 +628,6 @@ public class SearchServiceImpl implements SearchService {
             }
             if (seen.add(row.getUserId())) {
                 out.add(row.getUserId());
-            }
-        }
-        return out;
-    }
-
-    private List<Long> extractRankedIds(List<Map<String, Object>> ranked, double minScore) {
-        if (ranked == null || ranked.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<Long> out = new ArrayList<>();
-        Set<Long> seen = new LinkedHashSet<>();
-        for (Map<String, Object> row : ranked) {
-            double score = row.get("score") instanceof Number n ? n.doubleValue() : 0.0;
-            if (score < minScore) {
-                continue;
-            }
-            Object idObj = row.get("articleId");
-            if (idObj == null) {
-                idObj = row.get("userId");
-            }
-            if (idObj == null) {
-                continue;
-            }
-            try {
-                long id = Long.parseLong(String.valueOf(idObj));
-                if (seen.add(id)) {
-                    out.add(id);
-                }
-            } catch (NumberFormatException ignore) {
-                // 跳过
             }
         }
         return out;

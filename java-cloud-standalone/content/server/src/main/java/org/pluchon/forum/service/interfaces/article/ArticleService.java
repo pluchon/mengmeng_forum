@@ -3,11 +3,9 @@ package org.pluchon.forum.service.interfaces.article;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.dto.article.PublishArticleRequest;
 import org.pluchon.forum.entity.dto.article.UpdateArticleRequest;
-import org.pluchon.forum.entity.dto.article.ValidateTextRequest;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
 import org.pluchon.forum.entity.vo.article.ArticleDetailResponse;
 import org.pluchon.forum.entity.vo.article.ArticleListByUserIdPageResponse;
-import org.pluchon.forum.entity.vo.article.ArticleValidateTextVO;
 import org.pluchon.forum.entity.vo.article.AuditStatusResponse;
 import org.pluchon.forum.entity.vo.article.HotArticleListItemVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -20,9 +18,6 @@ public interface ArticleService {
 
     // 创建草稿，返回新帖子的 ID
     Long createDraft(PublishArticleRequest publishArticleRequest, Long userId);
-
-    // 发布已存在帖子；草稿变已发布，已发布帖子重新发布时只做权限与内容校验
-    void publishArticle(Long articleId, Long userId);
 
     // 帖子详情，包含作者信息、板块信息、当前用户的点赞 / Owner 标志
     ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId);
@@ -41,25 +36,11 @@ public interface ArticleService {
     ArticleListByUserIdPageResponse queryArticleListByUserIdWithPageAndUserInfo(Long userId, Long loginUserId,
                                                                                Integer pageNum, Integer pageSize);
 
-    // 回收站：根据 delete_state 1 查询当前登录用户已删除的帖子 分页，仅本人可看
-    PageResult<ArticleBriefVO> queryDeletedArticleListWithPage(Long loginUserId, Integer pageNum, Integer pageSize);
-
-    // 热帖榜单 TopN Redis ZSet，冷启动时从 DB 回源
-    List<Long> getHotArticleList(Integer topN);
-
     // 热帖榜分页，后端最多提供前 50 条，每页最多 10 条
     PageResult<HotArticleListItemVO> queryHotArticleListWithPage(Integer pageNum, Integer pageSize, Long loginUserId);
 
-    // 帖子摘要 带 Redis 缓存
-    String getArticleSummary(Long articleId);
-
     // 内容安全审核：返回 null 表示通过；非 null 为违规原因
     String validateContent(String content);
-
-    // 内容安全审核：返回 { isAllowed: true/false, reason: ... }
-    ArticleValidateTextVO validateContentResult(String content);
-
-    ArticleValidateTextVO validateContentResult(ValidateTextRequest request);
 
     // 更新帖子封面
     void updateArticleCoverByUrl(Long articleId, String coverUrl, Long loginUserId);

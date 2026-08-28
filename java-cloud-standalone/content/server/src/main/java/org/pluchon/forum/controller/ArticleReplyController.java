@@ -39,12 +39,4 @@ public class ArticleReplyController {
         return Result.success(articleReplyService.queryReplyByArticleIdWithPage(
                 articleId, pageNum, pageSize, loginUserId));
     }
-
-    @Operation(summary = "删除帖子回复", description = "传入回复ID，只有回复作者或帖子楼主可以删除")
-    @DeleteMapping("/deleteReply")
-    public Result<String> deleteReply(Long replyId, HttpServletRequest httpServletRequest) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        articleReplyService.deleteReply(replyId, loginUser.getId());
-        return Result.success("删除成功");
-    }
 }

@@ -41,7 +41,7 @@ public class OssConfig {
     }
 
     // 外链前缀 + 对象 key 前缀，用于校验客户端回传的 URL
-    public String publicUrlPrefix(String relativeFolder) {
+    private String publicUrlPrefix(String relativeFolder) {
         String prefix = urlPrefix == null ? "" : urlPrefix.trim();
         if (!prefix.isEmpty() && !prefix.endsWith("/")) {
             prefix = prefix + "/";

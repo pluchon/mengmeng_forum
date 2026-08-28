@@ -27,7 +27,6 @@ import org.pluchon.forum.entity.vo.game.GobangChatVO;
 import org.pluchon.forum.entity.vo.game.GobangMoveVO;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
 import org.pluchon.forum.entity.vo.game.GobangRoomStateVO;
-import org.pluchon.forum.entity.vo.game.GameRoomSnapshotVO;
 import org.pluchon.forum.entity.vo.mq.GameFinishedMqVO;
 import org.pluchon.forum.mapper.GameGobangMatchRecordMapper;
 import org.pluchon.forum.mapper.GameGobangRoomMoveMapper;
@@ -37,7 +36,6 @@ import org.pluchon.forum.mapper.GameUserProfileMapper;
 import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
-import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GobangRoomService;
@@ -104,9 +102,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private GameRankService gameRankService;
 
     @Autowired
-    private GameRoomSnapshotService gameRoomSnapshotService;
-
-    @Autowired
     private GameRoomEventBusService gameRoomEventBusService;
 
     @Autowired
@@ -155,17 +150,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     @Autowired
     private GameMatchRoomHelper gameMatchRoomHelper;
 
-    private GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
+    private final GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
 
     @Autowired
     private GameAiGatewayService gameAiGatewayService;
-
-    @Autowired(required = false)
-    public void setGobangGuardChain(GobangGuardChain gobangGuardChain) {
-        if (gobangGuardChain != null) {
-            this.gobangGuardChain = gobangGuardChain;
-        }
-    }
 
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
@@ -188,7 +176,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         gameUserProfileService.updateStatus(userIdB, GameConstants.GOBANG, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
-        saveRoomSnapshot(room);
         cacheRoomState(room);
         return room.getRoomId();
     }
@@ -212,7 +199,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userId, "BLACK");
         saveRoomPlayer(room.getRoomId(), GameConstants.AI_USER_ID, "AI");
-        saveRoomSnapshot(room);
         cacheRoomState(room);
         return room.getRoomId();
     }
@@ -228,7 +214,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         } else {
             room.getSpectatorJoinedAt().putIfAbsent(userId, System.currentTimeMillis());
             saveRoomPlayer(roomId, userId, "SPECTATOR");
-            saveRoomSnapshot(room);
             sendStateToRoom(room, "room_state_updated");
         }
         return getRoomState(roomId, userId);
@@ -292,7 +277,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             }
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
-            saveRoomSnapshot(room);
             cacheRoomState(room);
             GobangMoveVO moveVO = new GobangMoveVO(
                     userId,
@@ -344,8 +328,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 type,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl(),
-                System.currentTimeMillis()
+                request == null ? null : request.getEmojiUrl()
         );
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
     }
@@ -510,35 +493,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             gameGobangMatchRecordMapper.insert(record);
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
-        saveRoomSnapshot(room);
         publishGameFinishedEvent(finishedEvent);
         sendFinalStateToRoom(room);
         cleanupRoom(room);
-    }
-
-    private void saveRoomSnapshot(GobangRoom room) {
-        if (room == null) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        GameRoomSnapshotVO snapshot = new GameRoomSnapshotVO(
-                GameConstants.GOBANG,
-                room.getRoomId(),
-                room.getRoomStatus(),
-                room.getBlackUserId(),
-                room.getWhiteUserId(),
-                room.getCurrentTurnUserId(),
-                room.copyBoard(),
-                countMoves(room),
-                room.getWinnerUserId(),
-                room.getEndReason(),
-                room.getWinningLine(),
-                room.remainingGameMs(room.getBlackUserId(), now),
-                room.remainingGameMs(room.getWhiteUserId(), now),
-                room.currentTurnRemainingMs(now),
-                now
-        );
-        gameRoomSnapshotService.saveSnapshot(snapshot);
     }
 
     private GameFinishedMqVO createGameFinishedEvent(
@@ -566,9 +523,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 record.getId(),
                 winnerId,
                 loserId,
-                endReason,
-                room.getWinningLine(),
-                System.currentTimeMillis()
+                endReason
         );
     }
 
@@ -727,7 +682,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 room.remainingGameMs(room.getBlackUserId(), now),
                 room.remainingGameMs(room.getWhiteUserId(), now),
                 room.currentTurnRemainingMs(now),
-                now,
                 spectator,
                 room.isAiRoom(),
                 room.isAiThinking(),
@@ -884,19 +838,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
                 if (board[i][j] != 0) {
-                    count++;
-                }
-            }
-        }
-        return count;
-    }
-
-    private int countChess(GobangRoom room, int chess) {
-        int count = 0;
-        int[][] board = room.getBoard();
-        for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
-            for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
-                if (board[i][j] == chess) {
                     count++;
                 }
             }

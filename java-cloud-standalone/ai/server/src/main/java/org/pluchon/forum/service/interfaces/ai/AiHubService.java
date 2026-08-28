@@ -82,8 +82,6 @@ public interface AiHubService {
 
     List<RagArticleVectorHitVO> ragArticleVectorRanked(String query, List<Map<String, Object>> candidates);
 
-    List<Long> ragVectorSearchUsers(String query, List<Map<String, Object>> candidates);
-
     List<RagUserVectorHitVO> ragUserVectorRanked(String query);
 
     List<Long> rankSemanticCandidates(String query, List<Map<String, Object>> candidates);
@@ -93,8 +91,6 @@ public interface AiHubService {
     boolean validateImageUrl(String imageUrl, String objectKey);
 
     List<AiImageModerationItemResultVO> validateImageUrls(AiImageModerationBatchUrlRequest request);
-
-    boolean validateImagePayload(String contentBase64, String filename, String contentType);
 
     AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request);
 }

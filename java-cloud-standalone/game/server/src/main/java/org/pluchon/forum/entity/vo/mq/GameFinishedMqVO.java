@@ -3,9 +3,6 @@ package org.pluchon.forum.entity.vo.mq;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
-
-import java.util.List;
 
 // 游戏对局结束事件 MQ 载荷，结算事务提交后投递给异步通知、统计和榜单链路
 @Data
@@ -33,10 +30,4 @@ public class GameFinishedMqVO {
 
     // 结束原因
     private String endReason;
-
-    // 胜利连线坐标，非五连结束可为空
-    private List<GobangBoardPointVO> winLine;
-
-    // 事件发生时间戳
-    private Long occurredAt;
 }

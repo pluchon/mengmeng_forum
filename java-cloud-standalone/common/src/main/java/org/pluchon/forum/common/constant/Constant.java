@@ -74,8 +74,6 @@ public final class Constant {
     public static final long REDIS_TTL_DANMAKU_DUP = ForumRedisKeys.TTL_DANMAKU_DUP;
     public static final String REDIS_KEY_DANMAKU_MINUTE = ForumRedisKeys.DANMAKU_MINUTE;
     public static final long REDIS_TTL_DANMAKU_MINUTE = ForumRedisKeys.TTL_DANMAKU_MINUTE;
-    public static final String REDIS_KEY_ARTICLE_GUIDE = ForumRedisKeys.ARTICLE_GUIDE;
-    public static final long REDIS_TTL_ARTICLE_GUIDE = ForumRedisKeys.TTL_ARTICLE_GUIDE;
     public static final String REDIS_KEY_CHECKIN_STATUS = ForumRedisKeys.CHECKIN_STATUS;
     public static final long REDIS_TTL_CHECKIN_STATUS = ForumRedisKeys.TTL_CHECKIN_STATUS;
     public static final String REDIS_KEY_CHECKIN_RULE = ForumRedisKeys.CHECKIN_RULE;
@@ -153,8 +151,6 @@ public final class Constant {
     public static final long IMAGE_COMPRESS_TARGET_SIZE = ForumBusinessConstants.IMAGE_COMPRESS_TARGET_SIZE;
     public static final long IMAGE_COMPRESS_MAX_OUTPUT_SIZE = ForumBusinessConstants.IMAGE_COMPRESS_MAX_OUTPUT_SIZE;
     public static final int IMAGE_COMPRESS_MAX_DIMENSION = ForumBusinessConstants.IMAGE_COMPRESS_MAX_DIMENSION;
-    public static final long IMAGE_AUDIT_COMPRESS_TARGET_BYTES = ForumBusinessConstants.IMAGE_AUDIT_COMPRESS_TARGET_BYTES;
-    public static final int IMAGE_AUDIT_COMPRESS_MAX_DIMENSION = ForumBusinessConstants.IMAGE_AUDIT_COMPRESS_MAX_DIMENSION;
     public static final Set<String> IMAGE_SUPPORTED_TYPES = ForumBusinessConstants.IMAGE_SUPPORTED_TYPES;
     public static final String IMAGE_TYPE_GIF = ForumBusinessConstants.IMAGE_TYPE_GIF;
     public static final long MUSIC_AUDIO_MAX_SIZE = ForumBusinessConstants.MUSIC_AUDIO_MAX_SIZE;
@@ -171,9 +167,6 @@ public final class Constant {
     public static final int DANMAKU_MAX_PER_MINUTE = ForumBusinessConstants.DANMAKU_MAX_PER_MINUTE;
     public static final int DANMAKU_QUERY_MAX_WINDOW_MS = ForumBusinessConstants.DANMAKU_QUERY_MAX_WINDOW_MS;
     public static final int DANMAKU_MAX_CONTENT_LEN = ForumBusinessConstants.DANMAKU_MAX_CONTENT_LEN;
-    public static final String SUMMARY_ARTICLE_NOT_FOUND = ForumBusinessConstants.SUMMARY_ARTICLE_NOT_FOUND;
-    public static final String SUMMARY_ARTICLE_TOO_SHORT = ForumBusinessConstants.SUMMARY_ARTICLE_TOO_SHORT;
-    public static final String SUMMARY_AI_SERVICE_UNAVAILABLE = ForumBusinessConstants.SUMMARY_AI_SERVICE_UNAVAILABLE;
     public static final Byte SHOP_STATUS_PENDING = ForumBusinessConstants.SHOP_STATUS_PENDING;
     public static final Byte SHOP_STATUS_ONLINE = ForumBusinessConstants.SHOP_STATUS_ONLINE;
     public static final Byte SHOP_STATUS_OFFLINE = ForumBusinessConstants.SHOP_STATUS_OFFLINE;
@@ -263,9 +256,6 @@ public final class Constant {
     public static final String OSS_PATH_MUSIC_AVATAR = OssPaths.MUSIC_AVATAR;
     public static final String OSS_PATH_MUSIC_INFO = OssPaths.MUSIC_INFO;
     public static final String OSS_PATH_MUSIC_LRC = OssPaths.MUSIC_LRC;
-    public static final String OSS_PATH_NOTICE_PICTURE = OssPaths.NOTICE_PICTURE;
-    public static final String OSS_PATH_LOTTERY_ACTIVITY = OssPaths.LOTTERY_ACTIVITY;
-    public static final String OSS_PATH_LOTTERY_PRIZE = OssPaths.LOTTERY_PRIZE;
     public static final String OSS_PATH_CHAT_MESSAGE = OssPaths.CHAT_MESSAGE;
     public static final String OSS_PATH_CHAT_EMOJI = OssPaths.CHAT_EMOJI;
     public static final String OSS_PATH_EMOJI_SHOP = OssPaths.EMOJI_SHOP;

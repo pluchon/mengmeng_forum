@@ -2,7 +2,6 @@ package org.pluchon.forum.converter;
 
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
-import org.pluchon.forum.entity.vo.article.ArticleValidateTextVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 
 import java.util.ArrayList;
@@ -65,10 +64,4 @@ public final class ArticleConverter {
                 page.getHasNextPage());
     }
 
-    public static ArticleValidateTextVO toValidateTextVO(boolean allowed, String reason) {
-        ArticleValidateTextVO vo = new ArticleValidateTextVO();
-        vo.setIsAllowed(allowed);
-        vo.setReason(reason);
-        return vo;
-    }
 }

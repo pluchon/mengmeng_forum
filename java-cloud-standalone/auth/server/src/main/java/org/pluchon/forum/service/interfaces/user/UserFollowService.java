@@ -17,8 +17,6 @@ public interface UserFollowService {
 
     void unfollow(Long followerId, Long followeeId);
 
-    boolean isFollowing(Long followerId, Long followeeId);
-
     UserFollowStatsVO getStats(Long userId, Long viewerId);
 
     // 当前自然月新增粉丝数 以 Asia/Taipei 的月初为统计起点

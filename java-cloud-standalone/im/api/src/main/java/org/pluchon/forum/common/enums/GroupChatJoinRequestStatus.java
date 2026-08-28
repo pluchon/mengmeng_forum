@@ -15,16 +15,4 @@ public enum GroupChatJoinRequestStatus {
     GroupChatJoinRequestStatus(Byte code) {
         this.code = code;
     }
-
-    public static GroupChatJoinRequestStatus fromCode(Byte code) {
-        if (code == null) {
-            return null;
-        }
-        for (GroupChatJoinRequestStatus value : values()) {
-            if (value.code.equals(code)) {
-                return value;
-            }
-        }
-        return null;
-    }
 }

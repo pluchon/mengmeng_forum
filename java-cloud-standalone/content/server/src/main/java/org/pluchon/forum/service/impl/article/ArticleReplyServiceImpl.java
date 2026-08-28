@@ -199,35 +199,4 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         return vo;
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void deleteReply(Long replyId, Long loginUserId) {
-        ArticleReply reply = articleReplyMapper.selectOne(new LambdaQueryWrapper<ArticleReply>()
-                .eq(ArticleReply::getId, replyId)
-                .eq(ArticleReply::getDeleteState, (byte) 0)
-                .last("FOR UPDATE"));
-        if (reply == null || (reply.getState() != null && reply.getState() == 1)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-        if (reply.getDeleteState() != null && reply.getDeleteState() == 1) {
-            return;
-        }
-        Article article = articleService.selectArticleByArticleId(reply.getArticleId());
-        if (!reply.getPostUserId().equals(loginUserId) && !article.getUserId().equals(loginUserId)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
-        }
-        int updated = articleReplyMapper.update(null, new LambdaUpdateWrapper<ArticleReply>()
-                .eq(ArticleReply::getId, replyId)
-                .eq(ArticleReply::getDeleteState, 0)
-                .set(ArticleReply::getDeleteState, (byte) 1));
-        if (updated <= 0) {
-            ArticleReply latest = articleReplyMapper.selectById(replyId);
-            if (latest != null && latest.getDeleteState() != null && latest.getDeleteState() == 1) {
-                return;
-            }
-            throw new ApplicationException(Result.fail(ResultCode.FAILED));
-        }
-        articleQuestionService.handleDeletedReply(reply.getArticleId(), replyId);
-        articleService.deleteReply(reply.getArticleId());
-    }
 }

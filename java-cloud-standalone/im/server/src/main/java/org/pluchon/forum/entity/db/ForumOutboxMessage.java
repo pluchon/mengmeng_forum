@@ -24,7 +24,7 @@ public class ForumOutboxMessage {
 
     private String payloadJson;
 
-    // 0 待投递 1 已投递 2 已消费 3 失败 4 死信
+    // 0 待投递 1 已投递 4 死信
     private Integer messageState;
 
     private Integer retryCount;

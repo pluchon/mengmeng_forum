@@ -8,15 +8,12 @@ import org.pluchon.forum.common.enums.QuestionStatus;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.converter.ArticleQuestionConverter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleQuestionAccept;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleReplyLike;
 import org.pluchon.forum.entity.db.ArticleSubReply;
 import org.pluchon.forum.api.UserInternalVO;
-import org.pluchon.forum.entity.vo.article.ArticleReplyMediaVO;
-import org.pluchon.forum.entity.vo.article.QuestionAnswerVO;
 import org.pluchon.forum.entity.vo.user.UserBriefVO;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.pluchon.forum.mapper.ArticleQuestionAcceptMapper;
@@ -132,50 +129,6 @@ public class ArticleQuestionServiceImpl implements ArticleQuestionService {
         if (updated <= 0) {
             throw failed(ResultCode.FAILED_QUESTION_ACCEPT_CONFLICT);
         }
-    }
-
-    @Override
-    public QuestionAnswerVO queryAcceptedAnswer(Long articleId, Long loginUserId) {
-        validatePositiveId(articleId);
-        Article article = requireQuestion(articleId);
-        if (!ArticleStatus.isPublished(article.getStatus()) && !Objects.equals(article.getUserId(), loginUserId)) {
-            throw failed(ResultCode.FAILED_NOT_EXISTS);
-        }
-        Long replyId = article.getAcceptedReplyId();
-        if (replyId == null) {
-            List<ArticleQuestionAccept> accepts = listActiveAccepts(articleId);
-            replyId = accepts.stream()
-                    .map(ArticleQuestionAccept::getReplyId)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(null);
-        }
-        if (replyId == null) {
-            return null;
-        }
-        ArticleReply reply = articleReplyMapper.selectOne(new LambdaQueryWrapper<ArticleReply>()
-                .eq(ArticleReply::getId, replyId)
-                .eq(ArticleReply::getArticleId, articleId)
-                .eq(ArticleReply::getDeleteState, NORMAL_STATE)
-                .eq(ArticleReply::getState, NORMAL_STATE));
-        if (reply == null) {
-            return null;
-        }
-        UserBriefVO user = loadAnswerUser(reply.getPostUserId());
-        Long subReplyCount = articleSubReplyMapper.selectCount(new LambdaQueryWrapper<ArticleSubReply>()
-                .eq(ArticleSubReply::getReplyId, reply.getId())
-                .eq(ArticleSubReply::getDeleteState, NORMAL_STATE)
-                .eq(ArticleSubReply::getState, NORMAL_STATE));
-        boolean liked = isLiked(loginUserId, reply.getId());
-        List<ArticleReplyMediaVO> mediaList = articleReplyMediaService
-                .mapByReplyIds(List.of(reply.getId()))
-                .getOrDefault(reply.getId(), List.of());
-        return ArticleQuestionConverter.toAnswerVO(
-                reply,
-                user,
-                subReplyCount == null ? 0 : subReplyCount.intValue(),
-                liked,
-                mediaList);
     }
 
     @Override

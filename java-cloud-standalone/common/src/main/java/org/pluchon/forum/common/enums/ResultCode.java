@@ -17,10 +17,7 @@ public enum ResultCode {
     FAILED_LOGIN(1103, "账号或密码不正确"),
     FAILED_LOGIN_LOCKED(1210, "登录失败次数过多，请 15 分钟后再试"),
     FAILED_USER_BANNED(1104, "你已被禁言，如有疑问请联系管理员"),
-    FAILED_TWO_PWD_NOT_SAME(1105, "两次输入的密码不一致"),
     USER_UNLOGIN(1106,"登录状态已过期，请重新登录"),
-    FAILED_BOARD_ARTICLE_COUNT(1107,"板块数据更新失败，请稍后再试"),
-    FAILED_USER_ARTICLE_COUNT(1108,"个人数据更新失败，请稍后再试"),
     FAILED_ARTICLE(1109,"帖子加载失败，请稍后再试"),
     FAILED_UPDATE_ARTICLE(1110,"帖子修改失败，请确认你是作者且有修改权限"),
     FAILED_DELETE_ARTICLE(1111,"帖子删除失败，请确认你是作者且有删除权限"),
@@ -33,12 +30,9 @@ public enum ResultCode {
     FAILED_MAIL_CODE_INVALID(1118,"邮箱验证码不正确或已过期"),
     FAILED_MAIL_NOT_BOUND(1119,"该邮箱还没有绑定账号"),
     FAILED_MAIL_ALREADY_BOUND(1120,"该邮箱已绑定其他账号"),
-    FAILED_MOFIDY_PASSWORD_USERNAME_NOT_MATCH(1121,"账号信息不匹配，请重新登录后再修改密码"),
-    FAILED_MOFIDY_PASSWORD_IS_EMPTY(1122,"请把密码信息填写完整"),
     FAILED_MOFIDY_PASSWORD_ERROR(1123,"密码修改失败，请稍后再试"),
     FAILED_AI_CHECK_IMAGE_ERROR(1124,"图片审核暂时不可用，请稍后再试"),
     FAILED_AI_CHECK_CONTENT_ERROR(1125,"内容审核暂时不可用，请稍后再试"),
-    FAILED_AI_GENERATE_SUMMARY_ERROR(1126,"摘要生成失败，请稍后再试"),
     FAILED_CONTENT_VIOLATION(1127, "内容含有不合规信息，请修改后再提交"),
     FAILED_IMAGE_VIOLATION(1128, "图片含有不合规内容，请更换后再上传"),
     FAILED_CHECKIN_DUPLICATE(1129, "今天已经签到啦，明天再来"),
@@ -73,7 +67,6 @@ public enum ResultCode {
     FAILED_AUDIT_STATUS_INVALID(1154, "当前帖子状态不能提交审核"),
     FAILED_AUDIT_RETRY_LIMIT(1155, "审核次数已用完，请联系管理员"),
     FAILED_AUDIT_EDIT_LOCKED(1205, "帖子正在审核中，暂时不能编辑，请等待审核结果"),
-    FAILED_AUDIT_RESULT_DUPLICATE(1157, "审核结果已处理，无需重复提交"),
     FAILED_AUDIT_NOT_AUTHOR(1158, "不能操作别人帖子的审核"),
     FAILED_PUBLISH_NEED_APPROVED(1159, "帖子还没审核通过，暂时不能发布"),
     FAILED_MASCOT_QUOTA(1160, "今天和看板娘聊天的次数用完了，明天再来或开通会员"),
@@ -82,12 +75,9 @@ public enum ResultCode {
     FAILED_LOTTERY_TIMES_INVALID(1163, "每次只能抽 1 次或 10 次"),
     FAILED_AI_QUOTA_EXCEEDED(1164, "今天的 AI 使用次数已用完"),
     FAILED_AI_ENGINE(1165, "AI 服务正在休息，请稍后再试"),
-    FAILED_VIP_SUBSCRIBE_TIER(1166, "当前会员等级高于所选套餐，无法降级订阅"),
     FAILED_CAPTCHA_REQUIRED(1167, "请先完成安全验证"),
     FAILED_CAPTCHA_CHECK(1168, "安全验证没通过，请重新试一次"),
     FAILED_EMOJI_SHOP_NOT_FAVORITABLE(1169, "商城表情不能加入收藏"),
-    FAILED_ALREADY_FOLLOWING(1170, "你已经关注过这个用户了"),
-    FAILED_NOT_FOLLOWING(1171, "你还没有关注这个用户"),
     FAILED_CANNOT_FOLLOW_SELF(1172, "不能关注自己哦"),
     FAILED_REPLY_MEDIA_TOO_MANY(1173, "评论里的附件太多了"),
     FAILED_REPLY_MEDIA_INVALID(1174, "评论附件无效，请重新上传"),
@@ -104,9 +94,6 @@ public enum ResultCode {
     FAILED_DANMAKU_FONT_SIZE_INVALID(1185, "弹幕字号不可用"),
     FAILED_DANMAKU_DUPLICATE(1186, "请不要重复发送相同的弹幕"),
     FAILED_DANMAKU_MINUTE_LIMIT(1187, "弹幕发送太快了，请慢一点"),
-    FAILED_DANMAKU_NOT_FOUND(1188, "这条弹幕不存在"),
-    FAILED_DANMAKU_HIDE_FORBIDDEN(1189, "你没有隐藏这条弹幕的权限"),
-    FAILED_DANMAKU_ALREADY_HIDDEN(1190, "这条弹幕已经隐藏了"),
     FAILED_TETRIS_SETTLE_INVALID(1191, "本局成绩校验没通过"),
     FAILED_TETRIS_SETTLE_RATE_LIMIT(1192, "提交太频繁了，请稍后再试"),
     FAILED_ARTICLE_TYPE_INVALID(1193, "帖子类型不可用"),
@@ -114,7 +101,6 @@ public enum ResultCode {
     FAILED_QUESTION_STATUS_INVALID(1195, "当前问题状态不能进行该操作"),
     FAILED_QUESTION_ANSWER_INVALID(1196, "这个回答不存在或不能被采纳"),
     FAILED_QUESTION_ACCEPT_CONFLICT(1197, "问题已被处理，请刷新后重试"),
-    FAILED_VIP_SUBSCRIBE_UNAVAILABLE(1198, "积分订阅已下线，请扫码支付开通会员"),
     FAILED_SHOP_SERIES_OFFLINE(1199, "这个表情包系列已下架"),
     FAILED_SHOP_EMOJI_DELETED(1200, "这个表情已被删除"),
     FAILED_SHOP_EMOJI_NOT_OWNED(1201, "你还没有这个表情包"),
@@ -123,8 +109,9 @@ public enum ResultCode {
     FAILED_SERVICE_TIMEOUT(1208, "服务响应有点慢，请稍后再试"),
     FAILED_UPLOAD_TOO_LARGE(1209, "文件太大了，请压缩后再上传"),
     ERROR_SERVICES(2000, "服务开小差了，请稍后再试"),
-    ERROR_IS_NULL(2001, "数据为空"),// 内部标记，不直接展示给用户
     ;
+    // 已废弃码位，禁止复用: 1105 1107 1108 1121 1122 1126 1157 1166 1170 1171 1188 1189 1190 1198 2001
+    // 分别对应三次功能下线未清理的残留: VIP 积分订阅、弹幕隐藏、关注幂等化
 
     final int code;
     final String message;

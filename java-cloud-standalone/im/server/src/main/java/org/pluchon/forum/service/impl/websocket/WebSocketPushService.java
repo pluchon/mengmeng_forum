@@ -76,7 +76,7 @@ public class WebSocketPushService {
     }
 
     // 仅本机投递 不经 Redis，供订阅回调使用
-    public boolean pushLocal(Long userId, String payload) {
+    private boolean pushLocal(Long userId, String payload) {
         boolean result = onlineUserManageUtil.sendMessage(userId, payload);
         if (!result) {
             log.debug("[WS推送本机] 用户不在线或投递失败 userId={} online={}", userId, onlineUserManageUtil.isOnline(userId));

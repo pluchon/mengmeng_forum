@@ -76,7 +76,6 @@ public class ArticleMusicParseServiceImpl implements ArticleMusicParseService {
                 vo.setDurationText(formatDuration(seconds));
             }
             vo.setHasCover(Boolean.TRUE.equals(vo.getHasCover()));
-            vo.setHasLyrics(StringUtils.hasText(vo.getLyricText()));
             if (!StringUtils.hasText(vo.getTitle())) {
                 vo.setTitle(stemOf(original));
             }

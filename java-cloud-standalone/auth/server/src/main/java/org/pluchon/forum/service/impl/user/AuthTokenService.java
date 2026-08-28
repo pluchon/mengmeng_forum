@@ -26,12 +26,6 @@ public class AuthTokenService {
         }
     }
 
-    public String issueToken(User user) {
-        assertCanAuthenticate(user);
-        long tv = jwtTokenVersionService.currentVersion(user.getId());
-        return JWTUtils.genJwtForUser(user.getId(), user.getUsername(), tv);
-    }
-
     public String issueLoginToken(User user) {
         assertCanAuthenticate(user);
         long tv = jwtTokenVersionService.nextVersion(user.getId());

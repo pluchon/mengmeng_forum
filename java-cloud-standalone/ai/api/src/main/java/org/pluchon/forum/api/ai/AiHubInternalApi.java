@@ -101,9 +101,6 @@ public interface AiHubInternalApi {
     @PostMapping("/ai/internal/hub/rag/article-ranked")
     List<RagArticleVectorHitVO> ragArticleVectorRanked(@Valid @RequestBody AiRagSearchRequest request);
 
-    @PostMapping("/ai/internal/hub/rag/user-search")
-    List<Long> ragVectorSearchUsers(@Valid @RequestBody AiRagSearchRequest request);
-
     @PostMapping("/ai/internal/hub/rag/user-ranked")
     List<RagUserVectorHitVO> ragUserVectorRanked(@RequestParam("query") String query);
 
@@ -120,10 +117,6 @@ public interface AiHubInternalApi {
     /** 批量图片 AI 审核（按 OSS URL + objectKey） */
     @PostMapping("/ai/internal/hub/moderation/image-urls")
     List<AiImageModerationItemResultVO> validateImageUrls(@Valid @RequestBody AiImageModerationBatchUrlRequest request);
-
-    /** @deprecated 上传审图请用 image-url；保留兼容旧调用 */
-    @PostMapping("/ai/internal/hub/moderation/image-payload")
-    Boolean validateImagePayload(@Valid @RequestBody AiImageModerationRequest request);
 
     @PostMapping("/ai/internal/hub/game/gobang-move")
     AiGobangMoveVO chooseGobangMove(@Valid @RequestBody AiGobangMoveRequest request);

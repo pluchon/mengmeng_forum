@@ -6,8 +6,6 @@ import lombok.Data;
 @Data
 public class AiPolishRequest {
 
-    private String kind;
-
     private String title;
 
     private String content;

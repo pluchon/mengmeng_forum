@@ -8,7 +8,6 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
-import org.pluchon.forum.common.utils.CursorUtils;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
@@ -16,7 +15,6 @@ import org.pluchon.forum.entity.db.PointsLog;
 import org.pluchon.forum.entity.db.PointsMilestoneClaim;
 import org.pluchon.forum.entity.db.PointsWallet;
 import org.pluchon.forum.entity.dto.points.PointsLogQueryDTO;
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.points.PointsCenterOverviewVO;
 import org.pluchon.forum.entity.vo.points.PointsCenterChartVO;
@@ -62,8 +60,6 @@ import java.util.Map;
 public class PointsServiceImpl implements PointsService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Taipei");
-    private static final int DEFAULT_DAYS = 30;
-    private static final int MAX_DAYS = 365;
     private static final List<MilestoneDefinition> MILESTONES = List.of(
             new MilestoneDefinition("M1000", 1000, 50, "萌新旅人"),
             new MilestoneDefinition("M2000", 2000, 200, "软萌收藏家"),
@@ -153,103 +149,6 @@ public class PointsServiceImpl implements PointsService {
         );
         int totalSpend = absSumByNegativeSources(userId);
         return new PointsWalletVO(balance, totalCheckin, totalSpend);
-    }
-
-    @Override
-    public PageResult<PointsLogVO> getLogWithPage(Long userId, Integer pageNum, Integer pageSize, Byte sourceType) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int validPageNum = PageUtils.getValidPageNum(pageNum);
-        int validPageSize = PageUtils.getValidPageSize(pageSize);
-        Page<PointsLog> page = new Page<>(validPageNum, validPageSize);
-        var qw = new LambdaQueryWrapper<PointsLog>()
-                .eq(PointsLog::getUserId, userId)
-                .ne(PointsLog::getDeleteState, 1);
-        if (sourceType != null) {
-            qw.eq(PointsLog::getSourceType, sourceType);
-        }
-        Page<PointsLog> result = pointsLogMapper.selectPage(page, qw
-                .orderByDesc(PointsLog::getCreateTime)
-                .orderByDesc(PointsLog::getId));
-        List<PointsLogVO> records = new ArrayList<>(result.getRecords().size());
-        for (PointsLog row : result.getRecords()) {
-            records.add(new PointsLogVO(row.getId(), row.getDelta(), row.getBalanceAfter(),
-                    row.getSourceType(), row.getRelatedId(), row.getRemark(), row.getCreateTime()));
-        }
-        return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
-                result.getPages(), result.hasNext());
-    }
-
-    @Override
-    public CursorPageResult<PointsLogVO> getLogWithCursor(Long userId, String cursor, Integer pageSize, Byte sourceType) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int size = PageUtils.getValidPageSize(pageSize);
-        LambdaQueryWrapper<PointsLog> wrapper = new LambdaQueryWrapper<PointsLog>()
-                .eq(PointsLog::getUserId, userId)
-                .ne(PointsLog::getDeleteState, 1);
-        if (sourceType != null) {
-            wrapper.eq(PointsLog::getSourceType, sourceType);
-        }
-        if (StringUtils.hasText(cursor)) {
-            CursorUtils.CursorToken token = CursorUtils.decode(cursor);
-            Date cursorTime;
-            if (token != null) {
-                cursorTime = new Date(token.timeMillis());
-            } else {
-                cursorTime = null;
-            }
-            wrapper.and(w -> w.lt(PointsLog::getCreateTime, cursorTime)
-                    .or(w2 -> {
-                        if (token != null) {
-                            w2.eq(PointsLog::getCreateTime, cursorTime)
-                                    .lt(PointsLog::getId, token.id());
-                        }
-                    }));
-        }
-        wrapper.orderByDesc(PointsLog::getCreateTime).orderByDesc(PointsLog::getId);
-        Page<PointsLog> page = new Page<>(1, size + 1, false);
-        List<PointsLog> rows = pointsLogMapper.selectPage(page, wrapper).getRecords();
-        boolean hasNext = rows.size() > size;
-        if (hasNext) {
-            rows = new ArrayList<>(rows.subList(0, size));
-        }
-        List<PointsLogVO> records = new ArrayList<>(rows.size());
-        for (PointsLog row : rows) {
-            records.add(new PointsLogVO(row.getId(), row.getDelta(), row.getBalanceAfter(),
-                    row.getSourceType(), row.getRelatedId(), row.getRemark(), row.getCreateTime()));
-        }
-        String nextCursor = null;
-        if (hasNext && !rows.isEmpty()) {
-            PointsLog last = rows.get(rows.size() - 1);
-            nextCursor = CursorUtils.encode(last.getCreateTime(), last.getId());
-        }
-        return new CursorPageResult<>(records, nextCursor, hasNext, size);
-    }
-
-    @Override
-    public List<PointsDailyVO> getDailyAggregation(Long userId, Integer days) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        int validDays = (days == null || days < 1) ? DEFAULT_DAYS : Math.min(days, MAX_DAYS);
-        LocalDate today = LocalDate.now(SHANGHAI);
-        Date from = Date.from(today.minusDays(validDays - 1L).atStartOfDay(SHANGHAI).toInstant());
-        Date to = Date.from(today.plusDays(1).atStartOfDay(SHANGHAI).toInstant());
-        List<Map<String, Object>> raw = pointsLogMapper.selectDailyAggregation(userId, from, to);
-        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
-        List<PointsDailyVO> list = new ArrayList<>(raw.size());
-        for (Map<String, Object> row : raw) {
-            Object dayObj = row.get("day");
-            String day = dayObj instanceof Date ? fmt.format((Date) dayObj) : String.valueOf(dayObj);
-            list.add(new PointsDailyVO(day,
-                    toInt(row.get("in_total")),
-                    toInt(row.get("out_total")),
-                    toInt(row.get("net"))));
-        }
-        return list;
     }
 
     @Override

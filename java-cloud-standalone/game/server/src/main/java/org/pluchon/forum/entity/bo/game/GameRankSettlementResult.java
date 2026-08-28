@@ -10,12 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GameRankSettlementResult {
 
-    // 是否计入排位分
-    private Boolean ranked;
-
-    // 是否平局
-    private Boolean draw;
-
     // 胜方变化
     private GameRankPlayerChange winnerChange;
 

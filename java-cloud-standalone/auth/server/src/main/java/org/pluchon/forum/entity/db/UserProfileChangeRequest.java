@@ -21,8 +21,6 @@ public class UserProfileChangeRequest {
 
     private String candidateContent;
 
-    private String contentHash;
-
     private Byte reviewStatus;
 
     private Integer retryCount;

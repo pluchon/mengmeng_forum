@@ -6,8 +6,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.pluchon.forum.common.AiTaskMode;
-import org.pluchon.forum.common.AiTaskState;
 import org.pluchon.forum.common.AiWorkspaceState;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -16,21 +14,16 @@ import org.pluchon.forum.converter.AiWorkspaceConverter;
 import org.pluchon.forum.entity.db.ForumAiCreationVersion;
 import org.pluchon.forum.entity.db.ForumAiCreationWorkspace;
 import org.pluchon.forum.entity.db.ForumAiLongTermMemory;
-import org.pluchon.forum.entity.db.ForumAiTaskSession;
 import org.pluchon.forum.entity.db.ForumCompanionSession;
 import org.pluchon.forum.entity.dto.AiMemoryCreateRequest;
-import org.pluchon.forum.entity.dto.AiTaskHandoffRequest;
 import org.pluchon.forum.entity.dto.AiWorkspaceArtifactRequest;
-import org.pluchon.forum.entity.dto.AiWorkspaceCreateRequest;
 import org.pluchon.forum.entity.vo.ai.AiLongTermMemoryVO;
-import org.pluchon.forum.entity.vo.ai.AiTaskSessionVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVO;
 import org.pluchon.forum.entity.vo.ai.AiWorkspaceVersionVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.ForumAiCreationVersionMapper;
 import org.pluchon.forum.mapper.ForumAiCreationWorkspaceMapper;
 import org.pluchon.forum.mapper.ForumAiLongTermMemoryMapper;
-import org.pluchon.forum.mapper.ForumAiTaskSessionMapper;
 import org.pluchon.forum.mapper.ForumCompanionSessionMapper;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
@@ -69,9 +62,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
     private ForumAiLongTermMemoryMapper memoryMapper;
 
     @Autowired
-    private ForumAiTaskSessionMapper taskSessionMapper;
-
-    @Autowired
     private ForumCompanionSessionMapper companionSessionMapper;
 
     @Autowired
@@ -82,15 +72,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AiWorkspaceVO createWorkspace(Long userId, AiWorkspaceCreateRequest request) {
-        requireUser(userId);
-        AiWorkspaceCreateRequest safeRequest = request == null ? new AiWorkspaceCreateRequest() : request;
-        ForumAiCreationWorkspace row = createWorkspaceRow(userId, safeRequest.getCompanionSessionId(), safeRequest.getCheckpointId());
-        return AiWorkspaceConverter.toWorkspaceVO(row);
-    }
 
     @Override
     public PageResult<AiWorkspaceVO> listWorkspaces(Long userId, Integer pageNum, Integer pageSize) {
@@ -165,24 +146,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
                 .eq(ForumAiCreationWorkspace::getDeleteState, (byte) 0)
                 .set(ForumAiCreationWorkspace::getSelectedVersionId, versionId)
                 .set(ForumAiCreationWorkspace::getUpdateTime, new Date()));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void deleteWorkspace(Long userId, Long workspaceId) {
-        requireWorkspace(userId, workspaceId);
-        Date now = new Date();
-        versionMapper.update(null, new LambdaUpdateWrapper<ForumAiCreationVersion>()
-                .eq(ForumAiCreationVersion::getWorkspaceId, workspaceId)
-                .eq(ForumAiCreationVersion::getDeleteState, (byte) 0)
-                .set(ForumAiCreationVersion::getDeleteState, (byte) 1)
-                .set(ForumAiCreationVersion::getUpdateTime, now));
-        workspaceMapper.update(null, new LambdaUpdateWrapper<ForumAiCreationWorkspace>()
-                .eq(ForumAiCreationWorkspace::getId, workspaceId)
-                .eq(ForumAiCreationWorkspace::getUserId, userId)
-                .eq(ForumAiCreationWorkspace::getDeleteState, (byte) 0)
-                .set(ForumAiCreationWorkspace::getDeleteState, (byte) 1)
-                .set(ForumAiCreationWorkspace::getUpdateTime, now));
     }
 
     @Override
@@ -278,67 +241,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
                 .eq(ForumAiLongTermMemory::getDeleteState, (byte) 0)
                 .set(ForumAiLongTermMemory::getDeleteState, (byte) 1)
                 .set(ForumAiLongTermMemory::getUpdateTime, new Date()));
-        if (changed < 1) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
-        }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AiTaskSessionVO handoff(Long userId, AiTaskHandoffRequest request) {
-        requireUser(userId);
-        if (request == null || !StringUtils.hasText(request.getActiveModule())
-                || !StringUtils.hasText(request.getActiveWorker())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        if (request.getCompanionSessionId() != null) {
-            requireCompanionSession(userId, request.getCompanionSessionId());
-        }
-        if (request.getWorkspaceId() != null) {
-            requireWorkspace(userId, request.getWorkspaceId());
-        }
-        ForumAiTaskSession current = findActiveTask(userId, request.getCompanionSessionId());
-        Date now = new Date();
-        if (current == null) {
-            current = new ForumAiTaskSession();
-            current.setUserId(userId);
-            current.setCompanionSessionId(request.getCompanionSessionId());
-            current.setDeleteState((byte) 0);
-            current.setCreateTime(now);
-        }
-        current.setWorkspaceId(request.getWorkspaceId());
-        current.setActiveModule(normalizeShortText(request.getActiveModule(), 64));
-        current.setActiveWorker(normalizeShortText(request.getActiveWorker(), 64));
-        current.setCheckpointId(normalizeCheckpoint(request.getCheckpointId()));
-        current.setTaskMode(normalizeTaskMode(request.getTaskMode()));
-        current.setTaskState(AiTaskState.ACTIVE.name());
-        current.setUpdateTime(now);
-        if (current.getId() == null) {
-            taskSessionMapper.insert(current);
-        } else {
-            taskSessionMapper.updateById(current);
-        }
-        return AiWorkspaceConverter.toTaskSessionVO(current);
-    }
-
-    @Override
-    public AiTaskSessionVO currentTask(Long userId, Long companionSessionId) {
-        requireUser(userId);
-        ForumAiTaskSession row = findActiveTask(userId, companionSessionId);
-        return row == null ? null : AiWorkspaceConverter.toTaskSessionVO(row);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void finishTask(Long userId, Long taskSessionId) {
-        requireUser(userId);
-        int changed = taskSessionMapper.update(null, new LambdaUpdateWrapper<ForumAiTaskSession>()
-                .eq(ForumAiTaskSession::getId, taskSessionId)
-                .eq(ForumAiTaskSession::getUserId, userId)
-                .eq(ForumAiTaskSession::getDeleteState, (byte) 0)
-                .eq(ForumAiTaskSession::getTaskState, AiTaskState.ACTIVE.name())
-                .set(ForumAiTaskSession::getTaskState, AiTaskState.COMPLETED.name())
-                .set(ForumAiTaskSession::getUpdateTime, new Date()));
         if (changed < 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
@@ -452,21 +354,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
         }
     }
 
-    private ForumAiTaskSession findActiveTask(Long userId, Long companionSessionId) {
-        LambdaQueryWrapper<ForumAiTaskSession> wrapper = new LambdaQueryWrapper<ForumAiTaskSession>()
-                .eq(ForumAiTaskSession::getUserId, userId)
-                .eq(ForumAiTaskSession::getDeleteState, (byte) 0)
-                .eq(ForumAiTaskSession::getTaskState, AiTaskState.ACTIVE.name())
-                .orderByDesc(ForumAiTaskSession::getUpdateTime)
-                .last("LIMIT 1");
-        if (companionSessionId == null) {
-            wrapper.isNull(ForumAiTaskSession::getCompanionSessionId);
-        } else {
-            wrapper.eq(ForumAiTaskSession::getCompanionSessionId, companionSessionId);
-        }
-        return taskSessionMapper.selectOne(wrapper);
-    }
-
     private String normalizeArtifactJson(String raw) {
         if (!StringUtils.hasText(raw) || raw.trim().length() > MAX_ARTIFACT_LENGTH) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -488,15 +375,6 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         return value;
-    }
-
-    private String normalizeTaskMode(String raw) {
-        String value = raw == null || raw.isBlank() ? AiTaskMode.ASSISTANT.name() : raw.trim().toUpperCase(Locale.ROOT);
-        try {
-            return AiTaskMode.valueOf(value).name();
-        } catch (IllegalArgumentException exception) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
     }
 
     private String normalizeCheckpoint(String checkpointId) {

@@ -966,60 +966,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 pageSize, pages, toIndex < safeShops.size());
     }
 
-    // 普通名称匹配无结果时，AI 仅对本域已筛出的上架候选排序，最终可见性仍由本服务复查
-    private PageResult<EmojiShopListItemVO> querySemanticShopList(String validSort, String validCategory,
-                                                                   String keyword, int pageNum, int pageSize) {
-        PageResult<EmojiShopListItemVO> vectorPage = querySemanticShopListByIds(
-                economyAiGatewayService.ragVectorSearchEmojis(keyword), validCategory, pageNum, pageSize);
-        if (vectorPage != null) {
-            return vectorPage;
-        }
-        LambdaQueryWrapper<EmojiShop> candidateWrapper = newPublicShopQuery(validCategory);
-        applySort(candidateWrapper, validSort);
-        List<EmojiShop> candidates = emojiShopMapper.selectPage(
-                new Page<>(1, SEMANTIC_SEARCH_CANDIDATE_LIMIT, false), candidateWrapper).getRecords();
-        if (candidates == null || candidates.isEmpty()) {
-            return new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false);
-        }
-        List<Map<String, Object>> payload = new ArrayList<>(candidates.size());
-        for (EmojiShop candidate : candidates) {
-            Map<String, Object> item = new HashMap<>(2);
-            item.put("candidateId", candidate.getId());
-            item.put("text", candidate.getName() + "\n" + candidate.getCategory() + "\n"
-                    + (candidate.getDescription() == null ? "" : candidate.getDescription()));
-            payload.add(item);
-        }
-        List<Long> rankedIds;
-        try {
-            rankedIds = economyAiGatewayService.rankSemanticCandidates(keyword, payload);
-        } catch (RuntimeException exception) {
-            log.warn("表情包 AI 语义检索失败: {}", exception.getMessage());
-            rankedIds = Collections.emptyList();
-        }
-        if (rankedIds == null || rankedIds.isEmpty()) {
-            return new PageResult<>(Collections.emptyList(), 0L, pageNum, pageSize, 0L, false);
-        }
-        List<EmojiShop> verified = emojiShopMapper.selectList(newPublicShopQuery(validCategory)
-                .in(EmojiShop::getId, rankedIds));
-        Map<Long, EmojiShop> verifiedById = new HashMap<>();
-        for (EmojiShop shop : verified) {
-            verifiedById.put(shop.getId(), shop);
-        }
-        List<EmojiShop> ranked = new ArrayList<>();
-        for (Long shopId : rankedIds) {
-            EmojiShop shop = verifiedById.get(shopId);
-            if (shop != null) {
-                ranked.add(shop);
-            }
-        }
-        long total = ranked.size();
-        int fromIndex = Math.min((pageNum - 1) * pageSize, ranked.size());
-        int toIndex = Math.min(fromIndex + pageSize, ranked.size());
-        long pages = total == 0 ? 0L : (total + pageSize - 1) / pageSize;
-        List<EmojiShopListItemVO> records = enrichPublicListItems(ranked.subList(fromIndex, toIndex));
-        return new PageResult<>(records, total, pageNum, pageSize, pages, toIndex < ranked.size());
-    }
-
     private PageResult<EmojiShopListItemVO> querySemanticShopListByIds(List<Long> rankedIds, String category,
                                                                         int pageNum, int pageSize) {
         if (rankedIds == null || rankedIds.isEmpty()) {
@@ -1344,14 +1290,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             log.warn("商城 URL 校验失败: {}", hint);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
-    }
-
-    private boolean containsControlChar(String s) {
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c < 0x20 || c == 0x7F) return true;
-        }
-        return false;
     }
 
     private void invalidateShopDetailCache(Long shopId) {

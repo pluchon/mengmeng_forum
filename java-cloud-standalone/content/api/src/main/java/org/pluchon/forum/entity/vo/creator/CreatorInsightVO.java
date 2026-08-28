@@ -24,7 +24,5 @@ public class CreatorInsightVO {
 
     private List<String> highlights;
 
-    private String generatedAt;
-
     private Boolean cached;
 }

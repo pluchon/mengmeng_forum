@@ -83,10 +83,6 @@ public class GobangActionContext {
         return col;
     }
 
-    public GobangChatRequest getChatRequest() {
-        return chatRequest;
-    }
-
     public String chatMessageType() {
         return chatRequest == null || chatRequest.getMessageType() == null
                 ? "TEXT"

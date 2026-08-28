@@ -19,10 +19,7 @@ import org.pluchon.forum.entity.db.GameSettlementEvent;
 import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
-import org.pluchon.forum.entity.vo.game.GameRoomSnapshotVO;
-import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
-import org.pluchon.forum.entity.vo.game.JinziBoardPointVO;
 import org.pluchon.forum.entity.vo.game.JinziChatVO;
 import org.pluchon.forum.entity.vo.game.JinziMoveVO;
 import org.pluchon.forum.entity.vo.game.JinziRoomStateVO;
@@ -35,7 +32,6 @@ import org.pluchon.forum.mapper.GameUserProfileMapper;
 import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
-import org.pluchon.forum.service.interfaces.game.GameRoomSnapshotService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
 import org.pluchon.forum.service.interfaces.game.JinziRoomService;
@@ -79,9 +75,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     @Autowired
     private GameRankService gameRankService;
-
-    @Autowired
-    private GameRoomSnapshotService gameRoomSnapshotService;
 
     @Autowired
     private GameRoomEventBusService gameRoomEventBusService;
@@ -151,7 +144,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         gameUserProfileService.updateStatus(userIdB, GameConstants.JINZI, GameConstants.PROFILE_PLAYING, room.getRoomId());
         saveRoomPlayer(room.getRoomId(), userIdA, "BLACK");
         saveRoomPlayer(room.getRoomId(), userIdB, "WHITE");
-        saveRoomSnapshot(room);
         cacheRoomState(room);
         return room.getRoomId();
     }
@@ -237,7 +229,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             Long nextTurnUserId = (win || draw || matchOver) ? null : room.opponentOf(userId);
             room.setCurrentTurnUserId(nextTurnUserId);
             room.setTurnStartedAtMs(System.currentTimeMillis());
-            saveRoomSnapshot(room);
             cacheRoomState(room);
 
             JinziMoveVO moveVO = new JinziMoveVO(
@@ -274,7 +265,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 synchronized (room) {
                     if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus()) && room.isRoundFinished()) {
                         room.startNextRound();
-                        saveRoomSnapshot(room);
                         cacheRoomState(room);
                         sendStateToRoom(room, "round_started");
                     }
@@ -324,8 +314,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 messageType,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl(),
-                System.currentTimeMillis()
+                request == null ? null : request.getEmojiUrl()
         );
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
     }
@@ -454,7 +443,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             gameJinziMatchRecordMapper.insert(record);
             return createGameFinishedEvent(room, record, winnerId, loserId, endReason);
         });
-        saveRoomSnapshot(room);
         publishGameFinishedEvent(finishedEvent);
         sendFinalStateToRoom(room);
         cleanupRoom(room);
@@ -530,7 +518,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 room.remainingGameMs(room.getBlackUserId(), now),
                 room.remainingGameMs(room.getWhiteUserId(), now),
                 room.currentTurnRemainingMs(now),
-                now,
                 room.getWinningLine(),
                 blackPlayer,
                 whitePlayer,
@@ -601,28 +588,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         );
     }
 
-    private void saveRoomSnapshot(JinziRoom room) {
-        long now = System.currentTimeMillis();
-        GameRoomSnapshotVO snapshot = new GameRoomSnapshotVO(
-                GameConstants.JINZI,
-                room.getRoomId(),
-                room.getRoomStatus(),
-                room.getBlackUserId(),
-                room.getWhiteUserId(),
-                room.getCurrentTurnUserId(),
-                room.copyBoard(),
-                room.getTotalMoveCount(),
-                room.getWinnerUserId(),
-                room.getEndReason(),
-                toGobangPoints(room.getWinningLine()),
-                room.remainingGameMs(room.getBlackUserId(), now),
-                room.remainingGameMs(room.getWhiteUserId(), now),
-                room.currentTurnRemainingMs(now),
-                now
-        );
-        gameRoomSnapshotService.saveSnapshot(snapshot);
-    }
-
     private GameFinishedMqVO createGameFinishedEvent(
             JinziRoom room,
             GameJinziMatchRecord record,
@@ -648,9 +613,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 record.getId(),
                 winnerId,
                 loserId,
-                endReason,
-                toGobangPoints(room.getWinningLine()),
-                System.currentTimeMillis()
+                endReason
         );
     }
 
@@ -733,17 +696,6 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
             userRoomIds.remove(room.getWhiteUserId());
         }
-    }
-
-    private List<GobangBoardPointVO> toGobangPoints(List<JinziBoardPointVO> points) {
-        if (points == null || points.isEmpty()) {
-            return List.of();
-        }
-        List<GobangBoardPointVO> rows = new ArrayList<>(points.size());
-        for (JinziBoardPointVO point : points) {
-            rows.add(new GobangBoardPointVO(point.getRow(), point.getCol()));
-        }
-        return rows;
     }
 
     private void addRealUserId(List<Long> userIds, Long userId) {

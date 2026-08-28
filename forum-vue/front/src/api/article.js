@@ -1,19 +1,8 @@
 import request from './request'
-import { useUserStore } from '@/stores/user'
 
 // 按版块获取帖子列表 分页
 export function getArticleList(data) {
   return request({ url: '/board/selectBoardListByBoardIdWithPage', method: 'get', params: data })
-}
-
-// 首页版块统计 版块数量 + 帖子总数
-export function getHomeBoardStats() {
-  return request({ url: '/board/selectBoardBy', method: 'get' })
-}
-
-// 获取热帖榜单 ID 列表
-export function getHotArticleList(topN = 10) {
-  return request({ url: '/article/getHotArticleList', method: 'get', params: { topN } })
 }
 
 // 热帖榜后端分页 每页最多14条，总榜最多28条
@@ -34,11 +23,6 @@ export function getArticleDetail(articleId) {
 // 创建帖子草稿
 export function createDraft(data) {
   return request({ url: '/article/createDraft', method: 'post', data })
-}
-
-// 发布帖子 仅 APPROVED→PUBLISHED 手动发布模式；异步审核默认自动发布，一般无需调用
-export function publishArticle(articleId) {
-  return request({ url: '/article/publishArticle', method: 'put', params: { articleId } })
 }
 
 // 提交异步内容审核 LangGraph ；成功后 data 为 taskId UUID
@@ -66,11 +50,6 @@ export function deleteArticle(articleId) {
   return request({ url: '/article/deleteArticle', method: 'delete', params: { articleId } })
 }
 
-// 获取 AI 摘要
-export function getAiSummary(articleId) {
-  return request({ url: '/article/getSummary', method: 'get', params: { articleId } })
-}
-
 // 查询持久化帖子总结及异步状态
 export function getArticleSummaryState(articleId) {
   return request({
@@ -84,62 +63,6 @@ export function getArticleSummaryState(articleId) {
 // 重新生成帖子总结
 export function regenerateArticleSummary(articleId) {
   return request({ url: '/article/summary/regenerate', method: 'post', data: { articleId }, timeout: 65000 })
-}
-
-// 流式生成 AI 智能导读 SSE
-export function streamArticleGuide(articleId, { onChunk, onDone, onError } = {}) {
-  const userStore = useUserStore()
-  const ctrl = new AbortController()
-  const url = `/article/streamGuide?articleId=${encodeURIComponent(articleId)}`
-  fetch(url, {
-    headers: userStore.token ? { Authorization: userStore.token } : {},
-    signal: ctrl.signal,
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        const message = body?.message || '智能导读暂时不可用，请稍后重试'
-        onError?.(message)
-        onDone?.()
-        return
-      }
-      const reader = res.body?.getReader()
-      if (!reader) {
-        onError?.('浏览器不支持流式响应')
-        onDone?.()
-        return
-      }
-      const dec = new TextDecoder()
-      let buf = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const parts = buf.split('\n')
-        buf = parts.pop() || ''
-        for (const line of parts) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data:')) continue
-          const payload = trimmed.slice(5).trim()
-          if (payload === '[DONE]') {
-            onDone?.()
-            return
-          }
-          try {
-            const o = JSON.parse(payload)
-            if (o.text) onChunk?.(o.text)
-          } catch {
-            // 忽略 partial json
-          }
-        }
-      }
-      onDone?.()
-    })
-    .catch((err) => {
-      if (err?.name !== 'AbortError') onError?.(err?.message || '网络异常')
-      onDone?.()
-    })
-  return () => ctrl.abort()
 }
 
 // 按用户获取帖子列表 包含用户信息
@@ -173,11 +96,6 @@ export function getCreatorInsightData(period = 'WEEK') {
     method: 'get',
     params: { period },
   })
-}
-
-// AI 内容安全检测
-export function validateText(content) {
-  return request({ url: '/article/validateText', method: 'post', data: { content } })
 }
 
 export function reportArticleContent(data) {

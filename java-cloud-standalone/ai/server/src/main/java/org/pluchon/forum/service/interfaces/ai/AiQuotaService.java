@@ -7,8 +7,6 @@ import java.math.BigDecimal;
 // AI 周期额度预占与结算
 public interface AiQuotaService {
 
-    boolean hasAdvancedQwenAccess(AiUserContext user);
-
     void consumeQwenFlash(AiUserContext user);
 
     void consumeAdvancedLlm(AiUserContext user);

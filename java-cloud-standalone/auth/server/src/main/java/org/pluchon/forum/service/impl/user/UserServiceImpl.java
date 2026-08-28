@@ -14,7 +14,6 @@ import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.utils.UUIDUtils;
 import org.pluchon.forum.auth.client.FavoriteFolderInternalFeignClient;
 import org.pluchon.forum.auth.client.PointsInternalFeignClient;
-import org.pluchon.forum.cloud.MascotPreferenceInternalFeignClient;
 import org.pluchon.forum.entity.dto.RagUserIndexDTO;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
@@ -50,9 +49,6 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
-
-    @Autowired
-    private MascotPreferenceInternalFeignClient mascotPreferenceInternalFeignClient;
 
     // 注册后通过 content 内部契约建立默认收藏夹
     @Autowired
@@ -522,44 +518,6 @@ public class UserServiceImpl implements UserService {
         payload.setUserId(user.getId());
         payload.setNickname(user.getNickname());
         aiHubService.indexUserRag(payload);
-    }
-
-    @Override
-    public void setMascotModel(Long userId, Long mascotModelId) {
-        // 偏好权威在 forum ai；auth 仅转发并失效本地用户缓存由 ai 侧完成
-        mascotPreferenceInternalFeignClient.setMascotModel(userId, mascotModelId);
-    }
-
-    
-    // 修改密码
-    
-    @Override
-    public void updatePawssword(Long userId, String oldPassword, String newPassword) {
-        if (!StringUtils.hasLength(oldPassword) || !StringUtils.hasLength(newPassword)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        if (!RegexUtil.checkPassword(newPassword)) {
-            log.warn("用户 {} 修改密码时新密码强度不达标", userId);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        // 缓存不存 salt，必须直接查 DB 拿完整记录
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getId, userId).ne(User::getDeleteState, 1));
-        if (user == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        if (!PasswordUtils.matches(oldPassword, user.getPassword(), user.getSalt())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        String newSecret = PasswordUtils.encode(newPassword);
-        int updated = userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, userId).set(User::getSalt, "").set(User::getPassword, newSecret));
-        if (updated <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED));
-        }
-        jwtTokenVersionService.bump(userId);
-        // 盐值变更必须清缓存，下次读取时重建
-        stringRedisTemplate.delete(Constant.REDIS_KEY_USER_INFO + userId);
     }
 
     @Override

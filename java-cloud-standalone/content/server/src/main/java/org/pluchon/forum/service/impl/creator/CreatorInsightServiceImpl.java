@@ -214,7 +214,6 @@ public class CreatorInsightServiceImpl implements CreatorInsightService {
         result.setHighlight(ai.getHighlight().trim());
         result.setHighlights(ai.getHighlights() == null ? List.of(ai.getHighlight().trim())
                 : ai.getHighlights().stream().filter(StringUtils::hasText).map(String::trim).limit(3).toList());
-        result.setGeneratedAt(ZonedDateTime.now(ZONE_TAIPEI).toString());
         result.setCached(false);
         return result;
     }

@@ -48,7 +48,6 @@ public class CategoryServiceImpl implements CategoryService {
     @Autowired
     private ArticleMediaService articleMediaService;
 
-    @Override
     public List<Category> queryAllCategories() {
         return categoryMapper.selectList(new LambdaQueryWrapper<Category>().eq(Category::getState, 0)
                 .eq(Category::getDeleteState, 0).orderByAsc(Category::getSort));

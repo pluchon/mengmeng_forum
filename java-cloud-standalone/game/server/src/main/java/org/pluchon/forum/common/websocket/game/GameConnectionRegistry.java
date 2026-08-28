@@ -84,10 +84,6 @@ public class GameConnectionRegistry {
         cleanupSession(session);
     }
 
-    public boolean sendToLobby(Long userId, String payload) {
-        return send(lobbySessions.get(userId), payload);
-    }
-
     public boolean sendToGame(String gameCode, Long userId, String payload) {
         Map<Long, WebSocketSession> sessions = gameSessions.get(gameCode);
         return sessions != null && send(sessions.get(userId), payload);

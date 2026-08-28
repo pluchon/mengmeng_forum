@@ -10,9 +10,7 @@ public final class AuthApiPaths {
             "/article/selectArticleDetailByArticleId",
             "/article/summary",
             "/article/getArticleListByUserIdWithPageAndUserInfo",
-            "/article/getHotArticleList",
             "/article/getHotArticleListWithPage",
-            "/articleQuestion/acceptedAnswer",
             "/articleReply/getArticleReplyByArticleIdWithPage",
             "/articleSubReply/getSubReplyByReplyId",
             "/category/getCategoryWithBoards",
@@ -20,8 +18,6 @@ public final class AuthApiPaths {
             "/article/tag/list",
             "/article/tag/suggest",
             "/board/topBoardList",
-            "/board/selectBoardByBoardId",
-            "/board/selectBoardBy",
             "/board/selectBoardListByBoardIdWithPage",
             "/shop/list",
             "/shop/detail",
@@ -33,8 +29,7 @@ public final class AuthApiPaths {
             "/search/article",
             "/search/user",
             "/articleDanmaku/listByTimeWindow",
-            "/notice/center/list",
-            "/mascot/public/models"
+            "/notice/center/list"
     );
 
     private static final Set<String> OPTIONAL_POST_PATHS = Set.of(

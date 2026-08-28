@@ -29,7 +29,6 @@ public class GameConstants {
     public static final String END_SURRENDER = "SURRENDER";
     public static final String END_DISCONNECT = "DISCONNECT";
     public static final String END_TIMEOUT = "TIMEOUT";
-    public static final String END_ABNORMAL = "ABNORMAL";
 
     
     public static final String SETTLEMENT_EVENT_GAME_FINISHED = "GAME_FINISHED";
@@ -47,7 +46,6 @@ public class GameConstants {
 
     
     public static final int INITIAL_SCORE = 1000;
-    public static final int SCORE_DELTA = 10;
     public static final int BOARD_SIZE = 15;
     public static final long GAME_TIME_MS = 10 * 60 * 1000L;
     public static final long MOVE_TIME_MS = 60 * 1000L;
@@ -56,16 +54,11 @@ public class GameConstants {
 
     
     public static final int JINZI_BOARD_SIZE = 3;
-    public static final int JINZI_SCORE_DELTA = 3;
     public static final long JINZI_GAME_TIME_MS = 2 * 60 * 1000L;
     public static final long JINZI_MOVE_TIME_MS = 20 * 1000L;
     public static final long JINZI_RECONNECT_WINDOW_MS = 30 * 1000L;
     public static final long GOBANG_RECONNECT_WINDOW_MS = 60 * 1000L;
     public static final long TETRIS_RECONNECT_WINDOW_MS = 60 * 1000L;
-
-    
-    public static final int TETRIS_PK_SCORE_DELTA = 3;
-
     private GameConstants() {
     }
 }

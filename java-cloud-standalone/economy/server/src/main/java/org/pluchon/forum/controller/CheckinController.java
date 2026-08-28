@@ -6,13 +6,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
-import org.pluchon.forum.entity.db.CheckinLog;
 import org.pluchon.forum.entity.vo.checkin.CheckinMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinResultResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinRuleMonthResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinStatusResponse;
 import org.pluchon.forum.entity.vo.checkin.CheckinLogVO;
-import org.pluchon.forum.entity.vo.common.CursorPageResult;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.service.interfaces.checkin.CheckinService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,15 +71,5 @@ public class CheckinController {
     @GetMapping("/rule")
     public Result<CheckinRuleMonthResponse> getRule(@RequestParam(required = false) Integer month) {
         return Result.success(checkinService.getRule(month));
-    }
-
-    /** 签到流水游标分页 */
-    @GetMapping("/log/cursor")
-    public Result<CursorPageResult<CheckinLog>> getLogWithCursor(
-            @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "10") Integer pageSize,
-            HttpServletRequest httpServletRequest) {
-        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        return Result.success(checkinService.getLogWithCursor(sessionUser.getId(), cursor, pageSize));
     }
 }

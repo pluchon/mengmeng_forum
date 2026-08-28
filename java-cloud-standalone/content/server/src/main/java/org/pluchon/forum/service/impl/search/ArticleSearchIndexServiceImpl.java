@@ -55,7 +55,6 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
         indexPublishedArticle(article, tagNames);
     }
 
-    @Override
     public void indexPublishedArticle(Article article, List<String> tagNames) {
         if (article == null || article.getId() == null) {
             return;

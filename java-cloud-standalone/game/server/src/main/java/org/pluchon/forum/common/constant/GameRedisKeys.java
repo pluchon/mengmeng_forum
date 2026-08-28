@@ -48,10 +48,6 @@ public class GameRedisKeys {
         return PREFIX + gameCode + ":match:*";
     }
 
-    public static String roomState(String gameCode, String roomId) {
-        return PREFIX + gameCode + ":room:" + roomId + ":state";
-    }
-
     public static String tetrisSettleRate(Long userId) {
         return PREFIX + "tetris:settle:rate:" + userId;
     }

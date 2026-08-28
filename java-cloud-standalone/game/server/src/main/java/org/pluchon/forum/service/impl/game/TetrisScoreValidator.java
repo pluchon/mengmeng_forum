@@ -89,19 +89,6 @@ public class TetrisScoreValidator {
         }
     }
 
-    public int resolveForumPoints(int score) {
-        if (score >= TetrisConstants.TIER_HIGH_SCORE) {
-            return 3;
-        }
-        if (score >= TetrisConstants.TIER_GOOD_SCORE) {
-            return 2;
-        }
-        if (score >= TetrisConstants.TIER_QUALIFIED_SCORE) {
-            return 1;
-        }
-        return 0;
-    }
-
     private ApplicationException invalid() {
         return new ApplicationException(Result.fail(ResultCode.FAILED_TETRIS_SETTLE_INVALID));
     }

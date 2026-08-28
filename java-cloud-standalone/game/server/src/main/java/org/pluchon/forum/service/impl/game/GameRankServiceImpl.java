@@ -61,7 +61,7 @@ public class GameRankServiceImpl implements GameRankService {
         validateCommand(command);
         if (!claimSettlementOnce(command)) {
             // 同房间已结算过：返回空变化，避免重复加减分
-            return new GameRankSettlementResult(false, false, null, null);
+            return new GameRankSettlementResult(null, null);
         }
         if (isAiMatch(command)) {
             return settleGobangAiRank(command);
@@ -77,7 +77,7 @@ public class GameRankServiceImpl implements GameRankService {
         if (command.getWinnerUserId() == null || command.getLoserUserId() == null) {
             GameRankPlayerChange changeA = updateDrawProfile(playerA, command.getGameCode());
             GameRankPlayerChange changeB = updateDrawProfile(playerB, command.getGameCode());
-            return new GameRankSettlementResult(true, true, changeA, changeB);
+            return new GameRankSettlementResult(changeA, changeB);
         }
         GameUserProfile winner = command.getWinnerUserId().equals(playerA.getUserId()) ? playerA : playerB;
         GameUserProfile loser = command.getLoserUserId().equals(playerA.getUserId()) ? playerA : playerB;
@@ -86,7 +86,7 @@ public class GameRankServiceImpl implements GameRankService {
         int loserDelta = effective ? computeLoserDelta(command, loser, winner) : 0;
         GameRankPlayerChange winnerChange = updateWinProfile(winner, command.getGameCode(), winnerDelta);
         GameRankPlayerChange loserChange = updateLoseProfile(loser, command.getGameCode(), loserDelta);
-        return new GameRankSettlementResult(effective, false, winnerChange, loserChange);
+        return new GameRankSettlementResult(winnerChange, loserChange);
     }
 
     private void validateCommand(GameRankSettlementCommand command) {
@@ -118,7 +118,7 @@ public class GameRankServiceImpl implements GameRankService {
         if (!GameConstants.GOBANG.equals(command.getGameCode())) {
             resetProfileStatus(command.getPlayerAUserId(), command.getGameCode());
             resetProfileStatus(command.getPlayerBUserId(), command.getGameCode());
-            return new GameRankSettlementResult(false, false, null, null);
+            return new GameRankSettlementResult(null, null);
         }
         Long humanUserId = GameConstants.AI_USER_ID.equals(command.getPlayerAUserId())
                 ? command.getPlayerBUserId()
@@ -126,7 +126,7 @@ public class GameRankServiceImpl implements GameRankService {
         GameUserProfile human = gameUserProfileService.getOrCreateProfile(humanUserId, GameConstants.GOBANG);
         if (command.getWinnerUserId() == null || command.getLoserUserId() == null) {
             GameRankPlayerChange change = updateDrawProfile(human, GameConstants.GOBANG);
-            return new GameRankSettlementResult(true, true, change, null);
+            return new GameRankSettlementResult(change, null);
         }
         boolean humanWon = humanUserId.equals(command.getWinnerUserId());
         boolean effective = Boolean.TRUE.equals(command.getEffectiveForRank());
@@ -134,7 +134,7 @@ public class GameRankServiceImpl implements GameRankService {
             // 人机胜：固定 +12，不计连胜加成、不按 baseWin×0.8
             int delta = effective ? 12 : 0;
             GameRankPlayerChange change = updateWinProfile(human, GameConstants.GOBANG, delta);
-            return new GameRankSettlementResult(effective, false, change, null);
+            return new GameRankSettlementResult(change, null);
         }
         // 人机负：正常失败 0；逃跑/断线/超时 -10
         int delta = 0;
@@ -142,7 +142,7 @@ public class GameRankServiceImpl implements GameRankService {
             delta = -10;
         }
         GameRankPlayerChange change = updateLoseProfile(human, GameConstants.GOBANG, delta);
-        return new GameRankSettlementResult(effective, false, null, change);
+        return new GameRankSettlementResult(null, change);
     }
 
     private int computeWinnerDelta(GameRankSettlementCommand command, GameUserProfile winner, GameUserProfile loser) {
@@ -236,7 +236,7 @@ public class GameRankServiceImpl implements GameRankService {
         update.setCurrentStatus(GameConstants.PROFILE_IDLE);
         update.setCurrentRoomId(null);
         updateProfile(profile.getId(), gameCode, profile.getUserId(), update);
-        return buildChange(profile.getUserId(), gameCode, before, after, Math.max(0, delta));
+        return buildChange(profile.getUserId(), Math.max(0, delta));
     }
 
     private GameRankPlayerChange updateLoseProfile(GameUserProfile profile, String gameCode, int delta) {
@@ -249,7 +249,7 @@ public class GameRankServiceImpl implements GameRankService {
         update.setCurrentStatus(GameConstants.PROFILE_IDLE);
         update.setCurrentRoomId(null);
         updateProfile(profile.getId(), gameCode, profile.getUserId(), update);
-        return buildChange(profile.getUserId(), gameCode, before, after, Math.min(0, delta));
+        return buildChange(profile.getUserId(), Math.min(0, delta));
     }
 
     private GameRankPlayerChange updateDrawProfile(GameUserProfile profile, String gameCode) {
@@ -261,7 +261,7 @@ public class GameRankServiceImpl implements GameRankService {
         update.setCurrentStatus(GameConstants.PROFILE_IDLE);
         update.setCurrentRoomId(null);
         updateProfile(profile.getId(), gameCode, profile.getUserId(), update);
-        return buildChange(profile.getUserId(), gameCode, score, score, 0);
+        return buildChange(profile.getUserId(), 0);
     }
 
     private void resetProfileStatus(Long userId, String gameCode) {
@@ -287,15 +287,8 @@ public class GameRankServiceImpl implements GameRankService {
         gameUserProfileMapper.update(update, wrapper);
     }
 
-    private GameRankPlayerChange buildChange(Long userId, String gameCode, int before, int after, int delta) {
-        return new GameRankPlayerChange(
-                userId,
-                before,
-                after,
-                delta,
-                GameRankRules.buildRankInfo(gameCode, before),
-                GameRankRules.buildRankInfo(gameCode, after)
-        );
+    private GameRankPlayerChange buildChange(Long userId, int delta) {
+        return new GameRankPlayerChange(userId, delta);
     }
 
     private int consecutiveWins(String gameCode, Long userId) {

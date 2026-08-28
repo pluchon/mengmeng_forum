@@ -85,8 +85,4 @@ public final class GameAiPlanner {
         }
         return count;
     }
-
-    public static boolean isAiTurn(Long currentTurnUserId) {
-        return GameConstants.AI_USER_ID.equals(currentTurnUserId);
-    }
 }

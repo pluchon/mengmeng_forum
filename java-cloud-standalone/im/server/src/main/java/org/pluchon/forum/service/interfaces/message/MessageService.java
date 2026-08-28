@@ -7,7 +7,6 @@ import org.pluchon.forum.entity.dto.message.SendAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendMessageRequest;
 import org.pluchon.forum.entity.vo.message.MessageDetailResponse;
-import org.pluchon.forum.entity.vo.message.MessageListResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionResponse;
 import org.pluchon.forum.entity.vo.message.MessageSessionSearchResponse;
 import org.pluchon.forum.entity.vo.message.MessageVO;
@@ -32,9 +31,6 @@ public interface MessageService {
     PageResult<UserChatEmojiResponse> queryEmojiList(Long userId, String source, Integer pageNum, Integer pageSize);
 
     Long selectMessageUnRead(Long userId);
-
-    // 我收到的所有站内信 分页
-    PageResult<MessageListResponse> selectMessageListByUserIdWithPage(Long userId, Integer pageNum, Integer pageSize);
 
     void updateMessageStatusByMessageId(Long messageId, Byte status, Long loginUserId);
 

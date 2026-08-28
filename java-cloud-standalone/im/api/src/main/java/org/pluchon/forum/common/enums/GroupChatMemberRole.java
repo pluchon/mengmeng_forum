@@ -14,16 +14,4 @@ public enum GroupChatMemberRole {
     GroupChatMemberRole(Byte code) {
         this.code = code;
     }
-
-    public static GroupChatMemberRole fromCode(Byte code) {
-        if (code == null) {
-            return null;
-        }
-        for (GroupChatMemberRole value : values()) {
-            if (value.code.equals(code)) {
-                return value;
-            }
-        }
-        return null;
-    }
 }

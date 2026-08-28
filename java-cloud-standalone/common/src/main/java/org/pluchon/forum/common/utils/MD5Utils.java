@@ -6,7 +6,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 public class MD5Utils {
 
     // 普通信息加密
-    public static String md5Common(String encodeStr){
+    private static String md5Common(String encodeStr){
         return DigestUtils.md5Hex(encodeStr);
     }
 

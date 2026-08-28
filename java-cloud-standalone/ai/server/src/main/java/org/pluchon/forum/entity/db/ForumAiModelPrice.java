@@ -27,9 +27,6 @@ public class ForumAiModelPrice {
     @TableField("price_yuan")
     private BigDecimal priceYuan;
 
-    @TableField("vip_only")
-    private Byte vipOnly;
-
     private Byte enabled;
 
     private String remark;

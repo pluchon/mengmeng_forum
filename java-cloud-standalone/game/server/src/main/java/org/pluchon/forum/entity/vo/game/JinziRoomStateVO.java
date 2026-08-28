@@ -75,9 +75,6 @@ public class JinziRoomStateVO {
     // 当前步剩余毫秒
     private Long moveRemainingMs;
 
-    // 服务器当前时间戳
-    private Long serverNowMs;
-
     // 三连坐标，非三连结束为空
     private List<JinziBoardPointVO> winningLine;
 

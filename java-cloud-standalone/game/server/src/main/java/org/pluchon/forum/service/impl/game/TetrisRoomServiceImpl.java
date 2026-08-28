@@ -58,8 +58,6 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     private static final long RECONNECT_WINDOW_MS = GameConstants.TETRIS_RECONNECT_WINDOW_MS;
 
-    private static final int PK_SCORE_DELTA = 3;
-
     private final ConcurrentHashMap<String, TetrisRoom> rooms = new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
@@ -240,8 +238,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 messageType,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl(),
-                System.currentTimeMillis()
+                request == null ? null : request.getEmojiUrl()
         );
         synchronized (room) {
             room.getChatHistory().add(vo);
@@ -589,7 +586,6 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 spectators,
                 spectators.size(),
                 gameConnectionRegistry.countRoomOnline(room.getRoomId()),
-                System.currentTimeMillis(),
                 new ArrayList<>(room.getChatHistory())
         );
     }

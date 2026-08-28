@@ -24,7 +24,4 @@ public class TetrisChatVO {
 
     // 表情包 URL
     private String emojiUrl;
-
-    // 发送时间戳
-    private Long sentAtMs;
 }

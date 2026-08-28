@@ -22,8 +22,6 @@ public class MusicParseResultVO {
 
     private Boolean hasCover;
 
-    private Boolean hasLyrics;
-
     // 内嵌封面 MIME，如 image/jpeg
     private String coverMimeType;
 

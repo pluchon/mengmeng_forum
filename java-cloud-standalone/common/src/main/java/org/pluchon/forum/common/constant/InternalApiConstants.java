@@ -6,7 +6,7 @@ public final class InternalApiConstants {
     // 与 Java→Python 共用头名，但密钥使用 FORUM_SERVICE_INTERNAL_KEY
     public static final String INTERNAL_KEY_HEADER = "X-Internal-Key";
 
-    public static final String INTERNAL_PATH_MARKER = "/internal/";
+    private static final String INTERNAL_PATH_MARKER = "/internal/";
 
     private InternalApiConstants() {
     }

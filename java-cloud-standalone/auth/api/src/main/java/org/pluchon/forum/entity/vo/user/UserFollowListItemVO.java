@@ -15,6 +15,4 @@ public class UserFollowListItemVO {
     private Date followTime;
     // 当前登录用户是否关注了列表中的该用户
     private Boolean isFollowing;
-    // 列表中的该用户是否关注了主页用户 粉丝列表恒为 true
-    private Boolean followsProfileUser;
 }

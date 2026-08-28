@@ -89,18 +89,6 @@ public class SMSCodeServiceImpl implements SMSCodeService {
     }
 
     @Override
-    public String getForReset(String phoneNumber) {
-        return getInternal(phoneNumber);
-    }
-
-    private String getInternal(String phoneNumber) {
-        if (!RegexUtil.checkMobile(phoneNumber)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
-        }
-        return stringRedisTemplate.opsForValue().get(Constant.REDIS_KEY_SMS_VERIFY_RESET + phoneNumber);
-    }
-
-    @Override
     public User loginBySms(String phoneNumber, String code) {
         if (!consumeVerificationCode(phoneNumber, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));

@@ -33,10 +33,6 @@ public interface UserService {
 
     void applyReviewedProfileChange(Long userId, String fieldType, String content);
 
-    void setMascotModel(Long userId, Long mascotModelId);
-
-    void updatePawssword(Long userId, String oldPassword, String newPassword);
-
     void updateAvatarUrl(Long userId, String url);
 
     void updateBackgroundUrl(Long userId, String url);
