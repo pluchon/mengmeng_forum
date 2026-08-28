@@ -5,7 +5,7 @@ import { useUserStore } from '@/stores/user'
 const STREAM_IDLE_MS = 145_000
 
 // 看板娘对话 经 Java BFF > Python
-// 当前所选模型配额使用率 会员 ≥95% 可启用萌币扣费
+// 通用额度使用率 会员用满 100% 后可启用萌币扣费
 export function getMascotQuotaHint(llmProvider) {
   return request({
     url: '/mascot/quota-hint',

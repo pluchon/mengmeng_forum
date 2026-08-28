@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.util.Date;
-import java.util.List;
 import java.math.BigDecimal;
 
 @Data
@@ -15,18 +14,12 @@ public class VipQuotaPanelVO {
     private String tierLabel;
     private Date periodStart;
     private Date periodEnd;
-    private Long totalTokensUsed;
     private Integer totalCalls;
-    private List<VipQuotaGroupVO> groups;
-    private String emptyHint;
     private Long qwenBudgetMicros;
     private Long qwenUsedMicros;
     private Long qwenRemainingMicros;
     private BigDecimal wanImageLimit;
     private BigDecimal wanImageUsed;
     private BigDecimal wanImageRemaining;
-    private Long qwenBonusMicros;
-    private BigDecimal wanBonusCredits;
     private Date bonusExpireAt;
-    private Integer activeBonusGrantCount;
 }

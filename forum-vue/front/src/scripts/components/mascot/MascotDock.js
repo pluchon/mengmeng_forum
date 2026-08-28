@@ -244,7 +244,7 @@ export function useMascotDock() {
         exhausted: qwenLimit > 0 && qwenRemaining <= 0,
       },
       {
-        key: 'wan', label: 'Wan 2.7', tone: 'wan',
+        key: 'wan', label: '生图', tone: 'wan',
         text: `${remainingPercent(wanRemaining, wanLimit)}%`,
         remainingPercent: remainingPercent(wanRemaining, wanLimit),
         exhausted: wanLimit > 0 && wanRemaining <= 0,

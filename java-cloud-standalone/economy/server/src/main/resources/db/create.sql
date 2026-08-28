@@ -197,25 +197,6 @@ CREATE TABLE `exam_question_user_progress` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `forum_vip_quota_config` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `vip_tier` tinyint NOT NULL COMMENT '1=PRO 2=MAX',
-  `quota_key` varchar(64) NOT NULL COMMENT '配置键',
-  `group_label` varchar(64) NOT NULL COMMENT '分组标题',
-  `display_name` varchar(100) NOT NULL COMMENT '展示名称',
-  `quota_type` varchar(32) NOT NULL COMMENT 'unlimited|daily_count|token_period',
-  `daily_bucket` varchar(32) DEFAULT NULL COMMENT '日配额桶',
-  `model_code` varchar(64) DEFAULT NULL COMMENT 'token_period 时按模型汇总 forum_ai_usage_log',
-  `icon_provider` varchar(32) DEFAULT NULL COMMENT 'deepseek|qwen|gemini|claude',
-  `daily_limit` int DEFAULT NULL COMMENT '日次数上限',
-  `token_limit` bigint DEFAULT NULL COMMENT '周期 Token 上限',
-  `tier_tag` varchar(16) DEFAULT NULL COMMENT 'PRO|MAX|免费 角标',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `enabled` tinyint NOT NULL DEFAULT '1' COMMENT '1启用',
-  PRIMARY KEY (`id`),
-  KEY `idx_vip_quota_tier_sort` (`vip_tier`,`sort_order`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='VIP配额展示配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `lottery_activity` (
@@ -783,13 +764,6 @@ INSERT INTO `lottery_pool_task` (`activity_id`, `task_code`, `title`, `target_co
 (1, 'COMMENT_1', '评论 1 次', 1, 1, 10, 1),
 (1, 'LIKE_3', '点赞 3 次', 3, 1, 20, 1),
 (1, 'CHECKIN_TODAY', '今日签到', 1, 2, 30, 1);
-
-INSERT INTO `forum_vip_quota_config`
-(`vip_tier`, `quota_key`, `group_label`, `display_name`, `quota_type`, `daily_bucket`, `model_code`, `icon_provider`, `daily_limit`, `token_limit`, `tier_tag`, `sort_order`) VALUES
-(1, 'image_normal', 'AI 生图 · 每日', 'Wan 生图（普通）', 'daily_count', 'image_normal', 'wan2.7-image', 'qwen', 15, NULL, 'PRO', 30),
-(1, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 500000, 'PRO', 50),
-(2, 'image_normal', 'AI 生图 · 每日', 'Wan 生图（普通）', 'daily_count', 'image_normal', 'wan2.7-image', 'qwen', 50, NULL, 'MAX', 30),
-(2, 'token_qwen_deep', '本期 Token 配额 · 文本', '通义千问 · 深度', 'token_period', NULL, 'qwen3.7-max', 'qwen', NULL, 2000000, 'MAX', 50);
 
 INSERT INTO `starlight_shop_item`
 (`name`, `category`, `tag`, `price_starlight`, `reward_type`, `reward_value`, `stock_remaining`, `daily_limit`, `sort_order`, `enabled`, `delete_state`) VALUES

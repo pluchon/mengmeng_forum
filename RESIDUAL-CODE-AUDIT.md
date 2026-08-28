@@ -84,6 +84,12 @@ public interface ArticleInternalApi {
 
 **二、`GobangRoomParticipantVO.joinedAtMs` 不是死字段，判定有误。** 2.7 把它列进「三游戏复制粘贴死字段」，但 `GobangRoomServiceImpl.buildSpectators` 用它排序观战席（`spectators.sort(Comparator.comparing(GobangRoomParticipantVO::getJoinedAtMs))`），删掉会直接编译失败。已跳过保留。同批的 `sentAtMs` / `serverNowMs` / `baseScore` / `winLine` / `occurredAt` 等确认前后端零读取，已删。
 
+**三、1.1「看板娘积分付费入口彻底失效」定性有误。** 本文档把 `canUsePointsPay` 当成「切换萌萌币付费」的开关，认定它恒为 false 导致入口失效。实际全前端搜索 `canUsePointsPay`，只在三处默认值字面量里出现，**没有任何读取点**。真正控制萌萌币按钮的是 `showPointsPayButton`，由 `/vip/quota` 返回的配额耗尽状态驱动，**该入口一直是可用的**，不存在功能失效。
+
+P2 的后端改动仍然有效但性质不同：它摘掉了 `MascotServiceImpl` 对已死日计数列的本地读取，改为转发 economy 的 `/vip/internal/{userId}/quota-hint`，统一了提示文案与阈值口径（95% → 100%、「Qwen 深度写作」→「通用配额」）。这是口径纠正，不是故障修复。
+
+顺带发现一处待确认的语义不一致：`quotaHint.percent` 表示**已用**百分比，而前端进度条按**剩余**百分比渲染。本次未改，登记待产品确认。
+
 ### 一处表述修正：`ai_usage_daily` 不能整表下线
 
 我此前建议「连整表一起下线」，数据显示这个建议**不成立**。该表的六列要分开看：

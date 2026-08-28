@@ -12,9 +12,8 @@ import java.time.LocalDate;
 @Mapper
 public interface AiUsageDailyMapper extends BaseMapper<AiUsageDaily> {
 
-    @Insert("INSERT INTO ai_usage_daily (user_id, usage_date, qwen_flash_used, advanced_llm_used, "
-            + "image_normal_used, companion_normal_used, "
-            + "cover_hint_used, delete_state) VALUES (#{userId}, #{usageDate}, 0, 0, 0, 0, 0, 0) "
+    @Insert("INSERT INTO ai_usage_daily (user_id, usage_date, cover_hint_used, delete_state) "
+            + "VALUES (#{userId}, #{usageDate}, 0, 0) "
             + "ON DUPLICATE KEY UPDATE user_id = user_id")
     void ensureUsageRow(@Param("userId") Long userId, @Param("usageDate") LocalDate usageDate);
 

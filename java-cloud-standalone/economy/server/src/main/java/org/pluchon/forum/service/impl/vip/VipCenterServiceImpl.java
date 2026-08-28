@@ -13,18 +13,14 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.VipPurchaseRecordConverter;
-import org.pluchon.forum.entity.db.ForumVipQuotaConfig;
 import org.pluchon.forum.entity.db.UserVipSubscription;
 import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanFeatureVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanVO;
 import org.pluchon.forum.entity.vo.vip.VipPurchaseRecordVO;
-import org.pluchon.forum.entity.vo.vip.VipQuotaGroupVO;
-import org.pluchon.forum.entity.vo.vip.VipQuotaItemVO;
 import org.pluchon.forum.entity.vo.vip.VipQuotaPanelVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
-import org.pluchon.forum.mapper.ForumVipQuotaConfigMapper;
 import org.pluchon.forum.mapper.VipPurchaseRecordMapper;
 import org.pluchon.forum.entity.db.VipPurchaseRecord;
 import org.pluchon.forum.service.interfaces.points.PointsService;
@@ -33,13 +29,9 @@ import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
 import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +42,6 @@ import java.math.BigDecimal;
 public class VipCenterServiceImpl implements VipCenterService {
 
     private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Resource
     private EconomyUserInternalFeignClient userInternalFeignClient;
@@ -60,9 +51,6 @@ public class VipCenterServiceImpl implements VipCenterService {
 
     @Resource
     private PointsService pointsService;
-
-    @Resource
-    private ForumVipQuotaConfigMapper forumVipQuotaConfigMapper;
 
     @Resource
     private AiUsageInternalFeignClient aiUsageInternalFeignClient;
@@ -295,13 +283,8 @@ public class VipCenterServiceImpl implements VipCenterService {
         panel.setPeriodEnd(window.end);
 
         AiUsageDailyBucketsVO usage = loadUsageSnapshot(userId, window.start, window.end);
-        Map<String, Long> tokenByModel = usage.getTokenByModel() == null
-                ? Collections.emptyMap()
-                : usage.getTokenByModel();
         int totalCalls = usage.getTotalCalls() == null ? 0 : usage.getTotalCalls();
-        long totalTokens = tokenByModel.values().stream().mapToLong(Long::longValue).sum();
         panel.setTotalCalls(totalCalls);
-        panel.setTotalTokensUsed(totalTokens);
         Byte baseTier = window.baseTier;
         long baseQwenBudgetMicros = Constant.VIP_TIER_MAX.equals(baseTier) ? 20_900_000L
                 : (Constant.VIP_TIER_PRO.equals(baseTier) ? 10_900_000L : 6_000_000L);
@@ -338,107 +321,8 @@ public class VipCenterServiceImpl implements VipCenterService {
         panel.setWanImageUsed(baseWanUsed.add(wanBonusUsedCredits));
         panel.setWanImageRemaining(
                 BigDecimal.valueOf(baseWanLimit).subtract(baseWanUsed).max(BigDecimal.ZERO).add(wanBonusCredits));
-        panel.setQwenBonusMicros(qwenBonusMicros);
-        panel.setWanBonusCredits(wanBonusCredits);
-        panel.setActiveBonusGrantCount(bonusGrants.size());
         panel.setBonusExpireAt(bonusGrants.isEmpty() ? null : bonusGrants.get(0).getExpireTime());
-
-        List<ForumVipQuotaConfig> configs = forumVipQuotaConfigMapper.selectList(
-                Wrappers.lambdaQuery(ForumVipQuotaConfig.class)
-                        .eq(ForumVipQuotaConfig::getVipTier, tier)
-                        .eq(ForumVipQuotaConfig::getEnabled, 1)
-                        .orderByAsc(ForumVipQuotaConfig::getSortOrder));
-
-        Map<String, VipQuotaGroupVO> groupMap = new LinkedHashMap<>();
-        for (ForumVipQuotaConfig cfg : configs) {
-            if (isHiddenQuota(cfg)) {
-                continue;
-            }
-            VipQuotaItemVO item = toItem(cfg, usage, tokenByModel, window);
-            groupMap.computeIfAbsent(cfg.getGroupLabel(), k -> {
-                VipQuotaGroupVO g = new VipQuotaGroupVO();
-                g.setLabel(k);
-                g.setItems(new ArrayList<>());
-                return g;
-            }).getItems().add(item);
-        }
-        panel.setGroups(new ArrayList<>(groupMap.values()));
         return panel;
-    }
-
-    private boolean isHiddenQuota(ForumVipQuotaConfig cfg) {
-        if (cfg == null) {
-            return true;
-        }
-        return "advanced_llm".equals(cfg.getQuotaKey());
-    }
-
-    private VipQuotaItemVO toItem(ForumVipQuotaConfig cfg, AiUsageDailyBucketsVO daily,
-                                  Map<String, Long> tokenByModel, PeriodWindow window) {
-        VipQuotaItemVO item = new VipQuotaItemVO();
-        item.setQuotaKey(cfg.getQuotaKey());
-        item.setDisplayName(cfg.getDisplayName());
-        item.setModelCode(cfg.getModelCode());
-        item.setIconProvider(cfg.getIconProvider());
-        item.setQuotaType(cfg.getQuotaType());
-        item.setTierTag(cfg.getTierTag());
-
-        String type = cfg.getQuotaType();
-        if ("unlimited".equals(type)) {
-            item.setScopeLabel("会员期内");
-            item.setUsed(0L);
-            item.setLimit(null);
-            item.setUnit("无限");
-            item.setPercent(0);
-            item.setResetHint("Qwen Flash 写作额度由服务端统一管理");
-            return item;
-        }
-        if ("daily_count".equals(type)) {
-            item.setScopeLabel("每日");
-            int used = readDailyBucket(daily, cfg.getDailyBucket());
-            int limit = cfg.getDailyLimit() != null ? cfg.getDailyLimit() : 0;
-            item.setUsed((long) used);
-            item.setLimit((long) limit);
-            item.setUnit("次");
-            item.setPercent(limit > 0 ? Math.min(100, (int) Math.round(used * 100.0 / limit)) : 0);
-            item.setResetHint("明日 00:00 重置（自然日）");
-            return item;
-        }
-        if ("token_period".equals(type)) {
-            item.setScopeLabel("本周期");
-            String model = cfg.getModelCode();
-            long used = tokenByModel.getOrDefault(model, 0L);
-            long limit = cfg.getTokenLimit() != null ? cfg.getTokenLimit() : 0L;
-            item.setUsed(used);
-            item.setLimit(limit);
-            item.setUnit("tokens");
-            item.setPercent(limit > 0 ? (int) Math.min(100, Math.round(used * 100.0 / limit)) : 0);
-            item.setResetHint(resetHintForPeriod(window.end) + "（订阅周期）");
-            return item;
-        }
-        item.setUsed(0L);
-        item.setLimit(0L);
-        item.setUnit("");
-        item.setPercent(0);
-        item.setResetHint("");
-        return item;
-    }
-
-    private int readDailyBucket(AiUsageDailyBucketsVO daily, String bucket) {
-        if (daily == null || bucket == null) {
-            return 0;
-        }
-        return switch (bucket) {
-            case "qwen_flash" -> nvl(daily.getQwenFlashUsed());
-            case "advanced_llm" -> nvl(daily.getAdvancedLlmUsed());
-            case "image_normal" -> nvl(daily.getImageNormalUsed());
-            case "companion_normal" -> nvl(daily.getCompanionNormalUsed());
-            default -> 0;
-        };
-    }
-
-    private int nvl(Integer v) {
-        return v == null ? 0 : v;
     }
 
     private long nvl(Long value) {
@@ -456,21 +340,6 @@ public class VipCenterServiceImpl implements VipCenterService {
                 end == null ? System.currentTimeMillis() : end.getTime()
         );
         return snapshot == null ? new AiUsageDailyBucketsVO() : snapshot;
-    }
-
-    private String resetHintForPeriod(Date periodEnd) {
-        if (periodEnd == null) {
-            return "周期内有效";
-        }
-        LocalDate end = periodEnd.toInstant().atZone(TAIPEI).toLocalDate();
-        long days = ChronoUnit.DAYS.between(LocalDate.now(TAIPEI), end);
-        if (days < 0) {
-            return "已到期";
-        }
-        if (days == 0) {
-            return "今日重置";
-        }
-        return "周期重置于 " + end.format(DATE_FMT);
     }
 
     private PeriodWindow resolvePeriod(UserVipSubscription subscription, Byte effectiveTier) {

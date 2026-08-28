@@ -41,16 +41,13 @@ import org.pluchon.forum.mapper.ForumCompanionMessageMapper;
 import org.pluchon.forum.mapper.ForumMascotRelatedRecommendationItemMapper;
 import org.pluchon.forum.mapper.ForumMascotRelatedRecommendationMapper;
 import org.pluchon.forum.mapper.UserMascotPreferenceMapper;
-import org.pluchon.forum.mapper.AiUsageDailyMapper;
 import org.pluchon.forum.api.content.ArticleInternalVO;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
-import org.pluchon.forum.api.economy.VipTierSnapshotVO;
+import org.pluchon.forum.api.economy.VipQuotaHintVO;
 import org.pluchon.forum.cloud.feign.ArticleInternalFeignClient;
 import org.pluchon.forum.cloud.feign.AiVipInternalFeignClient;
-import org.pluchon.forum.entity.db.AiUsageDaily;
 import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.springframework.dao.DuplicateKeyException;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.pluchon.forum.service.impl.ai.AiCallRecordService;
 import org.pluchon.forum.service.impl.ai.AiPointsBillingService;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
@@ -168,9 +165,6 @@ public class MascotServiceImpl implements MascotService {
     private UserMascotPreferenceMapper userMascotPreferenceMapper;
 
     @Resource
-    private AiUsageDailyMapper aiUsageDailyMapper;
-
-    @Resource
     private AiVipInternalFeignClient vipInternalFeignClient;
 
     @Override
@@ -212,28 +206,14 @@ public class MascotServiceImpl implements MascotService {
         if (userId == null || userId <= 0) {
             return vo;
         }
-        VipTierSnapshotVO tier = vipInternalFeignClient.tierSnapshot(userId);
-        if (tier == null || !tier.isVipActive()
-                || (!Constant.VIP_TIER_PRO.equals(tier.getVipTier())
-                && !Constant.VIP_TIER_MAX.equals(tier.getVipTier()))) {
+        // 配额口径以 economy 为准，ai 域不再本地计算
+        VipQuotaHintVO hint = vipInternalFeignClient.quotaHintForLlmRoute(userId, llmRoute);
+        if (hint == null) {
             return vo;
         }
-        // AI 域本地读日用量；限额与 economy 配额配置对齐的常用默认值
-        int limit = Constant.VIP_TIER_MAX.equals(tier.getVipTier()) ? 300 : 100;
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Taipei"));
-        List<AiUsageDaily> rows = aiUsageDailyMapper.selectPage(new Page<>(1, 1, false),
-                Wrappers.lambdaQuery(AiUsageDaily.class)
-                        .eq(AiUsageDaily::getUserId, userId)
-                        .eq(AiUsageDaily::getUsageDate, today)
-                        .eq(AiUsageDaily::getDeleteState, 0)).getRecords();
-        int used = 0;
-        if (!rows.isEmpty() && rows.get(0).getAdvancedLlmUsed() != null) {
-            used = rows.get(0).getAdvancedLlmUsed();
-        }
-        int percent = Math.min(100, (int) Math.round(used * 100.0 / limit));
-        vo.setPercent(percent);
-        vo.setQuotaLabel("Qwen 深度写作");
-        vo.setCanUsePointsPay(percent >= 95);
+        vo.setPercent(hint.getPercent() == null ? 0 : hint.getPercent());
+        vo.setCanUsePointsPay(Boolean.TRUE.equals(hint.getCanUsePointsPay()));
+        vo.setQuotaLabel(hint.getQuotaLabel() == null ? "" : hint.getQuotaLabel());
         return vo;
     }
 
