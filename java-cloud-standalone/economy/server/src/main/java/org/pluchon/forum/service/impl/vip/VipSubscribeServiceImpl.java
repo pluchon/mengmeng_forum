@@ -7,9 +7,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.UserVipSubscription;
-import org.pluchon.forum.entity.dto.vip.VipSubscribeDTO;
 import org.pluchon.forum.entity.vo.points.PointsWalletVO;
-import org.pluchon.forum.entity.vo.vip.VipSubscribeResultVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
 import org.pluchon.forum.entity.vo.vip.VipTrialGrantResultVO;
 import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
@@ -21,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
-import java.util.UUID;
 
 // VIP 订阅：扫码支付开通；积分扣款路径已关闭
 @Service
@@ -44,18 +41,6 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         if (!Boolean.TRUE.equals(exists)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public VipSubscribeResultVO subscribe(Long userId, VipSubscribeDTO dto) {
-        throw new ApplicationException(Result.fail(ResultCode.FAILED_VIP_SUBSCRIBE_UNAVAILABLE));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public VipTrialGrantResultVO grantTrialVipDays(Long userId, int days) {
-        return grantTrialVipDays(userId, days, "TRIAL_VIP", UUID.randomUUID().toString());
     }
 
     @Override

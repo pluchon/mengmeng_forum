@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface AiUsageInternalApi {
 
     @GetMapping("/ai/internal/{userId}/usage-snapshot")
-    AiUsageDailyBucketsVO usageSnapshot(@PathVariable("userId") Long userId,
+    AiUsageDailyBucketsVO usageSnapshot(@PathVariable Long userId,
                                         @RequestParam("periodStartMs") long periodStartMs,
                                         @RequestParam("periodEndMs") long periodEndMs
     );

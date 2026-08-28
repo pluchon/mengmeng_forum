@@ -133,13 +133,11 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
         } catch (DuplicateKeyException dup) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FAVORITE_ALREADY_EXISTS));
         }
-        if (reallyAdded) {
-            folderMapper.incrementItemCount(folderId);
-            articleMapper.update(null, new LambdaUpdateWrapper<Article>()
-                    .eq(Article::getId, articleId).setSql("favorite_count = favorite_count + 1"));
-            TransactionHooks.afterCommit(() ->
-                    articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE));
-        }
+        folderMapper.incrementItemCount(folderId);
+        articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+                .eq(Article::getId, articleId).setSql("favorite_count = favorite_count + 1"));
+        TransactionHooks.afterCommit(() ->
+                articleHotRankingService.incrementScore(articleId, Constant.HOT_SCORE_WEIGHT_FAVORITE));
         recommendationAiProfileService.requestProfileRefresh(loginUserId);
         return folderId;
     }

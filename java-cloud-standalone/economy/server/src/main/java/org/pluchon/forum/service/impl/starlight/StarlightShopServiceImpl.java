@@ -122,7 +122,7 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         }
         String requestId = dto.getRequestId() == null ? "" : dto.getRequestId().trim();
         if (requestId.isEmpty() || requestId.length() > 64) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "requestId 无效"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
         String idemKey = "starlight_exch:" + userId + ":" + requestId;
 

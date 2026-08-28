@@ -788,10 +788,10 @@ public class MascotServiceImpl implements MascotService {
             return;
         }
         if (begin.isDuplicateSuccess()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该对话请求已处理，请勿重复提交"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "这条消息已经发送过了，请不要重复提交"));
         }
         if (begin.isTerminalFailure()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED, "该对话请求已失败，请更换 clientRequestId"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "这条消息发送失败了，请重新发送"));
         }
     }
 
@@ -1340,7 +1340,8 @@ public class MascotServiceImpl implements MascotService {
                                 Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
             } catch (ApplicationException ex) {
                 try {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "balance"));
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                            ? ex.getMessage() : ResultCode.FAILED_POINTS_NOT_ENOUGH.getMessage()));
                     emitter.complete();
                 } catch (Exception e) {
                     emitter.completeWithError(ex);
@@ -1353,7 +1354,8 @@ public class MascotServiceImpl implements MascotService {
                 reservedBasic = true;
             } catch (ApplicationException ex) {
                 try {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                            ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
                     emitter.complete();
                 } catch (Exception ignored) {
                     emitter.completeWithError(ex);
@@ -1382,7 +1384,8 @@ public class MascotServiceImpl implements MascotService {
                                         Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
                     } catch (ApplicationException balanceEx) {
                         try {
-                            sendMascotSse(emitter, Map.of("error", balanceEx.getMessage() != null ? balanceEx.getMessage() : "balance"));
+                            sendMascotSse(emitter, Map.of("error", balanceEx.getMessage() != null
+                                    ? balanceEx.getMessage() : ResultCode.FAILED_POINTS_NOT_ENOUGH.getMessage()));
                             emitter.complete();
                         } catch (Exception e) {
                             emitter.completeWithError(balanceEx);
@@ -1394,7 +1397,8 @@ public class MascotServiceImpl implements MascotService {
                         releaseBasicSlot(user.getId());
                     }
                     try {
-                        sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "quota"));
+                        sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                                ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
                         emitter.complete();
                     } catch (Exception e) {
                         emitter.completeWithError(ex);
@@ -1442,7 +1446,8 @@ public class MascotServiceImpl implements MascotService {
             }
             releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
             try {
-                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "duplicate"));
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                        ? ex.getMessage() : "这条消息已经发送过了，请不要重复提交"));
                 emitter.complete();
             } catch (Exception e) {
                 emitter.completeWithError(ex);
@@ -1533,7 +1538,12 @@ public class MascotServiceImpl implements MascotService {
                     String eventType = String.valueOf(chunk.get("type"));
                     if ("progress".equals(eventType) && chunk.get("data") instanceof Map<?, ?> progressData) {
                         Map<String, Object> progressMeta = new HashMap<>();
-                        progressData.forEach((key, value) -> progressMeta.put(String.valueOf(key), value));
+                        progressData.forEach((key, value) -> {
+                            // 链路编号只用于服务端排障，不下发给用户
+                            if (!"traceId".equals(String.valueOf(key))) {
+                                progressMeta.put(String.valueOf(key), value);
+                            }
+                        });
                         sendMascotSse(emitter, Map.of("meta", progressMeta));
                         continue;
                     }
@@ -1696,7 +1706,8 @@ public class MascotServiceImpl implements MascotService {
                 releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
                 aiCallRecordService.markFailure(streamBegin, AiCallState.FAILED, ex.getMessage());
                 persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
-                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "charge failed"));
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                        ? ex.getMessage() : "扣费失败，请稍后再试"));
                 emitter.complete();
                 return;
             }
@@ -1714,7 +1725,8 @@ public class MascotServiceImpl implements MascotService {
                 try {
                     delegatedImage = delegateMascotImage(user, request, imagePrompt, pySessionKey, persistSessionId);
                 } catch (ApplicationException ex) {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null ? ex.getMessage() : "生图失败"));
+                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                            ? ex.getMessage() : "生成图片失败，请稍后再试"));
                     emitter.complete();
                     return;
                 }

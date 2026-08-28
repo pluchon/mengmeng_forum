@@ -2,6 +2,7 @@ package org.pluchon.forum.common.websocket.game.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.websocket.game.GameConnectionRegistry;
 import org.pluchon.forum.common.websocket.game.GameWsMessage;
@@ -35,7 +36,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
     private ObjectMapper objectMapper;
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) throws Exception {
         Long userId = resolveUserId(session);
         if (userId == null) {
             session.close(CloseStatus.POLICY_VIOLATION);
@@ -54,7 +55,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) throws Exception {
         Long userId = resolveUserId(session);
         if (userId == null) {
             return;
@@ -78,7 +79,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitLobby(userId, session);
@@ -87,7 +88,7 @@ public class GameCenterLobbyWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) {
+    public void handleTransportError(@NonNull WebSocketSession session, @NonNull Throwable exception) {
         Long userId = resolveUserId(session);
         if (userId != null) {
             gameConnectionRegistry.exitLobby(userId, session);

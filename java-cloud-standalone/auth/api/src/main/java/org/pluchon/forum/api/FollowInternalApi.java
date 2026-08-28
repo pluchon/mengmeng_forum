@@ -21,14 +21,14 @@ public interface FollowInternalApi {
 
     @GetMapping("/user/internal/follow/{userId}/new-count")
     Long countNewFollowers(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate
     );
 
     @GetMapping("/user/internal/follow/{userId}/daily-new-counts")
     List<FollowDailyCountInternalVO> listDailyNewFollowers(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate
     );

@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.hibernate.validator.constraints.Length;
 
-// &#064;create 2026 03 05 16:13 作者代码水平一般，难免难看，请见谅
 // 前端注册请求
 @Data
 public class UserResigterRequest {

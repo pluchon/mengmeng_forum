@@ -292,7 +292,7 @@ public class ContentAiGatewayService {
                 byte[] body = feignException.responseBody().get().array();
                 Result<?> result = OBJECT_MAPPER.readValue(body, Result.class);
                 if (result != null && result.getCode() != ResultCode.SUCCESS.getCode()) {
-                    throw new ApplicationException(result.attachCurrentTrace());
+                    throw new ApplicationException(result);
                 }
             } catch (ApplicationException applicationException) {
                 throw applicationException;

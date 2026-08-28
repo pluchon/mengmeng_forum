@@ -32,7 +32,7 @@ public class LotteryVoucherServiceImpl implements LotteryVoucherService {
             return;
         }
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "幂等键无效"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
         LotteryVoucherLog existing = lotteryVoucherLogMapper.selectOne(Wrappers.lambdaQuery(LotteryVoucherLog.class)
                 .eq(LotteryVoucherLog::getUserId, userId)

@@ -18,10 +18,10 @@ public interface CompanionMemoryService {
 
     List<MascotHistoryTurn> loadHistoryTurns(Long sessionId, int maxTurns);
 
-    Long appendTextMessage(Long sessionId, String role, String content);
+    void appendTextMessage(Long sessionId, String role, String content);
 
     // 助手文本消息；searchImageUrl 为联网检索配图 存 image_url，msg_type 仍为 text
-    Long appendTextMessage(Long sessionId, String role, String content, String searchImageUrl);
+    void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl);
 
     Long appendTextMessage(Long sessionId, String role, String content,
                            List<CompanionImageGalleryItemVO> imageGallery);

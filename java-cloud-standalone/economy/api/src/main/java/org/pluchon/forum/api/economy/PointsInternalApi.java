@@ -19,7 +19,7 @@ public interface PointsInternalApi {
 
     @PostMapping("/points/internal/{userId}/add")
     Integer addPoints(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam("amount") int amount,
             @RequestParam("sourceType") byte sourceType,
             @RequestParam(value = "relatedId", required = false) Long relatedId,

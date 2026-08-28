@@ -34,7 +34,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Result<?>> handleValidationException(MethodArgumentNotValidException e) {
         FieldError fieldError = e.getBindingResult().getFieldError();
-        String errMsg = (fieldError != null) ? fieldError.getDefaultMessage() : "参数校验失败";
+        String errMsg = (fieldError != null && fieldError.getDefaultMessage() != null)
+                ? fieldError.getDefaultMessage()
+                : ResultCode.FAILED_PARAMS_VALIDATE.getMessage();
         log.warn("参数校验非法: {}", errMsg);
         return response(HttpStatus.BAD_REQUEST, Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, errMsg));
     }
@@ -150,6 +152,6 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Result<?>> response(HttpStatus status, Result<?> result) {
-        return ResponseEntity.status(status).body(result.attachCurrentTrace());
+        return ResponseEntity.status(status).body(result);
     }
 }

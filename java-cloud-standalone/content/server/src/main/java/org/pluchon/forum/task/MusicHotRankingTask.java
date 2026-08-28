@@ -1,6 +1,7 @@
 package org.pluchon.forum.task;
 
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicHotRankingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 // 音乐本周热榜：启动重算 + 每天 03:20 全量重算（错开热帖 03:00）
 @Slf4j
-@ConditionalOnProperty(name = "forum.domain", havingValue = "content")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.CONTENT)
 @Component
 public class MusicHotRankingTask {
 

@@ -19,7 +19,7 @@ public interface CreatorDailyMetricMapper extends BaseMapper<CreatorDailyMetric>
             + "like_count = GREATEST(like_count + VALUES(like_count), 0), "
             + "publish_count = GREATEST(publish_count + VALUES(publish_count), 0), "
             + "update_time = CURRENT_TIMESTAMP")
-    int increment(@Param("userId") Long userId,
+    void increment(@Param("userId") Long userId,
                   @Param("statDate") Date statDate,
                   @Param("readDelta") int readDelta,
                   @Param("likeDelta") int likeDelta,

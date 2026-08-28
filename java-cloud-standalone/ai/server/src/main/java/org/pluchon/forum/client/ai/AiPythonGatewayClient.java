@@ -119,16 +119,16 @@ public class AiPythonGatewayClient {
         String body = exception.getResponseBodyAsString();
         log.warn("Python AI 调用失败 type={} intent={} status={} body={}",
                 taskType, intent, status, truncateBody(body));
-        if (body != null && body.contains("AI_GATEWAY_BUSY")) {
+        if (body.contains("AI_GATEWAY_BUSY")) {
             return new ApplicationException(Result.fail(ResultCode.FAILED_RATE_LIMITED));
         }
         ParsedPythonError parsed = parsePythonErrorBody(body);
         if (parsed != null) {
             if ("INVALID_IMAGE_AUDIT_PAYLOAD".equals(parsed.errorCode)) {
-                if (parsed.message != null && parsed.message.contains("无法拉取")) {
+                if (parsed.message != null && parsed.message.contains("读取失败")) {
                     return new ApplicationException(Result.fail(
                             ResultCode.FAILED_AI_CHECK_IMAGE_ERROR,
-                            "图片审核读取失败，请稍后重试"));
+                            "图片读取失败，请稍后再试"));
                 }
                 if (parsed.message != null && parsed.message.contains("格式")) {
                     return new ApplicationException(
@@ -136,7 +136,7 @@ public class AiPythonGatewayClient {
                 }
                 return new ApplicationException(Result.fail(
                         ResultCode.FAILED_PARAMS_VALIDATE,
-                        parsed.message != null ? parsed.message : "图片审核参数无效"));
+                        parsed.message != null ? parsed.message : "图片无法通过审核，请更换后重试"));
             }
             if ("VISION_AUDIT_UNAVAILABLE".equals(parsed.errorCode)) {
                 return new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_IMAGE_ERROR));
@@ -172,7 +172,8 @@ public class AiPythonGatewayClient {
             if (body.contains("INVALID_IMAGE_AUDIT_PAYLOAD")) {
                 ParsedPythonError parsed = new ParsedPythonError();
                 parsed.errorCode = "INVALID_IMAGE_AUDIT_PAYLOAD";
-                parsed.message = body.contains("不支持的图片格式") ? "不支持的图片格式" : null;
+                parsed.message = body.contains("暂不支持这种图片格式")
+                        ? "暂不支持这种图片格式，请使用 JPG、PNG 或 GIF" : null;
                 return parsed;
             }
             return null;

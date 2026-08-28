@@ -12,7 +12,7 @@ public interface ForumAiQuotaPeriodUsageMapper extends BaseMapper<ForumAiQuotaPe
 
     @Insert("INSERT IGNORE INTO forum_ai_quota_period_usage "
             + "(user_id, quota_period_key, delete_state) VALUES (#{userId}, #{periodKey}, 0)")
-    int ensurePeriod(@Param("userId") Long userId, @Param("periodKey") String periodKey);
+    void ensurePeriod(@Param("userId") Long userId, @Param("periodKey") String periodKey);
 
     @Update("UPDATE forum_ai_quota_period_usage SET qwen_reserved_micros = qwen_reserved_micros + #{amount} "
             + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0 "
@@ -29,12 +29,12 @@ public interface ForumAiQuotaPeriodUsageMapper extends BaseMapper<ForumAiQuotaPe
     @Update("UPDATE forum_ai_quota_period_usage SET qwen_reserved_micros = "
             + "GREATEST(qwen_reserved_micros - #{amount}, 0) "
             + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0")
-    int releaseQwen(@Param("userId") Long userId, @Param("periodKey") String periodKey,
+    void releaseQwen(@Param("userId") Long userId, @Param("periodKey") String periodKey,
                     @Param("amount") long amount);
 
     @Update("UPDATE forum_ai_quota_period_usage SET wan_reserved_count = GREATEST(wan_reserved_count - 1, 0) "
             + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0")
-    int releaseWan(@Param("userId") Long userId, @Param("periodKey") String periodKey);
+    void releaseWan(@Param("userId") Long userId, @Param("periodKey") String periodKey);
 
     @Update("UPDATE forum_ai_quota_period_usage SET "
             + "qwen_reserved_micros = GREATEST(qwen_reserved_micros - #{qwenReserved}, 0), "
@@ -42,7 +42,7 @@ public interface ForumAiQuotaPeriodUsageMapper extends BaseMapper<ForumAiQuotaPe
             + "wan_reserved_count = GREATEST(wan_reserved_count - #{wanCount}, 0), "
             + "wan_used_count = wan_used_count + #{wanCount} "
             + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0")
-    int settle(@Param("userId") Long userId, @Param("periodKey") String periodKey,
+    void settle(@Param("userId") Long userId, @Param("periodKey") String periodKey,
                @Param("qwenReserved") long qwenReserved, @Param("qwenActual") long qwenActual,
                @Param("wanCount") int wanCount);
 }

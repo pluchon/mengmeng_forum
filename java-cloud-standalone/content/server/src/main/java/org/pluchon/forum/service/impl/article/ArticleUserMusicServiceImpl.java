@@ -104,8 +104,8 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         if (!publish && !"draft".equalsIgnoreCase(trimToEmpty(action))) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "action 仅支持 draft 或 publish"));
         }
-        String safeTitle = requireText(title, "请填写歌名", Constant.MUSIC_TITLE_MAX_LEN);
-        String safeArtist = requireText(artist, "请填写歌手", Constant.MUSIC_TITLE_MAX_LEN);
+        String safeTitle = requireText(title, "请填写歌名");
+        String safeArtist = requireText(artist, "请填写歌手");
         String safeAlbum = clip(trimToEmpty(album), Constant.MUSIC_TITLE_MAX_LEN);
         String safeDuration = clip(trimToEmpty(durationText), 16);
         String mergedLyric = mergeLyric(lyricText, lrc);
@@ -683,12 +683,12 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         return t.length() > 40 ? t.substring(0, 40) : t;
     }
 
-    private static String requireText(String value, String message, int max) {
+    private static String requireText(String value, String message) {
         String t = trimToEmpty(value);
         if (!StringUtils.hasText(t)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, message));
         }
-        return clip(t, max);
+        return clip(t, Constant.MUSIC_TITLE_MAX_LEN);
     }
 
     private static String extOf(String filename, String fallback) {

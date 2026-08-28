@@ -90,14 +90,14 @@ public class SMSCodeServiceImpl implements SMSCodeService {
 
     @Override
     public String getForReset(String phoneNumber) {
-        return getInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY_RESET);
+        return getInternal(phoneNumber);
     }
 
-    private String getInternal(String phoneNumber, String prefix) {
+    private String getInternal(String phoneNumber) {
         if (!RegexUtil.checkMobile(phoneNumber)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        return stringRedisTemplate.opsForValue().get(prefix + phoneNumber);
+        return stringRedisTemplate.opsForValue().get(Constant.REDIS_KEY_SMS_VERIFY_RESET + phoneNumber);
     }
 
     @Override

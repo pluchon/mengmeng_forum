@@ -17,9 +17,9 @@ public interface UserMascotPreferenceMapper extends BaseMapper<UserMascotPrefere
 
     @Insert("INSERT INTO user_mascot_preference (user_id, mascot_model_id, delete_state) "
             + "VALUES (#{userId}, #{mascotModelId}, 0)")
-    int insertPreference(@Param("userId") Long userId, @Param("mascotModelId") Long mascotModelId);
+    void insertPreference(@Param("userId") Long userId, @Param("mascotModelId") Long mascotModelId);
 
     @Update("UPDATE user_mascot_preference SET mascot_model_id = #{mascotModelId} "
             + "WHERE user_id = #{userId} AND delete_state = 0")
-    int updatePreference(@Param("userId") Long userId, @Param("mascotModelId") Long mascotModelId);
+    void updatePreference(@Param("userId") Long userId, @Param("mascotModelId") Long mascotModelId);
 }

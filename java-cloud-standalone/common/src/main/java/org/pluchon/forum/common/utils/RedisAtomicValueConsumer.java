@@ -26,6 +26,6 @@ public final class RedisAtomicValueConsumer {
             return false;
         }
         Long result = redis.execute(CONSUME_SCRIPT, Collections.singletonList(key), expected);
-        return result != null && result == 1L;
+        return result == 1L;
     }
 }

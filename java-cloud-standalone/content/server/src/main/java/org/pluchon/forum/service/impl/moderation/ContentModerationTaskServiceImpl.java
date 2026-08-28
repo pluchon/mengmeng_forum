@@ -184,23 +184,24 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean deleteConfirmedViolation(Byte targetType, Long targetId, String contentHash) {
+    public void deleteConfirmedViolation(Byte targetType, Long targetId, String contentHash) {
         if (TARGET_DANMAKU == safeByte(targetType)) {
             ArticleVideoDanmaku danmaku = articleVideoDanmakuMapper.selectById(targetId);
             if (danmaku == null || DELETE_TRUE == safeByte(danmaku.getDeleteState())
                     || !contentHash.equals(sha256(danmaku.getContent()))) {
-                return false;
+                return;
             }
-            return articleVideoDanmakuMapper.update(null, new LambdaUpdateWrapper<ArticleVideoDanmaku>()
+            articleVideoDanmakuMapper.update(null, new LambdaUpdateWrapper<ArticleVideoDanmaku>()
                     .eq(ArticleVideoDanmaku::getId, danmaku.getId())
                     .ne(ArticleVideoDanmaku::getDeleteState, DELETE_TRUE)
-                    .set(ArticleVideoDanmaku::getDeleteState, DELETE_TRUE)) > 0;
+                    .set(ArticleVideoDanmaku::getDeleteState, DELETE_TRUE));
+            return;
         }
         if (TARGET_REPLY == safeByte(targetType)) {
             ArticleReply reply = articleReplyMapper.selectById(targetId);
             if (reply == null || DELETE_TRUE == safeByte(reply.getDeleteState())
                     || !contentHash.equals(sha256(reply.getContent()))) {
-                return false;
+                return;
             }
             List<ArticleSubReply> subReplies = articleSubReplyMapper.selectList(
                     new LambdaQueryWrapper<ArticleSubReply>()
@@ -219,12 +220,12 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
             for (ArticleSubReply ignored : subReplies) {
                 articleService.deleteSubReply(reply.getArticleId());
             }
-            return true;
+            return;
         }
         ArticleSubReply subReply = articleSubReplyMapper.selectById(targetId);
         if (subReply == null || DELETE_TRUE == safeByte(subReply.getDeleteState())
                 || !contentHash.equals(sha256(subReply.getContent()))) {
-            return false;
+            return;
         }
         int updated = articleSubReplyMapper.update(null, new LambdaUpdateWrapper<ArticleSubReply>()
                 .eq(ArticleSubReply::getId, subReply.getId())
@@ -234,7 +235,6 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
             articleQuestionService.handleDeletedSubReply(subReply.getArticleId(), subReply.getId());
             articleService.deleteSubReply(subReply.getArticleId());
         }
-        return updated > 0;
     }
 
     private String loadCurrentContent(ContentAiTask task) {

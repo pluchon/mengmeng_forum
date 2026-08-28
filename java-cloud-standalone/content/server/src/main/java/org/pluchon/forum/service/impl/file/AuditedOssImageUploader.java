@@ -93,7 +93,7 @@ public class AuditedOssImageUploader {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "文件名数量不匹配"));
         }
         if (imageAuditExecutor == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "审图线程池未就绪"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_UNAVAILABLE, "图片审核服务正忙，请稍后再试"));
         }
 
         String pendingFolder = OssPaths.pendingFolder(businessPath);
@@ -232,9 +232,6 @@ public class AuditedOssImageUploader {
                 safeDelete(ossClient, pendingKey);
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_IMAGE_VIOLATION));
             }
-        } catch (ApplicationException exception) {
-            safeDelete(ossClient, pendingKey);
-            throw exception;
         } catch (RuntimeException exception) {
             safeDelete(ossClient, pendingKey);
             throw exception;

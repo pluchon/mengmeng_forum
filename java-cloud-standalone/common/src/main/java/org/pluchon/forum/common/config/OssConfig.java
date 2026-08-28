@@ -18,7 +18,7 @@ public class OssConfig {
     private String urlPrefix;
     // 兼容旧版 head 路径配置
     private String path;
-    // 业务对象 key 根前缀。留空时与 OSS 控制台根目录下 forum_xxx/ 对齐； 若仍使用 forum_db_item/ 包一层，可设 OSS_LOCAL_ROOT_PREFIX / OSS_SERVER_ROOT_PREFIX
+    // 业务对象 key 根前缀
     private String rootPrefix = "";
 
     public boolean isBucketConfigured() {

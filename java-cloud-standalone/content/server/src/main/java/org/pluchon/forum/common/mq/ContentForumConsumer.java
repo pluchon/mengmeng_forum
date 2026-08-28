@@ -3,6 +3,7 @@ package org.pluchon.forum.common.mq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.vo.mq.ArticleAuditResultMqVO;
 import org.pluchon.forum.service.interfaces.article.ArticleService;
@@ -18,7 +19,7 @@ import java.io.IOException;
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "forum.features.mq-consumer", havingValue = "true")
-@ConditionalOnProperty(name = "forum.domain", havingValue = "content")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.CONTENT)
 public class ContentForumConsumer {
 
     @Autowired

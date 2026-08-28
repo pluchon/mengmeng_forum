@@ -1,12 +1,8 @@
 package org.pluchon.forum.common.cloud;
 
 // 与 spring.application.name / forum.domain 对齐的域标识
-// 单体兼容模式
 public final class ForumDomainNames {
 
-    // 兼容开关：Feign remote 条件中表示「本进程装载全部域」
-    public static final String MONOLITH = "monolith";
-    public static final String AUTH = "auth";
     public static final String CONTENT = "content";
     public static final String IM = "im";
     public static final String GAME = "game";

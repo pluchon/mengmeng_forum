@@ -53,8 +53,7 @@ request.interceptors.response.use(
       if (res.code === 1104) {
         ElMessage.warning(res.message || '您已被禁言，无法发表内容，请联系管理员')
       } else if (!silentBusinessCodes.includes(res.code)) {
-        const traceHint = res.traceId ? `（参考编号：${res.traceId}）` : ''
-        ElMessage.error(`${res.message || '操作失败，请稍后重试'}${traceHint}`)
+        ElMessage.error(res.message || '操作失败，请稍后重试')
       }
       return Promise.reject(res)
     }
@@ -83,23 +82,23 @@ request.interceptors.response.use(
         await promptLogin()
       } else {
         const fallbackByStatus = {
-          400: '请求参数有误，请检查后重试',
-          403: '您没有权限执行此操作',
-          404: '请求的内容不存在或已被删除',
-          413: '上传文件过大，请压缩后重试',
-          429: '操作过于频繁，请稍后再试',
-          500: '服务开小差了，请稍后重试',
-          502: '上游服务暂时不可用，请稍后重试',
-          503: '服务暂时不可用，请稍后重试',
-          504: '服务响应较慢，请稍后重试',
+          400: '填写的内容有误，请检查后重试',
+          403: '你没有权限进行该操作',
+          404: '内容不存在或已被删除',
+          413: '文件太大了，请压缩后再上传',
+          429: '操作太频繁了，请稍后再试',
+          500: '服务开小差了，请稍后再试',
+          502: '服务暂时不可用，请稍后再试',
+          503: '服务正忙，请稍后再试',
+          504: '服务响应有点慢，请稍后再试',
         }
-        const msg = extractApiErrorMessage(error, fallbackByStatus[status] || '请求失败，请稍后重试')
+        const msg = extractApiErrorMessage(error, fallbackByStatus[status] || '操作没有成功，请稍后再试')
         ElMessage.error(msg)
       }
     } else if (error.code === 'ECONNABORTED') {
-      ElMessage.error('服务响应较慢，请稍后重试')
+      ElMessage.error('服务响应有点慢，请稍后再试')
     } else {
-      ElMessage.error('网络错误或服务器无响应，请稍后再试')
+      ElMessage.error('网络好像不太稳定，请检查后重试')
     }
     return Promise.reject(error)
   }

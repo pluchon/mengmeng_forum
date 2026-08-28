@@ -13,9 +13,9 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI().info(new Info()
-                .title("萌萌论坛测试")          // 文档标题
-                .description("论坛项目接口文档")    // 文档描述
-                .version("v1.0")                // 版本号
+                .title("萌萌论坛测试")
+                .description("论坛项目接口文档")
+                .version("v1.0")
                 .contact(new Contact().name("Forum Team").email("dev@example.com")));
     }
 }

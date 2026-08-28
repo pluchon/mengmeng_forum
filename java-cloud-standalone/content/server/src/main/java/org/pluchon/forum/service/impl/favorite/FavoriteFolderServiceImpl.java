@@ -124,7 +124,7 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (StringUtils.hasText(req.getCoverUrl())) {
             String coverUrl = req.getCoverUrl().trim();
             if (!ossConfig.matchesPublicObjectUrl(coverUrl, Constant.OSS_PATH_FAVORITE_FOLDER)) {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "收藏夹封面地址不合法"));
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "封面图片无效，请重新上传"));
             }
             folder.setCoverUrl(coverUrl);
         }

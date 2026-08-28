@@ -98,9 +98,8 @@ export function streamArticleGuide(articleId, { onChunk, onDone, onError } = {})
     .then(async (res) => {
       if (!res.ok) {
         const body = await res.json().catch(() => null)
-        const traceId = body?.traceId || res.headers.get('x-trace-id')
         const message = body?.message || '智能导读暂时不可用，请稍后重试'
-        onError?.(traceId ? `${message}（参考编号：${traceId}）` : message)
+        onError?.(message)
         onDone?.()
         return
       }

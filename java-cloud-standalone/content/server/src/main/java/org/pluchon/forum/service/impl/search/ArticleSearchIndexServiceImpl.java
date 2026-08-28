@@ -14,10 +14,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -144,41 +142,6 @@ public class ArticleSearchIndexServiceImpl implements ArticleSearchIndexService 
                 .limit(limit)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public int rebuildAllPublished() {
-        List<Article> published = articleMapper.selectList(new LambdaQueryWrapper<Article>()
-                .eq(Article::getStatus, ArticleStatus.PUBLISHED.getCode())
-                .ne(Article::getDeleteState, DELETE_TRUE)
-                .ne(Article::getState, STATE_FORBIDDEN)
-                .select(Article::getId, Article::getTitle, Article::getContent, Article::getUserId, Article::getStatus,
-                        Article::getUpdateTime));
-        Set<Long> alive = new HashSet<>();
-        int count = 0;
-        for (Article row : published) {
-            if (row.getId() == null) {
-                continue;
-            }
-            alive.add(row.getId());
-            syncPublishedArticle(row.getId());
-            count++;
-        }
-        Set<String> indexed = stringRedisTemplate.opsForSet().members(SearchRedisKeys.indexedArticles());
-        if (indexed != null) {
-            for (String sid : indexed) {
-                try {
-                    long id = Long.parseLong(sid);
-                    if (!alive.contains(id)) {
-                        removeArticle(id);
-                    }
-                } catch (NumberFormatException ignore) {
-                    stringRedisTemplate.opsForSet().remove(SearchRedisKeys.indexedArticles(), sid);
-                }
-            }
-        }
-        log.info("搜索倒排全量重建完成 count={}", count);
-        return count;
     }
 
     private long readForwardUpdateTime(long articleId) {

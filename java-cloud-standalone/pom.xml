@@ -52,6 +52,7 @@
         <ip2region.version>2.7.0</ip2region.version>
         <poi.version>5.2.5</poi.version>
         <pdfbox.version>3.0.5</pdfbox.version>
+        <jspecify.version>1.0.0</jspecify.version>
     </properties>
 
     <dependencyManagement>
@@ -176,6 +177,11 @@
                 <artifactId>pdfbox</artifactId>
                 <version>${pdfbox.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${jspecify.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -184,6 +190,11 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+        <!-- 空值契约注解：覆写 Spring 接口时显式声明，不依赖 springdoc 的传递引入 -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
         </dependency>
     </dependencies>
 

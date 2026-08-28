@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface MascotPreferenceInternalApi {
 
     @PostMapping("/mascot/internal/{userId}/preference")
-    void setMascotModel(@PathVariable("userId") Long userId,
+    void setMascotModel(@PathVariable Long userId,
                         @RequestParam("mascotModelId") Long mascotModelId
     );
 }

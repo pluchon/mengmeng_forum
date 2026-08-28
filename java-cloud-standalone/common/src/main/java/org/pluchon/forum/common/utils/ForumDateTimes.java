@@ -5,7 +5,7 @@ import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.TimeZone;
 
-// 论坛统一使用东八区墙钟，与 JDBC serverTimezone、Jackson time zone 对齐
+// 论坛统一使用东八区墙钟
 public final class ForumDateTimes {
 
     public static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Taipei");

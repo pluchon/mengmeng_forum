@@ -13,9 +13,6 @@ public class AiGeneratedImageUploadRequest {
     private String ossPath;
     private String baseName;
 
-    public AiGeneratedImageUploadRequest() {
-    }
-
     public AiGeneratedImageUploadRequest(Long userId, String sourceUrl, String ossPath, String baseName) {
         this.userId = userId;
         this.sourceUrl = sourceUrl;

@@ -59,7 +59,7 @@ public class UserLoginLogServiceImpl implements UserLoginLogService {
                     .set(User::getIpRegion, region));
             // 同步刷新用户缓存中的 IP 属地，避免缓存命中时拿到旧值
             String cacheKey = Constant.REDIS_KEY_USER_INFO + userId;
-            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(cacheKey))) {
+            if (stringRedisTemplate.hasKey(cacheKey)) {
                 stringRedisTemplate.opsForHash().put(cacheKey, "ipRegion", region);
             }
         }

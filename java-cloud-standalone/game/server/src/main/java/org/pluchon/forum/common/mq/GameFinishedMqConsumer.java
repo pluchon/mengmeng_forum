@@ -3,6 +3,7 @@ package org.pluchon.forum.common.mq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.vo.mq.GameFinishedMqVO;
 import org.pluchon.forum.service.interfaces.game.GameMqEventService;
@@ -17,7 +18,7 @@ import java.io.IOException;
 // 游戏结束结算仅由 forum game 消费，避免 content 进程抢队列后空 ACK
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "forum.domain", havingValue = "game")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.GAME)
 public class GameFinishedMqConsumer {
 
     @Autowired

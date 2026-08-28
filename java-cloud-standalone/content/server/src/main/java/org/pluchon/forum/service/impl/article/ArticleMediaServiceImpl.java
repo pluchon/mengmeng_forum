@@ -152,7 +152,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         if (videoUrl == null || videoUrl.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先上传视频"));
         }
         Article article = articleMapper.selectByIdForUpdate(articleId);
         if (article == null) {
@@ -238,15 +238,15 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         }
         String audio = musicAudioUrl.trim();
         if (!ossConfig.matchesPublicObjectUrl(audio, Constant.OSS_PATH_MUSIC_INFO)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐音频地址非法"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐音频无效，请重新选择"));
         }
         String cover = musicCoverUrl == null || musicCoverUrl.isBlank() ? null : musicCoverUrl.trim();
         if (cover != null && !ossConfig.matchesPublicObjectUrl(cover, Constant.OSS_PATH_MUSIC_AVATAR)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐封面地址非法"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐封面无效，请重新选择"));
         }
         String lrc = musicLrcUrl == null || musicLrcUrl.isBlank() ? null : musicLrcUrl.trim();
         if (lrc != null && !ossConfig.matchesPublicObjectUrl(lrc, Constant.OSS_PATH_MUSIC_LRC)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐歌词地址非法"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "配乐歌词无效，请重新选择"));
         }
         if (!articleUserMusicService.isBindable(musicKey.trim())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "该歌曲尚未过审，不能用于帖子"));

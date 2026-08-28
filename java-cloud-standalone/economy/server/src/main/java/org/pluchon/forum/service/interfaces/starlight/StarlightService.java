@@ -6,7 +6,7 @@ public interface StarlightService {
     int getBalance(Long userId);
 
     // 发放萌星辉；幂等键已存在则直接返回当前余额
-    int credit(Long userId, int amount, byte sourceType, Long relatedId, String idempotencyKey, String remark);
+    void credit(Long userId, int amount, byte sourceType, Long relatedId, String idempotencyKey, String remark);
 
     // 消耗萌星辉；幂等键已存在则直接返回当前余额
     int debit(Long userId, int amount, byte sourceType, Long relatedId, String idempotencyKey, String remark);

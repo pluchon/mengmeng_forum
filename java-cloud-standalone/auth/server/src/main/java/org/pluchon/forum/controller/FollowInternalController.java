@@ -43,7 +43,7 @@ public class FollowInternalController {
     }
 
     @GetMapping("/{followerId}/following-ids")
-    public Set<Long> listFollowingIds(@PathVariable("followerId") Long followerId) {
+    public Set<Long> listFollowingIds(@PathVariable Long followerId) {
         return userFollowService.listFollowingIds(followerId);
     }
 

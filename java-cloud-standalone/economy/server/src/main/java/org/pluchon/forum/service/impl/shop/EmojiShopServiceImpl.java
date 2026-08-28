@@ -536,7 +536,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (StringUtils.hasText(category) && EmojiShopCategory.fromCode(category) == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请选择有效的表情包分类"));
         }
-        Integer price = req.getPrice() == null ? 0 : req.getPrice();
+        int price = req.getPrice() == null ? 0 : req.getPrice();
         if (price < Constant.EMOJI_SHOP_PRICE_MIN || price > Constant.EMOJI_SHOP_PRICE_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_PRICE_INVALID));
         }
@@ -555,7 +555,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (rawUrls == null || rawUrls.isEmpty()) {
             return Collections.emptyList();
         }
-        List<String> imageUrls = new ArrayList<>();
         Set<String> uniqueUrls = new LinkedHashSet<>();
         for (String rawUrl : rawUrls) {
             String url = rawUrl == null ? "" : rawUrl.trim();
@@ -568,8 +567,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (uniqueUrls.size() > Constant.EMOJI_SHOP_ITEM_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_ITEMS_LIMIT));
         }
-        imageUrls.addAll(uniqueUrls);
-        return imageUrls;
+        return new ArrayList<>(uniqueUrls);
     }
 
     private void replaceShopItems(Long shopId, List<String> imageUrls) {
@@ -848,8 +846,8 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                     .map(UserInternalVO::getId)
                     .toList();
             List<Long> fuzzyAuthorIds = authorPage.getRecords().stream()
-                    .filter(user -> !exactAuthorIds.contains(user.getId()))
                     .map(UserInternalVO::getId)
+                    .filter(id -> !exactAuthorIds.contains(id))
                     .toList();
             if (!exactAuthorIds.isEmpty()) {
                 appendShopMatches(ranked, seen, category, sort,
@@ -1231,9 +1229,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 fallback = current;
             }
         }
-        return fallback == null
-                ? new ShopEmojiAvailabilityVO(ShopEmojiAvailability.NOT_FOUND, shopId)
-                : fallback;
+        return fallback;
     }
 
     @Override
@@ -1267,26 +1263,16 @@ public class EmojiShopServiceImpl implements EmojiShopService {
 
     private String normalizeSort(String sort) {
         if (!StringUtils.hasText(sort)) return "comprehensive";
-        switch (sort.trim().toLowerCase(Locale.ROOT)) {
-            case "comprehensive":
-                return "comprehensive";
-            case "new":
-            case "published_desc":
-                return "published_desc";
-            case "published_asc":
-                return "published_asc";
-            case "price_asc":
-                return "price_asc";
-            case "price_desc":
-                return "price_desc";
-            case "hot":
-            case "sales_desc":
-                return "sales_desc";
-            case "sales_asc":
-                return "sales_asc";
-            default:
-                return "comprehensive";
-        }
+        return switch (sort.trim().toLowerCase(Locale.ROOT)) {
+            case "comprehensive" -> "comprehensive";
+            case "new", "published_desc" -> "published_desc";
+            case "published_asc" -> "published_asc";
+            case "price_asc" -> "price_asc";
+            case "price_desc" -> "price_desc";
+            case "hot", "sales_desc" -> "sales_desc";
+            case "sales_asc" -> "sales_asc";
+            default -> "comprehensive";
+        };
     }
 
     private String normalizeCategory(String category) {

@@ -2,6 +2,7 @@ package org.pluchon.forum.common.interceptor;
 
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.utils.JWTUtils;
 import org.pluchon.forum.common.security.JwtTokenVersionService;
@@ -15,7 +16,6 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import java.util.Map;
 
-// WebSocket 握手拦截器：在连接建立前验证 JWT，防止伪造 userId
 @Slf4j
 @Component
 public class TokenHandshakeInterceptor implements HandshakeInterceptor {
@@ -25,10 +25,10 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
 
     // 握手前执行
     @Override
-    public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
-            WebSocketHandler wsHandler, Map<String, Object> attributes) {
-        // 从 URL 查询 参数中取 JWT，前端连接格式：ws://host/ws/notify?token xxx
-        // 按参数名匹配，兼容 token 不在第一位的情况 如 ?foo bar&token xxx
+    public boolean beforeHandshake(ServerHttpRequest request,
+                                   @NonNull ServerHttpResponse response,
+                                   @NonNull WebSocketHandler wsHandler,
+                                   @NonNull Map<String, Object> attributes) {
         String query = request.getURI().getQuery();
         String token = null;
         if (query != null) {
@@ -57,8 +57,6 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
-        // 从 JWT 载荷中取出 userId 和 username，存入 attributes
-        // 后续 WebSocket 处理器可直接取用
         Long userId;
         String username;
         try {
@@ -83,5 +81,7 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
 
     // 握手完成后回调，目前无需处理
     @Override
-    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Exception exception) {}
+    public void afterHandshake(@NonNull ServerHttpRequest request,
+                               @NonNull ServerHttpResponse response,
+                               @NonNull WebSocketHandler wsHandler, Exception exception) {}
 }

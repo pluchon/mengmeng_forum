@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.OutboxMessageState;
 import org.pluchon.forum.common.mq.ForumProducer;
@@ -23,7 +24,7 @@ import java.util.List;
 
 // 本地消息表投递：防多实例重复执行
 @Slf4j
-@ConditionalOnProperty(name = "forum.domain", havingValue = "im")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.IM)
 @Component
 public class OutboxDispatchTask {
 

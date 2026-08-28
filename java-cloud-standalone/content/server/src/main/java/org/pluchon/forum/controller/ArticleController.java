@@ -33,7 +33,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import jakarta.validation.Valid;
 import org.pluchon.forum.entity.dto.article.ArticleSummaryRegenerateRequest;
 import org.pluchon.forum.entity.vo.article.ArticleSummaryVO;
 import org.pluchon.forum.entity.dto.article.ContentReportRequest;

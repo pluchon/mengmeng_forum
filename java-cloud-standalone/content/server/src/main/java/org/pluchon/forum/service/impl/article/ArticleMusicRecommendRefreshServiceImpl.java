@@ -101,7 +101,7 @@ public class ArticleMusicRecommendRefreshServiceImpl implements ArticleMusicReco
 
     private void refreshOne(Long userId, String periodKey) {
         List<String> aiKeys = tryAiKeys(userId);
-        if (aiKeys != null && !aiKeys.isEmpty()) {
+        if (!aiKeys.isEmpty()) {
             articleMusicRecommendSlateService.saveSlate(userId, periodKey, SOURCE_AI, aiKeys);
             return;
         }

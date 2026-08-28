@@ -11,7 +11,7 @@ public class PageUtils {
         return (pageNum == null || pageNum < 1) ? 1 : pageNum;
     }
 
-    // 获取校验后的每页数量 上限 {@link #MAX_PAGE_SIZE}
+    // 获取校验后的每页数量
     public static int getValidPageSize(Integer pageSize) {
         int size = (pageSize == null || pageSize < 1) ? 10 : pageSize;
         return Math.min(size, MAX_PAGE_SIZE);

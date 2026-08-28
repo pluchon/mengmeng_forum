@@ -189,10 +189,10 @@ public class FileServiceImpl implements FileService {
     @Override
     public String uploadAiGeneratedImageFromRemote(Long userId, String sourceUrl, String ossPath, String baseName) {
         if (sourceUrl == null || sourceUrl.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先选择图片"));
         }
         if (ossPath == null || ossPath.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "OSS 路径为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址无效，请重新上传"));
         }
         if (baseName == null || baseName.isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "文件名为空"));
@@ -222,7 +222,7 @@ public class FileServiceImpl implements FileService {
     private ResolvedImage parseDataUrl(String dataUrl) {
         Matcher m = DATA_URL_PATTERN.matcher(dataUrl.trim());
         if (!m.matches()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "无效的图片 data URL"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片格式无法识别，请重新上传"));
         }
         String contentType = m.group(1).toLowerCase(Locale.ROOT);
         if (!Constant.IMAGE_SUPPORTED_TYPES.contains(contentType)) {
@@ -232,7 +232,7 @@ public class FileServiceImpl implements FileService {
         try {
             bytes = Base64.getDecoder().decode(m.group(2).replaceAll("\\s+", ""));
         } catch (IllegalArgumentException e) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片 Base64 解码失败"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片读取失败，请重新上传"));
         }
         if (bytes.length == 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片内容为空"));
@@ -242,7 +242,7 @@ public class FileServiceImpl implements FileService {
 
     private ResolvedImage downloadRemoteImage(String url) {
         if (!url.regionMatches(true, 0, "https://", 0, 8) && !url.regionMatches(true, 0, "http://", 0, 7)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅支持 http(s) 或 data 图片地址"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址无效，请重新上传"));
         }
         try {
             ResponseEntity<byte[]> resp = aiRestTemplate.exchange(URI.create(url), HttpMethod.GET, null, byte[].class);
@@ -422,7 +422,7 @@ public class FileServiceImpl implements FileService {
                     bytes);
         } catch (Exception e) {
             log.error("读取上传图片失败: name={}", file.getOriginalFilename(), e);
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "读取上传图片失败"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片读取失败，请重新上传"));
         }
     }
 
@@ -533,10 +533,10 @@ public class FileServiceImpl implements FileService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         if (sourceVideoUrl == null || sourceVideoUrl.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先上传视频"));
         }
         if (!ossConfig.matchesPublicObjectUrl(sourceVideoUrl.trim(), Constant.OSS_PATH_ARTICLE_VIDEO)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址非法"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "视频地址无效，请重新上传"));
         }
         long t0 = System.currentTimeMillis();
         String baseUrl = System.getenv().getOrDefault("FORUM_FFMPEG_URL", "http://ffmpeg:8099");

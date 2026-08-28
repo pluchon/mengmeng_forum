@@ -9,8 +9,6 @@ public interface RecommendationAiProfileService {
 
     void requestProfileRefresh(Long userId);
 
-    void clearProfile(Long userId);
-
     void refreshDueProfiles();
 
     Map<String, Double> getActiveTopicWeights(Long userId);

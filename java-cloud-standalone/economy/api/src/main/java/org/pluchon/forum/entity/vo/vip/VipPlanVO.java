@@ -17,7 +17,6 @@ public class VipPlanVO {
     private Integer durationDays;
     private boolean featured;
     private List<VipPlanFeatureVO> features;
-    // current | owned | subscribe
     private String buttonState;
     private String buttonLabel;
     private BigDecimal originalPrice;

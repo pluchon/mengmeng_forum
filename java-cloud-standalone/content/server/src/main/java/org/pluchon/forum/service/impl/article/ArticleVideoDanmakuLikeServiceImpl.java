@@ -54,7 +54,7 @@ public class ArticleVideoDanmakuLikeServiceImpl implements ArticleVideoDanmakuLi
         bumpLikeCount(danmakuId, -1);
     }
 
-    private ArticleVideoDanmaku requireDanmaku(Long danmakuId) {
+    private void requireDanmaku(Long danmakuId) {
         if (danmakuId == null || danmakuId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -62,7 +62,6 @@ public class ArticleVideoDanmakuLikeServiceImpl implements ArticleVideoDanmakuLi
         if (row == null || row.getDeleteState() != null && row.getDeleteState() == DELETE_TRUE) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
-        return row;
     }
 
     private void bumpLikeCount(Long danmakuId, int delta) {

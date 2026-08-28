@@ -50,16 +50,19 @@ public class StarlightServiceImpl implements StarlightService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public int credit(Long userId, int amount, byte sourceType, Long relatedId, String idempotencyKey, String remark) {
+    public void credit(Long userId, int amount, byte sourceType, Long relatedId, String idempotencyKey, String remark) {
         if (userId == null || userId <= 0 || amount <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "幂等键不能为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
         StarlightLog existing = findByIdempotency(userId, idempotencyKey);
         if (existing != null) {
-            return existing.getBalanceAfter() == null ? getBalance(userId) : existing.getBalanceAfter();
+            if (existing.getBalanceAfter() == null) {
+                getBalance(userId);
+            }
+            return;
         }
         UserStarlightWallet wallet = ensureForUpdate(userId);
         int before = wallet.getBalance() == null ? 0 : wallet.getBalance();
@@ -69,7 +72,6 @@ public class StarlightServiceImpl implements StarlightService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "萌星辉入账失败，请重试"));
         }
         insertLog(userId, amount, after, sourceType, relatedId, idempotencyKey, remark);
-        return after;
     }
 
     @Override
@@ -79,7 +81,7 @@ public class StarlightServiceImpl implements StarlightService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "幂等键不能为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
         StarlightLog existing = findByIdempotency(userId, idempotencyKey);
         if (existing != null) {
@@ -128,7 +130,7 @@ public class StarlightServiceImpl implements StarlightService {
         }
         locked = userStarlightWalletMapper.selectByUserIdForUpdate(userId);
         if (locked == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "萌星辉钱包初始化失败"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "萌星辉账户初始化失败，请稍后再试"));
         }
         return locked;
     }

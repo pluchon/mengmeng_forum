@@ -18,7 +18,7 @@ public final class ImageMagicValidator {
         if (file == null || file.isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "上传文件不能为空"));
         }
-        byte[] head = readHead(file, 16);
+        byte[] head = readHead(file);
         if (head.length < 3) {
             throw new ApplicationException(
                     Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED, "图片数据不完整或已损坏"));
@@ -37,9 +37,9 @@ public final class ImageMagicValidator {
                 "无法识别的图片内容，请确认文件为 JPG / PNG / GIF"));
     }
 
-    private static byte[] readHead(MultipartFile file, int length) {
+    private static byte[] readHead(MultipartFile file) {
         try (InputStream input = file.getInputStream()) {
-            return input.readNBytes(length);
+            return input.readNBytes(16);
         } catch (IOException exception) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "读取上传图片失败"));
         }

@@ -35,15 +35,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.pluchon.forum.common.utils.SearchKeywordHelper;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
-import java.util.Comparator;
 
 @Service
 @Slf4j
@@ -267,8 +260,8 @@ public class SearchServiceImpl implements SearchService {
 
     // 正文未命中时，只接受高相似度作者语义命中，避免把普通用户检索扩散为无关帖子
     private List<Long> articleIdsByHighSimilarityAuthors(String keyword) {
-        List<Long> authorIds = extractUserHitIds(aiHubService.ragUserVectorRanked(keyword),
-                ARTICLE_AUTHOR_VECTOR_MIN_SCORE);
+        List<Long> authorIds = extractUserHitIds(aiHubService.ragUserVectorRanked(keyword)
+        );
         if (authorIds.isEmpty()) {
             return Collections.emptyList();
         }
@@ -306,7 +299,7 @@ public class SearchServiceImpl implements SearchService {
             return new SearchUserResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyUserPage(p, s));
         }
         List<UserInternalVO> users = remote.getRecords().stream()
-                .filter(u -> u != null)
+                .filter(Objects::nonNull)
                 .toList();
         PageResult<SearchUserItemVO> pageResult = new PageResult<>(
                 buildSearchUserItems(users, viewerId),
@@ -624,7 +617,7 @@ public class SearchServiceImpl implements SearchService {
         return out;
     }
 
-    private List<Long> extractUserHitIds(List<RagUserVectorHitVO> ranked, double minScore) {
+    private List<Long> extractUserHitIds(List<RagUserVectorHitVO> ranked) {
         if (ranked == null || ranked.isEmpty()) {
             return Collections.emptyList();
         }
@@ -632,7 +625,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Long> seen = new LinkedHashSet<>();
         for (RagUserVectorHitVO row : ranked) {
             double score = row.getScore() != null ? row.getScore() : 0.0;
-            if (score < minScore || row.getUserId() == null) {
+            if (score < SearchServiceImpl.ARTICLE_AUTHOR_VECTOR_MIN_SCORE || row.getUserId() == null) {
                 continue;
             }
             if (seen.add(row.getUserId())) {

@@ -39,7 +39,7 @@ dashscope:
 
 redis:
   host: 127.0.0.1
-  port: 63790
+  port: 16379
   password: ""
   db: 0
   socket_timeout: 2

@@ -201,9 +201,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setFirstMonthPrice(BigDecimal.ZERO);
         p.setFirstPurchaseEligible(false);
         p.setFeatures(List.of(
-                feat("通用额度6元/月", true),
-                feat("Wan 15张/月", true),
-                feat("更多免费权益......", true)));
+                feat("通用额度6元/月"),
+                feat("Wan 15张/月"),
+                feat("更多免费权益......")));
         applyPlanQuota(p, new BigDecimal("6.0"), 15);
         if (!active || curTier == 0) {
             p.setButtonState("current");
@@ -226,9 +226,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(true);
         p.setFeatures(List.of(
-                feat("通用额度10.9元/月", true),
-                feat("Wan 20张/月", true),
-                feat("更多会员隐藏福利......", true)));
+                feat("通用额度10.9元/月"),
+                feat("Wan 20张/月"),
+                feat("更多会员隐藏福利......")));
         applyPlanPricing(p, new BigDecimal("9.9"), new BigDecimal("3.9"), firstPurchaseEligible);
         applyPlanQuota(p, new BigDecimal("10.9"), 20);
         applyPlanButton(p, curTier, active, 1);
@@ -246,9 +246,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setDurationDays(30);
         p.setFeatured(false);
         p.setFeatures(List.of(
-                feat("通用额度20.9元/月", true),
-                feat("Wan 50张/月", true),
-                feat("更多会员隐藏福利......", true)));
+                feat("通用额度20.9元/月"),
+                feat("Wan 50张/月"),
+                feat("更多会员隐藏福利......")));
         applyPlanPricing(p, new BigDecimal("15.9"), new BigDecimal("6.9"), firstPurchaseEligible);
         applyPlanQuota(p, new BigDecimal("20.9"), 50);
         applyPlanButton(p, curTier, active, 2);
@@ -277,10 +277,10 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setButtonLabel("立即开通");
     }
 
-    private VipPlanFeatureVO feat(String text, boolean enabled) {
+    private VipPlanFeatureVO feat(String text) {
         VipPlanFeatureVO f = new VipPlanFeatureVO();
         f.setText(text);
-        f.setEnabled(enabled);
+        f.setEnabled(true);
         return f;
     }
 

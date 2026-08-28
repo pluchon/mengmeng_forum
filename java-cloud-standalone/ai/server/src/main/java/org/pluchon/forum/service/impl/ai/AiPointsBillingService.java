@@ -170,21 +170,20 @@ public class AiPointsBillingService {
 
     // 计费折算用：无厂商 token 时用预估常量，不污染展示字段
     private AiModelUsageDTO usageForBillingCalc(AiModelUsageDTO usage) {
-        AiModelUsageDTO u = usage;
-        int in = u.getInputTokens() != null ? u.getInputTokens() : 0;
-        int out = u.getOutputTokens() != null ? u.getOutputTokens() : 0;
-        int img = u.getImageCount() != null ? u.getImageCount() : 0;
+        int in = usage.getInputTokens() != null ? usage.getInputTokens() : 0;
+        int out = usage.getOutputTokens() != null ? usage.getOutputTokens() : 0;
+        int img = usage.getImageCount() != null ? usage.getImageCount() : 0;
         if (in == 0 && out == 0 && img == 0) {
             AiModelUsageDTO copy = new AiModelUsageDTO();
-            copy.setModelCode(u.getModelCode());
+            copy.setModelCode(usage.getModelCode());
             copy.setInputTokens(Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS);
             copy.setOutputTokens(Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS);
             copy.setImageCount(img);
             copy.setEstimated(true);
-            copy.setLatencyMs(u.getLatencyMs());
+            copy.setLatencyMs(usage.getLatencyMs());
             return copy;
         }
-        return u;
+        return usage;
     }
 
     public AiModelUsageDTO usageForImage(String modelCode, int images) {
@@ -291,8 +290,7 @@ public class AiPointsBillingService {
                 return out;
             }
         }
-        AiModelUsageDTO u = usage;
-        int referenceCost = calcPoints(u);
+        int referenceCost = calcPoints(usage);
         if (referenceCost <= 0) {
             referenceCost = 1;
         }
@@ -301,23 +299,23 @@ public class AiPointsBillingService {
         int balanceAfter;
         String billingMode;
         if (usePointsBilling && billable) {
-            balanceAfter = chargePointsAndLog(user, featureCode, u, relatedId, pointsSource, charged);
+            balanceAfter = chargePointsAndLog(user, featureCode, usage, relatedId, pointsSource, charged);
             billingMode = "points";
         } else {
-            recordUsageOnly(user, featureCode, u, relatedId);
+            recordUsageOnly(user, featureCode, usage, relatedId);
             balanceAfter = balanceOf(user.getId());
             billingMode = billable
                     ? (vipExemptPoints(user) ? "vip_quota" : "free_quota")
                 : "platform_free";
         }
         if (billable && !usePointsBilling) {
-            settleQuotaUsage(user, featureCode, List.of(u));
+            settleQuotaUsage(user, featureCode, List.of(usage));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("pointsCost", charged);
         out.put("balanceAfter", balanceAfter);
         out.put("billingMode", billingMode);
-        out.put("usageStats", buildUsageStats(u, charged, billingMode));
+        out.put("usageStats", buildUsageStats(usage, charged, billingMode));
         return out;
     }
 
@@ -490,8 +488,7 @@ public class AiPointsBillingService {
             if (model.startsWith("qwen")) {
                 qwenCost = qwenCost.add(calcYuan(usage));
             }
-            if (Constant.AI_MODEL_IMAGE_NORMAL.equals(model)
-                    || Constant.AI_MODEL_IMAGE_DASH_PREMIUM.equals(model)
+            if (Constant.AI_MODEL_IMAGE_DASH_PREMIUM.equals(model)
                     || "wan2.7-image".equals(model)
                     || model.startsWith("wan")) {
                 wanImages += images;

@@ -169,17 +169,6 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
     }
 
     @Override
-    public void clearProfile(Long userId) {
-        if (userId == null || userId <= 0) {
-            return;
-        }
-        profileSnapshotMapper.update(null, new LambdaUpdateWrapper<ForumUserAiProfileSnapshot>()
-                .eq(ForumUserAiProfileSnapshot::getUserId, userId)
-                .eq(ForumUserAiProfileSnapshot::getDeleteState, DELETE_FALSE)
-                .set(ForumUserAiProfileSnapshot::getDeleteState, DELETE_TRUE));
-    }
-
-    @Override
     public void refreshDueProfiles() {
         Date now = new Date();
         List<ForumUserAiProfileSnapshot> due = profileSnapshotMapper.selectList(

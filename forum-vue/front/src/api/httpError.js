@@ -2,11 +2,9 @@
 export function extractApiErrorMessage(error, fallback = '请求失败，请稍后重试') {
   if (!error) return fallback
   const data = error.response?.data
-  const traceId = data?.traceId || error.response?.headers?.['x-trace-id']
-  const withTrace = message => traceId ? `${message}（参考编号：${traceId}）` : message
   if (data && typeof data === 'object') {
-    if (typeof data.message === 'string' && data.message.trim()) return withTrace(data.message.trim())
-    if (typeof data.msg === 'string' && data.msg.trim()) return withTrace(data.msg.trim())
+    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim()
+    if (typeof data.msg === 'string' && data.msg.trim()) return data.msg.trim()
   }
-  return withTrace(fallback)
+  return fallback
 }

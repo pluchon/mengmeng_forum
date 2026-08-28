@@ -6,39 +6,18 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
-// 检索词扩展与同义词映射工具
+// 检索词切分与归一化工具；语义联想交由 AI 检索负责，此处只做字面处理
 public final class SearchKeywordHelper {
 
     private static final int MAX_QUERY_TERMS = 12;
     private static final int MAX_INDEX_TERMS = 14;
 
-    // 主题与扩展短语映射
-    private static final Map<String, List<String>> TOPIC_EXPANSIONS = Map.ofEntries(
-            Map.entry("四川", List.of("四川", "川西", "四川西部", "川西高原", "甘孜", "阿坝")),
-            Map.entry("川西", List.of("四川", "四川西部", "川西高原", "甘孜", "阿坝")),
-            Map.entry("雪山", List.of("雪山", "雪峰", "高原雪景", "冰川")),
-            Map.entry("西藏", List.of("西藏", "拉萨", "高原", "藏区")),
-            Map.entry("新疆", List.of("新疆", "天山", "喀纳斯", "伊犁")),
-            Map.entry("云南", List.of("云南", "大理", "丽江", "香格里拉")),
-            Map.entry("旅行", List.of("旅行", "旅游", "出游", "攻略")),
-            Map.entry("自驾", List.of("自驾", "自驾游", "公路旅行")),
-            Map.entry("美食", List.of("美食", "探店", "好吃", "餐厅")),
-            Map.entry("咖啡", List.of("咖啡", "咖啡馆", "拿铁")),
-            Map.entry("猫", List.of("猫咪", "萌宠", "铲屎官")),
-            Map.entry("狗", List.of("狗狗", "萌宠", "遛狗")),
-            Map.entry("摄影", List.of("摄影", "旅拍", "扫街", "出片")),
-            Map.entry("java", List.of("Java", "后端", "Spring")),
-            Map.entry("python", List.of("Python", "爬虫", "数据分析")),
-            Map.entry("前端", List.of("前端", "Vue", "React", "页面"))
-    );
-
     private SearchKeywordHelper() {
     }
 
-    // 生成检索词表
+    // 生成检索词表：原词 + 按标点拆分
     public static List<String> expandTerms(String keyword) {
         if (!StringUtils.hasText(keyword)) {
             return List.of();
@@ -51,7 +30,6 @@ public final class SearchKeywordHelper {
                 terms.add(part);
             }
         }
-        appendSynonyms(raw, terms);
         List<String> out = new ArrayList<>(MAX_QUERY_TERMS);
         for (String t : terms) {
             if (t.length() < 2 && t.length() != raw.length()) {
@@ -72,7 +50,6 @@ public final class SearchKeywordHelper {
             String t = title.trim();
             raw.add(t);
             raw.addAll(splitByPunctuation(t));
-            raw.addAll(expandTerms(t));
         }
         if (tagNames != null) {
             for (String tag : tagNames) {
@@ -157,28 +134,5 @@ public final class SearchKeywordHelper {
             }
         }
         return out;
-    }
-
-    // 追加同义词
-    private static void appendSynonyms(String query, Set<String> terms) {
-        String lower = query.toLowerCase(Locale.ROOT);
-        for (Map.Entry<String, List<String>> entry : TOPIC_EXPANSIONS.entrySet()) {
-            String key = entry.getKey();
-            List<String> phrases = entry.getValue();
-            boolean hit = query.contains(key) || lower.contains(key.toLowerCase(Locale.ROOT));
-            if (!hit) {
-                for (String p : phrases) {
-                    if (query.contains(p) || lower.contains(p.toLowerCase(Locale.ROOT))) {
-                        hit = true;
-                        break;
-                    }
-                }
-            }
-            if (!hit) {
-                continue;
-            }
-            terms.add(key);
-            terms.addAll(phrases);
-        }
     }
 }

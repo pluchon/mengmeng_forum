@@ -16,7 +16,7 @@ public class MascotInternalController implements MascotPreferenceInternalApi {
 
     @Override
     public void setMascotModel(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam("mascotModelId") Long mascotModelId) {
         mascotService.setUserMascotPreference(userId, mascotModelId);
     }

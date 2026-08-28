@@ -19,7 +19,6 @@ import org.pluchon.forum.service.interfaces.user.UserProfileChangeService;
 import org.pluchon.forum.service.interfaces.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -109,22 +108,6 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
                         .orderByDesc(UserProfileChangeRequest::getId));
         UserProfileChangeRequest latest = rows.isEmpty() ? null : rows.get(0);
         return latest == null ? null : toVO(latest);
-    }
-
-    @Override
-    @Scheduled(fixedDelay = 60000L, initialDelay = 30000L)
-    public void retryPendingRequests() {
-        Date before = new Date(System.currentTimeMillis() - 30000L);
-        List<UserProfileChangeRequest> requests = requestMapper.selectList(
-                new LambdaQueryWrapper<UserProfileChangeRequest>()
-                        .eq(UserProfileChangeRequest::getReviewStatus, STATUS_PENDING)
-                        .lt(UserProfileChangeRequest::getRetryCount, 3)
-                        .eq(UserProfileChangeRequest::getDeleteState, DELETE_FALSE)
-                        .le(UserProfileChangeRequest::getUpdateTime, before)
-                        .orderByAsc(UserProfileChangeRequest::getId));
-        for (UserProfileChangeRequest request : requests.stream().limit(20).toList()) {
-            profileReviewExecutor.execute(() -> process(request.getId()));
-        }
     }
 
     private void process(Long requestId) {

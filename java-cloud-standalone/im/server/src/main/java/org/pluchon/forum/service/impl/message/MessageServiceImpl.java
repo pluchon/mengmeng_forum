@@ -726,14 +726,14 @@ public class MessageServiceImpl implements MessageService {
                 .orderByAsc(UserChatEmoji::getId);
         if ("uploaded".equals(normalizedSource)) {
             wrapper.isNull(UserChatEmoji::getOriginMessageId)
-                    .like(UserChatEmoji::getMediaUrl, "forum_chat_picture/emoji/");
+                    .like(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_CHAT_EMOJI);
         } else {
             wrapper.and(query -> query
                     .isNotNull(UserChatEmoji::getOriginMessageId)
                     .or(legacy -> legacy
                             .isNull(UserChatEmoji::getOriginMessageId)
-                            .notLike(UserChatEmoji::getMediaUrl, "forum_chat_picture/emoji/")
-                            .notLike(UserChatEmoji::getMediaUrl, "forum_emoji_shop/")));
+                            .notLike(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_CHAT_EMOJI)
+                            .notLike(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_EMOJI_SHOP)));
         }
 
         Page<UserChatEmoji> page = userChatEmojiMapper.selectPage(

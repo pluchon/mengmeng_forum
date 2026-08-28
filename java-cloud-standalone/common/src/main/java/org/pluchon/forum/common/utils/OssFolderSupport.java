@@ -11,7 +11,7 @@ import java.io.ByteArrayInputStream;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-// OSS 无真实目录；控制台「文件夹」靠以 / 结尾的 0 字节对象呈现。 上传或启动时若前缀不存在则创建，进程内缓存避免重复探测
+// OSS 上传或启动时若前缀不存在则创建，进程内缓存避免重复探测
 @Slf4j
 public final class OssFolderSupport {
 

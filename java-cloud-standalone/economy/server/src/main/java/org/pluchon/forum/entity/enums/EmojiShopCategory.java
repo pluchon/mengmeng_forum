@@ -1,8 +1,11 @@
 package org.pluchon.forum.entity.enums;
 
+import lombok.Getter;
+
 import java.util.Locale;
 
 // 表情商城分类
+@Getter
 public enum EmojiShopCategory {
 
     MOE("MOE", "萌系"),
@@ -19,14 +22,6 @@ public enum EmojiShopCategory {
         this.label = label;
     }
 
-    public String getCode() {
-        return code;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
     public static EmojiShopCategory fromCode(String code) {
         if (code == null || code.isBlank()) {
             return null;
@@ -39,4 +34,5 @@ public enum EmojiShopCategory {
         }
         return null;
     }
+
 }

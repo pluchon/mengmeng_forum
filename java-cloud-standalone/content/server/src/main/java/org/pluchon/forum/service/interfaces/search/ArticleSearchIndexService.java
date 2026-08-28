@@ -18,6 +18,4 @@ public interface ArticleSearchIndexService {
     // 倒排召回已发布帖子 ID，按「命中词数」降序.
     List<Long> searchPublishedIds(String keyword, int limit);
 
-    // 全量重建：扫描 DB 已发布帖，同步 Redis 索引
-    int rebuildAllPublished();
 }

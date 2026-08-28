@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.hibernate.validator.constraints.Length;
 
-// &#064;create 2026 03 06 17:35 作者代码水平一般，难免难看，请见谅
 // 用户登录请求
 @Data
 public class UserLoginRequest {

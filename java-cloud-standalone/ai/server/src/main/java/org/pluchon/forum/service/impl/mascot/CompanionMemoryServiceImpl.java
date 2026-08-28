@@ -131,20 +131,20 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long appendTextMessage(Long sessionId, String role, String content) {
-        return appendTextMessage(sessionId, role, content, (String) null);
+    public void appendTextMessage(Long sessionId, String role, String content) {
+        appendTextMessage(sessionId, role, content, (String) null);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
+    public void appendTextMessage(Long sessionId, String role, String content, String searchImageUrl) {
         List<CompanionImageGalleryItemVO> gallery = new ArrayList<>();
         if (searchImageUrl != null && !searchImageUrl.isBlank()) {
             CompanionImageGalleryItemVO item = new CompanionImageGalleryItemVO();
             item.setUrl(searchImageUrl.trim());
             gallery.add(item);
         }
-        return appendTextMessage(sessionId, role, content, gallery);
+        appendTextMessage(sessionId, role, content, gallery);
     }
 
     @Override
@@ -454,7 +454,7 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     private List<String> sanitizeFacts(List<String> raw) {
         List<String> out = new ArrayList<>();
         for (String item : raw == null ? List.<String>of() : raw) {
-            String text = item == null ? "" : item.trim();
+            String text = item.trim();
             if (text.isBlank() || out.contains(text)) {
                 continue;
             }

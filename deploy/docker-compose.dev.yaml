@@ -13,7 +13,7 @@
 # 宿主机连接（与 backend/application.yml、ai-server/config.yaml 默认一致）：
 #   Nacos       客户端 127.0.0.1:8848（gRPC 9848）；控制台 http://127.0.0.1:8080/index.html
 #   MySQL       127.0.0.1:33306
-#   Redis       127.0.0.1:63790
+#   Redis       127.0.0.1:16379
 #   RabbitMQ    AMQP 56720，管理台 http://127.0.0.1:25672
 #   PostgreSQL  54320
 #   FFmpeg      http://127.0.0.1:8099  （Java 大文件压缩：FORUM_FFMPEG_URL=http://127.0.0.1:8099）
@@ -82,7 +82,7 @@ services:
     container_name: forum-redis-dev
     restart: unless-stopped
     ports:
-      - "${REDIS_HOST_PORT:-63790}:6379"
+      - "${REDIS_HOST_PORT:-16379}:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - forum_dev_redis_data:/data

@@ -176,7 +176,7 @@ class ContentModerationModule:
         results: list[dict[str, Any]] = []
         all_allowed = True
         for index, item in enumerate(normalized_items):
-            row = dict(by_key.get(item["dedupe"], {"allowed": False, "reason": "审核失败"}))
+            row = dict(by_key.get(item["dedupe"], {"allowed": False, "reason": "图片审核失败，请稍后重试"}))
             row["index"] = index
             row["imageUrl"] = item["imageUrl"]
             row["objectKey"] = item["objectKey"]
@@ -209,22 +209,22 @@ class ContentModerationModule:
                     image_url[:120],
                     object_key[:80],
                 )
-                raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片无法拉取，请稍后重试")
+                raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片读取失败，请稍后再试")
             return image_data
         encoded = payload.get("contentBase64")
         if not isinstance(encoded, str) or not encoded.strip():
-            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "imageUrl 或 contentBase64 不能为空")
+            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片内容为空，请重新上传")
         try:
             image_data = base64.b64decode(encoded, validate=True)
         except (ValueError, TypeError) as exc:
-            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "contentBase64 格式错误") from exc
+            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片数据损坏，请重新上传") from exc
         return image_data
 
     @staticmethod
     def _audit_image_data(image_data: bytes) -> tuple[bool, str]:
         max_bytes = int(settings.image.get("max_bytes", 10 * 1024 * 1024))
         if len(image_data) > max_bytes:
-            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片超过允许大小")
+            raise ModuleRequestError("INVALID_IMAGE_AUDIT_PAYLOAD", "图片太大了，请压缩后再上传")
         fmt = validate_image_bytes(image_data)
         if not fmt:
             head = image_data[:12].hex() if image_data else ""
@@ -234,7 +234,7 @@ class ContentModerationModule:
         if not meets_vision_model_min_size(image_data):
             raise ModuleRequestError(
                 "INVALID_IMAGE_AUDIT_PAYLOAD",
-                "图片尺寸过小，宽高均需大于 10 像素",
+                "图片尺寸太小，请换一张更清晰的图片",
             )
         data_url = to_data_url(image_data, fmt)
         message = HumanMessage(content=[{"image": data_url}, {"text": IMAGE_DESC_PROMPT}])
@@ -250,7 +250,7 @@ class ContentModerationModule:
             ) from exc
         description = _extract_text(response)
         if not description:
-            return False, "图片描述为空"
+            return False, "图片无法识别，请换一张图片"
         try:
             verdict = _extract_text((IMAGE_AUDIT_TEMPLATE | text_llm()).invoke({"desc": description}))
         except Exception as exc:
@@ -295,12 +295,9 @@ class ContentModerationModule:
 def _format_reject_message(image_data: bytes) -> str:
     if len(image_data) >= 12 and image_data[4:8] == b"ftyp":
         brand = image_data[8:12].decode("ascii", errors="ignore").lower()
-        if brand.startswith("hei") or brand == "mif1":
-            return "不支持 HEIC/HEIF，请转换为 JPG 或 PNG"
-        if brand.startswith("avif"):
-            return "不支持 AVIF，请转换为 JPG 或 PNG"
-        return f"不支持该图片编码({brand})，请使用 JPG / PNG / GIF"
-    return "不支持的图片格式"
+        if brand.startswith("hei") or brand == "mif1" or brand.startswith("avif"):
+            return "暂不支持这种图片格式，请转成 JPG 或 PNG 后再上传"
+    return "暂不支持这种图片格式，请使用 JPG、PNG 或 GIF"
 
 
 def _extract_text(response: object) -> str:

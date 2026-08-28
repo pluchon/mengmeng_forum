@@ -1,5 +1,6 @@
 package org.pluchon.forum.task;
 
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicRecommendRefreshService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -7,7 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 // 双周音乐品味片单：每周日 03:10 触发，服务内再判断是否落在双周桶执行日（约每 14 天一次）
-@ConditionalOnProperty(name = "forum.domain", havingValue = "content")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.CONTENT)
 @Component
 public class MusicTasteRecommendRefreshTask {
 

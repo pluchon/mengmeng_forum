@@ -21,8 +21,7 @@ public final class LotteryImagePathUtils {
     }
 
     public static String activityCoverObjectName(long activityId, long publisherId, String ts, String ext) {
-        String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        return activityId + "_" + publisherId + "_" + ts + "_" + uuid + "." + ext;
+        return prizeImageObjectName(activityId, publisherId, ts, ext);
     }
 
     public static String activityCoverRelative(long activityId, long publisherId, String ts, String ext) {

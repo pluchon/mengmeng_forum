@@ -105,7 +105,7 @@ def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:
         logger.exception("AI Gateway 执行失败 trace_id=%s", trace_id)
         return {
             "code": 500,
-            "msg": "AI Gateway 执行失败",
+            "msg": "AI 服务暂时不可用，请稍后再试",
             "data": {
                 "requestId": request.request_id if request else "",
                 "traceId": trace_id,
@@ -133,7 +133,7 @@ def stream_gateway(raw: dict[str, Any]) -> Iterator[dict[str, Any]]:
         if not semaphore.acquire(blocking=False):
             yield ModuleEvent(
                 "error",
-                {"errorCode": "AI_GATEWAY_BUSY", "message": "AI 服务繁忙，请稍后重试"},
+                {"errorCode": "AI_GATEWAY_BUSY", "message": "AI 服务正忙，请稍后再试"},
             ).to_dict()
             yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
             return
@@ -149,7 +149,8 @@ def stream_gateway(raw: dict[str, Any]) -> Iterator[dict[str, Any]]:
         yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
     except Exception:
         logger.exception("AI Gateway 流式执行失败 trace_id=%s", request.trace_id)
-        yield ModuleEvent("error", {"errorCode": "AI_GATEWAY_FAILED", "message": "AI Gateway 执行失败"}).to_dict()
+        yield ModuleEvent("error", {"errorCode": "AI_GATEWAY_FAILED",
+                                    "message": "AI 服务暂时不可用，请稍后再试"}).to_dict()
         yield ModuleEvent("done", {"success": False, "traceId": request.trace_id}).to_dict()
 
 

@@ -1,9 +1,7 @@
 package org.pluchon.forum.common.constant;
 
 import java.util.Set;
-import java.util.regex.Pattern;
 
-// 全局常量门面：定义已拆分至各 *Constants / *RedisKeys，此处保持向后兼容
 public final class Constant {
 
     private Constant() {
@@ -11,7 +9,6 @@ public final class Constant {
 
     
     public static final String USER_SESSION = AuthConstants.USER_SESSION;
-    public static final Pattern VALID_USERNAME_PATTERN = AuthConstants.VALID_USERNAME_PATTERN;
     public static final String JWT_NAME = AuthConstants.JWT_NAME;
     public static final String JWT_USER_ID = AuthConstants.JWT_USER_ID;
     public static final String JWT_USER_NAME = AuthConstants.JWT_USER_NAME;
@@ -52,7 +49,6 @@ public final class Constant {
     public static final long REDIS_TTL_USER_NAME = ForumRedisKeys.TTL_USER_NAME;
     public static final long REDIS_TTL_EMPTY_MARK = ForumRedisKeys.TTL_EMPTY_MARK;
     public static final long REDIS_TTL_USER_LIKES = ForumRedisKeys.TTL_USER_LIKES;
-    public static final String REDIS_KEY_HOT_ARTICLES = ForumRedisKeys.HOT_ARTICLES;
     public static final String REDIS_KEY_SMS_VERIFY = ForumRedisKeys.SMS_VERIFY;
     public static final String REDIS_KEY_SMS_VERIFY_RESET = ForumRedisKeys.SMS_VERIFY_RESET;
     public static final String REDIS_KEY_SMS_COOLDOWN = ForumRedisKeys.SMS_COOLDOWN;
@@ -70,7 +66,6 @@ public final class Constant {
     public static final String REDIS_KEY_MESSAGE_UNREAD_COUNT = ForumRedisKeys.MESSAGE_UNREAD_COUNT;
     public static final long REDIS_TTL_MESSAGE_SESSIONS = ForumRedisKeys.TTL_MESSAGE_SESSIONS;
     public static final String REDIS_KEY_USER_EMOJI_LIST = ForumRedisKeys.USER_EMOJI_LIST;
-    public static final long REDIS_TTL_USER_EMOJI_LIST = ForumRedisKeys.TTL_USER_EMOJI_LIST;
     public static final String REDIS_KEY_ARTICLE_SUMMARY = ForumRedisKeys.ARTICLE_SUMMARY;
     public static final long REDIS_TTL_ARTICLE_SUMMARY = ForumRedisKeys.TTL_ARTICLE_SUMMARY;
     public static final String REDIS_KEY_DANMAKU_RATE = ForumRedisKeys.DANMAKU_RATE;
@@ -97,7 +92,6 @@ public final class Constant {
     public static final long REDIS_TTL_SHOP_LIST_LOCK = ForumRedisKeys.TTL_SHOP_LIST_LOCK;
     public static final String REDIS_KEY_AUDIT_RESULT_DEDUP = ForumRedisKeys.AUDIT_RESULT_DEDUP;
     public static final long REDIS_TTL_AUDIT_RESULT_DEDUP = ForumRedisKeys.TTL_AUDIT_RESULT_DEDUP;
-    public static final String REDIS_KEY_AUDIT_TASK_STATE = ForumRedisKeys.AUDIT_TASK_STATE;
     public static final String REDIS_KEY_LOTTERY_PUBLIC_RECENT = ForumRedisKeys.LOTTERY_PUBLIC_RECENT;
     public static final long REDIS_TTL_LOTTERY_PUBLIC_RECENT = ForumRedisKeys.TTL_LOTTERY_PUBLIC_RECENT;
     public static final String REDIS_KEY_LOGIN_FAIL = ForumRedisKeys.LOGIN_FAIL;
@@ -124,8 +118,6 @@ public final class Constant {
     public static final Byte REPLY_MEDIA_TYPE_IMAGE = ForumBusinessConstants.REPLY_MEDIA_TYPE_IMAGE;
     public static final Byte REPLY_MEDIA_TYPE_SHOP_EMOJI = ForumBusinessConstants.REPLY_MEDIA_TYPE_SHOP_EMOJI;
     public static final int REPLY_MEDIA_MAX_TOTAL = ForumBusinessConstants.REPLY_MEDIA_MAX_TOTAL;
-    public static final int REPLY_MEDIA_MAX_IMAGES = ForumBusinessConstants.REPLY_MEDIA_MAX_IMAGES;
-    public static final int REPLY_MEDIA_MAX_EMOJIS = ForumBusinessConstants.REPLY_MEDIA_MAX_EMOJIS;
     public static final double HOT_SCORE_WEIGHT_LIKE = ForumBusinessConstants.HOT_SCORE_WEIGHT_LIKE;
     public static final double HOT_SCORE_WEIGHT_VISIT = ForumBusinessConstants.HOT_SCORE_WEIGHT_VISIT;
     public static final double HOT_SCORE_WEIGHT_FAVORITE = ForumBusinessConstants.HOT_SCORE_WEIGHT_FAVORITE;
@@ -161,7 +153,6 @@ public final class Constant {
     public static final long IMAGE_COMPRESS_TARGET_SIZE = ForumBusinessConstants.IMAGE_COMPRESS_TARGET_SIZE;
     public static final long IMAGE_COMPRESS_MAX_OUTPUT_SIZE = ForumBusinessConstants.IMAGE_COMPRESS_MAX_OUTPUT_SIZE;
     public static final int IMAGE_COMPRESS_MAX_DIMENSION = ForumBusinessConstants.IMAGE_COMPRESS_MAX_DIMENSION;
-    public static final long IMAGE_AUDIT_JSON_SAFE_RAW_BYTES = ForumBusinessConstants.IMAGE_AUDIT_JSON_SAFE_RAW_BYTES;
     public static final long IMAGE_AUDIT_COMPRESS_TARGET_BYTES = ForumBusinessConstants.IMAGE_AUDIT_COMPRESS_TARGET_BYTES;
     public static final int IMAGE_AUDIT_COMPRESS_MAX_DIMENSION = ForumBusinessConstants.IMAGE_AUDIT_COMPRESS_MAX_DIMENSION;
     public static final Set<String> IMAGE_SUPPORTED_TYPES = ForumBusinessConstants.IMAGE_SUPPORTED_TYPES;
@@ -191,19 +182,13 @@ public final class Constant {
     public static final Byte POINTS_SOURCE_CHECKIN_BONUS = ForumBusinessConstants.POINTS_SOURCE_CHECKIN_BONUS;
     public static final Byte POINTS_SOURCE_CHECKIN_SURPRISE = ForumBusinessConstants.POINTS_SOURCE_CHECKIN_SURPRISE;
     public static final Byte POINTS_SOURCE_SHOP_PURCHASE = ForumBusinessConstants.POINTS_SOURCE_SHOP_PURCHASE;
-    public static final Byte POINTS_SOURCE_REFUND = ForumBusinessConstants.POINTS_SOURCE_REFUND;
     public static final Byte POINTS_SOURCE_LOTTERY_COST = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_COST;
     public static final Byte POINTS_SOURCE_LOTTERY_WIN = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_WIN;
     public static final Byte POINTS_SOURCE_REGISTER_BONUS = ForumBusinessConstants.POINTS_SOURCE_REGISTER_BONUS;
-    public static final Byte POINTS_SOURCE_VIP_SUBSCRIBE = ForumBusinessConstants.POINTS_SOURCE_VIP_SUBSCRIBE;
     public static final Byte POINTS_SOURCE_AI_COMPANION = ForumBusinessConstants.POINTS_SOURCE_AI_COMPANION;
     public static final Byte POINTS_SOURCE_AI_IMAGE = ForumBusinessConstants.POINTS_SOURCE_AI_IMAGE;
-    public static final Byte POINTS_SOURCE_GAME_WIN = ForumBusinessConstants.POINTS_SOURCE_GAME_WIN;
-    public static final Byte POINTS_SOURCE_GAME_LOSE = ForumBusinessConstants.POINTS_SOURCE_GAME_LOSE;
-    public static final Byte POINTS_SOURCE_TETRIS = ForumBusinessConstants.POINTS_SOURCE_TETRIS;
     public static final Byte POINTS_SOURCE_MILESTONE_REWARD = ForumBusinessConstants.POINTS_SOURCE_MILESTONE_REWARD;
     public static final Byte POINTS_SOURCE_LOTTERY_COLLECT = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_COLLECT;
-    public static final Byte POINTS_SOURCE_ADMIN_ADJUST = ForumBusinessConstants.POINTS_SOURCE_ADMIN_ADJUST;
     public static final int AI_ESTIMATE_CHAT_INPUT_TOKENS = ForumBusinessConstants.AI_ESTIMATE_CHAT_INPUT_TOKENS;
     public static final int AI_ESTIMATE_CHAT_OUTPUT_TOKENS = ForumBusinessConstants.AI_ESTIMATE_CHAT_OUTPUT_TOKENS;
     public static final String AI_MODEL_IMAGE_NORMAL = ForumBusinessConstants.AI_MODEL_IMAGE_NORMAL;
@@ -229,7 +214,6 @@ public final class Constant {
     public static final Byte LOTTERY_PRIZE_CONSOLATION = ForumBusinessConstants.LOTTERY_PRIZE_CONSOLATION;
     public static final Byte LOTTERY_PRIZE_POINTS = ForumBusinessConstants.LOTTERY_PRIZE_POINTS;
     public static final Byte LOTTERY_PRIZE_VIP_DAYS = ForumBusinessConstants.LOTTERY_PRIZE_VIP_DAYS;
-    public static final int LOTTERY_PRIZE_SINGLE_POINTS_MAX = ForumBusinessConstants.LOTTERY_PRIZE_SINGLE_POINTS_MAX;
     public static final int LOTTERY_RANDOM_POINTS_MARKER = ForumBusinessConstants.LOTTERY_RANDOM_POINTS_MARKER;
     public static final int LOTTERY_RANDOM_POINTS_MIN = ForumBusinessConstants.LOTTERY_RANDOM_POINTS_MIN;
     public static final int LOTTERY_RANDOM_POINTS_MAX = ForumBusinessConstants.LOTTERY_RANDOM_POINTS_MAX;
@@ -269,7 +253,6 @@ public final class Constant {
     public static final Byte SYSTEM_MSG_TYPE_TAG_APPROVED = ForumBusinessConstants.SYSTEM_MSG_TYPE_TAG_APPROVED;
     public static final String SYSTEM_MSG_TITLE_TAG_APPROVED = ForumBusinessConstants.SYSTEM_MSG_TITLE_TAG_APPROVED;
 
-    
     public static final String OSS_PATH_AVATAR = OssPaths.AVATAR;
     public static final String OSS_PATH_COVER = OssPaths.COVER;
     public static final String OSS_PATH_BACKGROUND = OssPaths.BACKGROUND;
@@ -277,7 +260,6 @@ public final class Constant {
     public static final String OSS_PATH_ARTICLE_IMAGE = OssPaths.ARTICLE_IMAGE;
     public static final String OSS_PATH_ARTICLE_VIDEO = OssPaths.ARTICLE_VIDEO;
     public static final String OSS_PATH_ARTICLE_HLS = OssPaths.ARTICLE_HLS;
-    public static final String OSS_PATH_MUSIC = OssPaths.MUSIC;
     public static final String OSS_PATH_MUSIC_AVATAR = OssPaths.MUSIC_AVATAR;
     public static final String OSS_PATH_MUSIC_INFO = OssPaths.MUSIC_INFO;
     public static final String OSS_PATH_MUSIC_LRC = OssPaths.MUSIC_LRC;
@@ -287,7 +269,6 @@ public final class Constant {
     public static final String OSS_PATH_CHAT_MESSAGE = OssPaths.CHAT_MESSAGE;
     public static final String OSS_PATH_CHAT_EMOJI = OssPaths.CHAT_EMOJI;
     public static final String OSS_PATH_EMOJI_SHOP = OssPaths.EMOJI_SHOP;
-    public static final String OSS_PATH_COMPANION_AI = OssPaths.COMPANION_AI;
     public static final String OSS_PATH_AI_GENERATION_ARTICLE = OssPaths.AI_GENERATION_ARTICLE;
     public static final String OSS_PATH_AI_GENERATION_SESSION = OssPaths.AI_GENERATION_SESSION;
     public static final String OSS_LEGACY_ROOT = OssPaths.LEGACY_ROOT;

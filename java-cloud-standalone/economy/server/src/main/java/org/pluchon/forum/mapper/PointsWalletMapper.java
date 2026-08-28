@@ -20,7 +20,7 @@ public interface PointsWalletMapper extends BaseMapper<PointsWallet> {
 
     @Insert("INSERT INTO points_wallet (user_id, balance, version, delete_state) "
             + "VALUES (#{userId}, #{balance}, 0, 0)")
-    int insertWallet(@Param("userId") Long userId, @Param("balance") int balance);
+    void insertWallet(@Param("userId") Long userId, @Param("balance") int balance);
 
     @Update("UPDATE points_wallet SET balance = balance + #{amount}, version = version + 1 "
             + "WHERE user_id = #{userId} AND delete_state = 0")

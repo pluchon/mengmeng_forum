@@ -20,7 +20,7 @@ public interface ForumAiModelUsageDailyMapper extends BaseMapper<ForumAiModelUsa
             + "input_tokens = input_tokens + #{inputTokens}, "
             + "output_tokens = output_tokens + #{outputTokens}, "
             + "image_count = image_count + #{imageCount}")
-    int incrementUsage(
+    void incrementUsage(
             @Param("statDate") Date statDate,
             @Param("modelCode") String modelCode,
             @Param("pointsSpent") long pointsSpent,

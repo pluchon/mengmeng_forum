@@ -165,18 +165,20 @@ public class AiCallRecordService {
 
     // 流式停止或断网但有部分输出：按实际输出 token 计费；无输出则不扣费
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> settlePartialOutput(AiCallBeginResult begin, AiUserContext user, String featureCode,
-                                                   String modelCode, int outputCharCount, String relatedId,
-                                                   Byte pointsSource, boolean usePointsBilling) {
+    public void settlePartialOutput(AiCallBeginResult begin, AiUserContext user, String featureCode,
+                                    String modelCode, int outputCharCount, String relatedId,
+                                    Byte pointsSource, boolean usePointsBilling) {
         if (begin == null) {
-            return Map.of("pointsCost", 0, "billingMode", "skipped");
+            return;
         }
         if (begin.isDuplicateSuccess()) {
-            return duplicateBillingResult(user, begin.getPreviousPointsCharged());
+            duplicateBillingResult(user, begin.getPreviousPointsCharged());
+            return;
         }
         if (outputCharCount <= 0) {
             markFailure(begin, AiCallState.DISCONNECTED, "无输出断开");
-            return duplicateBillingResult(user, 0);
+            duplicateBillingResult(user, 0);
+            return;
         }
         int outputTokens = Math.max(1, outputCharCount / PARTIAL_CHARS_PER_TOKEN);
         AiModelUsageDTO usage = new AiModelUsageDTO();
@@ -187,7 +189,6 @@ public class AiCallRecordService {
         Map<String, Object> billing = aiPointsBillingService.bill(
                 user, featureCode, usage, relatedId, pointsSource, usePointsBilling);
         updateRecordSettled(begin.getRecordId(), AiCallState.STOPPED, usage, billing);
-        return billing;
     }
 
     private void updateRecordSettled(Long recordId, AiCallState state, AiModelUsageDTO usage,

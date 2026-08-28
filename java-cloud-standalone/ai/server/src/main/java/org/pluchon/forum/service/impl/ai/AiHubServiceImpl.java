@@ -116,7 +116,7 @@ public class AiHubServiceImpl implements AiHubService {
         Map<String, Object> gateway = parseGatewayResponse(aiPythonGatewayClient.invoke(taskType, intent, body));
         Object success = gateway.get("success");
         if (!(success instanceof Boolean) || !((Boolean) success)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 模块执行失败"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE));
         }
         Map<String, Object> result = new HashMap<>();
         Object data = gateway.get("data");
@@ -385,8 +385,6 @@ public class AiHubServiceImpl implements AiHubService {
                 if (id != null) {
                     sorted.add(id);
                 }
-            }
-            if (sorted.isEmpty()) {
             }
             return sorted;
         } catch (Exception e) {
@@ -662,7 +660,7 @@ public class AiHubServiceImpl implements AiHubService {
             }
             payload.put("items", itemMaps);
             Map<String, Object> data = invokeGateway("CONTENT_MODERATION", "IMAGE_AUDIT", null, payload);
-            Object resultsObj = data != null ? data.get("results") : null;
+            Object resultsObj = data.get("results");
             if (resultsObj instanceof List<?> resultsList && !resultsList.isEmpty()) {
                 return parseImageModerationResults(resultsList, items);
             }
@@ -759,7 +757,7 @@ public class AiHubServiceImpl implements AiHubService {
                     Result.fail(ResultCode.FAILED_IMAGE_FORMAT_UNSUPPORTED, "图片数据不完整，请重试"));
         }
         log.warn("图片审核载荷 filename={} bytes={}KB b64Len={} head={}",
-                filename, imageBytes.length / 1024, contentBase64.length(), hexHead(imageBytes, 8));
+                filename, imageBytes.length / 1024, contentBase64.length(), hexHead(imageBytes));
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("contentBase64", Base64.getEncoder().encodeToString(imageBytes));
@@ -847,11 +845,11 @@ public class AiHubServiceImpl implements AiHubService {
         return text.isEmpty() ? null : text;
     }
 
-    private static String hexHead(byte[] bytes, int length) {
+    private static String hexHead(byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
             return "";
         }
-        int end = Math.min(length, bytes.length);
+        int end = Math.min(8, bytes.length);
         StringBuilder builder = new StringBuilder(end * 2);
         for (int i = 0; i < end; i++) {
             builder.append(String.format("%02x", bytes[i]));

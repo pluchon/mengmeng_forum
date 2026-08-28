@@ -3,6 +3,7 @@ package org.pluchon.forum.service.impl.points;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -57,7 +58,7 @@ import java.util.Map;
 // 仅 economy 域本地落库；其他域走 PointsFeignService
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "forum.domain", havingValue = "economy")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.ECONOMY)
 public class PointsServiceImpl implements PointsService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Taipei");
@@ -148,9 +149,9 @@ public class PointsServiceImpl implements PointsService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         int balance = selectBalance(userId);
-        int totalCheckin = sumByPositiveSources(userId, org.pluchon.forum.common.constant.Constant.POINTS_SOURCE_CHECKIN_BASIC,
-                org.pluchon.forum.common.constant.Constant.POINTS_SOURCE_CHECKIN_BONUS);
-        int totalSpend = absSumByNegativeSources(userId, org.pluchon.forum.common.constant.Constant.POINTS_SOURCE_SHOP_PURCHASE);
+        int totalCheckin = sumByPositiveSources(userId
+        );
+        int totalSpend = absSumByNegativeSources(userId);
         return new PointsWalletVO(balance, totalCheckin, totalSpend);
     }
 
@@ -194,10 +195,19 @@ public class PointsServiceImpl implements PointsService {
         }
         if (StringUtils.hasText(cursor)) {
             CursorUtils.CursorToken token = CursorUtils.decode(cursor);
-            Date cursorTime = new Date(token.timeMillis());
+            Date cursorTime;
+            if (token != null) {
+                cursorTime = new Date(token.timeMillis());
+            } else {
+                cursorTime = null;
+            }
             wrapper.and(w -> w.lt(PointsLog::getCreateTime, cursorTime)
-                    .or(w2 -> w2.eq(PointsLog::getCreateTime, cursorTime)
-                            .lt(PointsLog::getId, token.id())));
+                    .or(w2 -> {
+                        if (token != null) {
+                            w2.eq(PointsLog::getCreateTime, cursorTime)
+                                    .lt(PointsLog::getId, token.id());
+                        }
+                    }));
         }
         wrapper.orderByDesc(PointsLog::getCreateTime).orderByDesc(PointsLog::getId);
         Page<PointsLog> page = new Page<>(1, size + 1, false);
@@ -631,13 +641,12 @@ public class PointsServiceImpl implements PointsService {
         }
     }
 
-    private PointsWallet ensureWalletForUpdate(Long userId) {
+    private void ensureWalletForUpdate(Long userId) {
         ensureWalletExists(userId);
         PointsWallet locked = pointsWalletMapper.selectByUserIdForUpdate(userId);
         if (locked == null) {
             throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
         }
-        return locked;
     }
 
     private void insertLog(Long userId, int delta, int balanceAfter, Byte sourceType, Long relatedId,
@@ -660,12 +669,12 @@ public class PointsServiceImpl implements PointsService {
         }
     }
 
-    private int sumByPositiveSources(Long userId, Byte... sources) {
-        return toInt(pointsLogMapper.sumPositiveBySources(userId, sources));
+    private int sumByPositiveSources(Long userId) {
+        return toInt(pointsLogMapper.sumPositiveBySources(userId, new Byte[]{Constant.POINTS_SOURCE_CHECKIN_BASIC, Constant.POINTS_SOURCE_CHECKIN_BONUS}));
     }
 
-    private int absSumByNegativeSources(Long userId, Byte... sources) {
-        return toInt(pointsLogMapper.sumNegativeAbsBySources(userId, sources));
+    private int absSumByNegativeSources(Long userId) {
+        return toInt(pointsLogMapper.sumNegativeAbsBySources(userId, new Byte[]{Constant.POINTS_SOURCE_SHOP_PURCHASE}));
     }
 
     private static int toInt(Object o) {

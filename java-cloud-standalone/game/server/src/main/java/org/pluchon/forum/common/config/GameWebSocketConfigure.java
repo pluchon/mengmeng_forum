@@ -1,5 +1,6 @@
 package org.pluchon.forum.common.config;
 
+import org.jspecify.annotations.NonNull;
 import org.pluchon.forum.common.interceptor.TokenHandshakeInterceptor;
 import org.pluchon.forum.common.websocket.game.handler.GameCenterLobbyWebSocketHandler;
 import org.pluchon.forum.common.websocket.game.handler.GobangGameWebSocketHandler;
@@ -53,7 +54,7 @@ public class GameWebSocketConfigure implements WebSocketConfigurer {
     private String allowedOriginsCsv;
 
     @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+    public void registerWebSocketHandlers(@NonNull WebSocketHandlerRegistry registry) {
         String[] origins = Arrays.stream(allowedOriginsCsv.split(","))
                 .map(String::trim)
                 .filter(StringUtils::hasText)

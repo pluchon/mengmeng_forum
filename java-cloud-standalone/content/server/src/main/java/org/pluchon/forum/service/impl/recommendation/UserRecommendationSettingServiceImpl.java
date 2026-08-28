@@ -58,7 +58,7 @@ public class UserRecommendationSettingServiceImpl implements UserRecommendationS
         if (request == null || request.getPersonalizedEnabled() == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        byte nextState = Boolean.TRUE.equals(request.getPersonalizedEnabled()) ? ENABLED : DISABLED;
+        byte nextState = request.getPersonalizedEnabled() ? ENABLED : DISABLED;
         boolean updateInterest = request.getInterestBoardIds() != null;
         List<Long> nextInterestIds = updateInterest
                 ? validateInterestBoardIds(request.getInterestBoardIds())
@@ -75,7 +75,7 @@ public class UserRecommendationSettingServiceImpl implements UserRecommendationS
             created.setInterestBoardIds(updateInterest ? nextInterestJson : null);
             created.setDeleteState(DELETE_FALSE);
             userRecommendationSettingMapper.insert(created);
-            interestChanged = updateInterest && nextInterestIds != null && !nextInterestIds.isEmpty();
+            interestChanged = updateInterest && !nextInterestIds.isEmpty();
         } else {
             List<Long> previousInterest = RecommendationSettingConverter.parseInterestBoardIds(existing.getInterestBoardIds());
             LambdaUpdateWrapper<UserRecommendationSetting> update = new LambdaUpdateWrapper<UserRecommendationSetting>()

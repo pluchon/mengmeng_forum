@@ -9,5 +9,4 @@ public interface UserProfileChangeService {
 
     ProfileChangeStatusVO latest(Long userId, String fieldType);
 
-    void retryPendingRequests();
 }

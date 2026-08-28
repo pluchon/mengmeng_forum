@@ -444,13 +444,12 @@ public class AiWorkspaceServiceImpl implements AiWorkspaceService {
         return user;
     }
 
-    private AiUserContext requireActiveVip(Long userId) {
-        AiUserContext user = requireUser(userId);
+    private void requireActiveVip(Long userId) {
+        requireUser(userId);
         VipTierSnapshotVO snapshot = vipInternalFeignClient.tierSnapshot(userId);
         if (snapshot == null || !snapshot.isVipActive()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "长期记忆仅向有效会员开放"));
         }
-        return user;
     }
 
     private ForumAiTaskSession findActiveTask(Long userId, Long companionSessionId) {

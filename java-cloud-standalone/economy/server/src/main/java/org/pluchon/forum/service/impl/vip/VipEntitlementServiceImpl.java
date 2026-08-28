@@ -39,12 +39,6 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Date extendVipDays(Long userId, Byte tier, int days) {
-        return extendVipHours(userId, tier, Math.multiplyExact(days, 24));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
     public UserVipSubscription ensureCurrentBaseQuotaPeriod(Long userId) {
         UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
         Date nowDate = new Date();
@@ -89,37 +83,6 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
         }
         userDerivedCacheInvalidator.invalidateUserCaches(userId);
         return newExpire;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Date subscribeTier(Long userId, Byte tier, int days) {
-        if (userId == null || tier == null || days <= 0) {
-            return getSubscription(userId) == null ? null : getSubscription(userId).getVipExpireAt();
-        }
-        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
-        boolean sameActiveTier = vipActive(sub) && tier.equals(sub.getVipTier());
-        ZonedDateTime now = ZonedDateTime.now(TAIPEI);
-        Date expireAt;
-        Date periodStart = sub.getQuotaPeriodStart();
-        Date periodEnd = sub.getQuotaPeriodEnd();
-        if (sameActiveTier) {
-            ZonedDateTime expiry = sub.getVipExpireAt() == null
-                    ? now
-                    : sub.getVipExpireAt().toInstant().atZone(TAIPEI);
-            expireAt = Date.from(expiry.plusDays(days).toInstant());
-        } else {
-            expireAt = Date.from(now.plusDays(days).toInstant());
-            periodStart = Date.from(now.toInstant());
-            periodEnd = Date.from(now.plusDays(30).toInstant());
-        }
-        int affected = userVipSubscriptionMapper.updatePaidSubscription(
-                userId, tier, expireAt, tier, periodStart, periodEnd);
-        if (affected != 1) {
-            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
-        }
-        userDerivedCacheInvalidator.invalidateUserCaches(userId);
-        return expireAt;
     }
 
     private UserVipSubscription ensureSubscriptionForUpdate(Long userId) {

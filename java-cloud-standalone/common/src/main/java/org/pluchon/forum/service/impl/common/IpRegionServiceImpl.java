@@ -2,9 +2,7 @@ package org.pluchon.forum.service.impl.common;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.pluchon.forum.common.utils.HttpRequestUtils;
 import org.pluchon.forum.service.interfaces.common.IpRegionService;
 import org.lionsoul.ip2region.xdb.Searcher;
 import org.springframework.core.io.ClassPathResource;
@@ -44,11 +42,6 @@ public class IpRegionServiceImpl implements IpRegionService {
                 // 忽略
             }
         }
-    }
-
-    @Override
-    public String resolveFromRequest(HttpServletRequest request) {
-        return resolveRegion(HttpRequestUtils.resolveClientIp(request));
     }
 
     @Override

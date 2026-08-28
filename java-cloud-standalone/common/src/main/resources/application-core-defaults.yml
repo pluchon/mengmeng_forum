@@ -13,7 +13,7 @@ spring:
     redis:
       # Windows 上 localhost 常解析到 ::1，而 Docker 端口仅绑 127.0.0.1
       host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
-      port: 63790
+      port: 16379
       password: ${REDIS_PASSWORD}
       database: 0
       timeout: 5000ms

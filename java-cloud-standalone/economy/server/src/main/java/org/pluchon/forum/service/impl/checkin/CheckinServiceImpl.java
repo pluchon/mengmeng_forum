@@ -217,7 +217,7 @@ public class CheckinServiceImpl implements CheckinService {
         if (target == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_MAKEUP_DATE_INVALID));
         }
-        if (!consumeMakeupCard(userId, 1)) {
+        if (!consumeMakeupCard(userId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CHECKIN_MAKEUP_CARD_NOT_ENOUGH));
         }
         return performCheckin(userId, target, true);
@@ -519,10 +519,19 @@ public class CheckinServiceImpl implements CheckinService {
                 .ne(CheckinLog::getDeleteState, 1);
         if (cursor != null && !cursor.isBlank()) {
             CursorUtils.CursorToken token = CursorUtils.decode(cursor);
-            Date cursorTime = new Date(token.timeMillis());
+            Date cursorTime;
+            if (token != null) {
+                cursorTime = new Date(token.timeMillis());
+            } else {
+                cursorTime = null;
+            }
             wrapper.and(w -> w.lt(CheckinLog::getCheckinDate, cursorTime)
-                    .or(w2 -> w2.eq(CheckinLog::getCheckinDate, cursorTime)
-                            .lt(CheckinLog::getId, token.id())));
+                    .or(w2 -> {
+                        if (token != null) {
+                            w2.eq(CheckinLog::getCheckinDate, cursorTime)
+                                    .lt(CheckinLog::getId, token.id());
+                        }
+                    }));
         }
         wrapper.orderByDesc(CheckinLog::getCheckinDate).orderByDesc(CheckinLog::getId);
         Page<CheckinLog> page = new Page<>(1, size + 1, false);
@@ -687,19 +696,19 @@ public class CheckinServiceImpl implements CheckinService {
         addMakeupCards(userId, amount);
     }
 
-    private boolean consumeMakeupCard(Long userId, int amount) {
+    private boolean consumeMakeupCard(Long userId) {
         UserCheckinInfo info = loadUserInfo(userId);
         if (info == null) {
             return false;
         }
         int current = info.getMakeupCardCount() == null ? 0 : info.getMakeupCardCount();
-        if (current < amount) {
+        if (current < 1) {
             return false;
         }
         int updated = userCheckinInfoMapper.update(null, new LambdaUpdateWrapper<UserCheckinInfo>()
                 .eq(UserCheckinInfo::getUserId, userId)
-                .ge(UserCheckinInfo::getMakeupCardCount, amount)
-                .setSql("makeup_card_count = makeup_card_count - " + amount));
+                .ge(UserCheckinInfo::getMakeupCardCount, 1)
+                .setSql("makeup_card_count = makeup_card_count - " + 1));
         return updated > 0;
     }
 
@@ -716,10 +725,8 @@ public class CheckinServiceImpl implements CheckinService {
                 signed.add(d);
             }
         }
-        if (!signed.contains(today) && !signed.contains(today.minusDays(1))) {
-            // 今天和昨天都没签：连续为 0 补签过去某天且今天未签时，从今天往前会断
-            // 但仍要从「最近连续段」末端算：若昨天没签但补签了更早，streak 以今天为锚则为 0
-        }
+        // 今天和昨天都没签：连续为 0 补签过去某天且今天未签时，从今天往前会断
+        // 但仍要从「最近连续段」末端算：若昨天没签但补签了更早，streak 以今天为锚则为 0
         int streak = 0;
         LocalDate cursor = signed.contains(today) ? today : today.minusDays(1);
         if (!signed.contains(cursor)) {

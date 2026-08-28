@@ -159,7 +159,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 && StringUtils.hasText(article.getVideoUrl())) {
             videoUrl = article.getVideoUrl().trim();
         }
-        ArticleAuditTaskMqVO task = new ArticleAuditTaskMqVO(
+        final ArticleAuditTaskMqVO auditTask = new ArticleAuditTaskMqVO(
                 taskId,
                 articleId,
                 loginUserId,
@@ -170,7 +170,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 videoUrl,
                 System.currentTimeMillis()
         );
-        final ArticleAuditTaskMqVO auditTask = task;
         TransactionHooks.afterCommit(() -> forumProducer.sendArticleAuditTask(auditTask));
         if (wasPublished) {
             final Long boardId = article.getBoardId();
@@ -222,18 +221,11 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         }
         String finalStatus = result.getFinalStatus() == null ? "AUDIT_ERROR" : result.getFinalStatus().toUpperCase();
         Date now = new Date();
-        boolean applied;
-        switch (finalStatus) {
-            case "APPROVED":
-                applied = applyAuditApproved(article, result, now);
-                break;
-            case "REJECTED":
-                applied = applyAuditRejected(article, result, now);
-                break;
-            default:
-                applied = applyAuditError(article, result, now);
-                break;
-        }
+        boolean applied = switch (finalStatus) {
+            case "APPROVED" -> applyAuditApproved(article, result, now);
+            case "REJECTED" -> applyAuditRejected(article, result, now);
+            default -> applyAuditError(article, result, now);
+        };
         if (applied) {
             try {
                 stringRedisTemplate.opsForValue().set(dedupKey, "done",
@@ -307,7 +299,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 .eq(Article::getAuditTaskId, result.getTaskId())
                 .set(Article::getStatus, ArticleStatus.REJECTED.getCode())
                 .set(Article::getAuditFinishedAt, now)
-                .set(Article::getAuditResultMessage, truncate(reason, 500)));
+                .set(Article::getAuditResultMessage, truncate(reason)));
         if (updated <= 0) {
             log.warn("REJECTED 扭转失败 (并发): articleId={}, taskId={}", articleId, result.getTaskId());
             return false;
@@ -330,7 +322,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 .eq(Article::getAuditTaskId, result.getTaskId())
                 .set(Article::getStatus, ArticleStatus.AUDIT_ERROR.getCode())
                 .set(Article::getAuditFinishedAt, now)
-                .set(Article::getAuditResultMessage, truncate(reason, 500)));
+                .set(Article::getAuditResultMessage, truncate(reason)));
         if (updated <= 0) {
             log.warn("AUDIT_ERROR 扭转失败 (并发): articleId={}, taskId={}", articleId, result.getTaskId());
             return false;
@@ -360,7 +352,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             } catch (Exception e) {
                 payloadJson = null;
             }
-            systemMsgId = contentSystemMessageInternalFeignClient.createMessage(userId, sysMsgType, title, truncate(content, 500),
+            systemMsgId = contentSystemMessageInternalFeignClient.createMessage(userId, sysMsgType, title, truncate(content),
                     articleId, payloadJson);
         } catch (Exception e) {
             log.error("写入系统消息失败: userId={}, articleId={}", userId, articleId, e);
@@ -381,7 +373,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             auditWs.put("taskId", result.getTaskId());
             auditWs.put("finalStatus", result.getFinalStatus());
             auditWs.put("status", statusAfter);
-            auditWs.put("resultMessage", truncate(content, 500));
+            auditWs.put("resultMessage", truncate(content));
             auditWs.put("title", title);
             contentWebSocketInternalFeignClient.push(userId, objectMapper.writeValueAsString(auditWs));
             Map<String, Object> sysWs = new LinkedHashMap<>();
@@ -389,7 +381,7 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
             sysWs.put("messageId", systemMsgId);
             sysWs.put("articleId", articleId);
             sysWs.put("title", title);
-            sysWs.put("content", truncate(content, 500));
+            sysWs.put("content", truncate(content));
             sysWs.put("finalStatus", result.getFinalStatus());
             contentWebSocketInternalFeignClient.push(userId, objectMapper.writeValueAsString(sysWs));
         } catch (Exception e) {
@@ -415,11 +407,11 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         return title.length() > 30 ? title.substring(0, 30) + "..." : title;
     }
 
-    private static String truncate(String s, int max) {
+    private static String truncate(String s) {
         if (s == null) {
             return null;
         }
-        return s.length() <= max ? s : s.substring(0, max);
+        return s.length() <= 500 ? s : s.substring(0, 500);
     }
 
     @Override

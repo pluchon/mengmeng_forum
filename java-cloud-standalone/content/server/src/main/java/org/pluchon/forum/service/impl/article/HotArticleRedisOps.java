@@ -149,7 +149,7 @@ public class HotArticleRedisOps {
         List<Object> values = stringRedisTemplate.opsForHash().multiGet(key, new ArrayList<>(fields));
         Map<Long, String> result = new HashMap<>();
         for (int index = 0; index < fields.size(); index++) {
-            Object value = values != null && index < values.size() ? values.get(index) : null;
+            Object value = index < values.size() ? values.get(index) : null;
             if (value != null) {
                 result.put(articleIds.get(index), String.valueOf(value));
             }

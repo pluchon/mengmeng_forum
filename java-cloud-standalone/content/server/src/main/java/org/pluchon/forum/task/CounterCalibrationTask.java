@@ -2,6 +2,7 @@ package org.pluchon.forum.task;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.entity.db.ArticleLike;
 import org.pluchon.forum.mapper.ArticleLikeMapper;
@@ -19,7 +20,7 @@ import java.util.stream.Collectors;
 
 // 定时校准帖子 like_count 与 article_like 实际行数，防止并发漂移长期累积
 @Slf4j
-@ConditionalOnProperty(name = "forum.domain", havingValue = "content")
+@ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.CONTENT)
 @Component
 public class CounterCalibrationTask {
 

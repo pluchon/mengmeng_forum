@@ -7,5 +7,5 @@ import org.springframework.web.bind.annotation.PostMapping;
 public interface FavoriteFolderInternalApi {
 
     @PostMapping("/favorite/internal/{userId}/ensure-default-folder")
-    Long ensureDefaultFolder(@PathVariable("userId") Long userId);
+    Long ensureDefaultFolder(@PathVariable Long userId);
 }

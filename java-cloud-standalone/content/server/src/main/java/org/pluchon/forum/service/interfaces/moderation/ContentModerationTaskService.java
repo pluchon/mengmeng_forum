@@ -13,5 +13,5 @@ public interface ContentModerationTaskService {
 
     int republishPendingTasks();
 
-    boolean deleteConfirmedViolation(Byte targetType, Long targetId, String contentHash);
+    void deleteConfirmedViolation(Byte targetType, Long targetId, String contentHash);
 }

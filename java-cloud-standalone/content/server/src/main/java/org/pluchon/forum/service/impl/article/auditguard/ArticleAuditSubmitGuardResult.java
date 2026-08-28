@@ -1,7 +1,9 @@
 package org.pluchon.forum.service.impl.article.auditguard;
 
+import lombok.Getter;
 import org.pluchon.forum.common.result.Result;
 
+@Getter
 public class ArticleAuditSubmitGuardResult {
 
     private static final ArticleAuditSubmitGuardResult PASSED = new ArticleAuditSubmitGuardResult(true, null);
@@ -23,11 +25,4 @@ public class ArticleAuditSubmitGuardResult {
         return new ArticleAuditSubmitGuardResult(false, errorResult);
     }
 
-    public boolean isPassed() {
-        return passed;
-    }
-
-    public Result<?> getErrorResult() {
-        return errorResult;
-    }
 }

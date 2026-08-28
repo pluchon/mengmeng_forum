@@ -22,7 +22,7 @@ public interface UserVipSubscriptionMapper extends BaseMapper<UserVipSubscriptio
 
     @Insert("INSERT INTO user_vip_subscription (user_id, vip_tier, vip_expire_at, delete_state) "
             + "VALUES (#{userId}, #{tier}, #{expireAt}, 0)")
-    int insertSubscription(@Param("userId") Long userId, @Param("tier") Byte tier, @Param("expireAt") Date expireAt);
+    void insertSubscription(@Param("userId") Long userId, @Param("tier") Byte tier, @Param("expireAt") Date expireAt);
 
     @Update("UPDATE user_vip_subscription SET vip_tier = #{tier}, vip_expire_at = #{expireAt} "
             + "WHERE user_id = #{userId} AND delete_state = 0")
@@ -41,7 +41,7 @@ public interface UserVipSubscriptionMapper extends BaseMapper<UserVipSubscriptio
     @Update("UPDATE user_vip_subscription SET base_quota_tier = #{baseQuotaTier}, "
             + "quota_period_start = #{periodStart}, quota_period_end = #{periodEnd} "
             + "WHERE user_id = #{userId} AND delete_state = 0")
-    int updateBaseQuotaPeriod(@Param("userId") Long userId,
+    void updateBaseQuotaPeriod(@Param("userId") Long userId,
                               @Param("baseQuotaTier") Byte baseQuotaTier,
                               @Param("periodStart") Date periodStart,
                               @Param("periodEnd") Date periodEnd);

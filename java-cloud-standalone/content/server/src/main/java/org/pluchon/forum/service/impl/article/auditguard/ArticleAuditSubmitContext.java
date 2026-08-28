@@ -1,8 +1,10 @@
 package org.pluchon.forum.service.impl.article.auditguard;
 
+import lombok.Getter;
 import org.pluchon.forum.entity.db.Article;
 import org.pluchon.forum.api.UserInternalVO;
 
+@Getter
 public class ArticleAuditSubmitContext {
 
     private final Long articleId;
@@ -20,19 +22,4 @@ public class ArticleAuditSubmitContext {
         this.article = article;
     }
 
-    public Long getArticleId() {
-        return articleId;
-    }
-
-    public Long getLoginUserId() {
-        return loginUserId;
-    }
-
-    public UserInternalVO getAuthor() {
-        return author;
-    }
-
-    public Article getArticle() {
-        return article;
-    }
 }

@@ -18,7 +18,7 @@ public interface UserLotteryVoucherMapper extends BaseMapper<UserLotteryVoucher>
     UserLotteryVoucher selectByUserId(@Param("userId") Long userId);
 
     @Insert("INSERT INTO user_lottery_voucher (user_id, balance, version, delete_state) VALUES (#{userId}, 0, 0, 0)")
-    int insertWallet(@Param("userId") Long userId);
+    void insertWallet(@Param("userId") Long userId);
 
     @Update("UPDATE user_lottery_voucher SET balance = #{balance}, version = version + 1 "
             + "WHERE user_id = #{userId} AND version = #{version} AND delete_state = 0")

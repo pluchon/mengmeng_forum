@@ -35,8 +35,7 @@ public class SMSUtils {
             RuntimeOptions runtime = new RuntimeOptions();
             SendSmsVerifyCodeResponse response = client.sendSmsVerifyCodeWithOptions(request, runtime);
             // 检查响应状态码是否为OK
-            if (response.getBody() != null && "OK".equalsIgnoreCase(response.getBody().getCode())) {
-            } else {
+            if (!(response.getBody() != null && "OK".equalsIgnoreCase(response.getBody().getCode()))){
                 String msg = response.getBody() != null ? response.getBody().getMessage() : "未知错误";
                 log.error("向{}发送短信失败, templateCode={}, 原因: {}", phoneNumbers, templateCode, msg);
                 throw new ApplicationException("短信发送失败: " + msg);

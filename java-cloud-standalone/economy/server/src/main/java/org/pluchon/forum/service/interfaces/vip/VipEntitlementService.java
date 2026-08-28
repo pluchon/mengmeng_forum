@@ -12,11 +12,6 @@ public interface VipEntitlementService {
 
     UserVipSubscription ensureCurrentBaseQuotaPeriod(Long userId);
 
-    // 延长 VIP 天数；tier 为 null 时保持当前有效档或默认 PRO
-    Date extendVipDays(Long userId, Byte tier, int days);
-
     Date extendVipHours(Long userId, Byte tier, int hours);
 
-    // 订阅扣款后升级/续费 VIP 内部会先锁订阅行
-    Date subscribeTier(Long userId, Byte tier, int days);
 }

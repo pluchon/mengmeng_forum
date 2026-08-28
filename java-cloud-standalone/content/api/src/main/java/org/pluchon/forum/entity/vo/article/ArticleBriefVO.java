@@ -20,11 +20,8 @@ public class ArticleBriefVO {
     private Byte mediaType;
     private String videoUrl;
     private Integer favoriteCount;
-    // 帖子业务类型
     private Byte articleType;
-    // 问答解决状态
     private Byte questionStatus;
-    // 最佳答案对应的一级回答 ID
     private Long acceptedReplyId;
     private Byte status;
     private Byte state;

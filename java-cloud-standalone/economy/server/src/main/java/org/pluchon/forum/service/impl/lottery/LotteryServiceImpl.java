@@ -382,7 +382,7 @@ public class LotteryServiceImpl implements LotteryService {
     public LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto) {
         checkLotteryDrawGuard(LotteryDrawContext.requestOnly(userId, dto));
         if (dto.getRequestId() == null || dto.getRequestId().isBlank()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "requestId 不能为空"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
         String requestId = dto.getRequestId().trim();
         LotteryDrawRequest existingRequest = findDrawRequest(userId, requestId);
