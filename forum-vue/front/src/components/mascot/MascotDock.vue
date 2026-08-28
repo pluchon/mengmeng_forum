@@ -121,13 +121,9 @@
                       <span :class="{ 'is-exhausted': row.exhausted }" :style="{ width: `${row.remainingPercent}%` }" />
                     </div>
                   </div>
-                  <button
-                    v-if="quotaExhausted"
-                    type="button"
-                    class="mascot-quota-card__points"
-                    :class="{ 'is-active': usePointsBilling }"
-                    @click="togglePointsPay"
-                  >{{ usePointsBilling ? '已启用萌币支付' : '使用萌币继续' }}</button>
+                  <p v-if="quotaExhausted" class="mascot-quota-card__exhausted">
+                    本周期额度已用完，可用星辉兑换额度重置卡
+                  </p>
                 </section>
               </aside>
 
@@ -358,14 +354,11 @@
                   :vip="isVip"
                   :placeholder="inputPlaceholder"
                   generation-hint="AI 也有可能出错，请自行甄别"
-                  :show-points-pay-button="showPointsPayButton"
-                  :points-pay-active="usePointsBilling"
                   :context-used-tokens="contextWindow.usedTokens"
                   :context-max-tokens="contextWindow.maxTokens"
                   :context-available="contextWindow.canCompress"
                   :context-compressing="contextCompressing"
                   @send="send"
-                  @toggle-points-pay="togglePointsPay"
                   @compress-context="compressContext"
                   @open-memory="openMemoryDialog"
                 />
@@ -460,9 +453,6 @@ const {
   dismissRelatedSearchOffer,
   pickAskOption,
   submitAskCustom,
-  showPointsPayButton,
-  togglePointsPay,
-  usePointsBilling,
   formatAiUsageLine,
   formatMessageDay,
   formatSessionTime,

@@ -163,7 +163,7 @@ public class AiHubServiceImpl implements AiHubService {
                     invokeGateway("POST_CREATION", "TAG_RECOMMEND", request.getUserId(), payload));
             aiPointsBillingService.billBatch(
                     user, "article_tag_recommend", result.getUsageItems(), "qwen3.7-flash",
-                    request.getClientRequestId(), Constant.POINTS_SOURCE_AI_COMPANION, false);
+                    request.getClientRequestId());
             return result;
         } catch (RuntimeException exception) {
             aiQuotaService.releaseQwenFlash(user);
@@ -199,7 +199,7 @@ public class AiHubServiceImpl implements AiHubService {
                     invokeGateway("POST_CREATION", "MUSIC_RECOMMEND", request.getUserId(), payload));
             aiPointsBillingService.billBatch(
                     user, "music_recommend", result.getUsageItems(), "qwen3.7-flash",
-                    request.getClientRequestId(), Constant.POINTS_SOURCE_AI_COMPANION, false);
+                    request.getClientRequestId());
             return result;
         } catch (RuntimeException exception) {
             aiQuotaService.releaseQwenFlash(user);
@@ -223,7 +223,7 @@ public class AiHubServiceImpl implements AiHubService {
                     invokeGateway("POST_CREATION", "MUSIC_SEARCH", request.getUserId(), payload));
             aiPointsBillingService.billBatch(
                     user, "music_ai_search", result.getUsageItems(), "qwen3.7-flash",
-                    request.getClientRequestId(), Constant.POINTS_SOURCE_AI_COMPANION, false);
+                    request.getClientRequestId());
             return result;
         } catch (RuntimeException exception) {
             aiQuotaService.releaseQwenFlash(user);
@@ -317,7 +317,7 @@ public class AiHubServiceImpl implements AiHubService {
             List<AiModelUsageDTO> usages = AiHubConverter.toUsageItems(result.get("usage"));
             aiPointsBillingService.billBatch(
                     user, "creator_insight", usages, "qwen3.7-flash",
-                    request.getClientRequestId(), Constant.POINTS_SOURCE_AI_COMPANION, false);
+                    request.getClientRequestId());
             return response;
         } catch (RuntimeException exception) {
             aiQuotaService.releaseQwenFlash(user);

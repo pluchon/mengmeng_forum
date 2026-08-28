@@ -12,8 +12,6 @@ public class AiPolishRequest {
 
     private String editorMode;
 
-    private Boolean usePointsBilling;
-
     private String clientRequestId;
 
     private Long workspaceId;

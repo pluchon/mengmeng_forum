@@ -178,8 +178,6 @@ public final class Constant {
     public static final Byte POINTS_SOURCE_LOTTERY_COST = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_COST;
     public static final Byte POINTS_SOURCE_LOTTERY_WIN = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_WIN;
     public static final Byte POINTS_SOURCE_REGISTER_BONUS = ForumBusinessConstants.POINTS_SOURCE_REGISTER_BONUS;
-    public static final Byte POINTS_SOURCE_AI_COMPANION = ForumBusinessConstants.POINTS_SOURCE_AI_COMPANION;
-    public static final Byte POINTS_SOURCE_AI_IMAGE = ForumBusinessConstants.POINTS_SOURCE_AI_IMAGE;
     public static final Byte POINTS_SOURCE_MILESTONE_REWARD = ForumBusinessConstants.POINTS_SOURCE_MILESTONE_REWARD;
     public static final Byte POINTS_SOURCE_LOTTERY_COLLECT = ForumBusinessConstants.POINTS_SOURCE_LOTTERY_COLLECT;
     public static final int AI_ESTIMATE_CHAT_INPUT_TOKENS = ForumBusinessConstants.AI_ESTIMATE_CHAT_INPUT_TOKENS;

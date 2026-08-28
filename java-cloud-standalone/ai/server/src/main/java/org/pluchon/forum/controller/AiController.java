@@ -15,7 +15,6 @@ import org.pluchon.forum.entity.dto.AiPolishRequest;
 import org.pluchon.forum.entity.vo.ai.AiArticleCoverResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
-import org.pluchon.forum.entity.vo.ai.AiPriceEstimateVO;
 import org.pluchon.forum.entity.vo.ai.AiPolishResponseVO;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,17 +32,6 @@ public class AiController {
 
     @Autowired
     private AiCompanionApiService aiCompanionApiService;
-
-    @Operation(summary = "预估 AI 消耗积分")
-    @GetMapping("/price-estimate")
-    public Result<AiPriceEstimateVO> priceEstimate(
-            @RequestParam(required = false) String skill,
-            @RequestParam(required = false) String route,
-            @RequestParam(required = false) String quality,
-            HttpServletRequest request) {
-        AuthenticatedUser user = requireLoginUser(request);
-        return Result.success(aiCompanionApiService.priceEstimate(user.getId(), skill, route, quality));
-    }
 
     @Operation(summary = "帖子正文一键润色", description = "模型与润色提示均由服务端确定")
     @PostMapping("/polish")

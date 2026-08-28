@@ -15,8 +15,6 @@ public class AiImageRequest {
 
     private Boolean ephemeral;
 
-    private Boolean usePointsBilling;
-
     private String clientRequestId;
 
     private Long workspaceId;

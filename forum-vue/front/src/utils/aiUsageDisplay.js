@@ -17,8 +17,6 @@ export function formatAiUsageLine(stats) {
     parts.push('会员额度')
   } else if (stats.billingMode === 'free_quota') {
     parts.push('免费额度')
-  } else if (Number(stats.pointsCost) > 0) {
-    parts.push(`扣 ${stats.pointsCost} 积分`)
   }
   return parts.join(' · ')
 }

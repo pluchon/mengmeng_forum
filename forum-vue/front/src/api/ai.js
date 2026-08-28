@@ -43,15 +43,6 @@ export function aiPolish(data) {
   })
 }
 
-// 预估 AI 消耗积分
-export function aiPriceEstimate(params) {
-  return request({
-    url: '/ai/price-estimate',
-    method: 'get',
-    params,
-  })
-}
-
 // 查询 AI 创作工作区版本历史
 export function getAiWorkspaceVersions(workspaceId) {
   return request({

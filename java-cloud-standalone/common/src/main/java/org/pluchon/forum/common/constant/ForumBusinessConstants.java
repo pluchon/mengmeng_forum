@@ -111,8 +111,6 @@ public final class ForumBusinessConstants {
     public static final Byte POINTS_SOURCE_LOTTERY_COST = 4;
     public static final Byte POINTS_SOURCE_LOTTERY_WIN = 5;
     public static final Byte POINTS_SOURCE_REGISTER_BONUS = 6;
-    public static final Byte POINTS_SOURCE_AI_COMPANION = 9;
-    public static final Byte POINTS_SOURCE_AI_IMAGE = 10;
     public static final Byte POINTS_SOURCE_CHECKIN_SURPRISE = 14;
     public static final Byte POINTS_SOURCE_MILESTONE_REWARD = 15;
 

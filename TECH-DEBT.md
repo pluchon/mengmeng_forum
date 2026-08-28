@@ -41,6 +41,9 @@
 - **举报理由接进 AI 审核**：两个域的 `taskPayload` 增加 `reportReason`，多人共享任务时按 `taskId` 聚合去重（上限若干条，`；` 拼接）；Python 侧 `ai_async_worker` 透传，`moderation/graph.py` 的 prompt 以 `<untrusted_report_reason>` 呈现并明确「仅提示审核视角、本身不是证据、不得因此降低判定标准」。带理由的举报**整体绕过语义缓存**——缓存按内容取键不含理由，复用会让理由白传，写回则会污染普通自动审核。
 - **VIP 礼包额外额度显示得到用不到**：不再做独立额度池结算，改为**额度重置卡**（星辉商城 600 星辉，PRO/MAX 同价、重置效果随档位不同）。`vip_quota_bonus_grant` 整套表/服务/跨域契约已下线。
 - **AI 周期键随续期漂移**：周期锚点改取 economy 域 `user_vip_subscription.quota_period_*`，不再从 `vip_expire_at` 反推，续期不再等于白送一次额度重置。
+- **AI 额度用尽的口径**：额度用尽**直接失败**，不再回退扣萌萌币。看板娘的自动回退（静默扣币）与手动「使用萌币继续」开关、`usePointsBilling` 请求字段（4 个 DTO）、`ensureBalance`/`chargePointsAndLog` 扣分路径、`/ai/price-estimate` 预估端点与 `POINTS_SOURCE_AI_*` 两个来源常量全部下线。`AiPointsBillingService` 保留成本核算（`cost_yuan`、折算 micros 写周期表）与 `estimatePoints`（仅供 `forum_ai_call_record.estimated_points` 审计），这两者是额度判定的基础，不是扣费。
+  遗留（不影响功能）：响应体里 `pointsCost` 恒为 0、`balanceAfter` 只是钱包余额快照，为此每次结算仍会向 economy 域发一次 `getBalance`。要彻底去掉需连带改 4 个响应 VO 与前端 usageStats，收益有限，暂留。
+- **任务过程中额度不足不中断**：主回复已产出/已流式送出后才发生的生图，失败只降级成一条提示（非流式走 `MascotChatResponseVO.imageError`，流式走 `meta.imageError`），不再抛异常。此前流式路径在生图失败时提前 return，会连带跳过助手回复落库与终态 meta，等于丢掉已经生成的回复。用户显式触发的上下文压缩不属于「任务过程中」，额度不足仍直接失败。
 - **会员体验卡发放来源统一**：体验卡**只从抽奖池发放**——常规池 PRO 30 天（权重 20、限量 30），神秘大奖池 MAX 30 天（权重 1）。其余四个来源全部下线：连续签到 15/30 天档退回纯星辉（`MIXED`→`STARLIGHT`，`vip_days` 列已删）、签到惊喜奖池移除 VIP 档位（类间权重 1000→900，其余四类相对概率不变）、星辉商城改卖额度重置卡、收集册 80 档改为抵扣券×5。相应地 `CheckinServiceImpl` / `StarlightShopServiceImpl` / `LotteryServiceImpl` 的体验卡发放分支与 `LOTTERY_COLLECT_REWARD_VIP_DAYS` 常量一并移除，规则由代码强制而非仅靠数据。
 
 ---

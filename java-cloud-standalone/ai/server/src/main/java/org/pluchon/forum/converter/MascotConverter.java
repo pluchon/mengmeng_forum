@@ -22,18 +22,13 @@ public final class MascotConverter {
         vo.setSessionId(stringVal(data.get("sessionId")));
         vo.setReply(stringVal(data.get("reply")));
         vo.setImageUrl(stringVal(data.get("imageUrl")));
+        vo.setImageError(stringVal(data.get("imageError")));
         vo.setLive2d(data.get("live2d"));
         vo.setSuggestedAppearance(data.get("suggestedAppearance"));
         vo.setTier(stringVal(data.get("tier")));
         vo.setPointsCost(intVal(data.get("pointsCost")));
         vo.setBalanceAfter(intVal(data.get("balanceAfter")));
         vo.setBillingMode(stringVal(data.get("billingMode")));
-        Object quotaFallback = data.get("quotaFallbackToPoints");
-        if (quotaFallback instanceof Boolean b) {
-            vo.setQuotaFallbackToPoints(b);
-        } else if (quotaFallback != null) {
-            vo.setQuotaFallbackToPoints(Boolean.parseBoolean(String.valueOf(quotaFallback)));
-        }
         vo.setUsageStats(toUsageStatsVO(data.get("usageStats")));
         vo.setModelCode(stringVal(data.get("modelCode")));
         Object relatedSearchOffer = data.get("relatedSearchOffer");

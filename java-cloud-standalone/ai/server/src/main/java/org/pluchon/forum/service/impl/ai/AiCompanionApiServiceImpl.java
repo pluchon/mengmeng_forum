@@ -22,7 +22,6 @@ import org.pluchon.forum.entity.vo.ai.AiHubImageResultVO;
 import org.pluchon.forum.entity.vo.ai.AiHubPolishResultVO;
 import org.pluchon.forum.entity.vo.ai.AiCallBeginResult;
 import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
-import org.pluchon.forum.entity.vo.ai.AiPriceEstimateVO;
 import org.pluchon.forum.entity.vo.ai.AiPolishResponseVO;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
@@ -75,32 +74,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     private ObjectMapper objectMapper;
 
     @Override
-    public AiPriceEstimateVO priceEstimate(Long userId, String skill, String route, String quality) {
-        requireUser(userId);
-        String model;
-        int in = Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS;
-        int out = Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS;
-        int img = 0;
-        if ("drawing".equalsIgnoreCase(skill) || "image".equalsIgnoreCase(skill)) {
-            if ("premium".equalsIgnoreCase(quality)) {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
-            }
-            model = Constant.AI_MODEL_IMAGE_NORMAL;
-            in = 0;
-            out = 0;
-            img = 1;
-        } else {
-            requireUser(userId);
-            model = Constant.AI_MODEL_QWEN_DEEP;
-        }
-        AiPriceEstimateVO vo = new AiPriceEstimateVO();
-        vo.setModelCode(model);
-        vo.setEstimated(true);
-        vo.setPoints(aiPointsBillingService.estimatePoints(model, in, out, img));
-        return vo;
-    }
-
-    @Override
     @Transactional(rollbackFor = Exception.class)
     public AiPolishResponseVO polish(Long userId, AiPolishRequest req) {
         AiUserContext user = requireUser(userId);
@@ -114,16 +87,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             req.setClientRequestId(UUID.randomUUID().toString());
         }
         String modelCode = Constant.AI_MODEL_QWEN_FLASH;
-        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
         Long workspaceId = req.getWorkspaceId();
         if (workspaceId != null) {
             workspaceId = aiWorkspaceService.ensureWorkspace(user.getId(), workspaceId, req.getCheckpointId());
-        }
-        if (usePoints) {
-            aiPointsBillingService.ensureBalance(user,
-                    aiPointsBillingService.estimatePoints(modelCode,
-                            Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                            Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
         }
 
         boolean reservedAdvanced = false;
@@ -132,10 +98,8 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         rejectDuplicateAiBegin(begin);
         long startMs = System.currentTimeMillis();
         try {
-            if (!usePoints) {
-                aiQuotaService.consumeAdvancedLlm(user);
-                reservedAdvanced = true;
-            }
+            aiQuotaService.consumeAdvancedLlm(user);
+            reservedAdvanced = true;
             AiHubPolishResultVO hubResult = aiHubService.polish(user.getId(), req);
             List<AiModelUsageDTO> usages = normalizeUsageItems(
                     hubResult.getUsageItems(), hubResult.getUsage(), modelCode);
@@ -145,7 +109,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                     ? req.getClientRequestId().trim() : null;
             Map<String, Object> billing = aiCallRecordService.settleSuccessBatch(
                     begin, user, "ai_polish", usages, modelCode, relatedId,
-                    Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
                     System.currentTimeMillis() - startMs);
             AiPolishResponseVO response = AiHubConverter.toPolishResponse(hubResult, billing);
             if (workspaceId == null) {
@@ -183,11 +146,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             req.setClientRequestId(UUID.randomUUID().toString());
         }
         String imageModel = Constant.AI_MODEL_IMAGE_NORMAL;
-        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
-        if (usePoints) {
-            aiPointsBillingService.ensureBalance(
-                    user, aiPointsBillingService.estimatePoints(imageModel, 0, 0, 1));
-        }
 
         boolean reservedNormal = false;
         boolean reservedQwenFlash = false;
@@ -196,12 +154,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         rejectDuplicateAiBegin(begin);
         long startMs = System.currentTimeMillis();
         try {
-            if (!usePoints) {
-                aiQuotaService.consumeQwenFlash(user);
-                reservedQwenFlash = true;
-                aiQuotaService.consumeImageNormal(user);
-                reservedNormal = true;
-            }
+            aiQuotaService.consumeQwenFlash(user);
+            reservedQwenFlash = true;
+            aiQuotaService.consumeImageNormal(user);
+            reservedNormal = true;
             AiHubArticleCoverResultVO hubResult = aiHubService.articleCover(user.getId(), req);
             if (!StringUtils.hasText(hubResult.getUrl())) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_ENGINE, "AI 未返回封面图片"));
@@ -212,7 +168,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             hubResult.setUsage(aggregate);
             Map<String, Object> billing = aiCallRecordService.settleSuccessBatch(
                     begin, user, "article_cover", usages, imageModel, req.getClientRequestId(),
-                    Constant.POINTS_SOURCE_AI_IMAGE, usePoints, System.currentTimeMillis() - startMs);
+                    System.currentTimeMillis() - startMs);
 
             String base = user.getId() + "_article_cover_" + System.currentTimeMillis();
             String storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
@@ -285,10 +241,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
         }
         String modelCode = Constant.AI_MODEL_IMAGE_NORMAL;
-        boolean usePoints = Boolean.TRUE.equals(req.getUsePointsBilling());
-        if (usePoints) {
-            aiPointsBillingService.ensureBalance(user, aiPointsBillingService.estimatePoints(modelCode, 0, 0, 1));
-        }
 
         boolean reservedNormal = false;
         boolean reservedQwenFlash = false;
@@ -297,12 +249,10 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         rejectDuplicateAiBegin(begin);
         long startMs = System.currentTimeMillis();
         try {
-            if (!usePoints) {
-                aiQuotaService.consumeQwenFlash(user);
-                reservedQwenFlash = true;
-                aiQuotaService.consumeImageNormal(user);
-                reservedNormal = true;
-            }
+            aiQuotaService.consumeQwenFlash(user);
+            reservedQwenFlash = true;
+            aiQuotaService.consumeImageNormal(user);
+            reservedNormal = true;
             boolean ephemeral = Boolean.TRUE.equals(req.getEphemeral());
             Long dbSessionId = null;
             if (!ephemeral) {
@@ -320,7 +270,6 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                     : String.valueOf(dbSessionId));
             Map<String, Object> billing = aiCallRecordService.settleSuccess(
                     begin, user, "companion_image", usage, chargeRef,
-                    Constant.POINTS_SOURCE_AI_IMAGE, usePoints,
                     System.currentTimeMillis() - startMs);
             String url = hubResult.getUrl();
             if (!ephemeral && dbSessionId != null) {

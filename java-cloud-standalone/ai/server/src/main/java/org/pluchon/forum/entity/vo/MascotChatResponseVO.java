@@ -12,13 +12,14 @@ public class MascotChatResponseVO {
     private String sessionId;
     private String reply;
     private String imageUrl;
+    // 生图这一步单独失败时的提示 文字回复照常返回
+    private String imageError;
     private Object live2d;
     private Object suggestedAppearance;
     private String tier;
     private Integer pointsCost;
     private Integer balanceAfter;
     private String billingMode;
-    private Boolean quotaFallbackToPoints;
     private AiUsageStatsVO usageStats;
     private String modelCode;
     private Boolean estimated;

@@ -13,8 +13,6 @@ const props = defineProps({
   placeholder: { type: String, default: '说点什么…' },
   vip: { type: Boolean, default: false },
   generationHint: { type: String, default: '' },
-  showPointsPayButton: { type: Boolean, default: false },
-  pointsPayActive: { type: Boolean, default: false },
   contextUsedTokens: { type: Number, default: 0 },
   contextMaxTokens: { type: Number, default: 128000 },
   contextCompressing: { type: Boolean, default: false },
@@ -25,7 +23,6 @@ const emit = defineEmits([
   'update:modelValue',
   'update:imageQuality',
   'send',
-  'toggle-points-pay',
   'compress-context',
   'open-memory',
 ])

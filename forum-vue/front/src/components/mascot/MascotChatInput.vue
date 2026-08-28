@@ -97,16 +97,6 @@
             <span class="mascot-context-control__memory-icon" aria-hidden="true" />
           </button>
         </div>
-
-        <button
-          v-if="showPointsPayButton"
-          type="button"
-          class="mascot-points-pay-btn"
-          :class="{ 'is-active': pointsPayActive }"
-          @click="emit('toggle-points-pay')"
-        >
-          {{ pointsPayActive ? '已用萌币' : '使用萌币积分' }}
-        </button>
       </div>
       <span class="mascot-generation-hint">{{ generationHint }}</span>
       <span class="mascot-counter" aria-live="polite">{{ charCount }} / 2000</span>

@@ -18,7 +18,6 @@ import {
   getMascotMemory,
   editMascotMemory,
 } from '@/api/mascot'
-import { aiPriceEstimate } from '@/api/ai'
 import { getVipQuota } from '@/api/vip'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import {
@@ -172,9 +171,6 @@ export function useMascotDock() {
   
   const selectedLlmChat = ref('qwen-flash')
   const imageQuality = ref('normal')
-  const estimatePoints = ref(null)
-  const estimateLoading = ref(false)
-  const usePointsBilling = ref(false)
   const quotaHint = ref({ percent: 0, canUsePointsPay: false, quotaLabel: '' })
   const quotaPanel = ref(null)
   const contextWindow = ref({ usedTokens: 0, maxTokens: 128000, canCompress: false })
@@ -206,24 +202,12 @@ export function useMascotDock() {
   })
 
   const estimateHintText = computed(() => {
-    if (estimateLoading.value) return '正在估算…'
-    if (usePointsBilling.value && estimatePoints.value != null) {
-      return `萌币扣费模式：预估约 ${estimatePoints.value} 积分/次`
-    }
     if (userStore.isLoggedIn) {
       const p = quotaHint.value?.percent ?? 0
       const label = quotaHint.value?.quotaLabel || '通用额度'
-      return p > 0 ? `${label} 已用 ${p}%（默认走额度，不扣萌币）` : '默认使用方案额度，不扣萌币'
+      return p > 0 ? `${label} 已用 ${p}%` : '使用方案额度'
     }
     return '登录后使用免费方案额度'
-  })
-
-  const showPointsPayButton = computed(() => {
-    if (!userStore.isLoggedIn) return false
-    if (activeNav.value === 'drawing') {
-      return quotaRows.value.find((row) => row.key === 'wan')?.exhausted === true
-    }
-    return quotaRows.value.find((row) => row.key === 'qwen')?.exhausted === true
   })
   const quotaRows = computed(() => {
     const panel = quotaPanel.value || {}
@@ -251,7 +235,12 @@ export function useMascotDock() {
       },
     ]
   })
-  const quotaExhausted = computed(() => showPointsPayButton.value)
+  // 额度用尽即失败，不再回退扣币；这里只用于面板提示
+  const quotaExhausted = computed(() => {
+    if (!userStore.isLoggedIn) return false
+    const key = activeNav.value === 'drawing' ? 'wan' : 'qwen'
+    return quotaRows.value.find((row) => row.key === key)?.exhausted === true
+  })
   const spriteHovered = ref(false)
   const spriteReady = ref(false)
   const spriteX = ref(SPRITE_EDGE_MARGIN)
@@ -1326,17 +1315,6 @@ export function useMascotDock() {
     return current.toDateString() !== previous.toDateString()
   }
 
-  function notifyAiBilling(payload) {
-    if (!payload) return
-    if (payload.quotaFallbackToPoints) {
-      ElMessage.success('额度已用完，已自动改用萌币')
-    }
-    if (payload.billingMode === 'points' && Number(payload.pointsCost) > 0) {
-      ElMessage.success(`已扣 ${payload.pointsCost} 萌币`)
-      pointsWallet.refresh?.()
-    }
-  }
-
   async function refreshQuotaHint() {
     void refreshQuotaPanel()
     if (!userStore.isLoggedIn || activeNav.value === 'drawing') {
@@ -1364,46 +1342,6 @@ export function useMascotDock() {
     }
   }
 
-  async function togglePointsPay() {
-    if (usePointsBilling.value) {
-      usePointsBilling.value = false
-      return
-    }
-    try {
-      await confirmDialog(
-        '当前所选能力的方案额度已用尽。开启后将按实际用量消耗萌币，确认继续？',
-        '使用萌币积分',
-        { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' },
-      )
-      usePointsBilling.value = true
-      refreshEstimate()
-    } catch {
-    }
-  }
-  
-  async function refreshEstimate() {
-    if (!userStore.isLoggedIn) {
-      estimatePoints.value = null
-      return
-    }
-    estimateLoading.value = true
-    try {
-      const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
-      const res = await aiPriceEstimate({
-        skill,
-        route: selectedLlm.value,
-        quality: imageQuality.value,
-      })
-      estimatePoints.value = res?.data?.points ?? null
-    }
-    catch {
-      estimatePoints.value = null
-    }
-    finally {
-      estimateLoading.value = false
-    }
-  }
-  
   function isCurrentSessionEmpty() {
     return messages.value.length === 0
   }
@@ -1477,11 +1415,7 @@ export function useMascotDock() {
   
   watch([activeNav, selectedLlm, imageQuality, () => userStore.isLoggedIn], () => {
     if (assistantOpen.value) {
-      refreshEstimate()
       refreshQuotaHint()
-    }
-    if (!showPointsPayButton.value) {
-      usePointsBilling.value = false
     }
   }, { immediate: false })
 
@@ -1668,7 +1602,6 @@ export function useMascotDock() {
       await syncServerSessions(nav)
     }
     await loadMessagesForNav(nav)
-    refreshEstimate()
     refreshQuotaHint()
   }
   
@@ -1705,7 +1638,6 @@ export function useMascotDock() {
     await syncServerSessions(activeNav.value)
     await loadMessagesForNav(activeNav.value)
     scrollFsToBottom()
-    refreshEstimate()
     refreshQuotaHint()
     await refreshContextWindow()
   }
@@ -1793,7 +1725,6 @@ export function useMascotDock() {
             history,
             ephemeral: !userStore.isLoggedIn,
             clientDatetime: new Date().toISOString(),
-            usePointsBilling: usePointsBilling.value,
             // 单次请求幂等键：重试 / 重新生成须换新 id，避免计费撞车
             clientRequestId: (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
               ? crypto.randomUUID().replace(/-/g, '')
@@ -1892,7 +1823,10 @@ export function useMascotDock() {
               }
               const stats = usageStatsFromApi(meta)
               if (stats && row) row.usageStats = stats
-              notifyAiBilling(meta)
+              // 生图单步失败：回复已经流出来了，只提示图片没生成
+              if (meta?.imageError) {
+                ElMessage.warning(String(meta.imageError))
+              }
             },
             onDone() {
               clearThinkingRotation()
@@ -1906,7 +1840,6 @@ export function useMascotDock() {
                 }
               }
               chatStreamAbort = null
-              refreshEstimate()
               refreshContextWindow()
               persistCurrentMessages()
               if (!streamHadError) {
@@ -1970,11 +1903,6 @@ export function useMascotDock() {
     if (contextCompressing.value) return
     if (!userStore.isLoggedIn) {
       ElMessage.warning('请先登录')
-      return
-    }
-    if (usePointsBilling.value && estimatePoints.value != null
-        && pointsWallet.balance < estimatePoints.value) {
-      ElMessage.warning('萌币余额不足，请先充值或赚取积分')
       return
     }
     await refreshContextWindow()
@@ -2088,17 +2016,14 @@ export function useMascotDock() {
     sessionId,
     sessionListForNav,
     shouldShowDateDivider,
-    showPointsPayButton,
     spritePaused,
     spriteState,
     spriteX,
     stageTipText,
     startRenameSession,
     startNewSession,
-    togglePointsPay,
     submitMemoryEdit,
     uiLabels,
-    usePointsBilling,
     userStore,
   }
 }

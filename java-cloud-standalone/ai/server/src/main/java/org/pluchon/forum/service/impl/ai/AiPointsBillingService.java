@@ -235,16 +235,6 @@ public class AiPointsBillingService {
         return snapshot != null && snapshot.isVipActive();
     }
 
-    public void ensureBalance(AiUserContext user, int pointsNeeded) {
-        if (pointsNeeded <= 0) {
-            return;
-        }
-        int bal = balanceOf(user.getId());
-        if (bal < pointsNeeded) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_POINTS_NOT_ENOUGH));
-        }
-    }
-
     // 前端展示：token / 耗时 / 计费方式 数据来自 ai server 厂商 usage 字段
     public Map<String, Object> buildUsageStats(AiModelUsageDTO usage, int pointsCharged, String billingMode) {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -281,10 +271,9 @@ public class AiPointsBillingService {
         }
     }
 
-    // 统一计费：默认按会员/免费日额度，不扣萌萌币；仅 usePointsBilling true 时扣积分
+    // 统一计费：AI 全链路只吃会员/免费额度，额度用尽即失败，不扣萌萌币
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> bill(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId,
-                                    Byte pointsSource, boolean usePointsBilling) {
+    public Map<String, Object> bill(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId) {
         if (relatedId != null && !relatedId.isBlank()) {
             Long dupCount = forumAiUsageLogMapper.selectCount(
                     Wrappers.lambdaQuery(ForumAiUsageLog.class)
@@ -302,32 +291,20 @@ public class AiPointsBillingService {
                 return out;
             }
         }
-        int referenceCost = calcPoints(usage);
-        if (referenceCost <= 0) {
-            referenceCost = 1;
-        }
         boolean billable = BillableFeature.contains(featureCode);
-        int charged = usePointsBilling && billable ? referenceCost : 0;
-        int balanceAfter;
-        String billingMode;
-        if (usePointsBilling && billable) {
-            balanceAfter = chargePointsAndLog(user, featureCode, usage, relatedId, pointsSource, charged);
-            billingMode = "points";
-        } else {
-            recordUsageOnly(user, featureCode, usage, relatedId);
-            balanceAfter = balanceOf(user.getId());
-            billingMode = billable
-                    ? (vipExemptPoints(user) ? "vip_quota" : "free_quota")
+        recordUsageOnly(user, featureCode, usage, relatedId);
+        int balanceAfter = balanceOf(user.getId());
+        String billingMode = billable
+                ? (vipExemptPoints(user) ? "vip_quota" : "free_quota")
                 : "platform_free";
-        }
-        if (billable && !usePointsBilling) {
+        if (billable) {
             settleQuotaUsage(user, featureCode, List.of(usage));
         }
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("pointsCost", charged);
+        out.put("pointsCost", 0);
         out.put("balanceAfter", balanceAfter);
         out.put("billingMode", billingMode);
-        out.put("usageStats", buildUsageStats(usage, charged, billingMode));
+        out.put("usageStats", buildUsageStats(usage, 0, billingMode));
         return out;
     }
 
@@ -338,9 +315,7 @@ public class AiPointsBillingService {
             String featureCode,
             List<AiModelUsageDTO> usages,
             String fallbackModel,
-            String relatedId,
-            Byte pointsSource,
-            boolean usePointsBilling) {
+            String relatedId) {
         List<AiModelUsageDTO> normalized = normalizeUsageBatch(usages, fallbackModel);
         if (normalized.isEmpty()) {
             normalized = List.of(normalizeUsage(null, fallbackModel));
@@ -365,37 +340,11 @@ public class AiPointsBillingService {
             }
         }
 
-        List<Integer> itemCosts = new ArrayList<>(normalized.size());
-        int referenceCost = 0;
-        for (AiModelUsageDTO usage : normalized) {
-            int itemCost = Math.max(1, calcPoints(usage));
-            itemCosts.add(itemCost);
-            referenceCost += itemCost;
-        }
         boolean billable = BillableFeature.contains(featureCode);
-        int charged = usePointsBilling && billable ? referenceCost : 0;
-        int balanceAfter;
-        String billingMode;
-        if (usePointsBilling && billable) {
-            ensureBalance(user, charged);
-            AiModelUsageDTO total = aggregateUsage(normalized, fallbackModel);
-            String remark = featureRemark(featureCode, total.getModelCode(), charged);
-            String idempotencyKey = StringUtils.hasText(relatedId)
-                    ? "ai_bill:" + user.getId() + ":" + relatedId.trim() : null;
-            Integer balance = aiPointsInternalFeignClient.deductPoints(
-                    user.getId(), charged, pointsSource == null ? 0 : pointsSource,
-                    null, remark, idempotencyKey);
-            if (balance == null) {
-                throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
-            }
-            balanceAfter = balance;
-            billingMode = "points";
-        } else {
-            balanceAfter = balanceOf(user.getId());
-            billingMode = billable
-                    ? (vipExemptPoints(user) ? "vip_quota" : "free_quota")
-                    : "platform_free";
-        }
+        int balanceAfter = balanceOf(user.getId());
+        String billingMode = billable
+                ? (vipExemptPoints(user) ? "vip_quota" : "free_quota")
+                : "platform_free";
 
         for (int index = 0; index < normalized.size(); index++) {
             persistUsageLog(
@@ -403,45 +352,22 @@ public class AiPointsBillingService {
                     featureCode,
                     normalized.get(index),
                     derivedUsageRelatedId(relatedId, index),
-                    usePointsBilling && billable ? itemCosts.get(index) : 0);
+                    0);
         }
-        if (billable && !usePointsBilling) {
+        if (billable) {
             settleQuotaUsage(user, featureCode, normalized);
         }
         AiModelUsageDTO total = aggregateUsage(normalized, fallbackModel);
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("pointsCost", charged);
+        out.put("pointsCost", 0);
         out.put("balanceAfter", balanceAfter);
         out.put("billingMode", billingMode);
-        out.put("usageStats", buildUsageStats(total, charged, billingMode));
+        out.put("usageStats", buildUsageStats(total, 0, billingMode));
         return out;
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> bill(AiUserContext user, String featureCode, AiModelUsageDTO usage, String relatedId,
-                                    Byte pointsSource) {
-        return bill(user, featureCode, usage, relatedId, pointsSource, false);
     }
 
     private void recordUsageOnly(AiUserContext user, String featureCode, AiModelUsageDTO u, String relatedId) {
         persistUsageLog(user, featureCode, u, relatedId, 0);
-    }
-
-    private int chargePointsAndLog(AiUserContext user, String featureCode, AiModelUsageDTO u, String relatedId,
-                                   Byte pointsSource, int cost) {
-        ensureBalance(user, cost);
-        String remark = featureRemark(featureCode, u.getModelCode(), cost);
-        String idempotencyKey = relatedId != null && !relatedId.isBlank()
-                ? "ai_bill:" + user.getId() + ":" + relatedId.trim()
-                : null;
-        Integer balance = aiPointsInternalFeignClient.deductPoints(
-                user.getId(), cost, pointsSource == null ? 0 : pointsSource, null, remark, idempotencyKey);
-        if (balance == null) {
-            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
-        }
-        int balanceAfter = balance;
-        persistUsageLog(user, featureCode, u, relatedId, cost);
-        return balanceAfter;
     }
 
     private int balanceOf(Long userId) {

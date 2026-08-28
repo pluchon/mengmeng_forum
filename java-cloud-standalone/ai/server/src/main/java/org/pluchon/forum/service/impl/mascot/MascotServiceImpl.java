@@ -716,16 +716,13 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private Map<String, Object> billMascotUsage(AiCallBeginResult begin, AiUserContext user, String skill,
-                                                AiModelUsageDTO usage, String relatedId,
-                                                boolean usePointsBilling, long latencyMs) {
+                                                AiModelUsageDTO usage, String relatedId, long latencyMs) {
         return aiCallRecordService.settleSuccess(
                 begin,
                 user,
                 featureCode(skill),
                 usage,
                 relatedId,
-                Constant.POINTS_SOURCE_AI_COMPANION,
-                usePointsBilling,
                 latencyMs);
     }
 
@@ -754,12 +751,6 @@ public class MascotServiceImpl implements MascotService {
         if ("writing".equals(skill) || "chat".equals(skill) || "help".equals(skill)) {
             reserveAiQuota(user, route, reservedQwenFlash, reservedAdvanced);
         }
-    }
-
-    private boolean shouldAutoFallbackToPoints(ApplicationException ex) {
-        return ex != null
-                && ex.getErrorResult() != null
-                && ex.getErrorResult().getCode() == ResultCode.FAILED_AI_QUOTA_EXCEEDED.getCode();
     }
 
     private HttpHeaders internalJsonHeaders() {
@@ -834,7 +825,6 @@ public class MascotServiceImpl implements MascotService {
         imageRequest.setQuality("normal");
         imageRequest.setSessionId(sessionKey);
         imageRequest.setEphemeral(true);
-        imageRequest.setUsePointsBilling(Boolean.TRUE.equals(request.getUsePointsBilling()));
         imageRequest.setClientRequestId(imageRequestId(request, sessionKey));
         AiImageResponseVO image = aiCompanionApiService.image(user.getId(), imageRequest);
         if (dbSessionId != null && image.getUrl() != null && !image.getUrl().isBlank()) {
@@ -875,46 +865,24 @@ public class MascotServiceImpl implements MascotService {
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
 
         boolean vip = isVip(user);
-        boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
-        boolean autoPointsFallback = false;
         boolean reservedBasic = false;
         String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
 
-        if (usePoints) {
-            aiPointsBillingService.ensureBalance(user,
-                    aiPointsBillingService.estimatePoints(fallbackModel,
-                            Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                            Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
-        } else if (!vip) {
+        if (!vip) {
             reserveBasicSlot(user.getId());
             reservedBasic = true;
         }
 
         boolean[] reservedQwenFlash = {false};
         boolean[] reservedAdvanced = {false};
-        if (!usePoints) {
-            try {
-                reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
-            } catch (ApplicationException ex) {
-                if (shouldAutoFallbackToPoints(ex)) {
-                    usePoints = true;
-                    autoPointsFallback = true;
-                    if (reservedBasic) {
-                        releaseBasicSlot(user.getId());
-                        reservedBasic = false;
-                    }
-                    aiPointsBillingService.ensureBalance(user,
-                            aiPointsBillingService.estimatePoints(fallbackModel,
-                                    Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                                    Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
-                } else {
-                    if (reservedBasic) {
-                        releaseBasicSlot(user.getId());
-                    }
-                    throw ex;
-                }
+        try {
+            reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
+        } catch (ApplicationException ex) {
+            if (reservedBasic) {
+                releaseBasicSlot(user.getId());
             }
+            throw ex;
         }
 
         MascotMemoryVO mascotMemory = loadMascotMemory(user.getId());
@@ -1031,9 +999,8 @@ public class MascotServiceImpl implements MascotService {
             billing = usageItems.size() > 1
                     ? aiCallRecordService.settleSuccessBatch(
                     begin, user, featureCode(skill), usageItems, fallbackModel,
-                    billingRelatedId, Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
-                    System.currentTimeMillis() - startMs)
-                    : billMascotUsage(begin, user, skill, usage, billingRelatedId, usePoints,
+                    billingRelatedId, System.currentTimeMillis() - startMs)
+                    : billMascotUsage(begin, user, skill, usage, billingRelatedId,
                     System.currentTimeMillis() - startMs);
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
@@ -1046,13 +1013,22 @@ public class MascotServiceImpl implements MascotService {
 
         String reply = moduleData.get("reply") != null ? String.valueOf(moduleData.get("reply")) : "";
         String imageUrl = "";
+        String imageError = null;
+        // 主回复与计费已完成，生图这一步失败（含生图额度用尽）只降级成提示，不能让整次对话失败
         if (isImageAction(moduleData)) {
             String imagePrompt = String.valueOf(moduleData.getOrDefault("imagePrompt", "")).trim();
             if (imagePrompt.isBlank()) {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_AI, "生图提示词不能为空"));
+                imageError = "生图提示词不能为空";
+            } else {
+                try {
+                    AiImageResponseVO image = delegateMascotImage(
+                            user, request, imagePrompt, pySessionKey, dbSessionId);
+                    imageUrl = image.getUrl();
+                } catch (ApplicationException ex) {
+                    log.warn("看板娘生图失败 userId={}: {}", user.getId(), ex.getMessage());
+                    imageError = ex.getMessage() != null ? ex.getMessage() : "生成图片失败，请稍后再试";
+                }
             }
-            AiImageResponseVO image = delegateMascotImage(user, request, imagePrompt, pySessionKey, dbSessionId);
-            imageUrl = image.getUrl();
         }
         if (!ephemeral && dbSessionId != null) {
             if (!reply.isBlank()) {
@@ -1067,6 +1043,7 @@ public class MascotServiceImpl implements MascotService {
         data.put("sessionId", pySessionKey);
         data.put("reply", reply);
         data.put("imageUrl", imageUrl);
+        data.put("imageError", imageError);
         data.put("live2d", moduleData.get("live2d") instanceof Map ? moduleData.get("live2d") : Map.of());
         data.put("suggestedAppearance", moduleData.get("suggestedAppearance"));
         data.put("tier", vip ? "vip" : "basic");
@@ -1080,7 +1057,6 @@ public class MascotServiceImpl implements MascotService {
         data.put("relatedSearchQuery", moduleData.get("relatedSearchQuery"));
         data.put("askConfirmOffer", moduleData.get("askConfirmOffer"));
         data.put("searchImageGallery", parseImageGallery(moduleData.get("searchImageGallery")));
-        data.put("quotaFallbackToPoints", autoPointsFallback);
         return MascotConverter.toChatResponse(data);
     }
 
@@ -1162,8 +1138,7 @@ public class MascotServiceImpl implements MascotService {
                     user,
                     "companion_context_compress",
                     usage,
-                    "context-compress:" + sessionId + ":" + System.currentTimeMillis(),
-                    Constant.POINTS_SOURCE_AI_COMPANION);
+                    "context-compress:" + sessionId + ":" + System.currentTimeMillis());
             return companionMemoryService.getContextWindow(user.getId(), sessionId);
         } catch (ApplicationException exception) {
             if (reservedFlash) {
@@ -1276,29 +1251,11 @@ public class MascotServiceImpl implements MascotService {
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
         boolean vip = isVip(user);
-        boolean usePoints = Boolean.TRUE.equals(request.getUsePointsBilling());
-        boolean autoPointsFallback = false;
         boolean reservedBasic = false;
         String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
 
-        if (usePoints) {
-            try {
-                aiPointsBillingService.ensureBalance(user,
-                        aiPointsBillingService.estimatePoints(fallbackModel,
-                                Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                                Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
-            } catch (ApplicationException ex) {
-                try {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
-                            ? ex.getMessage() : ResultCode.FAILED_POINTS_NOT_ENOUGH.getMessage()));
-                    emitter.complete();
-                } catch (Exception e) {
-                    emitter.completeWithError(ex);
-                }
-                return;
-            }
-        } else if (!vip) {
+        if (!vip) {
             try {
                 reserveBasicSlot(user.getId());
                 reservedBasic = true;
@@ -1316,46 +1273,20 @@ public class MascotServiceImpl implements MascotService {
 
         boolean[] reservedQwenFlash = {false};
         boolean[] reservedAdvanced = {false};
-        if (!usePoints) {
-            try {
-                reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
-            } catch (ApplicationException ex) {
-                if (shouldAutoFallbackToPoints(ex)) {
-                    usePoints = true;
-                    autoPointsFallback = true;
-                    if (reservedBasic) {
-                        releaseBasicSlot(user.getId());
-                        reservedBasic = false;
-                    }
-                    try {
-                        aiPointsBillingService.ensureBalance(user,
-                                aiPointsBillingService.estimatePoints(fallbackModel,
-                                        Constant.AI_ESTIMATE_CHAT_INPUT_TOKENS,
-                                        Constant.AI_ESTIMATE_CHAT_OUTPUT_TOKENS, 0));
-                    } catch (ApplicationException balanceEx) {
-                        try {
-                            sendMascotSse(emitter, Map.of("error", balanceEx.getMessage() != null
-                                    ? balanceEx.getMessage() : ResultCode.FAILED_POINTS_NOT_ENOUGH.getMessage()));
-                            emitter.complete();
-                        } catch (Exception e) {
-                            emitter.completeWithError(balanceEx);
-                        }
-                        return;
-                    }
-                } else {
-                    if (reservedBasic) {
-                        releaseBasicSlot(user.getId());
-                    }
-                    try {
-                        sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
-                                ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
-                        emitter.complete();
-                    } catch (Exception e) {
-                        emitter.completeWithError(ex);
-                    }
-                    return;
-                }
+        try {
+            reserveUsageQuota(user, skill, route, reservedQwenFlash, reservedAdvanced);
+        } catch (ApplicationException ex) {
+            if (reservedBasic) {
+                releaseBasicSlot(user.getId());
             }
+            try {
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                        ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(ex);
+            }
+            return;
         }
 
         MascotMemoryVO mascotMemory = loadMascotMemory(user.getId());
@@ -1641,9 +1572,8 @@ public class MascotServiceImpl implements MascotService {
                 billing = usageItems.size() > 1
                         ? aiCallRecordService.settleSuccessBatch(
                         streamBegin, user, featureCode(skill), usageItems, fallbackModel,
-                        billingRelatedId, Constant.POINTS_SOURCE_AI_COMPANION, usePoints,
-                        System.currentTimeMillis() - streamStartMs)
-                        : billMascotUsage(streamBegin, user, skill, usage, billingRelatedId, usePoints,
+                        billingRelatedId, System.currentTimeMillis() - streamStartMs)
+                        : billMascotUsage(streamBegin, user, skill, usage, billingRelatedId,
                         System.currentTimeMillis() - streamStartMs);
                 terminalHandled.set(true);
             } catch (ApplicationException ex) {
@@ -1665,28 +1595,33 @@ public class MascotServiceImpl implements MascotService {
             autoSaveMemoryWrite(user.getId(), streamMemoryWrite.get());
 
             AiImageResponseVO delegatedImage = null;
+            // 文字回复此时已流给前端且已结算，生图这一步失败（含生图额度用尽）
+            // 只降级成一条提示，绝不能提前 return——否则会连带丢掉回复落库与终态 meta
             if (imageRequested) {
+                String imageError = null;
                 if (imagePrompt.isBlank()) {
-                    sendMascotSse(emitter, Map.of("error", "生图提示词不能为空"));
-                    emitter.complete();
-                    return;
+                    imageError = "生图提示词不能为空";
+                } else {
+                    sendMascotSse(emitter, Map.of("meta", Map.of("imageGenerating", true)));
+                    try {
+                        delegatedImage = delegateMascotImage(
+                                user, request, imagePrompt, pySessionKey, persistSessionId);
+                    } catch (ApplicationException ex) {
+                        log.warn("看板娘流式生图失败 userId={}: {}", user.getId(), ex.getMessage());
+                        imageError = ex.getMessage() != null ? ex.getMessage() : "生成图片失败，请稍后再试";
+                    }
                 }
-                sendMascotSse(emitter, Map.of("meta", Map.of("imageGenerating", true)));
-                try {
-                    delegatedImage = delegateMascotImage(user, request, imagePrompt, pySessionKey, persistSessionId);
-                } catch (ApplicationException ex) {
-                    sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
-                            ? ex.getMessage() : "生成图片失败，请稍后再试"));
-                    emitter.complete();
-                    return;
+                if (delegatedImage != null) {
+                    Map<String, Object> imageMeta = new LinkedHashMap<>();
+                    imageMeta.put("imageUrl", delegatedImage.getUrl());
+                    imageMeta.put("usageStats", delegatedImage.getUsageStats());
+                    imageMeta.put("pointsCost", delegatedImage.getPointsCost());
+                    imageMeta.put("balanceAfter", delegatedImage.getBalanceAfter());
+                    imageMeta.put("billingMode", delegatedImage.getBillingMode());
+                    sendMascotSse(emitter, Map.of("meta", imageMeta));
+                } else {
+                    sendMascotSse(emitter, Map.of("meta", Map.of("imageError", imageError)));
                 }
-                Map<String, Object> imageMeta = new LinkedHashMap<>();
-                imageMeta.put("imageUrl", delegatedImage.getUrl());
-                imageMeta.put("usageStats", delegatedImage.getUsageStats());
-                imageMeta.put("pointsCost", delegatedImage.getPointsCost());
-                imageMeta.put("balanceAfter", delegatedImage.getBalanceAfter());
-                imageMeta.put("billingMode", delegatedImage.getBillingMode());
-                sendMascotSse(emitter, Map.of("meta", imageMeta));
             }
 
             Map<String, Object> meta = new LinkedHashMap<>();
@@ -1694,7 +1629,6 @@ public class MascotServiceImpl implements MascotService {
             meta.put("pointsCost", billing.get("pointsCost"));
             meta.put("balanceAfter", billing.get("balanceAfter"));
             meta.put("billingMode", billing.get("billingMode"));
-            meta.put("quotaFallbackToPoints", autoPointsFallback);
             meta.put("usageStats", billing.get("usageStats"));
             meta.put("modelCode", usage.getModelCode());
             meta.put("llmRoute", route);
@@ -1722,8 +1656,7 @@ public class MascotServiceImpl implements MascotService {
             if (!replyBuffer.isEmpty()) {
                 aiCallRecordService.settlePartialOutput(
                         streamBegin, user, featureCode(skill), fallbackModel,
-                        replyBuffer.length(), billingRelatedId,
-                        Constant.POINTS_SOURCE_AI_COMPANION, usePoints);
+                        replyBuffer.length(), billingRelatedId);
             } else {
                 aiCallRecordService.markFailure(streamBegin, AiCallState.DISCONNECTED, e.getMessage());
             }

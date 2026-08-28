@@ -21,9 +21,6 @@ public class AiArticleCoverRequest {
     // 生图质量档位
     private String quality;
 
-    // 是否使用积分结算
-    private Boolean usePointsBilling;
-
     // 客户端幂等请求ID
     private String clientRequestId;
 

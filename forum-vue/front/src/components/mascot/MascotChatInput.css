@@ -280,19 +280,3 @@
   color: var(--el-text-color-placeholder, #a8abb2);
 }
 
-.mascot-points-pay-btn {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 36, 66, 0.45);
-  background: #fff;
-  color: #ff2442;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.mascot-points-pay-btn.is-active {
-  background: rgba(255, 36, 66, 0.1);
-  border-color: #ff2442;
-}

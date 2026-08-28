@@ -98,10 +98,9 @@ public class AiCallRecordService {
 
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> settleSuccess(AiCallBeginResult begin, AiUserContext user, String featureCode,
-                                             AiModelUsageDTO usage, String relatedId, Byte pointsSource,
-                                             boolean usePointsBilling, long latencyMs) {
+                                             AiModelUsageDTO usage, String relatedId, long latencyMs) {
         if (begin == null) {
-            return aiPointsBillingService.bill(user, featureCode, usage, relatedId, pointsSource, usePointsBilling);
+            return aiPointsBillingService.bill(user, featureCode, usage, relatedId);
         }
         if (begin.isDuplicateSuccess()) {
             return duplicateBillingResult(user, begin.getPreviousPointsCharged());
@@ -112,7 +111,7 @@ public class AiCallRecordService {
         }
         forumMetrics.recordAiCallLatency(latencyMs);
         Map<String, Object> billing = aiPointsBillingService.bill(
-                user, featureCode, usage, relatedId, pointsSource, usePointsBilling);
+                user, featureCode, usage, relatedId);
         updateRecordSettled(begin.getRecordId(), AiCallState.SUCCESS, usage, billing);
         return billing;
     }
@@ -125,8 +124,6 @@ public class AiCallRecordService {
             List<AiModelUsageDTO> usages,
             String fallbackModel,
             String relatedId,
-            Byte pointsSource,
-            boolean usePointsBilling,
             long latencyMs) {
         AiModelUsageDTO total = aiPointsBillingService.aggregateUsage(usages, fallbackModel);
         if (begin != null && begin.isDuplicateSuccess()) {
@@ -138,7 +135,7 @@ public class AiCallRecordService {
         }
         forumMetrics.recordAiCallLatency(latencyMs);
         Map<String, Object> billing = aiPointsBillingService.billBatch(
-                user, featureCode, usages, fallbackModel, relatedId, pointsSource, usePointsBilling);
+                user, featureCode, usages, fallbackModel, relatedId);
         if (begin != null) {
             updateRecordSettled(begin.getRecordId(), AiCallState.SUCCESS, total, billing);
         }
@@ -166,8 +163,7 @@ public class AiCallRecordService {
     // 流式停止或断网但有部分输出：按实际输出 token 计费；无输出则不扣费
     @Transactional(rollbackFor = Exception.class)
     public void settlePartialOutput(AiCallBeginResult begin, AiUserContext user, String featureCode,
-                                    String modelCode, int outputCharCount, String relatedId,
-                                    Byte pointsSource, boolean usePointsBilling) {
+                                    String modelCode, int outputCharCount, String relatedId) {
         if (begin == null) {
             return;
         }
@@ -187,7 +183,7 @@ public class AiCallRecordService {
         usage.setOutputTokens(outputTokens);
         usage.setEstimated(true);
         Map<String, Object> billing = aiPointsBillingService.bill(
-                user, featureCode, usage, relatedId, pointsSource, usePointsBilling);
+                user, featureCode, usage, relatedId);
         updateRecordSettled(begin.getRecordId(), AiCallState.STOPPED, usage, billing);
     }
 
