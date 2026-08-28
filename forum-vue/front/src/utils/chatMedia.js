@@ -27,10 +27,17 @@ export function isEmojiShopMediaUrl(url) {
   return s.length > 0 && (s.includes(OSS_PATH_EMOJI_SHOP) || s.includes('forum_emoji_shop/'))
 }
 
+// 私信或群聊来源，任一非空即为「收藏自聊天」
+function hasChatOrigin(item) {
+  const priv = Number(item?.originMessageId)
+  const group = Number(item?.originGroupMessageId)
+  return (priv > 0) || (group > 0)
+}
+
 // 用户主动上传的聊天表情 OSS …/emoji/，无来源消息
 export function isUserUploadedChatEmoji(item) {
   if (!item?.mediaUrl) return false
-  if (item.originMessageId != null && Number(item.originMessageId) > 0) return false
+  if (hasChatOrigin(item)) return false
   const url = String(item.mediaUrl).trim()
   return url.includes(OSS_PATH_CHAT_EMOJI) || url.includes(CHAT_EMOJI_URL_MARKER)
 }
@@ -38,7 +45,7 @@ export function isUserUploadedChatEmoji(item) {
 // 从他人聊天/内容收藏的表情
 export function isFavoriteFromChatEmoji(item) {
   if (!item?.mediaUrl) return false
-  if (item.originMessageId != null && Number(item.originMessageId) > 0) return true
+  if (hasChatOrigin(item)) return true
   const url = String(item.mediaUrl).trim()
   return !url.includes(OSS_PATH_CHAT_EMOJI)
     && !url.includes(CHAT_EMOJI_URL_MARKER)

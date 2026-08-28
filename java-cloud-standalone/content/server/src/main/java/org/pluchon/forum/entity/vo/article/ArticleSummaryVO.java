@@ -2,8 +2,6 @@ package org.pluchon.forum.entity.vo.article;
 
 import lombok.Data;
 
-import java.util.Date;
-
 // 帖子AI总结状态与内容
 @Data
 public class ArticleSummaryVO {
@@ -15,6 +13,4 @@ public class ArticleSummaryVO {
     private Boolean canExpand;
 
     private Boolean canRegenerate;
-
-    private Long retryAfterSeconds;
 }

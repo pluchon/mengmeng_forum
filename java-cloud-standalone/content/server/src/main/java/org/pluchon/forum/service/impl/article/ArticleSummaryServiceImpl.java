@@ -348,7 +348,6 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
             retryAfter = Math.max(0L,
                     (recent.getCreateTime().getTime() + MANUAL_COOLDOWN_MILLIS - System.currentTimeMillis()) / 1000L);
         }
-        vo.setRetryAfterSeconds(retryAfter);
         vo.setCanRegenerate(status != SUMMARY_PROCESSING && retryAfter == 0);
         if (status == SUMMARY_TOO_SHORT) {
             vo.setSummary("当前帖子内容较少，建议包含更多内容后再尝试 AI 智能总结。");

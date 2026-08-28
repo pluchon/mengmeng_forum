@@ -655,6 +655,7 @@ public class MessageServiceImpl implements MessageService {
         emoji.setMediaMime(req.getMediaMime());
         emoji.setMediaSize(req.getMediaSize());
         emoji.setOriginMessageId(quoteFromPrivateChat ? rawOriginId : null);
+        emoji.setOriginGroupMessageId(quoteFromGroupChat ? rawGroupOriginId : null);
         try {
             if (userChatEmojiMapper.insert(emoji) <= 0) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
@@ -702,14 +703,19 @@ public class MessageServiceImpl implements MessageService {
                 .ne(UserChatEmoji::getDeleteState, Constant.DELETE_STATE_TRUE)
                 .orderByAsc(UserChatEmoji::getCreateTime)
                 .orderByAsc(UserChatEmoji::getId);
+        // 私信来源与群聊来源都算「收藏」；两者皆空且 URL 落在 emoji 子目录才是自上传
         if ("uploaded".equals(normalizedSource)) {
             wrapper.isNull(UserChatEmoji::getOriginMessageId)
+                    .isNull(UserChatEmoji::getOriginGroupMessageId)
                     .like(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_CHAT_EMOJI);
         } else {
             wrapper.and(query -> query
                     .isNotNull(UserChatEmoji::getOriginMessageId)
+                    .or(group -> group.isNotNull(UserChatEmoji::getOriginGroupMessageId))
+                    // 历史数据没有来源ID，只能靠 URL 目录反推
                     .or(legacy -> legacy
                             .isNull(UserChatEmoji::getOriginMessageId)
+                            .isNull(UserChatEmoji::getOriginGroupMessageId)
                             .notLike(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_CHAT_EMOJI)
                             .notLike(UserChatEmoji::getMediaUrl, Constant.OSS_PATH_EMOJI_SHOP)));
         }

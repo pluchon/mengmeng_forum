@@ -21,6 +21,7 @@ public class UserChatEmojiResponse {
     private String mediaMime;
     private Long mediaSize;
     private Long originMessageId;
+    private Long originGroupMessageId;
     private Date createTime;
 
     public UserChatEmojiResponse(UserChatEmoji emoji) {
@@ -30,6 +31,7 @@ public class UserChatEmojiResponse {
         this.mediaMime = emoji.getMediaMime();
         this.mediaSize = emoji.getMediaSize();
         this.originMessageId = emoji.getOriginMessageId();
+        this.originGroupMessageId = emoji.getOriginGroupMessageId();
         this.createTime = emoji.getCreateTime();
     }
 }

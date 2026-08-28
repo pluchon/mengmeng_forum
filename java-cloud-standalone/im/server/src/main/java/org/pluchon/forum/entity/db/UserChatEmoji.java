@@ -9,7 +9,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-// 用户聊天表情收藏表实体, 对应 user_chat_emoji 来源 1: 用户主动上传 走 /file/uploadChatEmoji 来源 2: 把对方在聊天里发过来的图片收藏下来 origin_message_id 非空, media_url 直接复用消息 URL
+// 用户聊天表情收藏表实体, 对应 user_chat_emoji 来源 1: 用户主动上传 走 /file/uploadChatEmoji 来源 2: 收藏私信里的图片 origin_message_id 非空 来源 3: 收藏群聊里的图片 origin_group_message_id 非空; 后两者 media_url 直接复用消息 URL
 @Data
 @TableName("user_chat_emoji")
 @Schema(description = "用户聊天表情收藏实体")
@@ -34,8 +34,11 @@ public class UserChatEmoji {
     @Schema(description = "字节大小")
     private Long mediaSize;
 
-    @Schema(description = "来源消息ID(从他人聊天图片收藏时回填)")
+    @Schema(description = "来源私信消息ID(从私信聊天图片收藏时回填)")
     private Long originMessageId;
+
+    @Schema(description = "来源群聊消息ID(从群聊图片收藏时回填); 与 originMessageId 互斥")
+    private Long originGroupMessageId;
 
     @Schema(description = "是否删除: 0否 1是")
     @JsonIgnore
