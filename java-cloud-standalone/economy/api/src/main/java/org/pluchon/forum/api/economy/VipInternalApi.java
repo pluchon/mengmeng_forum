@@ -19,15 +19,4 @@ public interface VipInternalApi {
             @RequestParam(value = "llmRoute", required = false) String llmRoute
     );
 
-    @PostMapping("/vip/internal/{userId}/bonus/reserve")
-    VipBonusReservationVO reserveBonus(@PathVariable("userId") Long userId,
-                                       @Valid @RequestBody VipBonusReserveRequest request);
-
-    @PostMapping("/vip/internal/{userId}/bonus/settle")
-    VipBonusSettlementVO settleBonus(@PathVariable("userId") Long userId,
-                                     @Valid @RequestBody VipBonusSettleRequest request);
-
-    @PostMapping("/vip/internal/{userId}/bonus/release")
-    void releaseBonus(@PathVariable("userId") Long userId,
-                      @Valid @RequestBody VipBonusReleaseRequest request);
 }

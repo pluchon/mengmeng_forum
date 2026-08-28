@@ -14,7 +14,6 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.VipPurchaseRecordConverter;
 import org.pluchon.forum.entity.db.UserVipSubscription;
-import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanFeatureVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanVO;
@@ -26,7 +25,6 @@ import org.pluchon.forum.entity.db.VipPurchaseRecord;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.vip.VipCenterService;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
-import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
@@ -57,9 +55,6 @@ public class VipCenterServiceImpl implements VipCenterService {
 
     @Resource
     private VipPurchaseRecordMapper vipPurchaseRecordMapper;
-
-    @Resource
-    private VipQuotaBonusService vipQuotaBonusService;
 
     private boolean vipActive(UserVipSubscription sub) {
         if (sub == null) {
@@ -285,43 +280,21 @@ public class VipCenterServiceImpl implements VipCenterService {
         AiUsageDailyBucketsVO usage = loadUsageSnapshot(userId, window.start, window.end);
         int totalCalls = usage.getTotalCalls() == null ? 0 : usage.getTotalCalls();
         panel.setTotalCalls(totalCalls);
-        Byte baseTier = window.baseTier;
-        long baseQwenBudgetMicros = Constant.VIP_TIER_MAX.equals(baseTier) ? 20_900_000L
-                : (Constant.VIP_TIER_PRO.equals(baseTier) ? 10_900_000L : 6_000_000L);
-        int baseWanLimit = Constant.VIP_TIER_MAX.equals(baseTier) ? 50
-                : (Constant.VIP_TIER_PRO.equals(baseTier) ? 20 : 15);
-        List<VipQuotaBonusGrant> bonusGrants = vipQuotaBonusService.listActiveGrants(userId);
-        long qwenBonusGrantedMicros = bonusGrants.stream()
-                .mapToLong(item -> Math.max(0L, nvl(item.getQwenGrantedMicros())))
-                .sum();
-        long qwenBonusUsedMicros = bonusGrants.stream()
-                .mapToLong(item -> Math.max(0L, nvl(item.getQwenUsedMicros())))
-                .sum();
-        long qwenBonusMicros = Math.max(0L, qwenBonusGrantedMicros - qwenBonusUsedMicros);
-        BigDecimal wanBonusGrantedCredits = bonusGrants.stream()
-                .map(item -> positive(item.getWanGrantedCredits()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal wanBonusUsedCredits = bonusGrants.stream()
-                .map(item -> positive(item.getWanUsedCredits()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal wanBonusCredits = wanBonusGrantedCredits.subtract(wanBonusUsedCredits).max(BigDecimal.ZERO);
-        long qwenBudgetMicros = baseQwenBudgetMicros + qwenBonusGrantedMicros;
-        BigDecimal wanLimit = BigDecimal.valueOf(baseWanLimit).add(wanBonusGrantedCredits);
+        // 上限按当前生效档位取，与 AI 域判定同口径。
+        // 不能用 base_quota_tier：体验卡期间它可能还停在免费档，会出现
+        // 「面板显示免费额度、实际按 PRO 放行」。
+        long qwenBudgetMicros = Constant.VIP_TIER_MAX.equals(tier) ? 20_900_000L
+                : (Constant.VIP_TIER_PRO.equals(tier) ? 10_900_000L : 6_000_000L);
+        int wanLimit = Constant.VIP_TIER_MAX.equals(tier) ? 50
+                : (Constant.VIP_TIER_PRO.equals(tier) ? 20 : 15);
+        long qwenUsed = Math.max(0L, nvl(usage.getQwenCostMicros()));
         panel.setQwenBudgetMicros(qwenBudgetMicros);
-        long observedQwenUsed = Math.max(0L, usage.getQwenCostMicros() == null ? 0L : usage.getQwenCostMicros());
-        long baseQwenUsed = Math.max(0L, observedQwenUsed - qwenBonusUsedMicros);
-        long qwenUsed = baseQwenUsed + qwenBonusUsedMicros;
         panel.setQwenUsedMicros(qwenUsed);
-        panel.setQwenRemainingMicros(
-                Math.max(0L, baseQwenBudgetMicros - baseQwenUsed) + qwenBonusMicros);
-        panel.setWanImageLimit(wanLimit);
-        BigDecimal observedWanUsed = BigDecimal.valueOf(
-                Math.max(0, usage.getWanImageUsed() == null ? 0 : usage.getWanImageUsed()));
-        BigDecimal baseWanUsed = observedWanUsed.subtract(wanBonusUsedCredits).max(BigDecimal.ZERO);
-        panel.setWanImageUsed(baseWanUsed.add(wanBonusUsedCredits));
-        panel.setWanImageRemaining(
-                BigDecimal.valueOf(baseWanLimit).subtract(baseWanUsed).max(BigDecimal.ZERO).add(wanBonusCredits));
-        panel.setBonusExpireAt(bonusGrants.isEmpty() ? null : bonusGrants.get(0).getExpireTime());
+        panel.setQwenRemainingMicros(Math.max(0L, qwenBudgetMicros - qwenUsed));
+        int wanUsed = Math.max(0, usage.getWanImageUsed() == null ? 0 : usage.getWanImageUsed());
+        panel.setWanImageLimit(BigDecimal.valueOf(wanLimit));
+        panel.setWanImageUsed(BigDecimal.valueOf(wanUsed));
+        panel.setWanImageRemaining(BigDecimal.valueOf(Math.max(0, wanLimit - wanUsed)));
         return panel;
     }
 

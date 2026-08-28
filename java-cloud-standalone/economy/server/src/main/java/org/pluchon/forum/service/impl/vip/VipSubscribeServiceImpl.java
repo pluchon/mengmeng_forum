@@ -10,11 +10,9 @@ import org.pluchon.forum.entity.db.UserVipSubscription;
 import org.pluchon.forum.entity.vo.points.PointsWalletVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
 import org.pluchon.forum.entity.vo.vip.VipTrialGrantResultVO;
-import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
-import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,9 +30,6 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
 
     @Resource
     private VipEntitlementService vipEntitlementService;
-
-    @Resource
-    private VipQuotaBonusService vipQuotaBonusService;
 
     private void requireUserExists(Long userId) {
         Boolean exists = userInternalFeignClient.existsById(userId);
@@ -68,18 +63,11 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
                 ? Math.multiplyExact(days, 12)
                 : Math.multiplyExact(days, 24);
         Date newExpire = vipEntitlementService.extendVipHours(userId, actualTier, actualHours);
-        VipQuotaBonusGrant bonus = vipQuotaBonusService.grantTrialBonus(
-                userId, days, sourceType, idempotencyKey);
 
         VipTrialGrantResultVO result = new VipTrialGrantResultVO();
         result.setActualTier(actualTier);
         result.setActualDurationHours(actualHours);
         result.setVipExpireAt(newExpire);
-        if (bonus != null) {
-            result.setQwenBonusMicros(bonus.getQwenGrantedMicros());
-            result.setWanBonusCredits(bonus.getWanGrantedCredits().stripTrailingZeros().toPlainString());
-            result.setBonusExpireAt(bonus.getExpireTime());
-        }
         String duration = actualHours % 24 == 0
                 ? (actualHours / 24) + "天"
                 : actualHours + "小时";

@@ -21,5 +21,4 @@ public class VipQuotaPanelVO {
     private BigDecimal wanImageLimit;
     private BigDecimal wanImageUsed;
     private BigDecimal wanImageRemaining;
-    private Date bonusExpireAt;
 }

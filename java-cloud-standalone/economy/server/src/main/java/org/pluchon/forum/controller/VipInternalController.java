@@ -3,15 +3,9 @@ package org.pluchon.forum.controller;
 import org.pluchon.forum.api.economy.VipInternalApi;
 import org.pluchon.forum.api.economy.VipQuotaHintVO;
 import org.pluchon.forum.api.economy.VipTierSnapshotVO;
-import org.pluchon.forum.api.economy.VipBonusReleaseRequest;
-import org.pluchon.forum.api.economy.VipBonusReserveRequest;
-import org.pluchon.forum.api.economy.VipBonusReservationVO;
-import org.pluchon.forum.api.economy.VipBonusSettleRequest;
-import org.pluchon.forum.api.economy.VipBonusSettlementVO;
 import org.pluchon.forum.entity.vo.vip.VipStatusVO;
 import org.pluchon.forum.service.interfaces.vip.VipCenterService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
-import org.pluchon.forum.service.interfaces.vip.VipQuotaBonusService;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,9 +23,6 @@ public class VipInternalController implements VipInternalApi {
 
     @Autowired
     private VipCenterService vipCenterService;
-
-    @Autowired
-    private VipQuotaBonusService vipQuotaBonusService;
 
     @Autowired
     private VipEntitlementService vipEntitlementService;
@@ -66,21 +57,4 @@ public class VipInternalController implements VipInternalApi {
         return vipCenterService.quotaHintForLlmRoute(userId, llmRoute);
     }
 
-    @Override
-    public VipBonusReservationVO reserveBonus(@PathVariable("userId") Long userId,
-                                              @Valid @RequestBody VipBonusReserveRequest request) {
-        return vipQuotaBonusService.reserve(userId, request.getResourceType(), request.getAmount());
-    }
-
-    @Override
-    public VipBonusSettlementVO settleBonus(@PathVariable("userId") Long userId,
-                                            @Valid @RequestBody VipBonusSettleRequest request) {
-        return vipQuotaBonusService.settle(userId, request.getReservationToken(), request.getActualAmount());
-    }
-
-    @Override
-    public void releaseBonus(@PathVariable("userId") Long userId,
-                             @Valid @RequestBody VipBonusReleaseRequest request) {
-        vipQuotaBonusService.release(userId, request.getReservationToken());
-    }
 }

@@ -11,7 +11,6 @@ import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.StarlightExchangeRecord;
 import org.pluchon.forum.entity.db.StarlightShopItem;
 import org.pluchon.forum.entity.db.UserVipSubscription;
-import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.entity.dto.starlight.StarlightExchangeDTO;
 import org.pluchon.forum.entity.dto.starlight.StarlightUseDTO;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -22,7 +21,6 @@ import org.pluchon.forum.entity.vo.starlight.StarlightUseResultVO;
 import org.pluchon.forum.entity.vo.vip.VipTrialGrantResultVO;
 import org.pluchon.forum.mapper.StarlightExchangeRecordMapper;
 import org.pluchon.forum.mapper.StarlightShopItemMapper;
-import org.pluchon.forum.mapper.VipQuotaBonusGrantMapper;
 import org.pluchon.forum.service.interfaces.checkin.CheckinService;
 import org.pluchon.forum.service.interfaces.lottery.LotteryVoucherService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightService;
@@ -92,9 +90,6 @@ public class StarlightShopServiceImpl implements StarlightShopService {
 
     @Autowired
     private VipSubscribeService vipSubscribeService;
-
-    @Autowired
-    private VipQuotaBonusGrantMapper vipQuotaBonusGrantMapper;
 
     @Autowired
     private LotteryVoucherService lotteryVoucherService;
@@ -294,11 +289,11 @@ public class StarlightShopServiceImpl implements StarlightShopService {
                     userId, vipDays, "STARLIGHT", "STARLIGHT:" + record.getId());
             record.setActualGrantTier(grantResult.getActualTier());
             record.setActualDurationHours(grantResult.getActualDurationHours());
-            Date bonusExpireAt = grantResult.getBonusExpireAt();
-            if (bonusExpireAt == null) {
-                bonusExpireAt = Date.from(Instant.now().plus(30, ChronoUnit.DAYS));
-            }
-            record.setGrantSummary("过期时间：" + formatExpireText(bonusExpireAt));
+            // 礼包额度已下线，过期时间直接取会员到期时间
+            Date vipExpireAt = grantResult.getVipExpireAt();
+            record.setGrantSummary(vipExpireAt == null
+                    ? grantResult.getSummary()
+                    : "会员有效至：" + formatExpireText(vipExpireAt));
         }
         record.setUseStatus(USE_STATUS_USED);
         record.setUseTime(now);
@@ -344,45 +339,10 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         );
 
         Map<Long, String> tagByItemId = loadItemTags(result.getRecords());
-        Map<Long, Date> bonusExpireById = loadBonusExpireTimes(result.getRecords());
         List<StarlightExchangeRecordVO> records = result.getRecords().stream()
-                .map(r -> toRecordVO(r, tagByItemId.get(r.getItemId()), bonusExpireById.get(r.getId())))
+                .map(r -> toRecordVO(r, tagByItemId.get(r.getItemId())))
                 .collect(Collectors.toList());
         return toPageResult(records, result);
-    }
-
-    private Map<Long, Date> loadBonusExpireTimes(List<StarlightExchangeRecord> records) {
-        if (records == null || records.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        Map<Long, Date> map = new HashMap<>();
-        for (StarlightExchangeRecord record : records) {
-            if (record == null || record.getId() == null) {
-                continue;
-            }
-            if (!Objects.equals(record.getUseStatus(), USE_STATUS_USED)) {
-                continue;
-            }
-            if (!REWARD_VIP_DAYS.equals(record.getRewardType())) {
-                continue;
-            }
-            String key = "STARLIGHT:" + record.getId();
-            VipQuotaBonusGrant bonus = vipQuotaBonusGrantMapper.selectOne(
-                    Wrappers.lambdaQuery(VipQuotaBonusGrant.class)
-                            .eq(VipQuotaBonusGrant::getUserId, record.getUserId())
-                            .eq(VipQuotaBonusGrant::getSourceIdempotencyKey, key)
-                            .last("LIMIT 1")
-            );
-            Date expire = bonus != null ? bonus.getExpireTime() : null;
-            if (expire == null && record.getUseTime() != null) {
-                expire = Date.from(record.getUseTime().toInstant().plus(30, ChronoUnit.DAYS));
-            }
-            if (expire == null) {
-                expire = Date.from(Instant.now().plus(30, ChronoUnit.DAYS));
-            }
-            map.put(record.getId(), expire);
-        }
-        return map;
     }
 
     private Map<Long, String> loadItemTags(List<StarlightExchangeRecord> records) {
@@ -435,7 +395,7 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         return vo;
     }
 
-    private StarlightExchangeRecordVO toRecordVO(StarlightExchangeRecord record, String tag, Date bonusExpireAt) {
+    private StarlightExchangeRecordVO toRecordVO(StarlightExchangeRecord record, String tag) {
         StarlightExchangeRecordVO vo = new StarlightExchangeRecordVO();
         vo.setId(record.getId());
         vo.setItemId(record.getItemId());
@@ -447,10 +407,7 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         vo.setUseTime(record.getUseTime());
         vo.setActualGrantTier(record.getActualGrantTier());
         vo.setActualDurationHours(record.getActualDurationHours());
-        vo.setBonusExpireAt(bonusExpireAt);
-        if (Objects.equals(vo.getUseStatus(), USE_STATUS_USED) && bonusExpireAt != null) {
-            vo.setRewardSummary("过期时间：" + formatExpireText(bonusExpireAt));
-        } else if (record.getGrantSummary() != null && !record.getGrantSummary().isBlank()) {
+        if (record.getGrantSummary() != null && !record.getGrantSummary().isBlank()) {
             vo.setRewardSummary(record.getGrantSummary());
         } else {
             vo.setRewardSummary(buildRewardSummary(record.getRewardType(), record.getRewardValue()));

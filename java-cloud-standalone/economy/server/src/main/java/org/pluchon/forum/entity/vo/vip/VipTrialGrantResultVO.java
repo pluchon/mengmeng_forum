@@ -11,8 +11,5 @@ public class VipTrialGrantResultVO {
     private Byte actualTier;
     private Integer actualDurationHours;
     private Date vipExpireAt;
-    private Long qwenBonusMicros;
-    private String wanBonusCredits;
-    private Date bonusExpireAt;
     private String summary;
 }

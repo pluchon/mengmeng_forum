@@ -640,25 +640,6 @@ CREATE TABLE `user_vip_subscription` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_vip_subscription_user_id` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户VIP订阅（economy 权威）';
-CREATE TABLE `vip_quota_bonus_grant` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `user_id` bigint NOT NULL COMMENT '用户ID',
-  `source_type` varchar(32) NOT NULL COMMENT '礼包来源',
-  `source_idempotency_key` varchar(128) NOT NULL COMMENT '来源幂等键',
-  `qwen_granted_micros` bigint NOT NULL DEFAULT '0' COMMENT '通用额度微元',
-  `qwen_used_micros` bigint NOT NULL DEFAULT '0' COMMENT '通用额度已用微元',
-  `qwen_reserved_micros` bigint NOT NULL DEFAULT '0' COMMENT '通用额度预占微元',
-  `wan_granted_credits` decimal(12,4) NOT NULL DEFAULT '0' COMMENT 'Wan图片额度',
-  `wan_used_credits` decimal(12,4) NOT NULL DEFAULT '0' COMMENT 'Wan已用额度',
-  `wan_reserved_credits` decimal(12,4) NOT NULL DEFAULT '0' COMMENT 'Wan预占额度',
-  `expire_time` datetime NOT NULL COMMENT '礼包到期时间',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `delete_state` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_vip_bonus_user_idem` (`user_id`,`source_idempotency_key`),
-  KEY `idx_vip_bonus_user_expire` (`user_id`,`expire_time`,`delete_state`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='VIP奖励额度礼包';
 CREATE TABLE `vip_purchase_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint NOT NULL COMMENT '用户ID',

@@ -32,9 +32,6 @@ public class StarlightExchangeRecordVO {
 
     private Integer actualDurationHours;
 
-    // PRO 额度礼包过期时间（体验卡使用后默认约 30 天）
-    private Date bonusExpireAt;
-
     // 商品标签快照展示 来自当前商品配置，缺失时为空
     private String tag;
 
