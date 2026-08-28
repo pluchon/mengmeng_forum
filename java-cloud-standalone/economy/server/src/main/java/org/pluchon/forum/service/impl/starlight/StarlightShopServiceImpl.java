@@ -2,6 +2,7 @@ package org.pluchon.forum.service.impl.starlight;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.pluchon.forum.cloud.feign.AiUsageInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -9,6 +10,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.entity.db.StarlightExchangeRecord;
 import org.pluchon.forum.entity.db.StarlightShopItem;
+import org.pluchon.forum.entity.db.UserVipSubscription;
 import org.pluchon.forum.entity.db.VipQuotaBonusGrant;
 import org.pluchon.forum.entity.dto.starlight.StarlightExchangeDTO;
 import org.pluchon.forum.entity.dto.starlight.StarlightUseDTO;
@@ -25,6 +27,7 @@ import org.pluchon.forum.service.interfaces.checkin.CheckinService;
 import org.pluchon.forum.service.interfaces.lottery.LotteryVoucherService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightShopService;
+import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
 import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -63,13 +66,20 @@ public class StarlightShopServiceImpl implements StarlightShopService {
 
     private static final String REWARD_MAKEUP_CARD = "MAKEUP_CARD";
 
+    // 额度重置卡：清空当前配额周期已用量，PRO/MAX 同价不同效
+    private static final String REWARD_QUOTA_RESET = "QUOTA_RESET";
+
     private static final int USE_STATUS_UNUSED = 0;
 
     private static final int USE_STATUS_USED = 1;
 
     private static final Set<String> VALID_CATEGORIES = Set.of("HOT", "LIMITED", "COSMETIC", "UTILITY");
 
-    private static final Set<String> SUPPORTED_REWARDS = Set.of(REWARD_VIP_DAYS, REWARD_LOTTERY_VOUCHER, REWARD_MAKEUP_CARD);
+    private static final Set<String> SUPPORTED_REWARDS = Set.of(
+            REWARD_VIP_DAYS, REWARD_LOTTERY_VOUCHER, REWARD_MAKEUP_CARD, REWARD_QUOTA_RESET);
+
+    // 兑换后入背包、需用户主动点「使用」才生效的类型
+    private static final Set<String> USABLE_REWARDS = Set.of(REWARD_VIP_DAYS, REWARD_QUOTA_RESET);
 
     @Autowired
     private StarlightShopItemMapper starlightShopItemMapper;
@@ -91,6 +101,12 @@ public class StarlightShopServiceImpl implements StarlightShopService {
 
     @Autowired
     private CheckinService checkinService;
+
+    @Autowired
+    private VipEntitlementService vipEntitlementService;
+
+    @Autowired
+    private AiUsageInternalFeignClient aiUsageInternalFeignClient;
 
     @Override
     public PageResult<StarlightShopItemVO> pageItems(String category, Integer pageNum, Integer pageSize) {
@@ -228,7 +244,7 @@ public class StarlightShopServiceImpl implements StarlightShopService {
             checkinService.grantMakeupCards(userId, rewardValue);
         }
 
-        // VIP 类兑换只入背包，在「使用」时发放
+        // 体验卡与额度重置卡只入背包，在「使用」时发放
         return toExchangeResult(record, balanceAfter);
     }
 
@@ -252,11 +268,12 @@ public class StarlightShopServiceImpl implements StarlightShopService {
             return toUseResult(record);
         }
 
-        if (!REWARD_VIP_DAYS.equals(record.getRewardType())) {
+        String rewardType = record.getRewardType();
+        if (!USABLE_REWARDS.contains(rewardType)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "暂不支持使用该奖励类型"));
         }
         int vipDays = record.getRewardValue() == null ? 0 : record.getRewardValue();
-        if (vipDays <= 0) {
+        if (REWARD_VIP_DAYS.equals(rewardType) && vipDays <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "奖励配置无效"));
         }
 
@@ -270,19 +287,44 @@ public class StarlightShopServiceImpl implements StarlightShopService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "使用失败，请刷新后重试"));
         }
 
-        VipTrialGrantResultVO grantResult = vipSubscribeService.grantTrialVipDays(
-                userId, vipDays, "STARLIGHT", "STARLIGHT:" + record.getId());
-        record.setActualGrantTier(grantResult.getActualTier());
-        record.setActualDurationHours(grantResult.getActualDurationHours());
-        Date bonusExpireAt = grantResult.getBonusExpireAt();
-        if (bonusExpireAt == null) {
-            bonusExpireAt = Date.from(Instant.now().plus(30, ChronoUnit.DAYS));
+        if (REWARD_QUOTA_RESET.equals(rewardType)) {
+            applyQuotaReset(userId, record);
+        } else {
+            VipTrialGrantResultVO grantResult = vipSubscribeService.grantTrialVipDays(
+                    userId, vipDays, "STARLIGHT", "STARLIGHT:" + record.getId());
+            record.setActualGrantTier(grantResult.getActualTier());
+            record.setActualDurationHours(grantResult.getActualDurationHours());
+            Date bonusExpireAt = grantResult.getBonusExpireAt();
+            if (bonusExpireAt == null) {
+                bonusExpireAt = Date.from(Instant.now().plus(30, ChronoUnit.DAYS));
+            }
+            record.setGrantSummary("过期时间：" + formatExpireText(bonusExpireAt));
         }
-        record.setGrantSummary("过期时间：" + formatExpireText(bonusExpireAt));
         record.setUseStatus(USE_STATUS_USED);
         record.setUseTime(now);
         starlightExchangeRecordMapper.updateById(record);
         return toUseResult(record);
+    }
+
+    // 额度重置卡：把当前配额周期的已用量清零，重置到用户自己档位的上限。
+    // 周期由 economy 侧算好后传给 AI 域，避免 AI 回查会员快照造成事务内回环取锁。
+    private void applyQuotaReset(Long userId, StarlightExchangeRecord record) {
+        UserVipSubscription subscription = vipEntitlementService.ensureCurrentBaseQuotaPeriod(userId);
+        if (subscription == null
+                || subscription.getQuotaPeriodStart() == null
+                || subscription.getQuotaPeriodEnd() == null) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        Date periodEnd = subscription.getQuotaPeriodEnd();
+        aiUsageInternalFeignClient.resetPeriodQuota(
+                userId,
+                subscription.getQuotaPeriodStart().getTime(),
+                periodEnd.getTime());
+        Byte tier = subscription.getVipTier() == null ? Constant.VIP_TIER_FREE : subscription.getVipTier();
+        String tierLabel = Constant.VIP_TIER_MAX.equals(tier) ? "MAX"
+                : (Constant.VIP_TIER_PRO.equals(tier) ? "PRO" : "免费");
+        record.setActualGrantTier(tier);
+        record.setGrantSummary("已重置为" + tierLabel + "档本周期额度，有效至 " + formatExpireText(periodEnd));
     }
 
     @Override
@@ -473,6 +515,9 @@ public class StarlightShopServiceImpl implements StarlightShopService {
         }
         if (REWARD_MAKEUP_CARD.equals(rewardType)) {
             return "补签卡 ×" + Math.max(0, rewardValue == null ? 0 : rewardValue);
+        }
+        if (REWARD_QUOTA_RESET.equals(rewardType)) {
+            return "AI 额度重置卡";
         }
         return "兑换成功";
     }

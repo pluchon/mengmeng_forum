@@ -11,7 +11,7 @@ import mengXinghuiIconUrl from '@/assets/svg/meng_xinghui.svg?url'
 import AppPagination from '@/components/common/AppPagination.vue'
 import {
   MENGBI_DIKOUQUAN_WEBP_URL as voucherCoverUrl,
-  PRO_TIME_TO_TEST_WEBP_URL as vipTrialCoverUrl,
+  VIP_RESET_CARD_WEBP_URL as quotaResetCoverUrl,
   QIANDAO_BUQIANKA_WEBP_URL as makeupCardCoverUrl,
 } from '@/utils/clientOss'
 import emptyShopItemUrl from '@/assets/images/mengxinghui_no_shop_item.png'
@@ -286,8 +286,8 @@ async function loadHistory() {
   }
 }
 
-function isVipTrialItem(item) {
-  return String(item?.rewardType || '').toUpperCase() === 'VIP_DAYS'
+function isQuotaResetItem(item) {
+  return String(item?.rewardType || '').toUpperCase() === 'QUOTA_RESET'
 }
 
 function isLotteryVoucherItem(item) {
@@ -298,10 +298,9 @@ function isMakeupCardItem(item) {
   return String(item?.rewardType || '').toUpperCase() === 'MAKEUP_CARD'
 }
 
-function isVipTrialRecord(row) {
-  return String(row?.rewardType || '').toUpperCase() === 'VIP_DAYS'
-    || String(row?.itemName || '').includes('体验卡')
-    || String(row?.itemName || '').includes('VIP')
+function isQuotaResetRecord(row) {
+  return String(row?.rewardType || '').toUpperCase() === 'QUOTA_RESET'
+    || String(row?.itemName || '').includes('额度重置卡')
 }
 
 function isLotteryVoucherRecord(row) {

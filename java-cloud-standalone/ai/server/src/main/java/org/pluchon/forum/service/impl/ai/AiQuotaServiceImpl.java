@@ -66,18 +66,17 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
+    // 判定口径与文本一致：都读周期表的已用 + 预占。
+    // 不能从 usage_log 实时聚合张数——日志是不可变审计流水，聚合出来的用量无法被额度重置卡清零。
     public void consumeImageNormal(AiUserContext user) {
         PeriodWindow window = periodWindow(user);
         int cap = isMax(user) ? 50 : (isProOrMax(user) ? 20 : 15);
-        int used = forumAiUsageLogMapper.sumImageCountByModelBetween(
-                user.getId(), "wan2.7-image", window.start, window.end);
-        int remaining = Math.max(0, cap - used);
         ensurePeriodRow(user, window);
-        if (remaining <= 0 || forumAiQuotaPeriodUsageMapper.reserveWan(
-                user.getId(), window.key, remaining) != 1) {
+        if (forumAiQuotaPeriodUsageMapper.reserveWan(user.getId(), window.key, cap) != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_QUOTA_EXCEEDED));
         }
     }
+
 
     @Override
     public void recordCoverHint(AiUserContext user) {

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.pluchon.forum.entity.db.ForumAiQuotaPeriodUsage;
 
@@ -22,9 +23,19 @@ public interface ForumAiQuotaPeriodUsageMapper extends BaseMapper<ForumAiQuotaPe
 
     @Update("UPDATE forum_ai_quota_period_usage SET wan_reserved_count = wan_reserved_count + 1 "
             + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0 "
-            + "AND wan_reserved_count < #{remaining}")
+            + "AND wan_reserved_count + IFNULL(wan_used_count, 0) + 1 <= #{limitCount}")
     int reserveWan(@Param("userId") Long userId, @Param("periodKey") String periodKey,
-                   @Param("remaining") int remaining);
+                   @Param("limitCount") int limitCount);
+
+    // 额度重置卡：只清已结算用量，预占代表在途请求不能动，否则会超卖
+    @Update("UPDATE forum_ai_quota_period_usage SET qwen_used_micros = 0, wan_used_count = 0 "
+            + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0")
+    int resetUsage(@Param("userId") Long userId, @Param("periodKey") String periodKey);
+
+    @Select("SELECT * FROM forum_ai_quota_period_usage "
+            + "WHERE user_id = #{userId} AND quota_period_key = #{periodKey} AND delete_state = 0")
+    ForumAiQuotaPeriodUsage selectByUserAndPeriod(@Param("userId") Long userId,
+                                                 @Param("periodKey") String periodKey);
 
     @Update("UPDATE forum_ai_quota_period_usage SET qwen_reserved_micros = "
             + "GREATEST(qwen_reserved_micros - #{amount}, 0) "

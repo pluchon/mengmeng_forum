@@ -54,9 +54,9 @@
           <article v-for="item in items" :key="item.id" class="mxh-shop-card">
             <div class="mxh-shop-card__media" aria-hidden="true">
               <img
-                v-if="isVipTrialItem(item)"
+                v-if="isQuotaResetItem(item)"
                 class="mxh-shop-card__cover"
-                :src="vipTrialCoverUrl"
+                :src="quotaResetCoverUrl"
                 alt=""
               />
               <img
@@ -98,9 +98,9 @@
           <article v-for="row in backpackItems" :key="row.id" class="mxh-shop-card">
             <div class="mxh-shop-card__media" aria-hidden="true">
               <img
-                v-if="isVipTrialRecord(row)"
+                v-if="isQuotaResetRecord(row)"
                 class="mxh-shop-card__cover"
-                :src="vipTrialCoverUrl"
+                :src="quotaResetCoverUrl"
                 alt=""
               />
               <img

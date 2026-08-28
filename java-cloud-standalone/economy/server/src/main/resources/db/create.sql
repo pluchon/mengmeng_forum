@@ -767,16 +767,7 @@ INSERT INTO `lottery_pool_task` (`activity_id`, `task_code`, `title`, `target_co
 
 INSERT INTO `starlight_shop_item`
 (`name`, `category`, `tag`, `price_starlight`, `reward_type`, `reward_value`, `stock_remaining`, `daily_limit`, `sort_order`, `enabled`, `delete_state`) VALUES
-('PRO会员体验卡·1天', 'HOT', '热门', 30, 'VIP_DAYS', 1, -1, 0, 1, 1, 0),
-('PRO会员体验卡·3天', 'HOT', NULL, 80, 'VIP_DAYS', 3, -1, 0, 2, 1, 0),
-('PRO会员体验卡·7天', 'HOT', '热门', 150, 'VIP_DAYS', 7, 50, 0, 3, 1, 0),
-('PRO会员体验卡·15天', 'HOT', '限定', 280, 'VIP_DAYS', 15, 20, 0, 4, 1, 0),
-('PRO会员体验卡·30天', 'HOT', '限定', 500, 'VIP_DAYS', 30, 10, 0, 5, 1, 0),
-('PRO会员体验卡·日限1天', 'HOT', NULL, 25, 'VIP_DAYS', 1, -1, 2, 6, 1, 0),
-('PRO会员体验卡·日限3天', 'HOT', '新品', 70, 'VIP_DAYS', 3, -1, 1, 7, 1, 0),
-('PRO会员体验卡·周卡', 'HOT', '新品', 160, 'VIP_DAYS', 7, -1, 0, 8, 1, 0),
-('PRO会员体验卡·半月卡', 'HOT', NULL, 260, 'VIP_DAYS', 15, 30, 0, 9, 1, 0),
-('PRO会员体验卡·月卡特惠', 'HOT', '热门', 450, 'VIP_DAYS', 30, 15, 0, 10, 1, 0),
+('AI额度重置卡', 'HOT', '限定', 600, 'QUOTA_RESET', 1, -1, 1, 1, 1, 0),
 ('抽奖抵扣券·1张', 'HOT', '热门', 10, 'LOTTERY_VOUCHER', 1, -1, 0, 20, 1, 0),
 ('抽奖抵扣券·10张', 'HOT', NULL, 90, 'LOTTERY_VOUCHER', 10, -1, 0, 21, 1, 0),
 ('抽奖抵扣券·30张', 'HOT', '热门', 270, 'LOTTERY_VOUCHER', 30, -1, 0, 22, 1, 0),

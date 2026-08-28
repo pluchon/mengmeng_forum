@@ -22,4 +22,12 @@ public class AiUsageInternalController implements AiUsageInternalApi {
             @RequestParam("periodEndMs") long periodEndMs) {
         return aiUsageInternalService.usageSnapshot(userId, periodStartMs, periodEndMs);
     }
+
+    @Override
+    public void resetPeriodQuota(
+            @PathVariable Long userId,
+            @RequestParam("periodStartMs") long periodStartMs,
+            @RequestParam("periodEndMs") long periodEndMs) {
+        aiUsageInternalService.resetPeriodQuota(userId, periodStartMs, periodEndMs);
+    }
 }
