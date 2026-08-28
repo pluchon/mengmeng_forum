@@ -76,6 +76,14 @@ public interface ArticleInternalApi {
 | `exam_question` | 0 行 | 2.4 的跨域越界实体可安全删除 |
 | `forum_notice` | 6 行 | mock 数据在库，前端与 Python 都在读，保留 |
 
+### 两处前提修正（执行中被实践证伪）
+
+**一、这个项目没有 Flyway。** 本文档多处写「走 Flyway 前向迁移」，实际上全仓库搜 `flyway` / `liquibase` 零命中，也不存在 `db/migration` 目录。schema 由各模块 `src/main/resources/db/create.sql`（mysqldump 风格全量建表脚本）管理。因此列删除的正确做法是**改 `create.sql` + 对开发库执行 `ALTER TABLE`**，两者必须同步，否则新环境与既有环境会漂移。
+
+这条前提错误差点造成一次线上故障：`user_profile_change_request.content_hash` 是 `varchar(32) NOT NULL` 且**无默认值**，如果按原计划「Java 字段现在删、迁移留到最后阶段」，中间每一个提交都会让资料审核提交直接失败（MySQL 严格模式下 `Field 'content_hash' doesn't have a default value`）。所以 3.12 的三列已随 Java 字段删除在**同一提交**内落地。
+
+**二、`GobangRoomParticipantVO.joinedAtMs` 不是死字段，判定有误。** 2.7 把它列进「三游戏复制粘贴死字段」，但 `GobangRoomServiceImpl.buildSpectators` 用它排序观战席（`spectators.sort(Comparator.comparing(GobangRoomParticipantVO::getJoinedAtMs))`），删掉会直接编译失败。已跳过保留。同批的 `sentAtMs` / `serverNowMs` / `baseScore` / `winLine` / `occurredAt` 等确认前后端零读取，已删。
+
 ### 一处表述修正：`ai_usage_daily` 不能整表下线
 
 我此前建议「连整表一起下线」，数据显示这个建议**不成立**。该表的六列要分开看：
