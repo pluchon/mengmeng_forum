@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // 聊天文本消息举报实现
 @Service
@@ -43,6 +44,9 @@ public class ChatMessageReportServiceImpl implements ChatMessageReportService {
 
     private static final byte PRIVATE = 1;
     private static final byte GROUP = 2;
+
+    // 给 AI 的举报理由最多带几条，避免刷举报把提示词撑爆
+    private static final int MAX_REPORT_REASONS = 5;
     private static final byte TEXT_MESSAGE = 0;
     private static final byte TASK_PENDING = 0;
     private static final byte TASK_COMPLETED = 2;
@@ -116,7 +120,8 @@ public class ChatMessageReportServiceImpl implements ChatMessageReportService {
         }
         if (shared == null) {
             shared = createTask(reporterUserId, conversationType, request.getMessageId(), hash);
-            Map<String, Object> payload = taskPayload(shared, snapshot);
+            // 此处举报单尚未 insert，理由取当前这条，不能走聚合查询
+            Map<String, Object> payload = taskPayload(shared, snapshot, report.getReason());
             TransactionHooks.afterCommit(() -> forumProducer.sendAiAsyncTask(payload));
         }
         report.setTaskId(shared.getTaskId());
@@ -337,10 +342,34 @@ public class ChatMessageReportServiceImpl implements ChatMessageReportService {
         return task;
     }
 
+    // 重投/重试路径没有当前举报对象，理由改从已落库的举报单聚合
     private Map<String, Object> taskPayload(ImAiTask task, ChatSnapshot snapshot) {
+        return taskPayload(task, snapshot, aggregatedReasons(task.getTaskId()));
+    }
+
+    // 同一条消息的多人举报共享一个 AI 任务，理由去重后一并给出，仅作审核视角提示
+    private String aggregatedReasons(String taskId) {
+        if (taskId == null || taskId.isBlank()) {
+            return "";
+        }
+        List<ChatMessageReport> reports = reportMapper.selectList(new LambdaQueryWrapper<ChatMessageReport>()
+                .eq(ChatMessageReport::getTaskId, taskId)
+                .eq(ChatMessageReport::getDeleteState, DELETE_FALSE));
+        return reports.stream()
+                .map(ChatMessageReport::getReason)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(reason -> !reason.isEmpty())
+                .distinct()
+                .limit(MAX_REPORT_REASONS)
+                .collect(Collectors.joining("；"));
+    }
+
+    private Map<String, Object> taskPayload(ImAiTask task, ChatSnapshot snapshot, String reportReason) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("taskId", task.getTaskId());
         payload.put("taskType", "CHAT_REPORT_MODERATION");
+        payload.put("reportReason", reportReason == null ? "" : reportReason);
         payload.put("targetType", PRIVATE == safeByte(task.getTargetType()) ? "PRIVATE" : "GROUP");
         payload.put("targetId", task.getTargetId());
         payload.put("contentHash", task.getContentHash());

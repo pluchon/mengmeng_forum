@@ -91,22 +91,30 @@ class ContentModerationModule:
         plain = clean_html(content).strip()
         if not plain:
             return ModuleResult(success=True, data={"allowed": True, "reason": "", "cached": False})
-        logger.info("TEXT_AUDIT 收到审核请求 contentLen=%s", len(plain))
-        cached = semantic_cache.find_match(plain)
-        if cached:
-            return ModuleResult(
-                success=True,
-                data={"allowed": bool(cached["allow"]), "reason": cached.get("msg", ""), "cached": True},
-            )
+        report_reason = str(request.payload.get("reportReason") or "").strip()
+        logger.info(
+            "TEXT_AUDIT 收到审核请求 contentLen=%s reported=%s", len(plain), bool(report_reason)
+        )
+        # 语义缓存按内容取键，不含举报理由。带理由的举报若复用缓存，理由就白传了；
+        # 反之举报结论写回缓存也会污染普通自动审核。举报量小判定重，整体绕过缓存。
+        if not report_reason:
+            cached = semantic_cache.find_match(plain)
+            if cached:
+                return ModuleResult(
+                    success=True,
+                    data={"allowed": bool(cached["allow"]), "reason": cached.get("msg", ""), "cached": True},
+                )
 
         decision = await asyncio.to_thread(
             run_text_moderation,
             str(request.payload.get("title") or ""),
             plain,
+            report_reason,
         )
         allowed = bool(decision["allowed"])
         reason = str(decision.get("reason") or "")
-        semantic_cache.save(plain, {"allow": allowed, "msg": reason or "OK"})
+        if not report_reason:
+            semantic_cache.save(plain, {"allow": allowed, "msg": reason or "OK"})
         return ModuleResult(success=True, data={
             "allowed": allowed,
             "reason": reason,

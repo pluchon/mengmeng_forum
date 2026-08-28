@@ -38,11 +38,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // 内容举报与共享AI审核任务实现
 @Service
 public class ContentReportServiceImpl implements ContentReportService {
 
+    // 给 AI 的举报理由最多带几条，避免刷举报把提示词撑爆
+    private static final int MAX_REPORT_REASONS = 5;
     private static final byte TASK_TYPE_REPORT = 3;
     private static final byte TARGET_ARTICLE = 1;
     private static final byte TARGET_REPLY = 2;
@@ -125,7 +128,8 @@ public class ContentReportServiceImpl implements ContentReportService {
         }
         if (shared == null) {
             shared = createTask(reporterUserId, targetType, request.getTargetId(), contentHash);
-            Map<String, Object> payload = taskPayload(shared, snapshot);
+            // 此处举报单尚未 insert，理由取当前这条，不能走聚合查询
+            Map<String, Object> payload = taskPayload(shared, snapshot, report.getReason());
             TransactionHooks.afterCommit(() -> forumProducer.sendAiAsyncTask(payload));
         }
         report.setTaskId(shared.getTaskId());
@@ -376,10 +380,33 @@ public class ContentReportServiceImpl implements ContentReportService {
         }
     }
 
+    // 重投/重试路径没有当前举报对象，理由改从已落库的举报单聚合
     private Map<String, Object> taskPayload(ContentAiTask task, TargetSnapshot snapshot) {
+        return taskPayload(task, snapshot, aggregatedReasons(task.getTaskId()));
+    }
+
+    // 同一目标的多人举报共享一个 AI 任务，理由去重后一并给出，仅作审核视角提示
+    private String aggregatedReasons(String taskId) {
+        if (taskId == null || taskId.isBlank()) {
+            return "";
+        }
+        List<ContentReport> reports = reportMapper.selectList(new LambdaQueryWrapper<ContentReport>()
+                .eq(ContentReport::getTaskId, taskId)
+                .eq(ContentReport::getDeleteState, DELETE_FALSE));
+        return reports.stream()
+                .map(ContentReport::getReason)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .limit(MAX_REPORT_REASONS)
+                .collect(Collectors.joining("；"));
+    }
+
+    private Map<String, Object> taskPayload(ContentAiTask task, TargetSnapshot snapshot, String reportReason) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("taskId", task.getTaskId());
         payload.put("taskType", "CONTENT_REPORT_MODERATION");
+        payload.put("reportReason", reportReason == null ? "" : reportReason);
         payload.put("targetType", targetTypeName(task.getTargetType()));
         payload.put("targetId", task.getTargetId());
         payload.put("contentHash", task.getContentHash());

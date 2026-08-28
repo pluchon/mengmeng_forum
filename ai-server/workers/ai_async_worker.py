@@ -98,7 +98,12 @@ def _execute(task: dict[str, Any]) -> dict[str, Any]:
                 request_id=task_id,
                 trace_id=task_id,
                 user_context={},
-                payload={"title": task.get("title") or "", "content": task.get("content") or ""},
+                payload={
+                    "title": task.get("title") or "",
+                    "content": task.get("content") or "",
+                    # 举报理由只在举报类任务里有值，自动审核类任务为空
+                    "reportReason": task.get("reportReason") or "",
+                },
             )
             result = asyncio.run(ContentModerationModule().run(request))
             allowed = bool(result.data.get("allowed"))
