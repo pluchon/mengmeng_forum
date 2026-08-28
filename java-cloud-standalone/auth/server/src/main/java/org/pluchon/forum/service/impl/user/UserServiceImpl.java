@@ -7,6 +7,8 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.JWTUtils;
+import org.pluchon.forum.common.security.JwtRevocationService;
 import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.pluchon.forum.common.utils.PasswordUtils;
 import org.pluchon.forum.common.utils.PiiUtils;
@@ -68,6 +70,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
+
+    @Autowired
+    private JwtRevocationService jwtRevocationService;
 
     @Autowired
     private UserLoginLogService userLoginLogService;
@@ -524,11 +529,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void logout(Long userId) {
+    public void logout(Long userId, String jwtToken) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        jwtTokenVersionService.bump(userId);
+        // 只作废当前这一个令牌。若在这里 bump 版本号，手机点退出会把电脑也顶下线
+        jwtRevocationService.revoke(JWTUtils.parseJWT(jwtToken));
     }
 
     

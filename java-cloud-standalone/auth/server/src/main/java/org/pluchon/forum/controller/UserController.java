@@ -91,11 +91,11 @@ public class UserController {
         return Result.success(userAuthFlowService.getSessionUser(sessionUser.getId()));
     }
 
-    @Operation(summary = "退出登录", description = "递增当前账号 token 版本，使当前 JWT 立即失效")
+    @Operation(summary = "退出登录", description = "吊销本次请求携带的 JWT，只下线当前设备，其它端保持登录")
     @PostMapping("/logout")
     public Result<String> logout(HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        userService.logout(sessionUser.getId());
+        userService.logout(sessionUser.getId(), httpServletRequest.getHeader(Constant.JWT_NAME));
         return Result.success("退出成功");
     }
 

@@ -41,6 +41,7 @@ public final class Constant {
     public static final String WS_PUSH_CHANNEL = ForumRedisKeys.WS_PUSH_CHANNEL;
     public static final String GAME_ROOM_EVENT_CHANNEL = ForumRedisKeys.GAME_ROOM_EVENT_CHANNEL;
     public static final String REDIS_KEY_JWT_TOKEN_VERSION = ForumRedisKeys.JWT_TOKEN_VERSION;
+    public static final String REDIS_KEY_JWT_REVOKED = ForumRedisKeys.JWT_REVOKED;
     public static final String REDIS_KEY_USER_INFO = ForumRedisKeys.USER_INFO;
     public static final String REDIS_KEY_USER_NAME = ForumRedisKeys.USER_NAME;
     public static final String REDIS_KEY_USER_LIKES = ForumRedisKeys.USER_LIKES;

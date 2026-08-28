@@ -31,7 +31,10 @@ public class JWTUtils {
     // 使用我们的原始字符串生成我们的正式密钥，采用UTF 8编码
     private static SecretKey SECRET_KEY;
 
-    @Value("${jwt.secret:local_dev_jwt_secret_min_32_chars_change_me}")
+    // 仅供本地开发，生产必须通过 JWT_SECRET 覆盖；JwtSecretGuard 会在 prod 下拒绝启动
+    public static final String DEV_DEFAULT_SECRET = "local_dev_jwt_secret_min_32_chars_change_me";
+
+    @Value("${jwt.secret:" + DEV_DEFAULT_SECRET + "}")
     public void setSecretString(String secretString) {
         JWTUtils.SECRET_STRING = secretString;
         JWTUtils.SECRET_KEY = Keys.hmacShaKeyFor(SECRET_STRING.getBytes(StandardCharsets.UTF_8));
@@ -51,7 +54,27 @@ public class JWTUtils {
         claims.put(org.pluchon.forum.common.constant.Constant.JWT_USER_ID, userId);
         claims.put(org.pluchon.forum.common.constant.Constant.JWT_USER_NAME, username);
         claims.put(org.pluchon.forum.common.constant.Constant.JWT_TOKEN_VERSION, tokenVersion);
+        // jti 让每个令牌可以被单独吊销，"退出登录"才能只退当前设备而不影响其它端
+        claims.put(Claims.ID, java.util.UUID.randomUUID().toString().replace("-", ""));
         return genJwt(claims);
+    }
+
+    // 令牌唯一标识，旧令牌没有该字段时返回 null
+    public static String readTokenId(Claims claims) {
+        if (claims == null) {
+            return null;
+        }
+        Object raw = claims.get(Claims.ID);
+        return raw == null ? null : raw.toString();
+    }
+
+    // 令牌剩余有效秒数，用于给吊销记录设置 TTL，过期后自动清理
+    public static long remainingSeconds(Claims claims) {
+        if (claims == null || claims.getExpiration() == null) {
+            return 0L;
+        }
+        long millis = claims.getExpiration().getTime() - System.currentTimeMillis();
+        return millis <= 0 ? 0L : millis / 1000;
     }
 
     public static long readTokenVersion(Claims claims) {

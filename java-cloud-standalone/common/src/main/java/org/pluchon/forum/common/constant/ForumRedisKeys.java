@@ -6,6 +6,8 @@ public final class ForumRedisKeys {
     public static final String GAME_ROOM_EVENT_CHANNEL = "forum:game:room:event";
 
     public static final String JWT_TOKEN_VERSION = "forum:jwt:tv:";
+    // 单个令牌的吊销记录，TTL 取令牌剩余有效期，过期后自动消失
+    public static final String JWT_REVOKED = "forum:jwt:revoked:";
     public static final String USER_INFO = "user_info:";
     public static final String USER_NAME = "user_name:";
     public static final String USER_LIKES = "user_likes:";
