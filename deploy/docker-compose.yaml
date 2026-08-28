@@ -266,7 +266,9 @@ services:
     image: redis:8.0
     container_name: forum-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # volatile-lru 而非 allkeys-lru：令牌最低有效版本 forum:jwt:tv:* 是不带 TTL 的鉴权状态，
+    # 被淘汰会让下限归零，导致改密码时作废掉的旧令牌重新生效。只淘汰带 TTL 的缓存键
+    command: redis-server --requirepass ${REDIS_PASSWORD:-} --maxmemory 256mb --maxmemory-policy volatile-lru
     volumes:
       - forum_redis_data:/data
     healthcheck:
