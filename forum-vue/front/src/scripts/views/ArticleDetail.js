@@ -101,6 +101,8 @@ export function useArticleDetail() {
   let triplePointerId = null
   const engagementSubmitting = ref(false)
   const isOwner = ref(false)
+  // 被拒帖子的审核次数信息，仅本人可见
+  const auditRetryInfo = ref(null)
   const isFavorited = ref(false)
   const notInterestedSaving = ref(false)
   const notInterestedDialogVisible = ref(false)
@@ -1129,10 +1131,25 @@ export function useArticleDetail() {
       }
     }
     if (s === ARTICLE_STATUS.REJECTED) {
+      const retry = auditRetryInfo.value
+      const rejectReason = article.value.auditResultMessage || ''
+      if (retry?.retryLimitReached) {
+        const prefix = rejectReason ? `${rejectReason} ` : ''
+        return {
+          type: 'error',
+          title: '审核未通过，已无法再次提交',
+          description: `${prefix}本帖审核次数已用完（上限 ${retry.retryLimit} 次），无法再提交审核。如需发布，请新建一篇帖子。`,
+          ...shellBack,
+        }
+      }
+      const remaining = retry ? Math.max(0, retry.retryLimit - retry.retryCount) : 0
+      const remainingHint = retry && retry.retryLimit > 0
+        ? `还可提交 ${remaining} 次（上限 ${retry.retryLimit} 次）。`
+        : ''
       return {
         type: 'error',
         title: '审核未通过',
-        description: article.value.auditResultMessage || '请修改正文或图片后重新提交审核。',
+        description: `${rejectReason || '请修改正文或图片后重新提交审核。'}${remainingHint ? ` ${remainingHint}` : ''}`,
         buttonText: '去修改',
         path: `/article/edit/${id}`,
       }
@@ -1223,6 +1240,7 @@ export function useArticleDetail() {
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         await loadAuthorFollowState()
         await syncOwnerArticleStatus(articleId)
+        await loadAuditRetryInfo(articleId)
         await nextTick()
         updateGalleryStripState()
         bindGalleryStripObserver()
@@ -1261,6 +1279,23 @@ export function useArticleDetail() {
     },
     { immediate: true },
   )
+
+  // 被拒帖子要在横幅上如实告知还剩几次机会，次数用尽时不再引导用户去改
+  async function loadAuditRetryInfo(articleId) {
+    auditRetryInfo.value = null
+    if (!isOwner.value || Number(article.value?.status) !== ARTICLE_STATUS.REJECTED) return
+    try {
+      const res = await getAuditStatus(articleId)
+      if (res.code !== 0 || !res.data) return
+      auditRetryInfo.value = {
+        retryCount: Number(res.data.retryCount) || 0,
+        retryLimit: Number(res.data.retryLimit) || 0,
+        retryLimitReached: res.data.retryLimitReached === true,
+      }
+    } catch {
+      // 拿不到次数就退回原来的通用文案
+    }
+  }
 
   async function syncOwnerArticleStatus(articleId) {
     if (!isOwner.value || !article.value) return
