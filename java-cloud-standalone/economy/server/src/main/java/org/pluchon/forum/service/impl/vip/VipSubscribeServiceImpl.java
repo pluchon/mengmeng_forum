@@ -40,12 +40,6 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public VipTrialGrantResultVO grantTrialVipDays(Long userId, int days, String sourceType, String idempotencyKey) {
-        return grantTrialVip(userId, Constant.VIP_TIER_PRO, days, sourceType, idempotencyKey);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
     public VipTrialGrantResultVO grantTrialVip(Long userId, Byte tier, int days,
                                                String sourceType, String idempotencyKey) {
         if (days <= 0) {

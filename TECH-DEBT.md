@@ -16,13 +16,21 @@
 
 ## 二、需讨论
 
-### 2. 支付接通当天必须补 `vip_purchase_record` 写入
+### 2. 充值开通链路整条未实现
 
-`VipCenterServiceImpl` 判定首购资格靠 `selectCount(...) == 0`，而 `vip_purchase_record` 表**当前零写入方**（`VipPurchaseRecordMapper` 是空的 `BaseMapper`），所以 `firstPurchaseEligible` 恒为 true。
+**当前会员的唯一实际来源是抽奖池**：常规池 PRO 30 天（权重 20，限量 30），神秘大奖池 MAX 30 天（神秘大奖档内再取 1/1001）。
 
-mock 期间「所有人都能看到首月优惠价 3.9 / 6.9」是预期行为。但**支付渠道接通当天必须同步补上购买记录的 insert**，否则首月优惠价会被同一用户无限次复用。
+充值不是「已实现但走 mock 支付」，而是**从接口到落库整条链路都还没写**：`VipController` 只有 center / quota / purchase-records / status 四个 `@GetMapping`，没有任何下单或开通的写接口；`VipSubscribeDTO`、`VipSubscribeResultVO`、`UserVipSubscriptionMapper.updatePaidSubscription` 三者全仓零调用方。前端会员中心的价格是纯展示。
 
-保留清单（支付接通后的写入落点，勿删）：`VipPurchaseRecord` 实体、`VipPurchaseRecordMapper`、`VipPurchaseRecordConverter`、`VipCenterServiceImpl.purchaseRecords`、`/vip/purchase-records` 端点、`UserVipSubscriptionMapper.updatePaidSubscription`、`VipSubscribeResultVO`、`VipSubscribeDTO`。
+接通支付时要一并补齐三件事：
+
+1. **开通写接口**，落库走 `updatePaidSubscription`（注意它会重写 `quota_period_*`，锚点语义见已解决项第 3 条）
+2. **`vip_purchase_record` 的 insert**。`VipCenterServiceImpl` 判定首购资格靠 `selectCount(...) == 0`，该表当前零写入方，所以 `firstPurchaseEligible` 恒为 true——不补上，首月优惠价 3.9 / 6.9 会被同一用户无限次复用
+3. **显式传档位**。`grantTrialVipDays`（默认 PRO 的便捷重载）已删除，`grantTrialVip` 强制要求指定 tier，避免 MAX 被静默降级
+
+保留清单（支付接通后的落点，勿删）：`VipPurchaseRecord` 实体、`VipPurchaseRecordMapper`、`VipPurchaseRecordConverter`、`VipCenterServiceImpl.purchaseRecords`、`/vip/purchase-records` 端点、`UserVipSubscriptionMapper.updatePaidSubscription`、`VipSubscribeResultVO`、`VipSubscribeDTO`。
+
+> 档位保护规则（不是新来源，但影响到手档位）：MAX 生效中的用户领 PRO 卡不会降级，而是按 12 小时/天折半延长 MAX。即 MAX 用户抽到 PRO 30 天卡，实际到手 15 天 MAX。
 
 ---
 
