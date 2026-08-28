@@ -1,6 +1,7 @@
 package org.pluchon.forum.common.constant;
 
 import java.util.Set;
+import java.util.regex.Pattern;
 
 // 登录拦截器的游客与预登录接口白名单
 public final class AuthApiPaths {
@@ -16,7 +17,6 @@ public final class AuthApiPaths {
             "/category/getCategoryWithBoards",
             "/category/articles",
             "/article/tag/list",
-            "/article/tag/suggest",
             "/board/topBoardList",
             "/board/selectBoardListByBoardIdWithPage",
             "/shop/list",
@@ -34,6 +34,10 @@ public final class AuthApiPaths {
             // ai-server 无凭据回调这里取同一份候选集，必须对游客放行
             "/article/music/moods"
     );
+
+    // 公开收藏夹的夹内帖子，路径带 folderId 无法用等值匹配；私密夹由 FavoriteService 按 -1 过滤
+    private static final Pattern OPTIONAL_GET_PATTERNS =
+            Pattern.compile("^/favorite/folder/\\d+/articles$");
 
     private static final Set<String> OPTIONAL_POST_PATHS = Set.of(
             "/user/login",
@@ -54,7 +58,7 @@ public final class AuthApiPaths {
             return false;
         }
         if ("GET".equalsIgnoreCase(method)) {
-            return OPTIONAL_GET_PATHS.contains(uri);
+            return OPTIONAL_GET_PATHS.contains(uri) || OPTIONAL_GET_PATTERNS.matcher(uri).matches();
         }
         return "POST".equalsIgnoreCase(method) && OPTIONAL_POST_PATHS.contains(uri);
     }

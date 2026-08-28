@@ -10,6 +10,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.entity.dto.user.ChangePasswordRequest;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
 import org.pluchon.forum.entity.dto.user.ProfileChangeRequest;
 import org.pluchon.forum.entity.dto.user.UserLoginRequest;
@@ -90,11 +91,11 @@ public class UserController {
         return Result.success(userAuthFlowService.getSessionUser(sessionUser.getId()));
     }
 
-    @Operation(summary = "退出登录", description = "递增当前账号 token 版本，使当前 JWT 立即失效")
+    @Operation(summary = "退出登录", description = "吊销本次请求携带的 JWT，只下线当前设备，其它端保持登录")
     @PostMapping("/logout")
     public Result<String> logout(HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        userService.logout(sessionUser.getId());
+        userService.logout(sessionUser.getId(), httpServletRequest.getHeader(Constant.JWT_NAME));
         return Result.success("退出成功");
     }
 
@@ -126,18 +127,21 @@ public class UserController {
     @PostMapping("/findPasswordByMail")
     public Result<String> findPasswordByMail(@RequestParam String email, @RequestParam(required = false) String code,
                                              @RequestParam(required = false) String newPassword,
-                                             @RequestParam(required = false) String captchaTicket) {
+                                             @RequestParam(required = false) String captchaTicket,
+                                             HttpServletRequest httpServletRequest) {
         if (!StringUtils.hasText(code)) {
-            return Result.success(userAuthFlowService.sendResetCodeByMail(email, captchaTicket));
+            return Result.success(userAuthFlowService.sendResetCodeByMail(email, captchaTicket, httpServletRequest));
         }
         userAuthFlowService.completeResetByMail(email, code, newPassword, captchaTicket);
         return Result.success("密码重置成功！");
     }
 
     @Operation(summary = "通过手机号找回密码",
-            description = "code 为空时向手机号发送重置专用验证码；code 非空时连同新密码一起提交完成重置")
+            description = "code 为空时向手机号发送重置专用验证码；code 非空时连同新密码一起提交完成重置。"
+                    + "已登录用户改自己的密码时传 useBoundPhone=true，由后端取会话账号绑定的号码，无需传 phoneNumber")
     @PostMapping("/findPasswordBySms")
     public Result<String> findPasswordBySms(@RequestParam(required = false) String phoneNumber,
+                                            @RequestParam(defaultValue = "false") boolean useBoundPhone,
                                             @RequestParam(required = false) String code,
                                             @RequestParam(required = false) String newPassword,
                                             @RequestParam(required = false) String captchaTicket,
@@ -145,10 +149,21 @@ public class UserController {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long sessionUserId = sessionUser != null ? sessionUser.getId() : null;
         if (!StringUtils.hasText(code)) {
-            return Result.success(userAuthFlowService.sendResetCodeBySms(sessionUserId, phoneNumber, captchaTicket));
+            return Result.success(userAuthFlowService.sendResetCodeBySms(
+                    sessionUserId, useBoundPhone, phoneNumber, captchaTicket, httpServletRequest));
         }
-        userAuthFlowService.completeResetBySms(sessionUserId, phoneNumber, code, newPassword, captchaTicket);
+        userAuthFlowService.completeResetBySms(sessionUserId, useBoundPhone, phoneNumber, code, newPassword, captchaTicket);
         return Result.success("密码重置成功！");
+    }
+
+    @Operation(summary = "凭当前密码修改密码", description = "已登录用户提交当前密码与新密码，不需要验证码；成功后当前 JWT 立即失效")
+    @PostMapping("/changePassword")
+    public Result<String> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                         HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        userAuthFlowService.changePasswordByCurrent(sessionUser.getId(),
+                request.getCurrentPassword(), request.getNewPassword());
+        return Result.success("密码修改成功！");
     }
 
     @Operation(summary = "查询用户是否在线", description = "基于 WebSocket 连接状态")

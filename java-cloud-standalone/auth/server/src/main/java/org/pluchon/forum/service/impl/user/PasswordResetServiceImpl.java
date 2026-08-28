@@ -40,6 +40,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
 
+    @Autowired
+    private AccountPasswordGuard accountPasswordGuard;
+
     @Override
     public void resetByMail(String email, String code, String newPassword) {
         assertParamsValid(email, code, newPassword);
@@ -74,6 +77,19 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         resetBySms(phoneNumber, code, newPassword);
     }
 
+    @Override
+    public void changeByCurrentPassword(Long userId, String currentPassword, String newPassword) {
+        if (!StringUtils.hasText(currentPassword) || !RegexUtil.checkPassword(newPassword)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        User user = accountPasswordGuard.requireUser(userId);
+        accountPasswordGuard.assertPasswordMatches(user, currentPassword);
+        if (PasswordUtils.matches(newPassword, user.getPassword(), user.getSalt())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PASSWORD_SAME_AS_OLD));
+        }
+        updatePassword(userId, newPassword);
+    }
+
     // 共用：参数空值 + 密码强度校验
     private void assertParamsValid(String contact, String code, String newPassword) {
         if (!StringUtils.hasText(contact) || !StringUtils.hasText(code) || !StringUtils.hasText(newPassword)) {
@@ -97,12 +113,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     }
 
     private String resolveBoundPhone(Long userId) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getId, userId).ne(User::getDeleteState, 1));
-        if (user == null || user.getPhoneNum() == null || user.getPhoneNum().isBlank()) {
+        User user = accountPasswordGuard.requireUser(userId);
+        if (user.getPhoneNum() == null || user.getPhoneNum().isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
         String phoneNumber = PiiUtils.decrypt(user.getPhoneNum());

@@ -9,6 +9,7 @@ import org.pluchon.forum.common.utils.CaptchaUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.MailUtil;
 import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.entity.db.User;
@@ -17,6 +18,7 @@ import org.pluchon.forum.service.interfaces.user.MailCodeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.concurrent.TimeUnit;
 
@@ -38,20 +40,34 @@ public class MailCodeServiceImpl implements MailCodeService {
     @Autowired
     private AuthTokenService authTokenService;
 
+    @Autowired
+    private AccountPasswordGuard accountPasswordGuard;
+
     @Override
-    public void send(String email) {
-        sendInternal(email, Constant.REDIS_KEY_MAIL_VERIFY);
+    public void sendForLogin(String email, String clientIp) {
+        // 未注册的邮箱不发码，把"该邮箱还没有绑定账号"提前到第一步告诉用户
+        assertMailRegistered(email);
+        sendInternal(email, Constant.REDIS_KEY_MAIL_VERIFY, clientIp);
     }
 
     @Override
-    public void sendForReset(String email) {
-        sendInternal(email, Constant.REDIS_KEY_MAIL_VERIFY_RESET);
+    public void sendForBind(String email, Long userId, String clientIp) {
+        assertCanBindMail(email, userId);
+        sendInternal(email, Constant.REDIS_KEY_MAIL_VERIFY, clientIp);
     }
 
-    private void sendInternal(String email, String prefix) {
+    @Override
+    public void sendForReset(String email, String clientIp) {
+        assertMailRegistered(email);
+        sendInternal(email, Constant.REDIS_KEY_MAIL_VERIFY_RESET, clientIp);
+    }
+
+    private void sendInternal(String email, String prefix, String clientIp) {
         if (!RegexUtil.checkMail(email)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        // 邮箱维度的限制换个地址就绕开了，IP 维度合计计数才挡得住批量发信
+        assertIpQuota(clientIp);
         // 记录一个冷标记，防止用户频繁盗刷接口，时间为60S
         String cooldownKey = Constant.REDIS_KEY_MAIL_COOLDOWN + email;
         if (stringRedisTemplate.hasKey(cooldownKey)) {
@@ -84,13 +100,26 @@ public class MailCodeServiceImpl implements MailCodeService {
         }
     }
 
+    // 与短信共用同一个 IP 计数键，短信 + 邮件合计
+    private void assertIpQuota(String clientIp) {
+        if (!StringUtils.hasText(clientIp)) {
+            return;
+        }
+        boolean allowed = RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_CODE_IP_COUNT + clientIp,
+                Constant.CODE_SEND_IP_MAX_COUNT,
+                Constant.REDIS_TTL_CODE_IP_COUNT);
+        if (!allowed) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CODE_IP_RATE_LIMIT));
+        }
+    }
+
     @Override
     public User loginByMail(String email, String code) {
         if (!consumeVerificationCode(email, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
         }
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getEmailHash, PiiUtils.hmac(email)).ne(User::getDeleteState, 1));
+        User user = findByMail(email);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
         }
@@ -101,7 +130,11 @@ public class MailCodeServiceImpl implements MailCodeService {
     }
 
     @Override
-    public void verifyAndBind(String email, String code, Long userId) {
+    public void verifyAndBind(String email, String code, Long userId, String currentPassword) {
+        // 改绑等于把账号找回入口迁到新邮箱上，必须先证明是本人
+        User current = accountPasswordGuard.requireUser(userId);
+        boolean alreadyBound = StringUtils.hasText(current.getEmail());
+        accountPasswordGuard.assertCanRebind(current, alreadyBound, currentPassword);
         if (!consumeVerificationCode(email, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_CODE_INVALID));
         }
@@ -132,5 +165,34 @@ public class MailCodeServiceImpl implements MailCodeService {
         }
         return RedisAtomicValueConsumer.consumeIfMatch(
                 stringRedisTemplate, Constant.REDIS_KEY_MAIL_VERIFY_RESET + email, code);
+    }
+
+    private void assertMailRegistered(String email) {
+        if (!RegexUtil.checkMail(email)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (findByMail(email) == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_NOT_BOUND));
+        }
+    }
+
+    // 改绑前就把"已被他人占用"告诉用户，不让人白等一封信
+    private void assertCanBindMail(String email, Long userId) {
+        if (!RegexUtil.checkMail(email)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        User existing = findByMail(email);
+        if (existing == null) {
+            return;
+        }
+        if (existing.getId().equals(userId)) {
+            throw new ApplicationException(Result.fail("该邮箱已经是当前绑定邮箱，无需重复绑定"));
+        }
+        throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_ALREADY_BOUND));
+    }
+
+    private User findByMail(String email) {
+        return userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getEmailHash, PiiUtils.hmac(email)).ne(User::getDeleteState, 1));
     }
 }

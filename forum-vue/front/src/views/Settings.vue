@@ -182,7 +182,7 @@
             <el-button text class="settings-password-dialog__back" aria-label="返回安全验证方式" @click="pwdMethodSelected = false">
               <el-icon><ArrowLeft /></el-icon>
             </el-button>
-            <h2>{{ pwdStepMethod === 'email' ? '邮箱验证' : '手机验证' }}</h2>
+            <h2>{{ pwdStepTitle }}</h2>
           </template>
           <el-button text class="settings-password-dialog__close" aria-label="关闭安全验证" @click="pwdDialogVisible = false">
             <el-icon><Close /></el-icon>
@@ -216,12 +216,33 @@
             <div class="method-card-title">手机验证</div>
             <div class="method-card-desc">向 {{ maskContact(userStore.phoneNum, 'phone') }} 发送验证码</div>
           </div>
+          <div
+            class="verify-method-card"
+            :class="{ selected: pwdStepMethod === 'password' }"
+            @click="pwdStepMethod = 'password'"
+          >
+            <div class="method-card-icon">
+              <el-icon :size="32"><Lock /></el-icon>
+            </div>
+            <div class="method-card-title">使用当前密码</div>
+            <div class="method-card-desc">我确认我记得原密码</div>
+          </div>
         </div>
       </div>
 
       <div v-else>
         <el-form :model="pwdForm" class="settings-verify-form settings-password-dialog__form">
-          <el-form-item label="验证码" class="settings-verify-code-row">
+          <el-form-item v-if="pwdStepMethod === 'password'" label="当前密码" class="settings-verify-code-row">
+            <el-input
+              v-model="pwdForm.currentPassword"
+              type="password"
+              show-password
+              autocomplete="current-password"
+              placeholder="请输入当前密码"
+              maxlength="20"
+            />
+          </el-form-item>
+          <el-form-item v-else label="验证码" class="settings-verify-code-row">
             <el-input v-model="pwdForm.code" :placeholder="pwdStepMethod === 'email' ? '6 位验证码' : '4 位验证码'" :maxlength="pwdStepMethod === 'email' ? 6 : 4">
               <template #suffix>
                 <button
@@ -246,7 +267,24 @@
             </el-input>
           </el-form-item>
           <el-form-item label="设置新密码" class="settings-verify-code-row">
-            <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="8–20位，需含大小写字母和数字" />
+            <el-input
+              v-model="pwdForm.newPassword"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              placeholder="8–20位，需含大小写字母和数字"
+              maxlength="20"
+            />
+          </el-form-item>
+          <el-form-item label="确认新密码" class="settings-verify-code-row">
+            <el-input
+              v-model="pwdForm.confirmPassword"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              placeholder="请再次输入新密码"
+              maxlength="20"
+            />
           </el-form-item>
         </el-form>
       </div>
@@ -261,7 +299,7 @@
           >
             下一步
           </el-button>
-          <el-button v-else class="settings-verify-confirm" @click="submitPwd">确认重置</el-button>
+          <el-button v-else class="settings-verify-confirm" :loading="pwdSubmitting" @click="submitPwd">确认重置</el-button>
         </div>
       </template>
     </el-dialog>
@@ -300,9 +338,19 @@
             </template>
           </el-input>
         </el-form-item>
+        <el-form-item v-if="hasBoundEmail" label="当前密码" class="settings-verify-code-row">
+          <el-input
+            v-model="emailForm.currentPassword"
+            type="password"
+            show-password
+            autocomplete="current-password"
+            placeholder="改绑需要验证当前密码"
+            maxlength="20"
+          />
+        </el-form-item>
       </el-form>
       <div class="settings-verify-actions">
-        <el-button class="settings-verify-confirm" @click="submitBindEmail">确认</el-button>
+        <el-button class="settings-verify-confirm" :loading="bindSubmitting" @click="submitBindEmail">确认</el-button>
       </div>
     </el-dialog>
 
@@ -340,9 +388,19 @@
             </template>
           </el-input>
         </el-form-item>
+        <el-form-item v-if="hasBoundPhone" label="当前密码" class="settings-verify-code-row">
+          <el-input
+            v-model="phoneForm.currentPassword"
+            type="password"
+            show-password
+            autocomplete="current-password"
+            placeholder="改绑需要验证当前密码"
+            maxlength="20"
+          />
+        </el-form-item>
       </el-form>
       <div class="settings-verify-actions">
-        <el-button class="settings-verify-confirm" @click="submitBindPhone">确认</el-button>
+        <el-button class="settings-verify-confirm" :loading="bindSubmitting" @click="submitBindPhone">确认</el-button>
       </div>
     </el-dialog>
 

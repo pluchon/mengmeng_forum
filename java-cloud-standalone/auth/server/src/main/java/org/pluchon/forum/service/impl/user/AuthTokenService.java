@@ -28,7 +28,8 @@ public class AuthTokenService {
 
     public String issueLoginToken(User user) {
         assertCanAuthenticate(user);
-        long tv = jwtTokenVersionService.nextVersion(user.getId());
+        // 取当前下限而不是自增：多设备可以各自持有令牌同时在线
+        long tv = jwtTokenVersionService.issueVersion(user.getId());
         return JWTUtils.genJwtForUser(user.getId(), user.getUsername(), tv);
     }
 }

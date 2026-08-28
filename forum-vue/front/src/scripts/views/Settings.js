@@ -3,7 +3,8 @@ import { ElMessage } from 'element-plus'
 import { Avatar, User, Lock, MagicStick, Message, Phone, ArrowLeft, Close, Operation } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useBoardStore } from '@/stores/board'
-import { sendUpdatePwdCode, sendMailCode, sendSmsCode, updatePasswordByMail, updatePasswordBySms, verifyAndBindEmail, verifyAndBindPhone } from '@/api/settings'
+import { changePasswordByCurrent, sendUpdatePwdCode, sendMailCode, sendSmsCode, updatePasswordByMail, updatePasswordBySms, verifyAndBindEmail, verifyAndBindPhone } from '@/api/settings'
+import { AUTH_MSG, isValidEmail, isValidPassword, isValidPhone } from '@/utils/authValidators'
 import { getRecommendationSetting, updateRecommendationSetting } from '@/api/recommendation'
 import { notifyRecommendationSettingChanged } from '@/utils/recommendationSettingEvent'
 import { getEnterToSendEnabled, setEnterToSendEnabled } from '@/utils/chatSendPreference'
@@ -58,8 +59,20 @@ export function useSettings(captchaDialogRef) {
 
   const pwdMethodSelected = ref(false)
   const pwdStepMethod = ref('')
-  const pwdForm = reactive({ code: '', newPassword: '' })
+  const pwdForm = reactive({ code: '', newPassword: '', confirmPassword: '', currentPassword: '' })
+  const pwdSubmitting = ref(false)
+  const bindSubmitting = ref(false)
   let pwdSendTicket = ''
+
+  // 首次绑定不要密码，改绑才要：新用户完善资料的门槛不该被抬高
+  const hasBoundEmail = computed(() => Boolean(userStore.email))
+  const hasBoundPhone = computed(() => Boolean(userStore.phoneNum))
+
+  const pwdStepTitle = computed(() => {
+    if (pwdStepMethod.value === 'email') return '邮箱验证'
+    if (pwdStepMethod.value === 'phone') return '手机验证'
+    return '验证当前密码'
+  })
 
   const sendingEmailCode = ref(false)
   const sendingPhoneCode = ref(false)
@@ -69,8 +82,8 @@ export function useSettings(captchaDialogRef) {
   const phoneCodeBtnDisabledPwd = ref(false)
   const phoneCodeBtnTextPwd = ref('获取验证码')
 
-  const emailForm = reactive({ email: '', code: '' })
-  const phoneForm = reactive({ phoneNumber: '', code: '' })
+  const emailForm = reactive({ email: '', code: '', currentPassword: '' })
+  const phoneForm = reactive({ phoneNumber: '', code: '', currentPassword: '' })
   const emailCodeBtnDisabled = ref(false)
   const emailCodeBtnText = ref('获取验证码')
   const phoneCodeBtnDisabled = ref(false)
@@ -196,7 +209,25 @@ export function useSettings(captchaDialogRef) {
       pwdStepMethod.value = ''
       pwdForm.code = ''
       pwdForm.newPassword = ''
+      pwdForm.confirmPassword = ''
+      pwdForm.currentPassword = ''
       pwdSendTicket = ''
+    }
+  })
+
+  watch(emailDialogVisible, (val) => {
+    if (!val) {
+      emailForm.email = ''
+      emailForm.code = ''
+      emailForm.currentPassword = ''
+    }
+  })
+
+  watch(phoneDialogVisible, (val) => {
+    if (!val) {
+      phoneForm.phoneNumber = ''
+      phoneForm.code = ''
+      phoneForm.currentPassword = ''
     }
   })
 
@@ -241,10 +272,16 @@ export function useSettings(captchaDialogRef) {
     const contact = type === 'email' ? emailForm.email : phoneForm.phoneNumber
     if (!contact) return ElMessage.warning('请输入联系方式')
 
+    if (type === 'email' && !isValidEmail(contact)) {
+      return ElMessage.warning(AUTH_MSG.email)
+    }
+    if (type !== 'email' && !isValidPhone(contact)) {
+      return ElMessage.warning(AUTH_MSG.phone)
+    }
     if (type === 'email' && contact === userStore.email) {
       return ElMessage.warning('新邮箱不能与当前绑定的邮箱相同')
     }
-    if (type === 'sms' && contact === userStore.phoneNum) {
+    if (type !== 'email' && contact === userStore.phoneNum) {
       return ElMessage.warning('新手机号不能与当前绑定的手机号相同')
     }
 
@@ -263,15 +300,15 @@ export function useSettings(captchaDialogRef) {
       }
       ElMessage.success('验证码已发送')
       startTimer(textRef, disabledRef)
-    } catch {
-      ElMessage.error('验证码发送失败，请稍后重试')
     } finally {
+      // 失败原因由响应拦截器统一提示，这里再兜一句会变成两条提示叠着弹
       loadingRef.value = false
     }
   }
 
   async function sendPwdCode(type) {
-    const contact = type === 'EMAIL' ? userStore.email : userStore.phoneNum
+    // 手机路径不需要 contact，号码由后端从会话取
+    const contact = type === 'EMAIL' ? userStore.email : null
     const loadingRef = type === 'EMAIL' ? sendingEmailCode : sendingPhoneCode
     const textRef = type === 'EMAIL' ? emailCodeBtnTextPwd : phoneCodeBtnTextPwd
     const disabledRef = type === 'EMAIL' ? emailCodeBtnDisabledPwd : phoneCodeBtnDisabledPwd
@@ -293,38 +330,107 @@ export function useSettings(captchaDialogRef) {
     }
   }
 
+  // 改密码成功后会立刻登出，所以必须先在前端把新密码校验干净，
+  // 否则用户打错一个字符就会被踢出去且不知道新密码是什么
+  function validateNewPassword() {
+    if (!isValidPassword(pwdForm.newPassword)) {
+      ElMessage.warning(AUTH_MSG.password)
+      return false
+    }
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      ElMessage.warning('两次输入的密码不一致')
+      return false
+    }
+    return true
+  }
+
   async function submitPwd() {
+    if (pwdSubmitting.value) return
+    if (!validateNewPassword()) return
+
+    // 凭当前密码修改：不发验证码，也不需要人机票据
+    if (pwdStepMethod.value === 'password') {
+      if (!pwdForm.currentPassword) return ElMessage.warning('请输入当前密码')
+      pwdSubmitting.value = true
+      try {
+        const res = await changePasswordByCurrent(pwdForm.currentPassword, pwdForm.newPassword)
+        if (res.code === 0) finishPasswordChange()
+      } finally {
+        pwdSubmitting.value = false
+      }
+      return
+    }
+
+    const isEmail = pwdStepMethod.value === 'email'
+    const expectedLength = isEmail ? 6 : 4
+    const codeText = String(pwdForm.code || '').trim()
+    if (codeText.length !== expectedLength || !/^\d+$/.test(codeText)) {
+      return ElMessage.warning(`验证码须为 ${expectedLength} 位数字`)
+    }
+
     const submitTicket = await verifyCaptcha('RESET_SUBMIT')
     if (!submitTicket) return
 
-    const contact = pwdStepMethod.value === 'email' ? userStore.email : userStore.phoneNum
-    const res =
-      pwdStepMethod.value === 'email'
-        ? await updatePasswordByMail(contact, pwdForm.code, pwdForm.newPassword, submitTicket)
-        : await updatePasswordBySms(contact, pwdForm.code, pwdForm.newPassword, submitTicket)
-
-    if (res.code === 0) {
-      ElMessage.success('密码修改成功，请重新登录')
-      pwdDialogVisible.value = false
-      userStore.logout()
+    pwdSubmitting.value = true
+    try {
+      // 手机路径不传号码：掩码串不是号码，后端按会话取绑定的真实号码
+      const res = isEmail
+        ? await updatePasswordByMail(userStore.email, pwdForm.code, pwdForm.newPassword, submitTicket)
+        : await updatePasswordBySms(pwdForm.code, pwdForm.newPassword, submitTicket)
+      if (res.code === 0) finishPasswordChange()
+    } finally {
+      pwdSubmitting.value = false
     }
   }
 
+  function finishPasswordChange() {
+    ElMessage.success('密码修改成功，请重新登录')
+    pwdDialogVisible.value = false
+    userStore.logout()
+  }
+
   async function submitBindEmail() {
-    const res = await verifyAndBindEmail(emailForm.email, emailForm.code)
-    if (res.code === 0) {
-      ElMessage.success('邮箱绑定成功')
-      userStore.patchUserProfile({ email: emailForm.email })
-      emailDialogVisible.value = false
+    if (bindSubmitting.value) return
+    if (!isValidEmail(emailForm.email)) return ElMessage.warning(AUTH_MSG.email)
+    if (!/^\d{6}$/.test(String(emailForm.code || '').trim())) {
+      return ElMessage.warning(AUTH_MSG.mailCode)
+    }
+    // 改绑等于把账号找回入口迁走，必须先证明是本人
+    if (hasBoundEmail.value && !emailForm.currentPassword) {
+      return ElMessage.warning('请输入当前密码')
+    }
+    bindSubmitting.value = true
+    try {
+      const res = await verifyAndBindEmail(emailForm.email, emailForm.code, emailForm.currentPassword)
+      if (res.code === 0) {
+        ElMessage.success('邮箱绑定成功')
+        userStore.patchUserProfile({ email: emailForm.email })
+        emailDialogVisible.value = false
+      }
+    } finally {
+      bindSubmitting.value = false
     }
   }
 
   async function submitBindPhone() {
-    const res = await verifyAndBindPhone(phoneForm.phoneNumber, phoneForm.code)
-    if (res.code === 0) {
-      ElMessage.success('手机号绑定成功')
-      userStore.patchUserProfile({ phoneNum: phoneForm.phoneNumber })
-      phoneDialogVisible.value = false
+    if (bindSubmitting.value) return
+    if (!isValidPhone(phoneForm.phoneNumber)) return ElMessage.warning(AUTH_MSG.phone)
+    if (!/^\d{4}$/.test(String(phoneForm.code || '').trim())) {
+      return ElMessage.warning(AUTH_MSG.smsCode)
+    }
+    if (hasBoundPhone.value && !phoneForm.currentPassword) {
+      return ElMessage.warning('请输入当前密码')
+    }
+    bindSubmitting.value = true
+    try {
+      const res = await verifyAndBindPhone(phoneForm.phoneNumber, phoneForm.code, phoneForm.currentPassword)
+      if (res.code === 0) {
+        ElMessage.success('手机号绑定成功')
+        userStore.patchUserProfile({ phoneNum: phoneForm.phoneNumber })
+        phoneDialogVisible.value = false
+      }
+    } finally {
+      bindSubmitting.value = false
     }
   }
 
@@ -378,6 +484,11 @@ export function useSettings(captchaDialogRef) {
     pwdStepMethod,
     sendCode,
     sendPwdCode,
+    pwdSubmitting,
+    pwdStepTitle,
+    bindSubmitting,
+    hasBoundEmail,
+    hasBoundPhone,
     saveRecommendationSetting,
     sendingEmailCode,
     sendingPhoneCode,

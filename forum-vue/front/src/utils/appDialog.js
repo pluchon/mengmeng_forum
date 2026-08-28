@@ -61,6 +61,8 @@ export function iconConfirm({
   confirmText = '确认',
   cancelText = '取消',
   danger = false,
+  closeOnClickModal = false,
+  showClose = false,
 } = {}) {
   return mountDialog(IconConfirmDialog, {
     title,
@@ -68,6 +70,8 @@ export function iconConfirm({
     confirmText,
     cancelText,
     danger,
+    closeOnClickModal,
+    showClose,
   })
 }
 

@@ -14,6 +14,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.JWTUtils;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.common.security.AuthSnapshotResolver;
+import org.pluchon.forum.common.security.JwtRevocationService;
 import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -32,6 +33,9 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
+
+    @Autowired
+    private JwtRevocationService jwtRevocationService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -79,6 +83,10 @@ public class LoginInterceptor implements HandlerInterceptor {
             long jwtTv = JWTUtils.readTokenVersion(jwtClaims);
             if (!jwtTokenVersionService.isValid(userId, jwtTv)) {
                 log.warn("JWT 版本失效 userId={}, uri={}", userId, uri);
+                return reject(response, HttpServletResponse.SC_UNAUTHORIZED, ResultCode.USER_UNLOGIN);
+            }
+            // 该设备已单独退出登录，其它设备的令牌不受影响
+            if (jwtRevocationService.isRevoked(jwtClaims)) {
                 return reject(response, HttpServletResponse.SC_UNAUTHORIZED, ResultCode.USER_UNLOGIN);
             }
             request.setAttribute(Constant.USER_SESSION, user);

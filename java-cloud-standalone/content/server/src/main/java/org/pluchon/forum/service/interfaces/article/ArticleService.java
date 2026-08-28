@@ -20,7 +20,8 @@ public interface ArticleService {
     Long createDraft(PublishArticleRequest publishArticleRequest, Long userId);
 
     // 帖子详情，包含作者信息、板块信息、当前用户的点赞 / Owner 标志
-    ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId);
+    // clientIp 只用于浏览量去重，取不到时按不去重处理
+    ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId, String clientIp);
 
     // 修改帖子内容 仅作者
     void updateArticle(UpdateArticleRequest updateArticleRequest, Long loginUserId);

@@ -7,6 +7,8 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.JWTUtils;
+import org.pluchon.forum.common.security.JwtRevocationService;
 import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.pluchon.forum.common.utils.PasswordUtils;
 import org.pluchon.forum.common.utils.PiiUtils;
@@ -70,6 +72,9 @@ public class UserServiceImpl implements UserService {
     private JwtTokenVersionService jwtTokenVersionService;
 
     @Autowired
+    private JwtRevocationService jwtRevocationService;
+
+    @Autowired
     private UserLoginLogService userLoginLogService;
 
     
@@ -107,6 +112,14 @@ public class UserServiceImpl implements UserService {
                 .eq(User::getUsername, userName).ne(User::getDeleteState, 1));
         if (existing != null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_EXISTS));
+        }
+        // 选填的手机号 / 邮箱同样要唯一：邮箱验证码登录与找回密码都按 hash 做 selectOne，
+        // 一旦允许两个账号绑同一个联系方式，那些查询会直接抛多结果异常
+        if (StringUtils.hasLength(req.getPhoneNum()) && existsByPhoneHash(req.getPhoneNum())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_ALREADY_BOUND));
+        }
+        if (StringUtils.hasLength(req.getEmail()) && existsByEmailHash(req.getEmail())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MAIL_ALREADY_BOUND));
         }
         User register = new User();
         register.setUsername(userName);
@@ -339,6 +352,17 @@ public class UserServiceImpl implements UserService {
         return toSafeUser(user);
     }
 
+    // 注册查重用：hash 字段有索引，只判断存在与否，不取回明文
+    private boolean existsByPhoneHash(String phoneNum) {
+        return userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getPhoneHash, PiiUtils.hmac(phoneNum)).ne(User::getDeleteState, 1)) > 0;
+    }
+
+    private boolean existsByEmailHash(String email) {
+        return userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getEmailHash, PiiUtils.hmac(email)).ne(User::getDeleteState, 1)) > 0;
+    }
+
     private void assertLoginNotLocked(String failKey) {
         String raw = stringRedisTemplate.opsForValue().get(failKey);
         if (!StringUtils.hasLength(raw)) {
@@ -434,6 +458,12 @@ public class UserServiceImpl implements UserService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
                     "昵称和个人简介请通过审核流程提交"));
         }
+        // 邮箱和手机号是账号找回的入口，只能走 /mail/verifyAndBind、/sms/verifyAndBind：
+        // 那两个接口要验证码，改绑还要当前密码。放在这里改等于把那层校验整个绕过去
+        if (req.getEmail() != null || req.getPhoneNum() != null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "邮箱和手机号请通过绑定流程验证后修改"));
+        }
         // 获取旧的用户信息
         User oldUser = queryUserByUserId(userId);
         // 获取新旧用户名
@@ -444,33 +474,10 @@ public class UserServiceImpl implements UserService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
                     "用户名需为4–20位中文、英文字母或数字"));
         }
-        if (StringUtils.hasLength(req.getNickName()) && !RegexUtil.checkNickname(req.getNickName())) {
-            log.warn("新昵称格式不合法");
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
-                    "昵称需为2–20位中文、英文字母或数字"));
-        }
-        if (StringUtils.hasLength(req.getEmail()) && !RegexUtil.checkMail(req.getEmail())) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "邮箱格式不正确"));
-        }
-        if (req.getRemark() != null && req.getRemark().trim().length() > 50) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
-                    "个人简介不能超过50个字"));
-        }
         // mybatis plus 默认仅更新非空字段，无需手动判空
         User update = new User();
         update.setUsername(newUserName);
-        update.setNickname(req.getNickName());
-        // 针对特殊字段进行设置
-        if (StringUtils.hasLength(req.getEmail())) {
-            update.setEmail(PiiUtils.encrypt(req.getEmail()));
-            update.setEmailHash(PiiUtils.hmac(req.getEmail()));
-        }
         update.setGender(req.getGender());
-        if (StringUtils.hasLength(req.getPhoneNum())) {
-            update.setPhoneNum(PiiUtils.encrypt(req.getPhoneNum()));
-            update.setPhoneHash(PiiUtils.hmac(req.getPhoneNum()));
-        }
-        update.setRemark(req.getRemark());
         int result = userMapper.update(update, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId).ne(User::getDeleteState, 1).ne(User::getState, 1));
         if (result <= 0) {
@@ -522,11 +529,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void logout(Long userId) {
+    public void logout(Long userId, String jwtToken) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        jwtTokenVersionService.bump(userId);
+        // 只作废当前这一个令牌。若在这里 bump 版本号，手机点退出会把电脑也顶下线
+        jwtRevocationService.revoke(JWTUtils.parseJWT(jwtToken));
     }
 
     

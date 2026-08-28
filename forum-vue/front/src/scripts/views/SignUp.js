@@ -1,8 +1,8 @@
-import { ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import { validateAuthForm } from '@/utils/authFormShake'
 import { createAuthRules, digitsOnlyPhone } from '@/utils/authValidators'
 
 export function useSignUp(captchaDialogRef) {
@@ -48,14 +48,7 @@ export function useSignUp(captchaDialogRef) {
   const handleSignUp = async () => {
     if (!agreed.value) return ElMessage.warning('请先同意用户协议')
     if (!formRef.value) return
-
-    try {
-      await formRef.value.validate()
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(formRef.value)
-      return
-    }
+    if (!await validateAuthForm(formRef.value)) return
 
     const ticket = await verifyCaptcha('REGISTER')
     if (!ticket) return

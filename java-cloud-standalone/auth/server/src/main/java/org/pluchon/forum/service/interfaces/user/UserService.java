@@ -23,7 +23,8 @@ public interface UserService {
 
     User login(UserLoginRequest userLoginRequest, HttpServletRequest httpRequest);
 
-    void logout(Long userId);
+    // 只吊销本次请求携带的令牌，其它设备保持在线；改密码才走全端失效
+    void logout(Long userId, String jwtToken);
 
     User getUserInfoById(Long userId);
 

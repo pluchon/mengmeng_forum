@@ -9,6 +9,7 @@ import org.pluchon.forum.common.utils.CaptchaUtils;
 import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.SMSUtils;
 import org.pluchon.forum.common.utils.RedisAtomicValueConsumer;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.utils.PiiUtils;
 import org.pluchon.forum.entity.db.User;
@@ -17,6 +18,7 @@ import org.pluchon.forum.service.interfaces.user.SMSCodeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.concurrent.TimeUnit;
 
@@ -38,32 +40,41 @@ public class SMSCodeServiceImpl implements SMSCodeService {
     @Autowired
     private AuthTokenService authTokenService;
 
+    @Autowired
+    private AccountPasswordGuard accountPasswordGuard;
+
     @Override
-    public void send(String phoneNumber) {
-        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY);
+    public void sendForLogin(String phoneNumber, String clientIp) {
+        // 短信真实计费，未注册的号码不发码，避免被当成短信轰炸网关
+        assertPhoneRegistered(phoneNumber);
+        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY, clientIp);
     }
 
     @Override
-    public void sendForBind(String phoneNumber, Long userId) {
+    public void sendForBind(String phoneNumber, Long userId, String clientIp) {
         assertCanBindPhone(phoneNumber, userId);
-        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY);
+        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY, clientIp);
     }
 
     @Override
-    public void sendForReset(String phoneNumber) {
-        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY_RESET);
+    public void sendForReset(String phoneNumber, String clientIp) {
+        assertPhoneRegistered(phoneNumber);
+        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY_RESET, clientIp);
     }
 
     @Override
-    public void sendForResetBound(Long userId) {
+    public void sendForResetBound(Long userId, String clientIp) {
         String phoneNumber = resolveBoundPhone(userId);
-        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY_RESET);
+        sendInternal(phoneNumber, Constant.REDIS_KEY_SMS_VERIFY_RESET, clientIp);
     }
 
-    private void sendInternal(String phoneNumber, String prefix) {
+    private void sendInternal(String phoneNumber, String prefix, String clientIp) {
         if (!RegexUtil.checkMobile(phoneNumber)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        // 手机号维度的冷却与次数限制只能挡住盯着同一个号码打的脚本，
+        // 换号轰炸要靠 IP 维度的合计计数来兜底
+        assertIpQuota(clientIp);
         String cooldownKey = Constant.REDIS_KEY_SMS_COOLDOWN + phoneNumber;
         if (stringRedisTemplate.hasKey(cooldownKey)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_RATE_LIMIT));
@@ -88,13 +99,26 @@ public class SMSCodeServiceImpl implements SMSCodeService {
         }
     }
 
+    // 同一 IP 的短信 + 邮件发送合计计数，取不到 IP 时放行，不误伤正常用户
+    private void assertIpQuota(String clientIp) {
+        if (!StringUtils.hasText(clientIp)) {
+            return;
+        }
+        boolean allowed = RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_CODE_IP_COUNT + clientIp,
+                Constant.CODE_SEND_IP_MAX_COUNT,
+                Constant.REDIS_TTL_CODE_IP_COUNT);
+        if (!allowed) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CODE_IP_RATE_LIMIT));
+        }
+    }
+
     @Override
     public User loginBySms(String phoneNumber, String code) {
         if (!consumeVerificationCode(phoneNumber, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
         }
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getPhoneHash, PiiUtils.hmac(phoneNumber)).ne(User::getDeleteState, 1));
+        User user = findByPhone(phoneNumber);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
@@ -105,7 +129,11 @@ public class SMSCodeServiceImpl implements SMSCodeService {
     }
 
     @Override
-    public void verifyAndBind(String phoneNumber, String code, Long userId) {
+    public void verifyAndBind(String phoneNumber, String code, Long userId, String currentPassword) {
+        // 改绑等于把账号找回入口迁到新号码上，必须先证明是本人
+        User current = accountPasswordGuard.requireUser(userId);
+        boolean alreadyBound = StringUtils.hasText(current.getPhoneNum());
+        accountPasswordGuard.assertCanRebind(current, alreadyBound, currentPassword);
         if (!consumeVerificationCode(phoneNumber, code)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SMS_CODE_INVALID));
         }
@@ -138,13 +166,26 @@ public class SMSCodeServiceImpl implements SMSCodeService {
                 stringRedisTemplate, Constant.REDIS_KEY_SMS_VERIFY_RESET + phoneNumber, code);
     }
 
+    // 发码前确认号码确实绑定了账号，把"该手机号还没有绑定账号"提前到第一步告诉用户
+    private void assertPhoneRegistered(String phoneNumber) {
+        if (!RegexUtil.checkMobile(phoneNumber)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        if (findByPhone(phoneNumber) == null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
+        }
+    }
+
+    private User findByPhone(String phoneNumber) {
+        return userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getPhoneHash, PiiUtils.hmac(phoneNumber)).ne(User::getDeleteState, 1));
+    }
+
     private void assertCanBindPhone(String phoneNumber, Long userId) {
         if (!RegexUtil.checkMobile(phoneNumber)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        String phoneHash = PiiUtils.hmac(phoneNumber);
-        User existing = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getPhoneHash, phoneHash).ne(User::getDeleteState, 1));
+        User existing = findByPhone(phoneNumber);
         if (existing == null) {
             return;
         }
@@ -155,12 +196,8 @@ public class SMSCodeServiceImpl implements SMSCodeService {
     }
 
     private String resolveBoundPhone(Long userId) {
-        if (userId == null || userId <= 0) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
-        }
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getId, userId).ne(User::getDeleteState, 1));
-        if (user == null || user.getPhoneNum() == null || user.getPhoneNum().isBlank()) {
+        User user = accountPasswordGuard.requireUser(userId);
+        if (user.getPhoneNum() == null || user.getPhoneNum().isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PHONE_NOT_BOUND));
         }
         String phoneNumber = PiiUtils.decrypt(user.getPhoneNum());

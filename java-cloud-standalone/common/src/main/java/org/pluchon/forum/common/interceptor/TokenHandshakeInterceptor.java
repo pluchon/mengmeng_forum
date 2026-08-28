@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.utils.JWTUtils;
+import org.pluchon.forum.common.security.JwtRevocationService;
 import org.pluchon.forum.common.security.JwtTokenVersionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,9 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
 
     @Autowired
     private JwtTokenVersionService jwtTokenVersionService;
+
+    @Autowired
+    private JwtRevocationService jwtRevocationService;
 
     // 握手前执行
     @Override
@@ -70,6 +74,11 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
         long jwtTv = JWTUtils.readTokenVersion(claims);
         if (!jwtTokenVersionService.isValid(userId, jwtTv)) {
             log.warn("[WS握手] 拒绝：JWT 版本失效 | userId={}", userId);
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        if (jwtRevocationService.isRevoked(claims)) {
+            log.warn("[WS握手] 拒绝：令牌已退出登录 | userId={}", userId);
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }

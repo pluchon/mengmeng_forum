@@ -13,8 +13,12 @@ import SystemUpgradeDialog from '@/components/common/SystemUpgradeDialog.vue'
 
 // ─────────────────────── 常量 ───────────────────────────────────────
 const BTN_W = 40
-// 松开时与目标 X 偏差容差 px ，在此范围自动提交
-const SNAP_TOLERANCE = 30
+// 连续失败多少次才放弃并关闭弹窗，中间都留在原地换图重试
+const MAX_FAIL_BEFORE_CLOSE = 3
+// 后端 BasicCaptchaTrackValidator 的硬性下限：拖动时长与轨迹点数
+// 提前在前端拦一道，省一次请求，也能给出"太快了"这种用户看得懂的原因
+const MIN_DRAG_MS = 300
+const MIN_TRACK_POINTS = 10
 // 前端 mode → 天爱 type 字符串 全大写
 const MODE_TO_API_TYPE = {
   slider: 'SLIDER',
@@ -38,6 +42,7 @@ const upgradeDialogRef = ref(null)
 let resolvePromise = null
 let rejectPromise = null
 let settled = false
+let failCount = 0
 
 // ─────────────────────── 滑块状态 ───────────────────────────────────
 const bgWrapRef = ref(null)
@@ -209,6 +214,20 @@ function failAndClose(message) {
   resolvePromise = null
 }
 
+// 校验没通过：不关弹窗，原地换一张接着试。连续失败到上限才放弃
+// 差几个像素就把整个弹窗关掉、逼用户回去重新点"获取验证码"，代价太大了
+function failAndRetry(message) {
+  failCount += 1
+  if (failCount >= MAX_FAIL_BEFORE_CLOSE) {
+    failAndClose('验证多次没通过，请稍后再试')
+    return
+  }
+  ElMessage.warning(message || '验证失败，请重试')
+  submitting.value = false
+  dragging.value = false
+  loadVo()
+}
+
 // 验证码服务不可用：关闭验证弹窗，改提示系统升级
 function failAsSystemUpgrade() {
   settled = true
@@ -227,6 +246,14 @@ function failAsSystemUpgrade() {
 
 async function submitSlider() {
   if (!vo.value || submitting.value) return
+  // 后端对轨迹有硬性下限，不满足时提示写清楚原因，别等它回一句看不懂的失败。
+  // 这一步没提交过，题目还有效：只把滑块归位让他重来，不换图、也不计入失败次数
+  const dragMs = startMs ? Date.now() - startMs : 0
+  if (dragMs < MIN_DRAG_MS || trackList.length < MIN_TRACK_POINTS) {
+    ElMessage.warning('请按住滑块，平稳地拖到缺口位置')
+    resetSlider()
+    return
+  }
   submitting.value = true
   try {
     const stopTime = Date.now()
@@ -265,11 +292,11 @@ async function submitSlider() {
         failAsSystemUpgrade()
         return
       }
-      failAndClose(bizFailMessage(err, '验证失败，请重试'))
+      failAndRetry(bizFailMessage(err, '位置不太对，再试一次'))
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      failAndClose(res.message || '验证失败，请重试')
+      failAndRetry(res.message || '位置不太对，再试一次')
       return
     }
     resolveWithTicket(res.data.captchaTicket)
@@ -351,11 +378,11 @@ async function submitClickTrack() {
         failAsSystemUpgrade()
         return
       }
-      failAndClose(bizFailMessage(err, '验证失败，请重试'))
+      failAndRetry(bizFailMessage(err, '点的位置不太对，换一张再试'))
       return
     }
     if (res.code !== 0 || !res.data?.captchaTicket) {
-      failAndClose(res.message || '验证失败，请重试')
+      failAndRetry(res.message || '点的位置不太对，换一张再试')
       return
     }
     resolveWithTicket(res.data.captchaTicket)
@@ -425,8 +452,10 @@ function onDialogClosed() {
 function run(purpose) {
   purposeRef.value = purpose
   settled = false
-  // 随机选择验证模式
-  mode.value = Math.random() < 0.5 ? 'slider' : 'click'
+  failCount = 0
+  // 默认滑块：天爱只对滑块类做轨迹校验，点选仅比对坐标、没有行为分析，
+  // 一半概率随机给点选等于把这层防护削掉一半。点选保留为用户可主动切换的备选
+  mode.value = 'slider'
   return new Promise((resolve, reject) => {
     resolvePromise = resolve
     rejectPromise = reject

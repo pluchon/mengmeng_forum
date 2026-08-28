@@ -42,11 +42,13 @@ export function updatePasswordByMail(email, code, newPassword, captchaTicket) {
   })
 }
 
-export function updatePasswordBySms(phoneNumber, code, newPassword, captchaTicket) {
+// 设置页改密码走的是"当前账号已绑定的手机号"，号码由后端从会话里取，
+// 前端手上只有掩码串，不该也不能把它当号码传上去
+export function updatePasswordBySms(code, newPassword, captchaTicket) {
   return request({
     url: '/user/findPasswordBySms',
     method: 'post',
-    params: { phoneNumber, code, newPassword, captchaTicket },
+    params: { useBoundPhone: true, code, newPassword, captchaTicket },
   })
 }
 
@@ -69,7 +71,7 @@ export function uploadProfileBackground(formData, { onUploadProgress } = {}) {
 }
 
 export function sendUpdatePwdCode(contact, type, captchaTicket) {
-  if (type === 'EMAIL' || (contact && contact.includes('@'))) {
+  if (type === 'EMAIL') {
     return request({
       url: '/user/findPasswordByMail',
       method: 'post',
@@ -79,7 +81,7 @@ export function sendUpdatePwdCode(contact, type, captchaTicket) {
   return request({
     url: '/user/findPasswordBySms',
     method: 'post',
-    params: { phoneNumber: contact, captchaTicket },
+    params: { useBoundPhone: true, captchaTicket },
   })
 }
 
@@ -91,12 +93,22 @@ export function sendSmsCode(phoneNumber) {
   return request({ url: '/sms/verifyAndBind', method: 'post', params: { phoneNumber } })
 }
 
-export function verifyAndBindEmail(email, code) {
-  return request({ url: '/mail/verifyAndBind', method: 'post', params: { email, code } })
+// currentPassword 只有"改绑"（账号原本已绑过）时后端才要求，首次绑定可以不传
+export function verifyAndBindEmail(email, code, currentPassword) {
+  return request({ url: '/mail/verifyAndBind', method: 'post', params: { email, code, currentPassword } })
 }
 
-export function verifyAndBindPhone(phoneNumber, code) {
-  return request({ url: '/sms/verifyAndBind', method: 'post', params: { phoneNumber, code } })
+export function verifyAndBindPhone(phoneNumber, code, currentPassword) {
+  return request({ url: '/sms/verifyAndBind', method: 'post', params: { phoneNumber, code, currentPassword } })
+}
+
+// 凭当前密码直接改密码，不走验证码，手机停机 / 邮箱登不上时也能自助改
+export function changePasswordByCurrent(currentPassword, newPassword) {
+  return request({
+    url: '/user/changePassword',
+    method: 'post',
+    data: { currentPassword, newPassword },
+  })
 }
 
 export function getLoginLogs(limit = 20) {

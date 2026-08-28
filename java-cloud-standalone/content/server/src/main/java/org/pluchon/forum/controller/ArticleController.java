@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.utils.HttpRequestUtils;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.vo.article.ArticleBriefVO;
@@ -97,7 +98,8 @@ public class ArticleController {
     public Result<ArticleDetailResponse> selectArticleDetailByArticleId(Long articleId, HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long userId = (loginUser == null) ? -1L : loginUser.getId();
-        return Result.success(articleService.queryArticleDetailByArticleId(articleId, userId));
+        return Result.success(articleService.queryArticleDetailByArticleId(articleId, userId,
+                HttpRequestUtils.resolveClientIp(httpServletRequest)));
     }
 
     @Operation(summary = "编辑帖子内容，只有作者本人才可以", description = "传入帖子ID，标题，以及正文")

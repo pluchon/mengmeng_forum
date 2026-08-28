@@ -1,8 +1,8 @@
-import { computed, ref, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { sendSmsCodeForReset, sendMailCodeForReset, findPasswordByMail, findPasswordBySms } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import { validateAuthField, validateAuthForm } from '@/utils/authFormShake'
 import {
   AUTH_MSG,
   createAuthRules,
@@ -185,15 +185,23 @@ export function useForgotPassword(captchaDialogRef) {
     }
   }
 
+  // 1115 / 1119 被全局拦截器静默了（登录页自行接管），找回密码页必须自己说清楚，
+  // 否则用户点完按钮页面毫无反应
+  const notifyUnboundAccount = (err) => {
+    if (err?.code === 1115) {
+      ElMessage.info('该手机号还没有注册账号，换个方式找回或先去注册')
+      return true
+    }
+    if (err?.code === 1119) {
+      ElMessage.info('该邮箱还没有注册账号，换个方式找回或先去注册')
+      return true
+    }
+    return false
+  }
+
   const handleSendCode = async () => {
     if (codeBusy.value || !recoverFormRef.value) return
-    try {
-      await recoverFormRef.value.validateField('account')
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(recoverFormRef.value)
-      return
-    }
+    if (!await validateAuthField(recoverFormRef.value, 'account')) return
 
     const account = form.value.account
     const isPhone = form.value.type === 'PHONE'
@@ -215,20 +223,15 @@ export function useForgotPassword(captchaDialogRef) {
       } else {
         codePhase.value = 'idle'
       }
-    } catch {
+    } catch (err) {
       codePhase.value = 'idle'
+      notifyUnboundAccount(err)
     }
   }
 
   const handleSubmit = async () => {
     if (!recoverFormRef.value) return
-    try {
-      await recoverFormRef.value.validate()
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(recoverFormRef.value)
-      return
-    }
+    if (!await validateAuthForm(recoverFormRef.value)) return
     const ticket = await verifyCaptcha('RESET_SUBMIT')
     if (!ticket) return
     loading.value = true
@@ -242,6 +245,8 @@ export function useForgotPassword(captchaDialogRef) {
         ElMessage.success('密码重置成功')
         router.push('/sign-in')
       }
+    } catch (err) {
+      notifyUnboundAccount(err)
     } finally {
       loading.value = false
     }
