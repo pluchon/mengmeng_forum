@@ -1,7 +1,7 @@
-# 本地首次建库：对 forum-mysql-dev / forum-postgres-dev 执行六域 create.sql
+﻿# 本地首次建库：对 forum-mysql-dev / forum-postgres-dev 执行六域 create.sql
 # 用法（仓库根目录）:
 #   .\scripts\init-db.ps1
-# 需要先起中间件：.\scripts\dev-up.ps1
+# 需要先起中间件：.\deploy\scripts\dev-compose.ps1 up -d
 # 需要 Windows 用户环境变量里的 MYSQL_ROOT_PASSWORD 与六域账号
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +22,7 @@ function Require-Env([string]$name) {
 $rootPw = Require-Env "MYSQL_ROOT_PASSWORD"
 $mysql = "forum-mysql-dev"
 $postgres = "forum-postgres-dev"
-$expected = @{ auth = 11; content = 30; im = 14; game = 12; economy = 38; ai = 17 }
+$expected = @{ auth = 11; content = 30; im = 14; game = 12; economy = 36; ai = 17 }
 
 $mysqlState = docker inspect -f "{{.State.Running}}" $mysql 2>$null
 if ($mysqlState -ne "true") { throw "容器未 Running: $mysql ，先执行 deploy\scripts\dev-compose.ps1" }
@@ -33,7 +33,14 @@ for ($i = 1; $i -le 90; $i++) {
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
     Start-Sleep -Seconds 2
 }
-if (-not $ready) { throw "MySQL 未通过 SELECT 1 校验" }
+if (-not $ready) {
+    # 重试期内静默是可以的，但最终失败必须暴露原始 stderr，
+    # 否则无法区分“容器没起来”和“root 口令不对”
+    Write-Host "--- 最后一次 SELECT 1 的原始输出 ---" -ForegroundColor Yellow
+    docker exec -e "MYSQL_PWD=$rootPw" $mysql mysql -h 127.0.0.1 -uroot -Nse "SELECT 1" 2>&1 | ForEach-Object { Write-Host $_ }
+    docker logs --tail 50 $mysql 2>&1 | ForEach-Object { Write-Host $_ }
+    throw "MySQL 未通过 SELECT 1 校验"
+}
 
 function Get-TableCount([string]$domain) {
     $sql = "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='forum_${domain}_db' AND TABLE_TYPE='BASE TABLE';"
@@ -93,10 +100,13 @@ if ($pgState -eq "true") {
     if ([string]::IsNullOrWhiteSpace($pu)) { $pu = "langgraph" }
     $pd = [Environment]::GetEnvironmentVariable("POSTGRES_DB", "Process")
     if ([string]::IsNullOrWhiteSpace($pd)) { $pd = "langgraph_db" }
+    $pp = [Environment]::GetEnvironmentVariable("POSTGRES_PASSWORD", "Process")
     $pgSql = Join-Path $repoRoot "java-cloud-standalone\ai\server\src\main\resources\sql\postgres_ai_session.sql"
     if (Test-Path $pgSql) {
         Write-Host "==> postgres_ai_session.sql"
-        Get-Content -LiteralPath $pgSql -Raw -Encoding UTF8 | docker exec -i $postgres psql -v ON_ERROR_STOP=1 -U $pu -d $pd
+        # 显式带 PGPASSWORD：容器 pg_hba 不是 trust 时，缺这一项会 password authentication failed
+        Get-Content -LiteralPath $pgSql -Raw -Encoding UTF8 |
+            docker exec -e "PGPASSWORD=$pp" -i $postgres psql -v ON_ERROR_STOP=1 -U $pu -d $pd
         if ($LASTEXITCODE -ne 0) { throw "PostgreSQL 初始化失败" }
     }
 }

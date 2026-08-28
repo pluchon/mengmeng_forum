@@ -20,22 +20,39 @@ read_env() {
 }
 
 ensure_nacos_bootstrap_values() {
-  local key value
+  local key value backed_up=0 changed=0
   for key in NACOS_AUTH_TOKEN NACOS_AUTH_IDENTITY_KEY NACOS_AUTH_IDENTITY_VALUE; do
     value="$(read_env "$key")"
     [[ -n "$value" ]] && continue
     command -v openssl >/dev/null 2>&1 || {
-      echo "ERROR: openssl is required to initialize the local Nacos runtime values"
+      echo "ERROR: openssl is required to initialize the local Nacos runtime values" >&2
       return 1
     }
+    # 生产密钥文件是全站唯一来源，任何写入前先留一份带时间戳的备份
+    if [[ "$backed_up" == "0" ]]; then
+      cp -p "$ENV_FILE" "${ENV_FILE}.bak-$(date +%Y%m%d-%H%M%S)"
+      backed_up=1
+    fi
     if [[ "$key" == "NACOS_AUTH_TOKEN" ]]; then
       value="$(openssl rand -base64 48 | tr -d '\r\n')"
     else
       value="$(openssl rand -hex 24)"
     fi
-    printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    # 键已存在但值为空时必须就地替换。追加会产生同名重复键，
+    # 届时读到哪一个取决于解析顺序，可能导致全部服务读不到 Nacos 配置。
+    if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}=" "$ENV_FILE"; then
+      sed -i "s|^[[:space:]]*\(export[[:space:]]\+\)\?${key}=.*|${key}=${value}|" "$ENV_FILE"
+    else
+      printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    fi
+    changed=1
+    # 只报键名，不打印值
+    echo "generated ${key} into ${ENV_FILE}"
   done
-  chmod 600 "$ENV_FILE"
+  # 没有改动就不动权限，避免覆盖运维刻意设置的属主模型
+  if [[ "$changed" == "1" ]]; then
+    chmod 600 "$ENV_FILE"
+  fi
 }
 
 wait_mysql() {
@@ -47,7 +64,10 @@ wait_mysql() {
     sleep 2
   done
   echo "ERROR: MySQL did not pass authenticated SELECT 1" >&2
-  docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -h 127.0.0.1 -uroot -Nse "SELECT 1"
+  # 再跑一次是为了把原始 stderr 打出来，便于区分“连不上”与“凭据错”
+  docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -h 127.0.0.1 -uroot -Nse "SELECT 1" >&2 || true
+  docker logs --tail 50 forum-mysql >&2 || true
+  return 1
 }
 
 sql_escape() {
@@ -89,7 +109,7 @@ mysql_scalar() {
 # 更新包只接受与当前最终基线表数量一致的六域库；空库、部分库或版本不匹配均停止。
 require_domain_schemas() {
   local root_pw="$1" domain count expected invalid=0
-  declare -A expected_tables=([auth]=11 [content]=30 [im]=14 [game]=12 [economy]=38 [ai]=17)
+  declare -A expected_tables=([auth]=11 [content]=30 [im]=14 [game]=12 [economy]=36 [ai]=17)
   for domain in auth content im game economy ai; do
     count="$(mysql_scalar "$root_pw" "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='forum_${domain}_db' AND TABLE_TYPE='BASE TABLE';")" || return 1
     expected="${expected_tables[$domain]}"
@@ -149,7 +169,15 @@ done
 test -f "$ENV_FILE" || { echo "ERROR: missing external environment file: $ENV_FILE"; exit 1; }
 ensure_nacos_bootstrap_values
 
-chmod -R a+rX dist conf.d ssl 2>/dev/null || true
+# 上传不完整时必须在这里停住：缺 dist/ssl 会表现成 nginx 起不来或 TLS 握手失败，
+# 那时已经很难反推回“包没传全”这个根因。
+for d in dist conf.d ssl; do
+  test -d "$d" || { echo "ERROR: 缺少目录 $d，请重新完整上传发布包" >&2; exit 1; }
+done
+# 失败不静默：历史文件可能属主不同，放开读权限失败时至少要让 stderr 可见
+if ! chmod -R a+rX dist conf.d ssl; then
+  echo "WARN: 放开 dist/conf.d/ssl 读取权限失败，若 nginx 报 403 或证书读不到请检查属主" >&2
+fi
 mkdir -p "$LOG_ROOT"/java-backend "$LOG_ROOT"/ai-server "$LOG_ROOT"/ffmpeg "$LOG_ROOT"/nginx
 if ! chmod -R u=rwX,go= "$LOG_ROOT" 2>/dev/null; then
   # 历史日志可能由 root 或容器用户创建；权限收紧失败不应阻断服务恢复。
@@ -173,7 +201,11 @@ docker load -i images/forum-backend.tar
 docker load -i images/forum-ai-server.tar
 docker load -i images/infra.tar
 
-for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx:1.30.1 nacos/nacos-server:v3.1.1; do
+# 必须覆盖 infra.tar 里的中间件镜像：离线服务器拉不到公网，
+# tar 部分损坏时若不校验，compose 会转去 docker pull 然后长时间挂起，报错还指向 compose。
+for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest \
+           nginx:1.30.1 nacos/nacos-server:v3.1.1 \
+           mysql:9.7.0 redis:8.0 rabbitmq:4.3-management postgres:17; do
   docker image inspect "$img" >/dev/null 2>&1 || {
     echo "ERROR: image missing after load: $img"
     exit 1
@@ -197,20 +229,46 @@ require_domain_schemas "$root_pw"
 echo "==> compose application"
 $COMPOSE up -d --force-recreate --no-deps ai-server auth content im game economy ai gateway nginx
 
-sleep 3
-if curl -sf http://127.0.0.1/healthz >/dev/null; then
-  echo "healthz OK"
-else
-  echo "WARN: healthz failed — check: docker logs forum-nginx --tail 30"
+dump_app_diagnostics() {
+  echo "--- docker compose ps ---" >&2
+  $COMPOSE ps >&2 || true
+  for c in forum-nginx forum-gateway; do
+    echo "--- docker logs $c --tail 50 ---" >&2
+    docker logs --tail 50 "$c" >&2 || true
+  done
+}
+
+# Java 微服务启动远超 3 秒，固定 sleep 必然探到失败；且探测结果必须影响退出码，
+# 否则自动化调用方会把一次“网站 502”的发布判定为成功。
+wait_http_200() {
+  local url="$1" name="$2" i code=000
+  for i in $(seq 1 60); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo 000)"
+    if [[ "$code" == "200" ]]; then
+      echo "${name} OK (HTTP 200, ${i} 次探测)"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: ${name} 未就绪，最后一次 HTTP ${code}（已等待 120 秒） url=${url}" >&2
+  return 1
+}
+
+if ! wait_http_200 "http://127.0.0.1/healthz" "healthz"; then
+  dump_app_diagnostics
+  exit 1
 fi
 
 IDX="dist/user/index.html"
 if [[ -f "$IDX" ]]; then
   ASSET="$(grep -oE '/assets/[^"'\'' ]+\.js' "$IDX" | head -1 || true)"
   if [[ -n "$ASSET" ]]; then
-    CODE="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1${ASSET}" || echo 000)"
-    echo "probe ${ASSET} -> HTTP ${CODE} (expect 200)"
+    if ! wait_http_200 "http://127.0.0.1${ASSET}" "前端资源 ${ASSET}"; then
+      echo "ERROR: 静态资源不可访问，常见原因是 dist 未上传完整或 nginx 读不到文件" >&2
+      dump_app_diagnostics
+      exit 1
+    fi
   fi
 fi
 
-echo "Done. If browser still 403: docker logs forum-nginx --tail 50"
+echo "Done. 站点已通过 healthz 与静态资源探测。"

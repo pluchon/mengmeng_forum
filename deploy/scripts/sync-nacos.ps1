@@ -1,4 +1,4 @@
-# 将版本化配置同步到本机 Nacos 3.x，并逐项回读校验
+﻿# 将版本化配置同步到本机 Nacos 3.x，并逐项回读校验
 param(
     [string]$NamespaceId = "forum-dev",
     [string]$NamespaceName = "forum-dev",
@@ -22,7 +22,10 @@ foreach ($key in $userEnvironment.Keys) {
 $username = [Environment]::GetEnvironmentVariable("NACOS_CONSOLE_USERNAME", "Process")
 $password = [Environment]::GetEnvironmentVariable("NACOS_CONSOLE_PASSWORD", "Process")
 if ([string]::IsNullOrWhiteSpace($username)) { $username = "nacos" }
-if ([string]::IsNullOrWhiteSpace($password)) { $password = "nacos" }
+if ([string]::IsNullOrWhiteSpace($password)) {
+    $password = "nacos"
+    $usingDefaultPassword = $true
+}
 
 $expected = @(
     "forum-common.yml",
@@ -50,12 +53,50 @@ foreach ($dataId in $expected) {
     }
 }
 
+# 全新 Nacos（含刚清空数据卷）的嵌入库里没有任何用户，登录会直接 500 抛
+# UsernameNotFoundException，而不是 401。首次部署必须先初始化管理员，否则永远走不到发布这一步。
+# 该接口只能创建固定用户名 nacos，且已存在管理员时返回 code=409，可安全重复调用。
+function Initialize-NacosAdmin {
+    param([string]$Password)
+
+    $response = Invoke-WebRequest -Uri "$ConsoleUrl/v3/auth/user/admin" -Method Post `
+        -Body @{ password = $Password } `
+        -ContentType "application/x-www-form-urlencoded" -SkipHttpErrorCheck -TimeoutSec 10
+    $payload = $null
+    if ($response.Content) {
+        try { $payload = $response.Content | ConvertFrom-Json } catch { $payload = $null }
+    }
+    # 已存在管理员是幂等结果，不是失败
+    if ($payload -and $payload.code -eq 409) { return $false }
+    if ($response.StatusCode -eq 200 -and $payload -and $payload.code -eq 0) { return $true }
+    throw "初始化 Nacos 管理员失败: HTTP $($response.StatusCode) $($response.Content)"
+}
+
+if (-not $ValidateOnly -and $username -eq "nacos") {
+    if (Initialize-NacosAdmin -Password $password) {
+        Write-Host "检测到全新 Nacos，已初始化管理员 nacos" -ForegroundColor Yellow
+        if ($usingDefaultPassword) {
+            Write-Host "警告: 使用的是默认口令，请设置 NACOS_CONSOLE_PASSWORD 后改密" -ForegroundColor Red
+        }
+    }
+}
+
 try {
     $login = Invoke-RestMethod -Uri "$ConsoleUrl/v3/auth/user/login" -Method Post `
         -Body @{ username = $username; password = $password } `
         -ContentType "application/x-www-form-urlencoded" -TimeoutSec 10
 } catch {
-    throw "Nacos 控制台登录失败: $($_.Exception.Message)"
+    $hint = ""
+    # 500 而非 401 基本可断定是用户不存在（UsernameNotFoundException）
+    if ($_.Exception.Response.StatusCode.value__ -eq 500) {
+        if ($ValidateOnly) {
+            # 校验模式不允许写入，因此不会自动建管理员
+            $hint = "；可能是全新 Nacos 尚无管理员，-ValidateOnly 不会创建，请先不带该参数运行一次"
+        } elseif ($username -ne "nacos") {
+            $hint = "；用户 $username 可能不存在，初始化接口只会创建 nacos，请先在控制台手工创建该用户"
+        }
+    }
+    throw "Nacos 控制台登录失败: $($_.Exception.Message)$hint"
 }
 if ([string]::IsNullOrWhiteSpace($login.accessToken)) { throw "Nacos 登录响应缺少 accessToken" }
 $headers = @{ accessToken = $login.accessToken }

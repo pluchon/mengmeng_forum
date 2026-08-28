@@ -11,7 +11,7 @@ SQL_DIR="${FORUM_SQL_DIR:-./sql}"
 MYSQL_CONTAINER="${FORUM_MYSQL_CONTAINER:-forum-mysql}"
 POSTGRES_CONTAINER="${FORUM_POSTGRES_CONTAINER:-forum-postgres}"
 
-declare -A EXPECTED_TABLES=([auth]=11 [content]=30 [im]=14 [game]=12 [economy]=38 [ai]=17)
+declare -A EXPECTED_TABLES=([auth]=11 [content]=30 [im]=14 [game]=12 [economy]=36 [ai]=17)
 
 test -f "$ENV_FILE" || { echo "ERROR: missing env file: $ENV_FILE" >&2; exit 1; }
 test -d "$SQL_DIR" || { echo "ERROR: missing sql dir: $SQL_DIR" >&2; exit 1; }
@@ -121,17 +121,29 @@ fi
 ensure_domain_users "$root_pw"
 
 pu="$(read_env POSTGRES_USER)"; pd="$(read_env POSTGRES_DB)"
+pp="$(read_env POSTGRES_PASSWORD)"
 pu="${pu:-langgraph}"; pd="${pd:-langgraph_db}"
 pg_sql="${SQL_DIR}/postgres_ai_session.sql"
 if [[ -f "$pg_sql" ]]; then
+  pg_ready=0
   for i in $(seq 1 90); do
     if docker exec "$POSTGRES_CONTAINER" pg_isready -U "$pu" -d "$pd" >/dev/null 2>&1; then
+      pg_ready=1
       break
     fi
     sleep 2
   done
+  # 超时必须致命并打印原因，否则只会在下一行以一句 psql 报错收场，看不出是没起来
+  if [[ "$pg_ready" != "1" ]]; then
+    echo "ERROR: PostgreSQL did not become ready within 180 seconds" >&2
+    docker exec "$POSTGRES_CONTAINER" pg_isready -U "$pu" -d "$pd" >&2 || true
+    docker logs --tail 50 "$POSTGRES_CONTAINER" >&2 || true
+    exit 1
+  fi
   echo "==> apply PostgreSQL schema"
-  docker exec -i "$POSTGRES_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$pu" -d "$pd" < "$pg_sql"
+  # 显式带 PGPASSWORD：容器的 pg_hba 若不是 trust，缺这一项会 password authentication failed
+  docker exec -e PGPASSWORD="$pp" -i "$POSTGRES_CONTAINER" \
+    psql -v ON_ERROR_STOP=1 -U "$pu" -d "$pd" < "$pg_sql"
 fi
 
 echo "init-db done"

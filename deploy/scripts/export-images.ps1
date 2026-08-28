@@ -1,4 +1,4 @@
-# Export images + assemble an external package (classic dist bind mount on server)
+﻿# Export images + assemble an external package (classic dist bind mount on server)
 # Usage: cd deploy; .\scripts\export-images.ps1
 
 param([string]$OutputRoot = "C:\forum-build\luntan-package")
@@ -188,7 +188,9 @@ echo "Forum package release: $(cat RELEASE.txt 2>/dev/null || echo unknown)"
 
 fix_crlf() {
   for f in start.sh up.sh init-db.sh verify-frontend-dist.sh reset-db.sh sync-nacos.sh; do
-    [[ -f "$f" ]] && sed -i 's/\r$//' "$f"
+    # 末尾的 || true 不可省：循环最后一轮若文件不存在，[[ -f ]] && 会让函数返回 1，
+    # 在 set -e 下整个脚本会不打印任何信息就退出。
+    [[ -f "$f" ]] && sed -i 's/\r$//' "$f" || true
   done
 }
 fix_crlf
@@ -220,7 +222,10 @@ echo "==> docker load"
 docker load -i images/forum-backend.tar
 docker load -i images/forum-ai-server.tar
 docker load -i images/infra.tar
-for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest nginx:1.30.1 nacos/nacos-server:v3.1.1; do
+# 必须覆盖 infra.tar 里的中间件镜像：离线服务器无法回退到 docker pull
+for img in forum-backend:latest forum-ai-server:latest forum-ffmpeg:latest \
+           nginx:1.30.1 nacos/nacos-server:v3.1.1 \
+           mysql:9.7.0 redis:8.0 rabbitmq:4.3-management postgres:17; do
   docker image inspect "$img" >/dev/null 2>&1 || { echo "ERROR: image missing after load: $img"; exit 1; }
 done
 docker run --rm --user 0 \
@@ -246,7 +251,10 @@ wait_mysql() {
     sleep 2
   done
   echo "ERROR: MySQL did not pass authenticated SELECT 1" >&2
-  docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -h 127.0.0.1 -uroot -Nse "SELECT 1"
+  # 再跑一次把原始 stderr 打出来，便于区分“连不上”与“凭据错”
+  docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -h 127.0.0.1 -uroot -Nse "SELECT 1" >&2 || true
+  docker logs --tail 50 forum-mysql >&2 || true
+  return 1
 }
 
 sql_escape() {
@@ -274,22 +282,8 @@ SQL
   docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -uroot -e "FLUSH PRIVILEGES;" >/dev/null
 }
 
-mysql_scalar() {
-  local root_pw="$1" sql="$2"
-  docker exec -e MYSQL_PWD="${root_pw}" forum-mysql mysql -uroot -N -B -e "$sql"
-}
-
-validate_domain_tables() {
-  local root_pw="$1" domain actual expected invalid=0
-  declare -A expected_tables=([auth]=11 [content]=30 [im]=14 [game]=12 [economy]=38 [ai]=17)
-  for domain in auth content im game economy ai; do
-    expected="${expected_tables[$domain]}"
-    actual="$(mysql_scalar "$root_pw" "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='forum_${domain}_db' AND TABLE_TYPE='BASE TABLE';")"
-    echo "forum_${domain}_db tables=${actual} expected=${expected}"
-    [[ "$actual" == "$expected" ]] || invalid=1
-  done
-  [[ "$invalid" == "0" ]]
-}
+# 表数量校验统一由 init-db.sh 负责，这里不再保留副本：
+# 副本会各自持有一份表数量常量，下线表时必然漂移出不一致。
 
 wait_postgres() {
   local user="$1" database="$2" i
@@ -350,6 +344,10 @@ wait_mysql "$root_pw"
 if [[ "${SKIP_DB_INIT:-0}" != "1" ]]; then
   chmod +x ./init-db.sh
   FORUM_ENV_FILE="$ENV_FILE" FORUM_SQL_DIR=./sql bash ./init-db.sh
+else
+  # 跳过建表可以，但六域账号是应用连库的前提，漏建会表现成一堆 Access denied。
+  echo "SKIP_DB_INIT=1：跳过建表，仍需确保六域数据库账号存在"
+  ensure_domain_users "$root_pw"
 fi
 
 echo "==> compose application"
@@ -357,8 +355,28 @@ $COMPOSE up -d --force-recreate --no-deps ai-server auth content im game economy
 
 echo "--- middleware ---"
 $COMPOSE ps
-sleep 15
-curl -sf http://127.0.0.1/healthz && echo " healthz OK" || echo " healthz FAIL (see: docker logs forum-gateway --tail 50)"
+
+# 固定 sleep 加 “&& echo || echo” 会让脚本在站点 502 时依然退出 0，
+# 首次部署必须以真实探测结果决定退出码。
+healthz_ok=0
+for i in $(seq 1 60); do
+  code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/healthz || echo 000)"
+  if [[ "$code" == "200" ]]; then
+    echo "healthz OK (HTTP 200, ${i} 次探测)"
+    healthz_ok=1
+    break
+  fi
+  sleep 2
+done
+if [[ "$healthz_ok" != "1" ]]; then
+  echo "ERROR: healthz 未就绪，最后一次 HTTP ${code}（已等待 120 秒）" >&2
+  $COMPOSE ps >&2 || true
+  for c in forum-nginx forum-gateway; do
+    echo "--- docker logs $c --tail 50 ---" >&2
+    docker logs --tail 50 "$c" >&2 || true
+  done
+  exit 1
+fi
 echo ""
 echo "For an intentionally destructive rebuild, read DEPLOY.txt and use all reset confirmations."
 '@
@@ -520,8 +538,14 @@ Write-UnixShellFile -Path (Join-Path $pkg "DEPLOY.txt") -Content $deployTxt
 
 Write-UnixShellFile -Path (Join-Path $pkg "README.txt") -Content "See DEPLOY.txt in this folder."
 
-$gitCommit = (& git -C $repoRoot rev-parse --short=12 HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $gitCommit) { throw "Unable to resolve release commit" }
+# 先看退出码再取值：git 失败时返回 $null，直接 .Trim() 会抛“不能对空值调用方法”，
+# 把“仓库里没有提交”掩盖成一个看不懂的 PowerShell 错误。
+$gitCommitRaw = & git -C $repoRoot rev-parse --short=12 HEAD 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "无法解析发布用的 git commit（git 退出码 $LASTEXITCODE）：$gitCommitRaw"
+}
+$gitCommit = ($gitCommitRaw | Select-Object -Last 1 | Out-String).Trim()
+if (-not $gitCommit) { throw "无法解析发布用的 git commit：git 返回空值" }
 $releaseId = "{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $gitCommit
 Set-Content -LiteralPath (Join-Path $pkg "RELEASE.txt") -Value $releaseId -Encoding utf8NoBOM
 

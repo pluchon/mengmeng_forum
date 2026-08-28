@@ -1,4 +1,4 @@
-# Validate the production Nginx domain and TLS material before packaging.
+﻿# Validate the production Nginx domain and TLS material before packaging.
 param(
     [Parameter(Mandatory = $true)]
     [string]$SslRoot,
@@ -16,9 +16,20 @@ $nginxFullPath = [IO.Path]::GetFullPath($NginxConfig)
 $certificatePath = Join-Path $sslFullPath "$CertificateName.pem"
 $privateKeyPath = Join-Path $sslFullPath "$CertificateName.key"
 
-foreach ($requiredPath in @($nginxFullPath, $certificatePath, $privateKeyPath)) {
+if (-not (Test-Path -LiteralPath $nginxFullPath -PathType Leaf)) {
+    throw "缺少生产 Nginx 配置：$nginxFullPath"
+}
+# 证书与私钥按设计不入版本库，所以这里必须给出可直接照做的提示，
+# 否则打包会停在一句只有路径的报错上。
+foreach ($requiredPath in @($certificatePath, $privateKeyPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
-        throw "Production TLS file is missing: $requiredPath"
+        # throw 会把多行消息压成一段，指引单独打印才能保持可读
+        Write-Host "证书属于密钥材料，不随仓库分发，打包前需自行放入 $sslFullPath ：" -ForegroundColor Yellow
+        Write-Host "  $CertificateName.pem  证书链（叶证书 + 中间证书，至少两段 PEM）" -ForegroundColor Yellow
+        Write-Host "  $CertificateName.key  对应私钥" -ForegroundColor Yellow
+        Write-Host "  要求 SAN 覆盖 $($RequiredDnsNames -join ', ')，剩余有效期不少于 $MinimumRemainingDays 天" -ForegroundColor Yellow
+        Write-Host "  换域名时用 -CertificateName / -RequiredDnsNames 覆盖，并同步改 conf.d\20-prod-https.conf" -ForegroundColor Yellow
+        throw "缺少生产 TLS 证书文件：$requiredPath"
     }
 }
 

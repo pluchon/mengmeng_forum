@@ -1,4 +1,4 @@
-# Build all artifacts for docker-compose (run from deploy/)
+﻿# Build all artifacts for docker-compose (run from deploy/)
 # Usage: .\scripts\build-all.ps1
 #        .\scripts\build-all.ps1 -SkipDocker
 

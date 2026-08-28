@@ -1,4 +1,4 @@
-# 打包产物自检（make-package 结束后自动调用）
+﻿# 打包产物自检（make-package 结束后自动调用）
 param([string]$PkgRoot = "C:\forum-build\luntan-package")
 
 $ErrorActionPreference = "Stop"
@@ -55,13 +55,21 @@ foreach ($shName in @("start.sh", "up.sh", "reset-db.sh", "init-db.sh", "sync-na
     $raw = [System.IO.File]::ReadAllBytes($sh)
     if ($raw -contains 13) { throw "$shName contains CRLF - re-run export-images.ps1" }
 }
-$envPath = Join-Path $PkgRoot ".env"
-if (Test-Path $envPath) { throw "Package must not contain a real .env file" }
+# 递归查找：只看包根目录会漏掉子目录里被误打包的密钥文件，
+# 而部署包是要整体上传到服务器的。
+$leakedEnv = @(
+    Get-ChildItem -LiteralPath $PkgRoot -Recurse -File -Force -Filter ".env*" |
+        Where-Object { $_.Name -ne ".env.example" }
+)
+if ($leakedEnv.Count -gt 0) {
+    $rels = $leakedEnv | ForEach-Object { $_.FullName.Substring($PkgRoot.Length).TrimStart('\') }
+    throw "部署包内不得包含真实环境变量文件：$($rels -join ', ')"
+}
 
 $unexpectedDeltaSql = @(Get-ChildItem -LiteralPath (Join-Path $PkgRoot "sql") -File | Where-Object { $_.Name -match 'delta|remove-|cost-quota|message-album|session-visibility' })
 if ($unexpectedDeltaSql.Count -gt 0) { throw "Package contains obsolete incremental SQL: $($unexpectedDeltaSql.Name -join ', ')" }
 
-$expectedTables = @{ auth = 11; content = 30; im = 14; game = 12; economy = 38; ai = 17 }
+$expectedTables = @{ auth = 11; content = 30; im = 14; game = 12; economy = 36; ai = 17 }
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 foreach ($domain in $expectedTables.Keys) {
     $packagedSql = Join-Path $PkgRoot "sql\$domain-create.sql"

@@ -1,0 +1,22 @@
+* text=auto
+
+# 这些文件要在 Linux 服务器上由 bash 执行。仓库里 core.autocrlf=true，
+# 若不锁定 LF，新克隆检出的脚本会带 CRLF，服务器上报
+# "\r: command not found" 或 shebang 解析失败。
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+Dockerfile text eol=lf
+*.env.example text eol=lf
+
+# PowerShell 只在 Windows 本地跑，保留 CRLF
+*.ps1 text eol=crlf
+
+*.pem binary
+*.key binary
+*.tar binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

@@ -1,4 +1,4 @@
-# One-shot: build + export an external deployment package
+﻿# One-shot: build + export an external deployment package
 # Usage: cd deploy; .\scripts\make-package.ps1
 #        .\scripts\make-package.ps1 -SkipDocker -SkipBackend
 #        .\scripts\make-package.ps1 -ShowBuildDetails
@@ -18,10 +18,27 @@ $ErrorActionPreference = "Stop"
 $scriptsDir = $PSScriptRoot
 $deployRoot = Split-Path -Parent $scriptsDir
 
-& (Join-Path $scriptsDir "test-production-tls.ps1") `
-    -SslRoot (Join-Path $deployRoot "ssl") `
-    -NginxConfig (Join-Path $deployRoot "conf.d\20-prod-https.conf")
-if (-not $?) { throw "生产域名与 TLS 证书校验失败" }
+# 子脚本内部用 exit 1 结束时，$? 仍然是 True，只有 $LASTEXITCODE 会变。
+# 单看 $? 会让失败的构建步骤被当成成功，继续打出一个不完整的部署包。
+function Invoke-PackageStep {
+    param(
+        [string]$Name,
+        [string]$ScriptPath,
+        [hashtable]$Arguments = @{}
+    )
+    $global:LASTEXITCODE = 0
+    & $ScriptPath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Name 失败（退出码 $LASTEXITCODE）：$ScriptPath"
+    }
+}
+
+Invoke-PackageStep -Name "生产域名与 TLS 证书校验" `
+    -ScriptPath (Join-Path $scriptsDir "test-production-tls.ps1") `
+    -Arguments @{
+        SslRoot     = (Join-Path $deployRoot "ssl")
+        NginxConfig = (Join-Path $deployRoot "conf.d\20-prod-https.conf")
+    }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -40,14 +57,16 @@ $buildParams = @{
     DockerBuildProxy = $DockerBuildProxy
 }
 
-& (Join-Path $scriptsDir "build-all.ps1") @buildParams
-if (-not $?) { throw "本地构建脚本执行失败" }
+Invoke-PackageStep -Name "本地构建" `
+    -ScriptPath (Join-Path $scriptsDir "build-all.ps1") -Arguments $buildParams
 
-& (Join-Path $scriptsDir "export-images.ps1") -OutputRoot $OutputRoot
-if (-not $?) { throw "部署包导出脚本执行失败" }
+Invoke-PackageStep -Name "部署包导出" `
+    -ScriptPath (Join-Path $scriptsDir "export-images.ps1") `
+    -Arguments @{ OutputRoot = $OutputRoot }
 
-& (Join-Path $scriptsDir "verify-package.ps1") -PkgRoot $OutputRoot
-if (-not $?) { throw "部署包校验脚本执行失败" }
+Invoke-PackageStep -Name "部署包校验" `
+    -ScriptPath (Join-Path $scriptsDir "verify-package.ps1") `
+    -Arguments @{ PkgRoot = $OutputRoot }
 
 Write-Host ""
 Write-Host "Done. Upload this folder to server ~/package :" -ForegroundColor Green
