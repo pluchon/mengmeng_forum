@@ -1,6 +1,11 @@
 -- auth 域最终空库基线，已合并历史增量；本文件不会删除已有数据库或表。
 -- 仅对全新空库执行；已有表时应失败并改用经过审核的前向迁移。
 
+-- 必须先声明会话字符集：下方 mysqldump 风格的 character_set_client 只在每个 CREATE TABLE
+-- 前后成对生效，到 seed INSERT 时已还原成客户端默认值。若客户端默认是 latin1，
+-- 所有中文初始化数据会被按 latin1 写入而变成乱码。
+SET NAMES utf8mb4;
+
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `forum_auth_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
 USE `forum_auth_db`;
