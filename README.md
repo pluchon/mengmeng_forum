@@ -346,7 +346,7 @@ flowchart LR
 | economy | 积分钱包、签到、星辉、抽奖、会员订阅与 Wan/通用额度礼包 |
 | ai | 任务会话、用量、创作工作区、看板娘会话与记忆；周期额度只预占 Qwen 与 Wan |
 
-基线表数量：auth 11 · content 30 · im 14 · game 12 · economy 38 · ai 17。  
+基线表数量：auth 11 · content 30 · im 14 · game 12 · economy 36 · ai 17。  
 建库文件：各域 `server/src/main/resources/db/create.sql`。
 
 ## Python 端
@@ -609,23 +609,26 @@ sequenceDiagram
 ## 本地启动
 
 准备：Java 17、Python 3.11、Node.js、Docker Desktop。  
-密钥放环境变量，参考 `deploy/.env.example` 与 `scripts/dev-secrets.ps1.example`。
+密钥放 Windows 用户环境变量，键名参考 `deploy/.env.example`。
 
 ```powershell
 # 1) 中间件
-.\scripts\dev-up.ps1
+.\deploy\scripts\dev-compose.ps1 up -d
 
 # 2) 空库首次建表
 .\scripts\init-db.ps1
 
-# 3) 前端
+# 3) 推送 Nacos 配置（首次或配置变更后）
+.\deploy\scripts\sync-nacos.ps1
+
+# 4) 前端
 cd forum-vue\front
 npm install
 npm run dev
 
-# 4) Java：IDEA 启动 gateway、auth、content、im、game、economy、ai
+# 5) Java：IDEA 启动 gateway、auth、content、im、game、economy、ai
 
-# 5) AI
+# 6) AI
 cd ai-server
 python main.py
 ```
@@ -667,12 +670,23 @@ FORUM_ENV_FILE=/opt/forum-config/prod.env bash init-db.sh
 生产密钥在 `/opt/forum-config/prod.env`，发布包不带真实 `.env`。  
 有数据的库禁止跑 `init-db` / `reset-db`，改表只用审核过的前向迁移。
 
-### 常用脚本
+### 脚本
+
+部署只有三个入口，其余文件都是被它们调用的内部步骤，不要单独运行。
+
+| 入口 | 在哪跑 | 作用 |
+| --- | --- | --- |
+| `deploy/scripts/make-package.ps1` | 本地 PowerShell 7 | 构建并校验发布包 |
+| `start.sh` | 服务器（包内） | 首次部署：空库建表 + 起服务 |
+| `up.sh` | 服务器（包内） | 重新打包后上线：换镜像 + 重启 |
+
+`make-package.ps1` 内部依次调用 `build-all.ps1`（编前端与后端、构镜像）、`export-images.ps1`（组包并生成包内 `start.sh`/`reset-db.sh`/`collect-logs.sh`/`DEPLOY.txt`）、`verify-package.ps1` 与 `test-production-tls.ps1`（校验包与证书域名）。
+包内 `start.sh` 与 `up.sh` 会调用同包的 `init-db.sh`、`sync-nacos.sh`、`verify-frontend-dist.sh`。
+
+本地开发另有三个脚本，与部署无关：
 
 | 脚本 | 作用 |
 | --- | --- |
-| `scripts/dev-up.ps1` | 本地起中间件 |
-| `scripts/init-db.ps1` | 本地首次建库 |
-| `deploy/scripts/make-package.ps1` | 打发布包 |
-| `deploy/scripts/init-db.sh` | 服务器空库初始化 |
-| `deploy/scripts/server-up.sh` | 打成包内 `up.sh` |
+| `deploy/scripts/dev-compose.ps1` | 起/停本地中间件，参数直接透传给 docker compose |
+| `scripts/init-db.ps1` | 本地空库建表并校正六域账号 |
+| `deploy/scripts/sync-nacos.ps1` | 把 `deploy/nacos-config` 推到本地 Nacos 并回读校验 |

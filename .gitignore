@@ -145,10 +145,8 @@ deploy/.env.*
 forum-vue/front/.env.oss
 forum-vue/front/.env.development
 forum-vue/front/.env.production
-scripts/dev-secrets.ps1
 scripts/*-secrets.ps1
 !scripts/*-secrets.ps1.example
-!scripts/dev-secrets.ps1.example
 **/passwords.txt
 **/secrets.txt
 **/secrets/

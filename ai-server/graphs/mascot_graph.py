@@ -1,13 +1,5 @@
 """
-看板娘对话 — 基本 Agent 闭环（JSON 规划，不引入 bind_tools）:
-
-  START -> route_skill -> supervisor(init) -> tool_planner
-        -> [execute_tools -> tool_planner]* -> [task_worker?] -> agent -> END
-
-设计原则：
-- 意图与工具规划交给模型自主完成，不用关键词词库当“脑”；
-- 代码 harness 只做硬边界：工具白名单、会员权限、可见性、安全拒止（隐私/越狱/人身攻击）；
-- 部落帖：模型判断是否试探邀请；用户确认后才由 Java 检索。
+看板娘对话
 """
 from __future__ import annotations
 

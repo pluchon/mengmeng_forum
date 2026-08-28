@@ -1,31 +1,5 @@
 """
-帖子异步审核 LangGraph.
-
-流程:
-   START
-     │
-     ├─► validate_text  ─── reject ──► finalize (REJECTED)
-     │       │ pass
-     ├─► validate_images ── reject ──► finalize (REJECTED)
-     │       │ pass (+ video_url)
-     ├─► validate_video  ── reject ──► finalize (REJECTED)  [qwen3-vl-plus]
-     │       │ pass
-     ├─► approved  ─────────────────► finalize (APPROVED)
-     │
-     END
-
-异常路径: 任意节点抛异常被 try/except 兜底,
-state["final_status"]="AUDIT_ERROR", 直接路由到 finalize.
-
-PostgresSaver 在每个节点完成后自动 checkpoint:
-- thread_id = f"audit:{article_id}:{task_id}"
-- 服务挂掉重启时, 该 task_id 在 Java 侧通过超时兜底 task 转 AUDIT_ERROR,
-  Postgres 中残留的 checkpoint 仅供事后调试，不做断点续跑。
-- 为何只有本图挂 checkpointer：MQ 异步长链路（文本+多图+视频）耗时长，便于事后排查；
-  同步短请求图（润色/摘要/标签等）失败由调用方重试即可，加 checkpoint 只会多写 PG。
-
-输入: AuditState (含 title/content/cover_url/image_urls)
-输出: AuditState (含 final_status / final_reason)
+帖子异步审核 LangGraph
 """
 from __future__ import annotations
 
