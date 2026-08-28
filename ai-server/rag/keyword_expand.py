@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
-# 常见主题 → 扩展检索短语（用于 embedding 文本，非展示标签）
-_TOPIC_EXPANSIONS: dict[str, list[str]] = {
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+# 词表真源在 config.yaml 的 rag.topic_expansions（运营数据，可不改代码调整）。
+# 这里只保留配置缺失时的兜底，避免检索扩展整体失效。
+_FALLBACK_TOPIC_EXPANSIONS: dict[str, list[str]] = {
     "四川": ["四川", "川西", "四川西部", "川西高原", "甘孜", "阿坝"],
     "川西": ["四川", "四川西部", "川西高原", "甘孜", "阿坝"],
     "雪山": ["雪山", "雪峰", "高原雪景", "冰川"],
@@ -23,6 +29,43 @@ _TOPIC_EXPANSIONS: dict[str, list[str]] = {
     "python": ["Python", "爬虫", "数据分析"],
     "前端": ["前端", "Vue", "React", "页面"],
 }
+
+
+def _load_topic_expansions() -> dict[str, list[str]]:
+    """从配置读取主题扩展词表；结构非法或为空时回退内置词表."""
+    raw = settings.rag.get("topic_expansions")
+    if not isinstance(raw, dict) or not raw:
+        return dict(_FALLBACK_TOPIC_EXPANSIONS)
+    parsed: dict[str, list[str]] = {}
+    for key, value in raw.items():
+        topic = str(key or "").strip()
+        if not topic:
+            continue
+        if isinstance(value, str):
+            phrases = [value.strip()] if value.strip() else []
+        elif isinstance(value, list):
+            phrases = [str(item).strip() for item in value if str(item or "").strip()]
+        else:
+            continue
+        if phrases:
+            parsed[topic] = phrases
+    if not parsed:
+        logger.warning("[keyword_expand] rag.topic_expansions 结构非法，回退内置词表")
+        return dict(_FALLBACK_TOPIC_EXPANSIONS)
+    return parsed
+
+
+# 与 utils/rag_enhance.py 一致，配置在模块加载时取快照，改 yaml 需重启生效
+_TOPIC_EXPANSIONS: dict[str, list[str]] = _load_topic_expansions()
+
+# 词表改动会影响入库 embedding 文本，历史向量与新查询扩展口径将不一致；
+# 打印版本号便于判断线上索引是否需要重建。
+TOPIC_EXPANSIONS_VERSION = str(settings.rag.get("topic_expansions_version", "unset"))
+logger.info(
+    "[keyword_expand] 主题扩展词表已加载 version=%s topics=%d",
+    TOPIC_EXPANSIONS_VERSION,
+    len(_TOPIC_EXPANSIONS),
+)
 
 
 def _split_title_chunks(title: str) -> list[str]:
@@ -90,9 +133,11 @@ def expand_search_term_list(query: str) -> list[str]:
     return list(dict.fromkeys(x for x in parts if x))[:12]
 
 
-def build_rag_embed_text(title: str, *, user_tags: list[str] | None = None) -> tuple[str, list[str]]:
+def build_rag_embed_text(
+    title: str, *, user_tags: list[str] | None = None
+) -> tuple[str, list[str], str]:
     """
-    返回 (redis 存储 doc 摘要, 检索词列表).
+    返回 (redis 存储 doc 摘要, 检索词列表, embedding 输入文本).
     embedding 输入为若干短句拼接，不含正文。
     """
     keywords = expand_title_keywords(title, user_tags)

@@ -21,7 +21,7 @@ import {
   VideoPause,
   VideoPlay,
 } from '@element-plus/icons-vue'
-import { listMusicCatalog, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay } from '@/api/article'
+import { listMusicCatalog, listMusicMoodTags, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay } from '@/api/article'
 import { extractApiErrorMessage } from '@/api/httpError'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import BorderGlow from '@/components/common/BorderGlow.vue'
@@ -49,7 +49,9 @@ const CATALOG_SCOPES = [
   { id: 'artist', label: '歌手' },
   { id: 'album', label: '专辑' },
 ]
-const MOOD_TAGS = ['热门', '治愈', '清新', '浪漫', '轻松', '深夜']
+// 氛围标签的唯一来源在后端 Nacos 配置，这里只保留请求失败时的兜底，
+// 避免筛选栏整条消失。首项「热门」是默认态，后端视作不过滤。
+const MOOD_TAGS_FALLBACK = ['热门', '治愈', '清新', '浪漫', '轻松', '深夜', '轻音乐', '适合配图']
 const CATALOG_PAGE_SIZE = 10
 const WAVE_BAR_COUNT = 96
 const LRC_LINE_HEIGHT = 26
@@ -88,7 +90,7 @@ const tracks = ref([])
 const draftSelected = ref(null)
 const previewTrack = ref(null)
 const activeMood = ref('热门')
-const moodTags = MOOD_TAGS
+const moodTags = ref([...MOOD_TAGS_FALLBACK])
 const recentTracks = ref([])
 const recentPageNum = ref(1)
 const recentPageTotal = ref(1)
@@ -120,7 +122,6 @@ const uploadStatusFilters = [
   { id: 'rejected', label: '未通过' },
   { id: 'draft', label: '未发布' },
 ]
-const COMPOSE_TAG_OPTIONS = ['治愈', '清新', '浪漫', '轻音乐', '适合配图', '热门']
 const emptySongForm = () => ({
   id: null,
   audioName: '',
@@ -184,7 +185,8 @@ const composeLrcPreview = computed(() => {
   return plain.slice(0, 3)
 })
 
-const composeTagOptions = COMPOSE_TAG_OPTIONS
+// 投稿快选与筛选栏共用同一份候选集，二者不再各持一份而漂移
+const composeTagOptions = computed(() => moodTags.value)
 
 const hidePreviewFavorite = computed(() => mineTab.value === 'compose')
 
@@ -391,7 +393,24 @@ watch(
   },
 )
 
+// 候选集全站一致且极少变动，一个会话内只拉一次；失败时保留兜底列表不打断主流程
+let moodTagsLoaded = false
+async function loadMoodTags() {
+  if (moodTagsLoaded) return
+  try {
+    const res = await listMusicMoodTags()
+    const tags = res?.data
+    if (Array.isArray(tags) && tags.length) {
+      moodTags.value = tags
+      moodTagsLoaded = true
+    }
+  } catch {
+    // 保留 MOOD_TAGS_FALLBACK，下次进入面板再试
+  }
+}
+
 async function bootstrapHall() {
+  loadMoodTags()
   if (isPickerMode.value) {
     draftSelected.value = props.selected && isTrackBindable(props.selected)
       ? { ...props.selected }

@@ -8,6 +8,7 @@ import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.entity.vo.ai.RagArticleVectorHitVO;
 import org.pluchon.forum.entity.vo.MascotRelatedArticleCandidate;
 import org.pluchon.forum.service.interfaces.ai.AiHubService;
+import org.pluchon.forum.config.ForumAiRagProperties;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -32,12 +33,10 @@ public class MascotArticleRagHelper {
     private static final int RAG_EXCERPT_HEAD = 700;
     private static final int RAG_EXCERPT_TAIL = 400;
     private static final int MAX_CONFIRMED_CANDIDATES = 40;
-    // 向量相关度阈值 与 ai server rag.mascot_min_score 对齐
-    private static final double MIN_SCORE = 0.42;
-    // 最高分不足则整批不展示 避免泛语义误召回
-    private static final double TOP_MIN_TO_SHOW = 0.46;
-    // 高于此分可免标题关键词校验
-    private static final double HIGH_SCORE_BYPASS = 0.52;
+
+    // 三个阈值联动生效，统一由配置提供，见 forum.ai.rag.mascot-*
+    @Resource
+    private ForumAiRagProperties forumAiRagProperties;
 
     @Lazy
     @Resource
@@ -130,7 +129,7 @@ public class MascotArticleRagHelper {
         Map<Long, MascotRelatedArticleCandidate> unique = new LinkedHashMap<>();
         for (Map<String, Object> row : ranked) {
             double score = row.get("score") instanceof Number n ? n.doubleValue() : 0D;
-            if (score < MIN_SCORE) {
+            if (score < forumAiRagProperties.getMascotMinScore()) {
                 continue;
             }
             long id;
@@ -150,10 +149,10 @@ public class MascotArticleRagHelper {
         }
         List<MascotRelatedArticleCandidate> candidates = new ArrayList<>(unique.values());
         candidates.sort(Comparator.comparingDouble(MascotRelatedArticleCandidate::getRelevanceScore).reversed());
-        if (candidates.isEmpty() || candidates.get(0).getRelevanceScore() < TOP_MIN_TO_SHOW) {
+        if (candidates.isEmpty() || candidates.get(0).getRelevanceScore() < forumAiRagProperties.getMascotTopMinToShow()) {
             return Collections.emptyList();
         }
-        double floor = Math.max(MIN_SCORE, candidates.get(0).getRelevanceScore() * 0.78D);
+        double floor = Math.max(forumAiRagProperties.getMascotMinScore(), candidates.get(0).getRelevanceScore() * 0.78D);
         List<MascotRelatedArticleCandidate> result = new ArrayList<>();
         for (MascotRelatedArticleCandidate candidate : candidates) {
             if (candidate.getRelevanceScore() < floor) {
@@ -172,7 +171,7 @@ public class MascotArticleRagHelper {
 
     // 低分时要求查询词与标题有字面重叠，过滤泛向量误匹配
     private boolean passesSemanticGate(String query, String title, double score) {
-        if (score >= HIGH_SCORE_BYPASS) {
+        if (score >= forumAiRagProperties.getMascotHighScoreBypass()) {
             return true;
         }
         if (!StringUtils.hasText(title)) {
@@ -180,7 +179,7 @@ public class MascotArticleRagHelper {
         }
         List<String> tokens = tokenizeKeyword(query);
         if (tokens.isEmpty()) {
-            return score >= TOP_MIN_TO_SHOW;
+            return score >= forumAiRagProperties.getMascotTopMinToShow();
         }
         String titleLower = title.toLowerCase();
         for (String token : tokens) {

@@ -65,6 +65,15 @@ forum:
     internal-key: ${FORUM_MASCOT_INTERNAL_KEY:${FORUM_AI_INTERNAL_KEY}}
     basic-daily-limit: ${FORUM_MASCOT_BASIC_DAILY_LIMIT:30}
     treat-admin-as-vip: ${FORUM_MASCOT_TREAT_ADMIN_AS_VIP:true}
+    complexity:
+      # 命中即把 VIP Pro 会话升级到更贵的深度模型，直接影响 AI 成本。
+      # 放宽会增加深度模型调用量，收紧会降低回答质量，改动前评估用量。
+      direct-length-threshold: 320
+      min-indicators: 2
+      history-turns-threshold: 4
+      history-length-threshold: 120
+      keywords: 深入分析,详细分析,对比,比较,方案,规划,计划,推理,论证,优缺点,多步,教程,长文,大纲
+      strong-keywords: 帮我写一篇,制定一个
   ai:
     hub-base-url: ${FORUM_AI_HUB_BASE_URL:http://127.0.0.1:5000}
     internal-key: ${FORUM_AI_INTERNAL_KEY:${FORUM_MASCOT_INTERNAL_KEY}}

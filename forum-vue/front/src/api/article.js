@@ -167,6 +167,11 @@ export function clearArticleVideo(articleId) {
   return request({ url: '/article/clearArticleVideo', method: 'post', params: { articleId } })
 }
 
+// 氛围标签候选集（后端 Nacos 配置，筛选栏与投稿快选共用同一来源）
+export function listMusicMoodTags() {
+  return request({ url: '/article/music/moods', method: 'get' })
+}
+
 // 曲库列表（已发布且 AI 画像就绪，后端分页）
 export function listMusicCatalog({ keyword, scope, mood, pageNum = 1, pageSize = 10 } = {}) {
   const params = { pageNum, pageSize }
@@ -201,7 +206,7 @@ export function listMusicDiscoverHot({ pageNum = 1, pageSize = 6 } = {}) {
   return request({
     url: '/article/music/discover/hot',
     method: 'get',
-    params,
+    params: { pageNum, pageSize },
   })
 }
 

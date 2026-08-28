@@ -44,6 +44,7 @@ import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.entity.dto.AiModelUsageDTO;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.config.ForumAiRagProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -68,8 +69,9 @@ public class AiHubServiceImpl implements AiHubService {
     @Autowired
     private AiPointsBillingService aiPointsBillingService;
 
-    // 站点搜索：帖子向量最低相关度 与 ai server rag.vector_min_score 对齐
-    private static final double ARTICLE_SEARCH_MIN_SCORE = 0.20;
+    // 站点搜索：帖子向量最低相关度，见 forum.ai.rag.article-search-min-score
+    @Autowired
+    private ForumAiRagProperties forumAiRagProperties;
 
     @Autowired
     private AiPythonGatewayClient aiPythonGatewayClient;
@@ -375,7 +377,7 @@ public class AiHubServiceImpl implements AiHubService {
                 if (item instanceof Map<?, ?> m) {
                     Object scoreObj = m.get("score");
                     double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
-                    if (score < ARTICLE_SEARCH_MIN_SCORE) {
+                    if (score < forumAiRagProperties.getArticleSearchMinScore()) {
                         continue;
                     }
                 }

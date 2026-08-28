@@ -4,20 +4,48 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any, Literal
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, field_validator
 
 from clients.dashscope_chat_client import dashscope_chat_completion, lc_messages_to_openai
+from clients.forum_backend_client import list_music_mood_tags
 from config import settings
 from modules.creation.music_audit_parse import parse_audit_model
 from modules.creation.usage import usage_item
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_MOODS = {"热门", "治愈", "清新", "浪漫", "轻松", "深夜", "轻音乐", "适合配图"}
+# 候选集的唯一来源是后端 forum.music.mood-tags（Nacos），这里只保留取不到时的兜底。
+# 它是提示词里的“候选”，不是白名单：prompt 允许模型补充新标签，因此不做入库过滤。
+_FALLBACK_MOODS: tuple[str, ...] = (
+    "热门", "治愈", "清新", "浪漫", "轻松", "深夜", "轻音乐", "适合配图",
+)
+_MOOD_CACHE_TTL_SECONDS = 600
+_mood_cache: list[str] = []
+_mood_cache_at: float = 0.0
+
 RiskLevel = Literal["low", "medium", "high"]
+
+
+def _allowed_moods() -> list[str]:
+    """取氛围标签候选集，带 TTL 缓存；后端不可用时回退内置默认值."""
+    global _mood_cache, _mood_cache_at
+    now = time.monotonic()
+    if _mood_cache and now - _mood_cache_at < _MOOD_CACHE_TTL_SECONDS:
+        return _mood_cache
+    tags = list_music_mood_tags()
+    if tags:
+        _mood_cache = tags
+        _mood_cache_at = now
+        return _mood_cache
+    # 拉取失败不缓存，下次审核再试；同时避免每首歌都打一次失败请求过于频繁
+    _mood_cache_at = now
+    _mood_cache = list(_FALLBACK_MOODS)
+    logger.warning("[music_audit_text] 氛围标签拉取失败，本次使用内置候选集")
+    return _mood_cache
 
 
 class MusicTextAuditResult(BaseModel):
@@ -105,7 +133,7 @@ def audit_music_text(
             artist=artist.strip()[:120],
             user_tags=json.dumps(tags[:12], ensure_ascii=False),
             lyrics=lyric_text.strip()[:8000],
-            allowed_moods=json.dumps(sorted(_ALLOWED_MOODS), ensure_ascii=False),
+            allowed_moods=json.dumps(_allowed_moods(), ensure_ascii=False),
         )
         raw, usage = dashscope_chat_completion(
             model,

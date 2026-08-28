@@ -20,3 +20,16 @@ forum:
     mq-consumer: true
     websocket: false
     game-runtime: false
+  search:
+    # 相关度阈值：需要按召回效果反复调参，改这里重启即可，不必重新编译。
+    # ai-server 的 config.yaml 里有一组同类阈值各自独立生效，调参时两边一起看。
+    article-hybrid-min-score: 0.22
+    article-vector-min-score: 0.36
+    article-author-vector-min-score: 0.72
+    user-vector-min-score: 0.38
+    recommend-vector-min-score: 0.30
+  music:
+    # 氛围标签候选集，是前端筛选栏、投稿快选与 ai-server 审核提示词的唯一来源。
+    # 它不是白名单：AI 允许补充新标签、用户上传可自由输入，入库侧不按此列表拦截。
+    # 首项「热门」是默认态而非氛围，曲库筛选时被当作不过滤处理。
+    mood-tags: 热门,治愈,清新,浪漫,轻松,深夜,轻音乐,适合配图

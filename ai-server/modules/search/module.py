@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from clients.dashscope_embedding import embedding_similarities
+from config import settings
 from rag.search_service import (
     clean_query,
     search_articles_by_vector,
@@ -15,6 +16,14 @@ from rag.search_service import (
 )
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from utils.rag_enhance import hybrid_rank
+
+# 字段权重按“实际可用字段”重新归一化（缺 summary/author 时不稀释总分），
+# 所以三者是一组，必须整组同时可配，不能各自独立取默认值。
+_RAG = settings.rag
+_FIELD_WEIGHT_TITLE = float(_RAG.get("field_weight_title", 0.60))
+_FIELD_WEIGHT_SUMMARY = float(_RAG.get("field_weight_summary", 0.30))
+_FIELD_WEIGHT_AUTHOR = float(_RAG.get("field_weight_author", 0.10))
+_FIELD_MIN_SCORE = float(_RAG.get("field_min_score", 0.22))
 
 
 class SearchModule:
@@ -151,9 +160,9 @@ async def _rank_article_fields(query: str, candidates: list[Any]) -> list[dict[s
         weighted = 0.0
         available_weight = 0.0
         for field, weight, scores in (
-            ("title", 0.60, title_scores),
-            ("summary", 0.30, summary_scores),
-            ("author", 0.10, author_scores),
+            ("title", _FIELD_WEIGHT_TITLE, title_scores),
+            ("summary", _FIELD_WEIGHT_SUMMARY, summary_scores),
+            ("author", _FIELD_WEIGHT_AUTHOR, author_scores),
         ):
             if not row[field] or index >= len(scores):
                 continue
@@ -163,7 +172,7 @@ async def _rank_article_fields(query: str, candidates: list[Any]) -> list[dict[s
             continue
         score = weighted / available_weight
         title_exact = row["title"].casefold() == normalized_query
-        if score >= 0.22 or title_exact:
+        if score >= _FIELD_MIN_SCORE or title_exact:
             ranked.append({
                 "articleId": row["articleId"],
                 "score": round(score, 6),

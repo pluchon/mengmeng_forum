@@ -22,6 +22,30 @@ def _timeout() -> int:
     return int(settings.forum.get("request_timeout", 15))
 
 
+def list_music_mood_tags() -> list[str]:
+    """拉取音乐氛围标签候选集；失败返回空列表，由调用方回退到内置默认值."""
+    path = str(settings.forum.get("music_mood_path") or "/article/music/moods")
+    url = f"{_base_url()}{path}"
+    try:
+        response = requests.get(url, timeout=_timeout())
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("code") != _SUCCESS_CODE:
+            logger.warning(
+                "[forum_backend] 氛围标签响应异常 code=%s url=%s",
+                payload.get("code") if isinstance(payload, dict) else "non-dict",
+                url,
+            )
+            return []
+        data = payload.get("data")
+        if not isinstance(data, list):
+            return []
+        return [str(item).strip() for item in data if str(item or "").strip()]
+    except Exception:
+        logger.exception("[forum_backend] 拉取氛围标签失败 url=%s", url)
+        return []
+
+
 def list_published_notices() -> list[dict[str, Any]]:
     """拉取用户端公告中心已发布列表；失败返回空列表."""
     path = str(settings.forum.get("notice_list_path") or "/notice/center/list")

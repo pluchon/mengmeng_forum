@@ -29,7 +29,10 @@ public final class AuthApiPaths {
             "/search/article",
             "/search/user",
             "/articleDanmaku/listByTimeWindow",
-            "/notice/center/list"
+            "/notice/center/list",
+            // 氛围标签候选集，只有几个配置词、无业务数据；
+            // ai-server 无凭据回调这里取同一份候选集，必须对游客放行
+            "/article/music/moods"
     );
 
     private static final Set<String> OPTIONAL_POST_PATHS = Set.of(

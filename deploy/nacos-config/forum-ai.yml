@@ -18,3 +18,13 @@ forum:
     mq-consumer: false
     websocket: false
     game-runtime: false
+  ai:
+    rag:
+      # 与 ai-server（Python）config.yaml 的 rag 段对应，但两侧各自独立生效。
+      # article-search-min-score 保持 0.20（当前线上真实值），
+      # Python 侧 rag.vector_min_score 是 0.22，两者历史上已漂移；
+      # 若要统一请两边一起改，不要只动一侧。
+      article-search-min-score: 0.20
+      mascot-min-score: 0.42
+      mascot-top-min-to-show: 0.46
+      mascot-high-score-bypass: 0.52

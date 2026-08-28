@@ -56,6 +56,7 @@ import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
+import org.pluchon.forum.config.ForumMascotComplexityProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Value;
@@ -108,6 +109,9 @@ public class MascotServiceImpl implements MascotService {
 
     @Value("${forum.mascot.basic-daily-limit:30}")
     private int basicDailyLimit;
+
+    @Autowired
+    private ForumMascotComplexityProperties mascotComplexityProperties;
 
     @Value("${forum.mascot.treat-admin-as-vip:true}")
     private boolean treatAdminAsVip;
@@ -610,22 +614,30 @@ public class MascotServiceImpl implements MascotService {
         return "qwen-deep";
     }
 
+    // 判定参数见 forum.mascot.complexity.*，命中即升级到更贵的深度模型
     private boolean isComplexMascotRequest(MascotChatRequest request) {
         String message = request.getMessage() == null ? "" : request.getMessage().trim();
-        if (message.length() >= 320) {
+        if (message.length() >= mascotComplexityProperties.getDirectLengthThreshold()) {
             return true;
         }
         int indicators = 0;
-        for (String keyword : List.of("深入分析", "详细分析", "对比", "比较", "方案", "规划", "计划", "推理", "论证", "优缺点", "多步", "教程", "长文", "大纲")) {
+        for (String keyword : mascotComplexityProperties.resolvedKeywords()) {
             if (message.contains(keyword)) {
                 indicators++;
             }
         }
-        if (indicators >= 2 || message.contains("帮我写一篇") || message.contains("制定一个")) {
+        if (indicators >= mascotComplexityProperties.getMinIndicators()) {
             return true;
         }
+        for (String keyword : mascotComplexityProperties.resolvedStrongKeywords()) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
         int historyTurns = request.getHistory() == null ? 0 : request.getHistory().size();
-        return historyTurns >= 4 && message.length() >= 120 && indicators >= 1;
+        return historyTurns >= mascotComplexityProperties.getHistoryTurnsThreshold()
+                && message.length() >= mascotComplexityProperties.getHistoryLengthThreshold()
+                && indicators >= 1;
     }
 
     private String featureCode(String skill) {

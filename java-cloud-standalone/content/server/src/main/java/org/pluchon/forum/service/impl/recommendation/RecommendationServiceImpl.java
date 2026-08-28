@@ -42,6 +42,7 @@ import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfi
 import org.pluchon.forum.service.interfaces.recommendation.UserRecommendationSettingService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
 import org.pluchon.forum.service.remote.ContentAiGatewayService;
+import org.pluchon.forum.config.ForumSearchProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,7 +68,10 @@ public class RecommendationServiceImpl implements RecommendationService {
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_ENABLED = 0;
     private static final int INTERACTION_HISTORY_LIMIT = 60;
-    private static final double VECTOR_MIN_SCORE = 0.30D;
+
+    // 向量候选最低相似度由配置提供，见 forum.search.recommend-vector-min-score
+    @Autowired
+    private ForumSearchProperties forumSearchProperties;
 
     @Autowired
     private ArticleMapper articleMapper;
@@ -445,7 +449,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 continue;
             }
             double similarity = hit.getScore() == null ? 0D : hit.getScore();
-            if (similarity < VECTOR_MIN_SCORE) {
+            if (similarity < forumSearchProperties.getRecommendVectorMinScore()) {
                 continue;
             }
             similarityById.putIfAbsent(hit.getArticleId(), Math.min(similarity, 1D));

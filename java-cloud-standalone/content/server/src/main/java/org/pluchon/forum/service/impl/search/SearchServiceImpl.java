@@ -30,6 +30,7 @@ import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.search.ArticleSearchIndexService;
 import org.pluchon.forum.service.interfaces.search.SearchService;
 import org.pluchon.forum.service.impl.remote.ContentFollowLookupService;
+import org.pluchon.forum.config.ForumSearchProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -44,15 +45,11 @@ public class SearchServiceImpl implements SearchService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
-    // AI 搜索：候选集 hybrid_rank 最低分（社区与创作中心共用）
-    private static final double ARTICLE_AI_HYBRID_MIN_SCORE = 0.22;
-    // AI 搜索：无字面候选时，纯向量兜底最低分 更高，减少噪声 query 误召回
-    private static final double ARTICLE_AI_VECTOR_MIN_SCORE = 0.36;
-    // 帖子正文未命中时，作者语义回退的高相似度阈值
-    private static final double ARTICLE_AUTHOR_VECTOR_MIN_SCORE = 0.72;
-    // AI 用户搜索：纯向量兜底最低分
-    private static final double USER_AI_VECTOR_MIN_SCORE = 0.38;
     private static final int RAG_TEXT_TRUNCATE = 1200;
+
+    // 相关度阈值统一由配置提供，见 forum.search.*
+    @Autowired
+    private ForumSearchProperties forumSearchProperties;
 
     private String normalizeSearchKeyword(String keyword) {
         if (!StringUtils.hasText(keyword)) {
@@ -214,13 +211,13 @@ public class SearchServiceImpl implements SearchService {
                 payload.add(item);
             }
             rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(ragRequest(query, payload)),
-                    ARTICLE_AI_HYBRID_MIN_SCORE);
+                    forumSearchProperties.getArticleHybridMinScore());
         }
 
         if (rankedIds.isEmpty()) {
             rankedIds = extractArticleHitIds(aiHubService.ragArticleVectorRanked(
                     ragRequest(query, Collections.emptyList())),
-                    ARTICLE_AI_VECTOR_MIN_SCORE);
+                    forumSearchProperties.getArticleVectorMinScore());
         }
 
         if (rankedIds.isEmpty()) {
@@ -396,12 +393,12 @@ public class SearchServiceImpl implements SearchService {
             }
             rankedIds = extractArticleHitIds(
                     aiHubService.ragArticleVectorRanked(ragRequest(query, payload)),
-                    ARTICLE_AI_HYBRID_MIN_SCORE);
+                    forumSearchProperties.getArticleHybridMinScore());
         }
         if (rankedIds.isEmpty()) {
             List<Long> vectorIds = extractArticleHitIds(
                     aiHubService.ragArticleVectorRanked(ragRequest(query, Collections.emptyList())),
-                    ARTICLE_AI_VECTOR_MIN_SCORE);
+                    forumSearchProperties.getArticleVectorMinScore());
             rankedIds = retainCreatorArticleIds(vectorIds, creatorUserId, status);
             if (!rankedIds.isEmpty()) {
                 List<Article> vectorArticles = articleMapper.selectList(
@@ -531,7 +528,7 @@ public class SearchServiceImpl implements SearchService {
         Map<Long, Double> semanticScores = new HashMap<>();
         for (RagUserVectorHitVO hit : hits) {
             if (hit.getUserId() == null || hit.getScore() == null
-                    || hit.getScore() < USER_AI_VECTOR_MIN_SCORE) {
+                    || hit.getScore() < forumSearchProperties.getUserVectorMinScore()) {
                 continue;
             }
             semanticScores.put(hit.getUserId(), hit.getScore());
@@ -623,7 +620,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Long> seen = new LinkedHashSet<>();
         for (RagUserVectorHitVO row : ranked) {
             double score = row.getScore() != null ? row.getScore() : 0.0;
-            if (score < SearchServiceImpl.ARTICLE_AUTHOR_VECTOR_MIN_SCORE || row.getUserId() == null) {
+            if (score < forumSearchProperties.getArticleAuthorVectorMinScore() || row.getUserId() == null) {
                 continue;
             }
             if (seen.add(row.getUserId())) {
@@ -735,7 +732,7 @@ public class SearchServiceImpl implements SearchService {
         }
     }
 
-    // 原词 + 分词 + 同义扩展 控制词数，减轻 MySQL / AI 压力
+    // 原词 + 字面分词 控制词数，减轻 MySQL / AI 压力；语义联想交由 AI 检索负责
     private List<String> keywordTerms(String kw) {
         return SearchKeywordHelper.expandTerms(kw);
     }

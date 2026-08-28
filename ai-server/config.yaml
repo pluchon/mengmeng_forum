@@ -1,4 +1,4 @@
-# ai-server 本地开发配置（直连 deploy/docker-compose.dev.yaml 暴露的宿主机端口）
+﻿# ai-server 本地开发配置（直连 deploy/docker-compose.dev.yaml 暴露的宿主机端口）
 # 密钥勿写入本文件：本地使用 Windows 用户环境变量，生产由外部 prod.env 注入
 
 server:
@@ -147,6 +147,32 @@ rag:
   mascot_relative_to_top: 0.93
   mascot_top_min_to_show: 0.46
   mascot_score_gap: 0.055
+  # 站内搜索字段权重：按实际可用字段重新归一化，三者是一组，改一个要一起看
+  field_weight_title: 0.60
+  field_weight_summary: 0.30
+  field_weight_author: 0.10
+  field_min_score: 0.22
+  # 主题检索词扩展表：运营数据，加新主题不需要改代码。
+  # 它同时作用于入库 embedding 文本与查询扩展两端，改动后历史向量与新查询口径会不一致，
+  # 调整后请同步递增 topic_expansions_version 并评估是否重建文章向量索引。
+  topic_expansions_version: 1
+  topic_expansions:
+    四川: ["四川", "川西", "四川西部", "川西高原", "甘孜", "阿坝"]
+    川西: ["四川", "四川西部", "川西高原", "甘孜", "阿坝"]
+    雪山: ["雪山", "雪峰", "高原雪景", "冰川"]
+    西藏: ["西藏", "拉萨", "高原", "藏区"]
+    新疆: ["新疆", "天山", "喀纳斯", "伊犁"]
+    云南: ["云南", "大理", "丽江", "香格里拉"]
+    旅行: ["旅行", "旅游", "出游", "攻略"]
+    自驾: ["自驾", "自驾游", "公路旅行"]
+    美食: ["美食", "探店", "好吃", "餐厅"]
+    咖啡: ["咖啡", "咖啡馆", "拿铁"]
+    猫: ["猫咪", "萌宠", "铲屎官"]
+    狗: ["狗狗", "萌宠", "遛狗"]
+    摄影: ["摄影", "旅拍", "扫街", "出片"]
+    java: ["Java", "后端", "Spring"]
+    python: ["Python", "爬虫", "数据分析"]
+    前端: ["前端", "Vue", "React", "页面"]
 
 image:
   max_bytes: 10485760  # 10MB
@@ -183,6 +209,8 @@ forum:
   # 统一走网关；用 127.0.0.1 避免 Windows 上 localhost 解析到 ::1
   base_url: "http://127.0.0.1:10086"
   notice_list_path: "/notice/center/list"
+  # 氛围标签候选集，真源在后端 Nacos forum.music.mood-tags
+  music_mood_path: "/article/music/moods"
   request_timeout: 15
   site_help_cache_ttl: 600
   site_help_max_notice_chars: 4000

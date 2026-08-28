@@ -8,6 +8,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.config.ForumMusicProperties;
 import org.pluchon.forum.entity.dto.article.MusicAiSearchRequest;
 import org.pluchon.forum.entity.dto.article.MusicRecommendRequest;
 import org.pluchon.forum.entity.dto.article.ToggleMusicFavoriteRequest;
@@ -62,6 +63,15 @@ public class ArticleMusicController {
 
     @Autowired
     private ArticleMusicDiscoverService articleMusicDiscoverService;
+
+    @Autowired
+    private ForumMusicProperties forumMusicProperties;
+
+    /** 氛围标签候选集，供前端筛选栏与投稿快选使用 */
+    @GetMapping("/music/moods")
+    public Result<List<String>> musicMoodTags() {
+        return Result.success(forumMusicProperties.resolvedMoodTags());
+    }
 
     /** 已发布且 AI 画像就绪的曲库分页 */
     @GetMapping("/music/catalog")
