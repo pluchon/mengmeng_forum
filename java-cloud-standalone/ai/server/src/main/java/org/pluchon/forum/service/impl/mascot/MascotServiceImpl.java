@@ -491,8 +491,6 @@ public class MascotServiceImpl implements MascotService {
         vo.setNickname(user.getNickname());
         vo.setAvatarUrl(user.getAvatarUrl());
         vo.setIsAdmin(user.getIsAdmin());
-        vo.setVipTier(user.getVipTier());
-        vo.setVipExpireAt(user.getVipExpireAt());
         return vo;
     }
 

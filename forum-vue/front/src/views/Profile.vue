@@ -24,10 +24,7 @@
             <UserAvatarVip
               :key="avatarSrc"
               :src="avatarSrc"
-              :size="100"
-              :vip-tier="displayVipTier"
-              :vip-expire-at="displayVipExpireAt"
-            />
+              :size="100"            />
             <span class="profile-avatar-id">ID: {{ userInfo?.id || '---' }}</span>
           </div>
           <div class="info-content">
@@ -306,10 +303,7 @@
                 <div class="profile-public-group-owner">
                   <UserAvatarVip
                     :size="36"
-                    :src="group.ownerUser?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(group.ownerUser?.vipTier) || 0"
-                    :vip-expire-at="group.ownerUser?.vipExpireAt"
-                  />
+                    :src="group.ownerUser?.avatarUrl || defaultAvatar"                  />
                   <span>{{ group.ownerUser?.nickname || '群主' }}</span>
                 </div>
                 <span class="profile-public-group-count">{{ group.memberCount || 0 }}/{{ group.memberLimit || 0 }} 人</span>
@@ -517,10 +511,7 @@
             <div class="profile-fav-item-author">
               <UserAvatarVip
                 :size="40"
-                :src="row.author?.avatarUrl || defaultAvatar"
-                :vip-tier="Number(row.author?.vipTier) || 0"
-                :vip-expire-at="row.author?.vipExpireAt"
-              />
+                :src="row.author?.avatarUrl || defaultAvatar"              />
               <span :title="row.author?.nickname || '匿名用户'">{{ displayAuthorNickname(row.author?.nickname) }}</span>
             </div>
           </div>
@@ -711,8 +702,6 @@ const {
   triggerBgUpload,
   triggerFavoriteCoverUpload,
   userInfo,
-  displayVipTier,
-  displayVipExpireAt,
   emptyFavoriteArticleUrl,
 } = useProfile()
 

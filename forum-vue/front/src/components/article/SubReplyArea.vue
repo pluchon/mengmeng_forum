@@ -27,18 +27,12 @@
               >
                 <UserAvatarVip
                   :size="20"
-                  :src="sub.postUser?.avatarUrl || defaultAvatar"
-                  :vip-tier="Number(sub.postUser?.vipTier) || 0"
-                  :vip-expire-at="sub.postUser?.vipExpireAt"
-                />
+                  :src="sub.postUser?.avatarUrl || defaultAvatar"                />
               </div>
               <UserAvatarVip
                 v-else
                 :size="20"
-                :src="sub.postUser?.avatarUrl || defaultAvatar"
-                :vip-tier="Number(sub.postUser?.vipTier) || 0"
-                :vip-expire-at="sub.postUser?.vipExpireAt"
-              />
+                :src="sub.postUser?.avatarUrl || defaultAvatar"              />
               <span
                 class="sub-user-link"
                 :title="sub.postUser?.nickname || '用户'"

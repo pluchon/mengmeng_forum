@@ -1428,15 +1428,6 @@ export function useMascotDock() {
   
   const companionAvatarSrc = DEFAULT_AVATAR
   
-  const ringVipTier = computed(() => {
-    if (!userStore.isLoggedIn || !isVip.value)
-      return 0
-    const t = Number(userStore.vipTier) || 0
-    if (Number(userStore.isAdmin) === 1)
-      return Math.max(1, t || 1)
-    return t > 0 ? t : 1
-  })
-  
   function loadSavedPreferences() {
     try {
       const chat = localStorage.getItem(LLM_CHAT_KEY)
@@ -2089,7 +2080,6 @@ export function useMascotDock() {
     renameSubmitting,
     renamingSessionId,
     renderMascotMarkdown,
-    ringVipTier,
     searchGalleryItems,
     searchGalleryVisible,
     scrollbarFs,

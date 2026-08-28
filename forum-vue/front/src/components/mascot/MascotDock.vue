@@ -165,10 +165,7 @@
                       <UserAvatarVip
                         v-if="m.role === 'user'"
                         :size="28"
-                        :src="userStore.avatarUrl || DEFAULT_AVATAR"
-                        :vip-tier="ringVipTier"
-                        :vip-expire-at="userStore.vipExpireAt"
-                        class="mascot-msg-avatar-wrap"
+                        :src="userStore.avatarUrl || DEFAULT_AVATAR"                        class="mascot-msg-avatar-wrap"
                       />
                       <div class="mascot-msg-col">
                         <template v-if="m.type === 'image' && m.url">
@@ -499,7 +496,6 @@ const {
   openSearchGallery,
   regenerateAssistant,
   renderMascotMarkdown,
-  ringVipTier,
   relatedDialogItems,
   relatedDialogVisible,
   searchGalleryItems,

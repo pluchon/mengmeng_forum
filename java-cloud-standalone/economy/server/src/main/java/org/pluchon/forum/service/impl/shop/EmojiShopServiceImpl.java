@@ -35,8 +35,6 @@ import org.pluchon.forum.mapper.EmojiShopMapper;
 import org.pluchon.forum.mapper.UserEmojiMapper;
 import org.pluchon.forum.economy.client.EconomyUserInternalFeignClient;
 import org.pluchon.forum.service.interfaces.shop.EmojiShopService;
-import org.pluchon.forum.entity.vo.vip.VipStatusVO;
-import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DuplicateKeyException;
@@ -92,9 +90,6 @@ public class EmojiShopServiceImpl implements EmojiShopService {
 
     @Autowired
     private EconomyUserInternalFeignClient userInternalFeignClient;
-
-    @Autowired
-    private VipSubscribeService vipSubscribeService;
 
     @Autowired
     private OssConfig ossConfig;
@@ -1036,18 +1031,11 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 : imagePage.getRecords();
         String uploaderName = null;
         String uploaderAvatar = null;
-        Byte uploaderVipTier = null;
-        Date uploaderVipExpire = null;
         if (shop.getUploadUserId() != null) {
             UserInternalVO uploader = userInternalFeignClient.getById(shop.getUploadUserId());
             if (uploader != null) {
                 uploaderName = uploader.getNickname();
                 uploaderAvatar = uploader.getAvatarUrl();
-                VipStatusVO vipStatus = vipSubscribeService.status(shop.getUploadUserId());
-                if (vipStatus != null) {
-                    uploaderVipTier = vipStatus.getVipTier();
-                    uploaderVipExpire = vipStatus.getVipExpireAt();
-                }
             }
         }
         boolean isAuthor = loginUserId != null && shop.getUploadUserId() != null
@@ -1061,8 +1049,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         }
         return new EmojiShopDetailVO(shop.getId(), shop.getName(), shop.getDescription(), shop.getCoverUrl(),
                 shop.getPrice(), shop.getSalesCount(), shop.getStatus(), shop.getUploadUserId(), uploaderName,
-                uploaderAvatar, uploaderVipTier, uploaderVipExpire,
-                imageUrls, imagePage, owned, shop.getCreateTime());
+                uploaderAvatar, imageUrls, imagePage, owned, shop.getCreateTime());
     }
 
     // 把 EmojiShop 列表批量补齐上传者资料; owned 按请求用户另行计算, 不写入公开缓存

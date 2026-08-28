@@ -175,11 +175,7 @@
                   <div class="author">
                     <UserAvatarVip
                       :size="22"
-                      :src="item.entry?.user?.avatarUrl || defaultAvatar"
-                      :vip-tier="Number(item.entry?.user?.vipTier) || 0"
-                      :vip-expire-at="item.entry?.user?.vipExpireAt"
-                      :show-vip-ring="false"
-                    />
+                      :src="item.entry?.user?.avatarUrl || defaultAvatar"                    />
                     <span class="nickname" :title="item.entry?.user?.nickname || '匿名用户'">{{ formatCardNickname(item.entry?.user?.nickname || '匿名用户') }}</span>
                   </div>
                   <div class="likes">

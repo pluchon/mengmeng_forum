@@ -9,10 +9,7 @@
     <div class="search-user-row__avatar">
       <UserAvatarVip
         :size="52"
-        :src="user.avatarUrl || defaultAvatar"
-        :vip-tier="Number(user.vipTier) || 0"
-        :vip-expire-at="user.vipExpireAt"
-      />
+        :src="user.avatarUrl || defaultAvatar"      />
     </div>
     <strong class="search-user-row__name">{{ user.nickname || `用户 ${user.id}` }}</strong>
     <div class="search-user-row__stats">

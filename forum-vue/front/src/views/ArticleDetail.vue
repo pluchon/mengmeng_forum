@@ -203,10 +203,7 @@
                 >
                   <UserAvatarVip
                     :size="40"
-                    :src="author?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(author?.vipTier) || 0"
-                    :vip-expire-at="author?.vipExpireAt"
-                  />
+                    :src="author?.avatarUrl || defaultAvatar"                  />
                   <div class="author-name-group">
                     <div class="author-name-row">
                       <span class="nickname">{{ author?.nickname || '匿名用户' }}</span>
@@ -228,10 +225,7 @@
                 <div v-else class="author-info author-info--static">
                   <UserAvatarVip
                     :size="40"
-                    :src="author?.avatarUrl || defaultAvatar"
-                    :vip-tier="Number(author?.vipTier) || 0"
-                    :vip-expire-at="author?.vipExpireAt"
-                  />
+                    :src="author?.avatarUrl || defaultAvatar"                  />
                   <div class="author-name-group">
                     <div class="author-name-row">
                       <span class="nickname">{{ author?.nickname || '匿名用户' }}</span>
@@ -507,18 +501,12 @@
                       >
                         <UserAvatarVip
                           :size="32"
-                          :src="item.user?.avatarUrl || defaultAvatar"
-                          :vip-tier="Number(item.user?.vipTier) || 0"
-                          :vip-expire-at="item.user?.vipExpireAt"
-                        />
+                          :src="item.user?.avatarUrl || defaultAvatar"                        />
                       </div>
                       <UserAvatarVip
                         v-else
                         :size="32"
-                        :src="item.user?.avatarUrl || defaultAvatar"
-                        :vip-tier="Number(item.user?.vipTier) || 0"
-                        :vip-expire-at="item.user?.vipExpireAt"
-                      />
+                        :src="item.user?.avatarUrl || defaultAvatar"                      />
                       <div class="comment-main">
                         <div class="comment-user-row">
                           <div class="comment-user-left">

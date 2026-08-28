@@ -5,10 +5,7 @@
         <UserAvatarVip
           :key="userStore.avatarUrl"
           :src="userStore.avatarUrl || DEFAULT_AVATAR"
-          :size="100"
-          :vip-tier="Number(userStore.vipTier) || 0"
-          :vip-expire-at="userStore.vipExpireAt"
-        />
+          :size="100"        />
       </div>
       <div class="profile-info-summary">
         <h3>{{ userStore.nickname }}</h3>

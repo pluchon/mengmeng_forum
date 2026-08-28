@@ -80,11 +80,7 @@
               <button type="button" class="door-user-trigger" aria-label="个人菜单">
                 <UserAvatarVip
                   :size="36"
-                  :src="userStore.avatarUrl || defaultAvatar"
-                  :vip-tier="userStore.vipTier"
-                  :vip-expire-at="userStore.vipExpireAt"
-                  :show-vip-ring="false"
-                />
+                  :src="userStore.avatarUrl || defaultAvatar"                />
               </button>
               <template #dropdown>
                 <el-dropdown-menu>

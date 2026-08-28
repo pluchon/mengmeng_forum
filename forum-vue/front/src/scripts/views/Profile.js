@@ -309,16 +309,6 @@ export function useProfile() {
     return userInfo.value?.avatarUrl || defaultAvatar
   })
 
-  const displayVipTier = computed(() => {
-    if (isMe.value) return Number(userStore.vipTier) || 0
-    return Number(userInfo.value?.vipTier) || 0
-  })
-
-  const displayVipExpireAt = computed(() => {
-    if (isMe.value) return userStore.vipExpireAt ?? null
-    return userInfo.value?.vipExpireAt ?? null
-  })
-
   const isMe = computed(() => {
     const targetId = resolveProfileUserId()
     return String(targetId) === String(userStore.id)
@@ -903,8 +893,6 @@ export function useProfile() {
     defaultAvatar,
     deleteCurrentFavoriteFolder,
     displayAuthorNickname,
-    displayVipExpireAt,
-    displayVipTier,
     emptyFavoriteArticleUrl,
     favoriteCoverInputRef,
     favoriteCoverStyle,

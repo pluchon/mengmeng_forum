@@ -1113,14 +1113,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   white-space: nowrap;
 }
 
-.home-vip-badge-img {
-  flex-shrink: 0;
-  width: 1em;
-  height: 1em;
-  object-fit: contain;
-  display: block;
-}
-
 .home-user-sub {
   font-size: 12px;
   color: #86909c;

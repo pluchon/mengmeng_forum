@@ -14,15 +14,6 @@ import { formatCheckinLogDateOnly } from '@/utils/datetime'
 
 const ITEM_PAGE_SIZE = 8
 
-function effectiveVipTier(tier, expireAt) {
-  const t = Number(tier) || 0
-  if (t <= 0) return 0
-  if (!expireAt) return t
-  const ms = new Date(expireAt).getTime()
-  if (Number.isNaN(ms)) return t
-  return Date.now() > ms ? 0 : t
-}
-
 export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
   const router = useRouter()
   const userStore = useUserStore()
@@ -47,10 +38,6 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     if (Number.isFinite(total)) return total
     return detail.value?.imageUrls?.length || 0
   })
-
-  const uploaderVipTier = computed(() =>
-    effectiveVipTier(detail.value?.uploadUserVipTier, detail.value?.uploadUserVipExpireAt),
-  )
 
   const statusLabel = computed(() => {
     const s = detail.value?.status
@@ -253,7 +240,6 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     itemPageSize,
     previewUrl,
     imageCount,
-    uploaderVipTier,
     statusLabel,
     createDateText,
     dialogTitle,

@@ -65,10 +65,7 @@
                 >
                   <UserAvatarVip
                     :size="20"
-                    :src="detail.uploadUserAvatarUrl"
-                    :vip-tier="uploaderVipTier"
-                    :vip-expire-at="detail.uploadUserVipExpireAt"
-                  />
+                    :src="detail.uploadUserAvatarUrl"                  />
                   <span>{{ detail.uploadUserNickname || ('用户' + detail.uploadUserId) }}</span>
                 </div>
               </div>
@@ -193,7 +190,6 @@ const {
   itemPageSize,
   previewUrl,
   imageCount,
-  uploaderVipTier,
   statusLabel,
   createDateText,
   dialogTitle,

@@ -376,7 +376,7 @@ public class UserFollowServiceImpl implements UserFollowService {
         }
         return new UserBriefVO(
                 user.getId(), user.getNickname(), user.getAvatarUrl(), user.getIsAdmin(), user.getRemark(),
-                user.getBackgroundUrl(), user.getVipTier(), user.getVipExpireAt(), user.getIpRegion());
+                user.getBackgroundUrl(), user.getIpRegion());
     }
 
     private void validateFollowPair(Long followerId, Long followeeId) {

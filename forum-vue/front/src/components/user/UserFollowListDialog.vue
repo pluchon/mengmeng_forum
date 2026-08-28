@@ -34,10 +34,7 @@
         >
           <UserAvatarVip
             :size="48"
-            :src="item.user?.avatarUrl || defaultAvatar"
-            :vip-tier="Number(item.user?.vipTier) || 0"
-            :vip-expire-at="item.user?.vipExpireAt"
-          />
+            :src="item.user?.avatarUrl || defaultAvatar"          />
           <div class="follow-list-text">
             <div class="follow-list-name">{{ item.user?.nickname || '匿名用户' }}</div>
             <div class="follow-list-remark">{{ remarkSummary(item.user?.remark) }}</div>

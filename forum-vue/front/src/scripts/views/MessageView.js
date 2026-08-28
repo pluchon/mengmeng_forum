@@ -3230,18 +3230,6 @@ const GROUP_NOTIFY_OPTIONS = [
     return currentSession.value?.user?.avatarUrl || defaultAvatar
   }
 
-  function bubbleVipTier(msg) {
-    if (msg?.isOwner) return Number(userStore.vipTier) || 0
-    if (currentGroupSession.value) return Number(msg?.user?.vipTier) || 0
-    return Number(currentSession.value?.user?.vipTier) || 0
-  }
-
-  function bubbleVipExpireAt(msg) {
-    if (msg?.isOwner) return userStore.vipExpireAt
-    if (currentGroupSession.value) return msg?.user?.vipExpireAt
-    return currentSession.value?.user?.vipExpireAt
-  }
-
   function bubbleImageStyle(message) {
     const naturalSize = mediaNaturalSizes.value[mediaSizeKey(message)]
     const w = Number(message?.mediaWidth) > 0 ? message.mediaWidth : naturalSize?.width
@@ -3360,8 +3348,6 @@ const GROUP_NOTIFY_OPTIONS = [
     autoResizeInput,
     bubbleAvatar,
     bubbleImageStyle,
-    bubbleVipExpireAt,
-    bubbleVipTier,
     canFavoriteChatImage,
     canRecallMessage,
     canRecallGroupMessage,

@@ -63,10 +63,7 @@
             <div class="user-trigger">
               <UserAvatarVip
                 :size="32"
-                :src="userStore.avatarUrl || defaultAvatar"
-                :vip-tier="userStore.vipTier"
-                :vip-expire-at="userStore.vipExpireAt"
-              />
+                :src="userStore.avatarUrl || defaultAvatar"              />
             </div>
             <template #dropdown>
               <el-dropdown-menu class="red-dropdown">

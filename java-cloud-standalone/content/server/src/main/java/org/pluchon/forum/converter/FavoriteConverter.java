@@ -44,8 +44,6 @@ public final class FavoriteConverter {
                 author.getIsAdmin(),
                 author.getRemark(),
                 author.getBackgroundUrl(),
-                author.getVipTier(),
-                author.getVipExpireAt(),
                 author.getIpRegion());
     }
 

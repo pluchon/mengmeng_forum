@@ -472,7 +472,6 @@ public class ArticleServiceImpl implements ArticleService {
                 validPageNum, validPageSize, result.getPages(), result.hasNext()));
         UserBriefVO profileUser = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         if (!isOwner) {
-            profileUser.setVipExpireAt(null);
             profileUser.setIpRegion(null);
         }
         return new ArticleListByUserIdPageResponse(pageResult, profileUser, isOwner);

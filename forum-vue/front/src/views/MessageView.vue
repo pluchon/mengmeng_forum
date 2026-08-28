@@ -103,10 +103,7 @@
               <template v-if="item.kind === 'pm'">
                 <UserAvatarVip
                   :size="38"
-                  :src="item.user?.avatarUrl || defaultAvatar"
-                  :vip-tier="Number(item.user?.vipTier) || 0"
-                  :vip-expire-at="item.user?.vipExpireAt"
-                />
+                  :src="item.user?.avatarUrl || defaultAvatar"                />
               </template>
               <div v-else-if="item.kind === 'group'" class="mc-group-avatar">
                 <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
@@ -176,10 +173,7 @@
         <div class="mc-left-bottom">
           <UserAvatarVip
             :size="28"
-            :src="userStore.avatarUrl || defaultAvatar"
-            :vip-tier="Number(userStore.vipTier) || 0"
-            :vip-expire-at="userStore.vipExpireAt"
-          />
+            :src="userStore.avatarUrl || defaultAvatar"          />
           <span class="mc-left-uname">{{ userStore.nickname || '用户' }}</span>
           <div class="mc-online mc-online--trailing" :class="{ 'is-offline': !selfOnline }">
             <span class="mc-online-dot" />
@@ -195,10 +189,7 @@
               <UserAvatarVip
                 v-if="currentSession"
                 :size="34"
-                :src="currentSession.user?.avatarUrl || defaultAvatar"
-                :vip-tier="Number(currentSession.user?.vipTier) || 0"
-                :vip-expire-at="currentSession.user?.vipExpireAt"
-              />
+                :src="currentSession.user?.avatarUrl || defaultAvatar"              />
               <div v-else class="mc-group-avatar mc-group-avatar--head">
                 <img v-if="groupAvatarUrl(currentGroupSession)" :src="groupAvatarUrl(currentGroupSession)" alt="">
                 <span v-else>{{ groupAvatarText(currentGroupSession) }}</span>
@@ -251,10 +242,7 @@
                 >
                   <UserAvatarVip
                     :size="28"
-                    :src="bubbleAvatar(row.msg)"
-                    :vip-tier="bubbleVipTier(row.msg)"
-                    :vip-expire-at="bubbleVipExpireAt(row.msg)"
-                  />
+                    :src="bubbleAvatar(row.msg)"                  />
                 </div>
                 <div class="mc-bwrap">
                   <button
@@ -545,10 +533,7 @@
                   >
                     <UserAvatarVip
                       :size="26"
-                      :src="member.user?.avatarUrl || defaultAvatar"
-                      :vip-tier="Number(member.user?.vipTier) || 0"
-                      :vip-expire-at="member.user?.vipExpireAt"
-                    />
+                      :src="member.user?.avatarUrl || defaultAvatar"                    />
                     <span>{{ memberDisplayName(member) }}</span>
                   </button>
                   <div class="mc-mention-pager">
@@ -770,10 +755,7 @@
                     <div v-for="member in groupAdminMembers" :key="member.id" class="mc-group-admin-item">
                       <UserAvatarVip
                         :size="28"
-                        :src="member.user?.avatarUrl || defaultAvatar"
-                        :vip-tier="Number(member.user?.vipTier) || 0"
-                        :vip-expire-at="member.user?.vipExpireAt"
-                      />
+                        :src="member.user?.avatarUrl || defaultAvatar"                      />
                       <span class="mc-group-admin-name">{{ memberDisplayName(member) }}</span>
                       <span v-if="Number(member.role) === 0" class="mc-group-admin-role is-owner">群主</span>
                       <button
@@ -927,10 +909,7 @@
                 >
                   <UserAvatarVip
                     :size="34"
-                    :src="(item.viewerSide === 'applicant' ? item.ownerUser?.avatarUrl : item.targetUser?.avatarUrl) || defaultAvatar"
-                    :vip-tier="Number(item.viewerSide === 'applicant' ? item.ownerUser?.vipTier : item.targetUser?.vipTier) || 0"
-                    :vip-expire-at="item.viewerSide === 'applicant' ? item.ownerUser?.vipExpireAt : item.targetUser?.vipExpireAt"
-                  />
+                    :src="(item.viewerSide === 'applicant' ? item.ownerUser?.avatarUrl : item.targetUser?.avatarUrl) || defaultAvatar"                  />
                   <span class="mc-join-request-name">
                     {{ item.viewerSide === 'applicant' ? (item.ownerUser?.nickname || '群主') : (item.targetUser?.nickname || '用户') }}
                   </span>
@@ -1220,10 +1199,7 @@
           >
             <UserAvatarVip
               :size="32"
-              :src="member.user?.avatarUrl || defaultAvatar"
-              :vip-tier="Number(member.user?.vipTier) || 0"
-              :vip-expire-at="member.user?.vipExpireAt"
-            />
+              :src="member.user?.avatarUrl || defaultAvatar"            />
             <div class="mc-member-body">
               <span class="mc-member-name">{{ member.user?.nickname || ('用户' + member.user?.id) }}</span>
               <span class="mc-member-meta">
@@ -1454,8 +1430,6 @@ const {
   autoResizeInput,
   bubbleAvatar,
   bubbleImageStyle,
-  bubbleVipExpireAt,
-  bubbleVipTier,
   canFavoriteChatImage,
   canRecallMessage,
   canRecallGroupMessage,

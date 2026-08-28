@@ -47,11 +47,7 @@
           <button type="button" class="music-hall-page__avatar-btn" aria-label="个人主页" @click="goProfile">
             <UserAvatarVip
               :size="32"
-              :src="userStore.avatarUrl || defaultAvatar"
-              :vip-tier="Number(userStore.vipTier) || 0"
-              :vip-expire-at="userStore.vipExpireAt"
-              :show-vip-ring="false"
-            />
+              :src="userStore.avatarUrl || defaultAvatar"            />
           </button>
         </template>
         <template v-else>

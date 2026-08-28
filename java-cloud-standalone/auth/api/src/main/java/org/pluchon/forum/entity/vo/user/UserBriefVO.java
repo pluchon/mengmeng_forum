@@ -5,8 +5,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.pluchon.forum.api.UserInternalVO;
 
-import java.util.Date;
-
 // 用户简洁信息的返回
 @Data
 @AllArgsConstructor
@@ -18,8 +16,6 @@ public class UserBriefVO {
     private Byte isAdmin;
     private String remark;
     private String backgroundUrl;
-    private Byte vipTier;
-    private Date vipExpireAt;
     private String ipRegion;
 
     public static UserBriefVO from(UserInternalVO user) {

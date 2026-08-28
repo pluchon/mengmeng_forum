@@ -65,11 +65,7 @@
           <button type="button" class="home-shell-avatar-btn" aria-label="个人菜单">
             <UserAvatarVip
               :size="36"
-              :src="userStore.avatarUrl || defaultAvatar"
-              :vip-tier="Number(userStore.vipTier) || 0"
-              :vip-expire-at="userStore.vipExpireAt"
-              :show-vip-ring="false"
-            />
+              :src="userStore.avatarUrl || defaultAvatar"            />
           </button>
           <template #dropdown>
             <el-dropdown-menu>

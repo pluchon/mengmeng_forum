@@ -46,12 +46,6 @@ public class EmojiShopDetailVO {
     @Schema(description = "上传者头像 URL")
     private String uploadUserAvatarUrl;
 
-    @Schema(description = "上传者 VIP 等级: 0 普通 1 PRO 2 MAX")
-    private Byte uploadUserVipTier;
-
-    @Schema(description = "上传者 VIP 到期时间")
-    private Date uploadUserVipExpireAt;
-
     @Schema(description = "当前页包内表情图URL列表(按 sort 升序)")
     private List<String> imageUrls;
 

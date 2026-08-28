@@ -103,16 +103,6 @@ export function useHome() {
   // 首页承载分类导航；推荐与热帖榜保持内容流聚焦
   const showCategoryNavigator = computed(() => isHomeFeed.value)
 
-  const effectiveVipTier = computed(() => {
-    const t = Number(userStore.vipTier) || 0
-    if (t <= 0) return 0
-    const exp = userStore.vipExpireAt
-    if (!exp) return t
-    const ms = new Date(exp).getTime()
-    if (Number.isNaN(ms)) return t
-    return Date.now() > ms ? 0 : t
-  })
-
   const boardsInCategory = computed(() => {
     if (!isHomeFeed.value) return []
     if (activeCategoryId.value === 0) return []
@@ -466,7 +456,6 @@ export function useHome() {
     coverImageUrl,
     currentBoardId,
     defaultAvatar,
-    effectiveVipTier,
     ensureHomeFeedLoaded,
     feedError,
     feedForbidden,

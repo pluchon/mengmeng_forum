@@ -51,10 +51,7 @@
         <div class="author">
           <UserAvatarVip
             :size="22"
-            :src="entry.user?.avatarUrl || defaultAvatar"
-            :vip-tier="Number(entry.user?.vipTier) || 0"
-            :vip-expire-at="entry.user?.vipExpireAt"
-          />
+            :src="entry.user?.avatarUrl || defaultAvatar"          />
           <span class="nickname" :title="entry.user?.nickname">{{ displayNickname }}</span>
         </div>
         <div v-if="isQuestion" class="question-answer-count">
