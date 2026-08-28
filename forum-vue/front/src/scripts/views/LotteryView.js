@@ -45,7 +45,7 @@ import {
   PRIZE_JIFEN_WEBP_URL as prizeJifenUrl,
   PRIZE_SHENMI_WEBP_URL as prizeShenmiUrl,
   PRIZE_THANKS_WEBP_URL as prizeThanksUrl,
-  PRIZE_VIP_WEBP_URL as prizeVipUrl,
+  PRO_TIME_TO_TEST_WEBP_URL as prizeVipUrl,
   PRIZE_ZHOUBIAN_WEBP_URL as prizeZhoubianUrl,
 } from '@/utils/clientOss'
 import {

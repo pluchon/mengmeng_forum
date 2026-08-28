@@ -46,6 +46,13 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VipTrialGrantResultVO grantTrialVipDays(Long userId, int days, String sourceType, String idempotencyKey) {
+        return grantTrialVip(userId, Constant.VIP_TIER_PRO, days, sourceType, idempotencyKey);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public VipTrialGrantResultVO grantTrialVip(Long userId, Byte tier, int days,
+                                               String sourceType, String idempotencyKey) {
         if (days <= 0) {
             return null;
         }
@@ -54,8 +61,12 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         boolean maxActive = current != null
                 && Constant.VIP_TIER_MAX.equals(current.getVipTier())
                 && (current.getVipExpireAt() == null || current.getVipExpireAt().after(new Date()));
-        Byte actualTier = maxActive ? Constant.VIP_TIER_MAX : Constant.VIP_TIER_PRO;
-        int actualHours = maxActive ? Math.multiplyExact(days, 12) : Math.multiplyExact(days, 24);
+        boolean grantMax = Constant.VIP_TIER_MAX.equals(tier);
+        Byte actualTier = grantMax || maxActive ? Constant.VIP_TIER_MAX : Constant.VIP_TIER_PRO;
+        // MAX 用户领 PRO 卡按半价折算；MAX 卡本身是顶档，始终足额
+        int actualHours = !grantMax && maxActive
+                ? Math.multiplyExact(days, 12)
+                : Math.multiplyExact(days, 24);
         Date newExpire = vipEntitlementService.extendVipHours(userId, actualTier, actualHours);
         VipQuotaBonusGrant bonus = vipQuotaBonusService.grantTrialBonus(
                 userId, days, sourceType, idempotencyKey);
@@ -72,7 +83,7 @@ public class VipSubscribeServiceImpl implements VipSubscribeService {
         String duration = actualHours % 24 == 0
                 ? (actualHours / 24) + "天"
                 : actualHours + "小时";
-        result.setSummary((maxActive ? "MAX" : "PRO") + "会员延长" + duration);
+        result.setSummary((Constant.VIP_TIER_MAX.equals(actualTier) ? "MAX" : "PRO") + "会员延长" + duration);
         return result;
     }
 

@@ -41,6 +41,9 @@ public class LotteryDrawRecord {
     @Schema(description = "神秘子项数值")
     private Integer mysteryItemValue;
 
+    @Schema(description = "VIP天奖项实发档位 1PRO 2MAX 空按PRO")
+    private Byte grantVipTier;
+
     private String drawBatchKey;
 
     @JsonIgnore

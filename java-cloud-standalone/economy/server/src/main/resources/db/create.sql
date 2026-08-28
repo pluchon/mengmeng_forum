@@ -263,6 +263,7 @@ CREATE TABLE `lottery_draw_record` (
   `is_jackpot` tinyint NOT NULL DEFAULT '0' COMMENT '是否头奖快照',
   `mystery_item_type` tinyint DEFAULT NULL COMMENT '神秘子项类型 4积分/5VIP天',
   `mystery_item_value` int DEFAULT NULL COMMENT '神秘子项数值',
+  `grant_vip_tier` tinyint DEFAULT NULL COMMENT 'VIP天奖项实发档位: 1PRO 2MAX; 空按PRO',
   `draw_batch_key` varchar(40) DEFAULT NULL COMMENT '十连批次UUID',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -317,6 +318,7 @@ CREATE TABLE `lottery_prize_mystery_item` (
   `prize_id` bigint NOT NULL COMMENT '父奖品 lottery_prize.id',
   `item_type` tinyint NOT NULL COMMENT '4积分 5VIP天',
   `item_value` int NOT NULL COMMENT '积分数或VIP天数',
+  `vip_tier` tinyint DEFAULT NULL COMMENT 'VIP天奖项的发放档位: 1PRO 2MAX; 空按PRO',
   `weight` int NOT NULL DEFAULT '1' COMMENT '开奖权重',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '0否 1是',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -739,13 +741,14 @@ INSERT INTO `lottery_prize` (`id`, `name`, `prize_type`, `prize_value`, `stock_q
     (4, '安慰奖', 3, 0, -1, 1, 0, NULL),
     (5, '10~50随机积分', 4, -1, -1, 1, 0, NULL),
     (6, '50积分', 4, 50, -1, 0, 0, NULL),
-    (7, 'VIP体验1天', 5, 1, -1, 1, 0, NULL),
-    (8, 'VIP体验3天', 5, 3, -1, 1, 0, NULL);
+    (7, 'PRO会员体验卡·30天', 5, 30, -1, 1, 0, NULL),
+    (8, 'VIP体验3天', 5, 3, -1, 2, 0, NULL);
 
-INSERT INTO `lottery_prize_mystery_item` (`id`, `prize_id`, `item_type`, `item_value`, `weight`) VALUES
-    (1, 2, 5, 4, 1),
-    (2, 2, 4, 100, 1),
-    (3, 2, 4, 80, 1);
+-- 神秘大奖子奖项：会员奖项只保留一个 MAX 30 天，权重压到千分之一
+INSERT INTO `lottery_prize_mystery_item` (`id`, `prize_id`, `item_type`, `item_value`, `vip_tier`, `weight`) VALUES
+    (2, 2, 4, 100, NULL, 500),
+    (3, 2, 4, 80, NULL, 500),
+    (4, 2, 5, 30, 2, 1);
 
 INSERT INTO `lottery_activity` (`id`, `title`, `description`, `cover_image_url`, `publisher_id`, `cost_points_per_draw`, `status`, `phase`, `start_time`, `end_time`, `delete_state`)
 VALUES (1, '积分幸运抽',
@@ -758,7 +761,8 @@ INSERT INTO `lottery_activity_prize` (`id`, `activity_id`, `prize_id`, `weight`,
     (3, 1, 3, 500, 200, 0, NULL),
     (4, 1, 4, 2000, -1, 0, NULL),
     (5, 1, 5, 2300, -1, 0, NULL),
-    (7, 1, 7, 180, 150, 0, NULL);
+    -- 体验卡由 1 天改 30 天，价值 30 倍，权重从 180 压到 20（约千分之二）并限量
+    (7, 1, 7, 20, 30, 0, NULL);
 
 INSERT INTO `lottery_pool_task` (`activity_id`, `task_code`, `title`, `target_count`, `voucher_reward`, `sort_order`, `enabled`) VALUES
 (1, 'COMMENT_1', '评论 1 次', 1, 1, 10, 1),

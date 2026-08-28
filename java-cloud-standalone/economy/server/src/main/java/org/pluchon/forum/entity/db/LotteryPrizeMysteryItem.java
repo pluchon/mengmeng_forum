@@ -25,6 +25,10 @@ public class LotteryPrizeMysteryItem {
     @TableField("item_value")
     private Integer itemValue;
 
+    // VIP天奖项的发放档位 1PRO 2MAX 空按PRO
+    @TableField("vip_tier")
+    private Byte vipTier;
+
     private Integer weight;
 
     @JsonIgnore

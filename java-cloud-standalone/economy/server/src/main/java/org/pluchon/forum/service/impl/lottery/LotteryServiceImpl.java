@@ -340,7 +340,7 @@ public class LotteryServiceImpl implements LotteryService {
             grantVipDays = record.getPrizeValue() == null ? 0 : record.getPrizeValue();
         }
         String detail = buildRewardDetail(record.getMysteryItemType(), record.getMysteryItemValue(),
-                grantPoints, grantVipDays, record.getPrizeType(),
+                grantPoints, grantVipDays, record.getGrantVipTier(), record.getPrizeType(),
                 record.getPrizeValue() == null ? 0 : record.getPrizeValue());
         return StringUtils.hasText(detail) ? detail : "—";
     }
@@ -552,7 +552,7 @@ public class LotteryServiceImpl implements LotteryService {
             grantVipDays = record.getPrizeValue() == null ? 0 : record.getPrizeValue();
         }
         String rewardDetail = buildRewardDetail(record.getMysteryItemType(), record.getMysteryItemValue(),
-                grantPoints, grantVipDays, record.getPrizeType(),
+                grantPoints, grantVipDays, record.getGrantVipTier(), record.getPrizeType(),
                 record.getPrizeValue() == null ? 0 : record.getPrizeValue());
         Integer times = drawTimesByBatchKey.get(record.getDrawBatchKey());
         LotteryDrawRecordVO vo = new LotteryDrawRecordVO();
@@ -574,7 +574,7 @@ public class LotteryServiceImpl implements LotteryService {
         }
         boolean jackpot = rec.getIsJackpot() != null && rec.getIsJackpot() == 1;
         String rewardDetail = buildRewardDetail(rec.getMysteryItemType(), rec.getMysteryItemValue(),
-                grantPoints, grantVipDays, rec.getPrizeType(),
+                grantPoints, grantVipDays, rec.getGrantVipTier(), rec.getPrizeType(),
                 rec.getPrizeValue() == null ? 0 : rec.getPrizeValue());
         int starlightGranted = starlightService.amountForPrize(rec.getIsJackpot(), rec.getPrizeType());
         return new LotteryDrawItemVO(
@@ -690,6 +690,8 @@ public class LotteryServiceImpl implements LotteryService {
                                           String batchKey) {
         int grantPoints = 0;
         int grantVipDays = 0;
+        // 神秘大奖的 MAX 体验卡需要显式指定档位，普通卡池仍按 PRO
+        Byte grantVipTier = Constant.VIP_TIER_PRO;
         Byte mysteryItemType = null;
         Integer mysteryItemValue = null;
         int prizeValueSnapshot = picked.getPrizeValue() == null ? 0 : picked.getPrizeValue();
@@ -705,6 +707,9 @@ public class LotteryServiceImpl implements LotteryService {
                     prizeValueSnapshot = grantPoints;
                 } else if (Objects.equals(sub.getItemType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
                     grantVipDays = Math.max(0, mysteryItemValue);
+                    if (Constant.VIP_TIER_MAX.equals(sub.getVipTier())) {
+                        grantVipTier = Constant.VIP_TIER_MAX;
+                    }
                 }
             }
         } else if (Objects.equals(picked.getPrizeType(), Constant.LOTTERY_PRIZE_POINTS)) {
@@ -726,6 +731,7 @@ public class LotteryServiceImpl implements LotteryService {
         rec.setIsJackpot(picked.getIsJackpot());
         rec.setMysteryItemType(mysteryItemType);
         rec.setMysteryItemValue(mysteryItemValue);
+        rec.setGrantVipTier(grantVipDays > 0 ? grantVipTier : null);
         rec.setDrawBatchKey(batchKey);
         lotteryDrawRecordMapper.insert(rec);
 
@@ -738,8 +744,8 @@ public class LotteryServiceImpl implements LotteryService {
                     rec.getId(), "积分抽奖·中奖", "lottery_win:" + userId + ":" + rec.getId());
         }
         if (grantVipDays > 0) {
-            vipSubscribeService.grantTrialVipDays(
-                    userId, grantVipDays, "LOTTERY", "LOTTERY:" + rec.getId());
+            vipSubscribeService.grantTrialVip(
+                    userId, grantVipTier, grantVipDays, "LOTTERY", "LOTTERY:" + rec.getId());
         }
 
         boolean jackpot = picked.getIsJackpot() != null && picked.getIsJackpot() == 1;
@@ -755,7 +761,7 @@ public class LotteryServiceImpl implements LotteryService {
             );
         }
         String rewardDetail = buildRewardDetail(mysteryItemType, mysteryItemValue, grantPoints, grantVipDays,
-                picked.getPrizeType(), prizeValueSnapshot);
+                grantVipTier, picked.getPrizeType(), prizeValueSnapshot);
         LotteryDrawItemVO itemVO = new LotteryDrawItemVO(
                 rec.getId(),
                 picked.getPrizeName(),
@@ -784,18 +790,19 @@ public class LotteryServiceImpl implements LotteryService {
     }
 
     private String buildRewardDetail(Byte mysteryItemType, Integer mysteryItemValue, int grantPoints, int grantVipDays,
-                                   Byte prizeType, int prizeValueSnapshot) {
+                                   Byte grantVipTier, Byte prizeType, int prizeValueSnapshot) {
+        String tierLabel = Constant.VIP_TIER_MAX.equals(grantVipTier) ? "MAX" : "PRO";
         if (mysteryItemType != null) {
             if (Objects.equals(mysteryItemType, Constant.LOTTERY_PRIZE_POINTS)) {
                 return "积分 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue);
             }
             if (Objects.equals(mysteryItemType, Constant.LOTTERY_PRIZE_VIP_DAYS)) {
-                return "VIP 体验 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue) + " 天";
+                return tierLabel + "会员体验 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue) + " 天";
             }
             return "神秘子项奖励";
         }
         if (grantVipDays > 0) {
-            return "VIP 体验 " + grantVipDays + " 天";
+            return tierLabel + "会员体验 " + grantVipDays + " 天";
         }
         if (grantPoints > 0) {
             return "积分 " + grantPoints;
