@@ -2,6 +2,7 @@ package org.pluchon.forum.service.impl.captcha;
 
 import cloud.tianai.captcha.application.ImageCaptchaApplication;
 import cloud.tianai.captcha.common.response.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.captcha.CaptchaTicketPurpose;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 // 行为验证码校验与票据签发
+@Slf4j
 @Service
 public class CaptchaFacadeServiceImpl implements CaptchaFacadeService {
 
@@ -27,7 +29,10 @@ public class CaptchaFacadeServiceImpl implements CaptchaFacadeService {
     public CaptchaCheckResponseVO checkAndIssue(CaptchaCheckRequest request) {
         ApiResponse<?> match = imageCaptchaApplication.matching(request.getId(), request.getData());
         if (!match.isSuccess()) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_CAPTCHA_CHECK, match.getMsg()));
+            // 天爱的失败原因是给开发看的英文短语（轨迹校验失败固定返回 "basic check fail"），
+            // 直接透传给用户等于让人看一句看不懂的黑话，只记日志，对外统一用 1168 的文案
+            log.info("行为验证码校验未通过 purpose={} reason={}", request.getPurpose(), match.getMsg());
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_CAPTCHA_CHECK));
         }
         if (!isAllowedPurpose(request.getPurpose())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "purpose 非法"));

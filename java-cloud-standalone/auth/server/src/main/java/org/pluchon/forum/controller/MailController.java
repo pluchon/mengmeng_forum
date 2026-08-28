@@ -8,6 +8,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.common.utils.HttpRequestUtils;
 import org.pluchon.forum.entity.vo.user.AuthLoginResultVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
 import org.pluchon.forum.service.interfaces.user.MailCodeService;
@@ -36,25 +37,31 @@ public class MailController {
                                              HttpServletRequest request,
                                              HttpServletResponse response) {
         if (!StringUtils.hasText(code)) {
-            return Result.success(userAuthFlowService.sendMailLoginCode(email, captchaTicket));
+            return Result.success(userAuthFlowService.sendMailLoginCode(email, captchaTicket, request));
         }
         AuthLoginResultVO login = userAuthFlowService.loginByMail(email, code, captchaTicket, request);
         applyAuthHeaders(response, login);
         return Result.success(login.getUser());
     }
 
-    @Operation(summary = "绑定/修改邮箱", description = "code 为空时向新邮箱发送验证码；code 非空时校验并绑定到当前账号")
+    @Operation(summary = "绑定/修改邮箱",
+            description = "code 为空时向新邮箱发送验证码；code 非空时校验并绑定到当前账号。"
+                    + "账号已绑过邮箱时属于改绑，必须同时提交 currentPassword")
     @PostMapping("/verifyAndBind")
-    public Result<String> verifyAndBind(@RequestParam String email, @RequestParam(required = false) String code, HttpServletRequest request) {
+    public Result<String> verifyAndBind(@RequestParam String email,
+                                        @RequestParam(required = false) String code,
+                                        @RequestParam(required = false) String currentPassword,
+                                        HttpServletRequest request) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (sessionUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         if (!StringUtils.hasText(code)) {
-            mailCodeService.send(email);
+            mailCodeService.sendForBind(email, sessionUser.getId(),
+                    HttpRequestUtils.resolveClientIp(request));
             return Result.success("验证码已发送至您的邮箱~");
         }
-        mailCodeService.verifyAndBind(email, code, sessionUser.getId());
+        mailCodeService.verifyAndBind(email, code, sessionUser.getId(), currentPassword);
         return Result.success("邮箱绑定成功~");
     }
 

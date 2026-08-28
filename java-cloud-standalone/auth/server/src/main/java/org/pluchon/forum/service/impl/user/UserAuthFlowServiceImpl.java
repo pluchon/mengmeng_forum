@@ -7,6 +7,7 @@ import org.pluchon.forum.common.captcha.CaptchaTicketPurpose;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.HttpRequestUtils;
 import org.pluchon.forum.converter.UserConverter;
 import org.pluchon.forum.entity.db.User;
 import org.pluchon.forum.entity.dto.user.ModifyUserRequest;
@@ -70,9 +71,9 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
     }
 
     @Override
-    public String sendMailLoginCode(String email, String captchaTicket) {
+    public String sendMailLoginCode(String email, String captchaTicket, HttpServletRequest httpRequest) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.MAIL_SEND);
-        mailCodeService.send(email);
+        mailCodeService.sendForLogin(email, HttpRequestUtils.resolveClientIp(httpRequest));
         return "验证码已发送至您的邮箱~";
     }
 
@@ -88,16 +89,16 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
     }
 
     @Override
-    public String sendSmsLoginCode(String phoneNumber, String captchaTicket) {
+    public String sendSmsLoginCode(String phoneNumber, String captchaTicket, HttpServletRequest httpRequest) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.SMS_SEND);
-        smsCodeService.send(phoneNumber);
+        smsCodeService.sendForLogin(phoneNumber, HttpRequestUtils.resolveClientIp(httpRequest));
         return "验证码已发送~";
     }
 
     @Override
-    public String sendResetCodeByMail(String email, String captchaTicket) {
+    public String sendResetCodeByMail(String email, String captchaTicket, HttpServletRequest httpRequest) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.RESET_SEND);
-        mailCodeService.sendForReset(email);
+        mailCodeService.sendForReset(email, HttpRequestUtils.resolveClientIp(httpRequest));
         return "重置密码验证码已发送至您的邮箱~";
     }
 
@@ -108,29 +109,40 @@ public class UserAuthFlowServiceImpl implements UserAuthFlowService {
     }
 
     @Override
-    public String sendResetCodeBySms(Long sessionUserId, String phoneNumber, String captchaTicket) {
+    public String sendResetCodeBySms(Long sessionUserId, boolean useBoundPhone, String phoneNumber,
+                                     String captchaTicket, HttpServletRequest httpRequest) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.RESET_SEND);
-        boolean useBoundPhone = sessionUserId != null
-                && (!StringUtils.hasText(phoneNumber) || phoneNumber.contains("*"));
+        String clientIp = HttpRequestUtils.resolveClientIp(httpRequest);
         if (useBoundPhone) {
-            smsCodeService.sendForResetBound(sessionUserId);
+            smsCodeService.sendForResetBound(requireSessionUser(sessionUserId), clientIp);
         } else {
-            smsCodeService.sendForReset(phoneNumber);
+            smsCodeService.sendForReset(phoneNumber, clientIp);
         }
         return "重置密码验证码已发送~";
     }
 
     @Override
-    public void completeResetBySms(Long sessionUserId, String phoneNumber, String code, String newPassword,
-                                   String captchaTicket) {
+    public void completeResetBySms(Long sessionUserId, boolean useBoundPhone, String phoneNumber, String code,
+                                   String newPassword, String captchaTicket) {
         requireCaptchaTicket(captchaTicket, CaptchaTicketPurpose.RESET_SUBMIT);
-        boolean useBoundPhone = sessionUserId != null
-                && (!StringUtils.hasText(phoneNumber) || phoneNumber.contains("*"));
         if (useBoundPhone) {
-            passwordResetService.resetByBoundSms(sessionUserId, code, newPassword);
+            passwordResetService.resetByBoundSms(requireSessionUser(sessionUserId), code, newPassword);
         } else {
             passwordResetService.resetBySms(phoneNumber, code, newPassword);
         }
+    }
+
+    // "用我已绑定的手机号"只有登录态才说得通，游客带这个标记进来必须挡住
+    private Long requireSessionUser(Long sessionUserId) {
+        if (sessionUserId == null) {
+            throw new ApplicationException(Result.fail(ResultCode.USER_UNLOGIN));
+        }
+        return sessionUserId;
+    }
+
+    @Override
+    public void changePasswordByCurrent(Long userId, String currentPassword, String newPassword) {
+        passwordResetService.changeByCurrentPassword(userId, currentPassword, newPassword);
     }
 
     @Override

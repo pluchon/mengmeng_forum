@@ -1,4 +1,4 @@
-import { factConfirm } from '@/utils/appDialog'
+import { iconConfirm } from '@/utils/appDialog'
 import router from '@/router'
 
 let activeLoginPrompt = null
@@ -9,11 +9,15 @@ export async function promptLogin(_message = '') {
 
   activeLoginPrompt = (async () => {
     try {
-      const ok = await factConfirm({
+      // 游客随时可以放弃这个操作接着逛，所以给一个明确的"再逛逛"出口，
+      // 点遮罩和右上角关闭也都放行；单按钮弹窗会把人困在这里
+      const ok = await iconConfirm({
         title: '需要登录',
         message: '登录后即可继续当前操作。',
         confirmText: '去登录',
-        tone: 'warn',
+        cancelText: '再逛逛',
+        closeOnClickModal: true,
+        showClose: true,
       })
       if (!ok) return false
       const redirect = router.currentRoute.value?.fullPath

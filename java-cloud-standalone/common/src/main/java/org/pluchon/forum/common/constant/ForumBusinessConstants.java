@@ -53,6 +53,11 @@ public final class ForumBusinessConstants {
     public static final int MAIL_MAX_COUNT = 10;
     public static final int LOGIN_FAIL_MAX = 5;
 
+    // 同一 IP 30 分钟内可发送的验证码总条数，短信 + 邮件合计
+    public static final int CODE_SEND_IP_MAX_COUNT = 20;
+    // 同一 IP 10 分钟内可生成的行为验证码次数
+    public static final int CAPTCHA_IP_MAX_COUNT = 30;
+
     public static final int SECURITY_LOGIN_SAMPLE_LIMIT = 30;
     public static final int SECURITY_LOGIN_WINDOW_DAYS = 7;
     public static final int SECURITY_DISTINCT_IP_RISK = 4;

@@ -11,4 +11,8 @@ public interface PasswordResetService {
 
     // 已登录用户通过当前绑定手机号重置密码，前端只需要提交验证码与新密码
     void resetByBoundSms(Long userId, String code, String newPassword);
+
+    // 已登录用户凭当前密码直接改密码，不发验证码
+    // 手机停机 / 邮箱登不上时仍能自助改密，也省掉一条计费短信
+    void changeByCurrentPassword(Long userId, String currentPassword, String newPassword);
 }

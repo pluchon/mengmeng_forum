@@ -54,6 +54,14 @@ public final class Constant {
     public static final String REDIS_KEY_SMS_COOLDOWN = ForumRedisKeys.SMS_COOLDOWN;
     public static final String REDIS_KEY_SMS_COUNT = ForumRedisKeys.SMS_COUNT;
     public static final long REDIS_TTL_SMS_COUNT = ForumRedisKeys.TTL_SMS_COUNT;
+    public static final String REDIS_KEY_ARTICLE_VISIT_DEDUP = ForumRedisKeys.ARTICLE_VISIT_DEDUP;
+    public static final long REDIS_TTL_ARTICLE_VISIT_DEDUP = ForumRedisKeys.TTL_ARTICLE_VISIT_DEDUP;
+
+    public static final String REDIS_KEY_CODE_IP_COUNT = ForumRedisKeys.CODE_IP_COUNT;
+    public static final long REDIS_TTL_CODE_IP_COUNT = ForumRedisKeys.TTL_CODE_IP_COUNT;
+    public static final String REDIS_KEY_CAPTCHA_IP_COUNT = ForumRedisKeys.CAPTCHA_IP_COUNT;
+    public static final long REDIS_TTL_CAPTCHA_IP_COUNT = ForumRedisKeys.TTL_CAPTCHA_IP_COUNT;
+
     public static final String REDIS_KEY_MAIL_VERIFY = ForumRedisKeys.MAIL_VERIFY;
     public static final String REDIS_KEY_MAIL_VERIFY_RESET = ForumRedisKeys.MAIL_VERIFY_RESET;
     public static final String REDIS_KEY_MAIL_COOLDOWN = ForumRedisKeys.MAIL_COOLDOWN;
@@ -128,6 +136,8 @@ public final class Constant {
     public static final int MUSIC_HOT_AUTHOR_MAX_PER_LIST = ForumBusinessConstants.MUSIC_HOT_AUTHOR_MAX_PER_LIST;
     public static final int SMS_MAX_COUNT = ForumBusinessConstants.SMS_MAX_COUNT;
     public static final int MAIL_MAX_COUNT = ForumBusinessConstants.MAIL_MAX_COUNT;
+    public static final int CODE_SEND_IP_MAX_COUNT = ForumBusinessConstants.CODE_SEND_IP_MAX_COUNT;
+    public static final int CAPTCHA_IP_MAX_COUNT = ForumBusinessConstants.CAPTCHA_IP_MAX_COUNT;
     public static final int LOGIN_FAIL_MAX = ForumBusinessConstants.LOGIN_FAIL_MAX;
     public static final int SECURITY_LOGIN_SAMPLE_LIMIT = ForumBusinessConstants.SECURITY_LOGIN_SAMPLE_LIMIT;
     public static final int SECURITY_LOGIN_WINDOW_DAYS = ForumBusinessConstants.SECURITY_LOGIN_WINDOW_DAYS;

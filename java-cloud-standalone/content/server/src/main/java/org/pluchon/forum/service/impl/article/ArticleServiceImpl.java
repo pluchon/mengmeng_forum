@@ -172,7 +172,7 @@ public class ArticleServiceImpl implements ArticleService {
     // 详情
     
     @Override
-    public ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId) {
+    public ArticleDetailResponse queryArticleDetailByArticleId(Long articleId, Long loginUserId, String clientIp) {
         if (articleId == null || articleId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
@@ -180,7 +180,7 @@ public class ArticleServiceImpl implements ArticleService {
         if (!ArticleStatus.isPublished(articleInfo.getStatus()) && !Objects.equals(loginUserId, articleInfo.getUserId())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
-        if (articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+        if (shouldCountVisit(articleId, clientIp) && articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 // 显式锁住 update_time，避免 ON UPDATE CURRENT_TIMESTAMP 把浏览当成内容更新
                 .setSql("visit_count = visit_count + 1, update_time = update_time")) > 0) {
@@ -475,6 +475,18 @@ public class ArticleServiceImpl implements ArticleService {
             profileUser.setIpRegion(null);
         }
         return new ArticleListByUserIdPageResponse(pageResult, profileUser, isOwner);
+    }
+
+    // 帖子详情对游客开放，不去重的话一个 curl 循环就能刷高浏览量并把帖子顶上热榜。
+    // 按 IP + 帖子做 10 分钟去重，同一个人反复刷新本来也不该算多次浏览
+    private boolean shouldCountVisit(Long articleId, String clientIp) {
+        if (!StringUtils.hasText(clientIp)) {
+            return true;
+        }
+        String key = Constant.REDIS_KEY_ARTICLE_VISIT_DEDUP + articleId + ":" + clientIp;
+        Boolean first = stringRedisTemplate.opsForValue()
+                .setIfAbsent(key, "1", Constant.REDIS_TTL_ARTICLE_VISIT_DEDUP, TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(first);
     }
 
     private Page<Article> buildUserArticlePage(Long userId, int pageNum, int pageSize) {

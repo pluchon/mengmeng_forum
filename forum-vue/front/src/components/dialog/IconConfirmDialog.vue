@@ -4,8 +4,8 @@
     :width="width"
     append-to-body
     align-center
-    :show-close="false"
-    :close-on-click-modal="false"
+    :show-close="showClose"
+    :close-on-click-modal="closeOnClickModal"
     :close-on-press-escape="!loading"
     :z-index="zIndex"
     class="app-dialog icon-confirm-dialog"

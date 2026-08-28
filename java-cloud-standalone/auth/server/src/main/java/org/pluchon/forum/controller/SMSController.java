@@ -8,6 +8,7 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
+import org.pluchon.forum.common.utils.HttpRequestUtils;
 import org.pluchon.forum.entity.vo.user.AuthLoginResultVO;
 import org.pluchon.forum.entity.vo.user.UserSessionVO;
 import org.pluchon.forum.service.interfaces.user.SMSCodeService;
@@ -36,25 +37,31 @@ public class SMSController {
                                             HttpServletRequest request,
                                             HttpServletResponse response) {
         if (!StringUtils.hasText(code)) {
-            return Result.success(userAuthFlowService.sendSmsLoginCode(phoneNumber, captchaTicket));
+            return Result.success(userAuthFlowService.sendSmsLoginCode(phoneNumber, captchaTicket, request));
         }
         AuthLoginResultVO login = userAuthFlowService.loginBySms(phoneNumber, code, captchaTicket, request);
         applyAuthHeaders(response, login);
         return Result.success(login.getUser());
     }
 
-    @Operation(summary = "绑定/修改手机号", description = "code 为空时向新号码发送验证码；code 非空时校验并绑定")
+    @Operation(summary = "绑定/修改手机号",
+            description = "code 为空时向新号码发送验证码；code 非空时校验并绑定。"
+                    + "账号已绑过手机号时属于改绑，必须同时提交 currentPassword")
     @PostMapping("/verifyAndBind")
-    public Result<String> verifyAndBind(@RequestParam String phoneNumber, @RequestParam(required = false) String code, HttpServletRequest request) {
+    public Result<String> verifyAndBind(@RequestParam String phoneNumber,
+                                        @RequestParam(required = false) String code,
+                                        @RequestParam(required = false) String currentPassword,
+                                        HttpServletRequest request) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         if (sessionUser == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         if (!StringUtils.hasText(code)) {
-            smsCodeService.sendForBind(phoneNumber, sessionUser.getId());
+            smsCodeService.sendForBind(phoneNumber, sessionUser.getId(),
+                    HttpRequestUtils.resolveClientIp(request));
             return Result.success("验证码已发送~");
         }
-        smsCodeService.verifyAndBind(phoneNumber, code, sessionUser.getId());
+        smsCodeService.verifyAndBind(phoneNumber, code, sessionUser.getId(), currentPassword);
         return Result.success("手机号绑定成功~");
     }
 

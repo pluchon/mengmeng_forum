@@ -1,8 +1,8 @@
-import { computed, ref, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { login as apiLogin, smsLogin, mailLogin } from '@/api/auth'
 import { ElMessage } from 'element-plus'
-import { shakeAuthFormErrors } from '@/utils/authFormShake'
+import { validateAuthField, validateAuthForm } from '@/utils/authFormShake'
 import {
   AUTH_MSG,
   containsDangerousInput,
@@ -190,14 +190,7 @@ export function useSignIn(captchaDialogRef) {
 
   const handleSendCode = async () => {
     if (smsCodeBusy.value) return
-
-    try {
-      await phoneFormRef.value.validateField('phoneNum')
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(phoneFormRef.value)
-      return
-    }
+    if (!await validateAuthField(phoneFormRef.value, 'phoneNum')) return
 
     smsCodePhase.value = 'sending'
     try {
@@ -214,21 +207,16 @@ export function useSignIn(captchaDialogRef) {
       } else {
         smsCodePhase.value = 'idle'
       }
-    } catch {
+    } catch (err) {
       smsCodePhase.value = 'idle'
+      // 后端现在发码前就会查号码是否注册，未注册直接在这一步给出提示
+      notifyUnboundAccount(err)
     }
   }
 
   const handleSendMailCode = async () => {
     if (mailCodeBusy.value) return
-
-    try {
-      await emailCodeFormRef.value.validateField('email')
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(emailCodeFormRef.value)
-      return
-    }
+    if (!await validateAuthField(emailCodeFormRef.value, 'email')) return
 
     mailCodePhase.value = 'sending'
     try {
@@ -245,9 +233,25 @@ export function useSignIn(captchaDialogRef) {
       } else {
         mailCodePhase.value = 'idle'
       }
-    } catch {
+    } catch (err) {
       mailCodePhase.value = 'idle'
+      notifyUnboundAccount(err)
     }
+  }
+
+  // 1115 / 1119 在全局拦截器里是静默的，这里自己给提示并引导去注册
+  const notifyUnboundAccount = (err) => {
+    if (err?.code === 1115) {
+      ElMessage.info('该手机号未绑定账号')
+      router.push('/sign-up')
+      return true
+    }
+    if (err?.code === 1119) {
+      ElMessage.info('该邮箱未绑定账号')
+      router.push('/sign-up')
+      return true
+    }
+    return false
   }
 
   const afterLoginSuccess = () => {
@@ -270,14 +274,7 @@ export function useSignIn(captchaDialogRef) {
     else if (tab === 'emailPassword') formRef = emailPasswordFormRef.value
 
     if (!formRef) return
-
-    try {
-      await formRef.validate()
-    } catch {
-      await nextTick()
-      shakeAuthFormErrors(formRef)
-      return
-    }
+    if (!await validateAuthForm(formRef)) return
 
     loading.value = true
     try {
@@ -331,10 +328,7 @@ export function useSignIn(captchaDialogRef) {
 
       afterLoginSuccess()
     } catch (err) {
-      if (err && err.code === 1115) {
-        ElMessage.info('该手机号未绑定账号')
-        router.push('/sign-up')
-      }
+      notifyUnboundAccount(err)
     } finally {
       loading.value = false
     }
