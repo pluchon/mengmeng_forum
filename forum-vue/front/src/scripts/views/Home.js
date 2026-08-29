@@ -240,7 +240,11 @@ export function useHome() {
     }
   }
 
+  // 快速连点板块会并发发请求，谁后返回谁显示——点"动画番剧"却出"游戏电玩"的内容
+  let feedLoadSeq = 0
+
   async function fetchArticles(page = 1, opts = {}) {
+    const seq = ++feedLoadSeq
     const preserveScroll = opts?.preserveScroll === true
     pageNum.value = page
     loading.value = true
@@ -255,11 +259,13 @@ export function useHome() {
       const res = isRecommendationFeed.value
         ? await getRecommendationFeed(params)
         : await getArticleList({ ...params, boardId: currentBoardId.value || 0 })
+      if (seq !== feedLoadSeq) return
       if (res.code === 0) {
         articleList.value = res.data?.records || []
         total.value = res.data?.total || 0
       }
     } catch (error) {
+      if (seq !== feedLoadSeq) return
       articleList.value = []
       total.value = 0
       const status = Number(error?.response?.status)
@@ -283,10 +289,14 @@ export function useHome() {
         feedError.value = error?.message || '内容加载失败，请稍后重试'
       }
     } finally {
-      if (!preserveScroll) {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (seq === feedLoadSeq) {
+        // 用 auto 不用 smooth：平滑滚动要持续几百毫秒，
+        // 关闭详情返回首页时会和收起动画抢帧
+        if (!preserveScroll) {
+          window.scrollTo({ top: 0, behavior: 'auto' })
+        }
+        loading.value = false
       }
-      loading.value = false
     }
   }
 

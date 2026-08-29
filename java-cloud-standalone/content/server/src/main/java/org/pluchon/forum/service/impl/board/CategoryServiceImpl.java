@@ -56,14 +56,22 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     public List<CategoryWithBoards> getCategoryWithBoards() {
         List<Category> categories = queryAllCategories();
+        if (categories.isEmpty()) {
+            return List.of();
+        }
+        // 原本按分类逐个查板块，11 个分类就是 12 次查询，而这个接口每次打开首页都会调。
+        // 一次查完在内存分组，和下面按分类查帖子那处的做法保持一致
+        List<Long> categoryIds = categories.stream().map(Category::getId).toList();
+        List<Board> allBoards = boardMapper.selectList(new LambdaQueryWrapper<Board>()
+                .in(Board::getCategoryId, categoryIds).eq(Board::getState, 0)
+                .eq(Board::getDeleteState, 0).orderByAsc(Board::getSort));
+        Map<Long, List<Board>> boardsByCategory = allBoards.stream()
+                .collect(Collectors.groupingBy(Board::getCategoryId));
         List<CategoryWithBoards> result = new ArrayList<>();
         for (Category category : categories) {
             CategoryWithBoards item = new CategoryWithBoards();
             item.setCategory(category);
-            List<Board> boards = boardMapper.selectList(new LambdaQueryWrapper<Board>()
-                    .eq(Board::getCategoryId, category.getId()).eq(Board::getState, 0)
-                    .eq(Board::getDeleteState, 0).orderByAsc(Board::getSort));
-            item.setBoardList(boards);
+            item.setBoardList(boardsByCategory.getOrDefault(category.getId(), List.of()));
             result.add(item);
         }
         return result;

@@ -152,6 +152,14 @@ public final class Constant {
     public static final int SEARCH_RAG_CANDIDATE_LIMIT = ForumBusinessConstants.SEARCH_RAG_CANDIDATE_LIMIT;
     public static final int SEARCH_INVERTED_MAX_RESULTS = ForumBusinessConstants.SEARCH_INVERTED_MAX_RESULTS;
     public static final int SEARCH_RAG_MAX_RESULTS = ForumBusinessConstants.SEARCH_RAG_MAX_RESULTS;
+    public static final int AI_SEARCH_MAX_PER_MINUTE = ForumBusinessConstants.AI_SEARCH_MAX_PER_MINUTE;
+    public static final int AI_SEARCH_MAX_PER_DAY = ForumBusinessConstants.AI_SEARCH_MAX_PER_DAY;
+    public static final String REDIS_KEY_AI_SEARCH_MINUTE = ForumRedisKeys.AI_SEARCH_MINUTE;
+    public static final long REDIS_TTL_AI_SEARCH_MINUTE = ForumRedisKeys.TTL_AI_SEARCH_MINUTE;
+    public static final String REDIS_KEY_AI_SEARCH_DAY = ForumRedisKeys.AI_SEARCH_DAY;
+    public static final long REDIS_TTL_AI_SEARCH_DAY = ForumRedisKeys.TTL_AI_SEARCH_DAY;
+    public static final String REDIS_KEY_AI_SEARCH_RANK = ForumRedisKeys.AI_SEARCH_RANK;
+    public static final long REDIS_TTL_AI_SEARCH_RANK = ForumRedisKeys.TTL_AI_SEARCH_RANK;
     public static final String SEARCH_SOURCE_DB = ForumBusinessConstants.SEARCH_SOURCE_DB;
     public static final String SEARCH_SOURCE_INV = ForumBusinessConstants.SEARCH_SOURCE_INV;
     public static final String SEARCH_SOURCE_RAG = ForumBusinessConstants.SEARCH_SOURCE_RAG;

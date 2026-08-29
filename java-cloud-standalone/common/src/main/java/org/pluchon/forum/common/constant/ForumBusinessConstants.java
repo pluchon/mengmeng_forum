@@ -29,9 +29,16 @@ public final class ForumBusinessConstants {
     public static final int REPLY_MEDIA_MAX_TOTAL = 8;
 
     public static final double HOT_SCORE_WEIGHT_LIKE = 1.0;
-    public static final double HOT_SCORE_WEIGHT_VISIT = 1.0;
+    // 浏览是成本最低的行为：游客也算，IP 去重过期就能再计一次，全程不用登录。
+    // 与点赞等权会让热帖榜实质变成浏览量榜，也把最容易刷的维度顶到了最前面
+    public static final double HOT_SCORE_WEIGHT_VISIT = 0.1;
     public static final double HOT_SCORE_WEIGHT_FAVORITE = 0.7;
     public static final double HOT_SCORE_WEIGHT_REPLY = 0.5;
+
+    // AI 搜索一次最多打三次 Python（候选打分 / 向量兜底 / 作者相似兜底），
+    // 且搜不到结果的查询三次全跑，是全站唯一没有配额的 AI 入口
+    public static final int AI_SEARCH_MAX_PER_MINUTE = 10;
+    public static final int AI_SEARCH_MAX_PER_DAY = 100;
 
     public static final int HOT_RANK_WINDOW_DAYS = 7;
 

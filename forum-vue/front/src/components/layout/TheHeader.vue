@@ -11,6 +11,7 @@
       <div v-if="route.path !== '/privacy' && route.path !== '/terms'" class="header-center">
         <el-input
           v-model="searchQuery"
+          :maxlength="100"
           placeholder="搜索感兴趣的内容"
           :prefix-icon="Search"
           class="red-search-input"

@@ -36,7 +36,8 @@ public class SearchController {
                                                        HttpServletRequest request) {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
         boolean preferAiRag = loginUser != null && ("1".equals(ai) || "true".equalsIgnoreCase(ai));
-        return Result.success(searchService.searchArticles(keyword, pageNum, pageSize, preferAiRag));
+        Long viewerId = loginUser == null ? null : loginUser.getId();
+        return Result.success(searchService.searchArticles(keyword, pageNum, pageSize, preferAiRag, viewerId));
     }
 
     @Operation(summary = "搜索用户",

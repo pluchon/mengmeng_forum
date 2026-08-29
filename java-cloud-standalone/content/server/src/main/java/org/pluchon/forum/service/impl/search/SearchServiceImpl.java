@@ -10,6 +10,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.converter.SearchUserConverter;
 import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.db.Article;
@@ -62,6 +63,9 @@ public class SearchServiceImpl implements SearchService {
         return kw;
     }
     @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
     private ArticleMapper articleMapper;
 
     @Autowired
@@ -83,7 +87,8 @@ public class SearchServiceImpl implements SearchService {
     private org.pluchon.forum.service.interfaces.article.ArticleMediaService articleMediaService;
 
     @Override
-    public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize, boolean preferAiRag) {
+    public SearchArticleResponse searchArticles(String keyword, Integer pageNum, Integer pageSize,
+                                                boolean preferAiRag, Long viewerId) {
         String kw = normalizeSearchKeyword(keyword);
         int p = PageUtils.getValidPageNum(pageNum);
         int s = PageUtils.getValidPageSize(pageSize);
@@ -92,7 +97,62 @@ public class SearchServiceImpl implements SearchService {
             return searchArticlesTraditionally(kw, p, s);
         }
 
-        return searchArticlesByAiRag(kw, p, s);
+        return searchArticlesByAiRag(kw, p, s, viewerId);
+    }
+
+    // AI 搜索是全站唯一没有配额的 AI 入口，而一次查询最多打三次 Python，
+    // 且搜不到结果的查询三次全跑。命中排序缓存（翻页）不算配额
+    private void assertAiSearchQuota(Long viewerId) {
+        if (viewerId == null) {
+            return;
+        }
+        if (!RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_AI_SEARCH_MINUTE + viewerId,
+                Constant.AI_SEARCH_MAX_PER_MINUTE, Constant.REDIS_TTL_AI_SEARCH_MINUTE)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_SEARCH_RATE_LIMIT));
+        }
+        if (!RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_AI_SEARCH_DAY + viewerId,
+                Constant.AI_SEARCH_MAX_PER_DAY, Constant.REDIS_TTL_AI_SEARCH_DAY)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_SEARCH_DAILY_LIMIT));
+        }
+    }
+
+    // 排序结果缓存：同一个人搜同一个词，排序是确定的，翻页不该把整条 RAG 流水线重跑一遍。
+    // 只缓存 ID 顺序，可见性仍由 retainPublishedArticleIds 每次现查，避免命中缓存期间展示已下架的帖子
+    private String aiRankCacheKey(Long viewerId, String query) {
+        if (viewerId == null || !StringUtils.hasText(query)) {
+            return null;
+        }
+        return Constant.REDIS_KEY_AI_SEARCH_RANK + viewerId + ":" + Integer.toHexString(query.hashCode());
+    }
+
+    private List<Long> readAiRankCache(String key) {
+        if (key == null) {
+            return List.of();
+        }
+        String cached = stringRedisTemplate.opsForValue().get(key);
+        if (!StringUtils.hasText(cached)) {
+            return List.of();
+        }
+        List<Long> ids = new ArrayList<>();
+        for (String part : cached.split(",")) {
+            try {
+                ids.add(Long.valueOf(part));
+            } catch (NumberFormatException ignored) {
+                // 脏数据直接跳过，当作没命中
+            }
+        }
+        return ids;
+    }
+
+    private void writeAiRankCache(String key, List<Long> ids) {
+        if (key == null || ids == null || ids.isEmpty()) {
+            return;
+        }
+        String joined = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+        stringRedisTemplate.opsForValue().set(key, joined,
+                Constant.REDIS_TTL_AI_SEARCH_RANK, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private SearchArticleResponse searchArticlesTraditionally(String keyword, int page, int size) {
@@ -180,11 +240,17 @@ public class SearchServiceImpl implements SearchService {
     }
 
     // AI 语义搜索：先清洗噪声词，再从 DB 捞字面相关候选，hybrid_rank 打分；低分丢弃。 候选为空时再走向量兜底，且使用更高阈值，避免无关结果
-    private SearchArticleResponse searchArticlesByAiRag(String kw, int p, int s) {
+    private SearchArticleResponse searchArticlesByAiRag(String kw, int p, int s, Long viewerId) {
         String query = SearchKeywordHelper.sanitizeAiSearchQuery(kw);
         if (!StringUtils.hasText(query)) {
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
         }
+        String cacheKey = aiRankCacheKey(viewerId, query);
+        List<Long> cachedIds = readAiRankCache(cacheKey);
+        if (!cachedIds.isEmpty()) {
+            return buildAiRagResponse(kw, cachedIds, p, s);
+        }
+        assertAiSearchQuota(viewerId);
         List<Long> rankedIds = new ArrayList<>();
 
         List<Long> candidateIds = articleSearchIndexService.searchPublishedIds(
@@ -230,19 +296,25 @@ public class SearchServiceImpl implements SearchService {
         if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
             rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
         }
-        rankedIds = retainPublishedArticleIds(rankedIds);
-        if (rankedIds.isEmpty()) {
+        writeAiRankCache(cacheKey, rankedIds);
+        return buildAiRagResponse(kw, rankedIds, p, s);
+    }
+
+    // 可见性每次现查：缓存里只有 ID 顺序，5 分钟内被下架的帖子不能因为命中缓存就漏出去
+    private SearchArticleResponse buildAiRagResponse(String kw, List<Long> rankedIds, int p, int s) {
+        List<Long> visibleIds = retainPublishedArticleIds(rankedIds);
+        if (visibleIds.isEmpty()) {
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(p, s));
         }
-        long total = rankedIds.size();
+        long total = visibleIds.size();
         int fromIdx = (p - 1) * s;
-        int toIdx = Math.min(fromIdx + s, rankedIds.size());
-        List<Long> pageSlice = fromIdx >= rankedIds.size() ? Collections.emptyList()
-                : rankedIds.subList(fromIdx, toIdx);
+        int toIdx = Math.min(fromIdx + s, visibleIds.size());
+        List<Long> pageSlice = fromIdx >= visibleIds.size() ? Collections.emptyList()
+                : visibleIds.subList(fromIdx, toIdx);
         List<ArticleListResponse> records = buildListResponsesForRag(pageSlice);
         long pages = (total + s - 1) / s;
         PageResult<ArticleListResponse> pageResult = new PageResult<>(
-                records, total, p, s, pages, toIdx < rankedIds.size());
+                records, total, p, s, pages, toIdx < visibleIds.size());
         return new SearchArticleResponse(Constant.SEARCH_SOURCE_RAG, kw, pageResult);
     }
 
@@ -714,6 +786,15 @@ public class SearchServiceImpl implements SearchService {
                 .orderByDesc(Article::getUpdateTime);
     }
 
+    // MyBatis-Plus 的 like 会参数化，没有注入风险；但 % 和 _ 仍会被 MySQL 当通配符。
+    // 搜一个 % 就能匹配全表，把候选上限那么多条捞出来在内存里排序
+    private String escapeLikeWildcards(String term) {
+        if (term == null) {
+            return null;
+        }
+        return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     @SafeVarargs
     private <T> void applyTextLike(
             com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<T> w,
@@ -721,12 +802,13 @@ public class SearchServiceImpl implements SearchService {
             com.baomidou.mybatisplus.core.toolkit.support.SFunction<T, ?>... columns) {
         boolean first = true;
         for (String term : terms) {
+            String safe = escapeLikeWildcards(term);
             for (var col : columns) {
                 if (first) {
-                    w.like(col, term);
+                    w.like(col, safe);
                     first = false;
                 } else {
-                    w.or().like(col, term);
+                    w.or().like(col, safe);
                 }
             }
         }

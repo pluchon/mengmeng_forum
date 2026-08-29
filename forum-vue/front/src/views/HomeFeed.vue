@@ -63,16 +63,6 @@
       }"
     >
       <div
-        v-if="loading && !feedList.length"
-        class="home-feed-area-skeleton"
-        aria-busy="true"
-        aria-live="polite"
-        aria-label="帖子加载中"
-      >
-        <el-skeleton animated :rows="14" />
-      </div>
-
-      <div
         v-if="!loading && feedList.length"
         class="recommendation-feed-stage"
       >
@@ -100,8 +90,6 @@
                 class="note-cover note-cover--fluid"
                 :class="{ 'is-aspect-locked': !!coverAspectById[item.article?.id] }"
                 :style="coverAspectStyle(item.article?.id)"
-                @mouseenter="onCoverHoverEnter(item.entry)"
-                @mouseleave="onCoverHoverLeave(item.entry)"
               >
                 <img
                   v-if="displayCoverUrl(item.entry)"
@@ -175,7 +163,7 @@
                   <div class="author">
                     <UserAvatarVip
                       :size="22"
-                      :src="item.entry?.user?.avatarUrl || defaultAvatar"                    />
+                      :src="ossAvatarUrl(item.entry?.user?.avatarUrl) || defaultAvatar"                    />
                     <span class="nickname" :title="item.entry?.user?.nickname || '匿名用户'">{{ formatCardNickname(item.entry?.user?.nickname || '匿名用户') }}</span>
                   </div>
                   <div class="likes">
@@ -235,10 +223,13 @@
         />
       </div>
 
-      <el-empty
+      <div
         v-if="!loading && !feedError && feedList.length === 0"
-        description="这里还没有帖子哦"
-      />
+        class="home-feed-empty"
+      >
+        <img :src="boardEmptyImageUrl" alt="该板块暂无帖子">
+        <p>该板块暂无帖子</p>
+      </div>
     </main>
 
   </div>

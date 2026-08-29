@@ -31,7 +31,8 @@ function useUnifiedSearchFeed() {
   const articleRecords = ref([])
   const userRecords = ref([])
   const pageNum = ref(1)
-  const pageSize = ref(12)
+  // 与首页瀑布流保持一致，列数相同时最后一行不会一边缺角
+  const pageSize = ref(20)
   const total = ref(0)
   const followSavingIds = ref(new Set())
 
@@ -65,10 +66,14 @@ function useUnifiedSearchFeed() {
   })
 
   let handledSearchSubmitVersion = -1
+  // AI 搜索要几秒，连按两次回车会并发两个请求，谁后返回谁显示——
+  // 很容易出现"搜 A 却显示 B 的结果"
+  let searchSeq = 0
 
   async function runSearch(pn = 1) {
     const kw = keyword.value
     if (!kw) return
+    const seq = ++searchSeq
     pageNum.value = pn
     loading.value = true
     hasSearched.value = true
@@ -85,6 +90,7 @@ function useUnifiedSearchFeed() {
           pageSize: pageSize.value,
           ...(preferAiRag.value ? { ai: 1 } : {}),
         })
+        if (seq !== searchSeq) return
         if (res.code !== 0) {
           ElMessage.error(res.message || '搜索失败')
           return
@@ -101,6 +107,7 @@ function useUnifiedSearchFeed() {
           pageSize: pageSize.value,
           ...(preferAiRag.value ? { ai: 1 } : {}),
         })
+        if (seq !== searchSeq) return
         if (res.code !== 0) {
           ElMessage.error(res.message || '搜索失败')
           return
@@ -112,7 +119,7 @@ function useUnifiedSearchFeed() {
         userRecords.value = []
       }
     } finally {
-      loading.value = false
+      if (seq === searchSeq) loading.value = false
     }
   }
 
@@ -133,7 +140,6 @@ function useUnifiedSearchFeed() {
     if (cover) {
       captureFeedCardOrigin(articleId, cover, {
         coverUrl: meta.previewUrl || entry?.article?.coverImg || '',
-        restoreCoverUrl: meta.restoreCoverUrl || entry?.article?.coverImg || '',
       })
     }
     getFeedCardOrigin(articleId)

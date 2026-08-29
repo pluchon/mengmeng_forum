@@ -5,6 +5,7 @@
         <div class="home-search-bar home-search-bar--stream">
           <el-input
             v-model="searchQuery"
+            :maxlength="100"
             :placeholder="searchInputPlaceholder"
             class="home-xhs-search home-xhs-search--stream"
             size="large"

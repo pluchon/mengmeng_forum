@@ -64,6 +64,8 @@ public enum ResultCode {
     FAILED_DEFAULT_FOLDER_CANNOT_DELETE(1152, "默认收藏夹不能删除"),
     FAILED_FOLDER_VISIBILITY_RATE_LIMIT(1156, "收藏夹公开设置修改太频繁，请稍后再试"),
     FAILED_SEARCH_KEYWORD_EMPTY(1153, "请先输入搜索关键词"),
+    FAILED_AI_SEARCH_RATE_LIMIT(1215, "AI 搜索太频繁了，歇一会儿再试"),
+    FAILED_AI_SEARCH_DAILY_LIMIT(1216, "今天的 AI 搜索次数用完啦，明天再来"),
     FAILED_AUDIT_STATUS_INVALID(1154, "当前帖子状态不能提交审核"),
     FAILED_AUDIT_RETRY_LIMIT(1155, "审核次数已用完，请联系管理员"),
     FAILED_AUDIT_EDIT_LOCKED(1205, "帖子正在审核中，暂时不能编辑，请等待审核结果"),

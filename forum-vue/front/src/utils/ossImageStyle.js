@@ -8,6 +8,10 @@
 // 相册缩略图。CSS 里是 64px 方块，2 倍屏需要 128px 图源才不糊
 export const OSS_STYLE_THUMB = 'thumb'
 
+// 首页瀑布流封面。卡片列宽固定 282px，2 倍屏约 564px，取 600 留点余量。
+// 只按宽等比缩，不能裁成方图：瀑布流要按封面自然比例锁卡片高度
+export const OSS_STYLE_FEED_COVER = 'feed'
+
 // 只改写自家 OSS 的地址：外链、data:、blob: 一律原样返回
 export function ossStyleUrl(url, styleName) {
   const raw = String(url || '').trim()
@@ -25,6 +29,17 @@ export function ossStyleUrl(url, styleName) {
   }
 }
 
+// 头像。渲染尺寸 22-40px，96px 覆盖到 2 倍屏还有余量；方图裁剪对应圆形头像
+export const OSS_STYLE_AVATAR = 'avatar'
+
+export function ossAvatarUrl(url) {
+  return ossStyleUrl(url, OSS_STYLE_AVATAR)
+}
+
 export function ossThumbUrl(url) {
   return ossStyleUrl(url, OSS_STYLE_THUMB)
+}
+
+export function ossFeedCoverUrl(url) {
+  return ossStyleUrl(url, OSS_STYLE_FEED_COVER)
 }

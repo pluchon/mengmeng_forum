@@ -1,4 +1,6 @@
 import { computed, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { ossAvatarUrl, ossFeedCoverUrl } from '@/utils/ossImageStyle'
+import boardEmptyImageUrl from '@/assets/images/search_chat_empty.png'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown, Loading, Picture, Refresh } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
@@ -14,8 +16,6 @@ import {
   captureFeedCardOrigin,
   captureFeedOpenFrom,
   getFeedCardOrigin,
-  captureVideoFirstFrame,
-  onFeedRestoreCover,
   onFeedVisitCountUpdate,
 } from '@/utils/feedNavigation'
 import {
@@ -60,12 +60,9 @@ const {
 const feedList = computed(() => articleList.value)
 const notInterestedArticleStore = useNotInterestedArticleStore()
 const coverLoadedById = reactive({})
-const coverPreviewById = reactive({})
 const coverAspectById = reactive({})
-const coverHoverTokenById = reactive({})
 const videoDurationById = reactive({})
 const probingDurationIds = new Set()
-let stopRestoreCoverListen = null
 let stopVisitCountListen = null
 const MASONRY_COLUMN_WIDTH = 220
 
@@ -255,53 +252,15 @@ watch(
 const openCategoryId = ref(null)
 let categoryCloseTimer = null
 
+// 卡片列宽固定 282px，原本直接加载原图：一屏几十张手机拍的大图，
+// 全量下载只为渲染 282px 宽的卡片。改走 OSS 缩略样式。
+// 详情页主图和"下载原图"仍用原始 URL，不受影响
 function baseCoverUrl(entry) {
-  return String(coverImageUrl(entry) || '').trim()
-}
-
-function firstGalleryUrl(entry) {
-  return String(entry?.firstImageUrl || '').trim()
+  return ossFeedCoverUrl(String(coverImageUrl(entry) || '').trim())
 }
 
 function displayCoverUrl(entry) {
-  const id = entry?.article?.id
-  if (id != null && coverPreviewById[id]) return coverPreviewById[id]
   return baseCoverUrl(entry)
-}
-
-async function onCoverHoverEnter(entry) {
-  const id = entry?.article?.id
-  if (!id) return
-  const token = (coverHoverTokenById[id] || 0) + 1
-  coverHoverTokenById[id] = token
-
-  if (isVideoArticle(entry?.article)) {
-    const videoUrl = String(entry?.article?.videoUrl || '').trim()
-    if (!videoUrl) return
-    const frame = await captureVideoFirstFrame(videoUrl)
-    if (coverHoverTokenById[id] !== token) return
-    if (frame) coverPreviewById[id] = frame
-    return
-  }
-
-  const first = firstGalleryUrl(entry)
-  const base = baseCoverUrl(entry)
-  if (!first || first === base) return
-  await new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => resolve(true)
-    img.onerror = () => resolve(false)
-    img.src = first
-  })
-  if (coverHoverTokenById[id] !== token) return
-  coverPreviewById[id] = first
-}
-
-function onCoverHoverLeave(entry) {
-  const id = entry?.article?.id
-  if (!id) return
-  coverHoverTokenById[id] = (coverHoverTokenById[id] || 0) + 1
-  delete coverPreviewById[id]
 }
 
 function openArticle(entry, event) {
@@ -310,10 +269,7 @@ function openArticle(entry, event) {
   const card = event?.currentTarget?.closest?.('.note-card') || event?.currentTarget
   const cover = card?.querySelector?.('.note-cover') || card
   if (cover) {
-    captureFeedCardOrigin(id, cover, {
-      coverUrl: displayCoverUrl(entry),
-      restoreCoverUrl: baseCoverUrl(entry),
-    })
+    captureFeedCardOrigin(id, cover, { coverUrl: displayCoverUrl(entry) })
   }
   getFeedCardOrigin(id)
   captureFeedOpenFrom(route.path)
@@ -357,12 +313,6 @@ function handleCategoryFocusOut(event) {
 }
 
 onMounted(async () => {
-  stopRestoreCoverListen = onFeedRestoreCover((detail) => {
-    const id = detail?.articleId
-    if (!id) return
-    coverHoverTokenById[id] = (coverHoverTokenById[id] || 0) + 1
-    delete coverPreviewById[id]
-  })
   stopVisitCountListen = onFeedVisitCountUpdate((detail) => {
     const id = detail?.articleId
     const count = Number(detail?.visitCount)
@@ -380,6 +330,5 @@ onActivated(() => {
 
 onUnmounted(() => {
   if (categoryCloseTimer) clearTimeout(categoryCloseTimer)
-  if (typeof stopRestoreCoverListen === 'function') stopRestoreCoverListen()
   if (typeof stopVisitCountListen === 'function') stopVisitCountListen()
 })

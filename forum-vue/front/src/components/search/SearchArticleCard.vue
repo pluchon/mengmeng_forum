@@ -10,14 +10,12 @@
       class="note-cover note-cover--fluid"
       :class="{ 'is-aspect-locked': !!coverAspect }"
       :style="coverAspectStyle"
-      @mouseenter="onCoverHoverEnter"
-      @mouseleave="onCoverHoverLeave"
     >
       <img
         v-if="hasCoverImage"
         class="note-cover-img"
         :class="{ 'is-loaded': coverLoaded }"
-        :src="coverImageUrl"
+        :src="ossFeedCoverUrl(coverImageUrl)"
         :alt="article.title || ''"
         loading="lazy"
         @load="markCoverLoaded"
@@ -51,7 +49,7 @@
         <div class="author">
           <UserAvatarVip
             :size="22"
-            :src="entry.user?.avatarUrl || defaultAvatar"          />
+            :src="ossAvatarUrl(entry.user?.avatarUrl) || defaultAvatar"          />
           <span class="nickname" :title="entry.user?.nickname">{{ displayNickname }}</span>
         </div>
         <div v-if="isQuestion" class="question-answer-count">

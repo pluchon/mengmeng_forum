@@ -1780,31 +1780,28 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   gap: 16px;
 }
 
-/* 帖子首次/换页加载：右侧整区一条灰色动态骨架，不要白卡片网格 */
-.home-feed-area-skeleton {
-  flex: 1 1 auto;
+/* 板块下没有帖子时的占位，与搜索结果空态同一套观感 */
+.home-feed-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  min-height: 0;
-  box-sizing: border-box;
-  padding: 8px 2px 24px;
+  min-height: min(560px, calc(100vh - 220px));
+  color: #8a919f;
+  text-align: center;
 }
 
-.home-feed-area-skeleton .el-skeleton {
-  width: 100%;
-  --el-skeleton-color: #e5e7eb;
-  --el-skeleton-to-color: #f3f4f6;
+.home-feed-empty img {
+  width: min(260px, 58vw);
+  max-height: 260px;
+  object-fit: contain;
 }
 
-.home-feed-area-skeleton .el-skeleton__item {
-  height: 14px;
-  margin-top: 14px;
-  border-radius: 8px;
-}
-
-.home-feed-area-skeleton .el-skeleton__item:first-child {
-  margin-top: 0;
-  width: 42% !important;
-  height: 18px;
+.home-feed-empty p {
+  margin: 10px 0 0;
+  font-size: 14px;
 }
 .home-masonry-item {
   width: 100%;

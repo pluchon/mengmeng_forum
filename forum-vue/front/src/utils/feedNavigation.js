@@ -1,7 +1,6 @@
 const CARD_ORIGIN_KEY = 'forum_feed_card_origin'
 const OPEN_FROM_KEY = 'forum_feed_open_from'
 const HERO_LAYER_ID = 'forum-feed-close-hero'
-const RESTORE_COVER_EVENT = 'forum-feed-restore-cover'
 const VISIT_COUNT_EVENT = 'forum-feed-visit-count'
 
 // 小红书 getSafeTransformDistance：取偶数像素，避免亚像素抖动
@@ -88,7 +87,6 @@ export function captureFeedCardOrigin(articleId, element, extra = {}) {
       width: rect.width,
       height: rect.height,
       coverUrl,
-      restoreCoverUrl: extra.restoreCoverUrl || '',
     }),
   )
 }
@@ -112,28 +110,6 @@ export function getFeedCardOrigin(articleId) {
   } catch {
     return null
   }
-}
-
-export function notifyFeedRestoreCover(articleId, restoreCoverUrl = '') {
-  if (articleId == null) return
-  try {
-    window.dispatchEvent(
-      new CustomEvent(RESTORE_COVER_EVENT, {
-        detail: {
-          articleId: String(articleId),
-          restoreCoverUrl: String(restoreCoverUrl || ''),
-        },
-      }),
-    )
-  } catch {
-    // 忽略
-  }
-}
-
-export function onFeedRestoreCover(handler) {
-  const listener = (event) => handler?.(event?.detail)
-  window.addEventListener(RESTORE_COVER_EVENT, listener)
-  return () => window.removeEventListener(RESTORE_COVER_EVENT, listener)
 }
 
 export function notifyFeedVisitCountUpdate(articleId, visitCount) {
@@ -212,6 +188,8 @@ function clearDialogMotionStyles(dialog, overlay, { keepHidden = false } = {}) {
     interaction.style.opacity = ''
     interaction.style.overflow = ''
     interaction.style.transition = ''
+    // 收起动画期间把评论区整棵子树退出渲染，这里必须复位，否则复用 DOM 时它一直是隐的
+    interaction.style.removeProperty('content-visibility')
   }
   dialog.classList.remove(
     'article-detail-modal--expanding',
@@ -399,13 +377,10 @@ export function animateDetailDialogToCard(origin, options = {}) {
       return
     }
 
-    const articleId = options.articleId ?? origin.id
-    const restoreCoverUrl = options.restoreCoverUrl || origin.restoreCoverUrl || ''
     const overlay = dialog.closest('.el-overlay')
 
     if (prefersReducedMotion()) {
       freezeDetailVideos(dialog)
-      notifyFeedRestoreCover(articleId, restoreCoverUrl)
       resolve()
       return
     }
@@ -419,6 +394,12 @@ export function animateDetailDialogToCard(origin, options = {}) {
       info.style.opacity = '0'
       info.style.pointerEvents = 'none'
       info.style.overflow = 'hidden'
+      // 评论是无限滚动的，热帖能堆到几百个节点。opacity:0 只是看不见，
+      // 布局和合成照样要算，接下来 400ms 的收起动画得一直拖着它们。
+      // 淡出结束后整棵子树退出渲染，盒子仍在，不影响弹窗自身几何
+      setTimeout(() => {
+        info.style.contentVisibility = 'hidden'
+      }, 130)
     }
     dialog.querySelector('.detail-video-player__danmaku-layer')?.style.setProperty('visibility', 'hidden')
 
@@ -456,7 +437,6 @@ export function animateDetailDialogToCard(origin, options = {}) {
     const finish = () => {
       if (finished) return
       finished = true
-      notifyFeedRestoreCover(articleId, restoreCoverUrl)
       dialog.classList.add('article-detail-modal--closed')
       dialog.style.opacity = '0'
       dialog.style.visibility = 'hidden'

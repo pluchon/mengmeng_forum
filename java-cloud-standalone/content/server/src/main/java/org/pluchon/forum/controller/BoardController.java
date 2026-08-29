@@ -31,7 +31,8 @@ public class BoardController {
     // 板块顶部的导航栏列表展示
     @Operation(summary = "板块列表展示", description = "传入升序或者是降序的参数")
     @GetMapping("/topBoardList")
-    public Result<List<BoardPublicVO>> topBoardList(@NotNull Integer orderByStatus) {
+    public Result<List<BoardPublicVO>> topBoardList(
+            @RequestParam(defaultValue = "0") Integer orderByStatus) {
         return Result.success(boardService.queryBoardListByOrder(orderByStatus));
     }
 

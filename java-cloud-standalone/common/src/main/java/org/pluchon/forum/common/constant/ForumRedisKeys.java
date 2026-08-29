@@ -93,6 +93,14 @@ public final class ForumRedisKeys {
     public static final String DANMAKU_MINUTE = "forum:danmaku:minute:";
     public static final long TTL_DANMAKU_MINUTE = 60L;
 
+    public static final String AI_SEARCH_MINUTE = "forum:search:ai:minute:";
+    public static final long TTL_AI_SEARCH_MINUTE = 60L;
+    public static final String AI_SEARCH_DAY = "forum:search:ai:day:";
+    public static final long TTL_AI_SEARCH_DAY = 86400L;
+    // AI 搜索排序结果缓存：排序是确定的，翻页不该把整条 RAG 流水线重跑一遍
+    public static final String AI_SEARCH_RANK = "forum:search:ai:rank:";
+    public static final long TTL_AI_SEARCH_RANK = 300L;
+
     public static final String CHECKIN_STATUS = "checkin:status:";
     public static final long TTL_CHECKIN_STATUS = 600L;
     public static final String CHECKIN_RULE = "checkin:rule:m";

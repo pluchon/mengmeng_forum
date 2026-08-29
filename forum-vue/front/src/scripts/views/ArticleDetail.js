@@ -1402,11 +1402,7 @@ export function useArticleDetail() {
             ...origin,
             coverUrl: heroUrl,
           },
-          {
-            articleId,
-            heroUrl,
-            restoreCoverUrl: origin.restoreCoverUrl || String(article.value?.coverImg || '').trim(),
-          },
+          { articleId, heroUrl },
         )
       }
     } catch {

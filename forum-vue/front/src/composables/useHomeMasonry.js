@@ -32,8 +32,17 @@ export function useHomeMasonry(itemsSource, options = {}) {
     const n = columnCountForWidth(w)
     columnCount.value = n
     const cols = Array.from({ length: n }, () => [])
-    items.forEach((item, i) => {
-      cols[i % n].push(item)
+    // 原本是 i % n 轮询分配，跟瀑布流没关系：连续几张长图落在同一列
+    // 就会比别人长出一大截。item.height 是卡片自己算好的高度估算，
+    // 之前一直没人用，这里拿来把下一张放进当前最矮的那列
+    const heights = new Array(n).fill(0)
+    items.forEach((item) => {
+      let target = 0
+      for (let c = 1; c < n; c += 1) {
+        if (heights[c] < heights[target]) target = c
+      }
+      cols[target].push(item)
+      heights[target] += Number(item?.height) > 0 ? Number(item.height) : 320
     })
     columns.value = cols
   }
@@ -63,10 +72,11 @@ export function useHomeMasonry(itemsSource, options = {}) {
     { flush: 'post' },
   )
 
+  // 不用 deep：itemsSource 是 computed，每次重算都是新数组，浅层比较已经会触发；
+  // deep 只是白白把每个 entry 的所有属性都遍历一遍
   watch(
     () => unref(itemsSource),
     () => nextTick(redistribute),
-    { deep: true },
   )
 
   onMounted(() => {
@@ -74,9 +84,10 @@ export function useHomeMasonry(itemsSource, options = {}) {
     window.addEventListener('resize', redistribute)
   })
 
+  // 返回首页（keep-alive 激活）正好和详情关闭动画的落地时刻重合，
+  // 连着全量重排两次会让那一下更明显，留 rAF 那次即可
   onActivated(() => {
     nextTick(() => {
-      redistribute()
       requestAnimationFrame(redistribute)
     })
   })
