@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.recommendation;
 
+import org.pluchon.forum.common.constant.Constant;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -55,6 +56,9 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
     private static final long SEVEN_DAYS_MILLIS = 7L * 24 * 60 * 60 * 1000;
     private static final long FOURTEEN_DAYS_MILLIS = 14L * 24 * 60 * 60 * 1000;
     private static final String FEATURE_VERSION = "v1";
+
+    @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     private ContentAiGatewayService aiHubService;
@@ -165,7 +169,20 @@ public class RecommendationAiProfileServiceImpl implements RecommendationAiProfi
                     .set(ForumUserAiProfileSnapshot::getDeleteState, DELETE_FALSE)
                     .set(ForumUserAiProfileSnapshot::getRefreshAfter, now));
         }
-        executeAfterCommit(() -> recommendationExecutor.execute(() -> refreshProfile(userId)));
+        // 冷却窗口内只把到期时间提前，交给每小时的定时任务去补：
+        // 否则在两组兴趣板块之间来回切换，每次保存都会立刻打一次 Python 生成画像
+        if (!withinRefreshCooldown(userId)) {
+            executeAfterCommit(() -> recommendationExecutor.execute(() -> refreshProfile(userId)));
+        }
+    }
+
+    // 返回 true 表示冷却中，本次不立即生成
+    private boolean withinRefreshCooldown(Long userId) {
+        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(
+                Constant.REDIS_KEY_RECOMMEND_PROFILE_COOLDOWN + userId, "1",
+                Constant.RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+        // Redis 异常时按不冷却处理，宁可多生成一次也不要让画像一直不更新
+        return Boolean.FALSE.equals(first);
     }
 
     @Override

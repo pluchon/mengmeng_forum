@@ -99,7 +99,6 @@ function coverSrcMatchesBase(loadedSrc, baseSrc) {
 
 const masonryCards = computed(() => {
   const list = feedList.value || []
-  const showReason = Boolean(isRecommendationFeed.value)
   return list.map((entry, index) => {
     const article = entry?.article || {}
     const seed = Number(article?.id) || index + 1
@@ -107,11 +106,10 @@ const masonryCards = computed(() => {
     const titleLength = String(article?.title || '').length
     const titleHeight = Math.min(2, Math.max(1, Math.ceil(titleLength / 24))) * 24
     const extraHeight = (isQuestionArticle(article) ? 24 : 0) + (isVideoArticle(article) ? 20 : 0)
-    const reasonHeight = showReason && entry?.reasonMessage ? 20 : 0
     return {
       id: String(article?.id || `home-feed-${index}`),
       entry,
-      height: baseCoverHeight + 128 + titleHeight + extraHeight + reasonHeight,
+      height: baseCoverHeight + 128 + titleHeight + extraHeight,
       heightSettled: !coverImageUrl(entry)
         || Boolean(coverAspectById[article?.id] || coverLoadedById[article?.id]),
       article,

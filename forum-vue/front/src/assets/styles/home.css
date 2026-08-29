@@ -2043,17 +2043,6 @@ body:has(.home-xhs-root)::-webkit-scrollbar {
   overflow: hidden;
 }
 
-.note-recommend-reason {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: #9a879c;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 .note-footer {
   display: flex;
   justify-content: space-between;

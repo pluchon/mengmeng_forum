@@ -153,12 +153,6 @@
                   </span>
                 </div>
                 <h3 v-else class="note-title">{{ item.article?.title }}</h3>
-                <p
-                  v-if="isRecommendationFeed && item.entry?.reasonMessage"
-                  class="note-recommend-reason"
-                >
-                  {{ item.entry.reasonMessage }}
-                </p>
                 <div class="note-footer">
                   <div class="author">
                     <UserAvatarVip

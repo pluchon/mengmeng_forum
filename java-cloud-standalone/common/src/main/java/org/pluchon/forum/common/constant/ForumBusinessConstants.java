@@ -37,6 +37,15 @@ public final class ForumBusinessConstants {
 
     // AI 搜索一次最多打三次 Python（候选打分 / 向量兜底 / 作者相似兜底），
     // 且搜不到结果的查询三次全跑，是全站唯一没有配额的 AI 入口
+    // 推荐流一次算多少条并缓存。翻页只切这份缓存，不重跑召回
+    public static final int RECOMMEND_FEED_CACHE_SIZE = 120;
+    // 兴趣板块改动会立刻触发一次 AI 画像生成，在两组板块间来回切就能连续触发。
+    // 冷却内只更新到期时间，交给每小时的定时任务去补
+    public static final int RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS = 3600;
+    // 候选板块种类太少时不做"相邻不同板块"打散：只选了一个兴趣板块的用户
+    // 会被这条规则把自己最想看的内容全推到列表末尾
+    public static final int RECOMMEND_DIVERSITY_MIN_BOARDS = 3;
+
     // 昵称/简介每提交一次就是一次 AI 文本审核，和 AI 搜索一样属于没配额的 AI 入口
     public static final int PROFILE_CHANGE_MAX_PER_DAY = 10;
 

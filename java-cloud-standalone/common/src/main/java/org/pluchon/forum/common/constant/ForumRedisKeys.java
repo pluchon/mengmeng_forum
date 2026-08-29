@@ -93,6 +93,10 @@ public final class ForumRedisKeys {
     public static final String DANMAKU_MINUTE = "forum:danmaku:minute:";
     public static final long TTL_DANMAKU_MINUTE = 60L;
 
+    public static final String RECOMMEND_FEED_RANK = "forum:recommend:rank:";
+    public static final long TTL_RECOMMEND_FEED_RANK = 300L;
+    public static final String RECOMMEND_PROFILE_COOLDOWN = "forum:recommend:profile:cd:";
+
     public static final String PROFILE_CHANGE_DAY = "forum:profile:change:day:";
     public static final long TTL_PROFILE_CHANGE_DAY = 86400L;
 

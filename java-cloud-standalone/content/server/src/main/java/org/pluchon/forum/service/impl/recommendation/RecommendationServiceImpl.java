@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.api.ai.AiRagSearchRequest;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
-import org.pluchon.forum.common.enums.RecommendationReasonType;
 import org.pluchon.forum.common.enums.RecommendationFeedbackReason;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -51,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -70,6 +70,9 @@ public class RecommendationServiceImpl implements RecommendationService {
     private static final int INTERACTION_HISTORY_LIMIT = 60;
 
     // 向量候选最低相似度由配置提供，见 forum.search.recommend-vector-min-score
+    @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
     @Autowired
     private ForumSearchProperties forumSearchProperties;
 
@@ -122,7 +125,21 @@ public class RecommendationServiceImpl implements RecommendationService {
     public PageResult<RecommendArticleVO> getFeed(Long loginUserId, Integer pageNum, Integer pageSize) {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        int expectedSize = Math.max(validPageSize * (validPageNum + 1), validPageSize);
+        Set<Long> followingIds = loginUserId == null ? Set.of() : userFollowService.listFollowingIds(loginUserId);
+        // 原本每翻一页都把五路召回重跑一遍再切片。fresh / hot 依赖实时数据，
+        // 两次请求算出的顺序并不一致，用户会重复看到同一篇、或者永远错过某一篇；
+        // 而且 expectedSize 随页码增长，越往后翻捞得越多，向量召回还要再打一次 Python。
+        // 排序结果本身是确定的，缓存一份，翻页只切片
+        List<Long> rankedIds = readRankCache(loginUserId);
+        if (rankedIds.isEmpty()) {
+            rankedIds = computeRankedIds(loginUserId, followingIds);
+            writeRankCache(loginUserId, rankedIds);
+        }
+        return buildFeedPage(rankedIds, loginUserId, followingIds, validPageNum, validPageSize);
+    }
+
+    private List<Long> computeRankedIds(Long loginUserId, Set<Long> followingIds) {
+        int expectedSize = Constant.RECOMMEND_FEED_CACHE_SIZE;
         int candidateLimit = Math.max(expectedSize * 4, 80);
         Set<Long> feedbackArticleIds = loginUserId == null ? Set.of() : listFeedbackArticleIds(loginUserId);
         Set<Long> explicitBoardIds = loginUserId == null
@@ -131,7 +148,6 @@ public class RecommendationServiceImpl implements RecommendationService {
         Map<Long, Double> interactionBoardScores = loginUserId == null
                 ? Map.of()
                 : listInteractionBoardScores(loginUserId);
-        Set<Long> followingIds = loginUserId == null ? Set.of() : userFollowService.listFollowingIds(loginUserId);
         boolean personalized = loginUserId != null
                 && userRecommendationSettingService.isPersonalizedEnabled(loginUserId)
                 && (!explicitBoardIds.isEmpty() || !interactionBoardScores.isEmpty() || !followingIds.isEmpty());
@@ -146,26 +162,72 @@ public class RecommendationServiceImpl implements RecommendationService {
                     interactionBoardScores);
             addCandidates(candidateMap,
                     listArticlesByAuthors(followingIds, loginUserId, feedbackArticleIds, candidateLimit),
-                    RecommendationReasonType.FOLLOWING,
                     30D);
             addVectorCandidates(candidateMap, loginUserId, feedbackArticleIds, candidateLimit);
         }
         addFreshCandidates(candidateMap,
-                listFreshArticles(loginUserId, feedbackArticleIds, candidateLimit),
-                personalized ? RecommendationReasonType.FRESH : RecommendationReasonType.COMMUNITY);
+                listFreshArticles(loginUserId, feedbackArticleIds, candidateLimit));
         addHotCandidates(candidateMap, listHotArticles(loginUserId, feedbackArticleIds, candidateLimit));
         if (personalized) {
             applyAiProfileScores(candidateMap, loginUserId);
         }
 
         List<Candidate> activeCandidates = retainActiveAuthors(new ArrayList<>(candidateMap.values()));
-        List<Candidate> visibleCandidates = rankCandidates(activeCandidates, expectedSize, validPageSize);
-        int fromIndex = Math.min((validPageNum - 1) * validPageSize, visibleCandidates.size());
-        int toIndex = Math.min(fromIndex + validPageSize, visibleCandidates.size());
-        List<RecommendArticleVO> records = buildResponse(visibleCandidates.subList(fromIndex, toIndex), followingIds);
-        boolean hasNext = visibleCandidates.size() > toIndex;
-        return new PageResult<>(records, (long) visibleCandidates.size(), validPageNum, validPageSize,
-                (long) Math.max(1, (int) Math.ceil((double) visibleCandidates.size() / validPageSize)), hasNext);
+        List<Candidate> visibleCandidates = rankCandidates(activeCandidates, expectedSize);
+        return visibleCandidates.stream().map(item -> item.getArticle().getId()).toList();
+    }
+
+    // 缓存里只有顺序，可见性每次现查：这几分钟内被删除或下架的帖子不能因为命中缓存漏出去
+    private PageResult<RecommendArticleVO> buildFeedPage(List<Long> rankedIds, Long loginUserId,
+            Set<Long> followingIds, int pageNum, int pageSize) {
+        Set<Long> feedbackArticleIds = loginUserId == null ? Set.of() : listFeedbackArticleIds(loginUserId);
+        List<Long> visibleIds = retainVisibleArticleIds(rankedIds, loginUserId, feedbackArticleIds);
+        long total = visibleIds.size();
+        int fromIndex = Math.min((pageNum - 1) * pageSize, visibleIds.size());
+        int toIndex = Math.min(fromIndex + pageSize, visibleIds.size());
+        List<RecommendArticleVO> records = buildResponseByIds(visibleIds.subList(fromIndex, toIndex), followingIds);
+        long pages = total == 0 ? 1 : (total + pageSize - 1) / pageSize;
+        return new PageResult<>(records, total, pageNum, pageSize, pages, visibleIds.size() > toIndex);
+    }
+
+    private List<Long> retainVisibleArticleIds(List<Long> orderedIds, Long loginUserId, Set<Long> feedbackArticleIds) {
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> alive = articleMapper.selectList(visibleArticleWrapper(loginUserId, feedbackArticleIds)
+                        .in(Article::getId, orderedIds)
+                        .select(Article::getId))
+                .stream().map(Article::getId).collect(Collectors.toSet());
+        return orderedIds.stream().filter(alive::contains).toList();
+    }
+
+    private String rankCacheKey(Long loginUserId) {
+        return Constant.REDIS_KEY_RECOMMEND_FEED_RANK + (loginUserId == null ? "guest" : loginUserId);
+    }
+
+    private List<Long> readRankCache(Long loginUserId) {
+        String cached = stringRedisTemplate.opsForValue().get(rankCacheKey(loginUserId));
+        if (cached == null || cached.isBlank()) {
+            return List.of();
+        }
+        List<Long> ids = new ArrayList<>();
+        for (String part : cached.split(",")) {
+            try {
+                ids.add(Long.valueOf(part));
+            } catch (NumberFormatException ignored) {
+                // 脏数据当作没命中
+            }
+        }
+        return ids;
+    }
+
+    private void writeRankCache(Long loginUserId, List<Long> rankedIds) {
+        if (rankedIds.isEmpty()) {
+            return;
+        }
+        stringRedisTemplate.opsForValue().set(rankCacheKey(loginUserId),
+                rankedIds.stream().map(String::valueOf).collect(Collectors.joining(",")),
+                Constant.REDIS_TTL_RECOMMEND_FEED_RANK, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     @Override
@@ -271,48 +333,56 @@ public class RecommendationServiceImpl implements RecommendationService {
         recommendationAiProfileService.requestProfileRefresh(loginUserId);
     }
 
-    private List<Candidate> rankCandidates(List<Candidate> candidates, int expectedSize, int pageSize) {
+    private List<Candidate> rankCandidates(List<Candidate> candidates, int expectedSize) {
         List<Candidate> ordered = candidates.stream()
                 .sorted(Comparator.comparingDouble(Candidate::getScore).reversed()
                         .thenComparing(item -> item.getArticle().getCreateTime(), Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(item -> item.getArticle().getId(), Comparator.reverseOrder()))
                 .toList();
+        long distinctBoards = ordered.stream()
+                .map(item -> item.getArticle().getBoardId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
         List<Candidate> result = new ArrayList<>();
-        addCandidates(result, ordered, expectedSize, pageSize, false);
-        addCandidates(result, ordered, expectedSize, pageSize, true);
+        Set<Long> pickedArticleIds = new HashSet<>();
+        Map<Long, Integer> authorCount = new HashMap<>();
+        // 候选板块本来就没几种时不做相邻打散：只选了一个兴趣板块的用户，
+        // 高分内容会被这条规则整体推到列表末尾，反而看不到自己选的东西
+        if (distinctBoards >= Constant.RECOMMEND_DIVERSITY_MIN_BOARDS) {
+            addCandidates(result, ordered, expectedSize, pickedArticleIds, authorCount, false);
+        }
+        addCandidates(result, ordered, expectedSize, pickedArticleIds, authorCount, true);
         return result;
     }
 
-    private void addCandidates(List<Candidate> result, List<Candidate> candidates, int targetSize, int pageSize,
-            boolean allowAdjacentBoard) {
+    // 同作者上限按整份榜单算，不再按页：翻页已经改成切同一份缓存，页边界不再有意义
+    private static final int MAX_ARTICLES_PER_AUTHOR = 3;
+
+    private void addCandidates(List<Candidate> result, List<Candidate> candidates, int targetSize,
+            Set<Long> pickedArticleIds, Map<Long, Integer> authorCount, boolean allowAdjacentBoard) {
         for (Candidate candidate : candidates) {
             if (result.size() >= targetSize) {
                 return;
             }
-            if (containsArticle(result, candidate.getArticle().getId())) {
+            Long articleId = candidate.getArticle().getId();
+            if (!pickedArticleIds.add(articleId)) {
                 continue;
             }
-            int currentPage = result.size() / pageSize;
-            if (countAuthorInPage(result, candidate.getArticle().getUserId(), currentPage, pageSize) >= 2) {
+            Long authorId = candidate.getArticle().getUserId();
+            if (authorCount.getOrDefault(authorId, 0) >= MAX_ARTICLES_PER_AUTHOR) {
+                pickedArticleIds.remove(articleId);
                 continue;
             }
             if (!allowAdjacentBoard && !result.isEmpty()
-                    && Objects.equals(result.get(result.size() - 1).getArticle().getBoardId(), candidate.getArticle().getBoardId())) {
+                    && Objects.equals(result.get(result.size() - 1).getArticle().getBoardId(),
+                            candidate.getArticle().getBoardId())) {
+                pickedArticleIds.remove(articleId);
                 continue;
             }
+            authorCount.merge(authorId, 1, Integer::sum);
             result.add(candidate);
         }
-    }
-
-    private boolean containsArticle(List<Candidate> candidates, Long articleId) {
-        return candidates.stream().anyMatch(item -> Objects.equals(item.getArticle().getId(), articleId));
-    }
-
-    private long countAuthorInPage(List<Candidate> candidates, Long authorId, int page, int pageSize) {
-        int fromIndex = page * pageSize;
-        return candidates.subList(Math.min(fromIndex, candidates.size()), candidates.size()).stream()
-                .filter(item -> Objects.equals(item.getArticle().getUserId(), authorId))
-                .count();
     }
 
     private List<Candidate> retainActiveAuthors(List<Candidate> candidates) {
@@ -324,37 +394,40 @@ public class RecommendationServiceImpl implements RecommendationService {
         return candidates.stream().filter(item -> activeAuthorIds.contains(item.getArticle().getUserId())).toList();
     }
 
-    private List<RecommendArticleVO> buildResponse(List<Candidate> candidates, Set<Long> followingIds) {
+    private List<RecommendArticleVO> buildResponseByIds(List<Long> orderedIds, Set<Long> followingIds) {
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Article> articleMap = articleMapper.selectList(new LambdaQueryWrapper<Article>()
+                        .in(Article::getId, orderedIds))
+                .stream().collect(Collectors.toMap(Article::getId, item -> item));
+        List<Article> candidates = orderedIds.stream().map(articleMap::get).filter(Objects::nonNull).toList();
         if (candidates.isEmpty()) {
             return List.of();
         }
-        Set<Long> authorIds = candidates.stream().map(item -> item.getArticle().getUserId()).collect(java.util.stream.Collectors.toSet());
+        Set<Long> authorIds = candidates.stream().map(Article::getUserId).collect(Collectors.toSet());
         Map<Long, UserInternalVO> users = userInternalLookupService.loadActiveUsers(authorIds);
         Map<Long, String> boardNames = boardMapper.selectList(new LambdaQueryWrapper<Board>()
-                        .in(Board::getId, candidates.stream().map(item -> item.getArticle().getBoardId()).distinct().toList())
+                        .in(Board::getId, candidates.stream().map(Article::getBoardId).distinct().toList())
                         .eq(Board::getDeleteState, DELETE_FALSE)
                         .eq(Board::getState, STATE_ENABLED))
                 .stream()
-                .collect(java.util.stream.Collectors.toMap(Board::getId, Board::getName));
+                .collect(Collectors.toMap(Board::getId, Board::getName));
         Map<Long, Integer> imageCounts = articleMediaService.countImagesByArticleIds(
-                candidates.stream().map(item -> item.getArticle().getId()).toList());
+                candidates.stream().map(Article::getId).toList());
         Map<Long, String> firstImageUrls = articleMediaService.firstImageUrlByArticleIds(
-                candidates.stream().map(item -> item.getArticle().getId()).toList());
+                candidates.stream().map(Article::getId).toList());
         List<RecommendArticleVO> result = new ArrayList<>();
-        for (Candidate candidate : candidates) {
-            UserInternalVO author = users.get(candidate.getArticle().getUserId());
+        for (Article article : candidates) {
+            UserInternalVO author = users.get(article.getUserId());
             if (author == null) {
                 continue;
             }
             RecommendArticleVO response = new RecommendArticleVO();
-            response.setArticle(candidate.getArticle());
+            response.setArticle(article);
             response.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
-            response.setImageCount(imageCounts.getOrDefault(candidate.getArticle().getId(), 0));
-            response.setFirstImageUrl(firstImageUrls.get(candidate.getArticle().getId()));
-            if (candidate.getReason() != null) {
-                response.setReasonCode(candidate.getReason().getCode());
-                response.setReasonMessage(candidate.getReason().getMessage());
-            }
+            response.setImageCount(imageCounts.getOrDefault(article.getId(), 0));
+            response.setFirstImageUrl(firstImageUrls.get(article.getId()));
             result.add(response);
         }
         return result;
@@ -368,60 +441,41 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .orElse(0D);
         for (Article article : articles) {
             boolean explicitlySelected = explicitBoardIds.contains(article.getBoardId());
-            RecommendationReasonType reason = explicitlySelected
-                    ? RecommendationReasonType.INTEREST
-                    : RecommendationReasonType.INTERACTION;
             double interactionScore = interactionBoardScores.getOrDefault(article.getBoardId(), 0D);
             double normalizedInteractionScore = maximumInteractionScore <= 0D ? 0D : interactionScore / maximumInteractionScore;
             double score = 18D + normalizedInteractionScore * 24D + (explicitlySelected ? 32D : 0D);
-            mergeCandidate(candidateMap, article, reason, score);
+            mergeCandidate(candidateMap, article, score);
         }
     }
 
     private void addCandidates(Map<Long, Candidate> candidateMap, List<Article> articles,
-            RecommendationReasonType reason, double score) {
+            double score) {
         for (Article article : articles) {
-            mergeCandidate(candidateMap, article, reason, score);
+            mergeCandidate(candidateMap, article, score);
         }
     }
 
-    private void addFreshCandidates(Map<Long, Candidate> candidateMap, List<Article> articles,
-            RecommendationReasonType reason) {
+    private void addFreshCandidates(Map<Long, Candidate> candidateMap, List<Article> articles) {
         for (Article article : articles) {
-            mergeCandidate(candidateMap, article, reason, 8D + freshnessScore(article.getCreateTime()));
+            mergeCandidate(candidateMap, article, 8D + freshnessScore(article.getCreateTime()));
         }
     }
 
     private void addHotCandidates(Map<Long, Candidate> candidateMap, List<Article> articles) {
         for (int index = 0; index < articles.size(); index++) {
-            mergeCandidate(candidateMap, articles.get(index), RecommendationReasonType.HOT,
+            mergeCandidate(candidateMap, articles.get(index),
                     Math.max(12D, 26D - index * 0.35D));
         }
     }
 
-    private void mergeCandidate(Map<Long, Candidate> candidateMap, Article article,
-            RecommendationReasonType reason, double score) {
+    // 推荐理由只影响卡片上的展示文案，不参与排序（分数是无条件累加的），已按需求去掉
+    private void mergeCandidate(Map<Long, Candidate> candidateMap, Article article, double score) {
         Candidate existing = candidateMap.get(article.getId());
         if (existing == null) {
-            candidateMap.put(article.getId(), new Candidate(article, reason, score));
+            candidateMap.put(article.getId(), new Candidate(article, score));
             return;
         }
         existing.addScore(score);
-        if (reasonPriority(reason) > reasonPriority(existing.getReason())) {
-            existing.setReason(reason);
-        }
-    }
-
-    private int reasonPriority(RecommendationReasonType reason) {
-        return switch (reason) {
-            case INTEREST -> 6;
-            case FOLLOWING -> 5;
-            case VECTOR, AI_PROFILE -> 4;
-            case INTERACTION -> 3;
-            case HOT -> 2;
-            case FRESH -> 1;
-            case COMMUNITY -> 0;
-        };
     }
 
     private void addVectorCandidates(Map<Long, Candidate> candidateMap, Long userId,
@@ -472,7 +526,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             if (article == null) {
                 continue;
             }
-            mergeCandidate(candidateMap, article, RecommendationReasonType.VECTOR, 10D + entry.getValue() * 28D);
+            mergeCandidate(candidateMap, article, 10D + entry.getValue() * 28D);
             added++;
         }
     }
@@ -510,7 +564,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             }
             double overlap = calculateTopicOverlap(userTopics, feature.getFeatureJson());
             if (overlap > 0D) {
-                mergeCandidate(candidateMap, candidate.getArticle(), RecommendationReasonType.AI_PROFILE, overlap * 18D);
+                mergeCandidate(candidateMap, candidate.getArticle(), overlap * 18D);
             }
             double avoidOverlap = calculateTopicOverlap(avoidTopics, feature.getFeatureJson());
             if (avoidOverlap > 0D) {
@@ -711,28 +765,16 @@ public class RecommendationServiceImpl implements RecommendationService {
         // 帖子实体
         private final Article article;
 
-        // 前端展示的主要推荐理由
-        private RecommendationReasonType reason;
-
         // 多种召回信号累计后的排序分
         private double score;
 
-        Candidate(Article article, RecommendationReasonType reason, double score) {
+        Candidate(Article article, double score) {
             this.article = article;
-            this.reason = reason;
             this.score = score;
         }
 
         Article getArticle() {
             return article;
-        }
-
-        RecommendationReasonType getReason() {
-            return reason;
-        }
-
-        void setReason(RecommendationReasonType reason) {
-            this.reason = reason;
         }
 
         double getScore() {

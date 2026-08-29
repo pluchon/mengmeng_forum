@@ -152,6 +152,13 @@ public final class Constant {
     public static final int SEARCH_RAG_CANDIDATE_LIMIT = ForumBusinessConstants.SEARCH_RAG_CANDIDATE_LIMIT;
     public static final int SEARCH_INVERTED_MAX_RESULTS = ForumBusinessConstants.SEARCH_INVERTED_MAX_RESULTS;
     public static final int SEARCH_RAG_MAX_RESULTS = ForumBusinessConstants.SEARCH_RAG_MAX_RESULTS;
+    public static final int RECOMMEND_FEED_CACHE_SIZE = ForumBusinessConstants.RECOMMEND_FEED_CACHE_SIZE;
+    public static final int RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS =
+            ForumBusinessConstants.RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS;
+    public static final int RECOMMEND_DIVERSITY_MIN_BOARDS = ForumBusinessConstants.RECOMMEND_DIVERSITY_MIN_BOARDS;
+    public static final String REDIS_KEY_RECOMMEND_FEED_RANK = ForumRedisKeys.RECOMMEND_FEED_RANK;
+    public static final long REDIS_TTL_RECOMMEND_FEED_RANK = ForumRedisKeys.TTL_RECOMMEND_FEED_RANK;
+    public static final String REDIS_KEY_RECOMMEND_PROFILE_COOLDOWN = ForumRedisKeys.RECOMMEND_PROFILE_COOLDOWN;
     public static final int PROFILE_CHANGE_MAX_PER_DAY = ForumBusinessConstants.PROFILE_CHANGE_MAX_PER_DAY;
     public static final String REDIS_KEY_PROFILE_CHANGE_DAY = ForumRedisKeys.PROFILE_CHANGE_DAY;
     public static final long REDIS_TTL_PROFILE_CHANGE_DAY = ForumRedisKeys.TTL_PROFILE_CHANGE_DAY;

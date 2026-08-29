@@ -20,10 +20,6 @@ public class RecommendArticleVO {
     // 相册第一张图 URL，卡片悬停预览用；无相册时为空
     private String firstImageUrl;
 
-    // 推荐理由编码
-    private String reasonCode;
 
-    // 推荐理由文案
-    private String reasonMessage;
 
 }
