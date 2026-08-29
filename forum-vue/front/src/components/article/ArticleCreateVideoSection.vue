@@ -15,12 +15,22 @@
               : '准备上传…'
         }}
       </p>
-      <p class="video-uploading__hint">200MB 以下直接上传；更大视频会后台处理，请勿重复点击</p>
+      <div class="video-actions">
+        <button type="button" class="video-action-btn" @click="emit('cancel')">取消上传</button>
+      </div>
     </div>
 
     <div v-else-if="uploadError" class="video-uploading video-uploading--error">
       <p class="video-uploading__text">{{ uploadError }}</p>
-      <button type="button" class="editor-gallery-empty-cta" @click="emit('open')">重新选择视频</button>
+      <div class="video-actions">
+        <button
+          v-if="canRetry"
+          type="button"
+          class="video-action-btn video-action-btn--primary"
+          @click="emit('retry')"
+        >重试上传</button>
+        <button type="button" class="video-action-btn" @click="emit('open')">重新选择视频</button>
+      </div>
     </div>
 
     <template v-else-if="url">
@@ -54,9 +64,10 @@ defineProps({
   uploading: { type: Boolean, default: false },
   progress: { type: Number, default: 0 },
   uploadError: { type: String, default: '' },
+  canRetry: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['open', 'remove'])
+const emit = defineEmits(['open', 'remove', 'cancel', 'retry'])
 </script>
 
 <style scoped>
@@ -113,9 +124,46 @@ const emit = defineEmits(['open', 'remove'])
   font-size: 11px;
 }
 .video-remove:hover {
-  background: var(--primary-pale);
-  color: var(--primary-red);
-  transform: translateY(-1px);
+  background: rgba(0, 0, 0, 0.12);
+}
+.video-preview--fill .video-remove:hover {
+  background: rgba(21, 18, 24, 0.78);
+  color: #fff;
+}
+
+/* 上传中 / 失败态的操作按钮：常规长方形，横向并排 */
+.video-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.video-action-btn {
+  height: 34px;
+  padding: 0 18px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary, #1a1a1a);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 32px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.video-action-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+.video-action-btn--primary {
+  border-color: #eb7da9;
+  background: #eb7da9;
+  color: #fff;
+}
+.video-action-btn--primary:hover {
+  background: #dc5f91;
+  border-color: #dc5f91;
 }
 .video-uploading {
   padding: 28px 16px;
@@ -136,11 +184,6 @@ const emit = defineEmits(['open', 'remove'])
   margin: 0 0 8px;
   font-weight: 700;
   color: var(--text-primary, #1a1a1a);
-}
-.video-uploading__hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary, #666);
 }
 .video-empty-cta {
   display: flex;

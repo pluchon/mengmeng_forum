@@ -41,7 +41,7 @@ public class AiController {
     }
 
     /** 一键生成帖子封面 */
-    @Operation(summary = "一键生成帖子封面", description = "理解正文、按需检索并按 quality 生成封面")
+    @Operation(summary = "一键生成帖子封面", description = "理解正文、按需检索并生成封面；quality 目前仅支持 normal 档")
     @PostMapping("/article-cover")
     public Result<AiArticleCoverResponseVO> articleCover(
             @RequestBody AiArticleCoverRequest req,
@@ -57,7 +57,7 @@ public class AiController {
         return Result.success(aiCompanionApiService.coverHints(user.getId(), req));
     }
 
-    @Operation(summary = "AI 生图", description = "质量: 普通 | 进阶")
+    @Operation(summary = "AI 生图", description = "质量: 目前仅支持普通档")
     @PostMapping("/image")
     public Result<AiImageResponseVO> image(@RequestBody AiImageRequest req, HttpServletRequest request) {
         AuthenticatedUser user = requireLoginUser(request);

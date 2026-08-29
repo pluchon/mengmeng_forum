@@ -6,6 +6,7 @@ import com.aliyun.oss.model.ObjectMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -53,6 +54,9 @@ public class FileServiceImpl implements FileService {
 
     @Autowired
     private OssConfig ossConfig;
+
+    @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     private AuditedOssImageUploader auditedOssImageUploader;
@@ -107,7 +111,10 @@ public class FileServiceImpl implements FileService {
 
     // 仅超过 200MB 才走 ffmpeg 119MB 级游戏录像全量重编码在弱 CPU 上可能 30min+
     private static final long VIDEO_COMPRESS_THRESHOLD = 200L * 1024 * 1024;
-    private static final long VIDEO_HARD_MAX_SIZE = 600L * 1024 * 1024;
+    // nginx client_max_body_size 与 spring multipart 都是 350MB，
+    // 之前这里写 600MB 永远够不着：超过 350MB 会先被 nginx 用 413 掐掉。
+    // 留 10MB 给 multipart 边界与表单字段开销
+    private static final long VIDEO_HARD_MAX_SIZE = 340L * 1024 * 1024;
 
     @Override
     public String uploadArticleVideo(MultipartFile file, Long userId) {
@@ -171,6 +178,7 @@ public class FileServiceImpl implements FileService {
         if (files.length > 9) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "单次最多上传9张图片"));
         }
+        assertUploadQuota(userId, files.length);
         List<MultipartFile> prepared = new ArrayList<>(files.length);
         List<String> fileNames = new ArrayList<>(files.length);
         for (MultipartFile file : files) {
@@ -180,6 +188,23 @@ public class FileServiceImpl implements FileService {
             fileNames.add(buildObjectName(uploadFile, userId));
         }
         return auditedOssImageUploader.uploadBatch(prepared, pathPrefix, fileNames, imageAuditExecutor);
+    }
+
+    // 上传接口不绑帖子，"单次 9 张"和"落库 15 张"都拦不住反复调用，
+    // 而每张图都要占 OSS 空间并过一次 AI 审图，两头都是钱。这里按用户做一层窗口计数
+    private void assertUploadQuota(Long userId, int count) {
+        if (userId == null || count <= 0) {
+            return;
+        }
+        String key = Constant.REDIS_KEY_IMAGE_UPLOAD_COUNT + userId;
+        for (int i = 0; i < count; i++) {
+            boolean allowed = RedisWindowCounter.tryAcquire(stringRedisTemplate, key,
+                    Constant.IMAGE_UPLOAD_USER_MAX_COUNT, Constant.REDIS_TTL_IMAGE_UPLOAD_COUNT);
+            if (!allowed) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_RATE_LIMITED,
+                        "图片上传太频繁了，请稍后再试"));
+            }
+        }
     }
 
     private static final Pattern DATA_URL_PATTERN = Pattern.compile(
@@ -304,6 +329,7 @@ public class FileServiceImpl implements FileService {
     // 共用上传逻辑: 参数校验 + 可选压缩 + pending OSS + URL 审图 + promote
     private String uploadImage(MultipartFile file, Long userId, String pathPrefix) {
         ensureOssReady();
+        assertUploadQuota(userId, 1);
         validateImageFile(file);
         MultipartFile uploadFile = materializeUploadFile(maybeCompress(file));
         String fileName = buildObjectName(uploadFile, userId);
@@ -409,6 +435,14 @@ public class FileServiceImpl implements FileService {
         String lower = contentType.toLowerCase(Locale.ROOT);
         if (!(lower.startsWith("video/") || lower.equals("application/octet-stream"))) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "仅支持视频文件上传"));
+        }
+        // octet-stream 是给不报 MIME 的浏览器留的口子，等于把白名单架空，
+        // 再用扩展名兜一道，避免任意二进制文件被丢给 ffmpeg 去啃
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || !Constant.VIDEO_SUPPORTED_EXTENSIONS.contains(name.substring(dot))) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "仅支持 MP4 / MOV / M4V / WEBM 格式的视频"));
         }
     }
 

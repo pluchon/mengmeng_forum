@@ -155,6 +155,11 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         if (pool.isEmpty()) {
             return List.of();
         }
+        // 与润色 / 封面一致：日配额只算次数，超长正文会让单次调用成本失控
+        if (content != null && content.length() > Constant.AI_INPUT_CONTENT_MAX_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "正文太长了，请精简后再试"));
+        }
         AiArticleTagRecommendRequest request = new AiArticleTagRecommendRequest();
         request.setUserId(userId);
         request.setClientRequestId(java.util.UUID.randomUUID().toString());

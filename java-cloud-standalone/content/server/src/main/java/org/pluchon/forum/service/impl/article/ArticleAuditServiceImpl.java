@@ -122,6 +122,20 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         }
     }
 
+    // 发布门槛：与前端 validateForPublish 对齐
+    private void assertReadyForAudit(Article article) {
+        String title = article.getTitle() == null ? "" : article.getTitle().trim();
+        String content = article.getContent() == null ? "" : article.getContent().trim();
+        if (title.length() < Constant.ARTICLE_TITLE_MIN_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "标题至少 " + Constant.ARTICLE_TITLE_MIN_LEN + " 个字，补齐后再提交审核"));
+        }
+        if (content.length() < Constant.ARTICLE_CONTENT_MIN_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "正文至少 " + Constant.ARTICLE_CONTENT_MIN_LEN + " 个字，补齐后再提交审核"));
+        }
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String submitForAudit(Long articleId, Long loginUserId) {
@@ -131,6 +145,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         UserInternalVO author = userService.queryUserByUserId(loginUserId);
         Article article = articleMapper.selectByIdForUpdate(articleId);
         checkArticleAuditSubmitGuard(new ArticleAuditSubmitContext(articleId, loginUserId, author, article));
+        // 草稿允许写一半就存，所以标题/正文的下限门槛放在这里：
+        // 提交审核才是真正要发出去的动作，空内容不该进审核流程
+        assertReadyForAudit(article);
         int curRetry = article.getAuditRetryCount() == null ? 0 : article.getAuditRetryCount();
         String taskId = UUID.randomUUID().toString();
         Byte oldStatus = article.getStatus();

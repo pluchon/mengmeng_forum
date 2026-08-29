@@ -3,6 +3,7 @@ import { Plus } from '@element-plus/icons-vue'
 import AppPagination from '@/components/common/AppPagination.vue'
 import { ElMessage } from 'element-plus'
 import { listArticleTags, submitArticleTagFeedback, suggestArticleTags } from '@/api/articleTag'
+import { iconConfirm } from '@/utils/appDialog'
 
 const TAG_PAGE_SIZE = 15
 const TAG_COLORS = [
@@ -141,6 +142,16 @@ async function runSuggest() {
   if (!props.boardId) {
     ElMessage.warning('请先选择发布版块')
     return
+  }
+  // 推荐结果是整体替换 selectedIds，手动挑好的标签会被覆盖掉，先说清楚
+  if (selectedIds.value.length > 0) {
+    const ok = await iconConfirm({
+      title: '用 AI 推荐替换当前标签？',
+      message: `将清空你已选的 ${selectedIds.value.length} 个标签，改用 AI 推荐的结果。`,
+      confirmText: '替换',
+      cancelText: '保留当前',
+    }).catch(() => false)
+    if (!ok) return
   }
   aiLoading.value = true
   emit('ai-generating', true)

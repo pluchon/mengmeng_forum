@@ -33,6 +33,9 @@ public class VideoTranscodeExecutorConfig {
                     thread.setDaemon(true);
                     return thread;
                 },
-                new ThreadPoolExecutor.CallerRunsPolicy());
+                // 绝不能用 CallerRunsPolicy：调用方是 afterCommit 里的 Tomcat 请求线程，
+                // 一次 ffmpeg 转码可能几十分钟，队列一满就会把工作线程一个个占死。
+                // 这里直接拒绝，帖子保持 PROCESSING，交给转码兜底任务重新入队
+                new ThreadPoolExecutor.AbortPolicy());
     }
 }

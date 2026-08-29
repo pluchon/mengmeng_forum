@@ -145,6 +145,11 @@ public class ArticleServiceImpl implements ArticleService {
         if (articleType == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_TYPE_INVALID));
         }
+        // articleType 走枚举会拒非法值，contentType 之前是原样落库，传 99 也能存进去
+        Byte contentType = req.getContentType();
+        if (contentType == null || (contentType != 0 && contentType != 1)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "内容类型不可用"));
+        }
         UserInternalVO user = userInternalLookupService.queryUserByUserId(userId);
         if (user == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));

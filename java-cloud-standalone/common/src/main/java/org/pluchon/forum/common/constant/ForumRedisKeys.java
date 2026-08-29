@@ -64,6 +64,14 @@ public final class ForumRedisKeys {
     public static final String USER_EMOJI_LIST = "user_emoji:";
 
     // 同一 IP 对同一帖子的浏览去重：既防游客脚本刷榜，也让阅读量更接近真实人数
+    // 用户维度的图片上传计数
+    public static final String IMAGE_UPLOAD_COUNT = "image_upload_count:";
+    public static final long TTL_IMAGE_UPLOAD_COUNT = 1800L;
+
+    // 转码执行中标记，防止兜底任务把正在跑的任务重复入队
+    public static final String VIDEO_TRANSCODE_LOCK = "forum:video:transcode:";
+    public static final long TTL_VIDEO_TRANSCODE_LOCK = 3600L;
+
     public static final String ARTICLE_VISIT_DEDUP = "article:visit:";
     public static final long TTL_ARTICLE_VISIT_DEDUP = 600L;
 

@@ -74,6 +74,28 @@ public final class ForumBusinessConstants {
     public static final String SEARCH_SOURCE_RAG = "rag";
     public static final String SEARCH_SOURCE_EMPTY = "empty";
 
+    // 与 article 表 title varchar(100) / content text 对齐，避免超长直接撞数据库约束报 500
+    // 下限只在"提交审核"时校验，草稿写一半也能存
+    public static final int ARTICLE_TITLE_MIN_LEN = 3;
+    public static final int ARTICLE_CONTENT_MIN_LEN = 6;
+    public static final int ARTICLE_TITLE_MAX_LEN = 100;
+    public static final int ARTICLE_CONTENT_MAX_LEN = 20000;
+
+    // 送进大模型的正文上限：日配额只算次数不算 token，超长正文单次就能烧掉几十次的钱
+    public static final int AI_INPUT_CONTENT_MAX_LEN = 20000;
+
+    // 同一用户 30 分钟内可上传的图片总张数。上传接口不绑帖子，
+    // 单次 9 张 / 落库 15 张都拦不住反复调用，而每张都要占 OSS 并过一次 AI 审图
+    public static final int IMAGE_UPLOAD_USER_MAX_COUNT = 120;
+
+    // octet-stream 会绕过 MIME 白名单，扩展名作为第二道
+    public static final Set<String> VIDEO_SUPPORTED_EXTENSIONS = Set.of(
+            ".mp4", ".mov", ".m4v", ".webm");
+    // 转码超过这个时长仍停在 PROCESSING，视为任务丢失（多为服务重启），重新入队
+    public static final int VIDEO_TRANSCODE_STALE_MINUTES = 40;
+    // 单次兜底扫描最多重新入队的条数，避免一次把队列撑爆
+    public static final int VIDEO_TRANSCODE_SWEEP_BATCH = 10;
+
     public static final int ARTICLE_GALLERY_MAX = 15;
     public static final int ARTICLE_GALLERY_MIN_CONTENT_LEN = 10;
 

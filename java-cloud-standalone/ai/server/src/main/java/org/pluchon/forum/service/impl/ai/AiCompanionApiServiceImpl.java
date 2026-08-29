@@ -73,6 +73,27 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    // 生图配额 consumeImageNormal 与通用生图共用，非会员额度并非 0，
+    // 所以会员校验必须放在封面这个入口上，而不是去改共用的配额数字
+    private void assertCoverVip(AiUserContext user) {
+        boolean proOrMax = user != null && user.isVipActive()
+                && (Constant.VIP_TIER_PRO.equals(user.getVipTier())
+                    || Constant.VIP_TIER_MAX.equals(user.getVipTier()));
+        if (!proOrMax) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN,
+                    "AI 配图为会员专享（PRO / MAX）"));
+        }
+    }
+
+    // 日配额只算调用次数，不算 token。一次超长正文就能烧掉相当于几十次正常调用的钱，
+    // 所以送模型之前先卡一道长度，与帖子正文的入库上限保持一致
+    private void assertAiInputLength(String content) {
+        if (content != null && content.length() > Constant.AI_INPUT_CONTENT_MAX_LEN) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "正文太长了，请精简到 " + Constant.AI_INPUT_CONTENT_MAX_LEN + " 字以内再试"));
+        }
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiPolishResponseVO polish(Long userId, AiPolishRequest req) {
@@ -82,6 +103,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
         req.setTitle(StringUtils.hasText(req.getTitle()) ? req.getTitle().trim() : "");
         req.setContent(req.getContent().trim());
+        assertAiInputLength(req.getContent());
         req.setEditorMode("markdown".equalsIgnoreCase(req.getEditorMode()) ? "markdown" : "rich");
         if (!StringUtils.hasText(req.getClientRequestId())) {
             req.setClientRequestId(UUID.randomUUID().toString());
@@ -133,8 +155,11 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         if (req == null || !StringUtils.hasText(req.getContent()) || !StringUtils.hasText(req.getQuality())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
+        // 帖子封面是会员专享。此前只有前端拦，直接打接口就能白嫖生图 —— 而生图是最贵的一档
+        assertCoverVip(user);
         req.setTitle(StringUtils.hasText(req.getTitle()) ? req.getTitle().trim() : "");
         req.setContent(req.getContent().trim());
+        assertAiInputLength(req.getContent());
         req.setEditorMode("markdown".equalsIgnoreCase(req.getEditorMode()) ? "markdown" : "rich");
         req.setUserPrompt(StringUtils.hasText(req.getUserPrompt()) ? req.getUserPrompt().trim() : "");
         String quality = req.getQuality().trim().toLowerCase(Locale.ROOT);

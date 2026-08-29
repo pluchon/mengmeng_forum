@@ -1,7 +1,8 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { confirmDialog } from '@/utils/appDialog'
+import { confirmDialog, iconConfirm } from '@/utils/appDialog'
+import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
 import {
   Close,
   MagicStick,
@@ -72,8 +73,11 @@ export function useArticleCreate() {
     coverImg: ''
   })
 
-  const coverFile = ref(null)
+  // 封面选完即传：上传本身不需要 articleId，只有绑定需要。
+  // 早传的真正价值不是"发布变快"，而是把 AI 审图的驳回提前到选图那一刻，
+  // 而不是让人写完整篇文章、点了发布才被告知封面不合规
   const coverPreview = ref('')
+  const coverUploading = ref(false)
   const coverInputRef = ref(null)
   const coverImageQuality = ref('normal')
   const coverAiGenerating = ref(false)
@@ -89,6 +93,10 @@ export function useArticleCreate() {
   const videoUploading = ref(false)
   const videoUploadProgress = ref(0)
   const videoUploadError = ref('')
+  // 失败后留住文件对象，重试就不用让用户重新选一遍
+  const lastVideoFile = ref(null)
+  const canRetryVideoUpload = computed(() => !videoUploading.value && !!lastVideoFile.value)
+  let videoUploadAbort = null
   let pendingVideoUpload = null
   const galleryUploading = ref(false)
   const galleryPendingCount = ref(0)
@@ -180,43 +188,17 @@ export function useArticleCreate() {
     return payload.url || payload.imageUrl || payload.image_url || ''
   }
 
+  // 图在选择时已经传好了，这里只剩一次轻量的绑定
   async function runCoverUploadToArticle(articleId) {
     const previewUrl = String(coverPreview.value || '').trim()
-    if (!coverFile.value) {
-      if (!previewUrl || previewUrl === form.coverImg) return { ok: true }
-      const bindRes = await updateArticleCoverByUrl(articleId, previewUrl)
-      if (bindRes.code === 0) {
-        form.coverImg = previewUrl
-        return { ok: true }
-      }
-      ElMessage.error(bindRes.message || '封面绑定失败')
-      return { ok: false }
-    }
-    const pre = validateLocalImageFile(coverFile.value)
-    if (!pre.ok) {
-      ElMessage.warning(pre.message)
-      return { ok: false }
-    }
-    const loading = openImageUploadLoading(coverFile.value, '正在上传封面，请稍候…')
-    try {
-      const uploadRes = await uploadCoverFile(coverFile.value)
-      if (uploadRes.code !== 0) {
-        ElMessage.error(uploadRes.message || '封面上传失败')
-        return { ok: false }
-      }
-      const bindRes = await updateArticleCoverByUrl(articleId, uploadRes.data)
-      if (bindRes.code !== 0) {
-        ElMessage.error(bindRes.message || '封面绑定失败')
-        return { ok: false }
-      }
-      revokeCoverPreviewIfNeeded()
-      coverPreview.value = uploadRes.data
-      form.coverImg = uploadRes.data
-      coverFile.value = null
+    if (!previewUrl || previewUrl === form.coverImg) return { ok: true }
+    const bindRes = await updateArticleCoverByUrl(articleId, previewUrl)
+    if (bindRes.code === 0) {
+      form.coverImg = previewUrl
       return { ok: true }
-    } finally {
-      loading.close()
     }
+    ElMessage.error(bindRes.message || '封面绑定失败')
+    return { ok: false }
   }
 
   watch(galleryUrls, () => {
@@ -228,6 +210,12 @@ export function useArticleCreate() {
       scrollGalleryToEnd()
       bindGalleryOverflowWatch()
     })
+  })
+
+  // 编辑内容变化后延迟暂存，避免每敲一个字就写一次 localStorage
+  watch(() => [form.title, form.content, form.boardId], () => {
+    if (localDraftSaveTimer) window.clearTimeout(localDraftSaveTimer)
+    localDraftSaveTimer = window.setTimeout(saveLocalDraft, 800)
   })
 
   let lastMdContent = form.content
@@ -250,6 +238,8 @@ export function useArticleCreate() {
   onBeforeUnmount(() => {
     galleryResizeObserver?.disconnect()
     revokeCoverPreviewIfNeeded()
+    window.removeEventListener('beforeunload', onBeforeUnload)
+    if (localDraftSaveTimer) window.clearTimeout(localDraftSaveTimer)
   })
 
   onMounted(async () => {
@@ -257,6 +247,7 @@ export function useArticleCreate() {
       router.replace('/community')
       return
     }
+    window.addEventListener('beforeunload', onBeforeUnload)
     nextTick(() => {
       if (editorMode.value === 'markdown') {
         scrollGalleryToEnd()
@@ -314,6 +305,18 @@ export function useArticleCreate() {
           })
         }
       }
+    }
+
+    // 恢复上次没保存完的内容。放在最后：编辑已有帖子时也可能有更新的本地暂存
+    if (restoreLocalDraft()) {
+      if (form.boardId) {
+        boardStore.categoryList.forEach((cat) => {
+          if (cat.boardList?.some((board) => board.id === form.boardId)) {
+            selectedBoard.value = [cat.category.id, form.boardId]
+          }
+        })
+      }
+      ElMessage.info('已恢复上次未保存的内容')
     }
   })
 
@@ -378,9 +381,26 @@ export function useArticleCreate() {
     form.contentType = mode === 'markdown' ? 1 : 0
   }
 
-  function setEditorMode(mode) {
+  // 两个编辑器共用同一个 form.content，中间不做任何格式转换：
+  // Markdown 内容被富文本编辑器接手后会被规范化成 HTML 并写回，切回来就是一堆标签。
+  // 与其让内容被悄悄改坏，不如明说会清空，由用户决定
+  async function setEditorMode(mode) {
     if (aiWriting.value) return
     if (editorMode.value === mode) return
+    if (String(form.content || '').trim()) {
+      const target = mode === 'markdown' ? 'Markdown' : '富文本'
+      const ok = await iconConfirm({
+        title: '切换编辑器会清空正文',
+        message: `两种编辑器的格式不通用，切换到${target}后当前正文会被清空，请先自行备份。`,
+        confirmText: '清空并切换',
+        cancelText: '取消',
+        danger: true,
+      }).catch(() => false)
+      if (!ok) return
+      form.content = ''
+      mdUndoStack.value = []
+      mdRedoStack.value = []
+    }
     editorMode.value = mode
     switchMode(mode)
     nextTick(() => {
@@ -433,23 +453,38 @@ export function useArticleCreate() {
     coverInputRef.value?.click()
   }
 
-  function onCoverFileSelected(event) {
+  async function onCoverFileSelected(event) {
     const file = event.target?.files?.[0]
     event.target.value = ''
-    if (!file) return
-    const pre = validateLocalImageFile(file)
+    if (!file || coverUploading.value) return
+    // 每次选图都要真的写 OSS 并过一次 AI 审图，先用魔数校验挡掉明显不合格的，别白花钱
+    const pre = await validateLocalImageFileMagic(file)
     if (!pre.ok) {
       ElMessage.warning(pre.message)
       return
     }
-    revokeCoverPreviewIfNeeded()
-    coverFile.value = file
-    coverPreview.value = URL.createObjectURL(file)
+    coverUploading.value = true
+    const loading = openImageUploadLoading(file, '正在上传封面，请稍候…')
+    try {
+      const uploadRes = await uploadCoverFile(file)
+      if (uploadRes.code !== 0) {
+        ElMessage.error(uploadRes.message || '封面上传失败')
+        return
+      }
+      revokeCoverPreviewIfNeeded()
+      coverPreview.value = uploadRes.data
+      ElMessage.success('封面已就绪')
+    } catch (error) {
+      ElMessage.error(extractApiErrorMessage(error) || '封面上传失败，请重试')
+    } finally {
+      loading.close()
+      coverUploading.value = false
+    }
   }
 
   function clearCover() {
+    if (coverUploading.value) return
     revokeCoverPreviewIfNeeded()
-    coverFile.value = null
     coverPreview.value = ''
     form.coverImg = ''
   }
@@ -488,7 +523,6 @@ export function useArticleCreate() {
         return
       }
       revokeCoverPreviewIfNeeded()
-      coverFile.value = null
       coverPreview.value = imageUrl
       ElMessage.success('已生成封面，提交时会自动保存')
     } catch (error) {
@@ -699,12 +733,88 @@ export function useArticleCreate() {
 
   function removeVideo() {
     if (videoUploading.value) {
-      ElMessage.warning('视频仍在上传，请等待完成后再移除')
+      ElMessage.warning('视频仍在上传，请先取消上传')
       return
     }
     videoUrl.value = ''
     videoUploadError.value = ''
     videoUploadProgress.value = 0
+    lastVideoFile.value = null
+  }
+
+  // 与后端 VIDEO_HARD_MAX_SIZE 对齐（nginx 与 multipart 都是 350MB，留 10MB 给表单开销）
+  const VIDEO_MAX_MB = 340
+  const VIDEO_ALLOWED_EXT = ['.mp4', '.mov', '.m4v', '.webm']
+
+  // 之前只把体积拿来拼提示文案、不拦截：选个 1GB 的文件会真的开始传，
+  // 传到 350MB 才被 nginx 用 413 掐断，白等一场
+  function validateLocalVideoFile(file) {
+    const name = String(file?.name || '').toLowerCase()
+    const dot = name.lastIndexOf('.')
+    if (dot < 0 || !VIDEO_ALLOWED_EXT.includes(name.slice(dot))) {
+      return { ok: false, message: '仅支持 MP4 / MOV / M4V / WEBM 格式的视频' }
+    }
+    if (file.size > VIDEO_MAX_MB * 1024 * 1024) {
+      const mb = (file.size / 1024 / 1024).toFixed(1)
+      return { ok: false, message: `视频 ${mb}MB，超过 ${VIDEO_MAX_MB}MB 上限，请压缩后再上传` }
+    }
+    return { ok: true }
+  }
+
+  function startVideoUpload(file) {
+    const sizeMb = (file.size / 1024 / 1024).toFixed(1)
+    videoUploadError.value = ''
+    videoUploadProgress.value = 0
+    videoUploading.value = true
+    videoUploadAbort = new AbortController()
+    ElMessage.info(
+      sizeMb >= 200
+        ? `视频约 ${sizeMb}MB，超过 200MB 将后台处理，请勿重复点击`
+        : `视频约 ${sizeMb}MB，上传中，可先写正文`,
+    )
+    pendingVideoUpload = uploadArticleVideo(file, {
+      signal: videoUploadAbort.signal,
+      onUploadProgress: (ev) => {
+        if (!ev.total) return
+        const pct = Math.round((ev.loaded / ev.total) * 100)
+        videoUploadProgress.value = ev.loaded >= ev.total ? 100 : Math.min(99, pct)
+      },
+    })
+      .then((res) => {
+        if (res.code === 0 && res.data) {
+          videoUrl.value = String(res.data)
+          videoUploadProgress.value = 100
+          lastVideoFile.value = null
+          ElMessage.success('视频上传成功')
+        } else {
+          videoUploadError.value = res.message || '视频上传失败'
+          ElMessage.error(videoUploadError.value)
+        }
+      })
+      .catch((err) => {
+        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') {
+          videoUploadError.value = '已取消上传，可重试或换一个视频'
+          return
+        }
+        // 断网 / 超时都落在这里：文件对象留着，用户点重试即可，不用重新选
+        videoUploadError.value = extractApiErrorMessage(err, '视频上传异常，请检查网络后重试')
+        ElMessage.error(videoUploadError.value)
+      })
+      .finally(() => {
+        videoUploading.value = false
+        videoUploadAbort = null
+        pendingVideoUpload = null
+      })
+  }
+
+  function cancelVideoUpload() {
+    if (!videoUploading.value) return
+    videoUploadAbort?.abort()
+  }
+
+  function retryVideoUpload() {
+    if (videoUploading.value || !lastVideoFile.value) return
+    startVideoUpload(lastVideoFile.value)
   }
 
   function onVideoFileSelected(e) {
@@ -720,47 +830,21 @@ export function useArticleCreate() {
       ElMessage.warning('已有视频在上传，请等待完成')
       return
     }
-    const sizeMb = (file.size / 1024 / 1024).toFixed(1)
-    videoUploadError.value = ''
-    videoUploadProgress.value = 0
-    videoUploading.value = true
-    ElMessage.info(
-      sizeMb >= 200
-        ? `视频约 ${sizeMb}MB，超过 200MB 将后台处理，请勿重复点击`
-        : `视频约 ${sizeMb}MB，上传中，可先写正文`,
-    )
-    pendingVideoUpload = uploadArticleVideo(file, {
-      onUploadProgress: (ev) => {
-        if (!ev.total) return
-        const pct = Math.round((ev.loaded / ev.total) * 100)
-        videoUploadProgress.value = ev.loaded >= ev.total ? 100 : Math.min(99, pct)
-      },
-    })
-      .then((res) => {
-        if (res.code === 0 && res.data) {
-          videoUrl.value = String(res.data)
-          videoUploadProgress.value = 100
-          ElMessage.success('视频上传成功')
-        } else {
-          videoUploadError.value = res.message || '视频上传失败'
-          ElMessage.error(videoUploadError.value)
-        }
-      })
-      .catch((err) => {
-        videoUploadError.value = extractApiErrorMessage(err, '视频上传异常')
-        ElMessage.error(videoUploadError.value)
-      })
-      .finally(() => {
-        videoUploading.value = false
-        pendingVideoUpload = null
-      })
+    const pre = validateLocalVideoFile(file)
+    if (!pre.ok) {
+      ElMessage.warning(pre.message)
+      return
+    }
+    lastVideoFile.value = file
+    startVideoUpload(file)
   }
 
   // Markdown 预览
   const renderedPreview = computed(() => {
     if (!form.content) return '<div class="preview-empty">预览区域</div>'
-    try { return marked.parse(form.content) }
-    catch { return form.content }
+    // 与详情页一致地净化：预览只给作者自己看，但渲染路径不该有两套标准
+    try { return sanitizeHtml(marked.parse(form.content)) }
+    catch { return sanitizePlainTextAsHtml(form.content) }
   })
 
   // Markdown 工具栏
@@ -819,10 +903,54 @@ export function useArticleCreate() {
     return raw.replace(/<[^>]+>/g, '').trim().length
   }
 
-  // 核心提交逻辑
+  // 存草稿：只挡"存不下去"的硬条件（版块、长度上限、上传未完成），
+  // 不要求封面和最少字数 —— 草稿的意义就是写一半先存着
+  async function validateForDraft() {
+    if (!form.boardId) {
+      ElMessage.warning('请先选择发布版块')
+      return false
+    }
+    if (!form.title.trim() && !form.content.trim()) {
+      ElMessage.warning('写点标题或正文再存草稿吧')
+      return false
+    }
+    if (form.title.length > 100) {
+      ElMessage.warning('标题最多 100 个字')
+      return false
+    }
+    if (form.content.length > 20000) {
+      ElMessage.warning('正文最多 20000 字，请精简后再保存')
+      return false
+    }
+    if (coverUploading.value || galleryUploading.value || videoUploading.value) {
+      ElMessage.warning('还有文件在上传，请稍候再保存')
+      return false
+    }
+    return true
+  }
+
+  // 提交审核：完整门槛，与后端 assertReadyForAudit 对齐
   async function validateAndPrepare() {
     if (!form.boardId || !form.title || !form.content.trim()) {
       ElMessage.warning('标题、内容和版块缺一不可哦')
+      return false
+    }
+    // 与后端 PublishArticleRequest / UpdateArticleRequest 的约束对齐，
+    // 免得写完长文才在提交时被拒
+    if (form.title.trim().length < 3) {
+      ElMessage.warning('标题至少 3 个字')
+      return false
+    }
+    if (form.content.trim().length < 6) {
+      ElMessage.warning('正文至少 6 个字')
+      return false
+    }
+    if (form.content.length > 20000) {
+      ElMessage.warning('正文最多 20000 字，请精简后再发布')
+      return false
+    }
+    if (coverUploading.value) {
+      ElMessage.warning('封面还在上传中，请稍候')
       return false
     }
     if (!coverPreview.value) {
@@ -856,7 +984,7 @@ export function useArticleCreate() {
 
   async function handleSaveDraft() {
     await waitForPendingVideoUpload()
-    if (!await validateAndPrepare()) return
+    if (!await validateForDraft()) return
     submitting.value = true
     try {
       const payload = buildArticlePayload()
@@ -884,6 +1012,7 @@ export function useArticleCreate() {
           ElMessage.warning('正文已保存，但封面上传失败，请稍后在草稿中重试')
           return
         }
+        clearLocalDraft()
         ElMessage.success('草稿已保存')
         router.push('/creative')
       } else if (res?.message) {
@@ -944,7 +1073,82 @@ export function useArticleCreate() {
     }
   }
 
-  function handleCancel() {
+
+  // 本地暂存：刷新 / 误关页后还能把写了一半的内容捞回来。
+  // 只存纯文本字段，图片和视频已经在 OSS 上，靠 URL 恢复即可
+  const LOCAL_DRAFT_KEY = 'forum:articleDraft'
+  let localDraftSaveTimer = null
+
+  function localDraftKey() {
+    return `${LOCAL_DRAFT_KEY}:${userStore.id || 'anon'}:${route.params.id || 'new'}`
+  }
+
+  function hasUnsavedContent() {
+    return Boolean(String(form.title || '').trim() || String(form.content || '').trim())
+  }
+
+  function saveLocalDraft() {
+    if (!hasUnsavedContent()) return
+    try {
+      localStorage.setItem(localDraftKey(), JSON.stringify({
+        title: form.title,
+        content: form.content,
+        contentType: form.contentType,
+        articleType: form.articleType,
+        boardId: form.boardId,
+        editorMode: editorMode.value,
+        coverPreview: coverPreview.value,
+        tagIds: tagIds.value,
+        savedAt: Date.now(),
+      }))
+    } catch {
+      // 隐私模式或配额满：存不下就算了，不该影响正常编辑
+    }
+  }
+
+  function clearLocalDraft() {
+    try { localStorage.removeItem(localDraftKey()) } catch { /* 同上 */ }
+  }
+
+  function restoreLocalDraft() {
+    let saved = null
+    try {
+      saved = JSON.parse(localStorage.getItem(localDraftKey()) || 'null')
+    } catch {
+      return false
+    }
+    if (!saved || (!saved.title && !saved.content)) return false
+    form.title = saved.title || ''
+    form.content = saved.content || ''
+    form.contentType = Number(saved.contentType) || 0
+    if (saved.articleType != null) form.articleType = saved.articleType
+    if (saved.boardId) form.boardId = saved.boardId
+    editorMode.value = saved.editorMode === 'markdown' ? 'markdown' : 'rich'
+    if (saved.coverPreview) coverPreview.value = saved.coverPreview
+    if (Array.isArray(saved.tagIds)) tagIds.value = saved.tagIds
+    return true
+  }
+
+  // 关标签页 / 刷新前提示。内容其实已经暂存，但用户不知道，给个明确提醒
+  function onBeforeUnload(event) {
+    if (!hasUnsavedContent()) return
+    saveLocalDraft()
+    event.preventDefault()
+    event.returnValue = ''
+  }
+  // 写了半天点一下就走人太狠了，有内容时先确认
+  async function handleCancel() {
+    if (hasUnsavedContent()) {
+      const ok = await iconConfirm({
+        title: '放弃这次编辑？',
+        message: '当前内容尚未保存，离开后将会丢失。也可以先点「存草稿」保存。',
+        confirmText: '放弃并离开',
+        cancelText: '继续编辑',
+        danger: true,
+      }).catch(() => false)
+      if (!ok) return
+    }
+    clearLocalDraft()
     router.back()
   }
 
@@ -960,6 +1164,7 @@ export function useArticleCreate() {
     applyAiContent,
     cascaderOptions,
     coverPreview,
+    coverUploading,
     editorMode,
     form,
     bindGalleryItemsRef,
@@ -985,6 +1190,9 @@ export function useArticleCreate() {
     clearSelectedMusic,
     videoUploading,
     videoUploadProgress,
+    canRetryVideoUpload,
+    cancelVideoUpload,
+    retryVideoUpload,
     videoUploadError,
     galleryUploading,
     galleryPendingCount,

@@ -55,6 +55,8 @@ public final class Constant {
     public static final String REDIS_KEY_SMS_COOLDOWN = ForumRedisKeys.SMS_COOLDOWN;
     public static final String REDIS_KEY_SMS_COUNT = ForumRedisKeys.SMS_COUNT;
     public static final long REDIS_TTL_SMS_COUNT = ForumRedisKeys.TTL_SMS_COUNT;
+    public static final String REDIS_KEY_VIDEO_TRANSCODE_LOCK = ForumRedisKeys.VIDEO_TRANSCODE_LOCK;
+    public static final long REDIS_TTL_VIDEO_TRANSCODE_LOCK = ForumRedisKeys.TTL_VIDEO_TRANSCODE_LOCK;
     public static final String REDIS_KEY_ARTICLE_VISIT_DEDUP = ForumRedisKeys.ARTICLE_VISIT_DEDUP;
     public static final long REDIS_TTL_ARTICLE_VISIT_DEDUP = ForumRedisKeys.TTL_ARTICLE_VISIT_DEDUP;
 
@@ -154,6 +156,20 @@ public final class Constant {
     public static final String SEARCH_SOURCE_INV = ForumBusinessConstants.SEARCH_SOURCE_INV;
     public static final String SEARCH_SOURCE_RAG = ForumBusinessConstants.SEARCH_SOURCE_RAG;
     public static final String SEARCH_SOURCE_EMPTY = ForumBusinessConstants.SEARCH_SOURCE_EMPTY;
+    public static final int ARTICLE_TITLE_MIN_LEN = ForumBusinessConstants.ARTICLE_TITLE_MIN_LEN;
+    public static final int ARTICLE_CONTENT_MIN_LEN = ForumBusinessConstants.ARTICLE_CONTENT_MIN_LEN;
+    public static final int ARTICLE_TITLE_MAX_LEN = ForumBusinessConstants.ARTICLE_TITLE_MAX_LEN;
+    public static final int ARTICLE_CONTENT_MAX_LEN = ForumBusinessConstants.ARTICLE_CONTENT_MAX_LEN;
+    public static final int AI_INPUT_CONTENT_MAX_LEN = ForumBusinessConstants.AI_INPUT_CONTENT_MAX_LEN;
+    public static final int IMAGE_UPLOAD_USER_MAX_COUNT = ForumBusinessConstants.IMAGE_UPLOAD_USER_MAX_COUNT;
+    public static final String REDIS_KEY_IMAGE_UPLOAD_COUNT = ForumRedisKeys.IMAGE_UPLOAD_COUNT;
+    public static final long REDIS_TTL_IMAGE_UPLOAD_COUNT = ForumRedisKeys.TTL_IMAGE_UPLOAD_COUNT;
+    public static final java.util.Set<String> VIDEO_SUPPORTED_EXTENSIONS =
+            ForumBusinessConstants.VIDEO_SUPPORTED_EXTENSIONS;
+    public static final int VIDEO_TRANSCODE_STALE_MINUTES =
+            ForumBusinessConstants.VIDEO_TRANSCODE_STALE_MINUTES;
+    public static final int VIDEO_TRANSCODE_SWEEP_BATCH =
+            ForumBusinessConstants.VIDEO_TRANSCODE_SWEEP_BATCH;
     public static final int ARTICLE_GALLERY_MAX = ForumBusinessConstants.ARTICLE_GALLERY_MAX;
     public static final int ARTICLE_GALLERY_MIN_CONTENT_LEN = ForumBusinessConstants.ARTICLE_GALLERY_MIN_CONTENT_LEN;
     public static final long OSS_MAX_IMAGE_SIZE = ForumBusinessConstants.OSS_MAX_IMAGE_SIZE;

@@ -62,6 +62,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         if (!article.getUserId().equals(loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
+        validateArticleCoverUrl(coverUrl);
         if (ArticleStatus.isEditingLocked(article.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
         }
@@ -154,6 +155,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         if (videoUrl == null || videoUrl.isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先上传视频"));
         }
+        validateArticleVideoUrl(videoUrl);
         Article article = articleMapper.selectByIdForUpdate(articleId);
         if (article == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
@@ -410,6 +412,38 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
     }
 
     // 校验相册图 URL 必须落在 OSS_PATH_ARTICLE_IMAGE 子目录
+    // 封面此前完全不校验来源，可以指向任意外部地址：内容不可控、防盗链失效，
+    // 超过 cover_img varchar(255) 还会直接撞数据库约束。
+    // 合法来源只有两处：用户经 /file/uploadCover 上传的封面，以及 AI 生成后回传本站 OSS 的图
+    private void validateArticleCoverUrl(String url) {
+        if (url == null || url.isBlank()) {
+            // 允许留空表示清空封面
+            return;
+        }
+        String trimmed = url.trim();
+        if (trimmed.length() > 255) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+        if (ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_COVER)
+                || ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_AI_GENERATION_ARTICLE)) {
+            return;
+        }
+        log.warn("帖子封面 URL 非法: {}", trimmed);
+        throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+    }
+
+    // 视频比封面更需要校验来源：审核链会拿这个 URL 去下载分析，
+    // 不限定来源等于给了一个让服务端主动请求任意地址的口子。
+    // 另外 video_url 是 varchar(500)，超长会直接撞数据库约束
+    private void validateArticleVideoUrl(String url) {
+        String trimmed = url == null ? "" : url.trim();
+        if (trimmed.length() > 500
+                || !ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_ARTICLE_VIDEO)) {
+            log.warn("帖子视频 URL 非法: {}", trimmed);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+    }
+
     private void validateArticleImageUrl(String url) {
         if (!ossConfig.matchesPublicObjectUrl(url, Constant.OSS_PATH_ARTICLE_IMAGE)) {
             log.warn("帖子相册 URL 非法: {}", url);

@@ -145,7 +145,7 @@ export function uploadArticleImages(files, { onUploadProgress, silentHttpError }
 }
 
 // 上传帖子视频 单个
-export function uploadArticleVideo(file, { onUploadProgress } = {}) {
+export function uploadArticleVideo(file, { onUploadProgress, signal } = {}) {
   const formData = new FormData()
   formData.append('file', file)
   return request({
@@ -154,6 +154,7 @@ export function uploadArticleVideo(file, { onUploadProgress } = {}) {
     data: formData,
     timeout: 600000,
     onUploadProgress,
+    signal,
   })
 }
 

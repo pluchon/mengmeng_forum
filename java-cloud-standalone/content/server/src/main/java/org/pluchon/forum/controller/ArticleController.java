@@ -104,7 +104,7 @@ public class ArticleController {
 
     @Operation(summary = "编辑帖子内容，只有作者本人才可以", description = "传入帖子ID，标题，以及正文")
     @PutMapping("/updateArticleByArticleId")
-    public Result<String> updateArticleByArticleId(@RequestBody UpdateArticleRequest updateArticleRequest, HttpServletRequest httpServletRequest) {
+    public Result<String> updateArticleByArticleId(@Valid @RequestBody UpdateArticleRequest updateArticleRequest, HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         if (loginUser == null){
             return Result.fail(ResultCode.FAILED_USER_NOT_EXISTS);

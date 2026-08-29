@@ -11,10 +11,20 @@
         </div>
         <div class="editor-action-btns">
           <el-button class="editor-btn-ghost" @click="handleCancel">取消</el-button>
-          <el-button class="editor-btn-draft" :loading="submitting" @click="handleSaveDraft">
+          <el-button
+            class="editor-btn-draft"
+            :loading="submitting"
+            :disabled="coverUploading"
+            @click="handleSaveDraft"
+          >
             存草稿
           </el-button>
-          <el-button class="editor-btn-primary" :loading="submitting" @click="handlePublish">
+          <el-button
+            class="editor-btn-primary"
+            :loading="submitting"
+            :disabled="coverUploading"
+            @click="handlePublish"
+          >
             提交审核
           </el-button>
         </div>
@@ -295,8 +305,11 @@
                 :uploading="videoUploading"
                 :progress="videoUploadProgress"
                 :upload-error="videoUploadError"
+                :can-retry="canRetryVideoUpload"
                 @open="openVideoPicker"
                 @remove="removeVideo"
+                @cancel="cancelVideoUpload"
+                @retry="retryVideoUpload"
               />
             </section>
 
