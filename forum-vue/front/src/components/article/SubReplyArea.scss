@@ -17,9 +17,17 @@
   line-height: 1.4;
 }
 
-.sub-user-link,
+// 时间从这一行移走后腾出了空间。76px 大约只能放 5 个汉字，
+// 是昵称显示不全的真正瓶颈；@某人 的目标名保持较窄，避免顶掉发言人昵称
+.sub-user-link {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sub-reply-target {
-  max-width: 76px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -51,10 +59,19 @@
   color: #686b77;
 }
 
-.sub-item-meta-time {
+// IP 属地留在头部原位，时间已移到操作行右侧
+.sub-item-meta-ip {
   flex-shrink: 0;
   font-size: 11px;
   font-weight: 400;
+  color: #a0a3ae;
+  white-space: nowrap;
+}
+
+// 时间放在举报图标左边，定宽不参与挤压，昵称因此能显示更全
+.sub-item-actions__time {
+  flex-shrink: 0;
+  font-size: 11px;
   color: #a0a3ae;
   white-space: nowrap;
 }

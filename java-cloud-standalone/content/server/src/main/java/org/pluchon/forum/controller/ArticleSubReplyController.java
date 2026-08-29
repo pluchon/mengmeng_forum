@@ -3,6 +3,7 @@ package org.pluchon.forum.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
@@ -23,7 +24,7 @@ public class ArticleSubReplyController {
 
     @Operation(summary = "发表楼中楼回复", description = "传入 articleId->帖子ID、replyId->楼层ID、replyUserId->被回复的用户ID、content->内容")
     @PutMapping("/subReply")
-    public Result subReply(@RequestBody SubReplyRequest request, HttpServletRequest httpServletRequest) {
+    public Result subReply(@Valid @RequestBody SubReplyRequest request, HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         articleSubReplyService.subReply(request, loginUser.getId());
         return Result.success("楼中楼回复成功");

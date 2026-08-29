@@ -40,6 +40,11 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
 
     private static final byte DELETE_TRUE = 1;
     private static final byte MEDIA_TYPE_VIDEO = 1;
+    // 单次查询返回上限。窗口限了 120 秒，但窗口内的条数原本不限，
+    // 热门视频一个分片能出几千条，白白压带宽也压前端渲染
+    private static final int QUERY_MAX_ROWS = 200;
+    // 视频时长上限，超出这个值的时间点不可能是真实播放位置
+    private static final int VIDEO_TIME_MAX_MS = 6 * 60 * 60 * 1000;
 
     @Autowired
     private ArticleVideoDanmakuMapper articleVideoDanmakuMapper;
@@ -87,7 +92,7 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
             throw new ApplicationException(Result.fail(ResultCode.FAILED_DANMAKU_FONT_SIZE_INVALID));
         }
         Integer videoTimeMs = req.getVideoTimeMs();
-        if (videoTimeMs == null || videoTimeMs < 0) {
+        if (videoTimeMs == null || videoTimeMs < 0 || videoTimeMs > VIDEO_TIME_MAX_MS) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_DANMAKU_TIME_INVALID));
         }
         Article article = articleService.selectArticleByArticleId(req.getArticleId());
@@ -131,7 +136,8 @@ public class ArticleVideoDanmakuServiceImpl implements ArticleVideoDanmakuServic
                         .ge(ArticleVideoDanmaku::getVideoTimeMs, fromMs)
                         .le(ArticleVideoDanmaku::getVideoTimeMs, toMs)
                         .orderByAsc(ArticleVideoDanmaku::getVideoTimeMs)
-                        .orderByAsc(ArticleVideoDanmaku::getId));
+                        .orderByAsc(ArticleVideoDanmaku::getId)
+                        .last("limit " + QUERY_MAX_ROWS));
         return toItemVOListWithUsers(rows, loginUserId);
     }
 

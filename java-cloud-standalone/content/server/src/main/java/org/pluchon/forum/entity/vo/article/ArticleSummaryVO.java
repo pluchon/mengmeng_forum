@@ -13,4 +13,8 @@ public class ArticleSummaryVO {
     private Boolean canExpand;
 
     private Boolean canRegenerate;
+
+    // 本次"重新生成"是否落在冷却期内而被忽略。
+    // 之前冷却命中时静默返回当前状态，前端照常开始轮询，用户以为在重新生成
+    private Boolean cooldownHit;
 }

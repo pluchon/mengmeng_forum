@@ -3,6 +3,7 @@ package org.pluchon.forum.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
@@ -23,10 +24,10 @@ public class ArticleReplyController {
 
     @Operation(summary = "回复帖子", description = "传入回复信息，包括帖子ID、内容")
     @PutMapping("/replyArticle")
-    public Result<String> replyArticle(@RequestBody ReplyArticleRequest replyArticleRequest, HttpServletRequest httpServletRequest) {
+    public Result<ArticleReplyListResponse> replyArticle(@Valid @RequestBody ReplyArticleRequest replyArticleRequest,
+                                                        HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
-        articleReplyService.replyArticle(replyArticleRequest, loginUser.getId());
-        return Result.success("回复成功");
+        return Result.success(articleReplyService.replyArticle(replyArticleRequest, loginUser.getId()));
     }
 
     @Operation(summary = "帖子回复列表(分页)", description = "传入帖子ID和分页参数")

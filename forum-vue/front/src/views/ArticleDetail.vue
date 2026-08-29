@@ -60,7 +60,6 @@
                   :transcode-status="articleVideoTranscodeStatus"
                   :poster="videoPosterUrl || undefined"
                   @playing="onDetailVideoPlaying"
-                  @ended="replayDetailVideo"
                   @report-danmaku="reportDanmaku"
                 />
                 <div
@@ -421,6 +420,9 @@
                     <div class="ai-guide-title">
                       <el-icon class="ai-guide-wand" :size="18"><MagicStick /></el-icon>
                       <span>AI 导读</span>
+                      <transition name="fade">
+                        <span v-if="summaryJustUpdated" class="ai-guide-just-updated">刚刚更新</span>
+                      </transition>
                     </div>
                     <div class="ai-guide-actions">
                       <button
@@ -466,7 +468,7 @@
 
               <div class="comments-list">
                 <div
-                  v-for="item in replies"
+                  v-for="item in visibleReplies"
                   :key="item.articleReply.id"
                   class="comment-item"
                 >

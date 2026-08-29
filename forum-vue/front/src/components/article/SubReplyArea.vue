@@ -55,8 +55,8 @@
                 <span class="sub-reply-target" :title="sub.replyUserNickname">@{{ compactNickname(sub.replyUserNickname) }}</span>
               </template>
             </div>
-            <span class="sub-item-meta-time">
-              {{ formatCommentMeta(sub.subReply?.createTime, resolveIpRegion(sub)) }}
+            <span v-if="resolveIpRegion(sub)" class="sub-item-meta-ip">
+              {{ resolveIpRegion(sub) }}
             </span>
           </div>
           <div class="sub-item-content">
@@ -90,6 +90,7 @@
             </div>
             <div class="sub-item-actions__right">
               <span v-if="sub.accepted" class="sub-accepted-tag">已采纳</span>
+              <span class="sub-item-actions__time">{{ formatSubTime(sub.subReply?.createTime) }}</span>
               <button
                 v-if="!isOwnSub(sub) && !isAuthorReply(sub)"
                 type="button"

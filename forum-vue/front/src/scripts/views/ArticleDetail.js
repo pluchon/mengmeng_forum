@@ -161,6 +161,15 @@ export function useArticleDetail() {
     return s === plain || (plain.length > 40 && (s.includes(plain) || plain.includes(s)))
   }
   const replies = ref([])
+  // 置顶的在前，正常列表里同 id 的过滤掉 —— 否则用户往下滚到真实位置会看到重复的一条
+  const visibleReplies = computed(() => {
+    if (!pinnedReplies.value.length) return replies.value
+    const pinnedIds = new Set(pinnedReplies.value.map((item) => item?.articleReply?.id))
+    return [
+      ...pinnedReplies.value,
+      ...replies.value.filter((item) => !pinnedIds.has(item?.articleReply?.id)),
+    ]
+  })
   const replyPageNum = ref(1)
   const replyPageSize = ref(10)
   const replyTotal = ref(0)
@@ -181,6 +190,15 @@ export function useArticleDetail() {
   const replyPackBarCanScrollLeft = ref(false)
   const replyPackBarCanScrollRight = ref(false)
   const replySubmitting = ref(false)
+  // 评论按时间正序 + 无限滚动，新评论其实落在最末尾，用户看不到自己刚发的。
+  // 这里把它临时置顶在最前面——只是本次会话的视图状态，刷新后自然消失、
+  // 回到真实顺序，所以不需要维护它的生命周期
+  const pinnedReplies = ref([])
+  const favoriteSubmitting = ref(false)
+  const replyLikePending = ref(new Set())
+  // AI 导读标题右侧的"刚刚更新"提示
+  const summaryJustUpdated = ref(false)
+  let summaryJustUpdatedTimer = null
   const subReplyRefreshTokens = ref({})
 
   const REPLY_MEDIA_TYPE_IMAGE = 1
@@ -613,11 +631,58 @@ export function useArticleDetail() {
   })
   const detailVideoRef = ref(null)
 
-  function replayDetailVideo(e) {
-    const v = e?.target || detailVideoRef.value
-    if (!v) return
-    v.currentTime = 0
-    v.play().catch(() => {})
+  // 转码中只能播原片，转好了也不会自己切到 HLS，那行"流处理中"提示还会一直挂着。
+  // 30 秒问一次，转好或超过 10 分钟就收工——不值得为此上 WebSocket
+  const TRANSCODE_POLL_INTERVAL_MS = 30_000
+  const TRANSCODE_POLL_MAX_MS = 10 * 60 * 1000
+  let transcodePollTimer = null
+  let transcodePollStartedAt = 0
+
+  function stopTranscodePolling() {
+    if (transcodePollTimer != null) {
+      window.clearTimeout(transcodePollTimer)
+      transcodePollTimer = null
+    }
+    transcodePollStartedAt = 0
+  }
+
+  async function pollTranscodeStatusOnce(articleId) {
+    transcodePollTimer = null
+    if (Date.now() - transcodePollStartedAt > TRANSCODE_POLL_MAX_MS) {
+      stopTranscodePolling()
+      return
+    }
+    try {
+      const res = await getArticleDetail(articleId)
+      // 只接当前这篇的结果：轮询期间用户可能已经翻到别的帖子了
+      if (res?.code !== 0 || String(article.value?.id) !== String(articleId)) {
+        stopTranscodePolling()
+        return
+      }
+      const next = Number(res.data?.article?.videoTranscodeStatus)
+      if (next === 1) {
+        transcodePollTimer = window.setTimeout(
+          () => pollTranscodeStatusOnce(articleId),
+          TRANSCODE_POLL_INTERVAL_MS,
+        )
+        return
+      }
+      // 转好（或失败）了，只动这一个字段：整份替换会连带重置图集/关注等状态
+      article.value = { ...article.value, videoTranscodeStatus: next }
+      stopTranscodePolling()
+    } catch {
+      stopTranscodePolling()
+    }
+  }
+
+  function startTranscodePollingIfNeeded(articleId) {
+    stopTranscodePolling()
+    if (!articleId || articleVideoTranscodeStatus.value !== 1) return
+    transcodePollStartedAt = Date.now()
+    transcodePollTimer = window.setTimeout(
+      () => pollTranscodeStatusOnce(articleId),
+      TRANSCODE_POLL_INTERVAL_MS,
+    )
   }
 
   const isVideoArticle = computed(() => {
@@ -759,7 +824,7 @@ export function useArticleDetail() {
         reason,
       })
       if (response.code !== 0) {
-        ElMessage.error(response.message || '举报提交失败')
+
         return
       }
       contentReportDialogVisible.value = false
@@ -1056,7 +1121,12 @@ export function useArticleDetail() {
       shareCopiedTimer = null
     }
     stopAiSummaryPolling()
+    stopTranscodePolling()
     stopTriplePressAnimation()
+    if (summaryJustUpdatedTimer) {
+      window.clearTimeout(summaryJustUpdatedTimer)
+      summaryJustUpdatedTimer = null
+    }
   })
 
   const renderedContent = computed(() => {
@@ -1112,6 +1182,7 @@ export function useArticleDetail() {
   function resetDetailTransientState() {
     stopGalleryAutoplay()
     stopAiSummaryPolling()
+    stopTranscodePolling()
     aiLoading.value = false
     detailVideoRef.value?.resetDanmakuEngine?.()
     const musicEl = musicAudioRef.value
@@ -1132,6 +1203,7 @@ export function useArticleDetail() {
     replyTotal.value = 0
     replyLoadingMore.value = false
     replies.value = []
+    pinnedReplies.value = []
     unbindReplyLoadObserver()
     subReplyRefreshTokens.value = {}
   }
@@ -1181,6 +1253,7 @@ export function useArticleDetail() {
         isFavorited.value = res.data.isFavorited || false
         notInterestedArticleStore.syncFeedbackState(articleId, res.data.isNotInterested === true)
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
+        startTranscodePollingIfNeeded(articleId)
         await loadAuthorFollowState()
         await syncOwnerArticleStatus(articleId)
         await nextTick()
@@ -1571,17 +1644,20 @@ export function useArticleDetail() {
     if (!(await ensureLoggedIn('点赞需要登录'))) return
     const replyId = item?.articleReply?.id
     if (!replyId) return
+    // 逐条评论各自防重：连点会重复请求，点赞数是本地加减的，会被加错
+    if (replyLikePending.value.has(replyId)) return
+    replyLikePending.value = new Set(replyLikePending.value).add(replyId)
     try {
       const res = item.liked ? await unlikeReply(replyId) : await likeReply(replyId)
       if (res.code === 0) {
         item.liked = !item.liked
         const base = Number(item.articleReply.likeCount) || 0
         item.articleReply.likeCount = Math.max(0, base + (item.liked ? 1 : -1))
-      } else {
-        ElMessage.error(res.message || '操作失败')
       }
-    } catch {
-      ElMessage.error('点赞请求异常')
+    } finally {
+      const next = new Set(replyLikePending.value)
+      next.delete(replyId)
+      replyLikePending.value = next
     }
   }
 
@@ -1613,11 +1689,9 @@ export function useArticleDetail() {
           message: isFollowingAuthor.value ? '关注成功' : '已取消关注',
           zIndex: DETAIL_TOAST_Z_INDEX,
         })
-      } else {
-        ElMessage.error({ message: res.message || '操作失败', zIndex: DETAIL_TOAST_Z_INDEX })
       }
     } catch {
-      ElMessage.error({ message: '操作异常', zIndex: DETAIL_TOAST_Z_INDEX })
+      // 失败原因由响应拦截器统一提示
     } finally {
       followSaving.value = false
     }
@@ -1654,18 +1728,8 @@ export function useArticleDetail() {
   async function handleShare() {
     if (!article.value?.id) return
     const url = `${window.location.origin}/article/${article.value.id}`
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: article.value.title || '分享帖子',
-          text: article.value.title || '',
-          url,
-        })
-        return
-      } catch (error) {
-        if (error?.name === 'AbortError') return
-      }
-    }
+    // 只复制链接，不走 navigator.share —— 那会拉起系统分享面板/外部程序，
+    // 长按三连结束时也会自动触发一次，很打断
     const copied = copyToClipboardSync(url)
     if (copied) {
       showShareCopiedFeedback()
@@ -1698,11 +1762,7 @@ export function useArticleDetail() {
         const currentLikeCount = Number(article.value.likeCount) || 0
         article.value.likeCount = Math.max(0, currentLikeCount + (isLiked.value ? 1 : -1))
         ElMessage.success(isLiked.value ? '已点赞' : '已取消')
-      } else {
-        ElMessage.error(res.message || '操作失败')
       }
-    } catch (err) {
-      ElMessage.error('点赞请求异常')
     } finally {
       engagementSubmitting.value = false
     }
@@ -1853,16 +1913,21 @@ export function useArticleDetail() {
   async function toggleFavorite() {
     if (!(await ensureLoggedIn('收藏需要登录'))) return
     if (!article.value?.id) return
+    // 取消收藏此前没有防重：连点会重复请求，而收藏数是前端本地加减的，会被减多次
+    if (favoriteSubmitting.value) return
 
     if (isFavorited.value) {
-      const res = await cancelArticleFavorite(article.value.id)
-      if (res.code === 0) {
-        isFavorited.value = false
-        const fc = Number(article.value.favoriteCount) || 0
-        article.value.favoriteCount = Math.max(0, fc - 1)
-        ElMessage.success('已取消收藏')
-      } else {
-        ElMessage.error(res.message || '取消收藏失败')
+      favoriteSubmitting.value = true
+      try {
+        const res = await cancelArticleFavorite(article.value.id)
+        if (res.code === 0) {
+          isFavorited.value = false
+          const fc = Number(article.value.favoriteCount) || 0
+          article.value.favoriteCount = Math.max(0, fc - 1)
+          ElMessage.success('已取消收藏')
+        }
+      } finally {
+        favoriteSubmitting.value = false
       }
       return
     }
@@ -1891,7 +1956,7 @@ export function useArticleDetail() {
         article.value.favoriteCount = fc + 1
         ElMessage.success('已收藏')
       } else {
-        ElMessage.error(res.message || '收藏失败')
+
       }
     } finally {
       favoriteSaving.value = false
@@ -1909,10 +1974,23 @@ export function useArticleDetail() {
     if (!(await ensureLoggedIn('评论需要登录'))) return
     if (blockIfMuted(userStore)) return
     if (replySubmitting.value) return
-    if (replyPendingImages.value.some((img) => img?.pending)) return
+    // 这两处原本是静默 return：用户点了发送，界面纹丝不动，不知道为什么
+    if (replyPendingImages.value.some((img) => img?.pending)) {
+      ElMessage.warning('图片还在上传中，请稍候')
+      return
+    }
     const text = replyContent.value.trim()
     const mediaList = buildReplyMediaList()
-    if (!text && !mediaList.length) return
+    if (!text && !mediaList.length) {
+      ElMessage.warning('说点什么再发送吧')
+      return
+    }
+    // 失败的图片会被 buildReplyMediaList 跳过。不提醒的话，传 3 张失败 1 张，
+    // 发出去只有 2 张，用户却以为都发了
+    if (replyPendingImages.value.some((img) => img?.failed)) {
+      ElMessage.warning('有图片上传失败，请重试或移除后再发送')
+      return
+    }
     replySubmitting.value = true
     try {
       let res
@@ -1931,6 +2009,12 @@ export function useArticleDetail() {
         ElMessage.success('发送成功')
         replyContent.value = ''
         const wasSub = replyTarget.value?.mode === 'sub' && replyTarget.value.replyId
+        if (!wasSub && res.data?.articleReply?.id != null) {
+          pinnedReplies.value = [
+            { ...res.data, liked: !!res.data.liked },
+            ...pinnedReplies.value,
+          ]
+        }
         const subReplyId = wasSub ? replyTarget.value.replyId : null
         replyTarget.value = null
         clearReplyPendingMedia()
@@ -1941,12 +2025,11 @@ export function useArticleDetail() {
             [subReplyId]: (subReplyRefreshTokens.value[subReplyId] || 0) + 1,
           }
         }
-      } else {
-        ElMessage.error(res.message || '评论发送失败')
       }
     } catch (err) {
+      // 失败原因由响应拦截器统一提示；这里再弹一次，弹的是 AxiosError 的
+      // 原始 message（"Request failed with status code 400"），只会盖掉真正的原因
       if (err?.code === 1104) return
-      ElMessage.error(err?.message || '评论发送失败')
     } finally {
       replySubmitting.value = false
     }
@@ -2000,6 +2083,15 @@ export function useArticleDetail() {
     }, 5000)
   }
 
+  function showSummaryJustUpdated() {
+    summaryJustUpdated.value = true
+    if (summaryJustUpdatedTimer) window.clearTimeout(summaryJustUpdatedTimer)
+    summaryJustUpdatedTimer = window.setTimeout(() => {
+      summaryJustUpdated.value = false
+      summaryJustUpdatedTimer = null
+    }, 4000)
+  }
+
   function stopAiSummaryPolling() {
     if (aiSummaryPollTimer) {
       window.clearInterval(aiSummaryPollTimer)
@@ -2026,15 +2118,21 @@ export function useArticleDetail() {
     try {
       const res = await regenerateArticleSummary(article.value.id)
       if (res.code !== 0) {
-        ElMessage.error(res.message || '重新生成失败')
         aiSummaryCollapsed.value = previousCollapsed
         aiSummaryCanExpand.value = previousCanExpand
         return
       }
       applyAiSummaryState(res.data || {})
+      // F) 冷却期内后端只是原样返回当前状态，没有真的重新生成。
+      // 不弹 toast，改成标题右侧一行淡色小字，几秒后自动消失
+      if (res.data?.cooldownHit) {
+        showSummaryJustUpdated()
+        aiSummaryCollapsed.value = previousCollapsed
+        aiSummaryCanExpand.value = previousCanExpand
+        return
+      }
       startAiSummaryPolling()
-    } catch (error) {
-      ElMessage.error(error?.message || '重新生成失败')
+    } catch {
       aiSummaryCollapsed.value = previousCollapsed
       aiSummaryCanExpand.value = previousCanExpand
     } finally {
@@ -2126,7 +2224,6 @@ export function useArticleDetail() {
     videoPlayerReady,
     videoPosterUrl,
     onDetailVideoPlaying,
-    replayDetailVideo,
     author,
     addReplyShopEmoji,
     canSubmitReply,
@@ -2212,6 +2309,9 @@ export function useArticleDetail() {
     replyPlaceholder,
     replySelectedPack,
     replySubmitting,
+    visibleReplies,
+    favoriteSubmitting,
+    summaryJustUpdated,
     replyTarget,
     replyTargetLabel,
     replyVisiblePacks,

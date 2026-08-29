@@ -525,7 +525,9 @@ export function captureVideoFirstFrame(videoUrl) {
     const timer = setTimeout(() => finish(''), 2800)
     video.muted = true
     video.playsInline = true
-    video.preload = 'auto'
+    // 只要第一帧，preload='auto' 会把整片拉下来；
+    // 而且这里的 crossOrigin 和播放器的 <video> 不一致，两边不共用缓存，等于下两遍
+    video.preload = 'metadata'
     video.crossOrigin = 'anonymous'
     video.onerror = () => {
       clearTimeout(timer)

@@ -70,7 +70,9 @@
   right: 0;
   top: 0;
   overflow: hidden;
-  pointer-events: auto;
+  /* 这层铺满整个画面。设 auto 会把点击全吃掉，画面就没法点击播放/暂停了。
+     穿透给下面的 video，单条弹幕自己再打开 pointer-events */
+  pointer-events: none;
   z-index: 2;
 }
 

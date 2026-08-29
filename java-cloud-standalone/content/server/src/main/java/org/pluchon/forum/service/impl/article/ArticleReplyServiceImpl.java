@@ -85,7 +85,7 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void replyArticle(ReplyArticleRequest req, Long loginUserId) {
+    public ArticleReplyListResponse replyArticle(ReplyArticleRequest req, Long loginUserId) {
         UserInternalVO loginUser = userService.queryUserByUserId(loginUserId);
         ContentUserMuteGuard.assertCanPost(loginUser);
         Long articleId = req.getArticleId();
@@ -123,6 +123,13 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         // 帖子回复数 +1
         articleService.addReply(articleId);
         contentModerationTaskService.scheduleComment((byte) 2, newReply.getId(), raw);
+        // 复用列表的组装逻辑，返回的对象与列表项完全同构，前端不用另做拼装
+        return buildReplyResponse(
+                newReply,
+                Map.of(newReply.getId(), 0),
+                Set.of(),
+                articleReplyMediaService.mapByReplyIds(List.of(newReply.getId())),
+                Set.of());
     }
 
     @Override

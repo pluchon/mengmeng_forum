@@ -42,6 +42,8 @@ function useArticleDetailVideo(props, emit) {
   const currentTime = ref(0)
   const duration = ref(0)
   const progressDragging = ref(false)
+  // 拖动期间滑块跟手指走，不跟视频真实位置走
+  const dragPercent = ref(0)
   const volume = ref(0.8)
   const muted = ref(false)
   const playbackRate = ref(1)
@@ -68,6 +70,8 @@ function useArticleDetailVideo(props, emit) {
   let hlsNetworkRecoverCount = 0
   let hlsMediaRecoverCount = 0
   let hlsRecoverTimer = null
+  // 换源（HLS 降级 / 重试 / 转码完成）前记下位置与播放状态，新源就绪后还原
+  let pendingResume = null
 
   const {
     DANMAKU_AREA_OPTIONS,
@@ -99,6 +103,9 @@ function useArticleDetailVideo(props, emit) {
   const isLoggedIn = computed(() => userStore.isLoggedIn)
 
   const progressPercent = computed(() => {
+    // 拖动时不能用视频真实位置：seek 要等一会儿才生效，
+    // 期间滑块会在"手指位置"和"视频旧位置"之间来回跳，这就是拖起来卡的手感
+    if (progressDragging.value) return dragPercent.value
     if (!duration.value) return 0
     return Math.min(100, (currentTime.value / duration.value) * 100)
   })
@@ -127,6 +134,18 @@ function useArticleDetailVideo(props, emit) {
     const el = playerRootRef.value
     if (!el) return
     danmakuEngine.setLayerSize(el.clientWidth, el.clientHeight)
+  }
+
+  // shouldPlayOverride 传 true 表示"用户主动要求继续"，忽略当前的暂停态
+  function captureResumePoint(shouldPlayOverride = null) {
+    const v = videoEl.value
+    const t = Number(currentTime.value) || 0
+    pendingResume = {
+      timeSec: t > 0.5 ? t : 0,
+      shouldPlay: shouldPlayOverride != null
+        ? shouldPlayOverride
+        : (v ? !v.paused : playing.value),
+    }
   }
 
   function clearHlsRecoverTimer() {
@@ -172,6 +191,7 @@ function useArticleDetailVideo(props, emit) {
   }
 
   function fallbackHlsToMp4(mp4) {
+    captureResumePoint()
     resetHlsRecoverState()
     destroyHls()
     if (mp4) {
@@ -283,6 +303,7 @@ function useArticleDetailVideo(props, emit) {
     const hlsUrl = String(props.hlsUrl || '').trim()
     const ready = Number(props.transcodeStatus) === TRANSCODE_STATUS.READY
     if (!preferMp4Fallback.value && ready && hlsUrl && mp4) {
+      captureResumePoint()
       preferMp4Fallback.value = true
       destroyHls()
       const video = videoEl.value
@@ -300,11 +321,12 @@ function useArticleDetailVideo(props, emit) {
     const hadHlsPrefer = Number(props.transcodeStatus) === TRANSCODE_STATUS.READY
       && !!String(props.hlsUrl || '').trim()
     // 重试：先回退 MP4；若已是 MP4 则重新挂载
+    // 从断点续，不要让用户重看一遍；点了重试就是想接着看，强制播放
+    captureResumePoint(true)
     preferMp4Fallback.value = hadHlsPrefer && !preferMp4Fallback.value
       ? true
       : false
     loadError.value = false
-    currentTime.value = 0
     duration.value = 0
     playing.value = false
     nextTick(() => attachMediaSource())
@@ -316,17 +338,25 @@ function useArticleDetailVideo(props, emit) {
     duration.value = Number(v.duration) || 0
     v.volume = volume.value
     v.playbackRate = playbackRate.value
-    v.play()
-      .then(() => {
-        playing.value = true
-        emit('playing')
-      })
-      .catch(() => {
+    const resume = pendingResume
+    pendingResume = null
+    if (resume && resume.timeSec > 0 && Number.isFinite(v.duration) && resume.timeSec < v.duration) {
+      try {
+        v.currentTime = resume.timeSec
+        currentTime.value = resume.timeSec
+      } catch {
+        // 拿不到就从头播，不值得为此报错
+      }
+    }
+    // 换源前是暂停的就保持暂停：用户明明按了暂停，不该被一次降级弄成自动播放
+    if (!resume || resume.shouldPlay) {
+      v.play().catch(() => {
+        // 浏览器可能拦截带声音的自动播放，交给用户手动点
         playing.value = !v.paused
-        if (!v.paused) emit('playing')
       })
-    startProgressLoop()
-    danmakuEngine.resetPlaybackState()
+    }
+    // 只清屏上正在飞的弹幕，已下载的分片留着 —— 同一个帖子的弹幕不会变
+    danmakuEngine.clearActiveItems()
     scheduleInitialDanmakuLoad()
   }
 
@@ -341,8 +371,9 @@ function useArticleDetailVideo(props, emit) {
   function onTimeUpdate(e) {
     const v = e?.target || videoEl.value
     if (!v) return
-    currentTime.value = Number(v.currentTime) || 0
     duration.value = Number(v.duration) || duration.value
+    if (progressDragging.value) return
+    currentTime.value = Number(v.currentTime) || 0
   }
 
   function onEnded() {
@@ -354,15 +385,26 @@ function useArticleDetailVideo(props, emit) {
     v.play().catch(() => {})
   }
 
+  // playing 与进度循环统一由 video 的 play / pause 事件驱动，
+  // 避免"以为在播其实没播"这类状态漂移
+  function onMediaPlay() {
+    playing.value = true
+    startProgressLoop()
+    emit('playing')
+  }
+
+  function onMediaPause() {
+    playing.value = false
+    stopProgressLoop()
+  }
+
   function togglePlay() {
     const v = videoEl.value
     if (!v) return
     if (v.paused) {
       v.play().catch(() => {})
-      playing.value = true
     } else {
       v.pause()
-      playing.value = false
     }
   }
 
@@ -374,32 +416,40 @@ function useArticleDetailVideo(props, emit) {
     currentTime.value = v.currentTime
   }
 
-  function seekFromPointerEvent(e) {
+  function percentFromPointerEvent(e) {
     const rail = e?.currentTarget
-    if (!rail) return
+    if (!rail) return null
     const rect = rail.getBoundingClientRect()
-    if (!rect.width) return
-    const percent = ((e.clientX - rect.left) / rect.width) * 100
-    seekByPercent(percent)
+    if (!rect.width) return null
+    return Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100))
   }
 
   function onProgressPointerDown(e) {
     if (e?.button != null && e.button !== 0) return
+    const percent = percentFromPointerEvent(e)
+    if (percent == null) return
     progressDragging.value = true
+    dragPercent.value = percent
     e.currentTarget?.setPointerCapture?.(e.pointerId)
-    seekFromPointerEvent(e)
   }
 
+  // 拖动过程中只挪滑块，不碰 video.currentTime：
+  // 每次 seek 都要冲掉解码缓冲并重发 Range 请求，按 pointermove 的频率来必然卡
   function onProgressPointerMove(e) {
     if (!progressDragging.value) return
-    seekFromPointerEvent(e)
+    const percent = percentFromPointerEvent(e)
+    if (percent == null) return
+    dragPercent.value = percent
   }
 
+  // 松手才真正跳一次。单击（按下即抬起）走的也是这条，行为不变
   function onProgressPointerUp(e) {
     if (!progressDragging.value) return
-    seekFromPointerEvent(e)
+    const percent = percentFromPointerEvent(e)
+    if (percent != null) dragPercent.value = percent
     progressDragging.value = false
     e.currentTarget?.releasePointerCapture?.(e.pointerId)
+    seekByPercent(dragPercent.value)
   }
 
   function onProgressKeydown(e) {
@@ -524,21 +574,16 @@ function useArticleDetailVideo(props, emit) {
     }
   }
 
-  function onDanmakuLayerEnter() {
-    danmakuScrollPaused.value = true
-  }
-
-  function onDanmakuLayerLeave() {
-    danmakuScrollPaused.value = false
-    hoveredDanmakuKey.value = null
-  }
-
+  // 弹幕层已改为点击穿透（否则整块画面都点不到 video），
+  // 悬停暂停只能挂在单条弹幕上——这也更接近常见播放器的行为
   function onDanmakuItemEnter(item) {
     hoveredDanmakuKey.value = item?.key || null
+    danmakuScrollPaused.value = true
   }
 
   function onDanmakuItemLeave() {
     hoveredDanmakuKey.value = null
+    danmakuScrollPaused.value = false
   }
 
   async function toggleDanmakuLike(item) {
@@ -628,7 +673,8 @@ function useArticleDetailVideo(props, emit) {
     stopProgressLoop()
     const tick = () => {
       const v = videoEl.value
-      if (v) currentTime.value = Number(v.currentTime) || 0
+      // 拖动时不能用视频真实位置盖掉滑块位置
+      if (v && !progressDragging.value) currentTime.value = Number(v.currentTime) || 0
       rafId = requestAnimationFrame(tick)
     }
     rafId = requestAnimationFrame(tick)
@@ -644,15 +690,18 @@ function useArticleDetailVideo(props, emit) {
   watch(
     () => [props.src, props.hlsUrl, props.transcodeStatus],
     () => {
+      // 转码完成会把 transcodeStatus 从 1 切到 2，这里要续播，
+      // 否则用户看到一半会被自己的转码任务弹回片头
+      captureResumePoint()
       preferMp4Fallback.value = false
       loadError.value = false
-      currentTime.value = 0
       duration.value = 0
       playing.value = false
       danmuText.value = ''
       colorPickerOpen.value = false
       clearDanmuComposeSession(false)
-      danmakuEngine.resetPlaybackState()
+      // 只是换了播放源，帖子没变，弹幕不用重下
+      danmakuEngine.clearActiveItems()
       nextTick(() => attachMediaSource())
     },
   )
@@ -678,6 +727,16 @@ function useArticleDetailVideo(props, emit) {
     stopProgressLoop()
     resetHlsRecoverState()
     destroyHls()
+    const v = videoEl.value
+    if (v) {
+      try {
+        v.pause()
+        v.removeAttribute('src')
+        v.load()
+      } catch {
+        // 忽略
+      }
+    }
     danmakuEngine.stop()
     clearDanmuComposeSession(false)
     document.removeEventListener('click', onDocumentClick)
@@ -719,13 +778,13 @@ function useArticleDetailVideo(props, emit) {
     muted,
     onDanmakuItemEnter,
     onDanmakuItemLeave,
-    onDanmakuLayerEnter,
-    onDanmakuLayerLeave,
     onDanmuInputBlur,
     onDanmuInputFocus,
     onEnded,
     onLoadedMetadata,
     onMediaError,
+    onMediaPause,
+    onMediaPlay,
     onProgressPointerDown,
     onProgressPointerMove,
     onProgressPointerUp,
@@ -814,13 +873,13 @@ const {
   muted,
   onDanmakuItemEnter,
   onDanmakuItemLeave,
-  onDanmakuLayerEnter,
-  onDanmakuLayerLeave,
   onDanmuInputBlur,
   onDanmuInputFocus,
   onEnded,
   onLoadedMetadata,
   onMediaError,
+  onMediaPause,
+  onMediaPlay,
   onProgressPointerDown,
   onProgressPointerMove,
   onProgressPointerUp,

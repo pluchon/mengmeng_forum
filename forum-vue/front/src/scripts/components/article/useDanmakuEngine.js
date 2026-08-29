@@ -29,6 +29,10 @@ export function useDanmakuEngine(options) {
   let lastVideoMs = 0
   let lastFrameTs = 0
   let lastBufferChunk = -1
+  // 顶部/底部弹幕各自的占位表：key 是槽位序号，值是该槽空出来的视频时间
+  let fixedSlotReleaseAt = { 1: [], 2: [] }
+  // trySpawn 不必每帧跑：视频推进不到一帧的距离时没有新弹幕可出
+  let lastSpawnScanMs = -1
   let bufferTimer = null
   let bufferLoading = false
   let pendingBufferMs = null
@@ -74,6 +78,7 @@ export function useDanmakuEngine(options) {
     spawnedIds.value = new Set()
     activeItems.value = []
     laneReleaseAt.value = []
+    fixedSlotReleaseAt = { 1: [], 2: [] }
   }
 
   function resetPlaybackState() {
@@ -83,6 +88,7 @@ export function useDanmakuEngine(options) {
     catalog.value = new Map()
     lastVideoMs = 0
     lastBufferChunk = -1
+    lastSpawnScanMs = -1
     bufferLoading = false
     seekInFlight = false
   }
@@ -208,11 +214,11 @@ export function useDanmakuEngine(options) {
     if (seekInFlight) return
     seekInFlight = true
     clearBufferTimer()
-    activeItems.value = []
-    laneReleaseAt.value = []
-    spawnedIds.value = new Set()
-    loadedChunkIds.value = new Set()
+    // 只清屏上正在飞的，已下载的分片留着：
+    // 弹幕分片是不变的静态数据，拖一次进度条重下一次纯属浪费
+    clearActiveItems()
     lastBufferChunk = -1
+    lastSpawnScanMs = -1
     lastVideoMs = videoTimeMs
     try {
       await ensureBuffer(videoTimeMs)
@@ -245,7 +251,6 @@ export function useDanmakuEngine(options) {
     const pool = candidates.length ? candidates : Array.from({ length: lanes }, (_, i) => i)
     const shuffled = pool.slice().sort(() => Math.random() - 0.5)
     for (const lane of shuffled) {
-      const laneY = lane * DANMAKU_LANE_HEIGHT + 6
       const startX = layerSize.value.width
       if (!laneHasOverlap(lane, startX, width)) {
         const durationSec = (layerSize.value.width + width) / DANMAKU_SPEED_PX_PER_SEC
@@ -291,12 +296,35 @@ export function useDanmakuEngine(options) {
     })
   }
 
+  // 同一时刻的多条顶部（或底部）弹幕原本 y 完全相同，会叠成一团。
+  // 这里按停留时长占位，依次往下（顶部）/ 往上（底部）排
+  function pickFixedSlot(mode, videoTimeMs, laneH) {
+    const slots = fixedSlotReleaseAt[mode] || []
+    const areaH = getDisplayAreaHeight()
+    const maxSlots = Math.max(1, Math.floor((areaH - 16) / laneH))
+    for (let i = 0; i < maxSlots; i += 1) {
+      if ((slots[i] || 0) <= videoTimeMs) {
+        slots[i] = videoTimeMs + DANMAKU_FIXED_DURATION_MS
+        fixedSlotReleaseAt[mode] = slots
+        return i
+      }
+    }
+    // 全占满了就压在最后一槽，宁可重叠也别漏掉
+    const last = maxSlots - 1
+    slots[last] = videoTimeMs + DANMAKU_FIXED_DURATION_MS
+    fixedSlotReleaseAt[mode] = slots
+    return last
+  }
+
   function spawnFixedDanmaku(record, elapsedMs, mode) {
     const fontSize = Number(record.fontSize ?? 1)
     const width = estimateDanmakuWidth(record.content, fontSize)
     const areaH = getDisplayAreaHeight()
     const laneH = getDanmakuLaneHeight(fontSize)
-    const y = mode === DANMAKU_MODE_TOP ? 8 : Math.max(8, areaH - laneH - 8)
+    const slot = pickFixedSlot(mode, Number(record.videoTimeMs) || 0, laneH)
+    const y = mode === DANMAKU_MODE_TOP
+      ? 8 + slot * laneH
+      : Math.max(8, areaH - laneH - 8 - slot * laneH)
     const x = Math.max(0, (layerSize.value.width - width) / 2)
     appendActiveItem({
       key: `${record.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -328,10 +356,13 @@ export function useDanmakuEngine(options) {
     }
   }
 
-  function shouldSkipByDensity() {
+  // 原本用 Math.random() 抽签，但被抽掉的记录不会进 spawnedIds，
+  // 下一帧还会再抽一次——600ms 容差里有几十帧，等于几乎不生效。
+  // 改成按 id 取模的确定性判据：稳定，刷新前后看到的也一致
+  function shouldSkipByDensity(record) {
     const density = readSettings().density || 'standard'
-    if (density === 'low') return Math.random() < 0.45
-    return false
+    if (density !== 'low') return false
+    return (Number(record?.id) || 0) % 2 !== 0
   }
 
   function trySpawn(videoTimeMs, lookbackMs = DANMAKU_SPAWN_TOLERANCE_MS) {
@@ -340,7 +371,7 @@ export function useDanmakuEngine(options) {
       if (!shouldShowDanmakuRecord(record, readSettings())) continue
       const delta = videoTimeMs - Number(record.videoTimeMs || 0)
       if (delta >= 0 && delta <= lookbackMs) {
-        if (shouldSkipByDensity()) continue
+        if (shouldSkipByDensity(record)) continue
         spawnDanmaku(record, delta)
       }
     }
@@ -357,32 +388,40 @@ export function useDanmakuEngine(options) {
       handleSeek(videoTimeMs)
     } else {
       lastVideoMs = videoTimeMs
-      if (readSettings().enabled !== false) {
+      // trySpawn 要遍历整个 catalog（长视频几千条），不必每帧都扫；
+      // 视频推进不到 100ms 时不可能有新弹幕该出场
+      if (readSettings().enabled !== false
+          && (lastSpawnScanMs < 0 || Math.abs(videoTimeMs - lastSpawnScanMs) >= 100)) {
+        lastSpawnScanMs = videoTimeMs
         maybeEnsureBuffer(videoTimeMs)
         trySpawn(videoTimeMs)
       }
     }
 
-    activeItems.value = activeItems.value.filter((item) => {
-      if (item.expiresAtVideoMs != null && videoTimeMs > item.expiresAtVideoMs) {
-        return false
+    const scrollPaused = !!options.scrollPaused?.value
+    const moving = playing && readSettings().enabled !== false && !scrollPaused
+    const deltaSec = moving
+      ? Math.min(0.05, Math.max(0, (ts - (lastFrameTs || ts)) / 1000)) * playbackRate
+      : 0
+    lastFrameTs = ts
+
+    // 就地改 x，不再每帧给每条弹幕造一个新对象：
+    // ref 里的对象本身是响应式的，改属性一样能触发重渲染
+    if (moving && deltaSec > 0) {
+      const step = DANMAKU_SPEED_PX_PER_SEC * deltaSec
+      for (const item of activeItems.value) {
+        if (item.mode === DANMAKU_MODE_SCROLL) item.x -= step
       }
+    }
+
+    // 只有真的淘汰了东西才换数组，否则每帧无条件重建会白白触发一轮 diff
+    const kept = activeItems.value.filter((item) => {
+      if (item.expiresAtVideoMs != null && videoTimeMs > item.expiresAtVideoMs) return false
+      if (item.mode === DANMAKU_MODE_SCROLL && item.x <= -item.width - 24) return false
       return true
     })
-
-    const scrollPaused = !!options.scrollPaused?.value
-    if (playing && readSettings().enabled !== false && !scrollPaused) {
-      const prev = lastFrameTs || ts
-      const deltaSec = Math.min(0.05, Math.max(0, (ts - prev) / 1000)) * playbackRate
-      lastFrameTs = ts
-      activeItems.value = activeItems.value
-        .map((item) => {
-          if (item.mode !== DANMAKU_MODE_SCROLL) return item
-          return { ...item, x: item.x - DANMAKU_SPEED_PX_PER_SEC * deltaSec }
-        })
-        .filter((item) => item.mode !== DANMAKU_MODE_SCROLL || item.x > -item.width - 24)
-    } else {
-      lastFrameTs = ts
+    if (kept.length !== activeItems.value.length) {
+      activeItems.value = kept
     }
 
     rafId = requestAnimationFrame(tick)
@@ -414,7 +453,13 @@ export function useDanmakuEngine(options) {
   }
 
   function onReplay() {
-    resetPlaybackState()
+    // 只重置播放进度相关的状态，catalog / loadedChunkIds 留着：
+    // 循环一轮就把整片弹幕重下一遍太亏
+    clearBufferTimer()
+    clearActiveItems()
+    lastVideoMs = 0
+    lastBufferChunk = -1
+    lastSpawnScanMs = -1
     maybeEnsureBuffer(0)
   }
 

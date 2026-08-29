@@ -10,6 +10,8 @@
       @timeupdate="onTimeUpdate"
       @ended="onEnded"
       @error="onMediaError"
+      @play="onMediaPlay"
+      @pause="onMediaPause"
       @click="togglePlay"
     />
     <div
@@ -36,8 +38,6 @@
       v-if="settings.enabled"
       class="detail-video-player__danmaku-layer"
       :style="danmakuLayerStyle"
-      @mouseenter="onDanmakuLayerEnter"
-      @mouseleave="onDanmakuLayerLeave"
     >
       <div
         v-for="item in danmakuVisibleItems"

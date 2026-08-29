@@ -142,7 +142,9 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
                 .orderByDesc(ContentAiTask::getId)
                 .last("LIMIT 1"));
         if (recent != null) {
-            return toVO(getFeature(articleId), articleId);
+            ArticleSummaryVO cooling = toVO(getFeature(articleId), articleId);
+            cooling.setCooldownHit(true);
+            return cooling;
         }
         String plain = plainText(article.getContent());
         if (plain.length() <= 50) {
