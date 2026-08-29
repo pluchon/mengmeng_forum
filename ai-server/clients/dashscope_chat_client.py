@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 import json
 import logging
+import time
 from typing import Any
 
 import requests
@@ -20,6 +21,24 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# 复用连接，省掉每次调用的 TCP + TLS 握手
+_SESSION = requests.Session()
+
+# 只有这些状态码值得重试：限流与网关抖动是瞬时的。
+# 4xx 参数/鉴权错误重试多少次都是同样的结果，只会拖长用户等待
+_RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        return response is not None and response.status_code in _RETRYABLE_STATUS
+    # 连接被拒、读超时这类网络层异常同样属于瞬时故障
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    # 响应体解析不出内容，多半是模型这一次抽风，值得再要一次
+    return isinstance(exc, ValueError)
 
 
 def dashscope_compat_base() -> str:
@@ -66,6 +85,42 @@ def dashscope_chat_completion(
     temperature: float = 0.0,
     timeout: int = 45,
     response_format: dict[str, Any] | None = None,
+    retries: int = 1,
+) -> tuple[str, dict[str, Any]]:
+    """调用一次对话补全。
+
+    默认对瞬时故障重试一次：调用方的配额在进入这里之前就已经扣掉了，
+    一次限流或网关抖动就降级到兜底，等于让用户白付一次额度。
+    只重试 429 / 5xx 与网络层异常，4xx 直接抛。
+    """
+    last_error: Exception | None = None
+    for attempt in range(max(0, retries) + 1):
+        try:
+            return _post_chat_completion(
+                model, messages, temperature=temperature,
+                timeout=timeout, response_format=response_format,
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt >= retries or not _is_retryable(exc):
+                raise
+            # 线性退避即可，这里最多重试一两次，指数退避没有意义
+            time.sleep(0.6 * (attempt + 1))
+            logger.warning(
+                "Dashscope 调用失败将重试 model=%s attempt=%s error=%s",
+                model, attempt + 1, type(exc).__name__,
+            )
+    assert last_error is not None
+    raise last_error
+
+
+def _post_chat_completion(
+    model: str,
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float,
+    timeout: int,
+    response_format: dict[str, Any] | None,
 ) -> tuple[str, dict[str, Any]]:
     api_key = settings.dashscope.get("api_key") or ""
     base = dashscope_compat_base()
@@ -78,7 +133,7 @@ def dashscope_chat_completion(
     }
     if response_format:
         payload["response_format"] = response_format
-    r = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    r = _SESSION.post(url, headers=headers, json=payload, timeout=timeout)
     if not r.ok:
         logger.warning("Dashscope HTTP %s: %s", r.status_code, r.text[:500])
         r.raise_for_status()
@@ -98,31 +153,17 @@ def json_chat_completion(
     *,
     temperature: float = 0.2,
     timeout: int = 120,
-    retries: int = 0,
+    retries: int = 1,
 ) -> tuple[str, dict[str, Any]]:
-    """强制 JSON 对象输出；可选轻量重试（默认不重试，避免放大费用）。"""
-    last_error: Exception | None = None
-    for attempt in range(max(0, retries) + 1):
-        try:
-            return dashscope_chat_completion(
-                model,
-                messages,
-                temperature=temperature,
-                timeout=timeout,
-                response_format={"type": "json_object"},
-            )
-        except Exception as exc:
-            last_error = exc
-            if attempt < retries:
-                logger.warning(
-                    "json_chat_completion 失败将重试 model=%s attempt=%s",
-                    model,
-                    attempt + 1,
-                )
-                continue
-            raise
-    assert last_error is not None
-    raise last_error
+    """强制 JSON 对象输出；重试策略见 dashscope_chat_completion。"""
+    return dashscope_chat_completion(
+        model,
+        messages,
+        temperature=temperature,
+        timeout=timeout,
+        response_format={"type": "json_object"},
+        retries=retries,
+    )
 
 
 def dashscope_stream_text(
