@@ -49,6 +49,7 @@ import {
   shouldReturnBackToFeed,
   shouldReturnBackToSearch,
 } from '@/utils/feedNavigation'
+import { ossThumbUrl } from '@/utils/ossImageStyle'
 import { getReplyList, submitReply as apiSubmitReply, submitSubReply, likeReply, unlikeReply } from '@/api/reply'
 import { likeArticle, unlikeArticle } from '@/api/like'
 import { cancelArticleFavorite, getMyFavoriteFolders, saveArticleFavorite } from '@/api/favorite'
@@ -900,8 +901,27 @@ export function useArticleDetail() {
     startGalleryAutoplay()
   }
 
-  function galleryThumbIndexLabel(index) {
-    return String(Number(index) + 1).padStart(2, '0')
+  // 缩略图条一屏放不下九张，翻到后面时当前项会滚出可视区，
+  // 用户就只能靠角标知道自己在第几张了。这里让它跟着走。
+  // 用 strip.scrollTo 而不是 scrollIntoView：后者会连带滚动祖先容器，
+  // 详情页本身是个弹窗，会被拽歪
+  function scrollActiveThumbIntoView() {
+    const strip = galleryStripRef.value
+    if (!strip) return
+    const thumb = strip.children?.[activeGalleryIndex.value]
+    if (!thumb) return
+    const target = thumb.offsetLeft - (strip.clientWidth - thumb.clientWidth) / 2
+    strip.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+  }
+
+  // 鼠标停在图上说明正在细看，别把它翻走。
+  // 移开后交给 startGalleryAutoplay 自己判断——用户主动翻过页就不再恢复
+  function pauseGalleryAutoplayOnHover() {
+    stopGalleryAutoplay()
+  }
+
+  function resumeGalleryAutoplayOnHover() {
+    startGalleryAutoplay()
   }
 
   function scrollGalleryStripBy(deltaPx) {
@@ -932,6 +952,10 @@ export function useArticleDetail() {
   function onGalleryStripScroll() {
     updateGalleryStripState()
   }
+
+  watch(activeGalleryIndex, () => {
+    nextTick(scrollActiveThumbIntoView)
+  })
 
   function setActiveGalleryIndex(index, byUser = false) {
     activeGalleryIndex.value = index
@@ -2191,10 +2215,12 @@ export function useArticleDetail() {
     galleryCanGoNext,
     galleryCanGoPrev,
     galleryPageLabel,
+    ossThumbUrl,
+    pauseGalleryAutoplayOnHover,
+    resumeGalleryAutoplayOnHover,
     showGalleryNavArrows,
     shiftGalleryIndex,
     formatCompactNumber,
-    galleryThumbIndexLabel,
     scrollGalleryStripBy,
     toggleAiSummaryCollapsed,
     downloadCurrentGalleryImage,

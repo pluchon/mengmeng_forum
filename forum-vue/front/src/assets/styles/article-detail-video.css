@@ -101,6 +101,14 @@
   will-change: transform;
 }
 
+/* 层已改为点击穿透，悬停暂停只剩单条弹幕能触发。
+   用伪元素把命中区域上下左右各撑几像素，好压中一点，又不影响排版 */
+.detail-video-player__danmaku-item::before {
+  content: '';
+  position: absolute;
+  inset: -7px -10px;
+}
+
 .detail-video-player__danmaku-like-count {
   font-size: 0.78em;
   font-weight: 700;

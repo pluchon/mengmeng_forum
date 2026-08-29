@@ -27,7 +27,6 @@ import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.pluchon.forum.service.interfaces.recommendation.RecommendationAiProfileService;
 import org.pluchon.forum.service.interfaces.article.ArticleAuditService;
 import org.pluchon.forum.service.interfaces.article.ArticleHotRankingService;
-import org.pluchon.forum.service.interfaces.article.ArticleMediaService;
 import org.pluchon.forum.service.interfaces.article.ArticlePublishSideEffectService;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.service.interfaces.article.ArticleSummaryService;
@@ -102,9 +101,6 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
     private IpRegionService ipRegionService;
 
     @Autowired
-    private ArticleMediaService articleMediaService;
-
-    @Autowired
     private ArticleHotRankingService articleHotRankingService;
 
     @Autowired
@@ -170,7 +166,14 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         if (updated <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_STATUS_INVALID));
         }
-        List<String> imageUrls = articleMediaService.queryArticleImageUrls(articleId);
+        // 图片不再随审核任务送审：相册图、手动封面、AI 封面三条路径都走
+        // AuditedOssImageUploader（pending -> 审图 -> 通过才 promote），
+        // 而入库时 validateArticleImageUrl / validateArticleCoverUrl 又限定了
+        // URL 必须落在那几个正式路径上，所以能走到这里的图片必定已经审过一遍。
+        // 一篇九图帖白跑 10 次视觉模型，改一次重提交再来 10 次，不值得。
+        // 视频相反：uploadArticleVideo 只查格式大小、不审内容，
+        // 下面这条抽帧审核是视频唯一的一道关，不能省。
+        // 要恢复图片复审，把 coverUrl / imageUrls 填回下面的构造即可，Python 侧一直留着审图能力。
         String videoUrl = null;
         if (article.getMediaType() != null && article.getMediaType() == 1
                 && StringUtils.hasText(article.getVideoUrl())) {
@@ -182,8 +185,8 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
                 loginUserId,
                 article.getTitle(),
                 article.getContent(),
-                StringUtils.hasText(article.getCoverImg()) ? article.getCoverImg() : null,
-                imageUrls,
+                null,
+                List.of(),
                 videoUrl,
                 System.currentTimeMillis()
         );

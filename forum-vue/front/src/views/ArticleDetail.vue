@@ -48,7 +48,11 @@
             }"
           >
           <div class="media-section">
-            <div class="media-stage">
+            <div
+              class="media-stage"
+              @mouseenter="pauseGalleryAutoplayOnHover"
+              @mouseleave="resumeGalleryAutoplayOnHover"
+            >
               <div class="media-placeholder">
                 <ArticleDetailVideo
                   v-if="isVideoArticle && articleVideoUrl && videoPlayerReady"
@@ -159,7 +163,7 @@
                     :class="{ 'is-active': gi === activeGalleryIndex }"
                     @click="setActiveGalleryIndex(gi, true)"
                   >
-                    <el-image :src="url" fit="cover" class="media-gallery-thumb-image">
+                    <el-image :src="ossThumbUrl(url)" fit="cover" class="media-gallery-thumb-image">
                       <template #error>
                         <div class="article-image-error" role="img" aria-label="图片加载失败">
                           <el-icon><PictureFilled /></el-icon>
