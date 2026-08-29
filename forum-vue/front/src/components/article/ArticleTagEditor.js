@@ -191,6 +191,11 @@ async function submitFeedback() {
     ElMessage.warning('请输入标签名')
     return
   }
+  // 与后端 TAG_NAME_PATTERN 对齐，免得输一个字也要发一次请求才知道不行
+  if (!/^[一-龥a-zA-Z0-9+#.-]{2,12}$/.test(name)) {
+    ElMessage.warning('标签名需 2～12 位中文、字母、数字或 + # . - 符号')
+    return
+  }
   feedbackLoading.value = true
   try {
     const res = await submitArticleTagFeedback({

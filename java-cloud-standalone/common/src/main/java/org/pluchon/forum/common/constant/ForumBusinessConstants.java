@@ -96,6 +96,12 @@ public final class ForumBusinessConstants {
     // 单次兜底扫描最多重新入队的条数，避免一次把队列撑爆
     public static final int VIDEO_TRANSCODE_SWEEP_BATCH = 10;
 
+    // 每次标签申请要烧三次 AI 调用（内容审核 + 向量粗排 + 相似度精判），
+    // 且通过即建标签，不限次会同时敞开成本和标签池污染两个口子
+    public static final int TAG_FEEDBACK_USER_MAX_COUNT = 10;
+    // 标签允许的字符：中英数 + 技术标签常见的 + # . -（C++ / .NET / Vue3）
+    public static final String TAG_NAME_PATTERN = "^[\\u4e00-\\u9fa5a-zA-Z0-9+#.-]{2,12}$";
+
     public static final int ARTICLE_GALLERY_MAX = 15;
     public static final int ARTICLE_GALLERY_MIN_CONTENT_LEN = 10;
 

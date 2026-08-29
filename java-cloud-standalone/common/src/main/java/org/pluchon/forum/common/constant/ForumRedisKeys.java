@@ -72,6 +72,10 @@ public final class ForumRedisKeys {
     public static final String VIDEO_TRANSCODE_LOCK = "forum:video:transcode:";
     public static final long TTL_VIDEO_TRANSCODE_LOCK = 3600L;
 
+    // 用户维度的新标签申请计数
+    public static final String TAG_FEEDBACK_COUNT = "tag_feedback_count:";
+    public static final long TTL_TAG_FEEDBACK_COUNT = 86400L;
+
     public static final String ARTICLE_VISIT_DEDUP = "article:visit:";
     public static final long TTL_ARTICLE_VISIT_DEDUP = 600L;
 

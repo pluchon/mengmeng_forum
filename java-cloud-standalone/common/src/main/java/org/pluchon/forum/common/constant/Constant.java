@@ -170,6 +170,11 @@ public final class Constant {
             ForumBusinessConstants.VIDEO_TRANSCODE_STALE_MINUTES;
     public static final int VIDEO_TRANSCODE_SWEEP_BATCH =
             ForumBusinessConstants.VIDEO_TRANSCODE_SWEEP_BATCH;
+    public static final int TAG_FEEDBACK_USER_MAX_COUNT =
+            ForumBusinessConstants.TAG_FEEDBACK_USER_MAX_COUNT;
+    public static final String TAG_NAME_PATTERN = ForumBusinessConstants.TAG_NAME_PATTERN;
+    public static final String REDIS_KEY_TAG_FEEDBACK_COUNT = ForumRedisKeys.TAG_FEEDBACK_COUNT;
+    public static final long REDIS_TTL_TAG_FEEDBACK_COUNT = ForumRedisKeys.TTL_TAG_FEEDBACK_COUNT;
     public static final int ARTICLE_GALLERY_MAX = ForumBusinessConstants.ARTICLE_GALLERY_MAX;
     public static final int ARTICLE_GALLERY_MIN_CONTENT_LEN = ForumBusinessConstants.ARTICLE_GALLERY_MIN_CONTENT_LEN;
     public static final long OSS_MAX_IMAGE_SIZE = ForumBusinessConstants.OSS_MAX_IMAGE_SIZE;

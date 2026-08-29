@@ -23,7 +23,13 @@ import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.mapper.BoardMapper;
 import org.pluchon.forum.mapper.ForumArticleTagLinkMapper;
 import org.pluchon.forum.mapper.ForumArticleTagMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.mapper.ForumArticleTagRequestMapper;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import java.text.Normalizer;
+import java.util.regex.Pattern;
 import org.pluchon.forum.service.interfaces.article.ArticleTagService;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
 import org.springframework.stereotype.Service;
@@ -41,6 +47,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class ArticleTagServiceImpl implements ArticleTagService {
 
@@ -61,6 +68,14 @@ public class ArticleTagServiceImpl implements ArticleTagService {
     private ForumArticleTagLinkMapper linkMapper;
     @Autowired
     private ForumArticleTagRequestMapper requestMapper;
+
+    @Autowired
+    private ArticleTagRequestWriter tagRequestWriter;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    private static final Pattern TAG_NAME_RE = Pattern.compile(Constant.TAG_NAME_PATTERN);
     @Autowired
     private BoardMapper boardMapper;
     @Autowired
@@ -183,8 +198,10 @@ public class ArticleTagServiceImpl implements ArticleTagService {
                 .toList();
     }
 
+    // 刻意不加 @Transactional：方法里有三次 AI 调用与一次跨服务 Feign，
+    // 圈进事务会让数据库连接一直挂到模型返回。落库交给 ArticleTagRequestWriter，
+    // 各自是短事务，驳回记录也才不会被随后抛出的异常一起回滚掉
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ArticleTagFeedbackVO submitTagFeedback(
             Long userId,
             Long boardId,
@@ -192,8 +209,10 @@ public class ArticleTagServiceImpl implements ArticleTagService {
             String colorKey) {
         String name = normalizeTagName(proposedName);
         if (name == null) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "标签名需 2～12 字"));
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "标签名需 2～12 位中文、字母、数字或 + # . - 符号"));
         }
+        assertTagFeedbackQuota(userId);
         Board board = requireActiveBoard(boardId);
         Long categoryId = board.getCategoryId() != null ? board.getCategoryId() : 0L;
 
@@ -201,17 +220,10 @@ public class ArticleTagServiceImpl implements ArticleTagService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "该标签已存在"));
         }
 
+        // 内容审核 fail-closed：模型不可用时宁可让人重试，也不能放未审的标签名进池
         String audit = contentAiGatewayService.validateText("论坛帖子标签：" + name);
         if (audit != null) {
-            ForumArticleTagRequest req = new ForumArticleTagRequest();
-            req.setUserId(userId);
-            req.setBoardId(boardId);
-            req.setCategoryId(categoryId);
-            req.setProposedName(name);
-            req.setStatus((byte) 2);
-            req.setAuditMessage(audit);
-            req.setDeleteState(NOT_DELETED);
-            requestMapper.insert(req);
+            tagRequestWriter.recordRejected(userId, boardId, categoryId, name, audit);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_CHECK_CONTENT_ERROR, audit));
         }
 
@@ -230,18 +242,7 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         tag.setSort(99);
         tag.setState(TAG_NORMAL);
         tag.setDeleteState(NOT_DELETED);
-        tagMapper.insert(tag);
-
-        ForumArticleTagRequest req = new ForumArticleTagRequest();
-        req.setUserId(userId);
-        req.setBoardId(boardId);
-        req.setCategoryId(categoryId);
-        req.setProposedName(name);
-        req.setStatus((byte) 1);
-        req.setAuditMessage("AI 审核通过");
-        req.setApprovedTagId(tag.getId());
-        req.setDeleteState(NOT_DELETED);
-        requestMapper.insert(req);
+        tagRequestWriter.persistApproved(userId, boardId, categoryId, tag);
 
         contentSystemMessageInternalFeignClient.createMessage(
                 userId,
@@ -285,15 +286,32 @@ public class ArticleTagServiceImpl implements ArticleTagService {
         return cnt != null && cnt > 0;
     }
 
+    // 之前只限长度，等于什么字符都能进：零宽字符能造出视觉上完全一样、
+    // 但精确查重匹配不到的标签；全角 ＡＩ 与半角 AI 也会被当成两个标签。
+    // NFKC 先把全角等兼容字符折叠成标准形式，再删零宽与控制字符，最后过白名单
     private String normalizeTagName(String raw) {
         if (!StringUtils.hasText(raw)) {
             return null;
         }
-        String s = raw.trim().replaceAll("\\s+", "");
-        if (s.length() < 2 || s.length() > 12) {
-            return null;
+        String s = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC)
+                .replaceAll("[\\p{Cf}\\p{Cc}]", "")
+                .replaceAll("\\s+", "");
+        return TAG_NAME_RE.matcher(s).matches() ? s : null;
+    }
+
+    // 通过即建标签，每次还要烧三次 AI 调用，必须挡住循环提交
+    private void assertTagFeedbackQuota(Long userId) {
+        if (userId == null) {
+            return;
         }
-        return s;
+        boolean allowed = RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_TAG_FEEDBACK_COUNT + userId,
+                Constant.TAG_FEEDBACK_USER_MAX_COUNT,
+                Constant.REDIS_TTL_TAG_FEEDBACK_COUNT);
+        if (!allowed) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_RATE_LIMITED,
+                    "今天申请的新标签已达上限，明天再试"));
+        }
     }
 
     private List<ArticleTagVO> searchTags(Long boardId, String keyword) {
@@ -355,7 +373,19 @@ public class ArticleTagServiceImpl implements ArticleTagService {
                 .toList();
     }
 
+    // 查重 fail-open，与上面的内容审核相反：模型不可用时不该把新建标签整个堵死，
+    // 漏掉一个近似标签的代价远小于功能不可用，而申请频率上限限制了漏拦的规模
     private ArticleTagVO findHighlySimilarTag(String proposedName, Long boardId) {
+        try {
+            return doFindHighlySimilarTag(proposedName, boardId);
+        } catch (Exception exception) {
+            log.warn("标签相似度检查不可用，本次按不重复放行 name={}: {}",
+                    proposedName, exception.getMessage());
+            return null;
+        }
+    }
+
+    private ArticleTagVO doFindHighlySimilarTag(String proposedName, Long boardId) {
         List<ArticleTagVO> pool = listForBoard(boardId);
         if (pool.isEmpty()) {
             return null;
