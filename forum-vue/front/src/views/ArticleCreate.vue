@@ -9,6 +9,10 @@
             {{ isEdit ? (form.articleType === ARTICLE_TYPE.QUESTION ? '编辑问题' : '编辑帖子') : (form.articleType === ARTICLE_TYPE.QUESTION ? '发起提问' : '创作笔记') }}
           </h2>
         </div>
+        <div v-if="rejectReason" class="editor-reject-banner" :title="rejectReason">
+          <span class="editor-reject-banner__label">未通过</span>
+          <span class="editor-reject-banner__text">{{ rejectReason }}</span>
+        </div>
         <div class="editor-action-btns">
           <el-button class="editor-btn-ghost" @click="handleCancel">取消</el-button>
           <el-button

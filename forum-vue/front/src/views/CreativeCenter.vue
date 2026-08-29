@@ -215,6 +215,9 @@
                     <span>{{ formatShortDate(row.article.createTime) }}</span>
                   </div>
                 </div>
+                <div v-if="postRejectReason(row)" class="creative-post-reject" :title="postRejectReason(row)">
+                  {{ postRejectReason(row) }}
+                </div>
                 <div class="creative-post-status" :class="`is-${postStatus(row).tone}`">{{ postStatus(row).label }}</div>
                 <div class="creative-post-actions">
                   <el-tooltip :content="editTip(row)" placement="top">
@@ -315,6 +318,7 @@ const {
   pageNum,
   pagedArticles,
   postStatus,
+  postRejectReason,
   openArticle,
   requestCreatorInsight,
   requestDelete,

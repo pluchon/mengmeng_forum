@@ -30,6 +30,7 @@ const {
   coverInputRef,
   coverPreview,
   coverUploading,
+  rejectReason,
   editorMode,
   form,
   galleryInputRef,

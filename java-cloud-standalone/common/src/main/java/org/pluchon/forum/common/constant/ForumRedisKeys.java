@@ -76,6 +76,10 @@ public final class ForumRedisKeys {
     public static final String TAG_FEEDBACK_COUNT = "tag_feedback_count:";
     public static final long TTL_TAG_FEEDBACK_COUNT = 86400L;
 
+    // 单篇帖子的每日提交审核计数
+    public static final String ARTICLE_AUDIT_DAILY = "article:audit:daily:";
+    public static final long TTL_ARTICLE_AUDIT_DAILY = 86400L;
+
     public static final String ARTICLE_VISIT_DEDUP = "article:visit:";
     public static final long TTL_ARTICLE_VISIT_DEDUP = 600L;
 

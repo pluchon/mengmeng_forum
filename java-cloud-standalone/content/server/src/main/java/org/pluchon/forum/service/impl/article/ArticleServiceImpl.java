@@ -262,6 +262,16 @@ public class ArticleServiceImpl implements ArticleService {
             }
         }
         boolean wasPublished = ArticleStatus.isPublished(article.getStatus());
+        // 已发布的帖子，标题与正文都没动时不该重走一遍审核：
+        // 那会把帖子下架、清空热榜与搜索索引，再白烧一次完整 AI 审核
+        // （文本 + 逐张图片 + 视频），而内容其实一个字都没变。
+        // 标签是单独绑定的，仍然照常更新
+        if (wasPublished && isSameMainContent(article, req)) {
+            if (req.getTagIds() != null) {
+                articleTagService.bindArticleTags(articleId, article.getBoardId(), req.getTagIds());
+            }
+            return;
+        }
         var updateUw = new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .ne(Article::getDeleteState, DELETE_TRUE)
@@ -296,6 +306,17 @@ public class ArticleServiceImpl implements ArticleService {
     
     // 删除
     
+    // 标题与正文是否与库中完全一致。只比这两项：封面、相册、视频、配乐
+    // 都各有独立接口，它们的改动由那些接口自己决定要不要重审
+    private static boolean isSameMainContent(Article article, UpdateArticleRequest req) {
+        return Objects.equals(nullToEmptyText(article.getTitle()), nullToEmptyText(req.getTitle()))
+                && Objects.equals(nullToEmptyText(article.getContent()), nullToEmptyText(req.getContent()));
+    }
+
+    private static String nullToEmptyText(String value) {
+        return value == null ? "" : value;
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteArticle(Long articleId, Long loginUserId) {

@@ -79,8 +79,8 @@ async function runPolish() {
     }
     emit('apply', normalized)
     ElMessage.success('已完成润色，可继续编辑')
-  } catch (error) {
-    ElMessage.error(error?.message || 'AI 写作请求失败')
+  } catch {
+    // 失败原因由响应拦截器统一提示，这里不再叠加原始 HTTP 错误
   } finally {
     if (activeRequestId === requestId) {
       loading.value = false

@@ -35,6 +35,7 @@ public final class ArticleConverter {
         vo.setAcceptedReplyId(article.getAcceptedReplyId());
         vo.setStatus(article.getStatus());
         vo.setState(article.getState());
+        vo.setAuditResultMessage(article.getAuditResultMessage());
         vo.setCreateTime(article.getCreateTime());
         vo.setUpdateTime(article.getUpdateTime());
         return vo;

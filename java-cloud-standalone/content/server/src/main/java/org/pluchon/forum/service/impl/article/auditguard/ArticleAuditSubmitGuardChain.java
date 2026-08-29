@@ -23,6 +23,8 @@ public class ArticleAuditSubmitGuardChain {
                 new AuditAuthorGuard(),
                 new AuditStatusAllowedGuard(),
                 new AuditRetryLimitGuard()
+                // AuditDailySubmitGuard 依赖 Redis，只在 Spring 容器里生效；
+                // defaultChain 供单测等无容器场景使用，故不在此列出
         ));
     }
 

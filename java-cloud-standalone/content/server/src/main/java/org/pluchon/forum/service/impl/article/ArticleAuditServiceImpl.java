@@ -324,7 +324,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         notifyAuditResult(article, result,
                 Constant.SYSTEM_MSG_TYPE_AUDIT_FAIL,
                 Constant.SYSTEM_MSG_TITLE_AUDIT_FAIL,
-                String.format("你的帖子《%s》未通过审核, 原因: %s. 请修改后重新提交.",
+                // 与创作中心卡片、编辑页展示的拒绝理由保持同一句话，
+                // 三个地方措辞不一致会让人以为是两回事
+                String.format("《%s》未通过审核：%s",
                         safeTitle(article.getTitle()), reason));
         log.info("REJECTED 处理完成: articleId={}, taskId={}, reason={}", articleId, result.getTaskId(), reason);
         return true;

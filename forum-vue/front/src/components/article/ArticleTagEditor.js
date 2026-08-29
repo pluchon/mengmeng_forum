@@ -105,7 +105,6 @@ async function loadTags(pageNum = tagPageNum.value) {
     if (currentSequence !== loadSequence) return
     availableTags.value = []
     tagTotal.value = 0
-    ElMessage.error(error?.message || '加载标签失败')
   } finally {
     if (currentSequence === loadSequence) loading.value = false
   }
@@ -177,8 +176,9 @@ async function runSuggest() {
       return
     }
     ElMessage.success(`已推荐 ${ids.length} 个相关标签，可继续调整`)
-  } catch (error) {
-    ElMessage.error(error?.message || '推荐失败')
+  } catch {
+    // 失败原因已由响应拦截器统一提示。这里再弹一次，弹的是 AxiosError 的原始
+    // message（"Request failed with status code 400"），只会盖掉真正的原因
   } finally {
     aiLoading.value = false
     emit('ai-generating', false)
@@ -213,8 +213,8 @@ async function submitFeedback() {
     feedbackName.value = ''
     feedbackColor.value = 'mint'
     ElMessage.success(res?.data?.message || '标签已通过审核')
-  } catch (error) {
-    ElMessage.error(error?.message || '提交失败')
+  } catch {
+    // 同上：审核驳回的具体理由由拦截器弹出，不要再叠一条原始 HTTP 错误
   } finally {
     feedbackLoading.value = false
   }

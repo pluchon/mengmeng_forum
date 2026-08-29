@@ -32,7 +32,7 @@ import {
 import { submitArticleForAuditWithPrompt } from '@/composables/useArticleAuditSubmit'
 import { aiArticleCover } from '@/api/ai'
 import { extractApiErrorMessage } from '@/api/httpError'
-import { isArticleEditingLocked } from '@/utils/articleStatus'
+import { ARTICLE_STATUS, isArticleEditingLocked } from '@/utils/articleStatus'
 import WangEditor from '@/components/common/WangEditor.vue'
 import { marked } from 'marked'
 import { stripSingleOuterParagraph } from '@/utils/htmlNormalize'
@@ -78,6 +78,9 @@ export function useArticleCreate() {
   // 而不是让人写完整篇文章、点了发布才被告知封面不合规
   const coverPreview = ref('')
   const coverUploading = ref(false)
+  // 审核未通过时把理由带到编辑页，和创作中心卡片、站内信是同一句话，
+  // 免得用户只知道"没过"却不知道要改什么
+  const rejectReason = ref('')
   const coverInputRef = ref(null)
   const coverImageQuality = ref('normal')
   const coverAiGenerating = ref(false)
@@ -279,6 +282,11 @@ export function useArticleCreate() {
         })
         editorMode.value = ct === 1 ? 'markdown' : 'rich'
         coverPreview.value = a.coverImg
+        const auditStatus = Number(a.status)
+        rejectReason.value =
+          (auditStatus === ARTICLE_STATUS.REJECTED || auditStatus === ARTICLE_STATUS.AUDIT_ERROR)
+            ? String(a.auditResultMessage || '').trim()
+            : ''
         galleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         videoUrl.value = a.videoUrl || ''
         const isVideoPost = Number(a.mediaType) === 1 || Boolean(String(a.videoUrl || '').trim())
@@ -1165,6 +1173,7 @@ export function useArticleCreate() {
     cascaderOptions,
     coverPreview,
     coverUploading,
+    rejectReason,
     editorMode,
     form,
     bindGalleryItemsRef,

@@ -249,6 +249,15 @@ export function useCreativeCenter(iconSet) {
     return articleStatusMeta(row.article.status).isDraft ? 'creative-post-title--draft' : ''
   }
 
+  // 只有审核未通过 / 审核异常才展示理由，其余状态不占位
+  function postRejectReason(row) {
+    const article = row?.article
+    if (!article) return ''
+    const status = Number(article.status)
+    if (status !== ARTICLE_STATUS.REJECTED && status !== ARTICLE_STATUS.AUDIT_ERROR) return ''
+    return String(article.auditResultMessage || '').trim()
+  }
+
   function postStatus(row) {
     if (Number(row.article?.state) === 1) return { label: '已下架', tone: 'offline' }
     const meta = articleStatusMeta(row.article?.status)
@@ -382,6 +391,7 @@ export function useCreativeCenter(iconSet) {
     pageNum,
     pagedArticles,
     postStatus,
+    postRejectReason,
     postCoverUrl,
     postMetrics,
     postTitle,

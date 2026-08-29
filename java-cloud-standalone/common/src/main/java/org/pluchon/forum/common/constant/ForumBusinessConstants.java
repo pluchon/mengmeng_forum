@@ -206,6 +206,9 @@ public final class ForumBusinessConstants {
     public static final int EMOJI_SHOP_PRICE_MAX = 100_000;
 
     public static final int ARTICLE_AUDIT_MAX_RETRY = 3;
+    // 单篇帖子每日提交审核上限。ARTICLE_AUDIT_MAX_RETRY 会被编辑重置，
+    // 这个不会，用来挡住「改一下就又有 3 次」的无限磨审核
+    public static final int ARTICLE_AUDIT_DAILY_MAX = 8;
     public static final long ARTICLE_AUDIT_TIMEOUT_SECONDS = 600L;
 
     public static final String SYSTEM_MSG_TITLE_AUDIT_PASS = "帖子审核通过";
