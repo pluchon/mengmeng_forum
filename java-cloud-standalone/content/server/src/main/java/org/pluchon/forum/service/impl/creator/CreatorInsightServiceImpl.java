@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.creator;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +46,7 @@ import java.util.UUID;
 @Service
 public class CreatorInsightServiceImpl implements CreatorInsightService {
 
-    private static final ZoneId ZONE_TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_TAIPEI = ForumTimeZone.ZONE_ID;
     private static final String CACHE_PREFIX = "creator:insight:";
 
     @Autowired

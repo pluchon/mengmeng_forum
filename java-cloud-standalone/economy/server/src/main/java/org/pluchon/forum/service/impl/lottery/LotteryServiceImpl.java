@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.lottery;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -109,7 +110,7 @@ public class LotteryServiceImpl implements LotteryService {
     // 卡池列表默认每页 4 条
     private static final int DEFAULT_ACTIVITY_PAGE_SIZE = 5;
 
-    private static final ZoneId ZONE_SH = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_SH = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private LotteryActivityMapper lotteryActivityMapper;

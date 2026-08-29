@@ -37,6 +37,9 @@ public final class ForumBusinessConstants {
 
     // AI 搜索一次最多打三次 Python（候选打分 / 向量兜底 / 作者相似兜底），
     // 且搜不到结果的查询三次全跑，是全站唯一没有配额的 AI 入口
+    // 昵称/简介每提交一次就是一次 AI 文本审核，和 AI 搜索一样属于没配额的 AI 入口
+    public static final int PROFILE_CHANGE_MAX_PER_DAY = 10;
+
     public static final int AI_SEARCH_MAX_PER_MINUTE = 10;
     public static final int AI_SEARCH_MAX_PER_DAY = 100;
 

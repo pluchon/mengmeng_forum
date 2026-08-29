@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.mascot;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -559,7 +560,7 @@ public class MascotServiceImpl implements MascotService {
     }
 
     private String quotaKey(Long userId) {
-        String day = LocalDate.now(ZoneId.of("Asia/Taipei")).format(DateTimeFormatter.BASIC_ISO_DATE);
+        String day = LocalDate.now(ForumTimeZone.ZONE_ID).format(DateTimeFormatter.BASIC_ISO_DATE);
         return Constant.REDIS_KEY_MASCOT_DAILY_CHAT + day + ":" + userId;
     }
 

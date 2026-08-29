@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.ai;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import jakarta.annotation.Resource;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -21,7 +22,7 @@ import java.math.BigDecimal;
 @Service
 public class AiQuotaServiceImpl implements AiQuotaService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId TAIPEI = ForumTimeZone.ZONE_ID;
     private static final long QWEN_RESERVATION_MICROS = 10_000L;
 
     @Resource

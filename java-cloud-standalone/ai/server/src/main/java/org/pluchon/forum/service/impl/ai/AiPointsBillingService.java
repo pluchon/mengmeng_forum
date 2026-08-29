@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.ai;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,7 @@ import java.util.Map;
 @Service
 public class AiPointsBillingService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
     private static final BigDecimal POINTS_PER_YUAN = new BigDecimal("100");
 
     @Resource

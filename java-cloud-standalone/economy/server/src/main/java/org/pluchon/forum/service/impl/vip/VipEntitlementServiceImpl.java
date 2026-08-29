@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.vip;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -21,7 +22,7 @@ import java.util.Date;
 @Service
 public class VipEntitlementServiceImpl implements VipEntitlementService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId TAIPEI = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private UserVipSubscriptionMapper userVipSubscriptionMapper;

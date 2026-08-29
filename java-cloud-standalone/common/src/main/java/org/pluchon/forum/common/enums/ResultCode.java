@@ -66,6 +66,7 @@ public enum ResultCode {
     FAILED_SEARCH_KEYWORD_EMPTY(1153, "请先输入搜索关键词"),
     FAILED_AI_SEARCH_RATE_LIMIT(1215, "AI 搜索太频繁了，歇一会儿再试"),
     FAILED_AI_SEARCH_DAILY_LIMIT(1216, "今天的 AI 搜索次数用完啦，明天再来"),
+    FAILED_PROFILE_CHANGE_DAILY_LIMIT(1217, "今天提交的资料审核次数已达上限，明天再试"),
     FAILED_AUDIT_STATUS_INVALID(1154, "当前帖子状态不能提交审核"),
     FAILED_AUDIT_RETRY_LIMIT(1155, "审核次数已用完，请联系管理员"),
     FAILED_AUDIT_EDIT_LOCKED(1205, "帖子正在审核中，暂时不能编辑，请等待审核结果"),

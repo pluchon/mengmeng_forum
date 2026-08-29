@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -31,7 +32,7 @@ import java.util.Set;
 @Service
 public class ArticleMusicRecommendSlateServiceImpl implements ArticleMusicRecommendSlateService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
     private static final int SLATE_SIZE = 30;
     private static final byte DELETE_FALSE = 0;
     private static final byte DELETE_TRUE = 1;

@@ -1,5 +1,6 @@
 package org.pluchon.forum.common.utils;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
@@ -8,7 +9,7 @@ import java.util.TimeZone;
 // 论坛统一使用东八区墙钟
 public final class ForumDateTimes {
 
-    private static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_SHANGHAI = ForumTimeZone.ZONE_ID;
 
     private ForumDateTimes() {
     }

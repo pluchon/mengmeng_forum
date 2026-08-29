@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.internal;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.pluchon.forum.api.content.UserDailyEngagementInternalVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,7 +16,7 @@ import java.time.ZoneId;
 @Service
 public class UserEngagementInternalReadService {
 
-    private static final ZoneId ZONE_SH = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_SH = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

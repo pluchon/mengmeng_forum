@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.starlight;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.pluchon.forum.cloud.feign.AiUsageInternalFeignClient;
@@ -49,7 +50,7 @@ import java.util.stream.Collectors;
 @Service
 public class StarlightShopServiceImpl implements StarlightShopService {
 
-    private static final ZoneId ZONE_SH = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_SH = ForumTimeZone.ZONE_ID;
 
     private static final int DEFAULT_PAGE_SIZE = 8;
 

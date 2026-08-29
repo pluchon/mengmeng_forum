@@ -36,6 +36,7 @@ spring:
             enable: true
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
+    # 与 ForumTimeZone.ID 保持一致，改这里要同步改那边
     time-zone: Asia/Taipei
     default-property-inclusion: NON_NULL
   servlet:

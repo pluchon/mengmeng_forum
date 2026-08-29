@@ -9,6 +9,8 @@ import org.pluchon.forum.mapper.ForumNoticeMapper;
 import org.pluchon.forum.service.interfaces.message.ForumNoticeReadService;
 import org.springframework.stereotype.Service;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -20,7 +22,7 @@ public class ForumNoticeReadServiceImpl implements ForumNoticeReadService {
 
     private static final ThreadLocal<SimpleDateFormat> CN_TS = ThreadLocal.withInitial(() -> {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        f.setTimeZone(TimeZone.getTimeZone("Asia/Taipei"));
+        f.setTimeZone(ForumTimeZone.timeZone());
         return f;
     });
 

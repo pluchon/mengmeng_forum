@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.auth.client.AuthAiHubInternalFeignClient;
+import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
+import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.common.utils.RegexUtil;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.User;
@@ -64,6 +66,9 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ProfileChangeStatusVO submit(Long userId, ProfileChangeRequest request) {
@@ -73,6 +78,12 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
         String fieldType = normalizeFieldType(request.getFieldType());
         String content = request.getContent() == null ? "" : request.getContent().trim();
         validateCandidate(userId, fieldType, content);
+        // 校验通过后再计数：格式不合法的提交不该占用配额
+        if (!RedisWindowCounter.tryAcquire(stringRedisTemplate,
+                Constant.REDIS_KEY_PROFILE_CHANGE_DAY + userId,
+                Constant.PROFILE_CHANGE_MAX_PER_DAY, Constant.REDIS_TTL_PROFILE_CHANGE_DAY)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PROFILE_CHANGE_DAILY_LIMIT));
+        }
 
         requestMapper.update(null, new LambdaUpdateWrapper<UserProfileChangeRequest>()
                 .eq(UserProfileChangeRequest::getUserId, userId)
@@ -102,7 +113,8 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
                         .eq(UserProfileChangeRequest::getUserId, userId)
                         .eq(UserProfileChangeRequest::getFieldType, normalized)
                         .eq(UserProfileChangeRequest::getDeleteState, DELETE_FALSE)
-                        .orderByDesc(UserProfileChangeRequest::getId));
+                        .orderByDesc(UserProfileChangeRequest::getId)
+                        .last("LIMIT 1"));
         UserProfileChangeRequest latest = rows.isEmpty() ? null : rows.get(0);
         return latest == null ? null : toVO(latest);
     }
@@ -157,13 +169,24 @@ public class UserProfileChangeServiceImpl implements UserProfileChangeService {
     private void retryOrFail(UserProfileChangeRequest request, String reason) {
         int retries = request.getRetryCount() == null ? 0 : request.getRetryCount();
         byte nextStatus = retries + 1 >= 3 ? STATUS_FAILED : STATUS_PENDING;
-        requestMapper.update(null, new LambdaUpdateWrapper<UserProfileChangeRequest>()
+        int updated = requestMapper.update(null, new LambdaUpdateWrapper<UserProfileChangeRequest>()
                 .eq(UserProfileChangeRequest::getId, request.getId())
                 .eq(UserProfileChangeRequest::getReviewStatus, STATUS_PROCESSING)
                 .set(UserProfileChangeRequest::getReviewStatus, nextStatus)
                 .set(UserProfileChangeRequest::getRetryCount, retries + 1)
                 .set(UserProfileChangeRequest::getReviewReason,
                         nextStatus == STATUS_FAILED ? "审核服务暂时不可用，请重新提交" : truncate(reason)));
+        // 原本只是把状态改回 PENDING 就完事，没有任何人会再捡起它，
+        // 也没有扫描任务——"重试"其实从没发生过，用户永远停在"审核中"。
+        // 这里主动重投一次，失败三次才落到 FAILED
+        if (updated == 1 && nextStatus == STATUS_PENDING) {
+            Long id = request.getId();
+            try {
+                profileReviewExecutor.execute(() -> process(id));
+            } catch (RuntimeException rejected) {
+                log.warn("资料审核重试入队失败 requestId={}", id, rejected);
+            }
+        }
     }
 
     private void finish(UserProfileChangeRequest request, byte status, String reason) {

@@ -9,6 +9,7 @@ import org.pluchon.forum.mapper.ArticleLikeMapper;
 import org.pluchon.forum.mapper.ArticleMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -35,7 +36,7 @@ public class CounterCalibrationTask {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
-    @Scheduled(cron = "0 30 3 * * ?")
+    @Scheduled(cron = "0 30 3 * * ?", zone = ForumTimeZone.ID)
     public void calibrateArticleLikeCounts() {
         Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(LOCK_KEY, "1", Duration.ofMinutes(30));
         if (!Boolean.TRUE.equals(locked)) {

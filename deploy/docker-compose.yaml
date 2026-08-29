@@ -2,6 +2,9 @@
 # Nacos 只暴露在 forum-net 内，服务通过 NACOS_ADDR 进行发现与配置读取。
 
 x-java-env: &java-env
+  # 代码里已用 ForumTimeZone 显式指定时区，这里再兜一层：
+  # 基础镜像 eclipse-temurin 默认 UTC，日志时间戳等仍会跟着 JVM 默认走
+  TZ: Asia/Taipei
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
   FORUM_LOG_DIR: /app/logs
   # 容器内必须用 Compose 服务名；外部环境文件中的本机地址不应覆盖这里

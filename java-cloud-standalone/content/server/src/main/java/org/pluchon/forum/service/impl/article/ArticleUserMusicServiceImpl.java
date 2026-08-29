@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -470,7 +471,7 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
     }
 
     private String nextUniqueStem(Long userId, String title) {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Taipei"));
+        ZonedDateTime now = ZonedDateTime.now(ForumTimeZone.ZONE_ID);
         for (int i = 0; i < 5; i++) {
             String stem = sanitizeTitlePart(title) + "_" + userId + "_" + now.plusSeconds(i).format(STEM_TIME);
             Long count = userMusicMapper.selectCount(new LambdaQueryWrapper<UserMusic>()

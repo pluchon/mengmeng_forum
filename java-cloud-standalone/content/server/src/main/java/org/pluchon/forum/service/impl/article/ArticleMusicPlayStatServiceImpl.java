@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.pluchon.forum.entity.db.UserMusicPlayStat;
 import org.pluchon.forum.mapper.UserMusicPlayStatMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicHotRankingService;
@@ -19,7 +20,7 @@ import java.util.Objects;
 @Service
 public class ArticleMusicPlayStatServiceImpl implements ArticleMusicPlayStatService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private UserMusicPlayStatMapper userMusicPlayStatMapper;

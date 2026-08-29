@@ -37,6 +37,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
+
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -59,7 +61,7 @@ import java.util.Map;
 @ConditionalOnProperty(name = "forum.domain", havingValue = ForumDomainNames.ECONOMY)
 public class PointsServiceImpl implements PointsService {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId SHANGHAI = ForumTimeZone.ZONE_ID;
     private static final List<MilestoneDefinition> MILESTONES = List.of(
             new MilestoneDefinition("M1000", 1000, 50, "萌新旅人"),
             new MilestoneDefinition("M2000", 2000, 200, "软萌收藏家"),
@@ -350,6 +352,7 @@ public class PointsServiceImpl implements PointsService {
 
     private List<PointsDailyVO> toDailyRows(List<Map<String, Object>> raw) {
         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
+        fmt.setTimeZone(ForumTimeZone.timeZone());
         List<PointsDailyVO> list = new ArrayList<>(raw.size());
         for (Map<String, Object> row : raw) {
             Object dayObj = row.get("day");

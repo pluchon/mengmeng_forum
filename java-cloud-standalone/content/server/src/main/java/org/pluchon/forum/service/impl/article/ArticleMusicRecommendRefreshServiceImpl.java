@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,7 +70,7 @@ public class ArticleMusicRecommendRefreshServiceImpl implements ArticleMusicReco
 
     @Override
     public boolean shouldRunBiweeklyRefresh() {
-        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
+        java.time.LocalDate today = java.time.LocalDate.now(ForumTimeZone.ZONE_ID);
         java.time.temporal.WeekFields wf = java.time.temporal.WeekFields.of(java.util.Locale.CHINA);
         int week = today.get(wf.weekOfWeekBasedYear());
         int bucket = ((week + 1) / 2) * 2;

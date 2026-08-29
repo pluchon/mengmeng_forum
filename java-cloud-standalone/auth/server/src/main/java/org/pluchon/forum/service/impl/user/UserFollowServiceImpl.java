@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.user;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +43,7 @@ public class UserFollowServiceImpl implements UserFollowService {
 
     private static final byte DELETE_TRUE = 1;
     private static final byte STATE_FORBIDDEN = 1;
-    private static final ZoneId ZONE_TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_TAIPEI = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private UserFollowMapper userFollowMapper;

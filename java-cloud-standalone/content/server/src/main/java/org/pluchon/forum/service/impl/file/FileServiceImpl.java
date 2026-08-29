@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.file;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import cn.hutool.core.util.IdUtil;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.ObjectMetadata;
@@ -448,7 +449,7 @@ public class FileServiceImpl implements FileService {
 
     // 视频对象名: {userId}_{yyyyMMddHHmmss}.mp4
     private String buildVideoObjectName(Long userId) {
-        String timeStr = ZonedDateTime.now(ZoneId.of("Asia/Taipei"))
+        String timeStr = ZonedDateTime.now(ForumTimeZone.ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         return userId + "_" + timeStr + ".mp4";
     }

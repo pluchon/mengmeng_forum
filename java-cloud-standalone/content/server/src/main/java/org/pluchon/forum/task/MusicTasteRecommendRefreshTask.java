@@ -4,6 +4,7 @@ import org.pluchon.forum.common.cloud.ForumDomainNames;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicRecommendRefreshService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +16,7 @@ public class MusicTasteRecommendRefreshTask {
     @Autowired
     private ArticleMusicRecommendRefreshService articleMusicRecommendRefreshService;
 
-    @Scheduled(cron = "0 10 3 ? * SUN", zone = "Asia/Shanghai")
+    @Scheduled(cron = "0 10 3 ? * SUN", zone = ForumTimeZone.ID)
     public void refreshBiweeklySlates() {
         if (!articleMusicRecommendRefreshService.shouldRunBiweeklyRefresh()) {
             return;

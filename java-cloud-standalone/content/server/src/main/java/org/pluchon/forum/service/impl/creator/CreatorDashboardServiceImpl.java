@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.creator;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.entity.db.Article;
@@ -26,7 +27,7 @@ import java.util.Map;
 @Service
 public class CreatorDashboardServiceImpl implements CreatorDashboardService {
 
-    private static final ZoneId ZONE_TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId ZONE_TAIPEI = ForumTimeZone.ZONE_ID;
     private static final int MIN_WEEK_OFFSET = -104;
 
     @Autowired

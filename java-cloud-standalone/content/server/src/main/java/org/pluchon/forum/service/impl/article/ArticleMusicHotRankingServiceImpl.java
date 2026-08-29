@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.db.UserMusic;
@@ -32,7 +33,7 @@ import java.util.Objects;
 public class ArticleMusicHotRankingServiceImpl implements ArticleMusicHotRankingService {
 
     private static final Logger log = LoggerFactory.getLogger(ArticleMusicHotRankingServiceImpl.class);
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private UserMusicMapper userMusicMapper;

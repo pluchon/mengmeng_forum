@@ -19,6 +19,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -95,6 +97,8 @@ public class UserLoginLogServiceImpl implements UserLoginLogService {
                 .orderByDesc(UserLoginLog::getCreateTime));
         List<UserLoginLog> rows = page.getRecords();
         SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        // 不设时区就用 JVM 默认：容器里是 UTC，登录时间会整体少 8 小时
+        fmt.setTimeZone(ForumTimeZone.timeZone());
         List<UserLoginLogVO> list = new ArrayList<>();
         for (UserLoginLog row : rows) {
             UserLoginLogVO vo = new UserLoginLogVO();

@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.article;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +40,7 @@ import java.util.Set;
 @Service
 public class ArticleMusicRecommendMixServiceImpl implements ArticleMusicRecommendMixService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
     private static final int DEFAULT_LIMIT = 30;
     private static final int FAVORITE_QUOTA = 21;
     private static final int RECENT_QUOTA = 5;

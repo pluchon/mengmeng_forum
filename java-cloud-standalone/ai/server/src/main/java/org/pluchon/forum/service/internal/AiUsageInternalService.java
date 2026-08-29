@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.internal;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.pluchon.forum.api.ai.AiUsageDailyBucketsVO;
 import org.pluchon.forum.entity.db.ForumAiQuotaPeriodUsage;
 import org.pluchon.forum.mapper.ForumAiQuotaPeriodUsageMapper;
@@ -19,7 +20,7 @@ import java.util.Objects;
 @Service
 public class AiUsageInternalService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId TAIPEI = ForumTimeZone.ZONE_ID;
 
     @Autowired
     private ForumAiUsageLogMapper forumAiUsageLogMapper;

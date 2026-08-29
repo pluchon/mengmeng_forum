@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.vip;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
@@ -39,7 +40,7 @@ import java.math.BigDecimal;
 @Service
 public class VipCenterServiceImpl implements VipCenterService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId TAIPEI = ForumTimeZone.ZONE_ID;
 
     @Resource
     private EconomyUserInternalFeignClient userInternalFeignClient;

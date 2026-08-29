@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.checkin;
 
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -67,7 +68,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class CheckinServiceImpl implements CheckinService {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Taipei");
+    private static final ZoneId SHANGHAI = ForumTimeZone.ZONE_ID;
     private static final int DEFAULT_RULE_MONTH = 0;
     private static final int MAKEUP_LOOKBACK_DAYS = 30;
 
