@@ -216,7 +216,7 @@
                   </div>
                 </div>
                 <div v-if="postRejectReason(row)" class="creative-post-reject" :title="postRejectReason(row)">
-                  {{ postRejectReason(row) }}
+                  <span class="creative-post-reject__text">{{ postRejectReason(row) }}</span>
                 </div>
                 <div class="creative-post-status" :class="`is-${postStatus(row).tone}`">{{ postStatus(row).label }}</div>
                 <div class="creative-post-actions">

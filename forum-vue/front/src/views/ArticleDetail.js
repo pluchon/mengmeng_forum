@@ -140,7 +140,6 @@ const {
   onReplyImageFileChange,
   onReplyPackBarScroll,
   openCommentShopDetail,
-  ownerAuditNotice,
   questionActionSaving,
   questionStatusClass,
   questionStatusLabel,

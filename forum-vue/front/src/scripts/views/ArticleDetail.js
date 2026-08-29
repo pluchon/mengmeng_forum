@@ -60,7 +60,11 @@ import { marked } from 'marked'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
 import { unwrapPageRecords } from '@/utils/apiData'
-import { ARTICLE_STATUS } from '@/utils/articleStatus'
+import {
+  ARTICLE_STATUS,
+  articleDetailBlockedHint,
+  canOpenArticleDetail,
+} from '@/utils/articleStatus'
 import { formatCommentTimeShanghai, formatForumDateTimeShanghai } from '@/utils/datetime'
 import {
   QUESTION_STATUS,
@@ -102,7 +106,6 @@ export function useArticleDetail() {
   const engagementSubmitting = ref(false)
   const isOwner = ref(false)
   // 被拒帖子的审核次数信息，仅本人可见
-  const auditRetryInfo = ref(null)
   const isFavorited = ref(false)
   const notInterestedSaving = ref(false)
   const notInterestedDialogVisible = ref(false)
@@ -1106,75 +1109,6 @@ export function useArticleDetail() {
     return Math.max(Number(article.value.replyCount) || 0, Number(replyTotal.value) || 0)
   })
 
-  const ownerAuditNotice = computed(() => {
-    if (!isOwner.value || !article.value?.id) return null
-    const s = Number(article.value.status)
-    const id = article.value.id
-    const shellBack =
-      route.query.from === 'creative'
-        ? { buttonText: '返回创作中心', path: '/creative' }
-        : { buttonText: '返回首页', path: '/community' }
-    if (s === ARTICLE_STATUS.APPROVED) {
-      return {
-        type: 'success',
-        title: '审核通过',
-        description: '帖子正在发布，请稍候刷新页面。',
-        ...shellBack,
-      }
-    }
-    if (s === ARTICLE_STATUS.PENDING_AUDIT) {
-      return {
-        type: 'warning',
-        title: '审核中',
-        description: '内容正在由系统异步审核，通过后帖子会自动发布，结果将通过站内信通知。',
-        ...shellBack,
-      }
-    }
-    if (s === ARTICLE_STATUS.REJECTED) {
-      const retry = auditRetryInfo.value
-      const rejectReason = article.value.auditResultMessage || ''
-      if (retry?.retryLimitReached) {
-        const prefix = rejectReason ? `${rejectReason} ` : ''
-        return {
-          type: 'error',
-          title: '审核未通过，已无法再次提交',
-          description: `${prefix}本帖审核次数已用完（上限 ${retry.retryLimit} 次），无法再提交审核。如需发布，请新建一篇帖子。`,
-          ...shellBack,
-        }
-      }
-      const remaining = retry ? Math.max(0, retry.retryLimit - retry.retryCount) : 0
-      const remainingHint = retry && retry.retryLimit > 0
-        ? `还可提交 ${remaining} 次（上限 ${retry.retryLimit} 次）。`
-        : ''
-      return {
-        type: 'error',
-        title: '审核未通过',
-        description: `${rejectReason || '请修改正文或图片后重新提交审核。'}${remainingHint ? ` ${remainingHint}` : ''}`,
-        buttonText: '去修改',
-        path: `/article/edit/${id}`,
-      }
-    }
-    if (s === ARTICLE_STATUS.AUDIT_ERROR) {
-      return {
-        type: 'warning',
-        title: '审核异常',
-        description: article.value.auditResultMessage || '审核服务暂时不可用，请稍后重试。',
-        buttonText: '返回编辑',
-        path: `/article/edit/${id}`,
-      }
-    }
-    if (s === ARTICLE_STATUS.DRAFT) {
-      return {
-        type: 'info',
-        title: '草稿',
-        description: '帖子尚未上架。请完善内容、封面后提交审核。',
-        buttonText: '继续编辑',
-        path: `/article/edit/${id}`,
-      }
-    }
-    return null
-  })
-
   function resetDetailTransientState() {
     stopGalleryAutoplay()
     stopAiSummaryPolling()
@@ -1229,6 +1163,15 @@ export function useArticleDetail() {
     try {
       const res = await getArticleDetail(articleId)
       if (res.code === 0) {
+        // 只有已发布的帖子能进详情。作者本人也一样：草稿和审核中的内容还没定稿，
+        // 未通过 / 异常的原因已经在创作中心卡片和编辑页里说明了，不必再来一趟。
+        // 这里挡的是直接输 URL 与旧链接 —— 详情接口是编辑页共用的，不能在后端拦，
+        // 否则编辑页拿不到数据就没法提示"正在审核中"
+        if (!canOpenArticleDetail(res.data.article?.status)) {
+          ElMessage.info(articleDetailBlockedHint(res.data.article?.status))
+          router.replace('/creative')
+          return
+        }
         article.value = res.data.article
         author.value = res.data.user
         board.value = res.data.board
@@ -1240,7 +1183,6 @@ export function useArticleDetail() {
         articleGalleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         await loadAuthorFollowState()
         await syncOwnerArticleStatus(articleId)
-        await loadAuditRetryInfo(articleId)
         await nextTick()
         updateGalleryStripState()
         bindGalleryStripObserver()
@@ -1279,23 +1221,6 @@ export function useArticleDetail() {
     },
     { immediate: true },
   )
-
-  // 被拒帖子要在横幅上如实告知还剩几次机会，次数用尽时不再引导用户去改
-  async function loadAuditRetryInfo(articleId) {
-    auditRetryInfo.value = null
-    if (!isOwner.value || Number(article.value?.status) !== ARTICLE_STATUS.REJECTED) return
-    try {
-      const res = await getAuditStatus(articleId)
-      if (res.code !== 0 || !res.data) return
-      auditRetryInfo.value = {
-        retryCount: Number(res.data.retryCount) || 0,
-        retryLimit: Number(res.data.retryLimit) || 0,
-        retryLimitReached: res.data.retryLimitReached === true,
-      }
-    } catch {
-      // 拿不到次数就退回原来的通用文案
-    }
-  }
 
   async function syncOwnerArticleStatus(articleId) {
     if (!isOwner.value || !article.value) return
@@ -2263,7 +2188,6 @@ export function useArticleDetail() {
     onReplyImageFileChange,
     onReplyPackBarScroll,
     openCommentShopDetail,
-    ownerAuditNotice,
     questionActionSaving,
     questionStatusClass,
     questionStatusLabel,

@@ -349,7 +349,9 @@ public class ArticleAuditServiceImpl implements ArticleAuditService {
         notifyAuditResult(article, result,
                 Constant.SYSTEM_MSG_TYPE_AUDIT_ERROR,
                 Constant.SYSTEM_MSG_TITLE_AUDIT_ERROR,
-                String.format("你的帖子《%s》审核异常: %s. 请稍后重新提交.",
+                // 结尾不再补"请稍后重新提交"：reason 本身通常已经带了处理建议，
+                // 两句叠在一起会变成"请重新提交. 请稍后重新提交."
+                String.format("《%s》审核异常：%s",
                         safeTitle(article.getTitle()), reason));
         log.warn("AUDIT_ERROR 处理完成: articleId={}, taskId={}", articleId, result.getTaskId());
         return true;

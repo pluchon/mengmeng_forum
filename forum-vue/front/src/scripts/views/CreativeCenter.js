@@ -12,7 +12,12 @@ import {
 import { searchCreatorArticles } from '@/api/search'
 import { getCreatorMonthlyNewFollowers, getFollowStats } from '@/api/userFollow'
 import { blockIfMuted } from '@/utils/userMute'
-import { ARTICLE_STATUS, articleStatusMeta } from '@/utils/articleStatus'
+import {
+  ARTICLE_STATUS,
+  articleDetailBlockedHint,
+  articleStatusMeta,
+  canOpenArticleDetail,
+} from '@/utils/articleStatus'
 import { formatForumDateOnlyShanghai } from '@/utils/datetime'
 import { captureFeedOpenFrom } from '@/utils/feedNavigation'
 import editIconUrl from '@/assets/svg/编辑.svg?url'
@@ -249,19 +254,34 @@ export function useCreativeCenter(iconSet) {
     return articleStatusMeta(row.article.status).isDraft ? 'creative-post-title--draft' : ''
   }
 
-  // 只有审核未通过 / 审核异常才展示理由，其余状态不占位
+  // 只有"审核未通过"才写理由。"审核异常"是系统侧没跑通，
+  // 原因对作者没有参考价值，标签本身已经说清楚了
   function postRejectReason(row) {
     const article = row?.article
     if (!article) return ''
-    const status = Number(article.status)
-    if (status !== ARTICLE_STATUS.REJECTED && status !== ARTICLE_STATUS.AUDIT_ERROR) return ''
+    if (Number(article.status) !== ARTICLE_STATUS.REJECTED) return ''
     return String(article.auditResultMessage || '').trim()
+  }
+
+  // 标签配色按语义分档：已发布绿、草稿蓝、审核中黄、审核失败红。
+  // 原来只有 draft / published 两档，审核异常和未通过都会显示成绿色
+  const STATUS_TONE = {
+    [ARTICLE_STATUS.DRAFT]: 'draft',
+    [ARTICLE_STATUS.PENDING_AUDIT]: 'pending',
+    [ARTICLE_STATUS.APPROVED]: 'pending',
+    [ARTICLE_STATUS.REJECTED]: 'failed',
+    [ARTICLE_STATUS.AUDIT_ERROR]: 'failed',
+    [ARTICLE_STATUS.PUBLISHED]: 'published',
   }
 
   function postStatus(row) {
     if (Number(row.article?.state) === 1) return { label: '已下架', tone: 'offline' }
-    const meta = articleStatusMeta(row.article?.status)
-    return { label: meta.tip.replace('（待发布）', ''), tone: meta.isDraft ? 'draft' : 'published' }
+    const status = Number(row.article?.status)
+    const meta = articleStatusMeta(status)
+    return {
+      label: meta.tip.replace('（待发布）', ''),
+      tone: STATUS_TONE[status] || 'published',
+    }
   }
 
   function postMetrics(row) {
@@ -296,7 +316,13 @@ export function useCreativeCenter(iconSet) {
   }
 
   function openArticle(row) {
-    if (articleStatusMeta(row.article.status).isDraft) return
+    // 在这里就拦住，不要等详情页加载完再跳回来 —— 那会让弹窗闪一下
+    if (!canOpenArticleDetail(row.article?.status)) {
+      if (!articleStatusMeta(row.article?.status).isDraft) {
+        ElMessage.info(articleDetailBlockedHint(row.article?.status))
+      }
+      return
+    }
     const id = row.article?.id
     if (id == null) return
     // 与个人主页一致：详情叠在整理台上，关闭后回到 /creative，不经首页

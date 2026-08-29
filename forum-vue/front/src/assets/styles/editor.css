@@ -69,17 +69,24 @@
   color: var(--color-text-primary, #1d2129);
 }
 
-/* 编辑页头部的审核未通过提示，占用标题与按钮之间的空白 */
+/* 编辑页头部的审核未通过提示。紧跟在标题右边，
+   margin-right:auto 把右侧按钮组顶回原位；底色在内层，跟着文字宽度走 */
 .editor-reject-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1;
   min-width: 0;
-  margin: 0 16px;
-  padding: 6px 12px;
+  margin-right: auto;
+}
+
+.editor-reject-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 12px;
   border-radius: 8px;
-  background: #fff1f3;
+  background: #fdecef;
   color: #c04a63;
   font-size: 12px;
   line-height: 1.4;

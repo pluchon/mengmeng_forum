@@ -933,20 +933,30 @@
   flex: 1;
 }
 
-/* 审核未通过时把理由摆在卡片中间的空白处，用户不用点进去就知道要改什么 */
+/* 审核未通过时把理由摆在卡片中间的空白处，用户不用点进去就知道要改什么。
+   整块在可用空间里居中，文字也居中 */
 .creative-post-reject {
   min-width: 0;
   flex: 1.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.creative-post-reject__text {
+  max-width: 100%;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: 7px;
-  background: #fff1f3;
+  background: #fdecef;
   color: #c04a63;
   font-size: 11px;
   line-height: 1.4;
+  text-align: center;
   word-break: break-all;
 }
 
@@ -1007,9 +1017,20 @@
   white-space: nowrap;
 }
 
+/* 已发布走 .creative-post-status 的默认淡绿 */
 .creative-post-status.is-draft {
-  background: #f4f0f2;
-  color: #a5959f;
+  background: #eaf1fb;
+  color: #6d8fbd;
+}
+
+.creative-post-status.is-pending {
+  background: #fdf4e3;
+  color: #c08e3c;
+}
+
+.creative-post-status.is-failed {
+  background: #fdecef;
+  color: #c04a63;
 }
 
 .creative-post-status.is-offline {

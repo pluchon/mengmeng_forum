@@ -249,22 +249,6 @@
               </div>
             </div>
 
-            <el-alert
-              v-if="ownerAuditNotice"
-              class="owner-audit-alert"
-              :title="ownerAuditNotice.title"
-              :type="ownerAuditNotice.type"
-              :closable="false"
-              show-icon
-            >
-              <template #default>
-                <p class="owner-audit-desc">{{ ownerAuditNotice.description }}</p>
-                <el-button size="small" type="primary" @click="$router.push(ownerAuditNotice.path)">
-                  {{ ownerAuditNotice.buttonText }}
-                </el-button>
-              </template>
-            </el-alert>
-
             <el-scrollbar
               ref="articleContentScrollRef"
               class="article-content-scroll article-content-scroll--hidden-bar"
@@ -984,7 +968,6 @@
 <script setup src="./ArticleDetail.js"></script>
 
 <style scoped src="@/assets/styles/article.css"></style>
-<style scoped src="@/assets/styles/article-detail-owner.css"></style>
 <style lang="scss" src="./ArticleDetail.scss"></style>
 <style src="@/assets/styles/article-detail-modal-global.css"></style>
 <style src="@/assets/styles/favorite-folder-select.css"></style>

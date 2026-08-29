@@ -27,6 +27,21 @@ export function articleStatusLabel(status) {
   return map[s] ?? '未知'
 }
 
+// 只有已发布的帖子能进详情页。作者本人也一样：草稿和审核中还没定稿，
+// 未通过 / 异常的原因在创作中心卡片与编辑页里已经说清楚了
+export function canOpenArticleDetail(status) {
+  return Number(status) === ARTICLE_STATUS.PUBLISHED
+}
+
+export function articleDetailBlockedHint(status) {
+  const s = Number(status)
+  if (s === ARTICLE_STATUS.PENDING_AUDIT || s === ARTICLE_STATUS.APPROVED) {
+    return '帖子正在审核中，结果会通过站内信通知'
+  }
+  if (s === ARTICLE_STATUS.DRAFT) return '草稿还没发布，去创作中心继续编辑吧'
+  return '帖子未通过审核，可在下方查看原因或点编辑修改'
+}
+
 export function isArticleEditingLocked(status) {
   return Number(status) === ARTICLE_STATUS.PENDING_AUDIT
 }

@@ -10,8 +10,10 @@
           </h2>
         </div>
         <div v-if="rejectReason" class="editor-reject-banner" :title="rejectReason">
-          <span class="editor-reject-banner__label">未通过</span>
-          <span class="editor-reject-banner__text">{{ rejectReason }}</span>
+          <span class="editor-reject-banner__inner">
+            <span class="editor-reject-banner__label">未通过</span>
+            <span class="editor-reject-banner__text">{{ rejectReason }}</span>
+          </span>
         </div>
         <div class="editor-action-btns">
           <el-button class="editor-btn-ghost" @click="handleCancel">取消</el-button>

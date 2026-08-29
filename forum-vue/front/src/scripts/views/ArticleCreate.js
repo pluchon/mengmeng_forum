@@ -282,11 +282,10 @@ export function useArticleCreate() {
         })
         editorMode.value = ct === 1 ? 'markdown' : 'rich'
         coverPreview.value = a.coverImg
-        const auditStatus = Number(a.status)
-        rejectReason.value =
-          (auditStatus === ARTICLE_STATUS.REJECTED || auditStatus === ARTICLE_STATUS.AUDIT_ERROR)
-            ? String(a.auditResultMessage || '').trim()
-            : ''
+        // 只有"审核未通过"才带理由：审核异常属于系统侧问题，写原因没有参考价值
+        rejectReason.value = Number(a.status) === ARTICLE_STATUS.REJECTED
+          ? String(a.auditResultMessage || '').trim()
+          : ''
         galleryUrls.value = Array.isArray(res.data.imageUrls) ? [...res.data.imageUrls] : []
         videoUrl.value = a.videoUrl || ''
         const isVideoPost = Number(a.mediaType) === 1 || Boolean(String(a.videoUrl || '').trim())
