@@ -51,7 +51,10 @@ rabbitmq:
   ai_async_task_queue: "q-ai-async-task"
   ai_content_result_routing_key: "forum.ai.content.result"
   ai_im_result_routing_key: "forum.ai.im.result"
-  prefetch: 1
+  # 异步任务消费线程数。prefetch 必须与之对齐：
+  # 未确认消息数就是背压，prefetch 小于线程数会让线程闲着
+  worker_threads: 4
+  prefetch: 4
 
 postgres:
   host: postgres

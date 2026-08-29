@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 from typing import Any
 
@@ -15,6 +16,7 @@ from clients.rabbit import (
     ai_async_task_queue,
     ai_content_result_routing_key,
     ai_im_result_routing_key,
+    consumer_worker_threads,
     open_consumer_channel,
     publish_json,
 )
@@ -29,7 +31,11 @@ from runtime.contracts import ModuleRequest
 
 logger = logging.getLogger(__name__)
 _TASK_PREFIX = "ai_async:task_state:"
-_TASK_TTL = 3600
+# 锁只需要覆盖"单个任务的最长耗时"，取 10 分钟。
+# 之前是 3600：进程被杀导致 _release 没执行时，锁会残留一小时，
+# 而 Java 侧每 60 秒补投一次，每次都撞上陈旧锁被静默 ack 丢弃，
+# 直到 retry_count 用尽，帖子永远停在 SUMMARY_PROCESSING
+_TASK_TTL = 600
 
 
 def _task_key(task_id: str) -> str:
@@ -38,7 +44,17 @@ def _task_key(task_id: str) -> str:
 
 def _try_lock(task_id: str) -> bool:
     try:
-        return bool(redis_client.set(_task_key(task_id), "running", ex=_TASK_TTL, nx=True))
+        acquired = bool(redis_client.set(_task_key(task_id), "running", ex=_TASK_TTL, nx=True))
+        if not acquired:
+            # 正常去重也会走到这里，但陈旧锁同样走这里。没有日志的话，
+            # "任务被静默丢弃"从外面完全看不出来
+            state = redis_client.get(_task_key(task_id))
+            ttl = redis_client.ttl(_task_key(task_id))
+            logger.info(
+                "[ai_async_worker] 跳过重复任务 task_id=%s state=%s ttl=%s",
+                task_id, state, ttl,
+            )
+        return acquired
     except redis.RedisError:
         logger.exception("AI异步任务锁不可用，交由Java结果幂等兜底 task_id=%s", task_id)
         return True
@@ -278,42 +294,77 @@ def _normalize_music_risk(value: Any) -> str:
     return "medium"
 
 
+# pika 的连接和 channel 都不是线程安全的：worker 线程绝不能直接 basic_ack，
+# 必须把确认动作交回持有连接的 IO 线程执行
+def _settle_threadsafe(connection, channel, delivery_tag: int, ack: bool, requeue: bool = False) -> None:
+    def _do() -> None:
+        try:
+            if ack:
+                channel.basic_ack(delivery_tag=delivery_tag)
+            else:
+                channel.basic_nack(delivery_tag=delivery_tag, requeue=requeue)
+        except Exception:
+            # 连接期间断开重建过，旧 delivery_tag 已失效；
+            # 消息会被 broker 重投，交给 Redis 去重挡住
+            logger.warning("[ai_async_worker] 确认消息失败 delivery_tag=%s", delivery_tag)
+
+    try:
+        connection.add_callback_threadsafe(_do)
+    except Exception:
+        logger.warning("[ai_async_worker] 无法投递确认回调，消息将由 broker 重投")
+
+
+def _handle_message(connection, channel, delivery_tag: int, body: bytes) -> None:
+    task_id = ""
+    try:
+        task = json.loads(body.decode("utf-8"))
+        task_id = str(task.get("taskId") or "").strip()
+        if not task_id:
+            _settle_threadsafe(connection, channel, delivery_tag, ack=True)
+            return
+        if not _try_lock(task_id):
+            _settle_threadsafe(connection, channel, delivery_tag, ack=True)
+            return
+        started = time.time()
+        result = _execute(task)
+        routing_key = (
+            ai_im_result_routing_key()
+            if result.get("resultDomain") == "IM"
+            else ai_content_result_routing_key()
+        )
+        if not publish_json(routing_key, result):
+            _release(task_id)
+            _settle_threadsafe(connection, channel, delivery_tag, ack=False, requeue=True)
+            return
+        _mark_done(task_id)
+        _settle_threadsafe(connection, channel, delivery_tag, ack=True)
+        logger.info(
+            "[ai_async_worker] 任务完成 task_id=%s type=%s 耗时=%.1fs",
+            task_id, task.get("taskType"), time.time() - started,
+        )
+    except Exception:
+        logger.exception("AI异步消息处理失败 task_id=%s", task_id)
+        if task_id:
+            _release(task_id)
+        _settle_threadsafe(connection, channel, delivery_tag, ack=False, requeue=False)
+
+
 def _consume_loop() -> None:
     queue = ai_async_task_queue()
+    pool_size = consumer_worker_threads()
+    # 之前是单线程串行：一个总结任务最坏要几分钟，而帖子总结、评论审核、
+    # 弹幕审核、举报审核、音乐分析全挤在这一条线上排队，从外面看就像"卡住了"
+    executor = ThreadPoolExecutor(max_workers=pool_size, thread_name_prefix="ai-async-exec")
     while True:
         try:
             connection, channel = open_consumer_channel()
-            logger.info("[ai_async_worker] 已连接，订阅队列=%s", queue)
-            for method, _properties, body in channel.consume(queue, auto_ack=False, inactivity_timeout=None):
+            logger.info("[ai_async_worker] 已连接，订阅队列=%s 并发=%s", queue, pool_size)
+            # inactivity_timeout 让循环定期空转，_settle_threadsafe 投进来的
+            # 确认回调才有机会在 IO 线程上被执行
+            for method, _properties, body in channel.consume(queue, auto_ack=False, inactivity_timeout=1):
                 if method is None:
                     continue
-                task_id = ""
-                try:
-                    task = json.loads(body.decode("utf-8"))
-                    task_id = str(task.get("taskId") or "").strip()
-                    if not task_id:
-                        channel.basic_ack(delivery_tag=method.delivery_tag)
-                        continue
-                    if not _try_lock(task_id):
-                        channel.basic_ack(delivery_tag=method.delivery_tag)
-                        continue
-                    result = _execute(task)
-                    routing_key = (
-                        ai_im_result_routing_key()
-                        if result.get("resultDomain") == "IM"
-                        else ai_content_result_routing_key()
-                    )
-                    if not publish_json(routing_key, result):
-                        _release(task_id)
-                        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                        continue
-                    _mark_done(task_id)
-                    channel.basic_ack(delivery_tag=method.delivery_tag)
-                except Exception:
-                    logger.exception("AI异步消息处理失败")
-                    if task_id:
-                        _release(task_id)
-                    channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                executor.submit(_handle_message, connection, channel, method.delivery_tag, body)
         except Exception:
             logger.exception("AI异步worker连接断开，5秒后重连")
             time.sleep(5)

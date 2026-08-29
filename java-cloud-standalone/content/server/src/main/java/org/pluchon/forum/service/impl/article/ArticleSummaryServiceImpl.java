@@ -51,6 +51,8 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
     private static final byte TASK_TYPE_SUMMARY = 1;
     private static final byte TARGET_TYPE_ARTICLE = 1;
     private static final byte TASK_PENDING = 0;
+    // 补投上限；到达后转 FAILED 终态，由用户手动「重新生成」
+    private static final int MAX_SUMMARY_RETRY = 3;
     private static final byte TASK_COMPLETED = 2;
     private static final byte TASK_FAILED = 3;
     private static final byte DELETE_FALSE = 0;
@@ -209,12 +211,18 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
     @Override
     public int republishPendingTasks() {
         Date before = new Date(System.currentTimeMillis() - 60_000L);
+        // 先给补投耗尽的任务收口。Python 侧异常时是 basic_nack(requeue=false)，
+        // 消息直接丢弃、Java 永远等不到结果，任务就一直停在 PENDING；
+        // 补投上限用尽后没人再管，帖子的 summaryStatus 会永远是 PROCESSING，
+        // 前端也就一直轮询转圈。这里把它推到 FAILED —— 前端拿到终态会停止
+        // 轮询并露出「重新生成」入口
+        expireExhaustedTasks(before);
         List<ContentAiTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<ContentAiTask>()
                 .eq(ContentAiTask::getTaskType, TASK_TYPE_SUMMARY)
                 .eq(ContentAiTask::getStatus, TASK_PENDING)
                 .eq(ContentAiTask::getDeleteState, DELETE_FALSE)
                 .le(ContentAiTask::getUpdateTime, before)
-                .lt(ContentAiTask::getRetryCount, 3)
+                .lt(ContentAiTask::getRetryCount, MAX_SUMMARY_RETRY)
                 .last("LIMIT 20"));
         int count = 0;
         for (ContentAiTask task : tasks) {
@@ -229,6 +237,28 @@ public class ArticleSummaryServiceImpl implements ArticleSummaryService {
             count++;
         }
         return count;
+    }
+
+    // 补投次数已用尽却仍无结果的任务，标记为失败终态
+    private void expireExhaustedTasks(Date before) {
+        List<ContentAiTask> exhausted = taskMapper.selectList(new LambdaQueryWrapper<ContentAiTask>()
+                .eq(ContentAiTask::getTaskType, TASK_TYPE_SUMMARY)
+                .eq(ContentAiTask::getStatus, TASK_PENDING)
+                .eq(ContentAiTask::getDeleteState, DELETE_FALSE)
+                .le(ContentAiTask::getUpdateTime, before)
+                .ge(ContentAiTask::getRetryCount, MAX_SUMMARY_RETRY)
+                .last("LIMIT 20"));
+        for (ContentAiTask task : exhausted) {
+            markTaskFailed(task, "REPUBLISH_EXHAUSTED",
+                    "补投 " + MAX_SUMMARY_RETRY + " 次仍未收到 AI 结果，具体原因见 ai-server 日志 task_id="
+                            + task.getTaskId());
+            featureMapper.update(null, new LambdaUpdateWrapper<ForumArticleAiFeature>()
+                    .eq(ForumArticleAiFeature::getArticleId, task.getTargetId())
+                    .eq(ForumArticleAiFeature::getSummaryContentHash, task.getContentHash())
+                    .set(ForumArticleAiFeature::getSummaryStatus, SUMMARY_FAILED));
+            log.warn("帖子总结补投耗尽，标记为失败 articleId={} taskId={}",
+                    task.getTargetId(), task.getTaskId());
+        }
     }
 
     private void createSummaryTask(Article article, ForumArticleAiFeature feature, String contentHash,

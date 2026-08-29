@@ -38,11 +38,20 @@ def _params() -> pika.ConnectionParameters:
     )
 
 
+def consumer_worker_threads() -> int:
+    """异步任务消费线程数，至少 1"""
+    return max(1, int(_cfg.get("worker_threads", 4)))
+
+
 def open_consumer_channel() -> tuple[BlockingConnection, pika.channel.Channel]:
-    """每个消费者线程独占一个 BlockingConnection + Channel"""
+    """消费者独占一个 BlockingConnection + Channel。
+
+    prefetch 取线程数：未确认消息数就是天然的背压，
+    小于线程数会让线程闲着，大于线程数则任务会堆在进程内存里。
+    """
     conn = BlockingConnection(_params())
     ch = conn.channel()
-    ch.basic_qos(prefetch_count=int(_cfg.get("prefetch", 1)))
+    ch.basic_qos(prefetch_count=int(_cfg.get("prefetch", consumer_worker_threads())))
     return conn, ch
 
 
