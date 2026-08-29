@@ -7,8 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.pinyin4j.PinyinHelper;
 import org.pluchon.forum.api.UserInternalVO;
-import org.pluchon.forum.api.economy.VipTierSnapshotVO;
-import org.pluchon.forum.cloud.feign.ImVipInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.enums.GroupChatJoinRequestReadState;
@@ -71,10 +69,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -108,10 +108,6 @@ public class GroupChatServiceImpl implements GroupChatService {
     // 认证用户查询服务
     @Autowired
     private ImUserLookupService userLookupService;
-
-    // 会员权益内部客户端
-    @Autowired
-    private ImVipInternalFeignClient imVipInternalFeignClient;
 
     // 私信服务
     @Autowired
@@ -274,8 +270,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .orderByDesc(GroupChat::getUpdateTime));
         Map<Long, UserInternalVO> ownerUsers = queryOwnerUsers(result.getRecords());
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(group -> refreshAndConvert(group, loginUserId, ownerUsers.get(group.getOwnerUserId())))
+                .map(group -> refreshAndConvert(group, null, ownerUsers.get(group.getOwnerUserId())))
                 .collect(Collectors.toList());
+        fillViewerRelations(records, loginUserId);
         attachOwnerUsers(records, ownerUsers);
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -299,8 +296,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .orderByDesc(GroupChat::getCreateTime));
         Map<Long, UserInternalVO> ownerUsers = queryOwnerUsers(result.getRecords());
         List<GroupChatDetailVO> records = result.getRecords().stream()
-                .map(group -> refreshAndConvert(group, loginUserId, ownerUsers.get(group.getOwnerUserId())))
+                .map(group -> refreshAndConvert(group, null, ownerUsers.get(group.getOwnerUserId())))
                 .collect(Collectors.toList());
+        fillViewerRelations(records, loginUserId);
         attachOwnerUsers(records, ownerUsers);
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize,
                 result.getPages(), result.hasNext());
@@ -1023,11 +1021,13 @@ public class GroupChatServiceImpl implements GroupChatService {
             status = GroupChatStatus.FULL.getCode();
         }
         if (!Objects.equals(group.getMemberLimit(), limit) || !Objects.equals(group.getStatus(), status)) {
+            // 不要动 updateTime：公开群列表按它倒序，纠正一次状态就会把这个群顶到最前面。
+            // MyBatis-Plus 的自动填充也要绕开，这里显式锁住原值
             groupChatMapper.update(null, new LambdaUpdateWrapper<GroupChat>()
                     .eq(GroupChat::getId, group.getId())
                     .set(GroupChat::getMemberLimit, limit)
                     .set(GroupChat::getStatus, status)
-                    .set(GroupChat::getUpdateTime, ForumDateTimes.now()));
+                    .setSql("update_time = update_time"));
             group.setMemberLimit(limit);
             group.setStatus(status);
         }
@@ -1048,6 +1048,40 @@ public class GroupChatServiceImpl implements GroupChatService {
         GroupChatDetailVO vo = GroupChatConverter.toDetailVO(refreshGroupLimitStatus(group, owner));
         fillViewerRelation(vo, loginUserId);
         return vo;
+    }
+
+    // 列表场景：把逐条的 isActiveMember / latestPendingJoinRequest 合并成两次批量查询
+    private void fillViewerRelations(List<GroupChatDetailVO> vos, Long loginUserId) {
+        if (vos == null || vos.isEmpty() || loginUserId == null) {
+            return;
+        }
+        List<Long> groupIds = vos.stream().map(GroupChatDetailVO::getId)
+                .filter(Objects::nonNull).distinct().toList();
+        if (groupIds.isEmpty()) {
+            return;
+        }
+        Set<Long> joinedGroupIds = groupChatMemberMapper.selectList(new LambdaQueryWrapper<GroupChatMember>()
+                        .in(GroupChatMember::getGroupId, groupIds)
+                        .eq(GroupChatMember::getUserId, loginUserId)
+                        .eq(GroupChatMember::getStatus, GroupChatMemberStatus.ACTIVE.getCode())
+                        .ne(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .select(GroupChatMember::getGroupId))
+                .stream().map(GroupChatMember::getGroupId).collect(Collectors.toSet());
+        Map<Long, GroupChatJoinRequest> pendingByGroup = new HashMap<>();
+        groupChatJoinRequestMapper.selectList(new LambdaQueryWrapper<GroupChatJoinRequest>()
+                        .in(GroupChatJoinRequest::getGroupId, groupIds)
+                        .eq(GroupChatJoinRequest::getTargetUserId, loginUserId)
+                        .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                        .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
+                        .orderByDesc(GroupChatJoinRequest::getId))
+                // 同一个群保留 id 最大的那条，与逐条查询时的 limit 1 语义一致
+                .forEach(row -> pendingByGroup.putIfAbsent(row.getGroupId(), row));
+        for (GroupChatDetailVO vo : vos) {
+            vo.setCurrentUserJoined(joinedGroupIds.contains(vo.getId()));
+            GroupChatJoinRequest latest = pendingByGroup.get(vo.getId());
+            vo.setCurrentUserRequestStatus(latest == null ? null : latest.getStatus());
+            vo.setCurrentUserRequestId(latest == null ? null : latest.getId());
+        }
     }
 
     private void fillViewerRelation(GroupChatDetailVO vo, Long loginUserId) {
@@ -1626,37 +1660,13 @@ public class GroupChatServiceImpl implements GroupChatService {
         return value.isEmpty() ? null : value;
     }
 
+    // 群聊上限不再随群主 VIP 变化，见 ForumBusinessConstants 上的说明
     private int createLimitFor(UserInternalVO user) {
-        Byte tier = activeVipTier(user == null ? null : user.getId());
-        if (Constant.VIP_TIER_MAX.equals(tier)) {
-            return Constant.GROUP_CHAT_CREATE_LIMIT_MAX;
-        }
-        if (Constant.VIP_TIER_PRO.equals(tier)) {
-            return Constant.GROUP_CHAT_CREATE_LIMIT_PRO;
-        }
-        return Constant.GROUP_CHAT_CREATE_LIMIT_FREE;
+        return Constant.GROUP_CHAT_CREATE_LIMIT;
     }
 
     private int memberLimitFor(UserInternalVO user) {
-        Byte tier = activeVipTier(user == null ? null : user.getId());
-        if (Constant.VIP_TIER_MAX.equals(tier)) {
-            return Constant.GROUP_CHAT_MEMBER_LIMIT_MAX;
-        }
-        if (Constant.VIP_TIER_PRO.equals(tier)) {
-            return Constant.GROUP_CHAT_MEMBER_LIMIT_PRO;
-        }
-        return Constant.GROUP_CHAT_MEMBER_LIMIT_FREE;
-    }
-
-    private Byte activeVipTier(Long userId) {
-        if (userId == null || userId <= 0) {
-            return Constant.VIP_TIER_FREE;
-        }
-        VipTierSnapshotVO snapshot = imVipInternalFeignClient.tierSnapshot(userId);
-        if (snapshot != null && snapshot.isVipActive() && snapshot.getVipTier() != null) {
-            return snapshot.getVipTier();
-        }
-        return Constant.VIP_TIER_FREE;
+        return Constant.GROUP_CHAT_MEMBER_LIMIT;
     }
 
     private String displayName(UserInternalVO user) {

@@ -37,6 +37,9 @@ public final class ForumBusinessConstants {
 
     // AI 搜索一次最多打三次 Python（候选打分 / 向量兜底 / 作者相似兜底），
     // 且搜不到结果的查询三次全跑，是全站唯一没有配额的 AI 入口
+    // 收藏夹名是公开可见的，等于一个文案位；不设上限的话可以无限建
+    public static final int FAVORITE_FOLDER_MAX_COUNT = 20;
+
     // 推荐流一次算多少条并缓存。翻页只切这份缓存，不重跑召回
     public static final int RECOMMEND_FEED_CACHE_SIZE = 120;
     // 兴趣板块改动会立刻触发一次 AI 画像生成，在两组板块间来回切就能连续触发。
@@ -178,12 +181,12 @@ public final class ForumBusinessConstants {
     public static final Byte VIP_TIER_FREE = 0;
     public static final Byte VIP_TIER_PRO = 1;
     public static final Byte VIP_TIER_MAX = 2;
-    public static final int GROUP_CHAT_CREATE_LIMIT_FREE = 3;
-    public static final int GROUP_CHAT_CREATE_LIMIT_PRO = 10;
-    public static final int GROUP_CHAT_CREATE_LIMIT_MAX = 30;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_FREE = 100;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_PRO = 200;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_MAX = 350;
+    // 群聊上限原本按群主 VIP 分三档。副作用很难看：群主 VIP 一到期，上限从 350
+    // 掉回 100，一个 250 人的群立刻变成 OVER_LIMIT_LOCKED——群里的人什么都没做，
+    // 却因为群主没续费而进不来新人。等于用付费状态惩罚无关的第三方。
+    // 统一取原最高档，取消一个权益不应该让任何人变差，存量群也不会被锁。
+    public static final int GROUP_CHAT_CREATE_LIMIT = 30;
+    public static final int GROUP_CHAT_MEMBER_LIMIT = 350;
     public static final int GROUP_CHAT_NAME_MAX_LEN = 10;
     public static final int GROUP_CHAT_INTRO_MAX_LEN = 120;
     public static final int GROUP_CHAT_MESSAGE_MAX_LEN = 500;

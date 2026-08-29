@@ -93,6 +93,10 @@ public final class ForumRedisKeys {
     public static final String DANMAKU_MINUTE = "forum:danmaku:minute:";
     public static final long TTL_DANMAKU_MINUTE = 60L;
 
+    // 改名 = 一次 AI 审核，加个最低限度的防抖，正常使用感知不到
+    public static final String FAVORITE_FOLDER_RENAME = "forum:favorite:folder:rename:";
+    public static final long TTL_FAVORITE_FOLDER_RENAME = 10L;
+
     public static final String RECOMMEND_FEED_RANK = "forum:recommend:rank:";
     public static final long TTL_RECOMMEND_FEED_RANK = 300L;
     public static final String RECOMMEND_PROFILE_COOLDOWN = "forum:recommend:profile:cd:";

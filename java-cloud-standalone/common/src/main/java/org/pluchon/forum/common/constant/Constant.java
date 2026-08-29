@@ -152,6 +152,9 @@ public final class Constant {
     public static final int SEARCH_RAG_CANDIDATE_LIMIT = ForumBusinessConstants.SEARCH_RAG_CANDIDATE_LIMIT;
     public static final int SEARCH_INVERTED_MAX_RESULTS = ForumBusinessConstants.SEARCH_INVERTED_MAX_RESULTS;
     public static final int SEARCH_RAG_MAX_RESULTS = ForumBusinessConstants.SEARCH_RAG_MAX_RESULTS;
+    public static final int FAVORITE_FOLDER_MAX_COUNT = ForumBusinessConstants.FAVORITE_FOLDER_MAX_COUNT;
+    public static final String REDIS_KEY_FAVORITE_FOLDER_RENAME = ForumRedisKeys.FAVORITE_FOLDER_RENAME;
+    public static final long REDIS_TTL_FAVORITE_FOLDER_RENAME = ForumRedisKeys.TTL_FAVORITE_FOLDER_RENAME;
     public static final int RECOMMEND_FEED_CACHE_SIZE = ForumBusinessConstants.RECOMMEND_FEED_CACHE_SIZE;
     public static final int RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS =
             ForumBusinessConstants.RECOMMEND_PROFILE_REFRESH_COOLDOWN_SECONDS;
@@ -240,12 +243,8 @@ public final class Constant {
     public static final Byte VIP_TIER_FREE = ForumBusinessConstants.VIP_TIER_FREE;
     public static final Byte VIP_TIER_PRO = ForumBusinessConstants.VIP_TIER_PRO;
     public static final Byte VIP_TIER_MAX = ForumBusinessConstants.VIP_TIER_MAX;
-    public static final int GROUP_CHAT_CREATE_LIMIT_FREE = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_FREE;
-    public static final int GROUP_CHAT_CREATE_LIMIT_PRO = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_PRO;
-    public static final int GROUP_CHAT_CREATE_LIMIT_MAX = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT_MAX;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_FREE = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_FREE;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_PRO = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_PRO;
-    public static final int GROUP_CHAT_MEMBER_LIMIT_MAX = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT_MAX;
+    public static final int GROUP_CHAT_CREATE_LIMIT = ForumBusinessConstants.GROUP_CHAT_CREATE_LIMIT;
+    public static final int GROUP_CHAT_MEMBER_LIMIT = ForumBusinessConstants.GROUP_CHAT_MEMBER_LIMIT;
     public static final int GROUP_CHAT_NAME_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_NAME_MAX_LEN;
     public static final int GROUP_CHAT_INTRO_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_INTRO_MAX_LEN;
     public static final int GROUP_CHAT_MESSAGE_MAX_LEN = ForumBusinessConstants.GROUP_CHAT_MESSAGE_MAX_LEN;

@@ -19,6 +19,7 @@ public class ForumImApplication {
 
     public static void main(String[] args) {
         ForumDateTimes.useShanghaiAsDefault();
+
         SpringApplication.run(ForumImApplication.class, args);
     }
 }

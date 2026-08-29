@@ -6,7 +6,12 @@
           <el-icon :size="20"><Camera /></el-icon>
           <span>更换背景</span>
         </button>
-        <button type="button" class="banner-upload-btn" @click.stop="openBannerPreview">
+        <button
+          v-if="hasBannerImage"
+          type="button"
+          class="banner-upload-btn"
+          @click.stop="openBannerPreview"
+        >
           <el-icon :size="20"><ZoomIn /></el-icon>
           <span>查看背景</span>
         </button>
@@ -639,6 +644,7 @@ const {
   followingCount,
   followerCount,
   isMe,
+  hasBannerImage,
   likedArticles,
   likedPageNum,
   likedTotal,

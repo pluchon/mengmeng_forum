@@ -251,6 +251,10 @@ public class UserFollowServiceImpl implements UserFollowService {
         return new PageResult<>(records, page.getTotal(), p, s, page.getPages(), page.hasNext());
     }
 
+    private static final String BACKSLASH = String.valueOf((char) 92);
+    // 昵称候选上限：命中再多也只是用来回落到关注关系，取够用即可
+    private static final int KEYWORD_MATCH_LIMIT = 500;
+
     private int normalizeListPageSize(Integer pageSize) {
         int s = pageSize == null || pageSize < 1 ? 5 : pageSize;
         return Math.min(s, 50);
@@ -267,23 +271,21 @@ public class UserFollowServiceImpl implements UserFollowService {
     }
 
     // 在关注/粉丝范围内仅按昵称模糊匹配 不走 AI / 分词扩展
+    // 原本先把该用户的全部关注/粉丝 ID 无分页捞出来（5000 粉丝就是 5000 行），
+    // 再拿这批 ID 去 IN 查用户表。改成按昵称先筛用户、再回落到关注关系上，
+    // 规模不再随粉丝数增长
     private void applyKeywordFilter(LambdaQueryWrapper<UserFollow> wrapper, String keyword,
             Long profileUserId, boolean followingList) {
         if (!StringUtils.hasText(keyword)) {
             return;
         }
-        String kw = keyword.trim();
-        List<Long> scopedIds = resolveScopedUserIds(profileUserId, followingList);
-        if (scopedIds.isEmpty()) {
-            wrapper.eq(UserFollow::getId, -1L);
-            return;
-        }
+        String kw = escapeLikeWildcards(keyword.trim());
         List<Long> matched = userMapper.selectList(new LambdaQueryWrapper<User>()
-                .in(User::getId, scopedIds)
                 .ne(User::getDeleteState, DELETE_TRUE)
                 .ne(User::getState, STATE_FORBIDDEN)
                 .like(User::getNickname, kw)
-                .select(User::getId))
+                .select(User::getId)
+                .last("LIMIT " + KEYWORD_MATCH_LIMIT))
                 .stream()
                 .map(User::getId)
                 .toList();
@@ -298,19 +300,13 @@ public class UserFollowServiceImpl implements UserFollowService {
         }
     }
 
-    private List<Long> resolveScopedUserIds(Long profileUserId, boolean followingList) {
-        List<UserFollow> rows = userFollowMapper.selectList(
-                followingList
-                        ? new LambdaQueryWrapper<UserFollow>().eq(UserFollow::getFollowerId, profileUserId)
-                        : new LambdaQueryWrapper<UserFollow>().eq(UserFollow::getFolloweeId, profileUserId));
-        if (rows == null || rows.isEmpty()) {
-            return List.of();
-        }
-        return rows.stream()
-                .map(r -> followingList ? r.getFolloweeId() : r.getFollowerId())
-                .distinct()
-                .toList();
+    // % 和 _ 不转义的话，搜一个 % 就能匹配到全部用户
+    private String escapeLikeWildcards(String term) {
+        return term.replace(BACKSLASH, BACKSLASH + BACKSLASH)
+                .replace("%", BACKSLASH + "%")
+                .replace("_", BACKSLASH + "_");
     }
+
 
     private List<UserFollowListItemVO> buildListItems(List<UserFollow> follows, Long profileUserId,
             Long viewerId, boolean followersList) {

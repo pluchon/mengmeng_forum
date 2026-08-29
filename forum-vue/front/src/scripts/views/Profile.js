@@ -18,8 +18,6 @@ import {
 import { uploadProfileBackground, updateBackgroundUrl } from '@/api/settings'
 import { followUser, unfollowUser, getFollowStats } from '@/api/userFollow'
 import {
-  getGroupChatSessions,
-  getPublicGroupChats,
   getUserPublicGroupChats,
   joinPublicGroupChat,
 } from '@/api/groupChat'
@@ -48,7 +46,6 @@ export function useProfile() {
   const messageCenterUi = useMessageCenterUiStore()
   const notInterestedArticleStore = useNotInterestedArticleStore()
   const defaultAvatar = DEFAULT_AVATAR
-  const defaultBg = clientOssUrl('profileb_back.webp')
 
   // 详情路由下 params.id 是帖子 ID，背景态个人主页必须改读来源用户
   function resolveProfileUserId() {
@@ -115,7 +112,6 @@ export function useProfile() {
   const publicGroupsLoading = ref(false)
   const publicGroupsPageNum = ref(1)
   const publicGroupsTotal = ref(0)
-  const myGroupSessions = ref([])
   const joiningGroupId = ref(null)
 
   const notInterestedArticles = ref([])
@@ -161,9 +157,6 @@ export function useProfile() {
     }
   }
 
-  const joinedGroupIds = computed(() =>
-    new Set(myGroupSessions.value.map((item) => String(item.groupId))),
-  )
 
   async function loadLikedArticles(page = 1) {
     const userId = resolveProfileUserId()
@@ -219,6 +212,10 @@ export function useProfile() {
     return `${chars.slice(0, 6).join('')}…`
   }
 
+  function isDefaultFavoriteFolder(folder) {
+    return Number(folder?.isDefault) === 1
+  }
+
   function favoriteFolderInitial(folder) {
     const name = String(folder?.name || '收').trim()
     return name.charAt(0) || '收'
@@ -226,6 +223,11 @@ export function useProfile() {
 
   async function triggerFavoriteCoverUpload(folder) {
     if (!isMe.value || !folder?.id) return
+    // 后端已拒绝默认收藏夹改封面；这里先挡住，否则图片会先传上 OSS 再被拒，留下孤儿文件
+    if (isDefaultFavoriteFolder(folder)) {
+      ElMessage.warning('默认收藏夹不支持设置封面')
+      return
+    }
     if (!(await ensureLoggedIn('上传收藏夹封面需要登录'))) return
     favoriteCoverTarget.value = folder
     favoriteCoverInputRef.value?.click()
@@ -290,19 +292,22 @@ export function useProfile() {
         name,
         isPublic: favoriteCreateForm.value.isPublic,
       })
-      if (res.code === 0) {
-        ElMessage.success('已创建')
-        favoriteCreateVisible.value = false
-        await loadFavoriteFolders(1)
-      } else {
-        ElMessage.error(res.message || '创建失败')
-      }
+      ElMessage.success('已创建')
+      favoriteCreateVisible.value = false
+      await loadFavoriteFolders(1)
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       favoriteCreateSaving.value = false
     }
   }
 
-  const bgStyle = computed(() => `url(${userInfo.value?.backgroundUrl || defaultBg})`)
+  // 默认背景图已下线，没有背景就走纯色，不要再兜一张会 404 的图
+  const bgStyle = computed(() => {
+    const url = String(userInfo.value?.backgroundUrl || '').trim()
+    return url ? `url(${url})` : 'none'
+  })
+  const hasBannerImage = computed(() => Boolean(String(userInfo.value?.backgroundUrl || '').trim()))
 
   const avatarSrc = computed(() => {
     if (isMe.value && userStore.avatarUrl) return userStore.avatarUrl
@@ -380,32 +385,23 @@ export function useProfile() {
   }
 
 
-  async function loadMyGroupSessions() {
-    try {
-      const res = await getGroupChatSessions({ pageNum: 1, pageSize: 100 })
-      if (res.code === 0) {
-        myGroupSessions.value = res.data?.records || []
-      }
-    } catch {
-      myGroupSessions.value = []
-    }
-  }
-
   async function loadPublicGroups(page = 1) {
     const userId = resolveProfileUserId()
     publicGroupsPageNum.value = page
     publicGroupsLoading.value = true
     try {
-      const [groupsRes] = await Promise.all([
-        isMe.value
-          ? getPublicGroupChats({ pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE })
-          : getUserPublicGroupChats(userId, { pageNum: page, pageSize: PUBLIC_GROUP_PAGE_SIZE }),
-        loadMyGroupSessions(),
-      ])
-      if (groupsRes.code === 0) {
-        publicGroups.value = groupsRes.data?.records || []
-        publicGroupsTotal.value = Number(groupsRes.data?.total) || 0
-      }
+      // 之前本人主页走的是"全站公开群"接口，别人主页走"该用户创建的群"，
+      // 同一个 tab 两种语义，自己创建的群反而混在全站列表里找不到
+      const groupsRes = await getUserPublicGroupChats(userId, {
+        pageNum: page,
+        pageSize: PUBLIC_GROUP_PAGE_SIZE,
+      })
+      publicGroups.value = groupsRes.data?.records || []
+      publicGroupsTotal.value = Number(groupsRes.data?.total) || 0
+    } catch {
+      // 失败不能留上一页的数据配新页码
+      publicGroups.value = []
+      publicGroupsTotal.value = 0
     } finally {
       publicGroupsLoading.value = false
     }
@@ -417,10 +413,12 @@ export function useProfile() {
     notInterestedLoading.value = true
     try {
       const res = await getNotInterestedArticles({ pageNum: page, pageSize: PROFILE_PAGE_SIZE })
-      if (res.code === 0) {
-        notInterestedArticles.value = res.data?.records || []
-        notInterestedTotal.value = Number(res.data?.total) || 0
-      }
+      notInterestedArticles.value = res.data?.records || []
+      notInterestedTotal.value = Number(res.data?.total) || 0
+    } catch {
+      // 失败不能留上一页数据配新页码
+      notInterestedArticles.value = []
+      notInterestedTotal.value = 0
     } finally {
       notInterestedLoading.value = false
     }
@@ -432,8 +430,7 @@ export function useProfile() {
     if (!articleId || notInterestedRestoringId.value != null) return
     notInterestedRestoringId.value = articleId
     try {
-      const res = await restoreRecommendationInterested(articleId)
-      if (res.code !== 0) return
+      await restoreRecommendationInterested(articleId)
       notInterestedArticleStore.restoreInterested(articleId)
       notInterestedArticles.value = notInterestedArticles.value.filter(row => Number(row.article?.id) !== Number(articleId))
       notInterestedTotal.value = Math.max(0, notInterestedTotal.value - 1)
@@ -442,6 +439,8 @@ export function useProfile() {
         const maxPage = Math.max(1, Math.ceil((notInterestedTotal.value || 0) / PROFILE_PAGE_SIZE))
         await loadNotInterestedArticles(Math.min(notInterestedPageNum.value - 1, maxPage))
       }
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       notInterestedRestoringId.value = null
     }
@@ -465,14 +464,14 @@ export function useProfile() {
     joiningGroupId.value = gid
     try {
       const res = await joinPublicGroupChat(gid)
-      if (res.code === 0) {
-        ElMessage.success('申请已发送')
-        if (res.data?.id) {
-          group.currentUserRequestId = res.data.id
-          group.currentUserRequestStatus = res.data.status
-        }
-        await loadPublicGroups(publicGroupsPageNum.value)
+      ElMessage.success('申请已发送')
+      if (res.data?.id) {
+        group.currentUserRequestId = res.data.id
+        group.currentUserRequestStatus = res.data.status
       }
+      // 局部状态已更新，不必整页重拉——重拉会让服务端重算群状态、顺序也可能变
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       joiningGroupId.value = null
     }
@@ -494,8 +493,9 @@ export function useProfile() {
     return String(name).trim().charAt(0) || '群'
   }
 
+  // 后端 fillViewerRelations 已经算好，不用前端再拉一遍会话列表自己判断
   function isJoinedPublicGroup(group) {
-    return group?.currentUserJoined === true || joinedGroupIds.value.has(String(group?.id))
+    return group?.currentUserJoined === true
   }
 
   function isPendingPublicGroup(group) {
@@ -545,10 +545,11 @@ export function useProfile() {
         pageNum: favoriteDialogPageNum.value,
         pageSize: FAVORITE_DIALOG_PAGE_SIZE,
       })
-      if (res.code === 0) {
-        favoriteDialogItems.value = res.data?.records || []
-        favoriteDialogTotal.value = Number(res.data?.total) || 0
-      }
+      favoriteDialogItems.value = res.data?.records || []
+      favoriteDialogTotal.value = Number(res.data?.total) || 0
+    } catch {
+      favoriteDialogItems.value = []
+      favoriteDialogTotal.value = 0
     } finally {
       favoriteDialogLoading.value = false
     }
@@ -557,6 +558,10 @@ export function useProfile() {
 
   function startFavoriteFolderRename() {
     if (!isMe.value) return
+    if (isDefaultFavoriteFolder(activeFavoriteFolder.value)) {
+      ElMessage.warning('默认收藏夹不支持改名')
+      return
+    }
     favoriteFolderRenameValue.value = activeFavoriteFolder.value?.name || ''
     favoriteFolderRenaming.value = true
   }
@@ -564,24 +569,23 @@ export function useProfile() {
   async function confirmFavoriteFolderRename() {
     const folder = activeFavoriteFolder.value
     if (!folder?.id || favoriteFolderRenameSaving.value) return
-    const name = favoriteFolderRenameValue.value.trim().slice(0, 25)
+    // 不再静默截断：输入框已限长，超长交给后端拒绝，别背着用户改内容
+    const name = favoriteFolderRenameValue.value.trim()
     if (!name) {
       ElMessage.warning('请输入收藏夹名称')
       return
     }
     favoriteFolderRenameSaving.value = true
     try {
-      const res = await updateFavoriteFolder({ folderId: folder.id, name })
-      if (res.code === 0) {
-        folder.name = name
-        favoriteDialogTitle.value = name
-        const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
-        if (idx >= 0) favoriteFolders.value[idx].name = name
-        favoriteFolderRenaming.value = false
-        ElMessage.success('已更新名称')
-      } else {
-        ElMessage.error(res.message || '更新失败')
-      }
+      await updateFavoriteFolder({ folderId: folder.id, name })
+      folder.name = name
+      favoriteDialogTitle.value = name
+      const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
+      if (idx >= 0) favoriteFolders.value[idx].name = name
+      favoriteFolderRenaming.value = false
+      ElMessage.success('已更新名称')
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       favoriteFolderRenameSaving.value = false
     }
@@ -594,7 +598,11 @@ export function useProfile() {
       scrollY: window.scrollY,
       ...extra,
     }
-    sessionStorage.setItem(PROFILE_RETURN_KEY, JSON.stringify(state))
+    try {
+      sessionStorage.setItem(PROFILE_RETURN_KEY, JSON.stringify(state))
+    } catch {
+      // 隐私模式或存储已满：记不住返回位置可以接受，但不能因此打断跳转
+    }
   }
 
   async function tryRestoreProfileState() {
@@ -644,15 +652,13 @@ export function useProfile() {
         folderId: folder.id,
         isPublic,
       })
-      if (res.code === 0) {
-        favoriteFolderPublic.value = isPublic
-        folder.isPublic = isPublic
-        const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
-        if (idx >= 0) favoriteFolders.value[idx].isPublic = isPublic
-        ElMessage.success(isPublic === 1 ? '已设为公开' : '已设为私密')
-      } else {
-        ElMessage.error(res.message || '更新失败')
-      }
+      favoriteFolderPublic.value = isPublic
+      folder.isPublic = isPublic
+      const idx = favoriteFolders.value.findIndex((f) => f.id === folder.id)
+      if (idx >= 0) favoriteFolders.value[idx].isPublic = isPublic
+      ElMessage.success(isPublic === 1 ? '已设为公开' : '已设为私密')
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       favoriteVisibilitySaving.value = false
     }
@@ -818,7 +824,8 @@ export function useProfile() {
   }
 
   function openBannerPreview() {
-    const url = userInfo.value?.backgroundUrl || defaultBg
+    const url = String(userInfo.value?.backgroundUrl || '').trim()
+    if (!url) return
     bannerDialogRef.value?.openView(url)
   }
 
@@ -927,6 +934,7 @@ export function useProfile() {
     isFollowing,
     isJoinedPublicGroup,
     isMe,
+    hasBannerImage,
     isPendingPublicGroup,
     joiningGroupId,
     likedArticles,

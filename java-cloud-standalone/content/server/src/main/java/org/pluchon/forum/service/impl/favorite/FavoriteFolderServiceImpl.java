@@ -65,6 +65,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     @Autowired
     private OssConfig ossConfig;
 
+    @Autowired
+    private org.pluchon.forum.service.remote.ContentAiGatewayService contentAiGatewayService;
+
     
     // 创建 / 修改 / 删除
     
@@ -86,6 +89,8 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         if (dup != null && dup > 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_NAME_DUPLICATE));
         }
+        assertFolderCountLimit(loginUserId);
+        assertFolderNameCompliant(name);
         UserFavoriteFolder folder = new UserFavoriteFolder();
         folder.setUserId(loginUserId);
         folder.setName(name);
@@ -101,8 +106,15 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     @Transactional(rollbackFor = Exception.class)
     public void updateFolder(UpdateFolderRequest req, Long loginUserId) {
         UserFavoriteFolder folder = requireFolder(req.getFolderId(), loginUserId, true);
+        boolean isDefaultFolder = folder.getIsDefault() != null && folder.getIsDefault() == DEFAULT_YES;
+        boolean wantsRename = StringUtils.hasLength(req.getName())
+                && !Objects.equals(req.getName().trim(), folder.getName());
+        // 默认收藏夹此前只挡了删除，改名和封面完全没挡
+        if (isDefaultFolder && (wantsRename || StringUtils.hasText(req.getCoverUrl()))) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_DEFAULT_FOLDER_CANNOT_EDIT));
+        }
         // 同名校验 仅当用户改了名字才做
-        if (StringUtils.hasLength(req.getName()) && !Objects.equals(req.getName().trim(), folder.getName())) {
+        if (wantsRename) {
             String newName = req.getName().trim();
             Long dup = folderMapper.selectCount(new LambdaQueryWrapper<UserFavoriteFolder>()
                     .eq(UserFavoriteFolder::getUserId, loginUserId)
@@ -112,6 +124,8 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             if (dup != null && dup > 0) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_NAME_DUPLICATE));
             }
+            assertRenameNotTooOften(folder.getId());
+            assertFolderNameCompliant(newName);
             folder.setName(newName);
         }
         if (req.getIsPublic() != null && !Objects.equals(req.getIsPublic(), folder.getIsPublic())) {
@@ -130,6 +144,40 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
         }
         if (folderMapper.updateById(folder) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
+        }
+    }
+
+    private void assertFolderCountLimit(Long loginUserId) {
+        Long count = folderMapper.selectCount(new LambdaQueryWrapper<UserFavoriteFolder>()
+                .eq(UserFavoriteFolder::getUserId, loginUserId)
+                .ne(UserFavoriteFolder::getDeleteState, DELETE_YES));
+        if (count != null && count >= Constant.FAVORITE_FOLDER_MAX_COUNT) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_COUNT_LIMIT));
+        }
+    }
+
+    // 收藏夹可以设为公开并展示在个人主页上，是个公开文案位。
+    // 帖子标题、昵称、个人简介都要过审，这里此前一点都不审
+    private void assertFolderNameCompliant(String name) {
+        String reason;
+        try {
+            reason = contentAiGatewayService.validateText("论坛收藏夹名称：" + name);
+        } catch (Exception e) {
+            // 审核服务不可用时放行：收藏夹名影响面远小于帖子，不值得为它挡住正常使用
+            log.warn("收藏夹名称审核不可用，放行: {}", e.getMessage());
+            return;
+        }
+        if (StringUtils.hasText(reason)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, reason));
+        }
+    }
+
+    private void assertRenameNotTooOften(Long folderId) {
+        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(
+                Constant.REDIS_KEY_FAVORITE_FOLDER_RENAME + folderId, "1",
+                Constant.REDIS_TTL_FAVORITE_FOLDER_RENAME, TimeUnit.SECONDS);
+        if (Boolean.FALSE.equals(first)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_FOLDER_RENAME_TOO_OFTEN));
         }
     }
 
