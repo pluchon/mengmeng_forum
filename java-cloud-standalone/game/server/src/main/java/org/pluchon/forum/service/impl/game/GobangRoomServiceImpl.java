@@ -1097,10 +1097,11 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             }
             int row = move.getRow();
             int col = move.getCol();
-            if (!inBoard(row, col) || room.getBoard()[row][col] != 0) {
+            // 一律读传进来的快照：这段跑在房间锁之外，room.getBoard() 给的是内部数组本身
+            if (!inBoard(row, col) || board[row][col] != 0) {
                 return null;
             }
-            GobangThreatDetector.ThreatHit mustBlock = gobangAiEngine.findMustBlock(room.getBoard());
+            GobangThreatDetector.ThreatHit mustBlock = gobangAiEngine.findMustBlock(board);
             if (mustBlock != null && (mustBlock.row() != row || mustBlock.col() != col)) {
                 room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, true));
                 return new int[] { mustBlock.row(), mustBlock.col() };

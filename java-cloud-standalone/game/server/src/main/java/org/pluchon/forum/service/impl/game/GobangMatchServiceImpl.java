@@ -144,11 +144,19 @@ public class GobangMatchServiceImpl implements GobangMatchService {
         if (userA == null || userB == null || userA.equals(userB)) {
             return;
         }
-        String roomId = gobangRoomService.createMatchedRoom(userA, userB);
-        GameMatchSuccessVO payloadA = new GameMatchSuccessVO(roomId, userA, userB);
-        GameMatchSuccessVO payloadB = new GameMatchSuccessVO(roomId, userB, userA);
-        sendToGame(userA, GameWsResponse.ok("match_success", null, payloadA));
-        sendToGame(userB, GameWsResponse.ok("match_success", null, payloadB));
+        // 建房失败时两人已经被取出队列，不放回去状态就永远卡在「匹配中」，
+        // 既开不了新局也点不动按钮
+        try {
+            String roomId = gobangRoomService.createMatchedRoom(userA, userB);
+            GameMatchSuccessVO payloadA = new GameMatchSuccessVO(roomId, userA, userB);
+            GameMatchSuccessVO payloadB = new GameMatchSuccessVO(roomId, userB, userA);
+            sendToGame(userA, GameWsResponse.ok("match_success", null, payloadA));
+            sendToGame(userB, GameWsResponse.ok("match_success", null, payloadB));
+        } catch (Exception e) {
+            log.error("五子棋建房失败 userA={}, userB={}", userA, userB, e);
+            releaseMatching(userA);
+            releaseMatching(userB);
+        }
     }
 
     private void matchAiFromQueue(String bucketCode) {
@@ -160,9 +168,28 @@ public class GobangMatchServiceImpl implements GobangMatchService {
         if (userId == null) {
             return;
         }
-        String roomId = gobangRoomService.createAiRoom(userId);
-        GameMatchSuccessVO payload = new GameMatchSuccessVO(roomId, userId, GameConstants.AI_USER_ID);
-        sendToGame(userId, GameWsResponse.ok("match_success", null, payload));
+        // 同上：建房失败要把人放回空闲，否则状态卡在「匹配中」
+        try {
+            String roomId = gobangRoomService.createAiRoom(userId);
+            GameMatchSuccessVO payload = new GameMatchSuccessVO(roomId, userId, GameConstants.AI_USER_ID);
+            sendToGame(userId, GameWsResponse.ok("match_success", null, payload));
+        } catch (Exception e) {
+            log.error("五子棋人机建房失败 userId={}", userId, e);
+            releaseMatching(userId);
+        }
+    }
+
+    // 建房失败后的收尾：把人从「匹配中」放回空闲，让他能重新点匹配
+    private void releaseMatching(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            gameMatchQueueService.dequeue(GameConstants.GOBANG, userId);
+            gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
+        } catch (Exception e) {
+            log.warn("重置五子棋匹配状态失败 userId={}", userId, e);
+        }
     }
 
     private GameMatchBucket bucketOf(int score) {

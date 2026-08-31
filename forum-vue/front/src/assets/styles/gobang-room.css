@@ -1012,3 +1012,15 @@
 .gobang-chat-input--stacked .game-chat-send {
   width: 100%;
 }
+
+/* 滚动条藏起来，但保留滚动能力 */
+.gobang-chat-input--stacked :deep(.el-textarea__inner) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gobang-chat-input--stacked :deep(.el-textarea__inner)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

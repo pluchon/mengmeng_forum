@@ -653,3 +653,15 @@
   line-height: 1.7;
   color: rgba(237, 245, 243, 0.62);
 }
+
+/* 滚动条藏起来，但保留滚动能力 */
+.tetris-pk-chat-input :deep(.el-textarea__inner) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tetris-pk-chat-input :deep(.el-textarea__inner)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

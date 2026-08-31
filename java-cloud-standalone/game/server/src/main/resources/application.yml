@@ -47,6 +47,14 @@ spring:
 feign:
   sentinel:
     enabled: true
+  client:
+    config:
+      # 五子棋 AI：Python 侧问大模型自带 8 秒超时，这里留点余量。
+      # 不配的话 Feign 默认读超时是 60 秒，正好等于单步限时——
+      # AI 域或网络卡住时，这一手会拖到超时判负
+      gameAiHubInternalFeignClient:
+        connectTimeout: 2000
+        readTimeout: 12000
 
 forum:
   domain: game
