@@ -1,5 +1,5 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { onActivated } from 'vue'
+import { onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, DataLine, Medal, Promotion, Trophy, VideoPlay, View } from '@element-plus/icons-vue'
@@ -927,18 +927,39 @@ onMounted(async () => {
   await Promise.all([refreshLobby(), refreshForumPointsBalance()])
   gameCenterInitialized = true
   lobbySocket.connect()
-  // 只作为兜底：在线人数已经走推送，但心跳过期这种「无事件的变化」推不出来。
-  // 原来是 5 秒一轮，既没必要也是卡片区闪烁的来源
+  startRefreshTimer()
+})
+
+// 只作为兜底：在线人数已经走推送，但心跳过期这种「无事件的变化」推不出来。
+// 原来是 5 秒一轮，既没必要也是卡片区闪烁的来源
+function startRefreshTimer() {
+  if (refreshTimer) return
   refreshTimer = window.setInterval(() => {
     refreshLobby(true)
   }, 30000)
-})
+}
+
+function stopRefreshTimer() {
+  if (refreshTimer) {
+    window.clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
 
 onActivated(() => {
-  if (gameCenterInitialized) {
-    void refreshLobby(true)
-    void refreshForumPointsBalance()
-  }
+  if (!gameCenterInitialized) return
+  void refreshLobby(true)
+  void refreshForumPointsBalance()
+  lobbySocket.connect()
+  startRefreshTimer()
+})
+
+// 这个页面被 keep-alive 缓存着，进房间时走的是 deactivate 而不是 unmount。
+// 不在这里收尾的话，人在房间里，大厅的定时刷新和大厅长连接还在后台跑，
+// 推送过来的房间变更还会触发一次观战列表请求
+onDeactivated(() => {
+  stopRefreshTimer()
+  lobbySocket.close()
 })
 
 function createMatchSocket(gameCode, socketPath, roomRouteName) {
