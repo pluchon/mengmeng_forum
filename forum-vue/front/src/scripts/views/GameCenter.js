@@ -190,6 +190,15 @@ const lobbySocket = useGameWebSocket('game-center/lobby', {
     if (message.type === 'lobby_ready' && message.data) {
       overview.lobbyOnlineCount = Number(message.data.lobbyOnlineCount ?? message.data.onlineCount) || overview.lobbyOnlineCount
     }
+    // 有人进出某个游戏时服务端直接把新的人数推过来，不必再定时把整个概览拉一遍
+    if (message.type === 'lobby_online_changed' && message.data) {
+      const changed = message.data.gameCode
+      const count = Number(message.data.onlineCount)
+      if (changed && Number.isFinite(count)) {
+        const target = overview.games.find((item) => item?.gameCode === changed)
+        if (target) target.onlineCount = count
+      }
+    }
     if (!message.ok && message.message) {
       ElMessage.warning(message.message)
     }
@@ -331,8 +340,10 @@ async function loadGameCategories() {
   }
 }
 
-async function loadGamePage(page = gamePageNum.value) {
-  gameListLoading.value = true
+// silent：定时刷新用。加载态会给卡片区盖一层遮罩，
+// 每 5 秒来一次就是用户看到的「每隔几秒闪一下」
+async function loadGamePage(page = gamePageNum.value, silent = false) {
+  if (!silent) gameListLoading.value = true
   try {
     const res = await getGamePage({
       pageNum: page,
@@ -345,7 +356,7 @@ async function loadGamePage(page = gamePageNum.value) {
       gamePageNum.value = page
     }
   } finally {
-    gameListLoading.value = false
+    if (!silent) gameListLoading.value = false
   }
 }
 
@@ -501,7 +512,7 @@ function resolveLeaderboardRequest(gameCode) {
 async function refreshLobby(silent = false) {
   await Promise.all([
     loadOverview(silent),
-    loadGamePage(gamePageNum.value),
+    loadGamePage(gamePageNum.value, silent),
     loadStatisticsSummary(),
     loadProfileByGame('tetris'),
     loadProfileByGame('tetris_pk'),
@@ -916,9 +927,11 @@ onMounted(async () => {
   await Promise.all([refreshLobby(), refreshForumPointsBalance()])
   gameCenterInitialized = true
   lobbySocket.connect()
+  // 只作为兜底：在线人数已经走推送，但心跳过期这种「无事件的变化」推不出来。
+  // 原来是 5 秒一轮，既没必要也是卡片区闪烁的来源
   refreshTimer = window.setInterval(() => {
     refreshLobby(true)
-  }, 5000)
+  }, 30000)
 })
 
 onActivated(() => {

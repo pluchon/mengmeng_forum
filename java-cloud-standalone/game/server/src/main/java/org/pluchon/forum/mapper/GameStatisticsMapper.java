@@ -42,12 +42,6 @@ public interface GameStatisticsMapper {
                 FROM game_jinzi_match_record
                 WHERE delete_state = 0 AND (black_user_id = #{userId} OR white_user_id = #{userId})
                 UNION ALL
-                SELECT id, 'tetris', NULL, 'FINISHED', 'FINISHED', 0,
-                       score, level, lines_cleared, started_at, ended_at,
-                       NULL, NULL, NULL
-                FROM game_tetris_record
-                WHERE delete_state = 0 AND validation_status IN ('VALID', 'REPLAY_OK', 'SKIPPED', 'MISMATCH') AND user_id = #{userId}
-                UNION ALL
                 SELECT id, 'tetris_pk', room_id,
                        CASE WHEN winner_user_id IS NULL THEN 'DRAW'
                             WHEN winner_user_id = #{userId} THEN 'WIN' ELSE 'LOSE' END,
@@ -82,10 +76,6 @@ public interface GameStatisticsMapper {
                 SELECT id, 'jinzi'
                 FROM game_jinzi_match_record
                 WHERE delete_state = 0 AND (black_user_id = #{userId} OR white_user_id = #{userId})
-                UNION ALL
-                SELECT id, 'tetris'
-                FROM game_tetris_record
-                WHERE delete_state = 0 AND validation_status IN ('VALID', 'REPLAY_OK', 'SKIPPED', 'MISMATCH') AND user_id = #{userId}
                 UNION ALL
                 SELECT id, 'tetris_pk'
                 FROM game_tetris_pk_match_record

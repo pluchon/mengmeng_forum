@@ -18,6 +18,9 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
     private static final Duration HEARTBEAT_TTL = Duration.ofSeconds(90);
 
     @Autowired
+    private GameLobbyBroadcaster gameLobbyBroadcaster;
+
+    @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     @Override
@@ -69,6 +72,8 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
         }
         try {
             touchGame(gameCode, userId);
+            // 进出游戏是在线人数唯一会变的时刻，直接推给大厅，省掉前端的定时拉取
+            gameLobbyBroadcaster.onlineChanged(gameCode, countGameOnline(gameCode));
         } catch (Exception e) {
             log.debug("写入游戏在线状态失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
         }
@@ -81,6 +86,7 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
         }
         try {
             stringRedisTemplate.opsForZSet().remove(GameRedisKeys.gameOnline(gameCode), String.valueOf(userId));
+            gameLobbyBroadcaster.onlineChanged(gameCode, countGameOnline(gameCode));
         } catch (Exception e) {
             log.debug("清理游戏在线状态失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
         }

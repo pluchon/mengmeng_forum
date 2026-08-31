@@ -22,10 +22,11 @@ import java.util.Set;
 @Service
 public class GameStatisticsServiceImpl implements GameStatisticsService {
 
+    // 单人俄罗斯方块不进对局统计：它没有对手也没有胜负，
+    // 统计里只会把总局数撑大。它的成绩在游戏入口卡片上以「最高 X 分」呈现。
     private static final Set<String> SUPPORTED_GAME_CODES = Set.of(
             GameConstants.GOBANG,
             GameConstants.JINZI,
-            "tetris",
             "tetris_pk"
     );
 
@@ -50,6 +51,9 @@ public class GameStatisticsServiceImpl implements GameStatisticsService {
         int winCount = 0;
         int loseCount = 0;
         for (GameUserProfile profile : profiles) {
+            if (!SUPPORTED_GAME_CODES.contains(profile.getGameCode())) {
+                continue;
+            }
             GameStatisticsGameSummaryVO item = new GameStatisticsGameSummaryVO();
             item.setGameCode(profile.getGameCode());
             item.setRankScore(nvl(profile.getScore()));

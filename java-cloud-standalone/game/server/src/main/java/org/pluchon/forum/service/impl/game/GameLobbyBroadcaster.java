@@ -27,6 +27,30 @@ public class GameLobbyBroadcaster {
     @Autowired
     private GameConnectionRegistry gameConnectionRegistry;
 
+    /**
+     * 某个游戏的在线人数变了。
+     *
+     * <p>在线人数原来只能靠前端每 5 秒把整个概览拉一遍，而拉取会带上加载态，
+     * 卡片区每隔几秒就闪一下。进出游戏是服务端明确知道的时刻，直接推数字过去。
+     *
+     * <p>这里推的是数值而不是「有变化」的信号：人数就一个整数，推过去前端直接用，
+     * 不必再回一趟接口。
+     */
+    public void onlineChanged(String gameCode, int onlineCount) {
+        if (gameCode == null || gameCode.isBlank()) {
+            return;
+        }
+        try {
+            String payload = MAPPER.writeValueAsString(GameWsResponse.ok(
+                    "lobby_online_changed",
+                    null,
+                    Map.of("gameCode", gameCode, "onlineCount", Math.max(0, onlineCount))));
+            gameConnectionRegistry.broadcastLobby(payload);
+        } catch (Exception e) {
+            log.debug("广播游戏在线人数失败 gameCode={}, error={}", gameCode, e.getMessage());
+        }
+    }
+
     public void roomsChanged(String gameCode) {
         if (gameCode == null || gameCode.isBlank()) {
             return;
