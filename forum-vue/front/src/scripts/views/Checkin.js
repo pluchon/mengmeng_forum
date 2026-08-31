@@ -8,7 +8,7 @@ import {
   makeupCheckin,
 } from '@/api/checkin'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
-import { unwrapPageRecords } from '@/utils/apiData'
+import { apiErrorCode, unwrapPageRecords } from '@/utils/apiData'
 import { clientOssUrl } from '@/utils/clientOss'
 import iconPrevUrl from '@/assets/svg/后退.svg?url'
 import iconNextUrl from '@/assets/svg/前进.svg?url'
@@ -295,7 +295,7 @@ export function useCheckin() {
         await Promise.all([loadStatus(), loadMonth()])
       }
     } catch (e) {
-      if (e?.code === 1129) {
+      if (apiErrorCode(e) === 1129) {
         ElMessage.warning(e.message || '今日已签到, 请明天再来')
         if (status.value) status.value = { ...status.value, todaySigned: true }
       }

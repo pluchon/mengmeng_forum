@@ -295,6 +295,9 @@
 }
 
 .emoji-shop-card {
+  /* 状态标签用 absolute 定位，卡片必须是它的包含块。
+     缺了这行就只在 :hover 的 transform 生效时才落在卡片里 */
+  position: relative;
   display: flex;
   flex-direction: column;
   border-radius: 17px;

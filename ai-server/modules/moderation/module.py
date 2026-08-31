@@ -12,11 +12,23 @@ from langchain_core.messages import HumanMessage
 from clients.llm import text_llm, vision_llm, vision_llm_fallback
 from config import settings
 from graphs.article_audit import run_audit
-from graphs.prompts import IMAGE_AUDIT_TEMPLATE, IMAGE_DESC_PROMPT, TEXT_AUDIT_TEMPLATE
+from graphs.prompts import (
+    ANIMATION_DESC_PROMPT,
+    IMAGE_AUDIT_TEMPLATE,
+    IMAGE_DESC_PROMPT,
+    TEXT_AUDIT_TEMPLATE,
+)
 from runtime.contracts import ModuleRequest, ModuleRequestError, ModuleResult
 from utils import cache as semantic_cache
 from utils.html import clean_html
-from utils.image import fetch_image_bytes, meets_vision_model_min_size, to_data_url, validate_image_bytes
+from utils.image import (
+    build_animation_grid,
+    count_image_frames,
+    fetch_image_bytes,
+    meets_vision_model_min_size,
+    to_data_url,
+    validate_image_bytes,
+)
 from modules.moderation.graph import run_text_moderation
 
 logger = logging.getLogger(__name__)
@@ -244,8 +256,20 @@ class ContentModerationModule:
                 "INVALID_IMAGE_AUDIT_PAYLOAD",
                 "图片尺寸太小，请换一张更清晰的图片",
             )
-        data_url = to_data_url(image_data, fmt)
-        message = HumanMessage(content=[{"image": data_url}, {"text": IMAGE_DESC_PROMPT}])
+        # 视觉模型对动图只解析首帧：首帧正常、后面帧违规就能整包过审。
+        # 抽 4 帧拼成一张网格图再送，调用次数不变
+        prompt = IMAGE_DESC_PROMPT
+        audit_bytes, audit_fmt = image_data, fmt
+        if count_image_frames(image_data) > 1:
+            grid = build_animation_grid(image_data)
+            if grid:
+                audit_bytes, audit_fmt = grid, "png"
+                prompt = ANIMATION_DESC_PROMPT
+            else:
+                # 拼不出来就退回首帧，宁可覆盖不全也不能因此放行或报错
+                logger.warning("IMAGE_AUDIT 动图抽帧失败，退回首帧审核")
+        data_url = to_data_url(audit_bytes, audit_fmt)
+        message = HumanMessage(content=[{"image": data_url}, {"text": prompt}])
         try:
             response = _invoke_vision(message)
         except ModuleRequestError:

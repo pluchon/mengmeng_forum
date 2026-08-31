@@ -3209,16 +3209,15 @@ const GROUP_NOTIFY_OPTIONS = [
     try {
       const res = await getShopEmojiAvailability({ url: mediaUrl })
       const status = res.data?.status
-      if (res.code === 0 && status === 'AVAILABLE' && res.data?.shopId) {
+      const shopId = res.data?.shopId
+      // 已下架也跳过去：详情页会展示下架占位，和从评论点进来的表现一致。
+      // 原来这里只弹一句提示不跳转，两个入口两种行为
+      if (res.code === 0 && shopId && (status === 'AVAILABLE' || status === 'SERIES_OFFLINE')) {
         handleClose()
-        await router.push({ path: '/emoji-shop', query: { detail: String(res.data.shopId) } })
+        await router.push({ path: '/emoji-shop', query: { detail: String(shopId) } })
         return
       }
-      if (status === 'SERIES_OFFLINE') {
-        ElMessage.warning('该表情包系列已下架')
-      } else {
-        ElMessage.warning('该表情已被删除')
-      }
+      ElMessage.warning('该表情已被删除')
     } catch {
       // 请求拦截器已提示
     }

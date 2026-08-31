@@ -8,9 +8,15 @@ import {
   updateShopStatus,
   getShopEmojiAvailability,
 } from '@/api/shop'
+import { apiErrorCode } from '@/utils/apiData'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { formatCheckinLogDateOnly } from '@/utils/datetime'
+import offlineImageUrl from '@/assets/images/biaoqing_offline.png'
+
+// 与后端 ResultCode.FAILED_SHOP_OFFLINE 对齐；下架有专门的占位页，
+// 不需要拦截器再弹一次 toast
+const SHOP_OFFLINE_CODE = 1221
 
 const ITEM_PAGE_SIZE = 8
 
@@ -123,7 +129,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
       const res = await getShopDetail(id, {
         itemPageNum: page,
         itemPageSize: itemPageSize.value,
-      })
+      }, { silentBizCodes: [SHOP_OFFLINE_CODE] })
       if (res.code === 0 && res.data) {
         detail.value = res.data
         const pageData = res.data.imagePage
@@ -136,10 +142,22 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
         ElMessage.warning('商品不存在或已下架')
         close()
       }
+    } catch (error) {
+      // 已下架：作者已经把系列撤了，但从评论/聊天点进来的用户仍然应该看到
+      // 一个说明页，而不是一闪而过的报错。1221 是后端专门为此区分出来的码
+      if (apiErrorCode(error) === SHOP_OFFLINE_CODE) {
+        offlineNotice.value = true
+        detail.value = null
+      } else {
+        close()
+      }
     } finally {
       loading.value = false
     }
   }
+
+  const offlineNotice = ref(false)
+  const offlineImage = offlineImageUrl
 
   async function open(shopId) {
     const id = Number(shopId)
@@ -149,6 +167,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
     itemPage.value = 1
     itemPageSize.value = ITEM_PAGE_SIZE
     detail.value = null
+    offlineNotice.value = false
     try {
       if (userStore.isLoggedIn) await wallet.refresh()
       await loadDetail(id, 1, true)
@@ -166,6 +185,7 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
   function close() {
     visible.value = false
     detail.value = null
+    offlineNotice.value = false
     previewIndex.value = 0
     itemPage.value = 1
     itemPageSize.value = ITEM_PAGE_SIZE
@@ -233,6 +253,8 @@ export function useEmojiShopDetailDialog({ onPurchased, onClosed } = {}) {
   return {
     visible,
     loading,
+    offlineNotice,
+    offlineImage,
     purchasing,
     detail,
     previewIndex,

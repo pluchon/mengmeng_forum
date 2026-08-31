@@ -40,6 +40,36 @@
   min-height: 510px;
 }
 
+/* 下架占位：整块卡片是空的，图和文案在水平垂直中心 */
+.emoji-shop-detail-dialog__offline {
+  min-height: 510px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.emoji-shop-detail-dialog__offline-img {
+  width: min(240px, 60%);
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.emoji-shop-detail-dialog__offline-title {
+  margin: 12px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1d2129;
+}
+
+.emoji-shop-detail-dialog__offline-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #86909c;
+}
+
 .emoji-shop-detail-dialog__split {
   display: flex;
   min-height: 510px;
@@ -187,6 +217,12 @@
   font-size: 12px;
 }
 
+/* 下架是"这个包已经不卖了"，用绿色会读成正常状态 */
+.emoji-shop-detail-dialog__info-top.is-offline :deep(.el-tag) {
+  color: #d9534f;
+  background: #fdeeee;
+}
+
 .emoji-shop-detail-dialog__author {
   display: inline-flex;
   align-items: center;
@@ -292,6 +328,13 @@
 .emoji-shop-detail-dialog__buy-btn:deep(.is-disabled) {
   color: #fff;
   background: #ace08f;
+}
+
+/* 已下架时"已拥有"跟着变红，和上面的标签呼应 */
+.emoji-shop-detail-dialog__buy-btn.is-offline,
+.emoji-shop-detail-dialog__buy-btn.is-offline:deep(.is-disabled) {
+  color: #fff !important;
+  background: #e08f8f !important;
 }
 
 .emoji-shop-detail-dialog__shelf-btn {

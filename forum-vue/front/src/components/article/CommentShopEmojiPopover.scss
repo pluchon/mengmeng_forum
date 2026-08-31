@@ -73,3 +73,8 @@
 .comment-shop-emoji-popover__state.is-error {
   color: #f53f3f;
 }
+
+/* 下架是既成事实，不是这次操作出的错，别用报错的红 */
+.comment-shop-emoji-popover__state.is-offline {
+  color: #86909c;
+}

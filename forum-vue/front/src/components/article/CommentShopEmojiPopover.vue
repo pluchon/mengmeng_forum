@@ -24,7 +24,11 @@
     <div class="comment-shop-emoji-popover">
       <img :src="mediaUrl" alt="" class="comment-shop-emoji-popover__preview">
       <div v-if="loading" class="comment-shop-emoji-popover__state">加载中…</div>
-      <div v-else-if="errorText" class="comment-shop-emoji-popover__state is-error">{{ errorText }}</div>
+      <div
+        v-else-if="errorText"
+        class="comment-shop-emoji-popover__state"
+        :class="offlineNotice ? 'is-offline' : 'is-error'"
+      >{{ errorText }}</div>
       <button
         v-else-if="detail"
         type="button"

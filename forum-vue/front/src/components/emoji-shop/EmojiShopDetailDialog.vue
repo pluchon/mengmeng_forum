@@ -52,7 +52,10 @@
           </aside>
 
           <section class="emoji-shop-detail-dialog__info">
-            <div class="emoji-shop-detail-dialog__info-top">
+            <div
+              class="emoji-shop-detail-dialog__info-top"
+              :class="{ 'is-offline': detail.status === 2 }"
+            >
               <div>
                 <h2 class="emoji-shop-detail-dialog__name">{{ detail.name }}</h2>
                 <div
@@ -123,6 +126,7 @@
                   v-if="detail.owned"
                   type="success"
                   class="emoji-shop-detail-dialog__buy-btn"
+                  :class="{ 'is-offline': detail.status === 2 }"
                   disabled
                   round
                 >
@@ -162,6 +166,11 @@
           </section>
         </div>
       </template>
+      <div v-else-if="offlineNotice" class="emoji-shop-detail-dialog__offline">
+        <img :src="offlineImage" alt="" class="emoji-shop-detail-dialog__offline-img" />
+        <p class="emoji-shop-detail-dialog__offline-title">该表情包已下架</p>
+        <p class="emoji-shop-detail-dialog__offline-desc">作者已将这个系列下架，暂时无法查看</p>
+      </div>
     </div>
   </el-dialog>
 </template>
@@ -183,6 +192,8 @@ const props = defineProps({
 const {
   visible,
   loading,
+  offlineNotice,
+  offlineImage,
   purchasing,
   detail,
   previewIndex,

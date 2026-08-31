@@ -1,4 +1,5 @@
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
+import { apiErrorCode } from '@/utils/apiData'
 import { useRouter } from 'vue-router'
 import { sendSmsCodeForReset, sendMailCodeForReset, findPasswordByMail, findPasswordBySms } from '@/api/auth'
 import { ElMessage } from 'element-plus'
@@ -188,11 +189,11 @@ export function useForgotPassword(captchaDialogRef) {
   // 1115 / 1119 被全局拦截器静默了（登录页自行接管），找回密码页必须自己说清楚，
   // 否则用户点完按钮页面毫无反应
   const notifyUnboundAccount = (err) => {
-    if (err?.code === 1115) {
+    if (apiErrorCode(err) === 1115) {
       ElMessage.info('该手机号还没有注册账号，换个方式找回或先去注册')
       return true
     }
-    if (err?.code === 1119) {
+    if (apiErrorCode(err) === 1119) {
       ElMessage.info('该邮箱还没有注册账号，换个方式找回或先去注册')
       return true
     }

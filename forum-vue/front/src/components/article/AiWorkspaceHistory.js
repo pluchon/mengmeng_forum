@@ -1,4 +1,5 @@
-import { ref, watch } from 'vue'
+import { ref, watch } from 'vue'
+import { apiErrorCode } from '@/utils/apiData'
 import { ElMessage } from 'element-plus'
 import { getAiWorkspaceVersions, selectAiWorkspaceVersion } from '@/api/ai'
 
@@ -35,10 +36,11 @@ async function loadVersions() {
       versions.value = Array.isArray(res.data) ? res.data : []
       return
     }
-    noPermission.value = res.code === 1003 || res.code === 1106
-    error.value = noPermission.value ? '' : (res.message || '版本加载失败')
+    error.value = res.message || '版本加载失败'
   } catch (requestError) {
-    error.value = requestError?.message || '版本加载失败'
+    const code = apiErrorCode(requestError)
+    noPermission.value = code === 1003 || code === 1106
+    error.value = noPermission.value ? '' : (requestError?.message || '版本加载失败')
   } finally {
     loading.value = false
   }

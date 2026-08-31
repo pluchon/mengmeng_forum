@@ -78,8 +78,14 @@ export function getShopList(params) {
   return request({ url: '/shop/list', method: 'get', params })
 }
 
-export function getShopDetail(shopId, params = {}) {
-  return request({ url: '/shop/detail', method: 'get', params: { shopId, ...params } })
+// silentBizCodes：交给拦截器跳过提示的业务码，调用方自己呈现（如已下架）
+export function getShopDetail(shopId, params = {}, { silentBizCodes } = {}) {
+  return request({
+    url: '/shop/detail',
+    method: 'get',
+    params: { shopId, ...params },
+    ...(silentBizCodes ? { silentBizCodes } : {}),
+  })
 }
 
 export function purchaseShop(shopId) {

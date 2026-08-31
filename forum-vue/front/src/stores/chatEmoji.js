@@ -1,4 +1,5 @@
-import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
+import { apiErrorCode } from '@/utils/apiData'
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { confirmDialog } from '@/utils/appDialog'
@@ -60,7 +61,7 @@ export const useChatEmojiStore = defineStore('chatEmoji', () => {
       })
       if (fav.data) return fav.data
     } catch (e) {
-      if (e?.code === 1132) {
+      if (apiErrorCode(e) === 1132) {
         ElMessage.info('已在你的收藏中')
         return null
       }
@@ -134,7 +135,7 @@ export const useChatEmojiStore = defineStore('chatEmoji', () => {
         return fav.data
       }
     } catch (e) {
-      if (e?.code === 1132) {
+      if (apiErrorCode(e) === 1132) {
         ElMessage.info('已在你的收藏中')
         return null
       }

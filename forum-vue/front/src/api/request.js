@@ -5,6 +5,28 @@ import { useUserStore } from '../stores/user'
 import { extractApiErrorMessage } from '@/api/httpError'
 import { promptLogin } from '@/utils/loginPrompt'
 
+// 后端的业务失败几乎都经 GlobalExceptionHandler 映射成 4xx，走的是错误拦截器，
+// 而静默名单和"被禁言"的专属文案原本只写在成功拦截器里，等于从没生效过。
+// 两条路径共用同一套规则
+const GLOBAL_SILENT_BIZ_CODES = [1115, 1119, 1132]
+const MUTED_BIZ_CODE = 1104
+
+function notifyBusinessError(code, message, config, fallback) {
+  if (code === MUTED_BIZ_CODE) {
+    ElMessage.warning(message || '您已被禁言，无法发表内容，请联系管理员')
+    return
+  }
+  const extra = config?.silentBizCodes
+  const silent = [
+    ...GLOBAL_SILENT_BIZ_CODES,
+    ...(Array.isArray(extra) ? extra : []),
+  ]
+  if (code != null && silent.includes(code)) {
+    return
+  }
+  ElMessage.error(message || fallback)
+}
+
 const request = axios.create({
   // 开发环境下使用代理，因此不需要配置写死的 base URL，由 vite.config 代理
   baseURL: '/', 
@@ -43,18 +65,7 @@ request.interceptors.response.use(
     }
     // 业务错误码处理
     if (res.code !== undefined && res.code !== 0) {
-      const extraSilent = response.config?.silentBizCodes
-      const silentBusinessCodes = [
-        1115,
-        1119,
-        1132,
-        ...(Array.isArray(extraSilent) ? extraSilent : []),
-      ]
-      if (res.code === 1104) {
-        ElMessage.warning(res.message || '您已被禁言，无法发表内容，请联系管理员')
-      } else if (!silentBusinessCodes.includes(res.code)) {
-        ElMessage.error(res.message || '操作失败，请稍后重试')
-      }
+      notifyBusinessError(res.code, res.message, response.config, '操作失败，请稍后重试')
       return Promise.reject(res)
     }
     return res
@@ -92,8 +103,10 @@ request.interceptors.response.use(
           503: '服务正忙，请稍后再试',
           504: '服务响应有点慢，请稍后再试',
         }
+        // 业务码可能走非 200（GlobalExceptionHandler.resolveStatus 默认 400），
+        // silentBizCodes 在这条路径上也要生效，否则调用方自己渲染了状态还会多一个 toast
         const msg = extractApiErrorMessage(error, fallbackByStatus[status] || '操作没有成功，请稍后再试')
-        ElMessage.error(msg)
+        notifyBusinessError(error.response?.data?.code, msg, error.config, msg)
       }
     } else if (error.code === 'ECONNABORTED') {
       ElMessage.error('服务响应有点慢，请稍后再试')

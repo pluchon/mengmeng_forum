@@ -1,4 +1,5 @@
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
+import { apiErrorCode } from '@/utils/apiData'
 import { useRouter } from 'vue-router'
 import { login as apiLogin, smsLogin, mailLogin } from '@/api/auth'
 import { ElMessage } from 'element-plus'
@@ -241,12 +242,12 @@ export function useSignIn(captchaDialogRef) {
 
   // 1115 / 1119 在全局拦截器里是静默的，这里自己给提示并引导去注册
   const notifyUnboundAccount = (err) => {
-    if (err?.code === 1115) {
+    if (apiErrorCode(err) === 1115) {
       ElMessage.info('该手机号未绑定账号')
       router.push('/sign-up')
       return true
     }
-    if (err?.code === 1119) {
+    if (apiErrorCode(err) === 1119) {
       ElMessage.info('该邮箱未绑定账号')
       router.push('/sign-up')
       return true
@@ -281,16 +282,7 @@ export function useSignIn(captchaDialogRef) {
       if (tab === 'phone') {
         const ticket = await verifyCaptcha('SMS_LOGIN')
         if (!ticket) return
-        const res = await smsLogin(loginForm.value.phoneNum, loginForm.value.code, ticket)
-        if (res.code !== 0) {
-          if (res.code === 1115) {
-            ElMessage.info('该手机号未绑定账号')
-            router.push('/sign-up')
-          } else {
-            ElMessage.error(res.message || '登录失败')
-          }
-          return
-        }
+        await smsLogin(loginForm.value.phoneNum, loginForm.value.code, ticket)
       } else if (tab === 'userName') {
         const ticket = await verifyCaptcha('USER_LOGIN')
         if (!ticket) return
@@ -304,16 +296,7 @@ export function useSignIn(captchaDialogRef) {
       } else if (tab === 'emailCode') {
         const ticket = await verifyCaptcha('MAIL_LOGIN')
         if (!ticket) return
-        const res = await mailLogin(loginForm.value.email, loginForm.value.emailCode.trim(), ticket)
-        if (res.code !== 0) {
-          if (res.code === 1119) {
-            ElMessage.info('该邮箱未绑定账号')
-            router.push('/sign-up')
-          } else {
-            ElMessage.error(res.message || '登录失败')
-          }
-          return
-        }
+        await mailLogin(loginForm.value.email, loginForm.value.emailCode.trim(), ticket)
       } else if (tab === 'emailPassword') {
         const ticket = await verifyCaptcha('USER_LOGIN')
         if (!ticket) return

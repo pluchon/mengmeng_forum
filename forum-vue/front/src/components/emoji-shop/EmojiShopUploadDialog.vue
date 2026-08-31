@@ -19,7 +19,14 @@
           <span>{{ dialogTitle }}</span>
         </div>
         <div class="emoji-shop-upload-dialog__head-actions">
-          <el-button text circle aria-label="关闭" :disabled="interactionLocked" @click="close">
+          <el-button
+            text
+            circle
+            aria-label="关闭"
+            :title="closeBlockedHint"
+            :disabled="interactionLocked"
+            @click="close"
+          >
             <el-icon><Close /></el-icon>
           </el-button>
         </div>
@@ -157,7 +164,7 @@
                 <el-input-number
                   v-model="form.price"
                   :min="0"
-                  :max="100000"
+                  :max="5000"
                   :step="1"
                   :controls="false"
                   :disabled="priceMode === 'free'"
@@ -295,6 +302,7 @@ const {
   savingDraft,
   autoSavingDraft,
   interactionLocked,
+  closeBlockedHint,
   loadingDraft,
   waitingUploads,
   relisting,

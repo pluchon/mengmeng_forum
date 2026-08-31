@@ -60,7 +60,7 @@ import BorderGlow from '@/components/common/BorderGlow.vue'
 import { marked } from 'marked'
 import { DEFAULT_AVATAR } from '@/utils/constants'
 import { sanitizeHtml, sanitizePlainTextAsHtml } from '@/utils/security'
-import { unwrapPageRecords } from '@/utils/apiData'
+import { apiErrorCode, unwrapPageRecords } from '@/utils/apiData'
 import {
   ARTICLE_STATUS,
   articleDetailBlockedHint,
@@ -953,8 +953,38 @@ export function useArticleDetail() {
     updateGalleryStripState()
   }
 
-  watch(activeGalleryIndex, () => {
+  // 缩略图改走 style/thumb 之后，主图的原图不再被缩略图顺带缓存，
+  // 切换时要现下载，el-image 在 src 变化时又会先清空再显示——就是那一下闪。
+  // 提前把相邻两张的原图拉进浏览器缓存，切过去时基本是瞬时的
+  const preloadedGalleryUrls = new Set()
+
+  function preloadGalleryImage(url) {
+    const target = String(url || '').trim()
+    if (!target || preloadedGalleryUrls.has(target)) return
+    preloadedGalleryUrls.add(target)
+    const img = new Image()
+    img.src = target
+  }
+
+  function preloadNeighborGalleryImages(index) {
+    const urls = articleGalleryUrls.value
+    if (!urls.length) return
+    for (const offset of [1, -1, 2]) {
+      const neighbor = index + offset
+      if (neighbor >= 0 && neighbor < urls.length) {
+        preloadGalleryImage(urls[neighbor])
+      }
+    }
+  }
+
+  watch(activeGalleryIndex, (index) => {
     nextTick(scrollActiveThumbIntoView)
+    preloadNeighborGalleryImages(index)
+  })
+
+  watch(articleGalleryUrls, (urls) => {
+    preloadedGalleryUrls.clear()
+    if (urls?.length) preloadNeighborGalleryImages(activeGalleryIndex.value)
   })
 
   function setActiveGalleryIndex(index, byUser = false) {
@@ -2049,7 +2079,7 @@ export function useArticleDetail() {
     } catch (err) {
       // 失败原因由响应拦截器统一提示；这里再弹一次，弹的是 AxiosError 的
       // 原始 message（"Request failed with status code 400"），只会盖掉真正的原因
-      if (err?.code === 1104) return
+      if (apiErrorCode(err) === 1104) return
     } finally {
       replySubmitting.value = false
     }

@@ -229,7 +229,9 @@ public final class ForumBusinessConstants {
 
     public static final int EMOJI_SHOP_ITEM_MAX = 60;
     public static final int EMOJI_SHOP_PRICE_MIN = 0;
-    public static final int EMOJI_SHOP_PRICE_MAX = 100_000;
+    public static final int EMOJI_SHOP_PRICE_MAX = 5_000;
+    // 草稿没有上限时可以无限新建，每条还带一批图片关联
+    public static final int EMOJI_SHOP_DRAFT_MAX_COUNT = 20;
 
     public static final int ARTICLE_AUDIT_MAX_RETRY = 3;
     // 单篇帖子每日提交审核上限。ARTICLE_AUDIT_MAX_RETRY 会被编辑重置，

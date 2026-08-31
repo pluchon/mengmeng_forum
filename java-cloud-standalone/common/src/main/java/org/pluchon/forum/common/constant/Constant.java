@@ -280,6 +280,7 @@ public final class Constant {
     public static final int EMOJI_SHOP_ITEM_MAX = ForumBusinessConstants.EMOJI_SHOP_ITEM_MAX;
     public static final int EMOJI_SHOP_PRICE_MIN = ForumBusinessConstants.EMOJI_SHOP_PRICE_MIN;
     public static final int EMOJI_SHOP_PRICE_MAX = ForumBusinessConstants.EMOJI_SHOP_PRICE_MAX;
+    public static final int EMOJI_SHOP_DRAFT_MAX_COUNT = ForumBusinessConstants.EMOJI_SHOP_DRAFT_MAX_COUNT;
     public static final int ARTICLE_AUDIT_MAX_RETRY = ForumBusinessConstants.ARTICLE_AUDIT_MAX_RETRY;
     public static final int ARTICLE_AUDIT_DAILY_MAX = ForumBusinessConstants.ARTICLE_AUDIT_DAILY_MAX;
     public static final String REDIS_KEY_ARTICLE_AUDIT_DAILY = ForumRedisKeys.ARTICLE_AUDIT_DAILY;

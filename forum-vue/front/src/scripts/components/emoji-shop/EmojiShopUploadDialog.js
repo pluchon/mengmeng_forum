@@ -1,4 +1,4 @@
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { confirmDialog } from '@/utils/appDialog'
@@ -77,7 +77,16 @@ export function useEmojiShopUploadDialog({
 
   const priceMode = computed(() => (Number(form.price) > 0 ? 'paid' : 'free'))
   const editMode = computed(() => publishedShopId.value != null)
-  const interactionLocked = computed(() => submitting.value || savingDraft.value || autoSavingDraft.value || relisting.value)
+  // 图片上传要先过 OSS 审图才返回 URL，这期间关掉卡片会丢掉正在审的图。
+  // 原本只锁了提交/存草稿/上架，审图中是能关的
+  const uploadInFlight = computed(() => uploadingImageCount.value > 0 || pendingPackCount.value > 0)
+  const interactionLocked = computed(() => submitting.value || savingDraft.value
+    || autoSavingDraft.value || relisting.value || uploadInFlight.value)
+  const closeBlockedHint = computed(() => {
+    if (uploadInFlight.value) return '图片审核中，请稍候'
+    if (interactionLocked.value) return '正在保存，请稍候'
+    return '关闭'
+  })
   const dialogTitle = computed(() => (editMode.value ? '编辑表情包' : '上传表情包'))
   const isOfflinePublished = computed(() => editMode.value && Number(publishedStatus.value) === 2)
   const displayPackCount = computed(() => form.imageUrls.length + pendingPackCount.value)
@@ -225,6 +234,7 @@ export function useEmojiShopUploadDialog({
     uploadGeneration += 1
     resetForm()
     visible.value = true
+    bindUnloadGuard()
     const targetDraftId = Number(id)
     if (!Number.isFinite(targetDraftId) || targetDraftId <= 0) {
       rememberSavedForm()
@@ -260,6 +270,9 @@ export function useEmojiShopUploadDialog({
       form.coverUrl = data.coverUrl || ''
       form.imageUrls = Array.isArray(data.imageUrls) ? [...data.imageUrls] : []
       rememberSavedForm()
+    } catch {
+      // 加载失败就别把空表单留在那儿，用户填一半提交会覆盖掉原内容
+      closeImmediately()
     } finally {
       loadingDraft.value = false
     }
@@ -272,6 +285,7 @@ export function useEmojiShopUploadDialog({
 
   function closeImmediately() {
     if (!visible.value) return
+    unbindUnloadGuard()
     const closingGeneration = uploadGeneration
     cancelQueuedUploads(closingGeneration)
     uploadGeneration += 1
@@ -302,11 +316,32 @@ export function useEmojiShopUploadDialog({
       }
       const saved = await persistDraft(false)
       if (saved) done()
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       waitingUploads.value = false
       autoSavingDraft.value = false
     }
   }
+
+  // 关标签页/刷新时拦一下：草稿是手动或点空白才存的，直接关会丢
+  function onBeforeUnload(event) {
+    if (!visible.value || !hasUnsavedChanges()) return
+    event.preventDefault()
+    // 现代浏览器只认 returnValue，文案由浏览器自己决定
+    event.returnValue = ''
+    return ''
+  }
+
+  function bindUnloadGuard() {
+    window.addEventListener('beforeunload', onBeforeUnload)
+  }
+
+  function unbindUnloadGuard() {
+    window.removeEventListener('beforeunload', onBeforeUnload)
+  }
+
+  onUnmounted(unbindUnloadGuard)
 
   function pickCover() {
     coverInput.value?.click()
@@ -440,6 +475,9 @@ export function useEmojiShopUploadDialog({
         return true
       }
       return false
+    } catch {
+      // 存草稿失败要如实返回 false，否则关闭弹窗的分支会以为已经存上了
+      return false
     } finally {
       savingDraft.value = false
     }
@@ -519,6 +557,8 @@ export function useEmojiShopUploadDialog({
         onCreated?.(shopId)
         router.replace({ path: '/emoji-shop', query: { detail: String(shopId) } }).catch(() => {})
       }
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       waitingUploads.value = false
       submitting.value = false
@@ -571,6 +611,8 @@ export function useEmojiShopUploadDialog({
       rememberSavedForm()
       ElMessage.success('表情包已重新上架')
       onPublishedUpdated?.(publishedShopId.value)
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       waitingUploads.value = false
       relisting.value = false
@@ -632,5 +674,6 @@ export function useEmojiShopUploadDialog({
     submit,
     deletePublished,
     relistPublished,
+    closeBlockedHint,
   }
 }

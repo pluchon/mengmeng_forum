@@ -46,6 +46,7 @@ import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Collections;
@@ -55,6 +56,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -186,6 +188,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         EmojiShop shop = req.getDraftId() == null ? null : getOwnDraft(operatorUserId, req.getDraftId());
         DraftPayload payload = normalizeDraftPayload(req);
         if (shop == null) {
+            assertDraftCountLimit(operatorUserId);
             shop = new EmojiShop();
             shop.setName(payload.name);
             shop.setDescription(payload.description);
@@ -329,6 +332,12 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "审核中，暂不可编辑"));
         }
         PublishedPayload payload = normalizePublishedPayload(operatorUserId, request);
+        // 名称和说明是唯一靠后置 AI 审核把关的部分：创建时会送审，编辑却不会，
+        // 于是可以用正常名称过审上架、再改成违规名称。图片不受影响——新图 URL
+        // 必须落在 OSS_PATH_EMOJI_SHOP，而那个路径只有审图通过才能 promote 进去。
+        // 只改图片/价格/分类不触发重审；重审期间保持在售，不通过再撤下
+        boolean textChanged = !Objects.equals(payload.name, shop.getName())
+                || !Objects.equals(payload.description, shop.getDescription());
         emojiShopMapper.update(null, new LambdaUpdateWrapper<EmojiShop>()
                 .eq(EmojiShop::getId, shopId)
                 .eq(EmojiShop::getUploadUserId, operatorUserId)
@@ -351,7 +360,47 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             if (Constant.SHOP_STATUS_ONLINE.equals(shop.getStatus())) {
                 indexEmojiRagQuietly(shop);
             }
+            if (textChanged) {
+                emojiShopTextAuditExecutor.execute(() -> processEditedShopTextAudit(shopId));
+            }
         });
+    }
+
+    // 编辑后的复审：不把包撤下来（改个错别字就消失几秒体验太差），
+    // 只在判定违规时才软删撤回，和创建时的 rejectPendingShop 一致
+    private void processEditedShopTextAudit(Long shopId) {
+        try {
+            EmojiShop shop = emojiShopMapper.selectById(shopId);
+            if (shop == null || (shop.getDeleteState() != null && shop.getDeleteState() == 1)) {
+                return;
+            }
+            String nameReject = economyAiGatewayService.validateText(shop.getName());
+            if (StringUtils.hasText(nameReject)) {
+                withdrawShopAfterEdit(shopId, "名称未通过审核");
+                return;
+            }
+            String description = shop.getDescription() == null ? "" : shop.getDescription().trim();
+            if (StringUtils.hasText(description)) {
+                String descReject = economyAiGatewayService.validateText(description);
+                if (StringUtils.hasText(descReject)) {
+                    withdrawShopAfterEdit(shopId, "说明未通过审核");
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("表情包编辑后复审失败 shopId={}: {}", shopId, ex.getMessage());
+        }
+    }
+
+    private void withdrawShopAfterEdit(Long shopId, String reason) {
+        int updated = emojiShopMapper.update(null, new LambdaUpdateWrapper<EmojiShop>()
+                .eq(EmojiShop::getId, shopId)
+                .ne(EmojiShop::getDeleteState, 1)
+                .set(EmojiShop::getDeleteState, (byte) 1));
+        if (updated == 1) {
+            invalidateShopDetailCache(shopId);
+            invalidateShopListCache();
+            log.info("表情包编辑后复审未通过已撤回 shopId={} reason={}", shopId, reason);
+        }
     }
 
     @Override
@@ -385,6 +434,15 @@ public class EmojiShopServiceImpl implements EmojiShopService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteMyPublished(Long operatorUserId, Long shopId) {
         getOwnPublished(operatorUserId, shopId);
+        // 删除是软删，购买者会立刻从已购列表和详情页失去这个包，积分也不退。
+        // 下架则温和得多：不能新买，但已购者仍可查看。卖出去过就只允许下架
+        Long purchased = userEmojiMapper.selectCount(new LambdaQueryWrapper<UserEmoji>()
+                .eq(UserEmoji::getShopId, shopId)
+                .ne(UserEmoji::getUserId, operatorUserId)
+                .ne(UserEmoji::getDeleteState, 1));
+        if (purchased != null && purchased > 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_HAS_PURCHASERS));
+        }
         emojiShopMapper.update(null, new LambdaUpdateWrapper<EmojiShop>()
                 .eq(EmojiShop::getId, shopId)
                 .eq(EmojiShop::getUploadUserId, operatorUserId)
@@ -516,6 +574,16 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NOT_EXISTS));
         }
         return draft;
+    }
+
+    private void assertDraftCountLimit(Long operatorUserId) {
+        Long count = emojiShopMapper.selectCount(new LambdaQueryWrapper<EmojiShop>()
+                .eq(EmojiShop::getUploadUserId, operatorUserId)
+                .eq(EmojiShop::getStatus, Constant.SHOP_STATUS_DRAFT)
+                .ne(EmojiShop::getDeleteState, 1));
+        if (count != null && count >= Constant.EMOJI_SHOP_DRAFT_MAX_COUNT) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_DRAFT_COUNT_LIMIT));
+        }
     }
 
     private DraftPayload normalizeDraftPayload(SaveEmojiShopDraftRequest req) {
@@ -830,7 +898,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         appendShopMatches(ranked, seen, category, sort,
                 newPublicShopQuery(category).eq(EmojiShop::getName, keyword));
         appendShopMatches(ranked, seen, category, sort,
-                newPublicShopQuery(category).like(EmojiShop::getName, keyword));
+                newPublicShopQuery(category).like(EmojiShop::getName, escapeLikeWildcards(keyword)));
 
         var authorPage = userInternalFeignClient.searchByKeyword(
                 keyword, 1, SEMANTIC_SEARCH_CANDIDATE_LIMIT);
@@ -853,7 +921,49 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                         newPublicShopQuery(category).in(EmojiShop::getUploadUserId, fuzzyAuthorIds));
             }
         }
+        // 四段召回按「包名精确 → 包名模糊 → 作者精确 → 作者模糊」追加，sort 原本只在
+        // 段内生效，段间是固定顺序：选了"价格从低到高"，首条往往不是最便宜的。
+        // 综合排序保留这个相关性分层；用户明确选了排序维度就跨段统一排
+        if (!"comprehensive".equals(sort)) {
+            sortInMemory(ranked, sort);
+        }
         return toShopListPage(ranked, pageNum, pageSize);
+    }
+
+    // 与 applySort 的 SQL 排序保持一致，供跨段合并后的内存排序使用
+    private void sortInMemory(List<EmojiShop> shops, String sort) {
+        if (shops == null || shops.size() < 2) {
+            return;
+        }
+        Comparator<EmojiShop> comparator = switch (sort) {
+            case "published_asc" -> Comparator
+                    .comparingLong((EmojiShop s) -> s.getCreateTime() == null ? Long.MIN_VALUE : s.getCreateTime().getTime())
+                    .thenComparing((a, b) -> Integer.compare(safeInt(b.getPrice()), safeInt(a.getPrice())))
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+            case "price_asc" -> Comparator
+                    .comparingInt((EmojiShop s) -> safeInt(s.getPrice()))
+                    .thenComparing(this::compareCreateTimeDesc)
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+            case "price_desc" -> Comparator
+                    .comparingInt((EmojiShop s) -> -safeInt(s.getPrice()))
+                    .thenComparing(this::compareCreateTimeDesc)
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+            case "sales_asc" -> Comparator
+                    .comparingInt((EmojiShop s) -> safeInt(s.getSalesCount()))
+                    .thenComparing((a, b) -> Integer.compare(safeInt(b.getPrice()), safeInt(a.getPrice())))
+                    .thenComparing(this::compareCreateTimeDesc)
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+            case "sales_desc" -> Comparator
+                    .comparingInt((EmojiShop s) -> -safeInt(s.getSalesCount()))
+                    .thenComparing((a, b) -> Integer.compare(safeInt(b.getPrice()), safeInt(a.getPrice())))
+                    .thenComparing(this::compareCreateTimeDesc)
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+            default -> Comparator
+                    .comparing((EmojiShop s) -> s, this::compareCreateTimeDesc)
+                    .thenComparing((a, b) -> Integer.compare(safeInt(b.getPrice()), safeInt(a.getPrice())))
+                    .thenComparing((a, b) -> compareIdDesc(a.getId(), b.getId()));
+        };
+        shops.sort(comparator);
     }
 
     private void appendShopMatches(List<EmojiShop> target, Set<Long> seen, String category,
@@ -871,6 +981,14 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 target.add(shop);
             }
         }
+    }
+
+    // 不转义的话，搜一个 % 就能匹配到全部表情包
+    private String escapeLikeWildcards(String term) {
+        String backslash = String.valueOf((char) 92);
+        return term.replace(backslash, backslash + backslash)
+                .replace("%", backslash + "%")
+                .replace("_", backslash + "_");
     }
 
     private LambdaQueryWrapper<EmojiShop> newPublicShopQuery(String category) {
@@ -1012,7 +1130,9 @@ public class EmojiShopServiceImpl implements EmojiShopService {
                 canView = operator != null && operator.getIsAdmin() != null && operator.getIsAdmin() == 1;
             }
             if (!canView) {
-                throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_NOT_EXISTS));
+                // 和"不存在"区分开：前端要据此展示"已下架"的占位页而不是报错。
+                // 只暴露"存在但已下架"，不返回任何包内内容
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_OFFLINE));
             }
         }
         int validItemPageNum = PageUtils.getValidPageNum(itemPageNum);
