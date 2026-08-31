@@ -57,9 +57,7 @@ public class GameStatisticsServiceImpl implements GameStatisticsService {
             item.setWinCount(nvl(profile.getWinCount()));
             item.setLoseCount(nvl(profile.getLoseCount()));
             item.setDrawCount(nvl(profile.getDrawCount()));
-            item.setWinRate(item.getTotalCount() == 0
-                    ? 0D
-                    : Math.round(item.getWinCount() * 1000D / item.getTotalCount()) / 10D);
+            item.setWinRate(GameRankRules.winRatePercentPrecise(item.getWinCount(), item.getLoseCount()));
             games.add(item);
             totalCount += item.getTotalCount();
             winCount += item.getWinCount();

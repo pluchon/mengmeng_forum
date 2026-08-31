@@ -46,7 +46,8 @@ public class TetrisPkConverter {
     ) {
         int totalCount = value(profile.getTotalCount());
         int winCount = value(profile.getWinCount());
-        int winRate = totalCount <= 0 ? 0 : (int) Math.round(winCount * 100.0 / totalCount);
+        int winRate = org.pluchon.forum.service.impl.game.GameRankRules.winRatePercent(
+                profile.getWinCount(), profile.getLoseCount());
         return new TetrisPkLeaderboardVO(
                 profile.getUserId(),
                 user == null ? null : user.getUsername(),

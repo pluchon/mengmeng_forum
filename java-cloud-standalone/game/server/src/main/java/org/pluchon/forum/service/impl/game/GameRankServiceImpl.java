@@ -28,6 +28,8 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 
+import java.util.List;
+
 // 游戏排位结算服务，统一处理真人对局与五子棋人机对局的段位分变化
 @Service
 public class GameRankServiceImpl implements GameRankService {
@@ -145,22 +147,31 @@ public class GameRankServiceImpl implements GameRankService {
         return new GameRankSettlementResult(null, change);
     }
 
+    // 新手保护区上界：低于此分正常失败只扣 3
+    private static final int ROOKIE_FLOOR = 1300;
+    // 新手加速的消失点，约等于白银段结束
+    private static final int ROOKIE_BOOST_CEILING = 1600;
+
     private int computeWinnerDelta(GameRankSettlementCommand command, GameUserProfile winner, GameUserProfile loser) {
-        int delta = weighted(baseWinDelta(winner.getScore(), loser.getScore()), command.getGameCode());
-        delta += streakBonus(command.getGameCode(), winner.getUserId());
+        int base = weighted(baseDelta(winner.getScore(), loser.getScore()), command.getGameCode());
+        int delta = base + streakBonus(command.getGameCode(), winner.getUserId())
+                + rookieBoost(winner.getScore());
         return Math.min(40, Math.max(1, delta));
     }
 
     private int computeLoserDelta(GameRankSettlementCommand command, GameUserProfile loser, GameUserProfile winner) {
         int loserScore = GameRankRules.normalizeScore(loser.getScore());
         if (isEscapeReason(command.getEndReason())) {
-            return loserScore < 1300 ? -5 : -15;
+            return loserScore < ROOKIE_FLOOR ? -8 : -15;
         }
-        if (loserScore < 1300) {
-            // 青铜段位保护：正常失败不扣分
-            return 0;
+        if (loserScore < ROOKIE_FLOOR) {
+            // 新手区少扣而不是不扣：完全不扣会让这一段变成只涨不跌的参与奖，
+            // 玩家无论胜率如何都必然升段
+            return -3;
         }
-        int penalty = weighted(baseLosePenalty(loserScore, winner.getScore()), command.getGameCode());
+        int base = weighted(baseDelta(winner.getScore(), loser.getScore()), command.getGameCode());
+        // 连败减免与连胜加成对称，两边的注入量在人群上大致抵消
+        int penalty = base - streakRelief(command.getGameCode(), loser.getUserId());
         return -Math.min(20, Math.max(1, penalty));
     }
 
@@ -168,43 +179,73 @@ public class GameRankServiceImpl implements GameRankService {
         return Math.max(1, (int) Math.round(value * GameRankRules.gameWeight(gameCode)));
     }
 
-    private int baseWinDelta(Integer winnerScore, Integer loserScore) {
+    /**
+     * 胜负共用同一张基础表，赢家加多少输家就扣多少。
+     *
+     * <p>原来赢用一张表（18~30）、输用另一张（6~12），同段位对局赢 22 输 10，
+     * 每局系统净增 12 分——分数只涨不跌，活跃玩家最终都会漂到大师，段位失去区分度。
+     *
+     * <p>而且原来的输分表方向是反的：输给强者扣 12、输给弱者只扣 6。Elo 的直觉相反，
+     * 输给比自己弱的人才是更大的意外，应该扣得更多。这里用同一个「输家段位 - 赢家段位」
+     * 轴表达，方向和零和一次性都对了。
+     */
+    private int baseDelta(Integer winnerScore, Integer loserScore) {
         int diff = GameRankRules.segment(loserScore) - GameRankRules.segment(winnerScore);
         if (diff >= 2) {
-            return 30;
+            // 赢家越级挑战成功；反过来看就是输家输给了远低于自己的人
+            return 20;
         }
         if (diff == 1) {
-            return 28;
-        }
-        if (diff == -1) {
-            return 22;
-        }
-        if (diff <= -2) {
             return 18;
         }
-        return 22;
-    }
-
-    private int baseLosePenalty(Integer loserScore, Integer winnerScore) {
-        int diff = GameRankRules.segment(winnerScore) - GameRankRules.segment(loserScore);
-        if (diff >= 2) {
+        if (diff == -1) {
             return 12;
         }
-        if (diff == 1) {
+        if (diff <= -2) {
+            // 强者赢弱者，几乎无信息量
             return 11;
         }
-        if (diff == -1) {
-            return 8;
+        return 15;
+    }
+
+    /**
+     * 新手加速：低分段赢一局多给几分，随分数衰减，出了 {@value #ROOKIE_BOOST_CEILING} 就归零。
+     *
+     * <p>这是全局唯一一处有意的分数注入。玩家很快会离开这个区间，所以注入总量有界，
+     * 不会像原来那样让整个天梯持续通胀。
+     */
+    private int rookieBoost(Integer winnerScore) {
+        int score = GameRankRules.normalizeScore(winnerScore);
+        if (score < ROOKIE_FLOOR) {
+            return 5;
         }
-        if (diff <= -2) {
-            return 6;
+        if (score < ROOKIE_BOOST_CEILING) {
+            return 3;
         }
-        return 10;
+        return 0;
     }
 
     private int streakBonus(String gameCode, Long userId) {
         int previousWins = consecutiveWins(gameCode, userId);
         int currentStreak = previousWins + 1;
+        if (currentStreak >= 5) {
+            return 8;
+        }
+        if (currentStreak == 4) {
+            return 6;
+        }
+        if (currentStreak == 3) {
+            return 4;
+        }
+        if (currentStreak == 2) {
+            return 2;
+        }
+        return 0;
+    }
+
+    // 连败减免，档位与 streakBonus 完全对称
+    private int streakRelief(String gameCode, Long userId) {
+        int currentStreak = consecutiveLosses(gameCode, userId) + 1;
         if (currentStreak >= 5) {
             return 8;
         }
@@ -292,6 +333,20 @@ public class GameRankServiceImpl implements GameRankService {
     }
 
     private int consecutiveWins(String gameCode, Long userId) {
+        return streakOf(gameCode, userId, true);
+    }
+
+    private int consecutiveLosses(String gameCode, Long userId) {
+        return streakOf(gameCode, userId, false);
+    }
+
+    /**
+     * 从最近一局往回数连续的胜（或负）场次。
+     *
+     * <p>三种棋的记录表结构不同，差异只在「跳过哪些对局」和「胜者字段」，
+     * 这里统一成同一段遍历，避免连胜连败各写三份。
+     */
+    private int streakOf(String gameCode, Long userId, boolean wantWin) {
         if (GameConstants.GOBANG.equals(gameCode)) {
             Page<GameGobangMatchRecord> result = gameGobangMatchRecordMapper.selectPage(new Page<>(1, 20),
                     new LambdaQueryWrapper<GameGobangMatchRecord>()
@@ -301,18 +356,9 @@ public class GameRankServiceImpl implements GameRankService {
                                     .eq(GameGobangMatchRecord::getWhiteUserId, userId))
                             .orderByDesc(GameGobangMatchRecord::getEndedAt)
                             .orderByDesc(GameGobangMatchRecord::getId));
-            int wins = 0;
-            for (GameGobangMatchRecord record : result.getRecords()) {
-                // 人机对局不计入连胜
-                if (isGobangAiMatch(record)) {
-                    continue;
-                }
-                if (!userId.equals(record.getWinnerUserId())) {
-                    break;
-                }
-                wins++;
-            }
-            return wins;
+            // 人机对局不计入连胜连败
+            return countStreak(result.getRecords(), userId, wantWin,
+                    this::isGobangAiMatch, GameGobangMatchRecord::getWinnerUserId);
         }
         if (GameConstants.JINZI.equals(gameCode)) {
             Page<GameJinziMatchRecord> result = gameJinziMatchRecordMapper.selectPage(new Page<>(1, 20),
@@ -323,14 +369,8 @@ public class GameRankServiceImpl implements GameRankService {
                                     .eq(GameJinziMatchRecord::getWhiteUserId, userId))
                             .orderByDesc(GameJinziMatchRecord::getEndedAt)
                             .orderByDesc(GameJinziMatchRecord::getId));
-            int wins = 0;
-            for (GameJinziMatchRecord record : result.getRecords()) {
-                if (!userId.equals(record.getWinnerUserId())) {
-                    break;
-                }
-                wins++;
-            }
-            return wins;
+            return countStreak(result.getRecords(), userId, wantWin,
+                    record -> false, GameJinziMatchRecord::getWinnerUserId);
         }
         Page<GameTetrisPkMatchRecord> result = gameTetrisPkMatchRecordMapper.selectPage(new Page<>(1, 20),
                 new LambdaQueryWrapper<GameTetrisPkMatchRecord>()
@@ -340,20 +380,31 @@ public class GameRankServiceImpl implements GameRankService {
                                 .eq(GameTetrisPkMatchRecord::getPlayer2UserId, userId))
                         .orderByDesc(GameTetrisPkMatchRecord::getEndedAt)
                         .orderByDesc(GameTetrisPkMatchRecord::getId));
-        int wins = 0;
-        for (GameTetrisPkMatchRecord record : result.getRecords()) {
-            // 双方最高分未达 300 的对局不计入连胜
-            if (tetrisPkMaxScore(record) < 300) {
-                continue;
-            }
-            if (!userId.equals(record.getWinnerUserId())) {
-                break;
-            }
-            wins++;
-        }
-        return wins;
+        // 双方最高分未达 300 的对局不计入连胜连败
+        return countStreak(result.getRecords(), userId, wantWin,
+                record -> tetrisPkMaxScore(record) < 300, GameTetrisPkMatchRecord::getWinnerUserId);
     }
 
+    private <T> int countStreak(List<T> records, Long userId, boolean wantWin,
+                                java.util.function.Predicate<T> skip,
+                                java.util.function.Function<T, Long> winnerOf) {
+        int count = 0;
+        for (T record : records) {
+            if (skip.test(record)) {
+                continue;
+            }
+            Long winner = winnerOf.apply(record);
+            // 平局既不算连胜也不算连败，遇到就中断
+            if (winner == null) {
+                break;
+            }
+            if (userId.equals(winner) != wantWin) {
+                break;
+            }
+            count++;
+        }
+        return count;
+    }
     private boolean isGobangAiMatch(GameGobangMatchRecord record) {
         return GameConstants.AI_USER_ID.equals(record.getBlackUserId())
                 || GameConstants.AI_USER_ID.equals(record.getWhiteUserId());

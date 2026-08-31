@@ -89,6 +89,11 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     // roomId > 房间状态
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
 
+    // 房间号必须对活跃房间查重：撞号会让后建的房间把先建的从 rooms 里挤掉
+    private String nextRoomId() {
+        return GameRoomIdGenerator.generateRoomId(rooms::containsKey);
+    }
+
     // userId > roomId，用于防止同一用户进入多个房间
     private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
 
@@ -167,7 +172,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     private String createMatchedRoomInternal(Long userIdA, Long userIdB) {
-        GobangRoom room = new GobangRoom(userIdA, userIdB);
+        GobangRoom room = new GobangRoom(nextRoomId(), userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
         userRoomIds.put(userIdA, room.getRoomId());
@@ -185,7 +190,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (userId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        GobangRoom room = new GobangRoom(userId, GameConstants.AI_USER_ID);
+        GobangRoom room = new GobangRoom(nextRoomId(), userId, GameConstants.AI_USER_ID);
         room.setAiRoom(true);
         String modelCode = chooseAiModelCode(userId);
         room.setAiModelCode(modelCode);

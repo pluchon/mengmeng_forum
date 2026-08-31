@@ -73,6 +73,28 @@ public class GameRankRules {
         return 1.0D;
     }
 
+    /**
+     * 胜率口径：胜 / (胜 + 负)，平局不计入分母。
+     *
+     * <p>原来用 totalCount 当分母，而它含平局。井字棋的平局率很高，
+     * 一个 10 胜 0 负 10 平的玩家会被显示成 50%。三处计算口径必须一致，
+     * 所以收到这里。
+     */
+    public static int winRatePercent(Integer winCount, Integer loseCount) {
+        int wins = winCount == null ? 0 : Math.max(0, winCount);
+        int loses = loseCount == null ? 0 : Math.max(0, loseCount);
+        int decided = wins + loses;
+        return decided == 0 ? 0 : (int) Math.round(wins * 100.0 / decided);
+    }
+
+    /** 同上，保留一位小数 */
+    public static double winRatePercentPrecise(Integer winCount, Integer loseCount) {
+        int wins = winCount == null ? 0 : Math.max(0, winCount);
+        int loses = loseCount == null ? 0 : Math.max(0, loseCount);
+        int decided = wins + loses;
+        return decided == 0 ? 0D : Math.round(wins * 1000D / decided) / 10D;
+    }
+
     public static String rankName(String majorName, String tierName) {
         return tierName == null ? majorName : majorName + " " + tierName;
     }

@@ -62,6 +62,11 @@ public class JinziRoomServiceImpl implements JinziRoomService {
     // roomId > 房间状态
     private final ConcurrentHashMap<String, JinziRoom> rooms = new ConcurrentHashMap<>();
 
+    // 房间号必须对活跃房间查重：撞号会让后建的房间把先建的从 rooms 里挤掉
+    private String nextRoomId() {
+        return GameRoomIdGenerator.generateRoomId(rooms::containsKey);
+    }
+
     // userId > roomId，用于防止同一用户进入多个房间
     private final ConcurrentHashMap<Long, String> userRoomIds = new ConcurrentHashMap<>();
 
@@ -135,7 +140,7 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         if (existingRoomB != null && rooms.containsKey(existingRoomB)) {
             return existingRoomB;
         }
-        JinziRoom room = new JinziRoom(userIdA, userIdB);
+        JinziRoom room = new JinziRoom(nextRoomId(), userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
         userRoomIds.put(userIdA, room.getRoomId());

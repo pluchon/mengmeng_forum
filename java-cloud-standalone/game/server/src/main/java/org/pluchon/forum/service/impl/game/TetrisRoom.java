@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TetrisRoom {
 
     // 房间 ID
-    private final String roomId = GameRoomIdGenerator.generateRoomId();
+    private final String roomId;
 
     // 玩家1用户 ID
     private final Long player1UserId;
@@ -62,7 +62,8 @@ public class TetrisRoom {
     // 房间聊天记录
     private final List<TetrisChatVO> chatHistory = new ArrayList<>();
 
-    public TetrisRoom(Long player1UserId, Long player2UserId, Long redUserId, Long blueUserId) {
+    public TetrisRoom(String roomId, Long player1UserId, Long player2UserId, Long redUserId, Long blueUserId) {
+        this.roomId = roomId;
         this.player1UserId = player1UserId;
         this.player2UserId = player2UserId;
         this.redUserId = redUserId;

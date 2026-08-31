@@ -20,7 +20,7 @@ public class JinziRoom {
     public static final int MAX_TOTAL_ROUNDS = 7;
 
     // 房间 ID 6 位纯数字
-    private final String roomId = GameRoomIdGenerator.generateRoomId();
+    private final String roomId;
 
     // 黑方用户 ID
     private final Long blackUserId;
@@ -109,7 +109,8 @@ public class JinziRoom {
     // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
-    public JinziRoom(Long blackUserId, Long whiteUserId) {
+    public JinziRoom(String roomId, Long blackUserId, Long whiteUserId) {
+        this.roomId = roomId;
         this.blackUserId = blackUserId;
         this.whiteUserId = whiteUserId;
         this.currentTurnUserId = blackUserId;

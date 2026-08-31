@@ -32,7 +32,8 @@ public class GameConverter {
     public static GameUserProfileVO toProfileVO(GameUserProfile profile, UserInternalVO user) {
         int total = value(profile.getTotalCount());
         int wins = value(profile.getWinCount());
-        int winRate = total == 0 ? 0 : (int) Math.round(wins * 100.0 / total);
+        int winRate = org.pluchon.forum.service.impl.game.GameRankRules.winRatePercent(
+                profile.getWinCount(), profile.getLoseCount());
         var rankInfo = org.pluchon.forum.service.impl.game.GameRankRules.buildRankInfo(
                 profile.getGameCode(),
                 profile.getScore()

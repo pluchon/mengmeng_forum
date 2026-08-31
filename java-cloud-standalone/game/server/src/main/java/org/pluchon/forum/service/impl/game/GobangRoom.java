@@ -16,7 +16,7 @@ import org.pluchon.forum.entity.vo.game.GobangBoardPointVO;
 public class GobangRoom {
 
     // 房间 ID
-    private final String roomId = GameRoomIdGenerator.generateRoomId();
+    private final String roomId;
 
     // 黑方用户 ID
     private final Long blackUserId;
@@ -99,7 +99,8 @@ public class GobangRoom {
     // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
-    public GobangRoom(Long blackUserId, Long whiteUserId) {
+    public GobangRoom(String roomId, Long blackUserId, Long whiteUserId) {
+        this.roomId = roomId;
         this.blackUserId = blackUserId;
         this.whiteUserId = whiteUserId;
         this.currentTurnUserId = blackUserId;
