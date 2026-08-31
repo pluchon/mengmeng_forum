@@ -402,13 +402,44 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus()) || room.isRoundFinished() || room.getCurrentTurnUserId() == null) {
                     continue;
                 }
-                long moveLeft = room.currentTurnRemainingMs(now);
-                long gameLeft = room.remainingGameMs(room.getCurrentTurnUserId(), now);
-                if (moveLeft <= 0 || gameLeft <= 0) {
-                    finishRoom(room, room.opponentOf(room.getCurrentTurnUserId()), GameConstants.END_TIMEOUT);
+                Long turnUserId = room.getCurrentTurnUserId();
+                // 总时长耗尽才结束整场；单步走神只输这一小局。
+                // 先判总时长——currentTurnRemainingMs 取的是两者的较小值，反过来判会把
+                // 「整场时间到」误当成「这一步超时」，白白多打几局
+                if (room.remainingGameMs(turnUserId, now) <= 0) {
+                    finishRoom(room, room.opponentOf(turnUserId), GameConstants.END_TIMEOUT);
+                    continue;
+                }
+                if (room.currentTurnRemainingMs(now) <= 0) {
+                    settleRoundTimeout(room, turnUserId, now);
                 }
             }
         }
+    }
+
+    /**
+     * 单步超时：这一小局判给对手，整场继续。
+     *
+     * <p>五局三胜下一次走神就整场结束太重了。总时长仍然是硬约束——那条在调用处先判。
+     */
+    private void settleRoundTimeout(JinziRoom room, Long timeoutUserId, long now) {
+        Long roundWinnerId = room.opponentOf(timeoutUserId);
+        if (roundWinnerId == null) {
+            return;
+        }
+        // 超时的这段时间要从他的总时长里扣掉，否则等于白拿一步的思考时间
+        room.consumeTurnTime(now);
+        room.recordRoundWin(room.chessOf(roundWinnerId), roundWinnerId, GameConstants.END_TIMEOUT, null);
+        room.setCurrentTurnUserId(null);
+        room.setTurnStartedAtMs(System.currentTimeMillis());
+        cacheRoomState(room);
+        if (room.isMatchOver()) {
+            finishRoom(room, room.getMatchWinnerId(), GameConstants.END_TIMEOUT);
+            return;
+        }
+        // 推一帧带 roundFinished 的状态，前端据此显示小局结果并倒计时进下一局
+        sendStateToRoom(room, "room_state_updated");
+        scheduleNextRound(room);
     }
 
     private String validateMove(JinziRoom room, Long userId, Integer row, Integer col) {

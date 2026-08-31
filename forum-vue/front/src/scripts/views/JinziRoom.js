@@ -201,7 +201,12 @@ const roundStatusText = computed(() => {
   if (isFinished.value) return winnerText.value
   if (room.roundFinished) {
     if (!room.roundWinnerUserId) return '本小局平局，即将开始下一局'
-    return room.roundWinnerUserId === room.thisUserId ? '本小局胜利！' : '本小局失利！'
+    const mine = room.roundWinnerUserId === room.thisUserId
+    // 超时输掉的小局要说清楚是超时，不然玩家会以为自己被连成一线了
+    if (room.roundEndReason === 'TIMEOUT') {
+      return mine ? '对手超时，本小局胜利！' : '你超时了，本小局失利！'
+    }
+    return mine ? '本小局胜利！' : '本小局失利！'
   }
   if (isMyTurn.value) return '轮到你落子'
   return '等待对手落子'
