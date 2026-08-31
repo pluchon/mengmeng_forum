@@ -107,7 +107,10 @@ public class GameRankServiceImpl implements GameRankService {
             return true;
         }
         String key = "forum:game:rank-settle:" + command.getGameCode().trim() + ":" + command.getRoomId().trim();
-        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofDays(7));
+        // 存活期只要远长于一局即可。房号是六位数字且只跟当前在用的房间比对，
+        // 留七天意味着几天后复用到同一个房号时，整局会被当成「已结算过」直接跳过，
+        // 双方的分数与状态都不会更新。
+        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofHours(6));
         return Boolean.TRUE.equals(first);
     }
 

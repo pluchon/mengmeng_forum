@@ -30,7 +30,7 @@ INSERT INTO `game_definition` (`id`, `game_code`, `game_name`, `cover_url`, `sta
 (1, 'gobang', '五子棋', NULL, 1, 1, 0),
 (2, 'jinzi', '井字棋', NULL, 1, 2, 0),
 (3, 'tetris', '俄罗斯方块单人', NULL, 1, 3, 0),
-(4, 'tetris_pk', '俄罗斯方块 PK', NULL, 1, 4, 0);
+(4, 'tetris_pk', '俄罗斯方块竞速', NULL, 1, 4, 0);
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;

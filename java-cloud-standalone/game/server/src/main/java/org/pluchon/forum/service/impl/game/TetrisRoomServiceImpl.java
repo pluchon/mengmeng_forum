@@ -169,7 +169,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     userId,
                     TetrisRoomStateVO.class
             );
-            if (cached != null) {
+            // 缓存只为多实例部署兜底：房间在别的实例上还活着。
+            // 已经结束的对局不能从这里放行，否则拿着旧房号还能「进」一个散了的房间。
+            if (cached != null && !GameConstants.ROOM_FINISHED.equals(cached.getRoomStatus())) {
                 return cached;
             }
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
@@ -596,6 +598,22 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 room.getPlayer1UserId(),
                 room.getPlayer2UserId());
         gameMatchRoomHelper.releaseMatchedRoom("tetris", room.getPlayer1UserId(), room.getPlayer2UserId());
+        // 排位结算里也会把状态改回 IDLE，但那条链路有幂等短路（同房号七天内只结算一次），
+        // 一旦短路 profile 就还挂着旧房号，首页的按钮会一直显示「继续对局」并把人送回散了的房间。
+        // 这里再显式归位一次，让「房间没了」和「玩家空闲了」这两件事不依赖同一条链路。
+        releasePlayerStatus(room.getPlayer1UserId());
+        releasePlayerStatus(room.getPlayer2UserId());
+    }
+
+    private void releasePlayerStatus(Long userId) {
+        if (userId == null || GameConstants.AI_USER_ID.equals(userId)) {
+            return;
+        }
+        try {
+            gameUserProfileService.updateStatus(userId, GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
+        } catch (Exception e) {
+            log.warn("重置俄罗斯方块玩家状态失败 userId={}", userId, e);
+        }
     }
 
     private TetrisRoom requireExistingRoom(String roomId) {

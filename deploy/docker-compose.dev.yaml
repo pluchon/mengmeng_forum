@@ -21,8 +21,8 @@
 # Nacos 与线上一致使用镜像 nacos/nacos-server:v3.1.1；本地需映射 8848/9848/8080 供 IDEA 与浏览器连接。
 # 启用前请停掉仓库内本机独立 Nacos，避免 8848/9848 端口冲突。
 
-# 固定历史 Compose 项目名，继续复用现有 nginx_forum_dev_* 数据卷，避免创建空白中间件。
-name: nginx
+# Compose 项目名固定为 meng_community，对应数据卷前缀 meng_community_forum_dev_*。
+name: meng_community
 
 services:
 
@@ -154,10 +154,15 @@ services:
 
 volumes:
   forum_dev_nacos_data:
+    external: true
   forum_dev_mysql_data:
+    external: true
   forum_dev_redis_data:
+    external: true
   forum_dev_rabbitmq_data:
+    external: true
   forum_dev_postgres_data:
+    external: true
 
 networks:
   forum-dev-net:

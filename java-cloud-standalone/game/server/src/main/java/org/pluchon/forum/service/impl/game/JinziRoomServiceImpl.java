@@ -710,6 +710,21 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
             gameMatchRoomHelper.releaseMatchedRoom("jinzi", room.getBlackUserId(), room.getWhiteUserId());
         }
+        // 排位结算那条链路有幂等短路，短路时 profile 还挂着旧房号，
+        // 首页按钮就会一直显示「继续对局」并把人送回散了的房间
+        releasePlayerStatus(room.getBlackUserId());
+        releasePlayerStatus(room.getWhiteUserId());
+    }
+
+    private void releasePlayerStatus(Long userId) {
+        if (userId == null || GameConstants.AI_USER_ID.equals(userId)) {
+            return;
+        }
+        try {
+            gameUserProfileService.updateStatus(userId, GameConstants.JINZI, GameConstants.PROFILE_IDLE, null);
+        } catch (Exception e) {
+            log.warn("重置玩家状态失败 gameCode={}, userId={}", GameConstants.JINZI, userId, e);
+        }
     }
 
     private void addRealUserId(List<Long> userIds, Long userId) {

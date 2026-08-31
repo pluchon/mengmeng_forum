@@ -14,18 +14,9 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
-        <module name="game-api" />
-        <module name="auth-server" />
-        <module name="economy-server" />
-        <module name="economy-api" />
-        <module name="ai-server" />
-        <module name="game-server" />
         <module name="common" />
-        <module name="ai-api" />
-        <module name="content-server" />
-        <module name="auth-api" />
-        <module name="content-api" />
         <module name="gateway" />
       </profile>
       <profile name="Annotation profile for im" enabled="true">
@@ -34,10 +25,19 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
         </processorPath>
         <module name="im-server" />
+        <module name="game-server" />
         <module name="im-api" />
+        <module name="game-api" />
+        <module name="ai-api" />
+        <module name="auth-server" />
+        <module name="content-server" />
+        <module name="auth-api" />
+        <module name="economy-server" />
+        <module name="economy-api" />
+        <module name="content-api" />
+        <module name="ai-server" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

@@ -10,11 +10,14 @@ import {
   getGameStatisticsRecords,
   getGameStatisticsSummary,
   getGobangActiveRooms,
+  getGobangRoom,
   getGobangReplay,
+  getJinziRoom,
   getTetrisLeaderboard,
   getTetrisPkActiveRooms,
   getTetrisPkLeaderboard,
   getTetrisPkProfile,
+  getTetrisPkRoom,
   getTetrisProfile,
   getTetrisReplay,
 } from '@/api/game'
@@ -104,7 +107,7 @@ const GAME_PRESETS = {
   },
   tetris_pk: {
     name: '俄罗斯方块 PK',
-    sub: '3 分钟 · 比谁消行多',
+    sub: '双人竞速 · 3 分钟内比谁消行多',
     cover: eluosiPkImg,
     btnClass: 'btn--tetris-pk',
     idleText: '开始竞速',
@@ -214,7 +217,7 @@ const jinziGame = computed(() =>
 const tetrisPkGame = computed(() =>
   overview.games.find((item) => item?.gameCode === 'tetris_pk') || {
     gameCode: 'tetris_pk',
-    gameName: '俄罗斯方块PK',
+    gameName: '俄罗斯方块竞速',
     enabled: true,
     onlineCount: 0,
   },
@@ -541,18 +544,43 @@ function handleMatchButtonClick(gameCode, mode = 'RANKED') {
     ElMessage.warning('正在匹配中，请先取消当前匹配')
     return
   }
-  startGameMatch(gameCode, { mode })
+  void startGameMatch(gameCode, { mode })
 }
 
-function startGameMatch(gameCode, payload = null) {
-  if (currentMatchRooms[gameCode]) {
-    const roomRouteName = gameCode === 'gobang'
-      ? 'gobangRoom'
-      : gameCode === 'jinzi'
-        ? 'jinziRoom'
-        : 'tetrisPkRoom'
-    router.push({ name: roomRouteName, params: { roomId: currentMatchRooms[gameCode] } })
-    return
+const ROOM_ROUTE_NAMES = {
+  gobang: 'gobangRoom',
+  jinzi: 'jinziRoom',
+  tetris_pk: 'tetrisPkRoom',
+}
+
+const ROOM_FETCHERS = {
+  gobang: getGobangRoom,
+  jinzi: getJinziRoom,
+  tetris_pk: getTetrisPkRoom,
+}
+
+// 「继续对局」的房号来自轮询到的 profile，可能已经过期。
+// 直接跳过去会把人送进一个已经散场的房间，跳之前先问一句服务端。
+async function isRoomAlive(gameCode, roomId) {
+  const fetcher = ROOM_FETCHERS[gameCode]
+  if (!fetcher) return false
+  try {
+    const res = await fetcher(roomId)
+    return res.code === 0 && Boolean(res.data) && res.data.roomStatus !== 'FINISHED'
+  } catch {
+    return false
+  }
+}
+
+async function startGameMatch(gameCode, payload = null) {
+  const existingRoomId = currentMatchRooms[gameCode]
+  if (existingRoomId) {
+    if (await isRoomAlive(gameCode, existingRoomId)) {
+      router.push({ name: ROOM_ROUTE_NAMES[gameCode] || 'tetrisPkRoom', params: { roomId: existingRoomId } })
+      return
+    }
+    // 房间已经不在了，清掉旧房号并按正常匹配继续，不要卡住用户
+    currentMatchRooms[gameCode] = ''
   }
   if (matchingGameCode.value && matchingGameCode.value !== gameCode) {
     ElMessage.warning('一次只能匹配一个游戏')
