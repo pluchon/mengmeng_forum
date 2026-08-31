@@ -109,6 +109,9 @@ public class JinziRoom {
     // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
+    // 每人最近一次发言时刻，用于限频
+    private final ConcurrentHashMap<Long, Long> lastChatAtMs = new ConcurrentHashMap<>();
+
     public JinziRoom(String roomId, Long blackUserId, Long whiteUserId) {
         this.roomId = roomId;
         this.blackUserId = blackUserId;
@@ -132,6 +135,16 @@ public class JinziRoom {
 
     public int chessOf(Long userId) {
         return blackUserId.equals(userId) ? 1 : 2;
+    }
+
+    // 距离上次发言不足 interval 毫秒就拒绝，同时记下本次时刻
+    public boolean tryChat(Long userId, long nowMs, long intervalMs) {
+        Long last = lastChatAtMs.get(userId);
+        if (last != null && nowMs - last < intervalMs) {
+            return false;
+        }
+        lastChatAtMs.put(userId, nowMs);
+        return true;
     }
 
     public long currentTurnRemainingMs(long now) {
@@ -204,7 +217,9 @@ public class JinziRoom {
         if (whiteWins > blackWins) {
             return whiteUserId;
         }
-        return blackUserId != null ? blackUserId : whiteUserId;
+        // 胜局数相同就是平局。原来这里直接返回黑方——三局全平、或者七局打成 2:2
+        // 都会让黑方白捡一场胜利，排位分还照加照扣
+        return null;
     }
 
     public void startNextRound() {

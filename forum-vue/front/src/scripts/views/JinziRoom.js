@@ -128,15 +128,28 @@ const roomSocket = useGameWebSocket(`games/jinzi/rooms/${roomId.value}`, {
     if (message.type === 'room_chat' && message.data) {
       chatMessages.value.push(message.data)
     }
+    // 通知只带 userId，得分清是自己还是对手
     if (message.type === 'peer_disconnected') {
-      peerStateText.value = '对手暂时离线，保留 30 秒重连窗口'
+      if (Number(message.data?.userId) !== Number(room.thisUserId)) {
+        peerStateText.value = '对手暂时离线，保留 30 秒重连窗口'
+      }
     }
     if (message.type === 'peer_reconnected') {
-      peerStateText.value = '对手已重连'
+      const isMe = Number(message.data?.userId) === Number(room.thisUserId)
+      const text = isMe ? '已重新连上' : '对手已重连'
+      peerStateText.value = text
       window.setTimeout(() => {
-        if (peerStateText.value === '对手已重连') peerStateText.value = ''
+        if (peerStateText.value === text) peerStateText.value = ''
       }, 2400)
     }
+  },
+  // 断线期间棋钟没有停，回来得按服务端的状态重画，而不是接着用断线前的棋盘
+  onReconnect() {
+    void loadRoom()
+  },
+  onReconnectFailed() {
+    peerStateText.value = '连接已断开'
+    ElMessage.error('实时连接断开且重连失败，请刷新页面')
   },
 })
 
@@ -181,7 +194,8 @@ const winnerText = computed(() => {
   }
   if (myWins.value > opponentWins.value) return '恭喜获胜！'
   if (myWins.value < opponentWins.value) return '惜败对手'
-  return myChess.value === 1 ? '恭喜获胜！' : '惜败对手'
+  // 胜局数相同就是平局。原来这里按「我是不是黑方」来判，黑方会看到「恭喜获胜」
+  return '战成平局'
 })
 const roundStatusText = computed(() => {
   if (isFinished.value) return winnerText.value

@@ -171,17 +171,21 @@
               <div v-if="!chatMessages.length" class="jinzi-chat-empty">暂无消息</div>
             </div>
             <div class="jinzi-chat-input">
-              <el-input
-                v-model="chatText"
-                :disabled="!canChat"
-                maxlength="200"
-                placeholder="发送消息"
-                @keyup.enter="sendChat"
-              >
-                <template #suffix>
+              <div class="jinzi-chat-field">
+                <el-input
+                  v-model="chatText"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  resize="none"
+                  :disabled="!canChat"
+                  maxlength="200"
+                  placeholder="说点什么…"
+                  @keydown.enter.exact.prevent="sendChat"
+                />
+                <span class="jinzi-chat-emoji">
                   <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendEmoji" />
-                </template>
-              </el-input>
+                </span>
+              </div>
               <el-button class="jinzi-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
                 发送
               </el-button>

@@ -35,6 +35,7 @@ import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.GameRankService;
 import org.pluchon.forum.service.interfaces.game.JinziRoomService;
+import org.pluchon.forum.common.config.OssConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -60,6 +61,9 @@ import java.util.concurrent.TimeUnit;
 public class JinziRoomServiceImpl implements JinziRoomService {
 
     // roomId > 房间状态
+    // 两条发言之间的最小间隔，挡住刷屏
+    private static final long CHAT_INTERVAL_MS = 1_000L;
+
     private final ConcurrentHashMap<String, JinziRoom> rooms = new ConcurrentHashMap<>();
 
     // 房间号必须对活跃房间查重：撞号会让后建的房间把先建的从 rooms 里挤掉
@@ -119,6 +123,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
 
     @Autowired
     private GameMatchRoomHelper gameMatchRoomHelper;
+
+    @Autowired
+    private OssConfig ossConfig;
 
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
@@ -310,16 +317,32 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             sendRoomError(roomId, userId, requestId, error);
             return;
         }
+        if (!room.tryChat(userId, System.currentTimeMillis(), CHAT_INTERVAL_MS)) {
+            sendRoomError(roomId, userId, requestId, "发言太快了，慢一点");
+            return;
+        }
         String messageType = request == null || request.getMessageType() == null
                 ? "TEXT"
                 : request.getMessageType().trim().toUpperCase();
         String content = request == null || request.getContent() == null ? "" : request.getContent().trim();
+        if ("EMOJI".equals(messageType)) {
+            // 表情地址会被前端当成 <img src> 渲染给房里所有人，
+            // 不限制来源等于让任何人往别人页面里塞任意外链
+            String emojiUrl = request == null || request.getEmojiUrl() == null || request.getEmojiUrl().isBlank()
+                    ? content
+                    : request.getEmojiUrl().trim();
+            if (!isTrustedEmojiUrl(emojiUrl)) {
+                sendRoomError(roomId, userId, requestId, "表情来源不合法");
+                return;
+            }
+            content = emojiUrl;
+        }
         JinziChatVO vo = new JinziChatVO(
                 userId,
                 messageType,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl()
+                "EMOJI".equals(messageType) ? content : null
         );
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
     }
@@ -336,7 +359,9 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 return;
             }
             room.getDisconnectDeadlines().put(userId, System.currentTimeMillis() + GameConstants.JINZI_RECONNECT_WINDOW_MS);
-            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, toStateVO(room, room.opponentOf(userId))));
+            // 只广播「谁掉线了」。以前发的是整份按某一个人视角生成的状态，
+            // 房里所有人收到同一份，视角本身就是错的
+            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, Map.of("userId", userId)));
         }
     }
 
@@ -349,12 +374,22 @@ public class JinziRoomServiceImpl implements JinziRoomService {
                 if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                     continue;
                 }
+                List<Long> expired = new ArrayList<>();
                 for (Map.Entry<Long, Long> entry : room.getDisconnectDeadlines().entrySet()) {
                     if (entry.getValue() <= now) {
-                        finishRoom(room, room.opponentOf(entry.getKey()), GameConstants.END_DISCONNECT);
-                        break;
+                        expired.add(entry.getKey());
                     }
                 }
+                if (expired.isEmpty()) {
+                    continue;
+                }
+                if (expired.size() >= 2) {
+                    // 两个人都掉线超时，谁也不该赢。以前是取遍历到的第一个判负，
+                    // 等于让哈希表的迭代顺序决定谁输
+                    finishRoom(room, null, GameConstants.END_DRAW);
+                    continue;
+                }
+                finishRoom(room, room.opponentOf(expired.get(0)), GameConstants.END_DISCONNECT);
             }
         }
     }
@@ -687,6 +722,19 @@ public class JinziRoomServiceImpl implements JinziRoomService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN));
         }
         return room;
+    }
+
+    // 表情只接受站内地址：相对路径，或配置里那个 OSS 前缀
+    private boolean isTrustedEmojiUrl(String url) {
+        if (url == null || url.isBlank() || url.length() > 512) {
+            return false;
+        }
+        String trimmed = url.trim();
+        if (trimmed.startsWith("/")) {
+            return !trimmed.startsWith("//");
+        }
+        String prefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
+        return !prefix.isEmpty() && trimmed.startsWith(prefix);
     }
 
     private void requireActionParams(String roomId, Long userId) {
