@@ -15,7 +15,15 @@ public final class TetrisEngineConstants {
 
     public static final String GARBAGE_TYPE = "G";
 
-    public static final List<String> BLOCK_TYPES = List.of("I", "O", "T", "S", "Z", "J", "L");
+    /**
+     * 七种方块的顺序必须与前端 constants.js 里 blockShape 的键顺序完全一致。
+     *
+     * <p>7-bag 是拿这个列表做 Fisher-Yates 洗牌，相同的随机数洗不同的初始数组，
+     * 洗出来的袋就不一样。两边曾经一个是 I,O,T,S,Z,J,L、另一个是 I,L,J,Z,S,O,T，
+     * 于是单人版的重放校验从上线起一次都没通过过——每局都在第二个方块上判定
+     * 类型不符然后跳过，灰度期看到的「零 MISMATCH」其实是「根本没跑起来」。
+     */
+    public static final List<String> BLOCK_TYPES = List.of("I", "L", "J", "Z", "S", "O", "T");
 
     public static final Map<String, int[][]> BLOCK_SHAPE;
 
