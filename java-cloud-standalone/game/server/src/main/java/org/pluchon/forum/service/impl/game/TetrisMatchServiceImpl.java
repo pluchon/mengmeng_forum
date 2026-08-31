@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 // 俄罗斯方块 PK 匹配服务，仅真人匹配
 @Slf4j
@@ -33,6 +34,11 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
             GameConstants.MATCH_BUCKET_GOLD,
             GameConstants.MATCH_BUCKET_MASTER
     );
+
+    // 参与配对的全部桶，含兜底桶
+    private static final List<String> ALL_BUCKETS = Stream
+            .concat(MATCH_BUCKETS.stream(), Stream.of(GameConstants.MATCH_BUCKET_ANY))
+            .toList();
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
@@ -127,9 +133,10 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
 
     @Scheduled(fixedDelay = 1_000)
     public void matchQueuedUsers() {
-        for (String bucket : MATCH_BUCKETS) {
+        for (String bucket : ALL_BUCKETS) {
             matchQueue(bucket);
         }
+        relaxLongWaiters();
     }
 
     private void matchQueue(String bucketCode) {
@@ -177,6 +184,33 @@ public class TetrisMatchServiceImpl implements TetrisMatchService {
             return GameConstants.INITIAL_SCORE;
         }
         return profile.getScore();
+    }
+
+    /**
+     * 在段位桶里等够久还没配上的人，挪进兜底桶。
+     *
+     * <p>段位桶是硬隔离的，在线人少时同桶里常常只有自己一个，等多久都配不上。
+     * 挪进兜底桶后，不同段位的等待者就能互相碰上——排位分本来就按段位差调整了
+     * 升降幅度，跨段对局不至于失衡。
+     */
+    private void relaxLongWaiters() {
+        for (String bucket : MATCH_BUCKETS) {
+            Long userId = gameMatchQueueService.pollAiCandidate(
+                    GameConstants.TETRIS_PK,
+                    bucket,
+                    GameConstants.BUCKET_RELAX_MS
+            );
+            if (userId == null) {
+                continue;
+            }
+            if (!gameMatchQueueService.enqueue(
+                    GameConstants.TETRIS_PK,
+                    userId,
+                    new GameMatchBucket(GameConstants.MATCH_BUCKET_ANY))) {
+                // 放不回队列就恢复空闲，别把人吞在「匹配中」
+                gameUserProfileService.updateStatus(userId, GameConstants.TETRIS_PK, GameConstants.PROFILE_IDLE, null);
+            }
+        }
     }
 
     private GameMatchBucket bucketOf(int score) {

@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 // 五子棋匹配服务，按积分分段匹配，避免同一用户重复入队
 @Slf4j
@@ -38,6 +39,11 @@ public class GobangMatchServiceImpl implements GobangMatchService {
             GameConstants.MATCH_BUCKET_GOLD,
             GameConstants.MATCH_BUCKET_MASTER
     );
+
+    // 参与配对的全部桶，含兜底桶
+    private static final List<String> ALL_BUCKETS = Stream
+            .concat(MATCH_BUCKETS.stream(), Stream.of(GameConstants.MATCH_BUCKET_ANY))
+            .toList();
 
     @Autowired
     private GameUserProfileService gameUserProfileService;
@@ -126,10 +132,11 @@ public class GobangMatchServiceImpl implements GobangMatchService {
     // 每秒扫描一次，优先真人匹配，等待过久时分配 AI 对手
     @Scheduled(fixedDelay = 1_000)
     public void matchQueuedUsers() {
-        for (String bucket : MATCH_BUCKETS) {
+        for (String bucket : ALL_BUCKETS) {
             matchQueue(bucket);
         }
-        for (String bucket : MATCH_BUCKETS) {
+        relaxLongWaiters();
+        for (String bucket : ALL_BUCKETS) {
             matchAiFromQueue(bucket);
         }
     }
@@ -189,6 +196,33 @@ public class GobangMatchServiceImpl implements GobangMatchService {
             gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
         } catch (Exception e) {
             log.warn("重置五子棋匹配状态失败 userId={}", userId, e);
+        }
+    }
+
+    /**
+     * 在段位桶里等够久还没配上的人，挪进兜底桶。
+     *
+     * <p>段位桶是硬隔离的，在线人少时同桶里常常只有自己一个，等多久都配不上。
+     * 挪进兜底桶后，不同段位的等待者就能互相碰上——排位分本来就按段位差调整了
+     * 升降幅度，跨段对局不至于失衡。
+     */
+    private void relaxLongWaiters() {
+        for (String bucket : MATCH_BUCKETS) {
+            Long userId = gameMatchQueueService.pollAiCandidate(
+                    GameConstants.GOBANG,
+                    bucket,
+                    GameConstants.BUCKET_RELAX_MS
+            );
+            if (userId == null) {
+                continue;
+            }
+            if (!gameMatchQueueService.enqueue(
+                    GameConstants.GOBANG,
+                    userId,
+                    new GameMatchBucket(GameConstants.MATCH_BUCKET_ANY))) {
+                // 放不回队列就恢复空闲，别把人吞在「匹配中」
+                gameUserProfileService.updateStatus(userId, GameConstants.GOBANG, GameConstants.PROFILE_IDLE, null);
+            }
         }
     }
 

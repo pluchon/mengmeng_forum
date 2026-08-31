@@ -50,6 +50,17 @@ public class GameConstants {
     public static final String MATCH_BUCKET_GOLD = "gold";
     public static final String MATCH_BUCKET_MASTER = "master";
 
+    /**
+     * 兜底匹配桶。
+     *
+     * <p>段位桶是硬隔离的，在线人少时同桶里往往只有自己一个，等多久都配不上。
+     * 在原桶等够 {@link #BUCKET_RELAX_MS} 的人会被挪进这里，让不同段位的人有机会碰上。
+     */
+    public static final String MATCH_BUCKET_ANY = "any";
+
+    // 在段位桶里等这么久还没配上，就放宽到兜底桶
+    public static final long BUCKET_RELAX_MS = 15 * 1000L;
+
     
     public static final int INITIAL_SCORE = 1000;
     public static final int BOARD_SIZE = 15;

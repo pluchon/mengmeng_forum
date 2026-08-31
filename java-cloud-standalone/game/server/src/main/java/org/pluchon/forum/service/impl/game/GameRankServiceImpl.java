@@ -134,19 +134,16 @@ public class GameRankServiceImpl implements GameRankService {
             return new GameRankSettlementResult(change, null);
         }
         boolean humanWon = humanUserId.equals(command.getWinnerUserId());
-        boolean effective = Boolean.TRUE.equals(command.getEffectiveForRank());
+        // 人机对局不计排位分，只记场次与胜负。
+        //
+        // 原来是胜 +12、负 0，只赚不赔又没有上限：AI 难度按自己的段位调、可以反复打，
+        // 五成胜率打两百局就能上大师，而且刷出来的分和真人对局共用同一个 score，
+        // 直接污染天梯榜。任何正期望都会被利用，所以干脆不动分。
         if (humanWon) {
-            // 人机胜：固定 +12，不计连胜加成、不按 baseWin×0.8
-            int delta = effective ? 12 : 0;
-            GameRankPlayerChange change = updateWinProfile(human, GameConstants.GOBANG, delta);
+            GameRankPlayerChange change = updateWinProfile(human, GameConstants.GOBANG, 0);
             return new GameRankSettlementResult(change, null);
         }
-        // 人机负：正常失败 0；逃跑/断线/超时 -10
-        int delta = 0;
-        if (effective && isEscapeReason(command.getEndReason())) {
-            delta = -10;
-        }
-        GameRankPlayerChange change = updateLoseProfile(human, GameConstants.GOBANG, delta);
+        GameRankPlayerChange change = updateLoseProfile(human, GameConstants.GOBANG, 0);
         return new GameRankSettlementResult(null, change);
     }
 
