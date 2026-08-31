@@ -52,6 +52,27 @@ public final class ArticleConverter {
         return list;
     }
 
+    /**
+     * 抹掉只该给作者本人看的字段。
+     *
+     * <p>审核评语是审核系统写给作者的，内容不受控——AI 的判定理由、人工审核的备注
+     * 都会落在这里。它不该跟着帖子出现在热帖榜、收藏夹或别人的主页上，
+     * 而热帖榜是连游客都能拿到的。
+     */
+    public static ArticleBriefVO stripAuthorOnlyFields(ArticleBriefVO vo) {
+        if (vo != null) {
+            vo.setAuditResultMessage(null);
+        }
+        return vo;
+    }
+
+    public static void stripAuthorOnlyFields(java.util.Collection<ArticleBriefVO> list) {
+        if (list == null) {
+            return;
+        }
+        list.forEach(ArticleConverter::stripAuthorOnlyFields);
+    }
+
     public static PageResult<ArticleBriefVO> toBriefPage(PageResult<Article> page) {
         if (page == null) {
             return new PageResult<>(List.of(), 0L, 1, 10, 0L, false);

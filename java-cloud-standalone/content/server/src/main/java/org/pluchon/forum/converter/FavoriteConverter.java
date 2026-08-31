@@ -20,7 +20,8 @@ public final class FavoriteConverter {
     public static FolderArticleVO toFolderArticleVO(Article article,
                                                      UserBriefVO author,
                                                      Date favoriteTime) {
-        ArticleBriefVO articleVO = ArticleConverter.toBriefVO(article);
+        // 收藏的多半是别人的帖子，审核评语不该跟着出来
+        ArticleBriefVO articleVO = ArticleConverter.stripAuthorOnlyFields(ArticleConverter.toBriefVO(article));
         if (articleVO != null) {
             articleVO.setTitle(truncate(normalizeText(articleVO.getTitle()), TITLE_MAX_LENGTH));
             String content = truncate(normalizeContent(articleVO.getContent()), CONTENT_MAX_LENGTH);

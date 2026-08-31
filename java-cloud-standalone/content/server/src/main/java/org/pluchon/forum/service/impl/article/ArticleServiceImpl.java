@@ -428,7 +428,12 @@ public class ArticleServiceImpl implements ArticleService {
                 && (result.getRecords() == null || result.getRecords().isEmpty())) {
             return querySemanticUserArticles(userId, status, keyword.trim(), validPageNum, validPageSize);
         }
-        return ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
+        PageResult<ArticleBriefVO> briefPage = ArticleConverter.toBriefPage(new PageResult<>(result.getRecords(), result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext()));
+        if (!isOwner) {
+            // 与下面主页把 ipRegion 抹掉是同一个道理：审核评语只该给作者本人看
+            ArticleConverter.stripAuthorOnlyFields(briefPage.getRecords());
+        }
+        return briefPage;
     }
 
     // 创作中心仅在标题/正文模糊匹配为空时请求 AI 对本人的候选帖子排序，状态与归属仍由本域复查
@@ -499,6 +504,7 @@ public class ArticleServiceImpl implements ArticleService {
         UserBriefVO profileUser = org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(user);
         if (!isOwner) {
             profileUser.setIpRegion(null);
+            ArticleConverter.stripAuthorOnlyFields(pageResult.getRecords());
         }
         return new ArticleListByUserIdPageResponse(pageResult, profileUser, isOwner);
     }
@@ -583,7 +589,7 @@ public class ArticleServiceImpl implements ArticleService {
             }
             HotArticleListItemVO item = new HotArticleListItemVO();
             item.setRank(rankBase + index + 1);
-            item.setArticle(ArticleConverter.toBriefVO(article));
+            item.setArticle(ArticleConverter.stripAuthorOnlyFields(ArticleConverter.toBriefVO(article)));
             item.setUser(org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(author));
             item.setFromFollowing(followingIds.contains(article.getUserId()));
             Double score = hotScores.get(article.getId());
