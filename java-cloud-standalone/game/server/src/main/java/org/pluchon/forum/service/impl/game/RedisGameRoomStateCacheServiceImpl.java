@@ -71,6 +71,27 @@ public class RedisGameRoomStateCacheServiceImpl implements GameRoomStateCacheSer
         }
     }
 
+    @Override
+    public void clearState(String gameCode, String roomId, Long... userIds) {
+        if (gameCode == null || gameCode.isBlank() || roomId == null || roomId.isBlank() || userIds == null) {
+            return;
+        }
+        for (Long userId : userIds) {
+            if (userId == null) {
+                continue;
+            }
+            try {
+                stringRedisTemplate.delete(key(gameCode, roomId, userId));
+            } catch (Exception e) {
+                log.debug("清理游戏房间状态缓存失败 gameCode={}, roomId={}, userId={}, error={}",
+                        gameCode,
+                        roomId,
+                        userId,
+                        e.getMessage());
+            }
+        }
+    }
+
     private String key(String gameCode, String roomId, Long userId) {
         return STATE_KEY_PREFIX + gameCode + ":" + roomId + ":" + userId;
     }

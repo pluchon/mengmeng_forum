@@ -579,10 +579,23 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 : Math.min(0, result.getLoserChange().getDelta());
     }
 
+    /**
+     * 房间散场。
+     *
+     * <p>以前只清了内存里的两张表，Redis 里的房间状态缓存和匹配建房记录都还在，各自躺两小时。
+     * 于是拿着旧房号仍然能「进房」——getRoomState 会从缓存把最后一帧还给你，看起来就像
+     * 又回到了那局已经结束的对局。
+     */
     private void cleanupRoom(TetrisRoom room) {
         userRoomIds.remove(room.getPlayer1UserId());
         userRoomIds.remove(room.getPlayer2UserId());
         rooms.remove(room.getRoomId());
+        gameRoomStateCacheService.clearState(
+                GameConstants.TETRIS_PK,
+                room.getRoomId(),
+                room.getPlayer1UserId(),
+                room.getPlayer2UserId());
+        gameMatchRoomHelper.releaseMatchedRoom("tetris", room.getPlayer1UserId(), room.getPlayer2UserId());
     }
 
     private TetrisRoom requireExistingRoom(String roomId) {

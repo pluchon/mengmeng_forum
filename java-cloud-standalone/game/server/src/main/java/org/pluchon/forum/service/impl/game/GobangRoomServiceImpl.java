@@ -609,11 +609,20 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         return message.length() <= 512 ? message : message.substring(0, 512);
     }
 
+    // 同时清掉 Redis 里的房间状态缓存与匹配建房记录，否则拿旧房号还能「进」一个散了的房间
     private void cleanupRoom(GobangRoom room) {
         rooms.remove(room.getRoomId());
         userRoomIds.remove(room.getBlackUserId());
         if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
             userRoomIds.remove(room.getWhiteUserId());
+        }
+        gameRoomStateCacheService.clearState(
+                GameConstants.GOBANG,
+                room.getRoomId(),
+                room.getBlackUserId(),
+                room.getWhiteUserId());
+        if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+            gameMatchRoomHelper.releaseMatchedRoom("gobang", room.getBlackUserId(), room.getWhiteUserId());
         }
     }
 

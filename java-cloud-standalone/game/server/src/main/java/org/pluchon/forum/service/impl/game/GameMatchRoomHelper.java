@@ -18,9 +18,7 @@ public class GameMatchRoomHelper {
 
     public String resolveMatchedRoomId(String gameCode, Long userIdA, Long userIdB,
                                        Supplier<String> roomCreator, Predicate<String> roomExists) {
-        long minUser = Math.min(userIdA, userIdB);
-        long maxUser = Math.max(userIdA, userIdB);
-        String matchKey = ForumRedisKeys.GAME_MATCH_ROOM + gameCode + ":" + minUser + ":" + maxUser;
+        String matchKey = matchKey(gameCode, userIdA, userIdB);
         String existingRoomId = stringRedisTemplate.opsForValue().get(matchKey);
         if (existingRoomId != null && roomExists.test(existingRoomId)) {
             return existingRoomId;
@@ -28,5 +26,29 @@ public class GameMatchRoomHelper {
         String roomId = roomCreator.get();
         stringRedisTemplate.opsForValue().set(matchKey, roomId, 2, TimeUnit.HOURS);
         return roomId;
+    }
+
+    /**
+     * 对局结束后释放这一对用户的建房记录。
+     *
+     * <p>不释放的话这条 key 还要在 Redis 里躺两小时，同一对人再匹配就会命中它。
+     * 虽然还有一层「房间是否存在」的判断兜底，但那道判断只看当前实例的内存，
+     * 房间散场后本就不该再让任何人拿到这个房号。
+     */
+    public void releaseMatchedRoom(String gameCode, Long userIdA, Long userIdB) {
+        if (gameCode == null || gameCode.isBlank() || userIdA == null || userIdB == null) {
+            return;
+        }
+        try {
+            stringRedisTemplate.delete(matchKey(gameCode, userIdA, userIdB));
+        } catch (Exception ignored) {
+            // 释放失败最多让下一次匹配多走一次「房间已不存在」的判断，不必打断结算
+        }
+    }
+
+    private String matchKey(String gameCode, Long userIdA, Long userIdB) {
+        long minUser = Math.min(userIdA, userIdB);
+        long maxUser = Math.max(userIdA, userIdB);
+        return ForumRedisKeys.GAME_MATCH_ROOM + gameCode + ":" + minUser + ":" + maxUser;
     }
 }

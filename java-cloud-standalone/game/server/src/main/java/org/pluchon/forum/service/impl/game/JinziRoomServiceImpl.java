@@ -695,11 +695,20 @@ public class JinziRoomServiceImpl implements JinziRoomService {
         }
     }
 
+    // 同时清掉 Redis 里的房间状态缓存与匹配建房记录，否则拿旧房号还能「进」一个散了的房间
     private void cleanupRoom(JinziRoom room) {
         rooms.remove(room.getRoomId());
         userRoomIds.remove(room.getBlackUserId());
         if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
             userRoomIds.remove(room.getWhiteUserId());
+        }
+        gameRoomStateCacheService.clearState(
+                GameConstants.JINZI,
+                room.getRoomId(),
+                room.getBlackUserId(),
+                room.getWhiteUserId());
+        if (!GameConstants.AI_USER_ID.equals(room.getWhiteUserId())) {
+            gameMatchRoomHelper.releaseMatchedRoom("jinzi", room.getBlackUserId(), room.getWhiteUserId());
         }
     }
 
