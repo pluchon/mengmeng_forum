@@ -34,6 +34,9 @@ export function useCheckin() {
   const makeupConfirmVisible = ref(false)
   const status = ref(null)
   const monthData = ref(null)
+  // 兜底数据和真实数据长得一样，画出来是一排 0，用户会以为自己整月没签到
+  const monthLoadFailed = ref(false)
+  const logLoadFailed = ref(false)
   const viewYear = ref(new Date().getFullYear())
   const viewMonth = ref(new Date().getMonth() + 1)
 
@@ -207,11 +210,13 @@ export function useCheckin() {
       const res = await getCheckinMonth({ year: viewYear.value, month: viewMonth.value })
       if (res.code === 0 && res.data) {
         monthData.value = res.data
+        monthLoadFailed.value = false
         return
       }
     } catch {
       // 后端未重启或接口失败时走本地月历兜底
     }
+    monthLoadFailed.value = true
     monthData.value = {
       year: viewYear.value,
       month: viewMonth.value,
@@ -222,10 +227,15 @@ export function useCheckin() {
   }
 
   async function loadStatus() {
-    const res = await getCheckinInfo()
-    if (res.code === 0) {
-      status.value = res.data
-      checkinSnapshotStore.applyFromInfo(res.data)
+    try {
+      const res = await getCheckinInfo()
+      if (res.code === 0) {
+        status.value = res.data
+        checkinSnapshotStore.applyFromInfo(res.data)
+      }
+    } catch {
+      // 失败原因由响应拦截器统一提示；这里不能抛出去，
+      // 否则会连累 loadEntry / 签到成功后的刷新一起中断
     }
   }
 
@@ -289,6 +299,9 @@ export function useCheckin() {
         ElMessage.warning(e.message || '今日已签到, 请明天再来')
         if (status.value) status.value = { ...status.value, todaySigned: true }
       }
+      // 网络中断时响应可能丢了但服务端已经签上，回读一次真实状态，
+      // 否则积分和连签天数会一直停在旧值
+      await Promise.all([loadStatus(), loadMonth()])
     } finally {
       submitting.value = false
     }
@@ -321,6 +334,10 @@ export function useCheckin() {
         makeupConfirmVisible.value = false
         await Promise.all([loadStatus(), loadMonth()])
       }
+    } catch {
+      // 失败时服务端可能已经扣了卡并补签成功，只是响应没回来。
+      // 不刷新的话用户看到的还是旧卡数，再点一次会补掉下一个漏签日、又扣一张
+      await Promise.all([loadStatus(), loadMonth()])
     } finally {
       makeupSubmitting.value = false
     }
@@ -355,7 +372,13 @@ export function useCheckin() {
         logRows.value = unwrapPageRecords(data)
         logTotal.value = data?.total ?? logRows.value.length
         logPage.value = page
+        logLoadFailed.value = false
       }
+    } catch {
+      // 失败要清空：留着上一页的数据配新页码，比空列表更容易误导
+      logRows.value = []
+      logTotal.value = 0
+      logLoadFailed.value = true
     } finally {
       logLoading.value = false
     }
@@ -407,5 +430,7 @@ export function useCheckin() {
     streakRewards,
     submitting,
     weekChartOption,
+    monthLoadFailed,
+    logLoadFailed,
   }
 }

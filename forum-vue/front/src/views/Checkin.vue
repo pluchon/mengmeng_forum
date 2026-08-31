@@ -91,7 +91,10 @@
             <strong>每周签到统计</strong>
             <span>本月已签到 {{ monthSignedDays }} 天</span>
           </div>
-          <EChart class="checkin-week__chart" :option="weekChartOption" />
+          <div v-if="monthLoadFailed" class="checkin-week__failed">
+            统计数据没能加载出来，稍后再试
+          </div>
+          <EChart v-else class="checkin-week__chart" :option="weekChartOption" />
         </div>
       </section>
       </div>
@@ -134,7 +137,11 @@
 
         <div class="checkin-tip">
           <strong>补签小贴士</strong>
-          <p>每次消耗 1 张补签卡，自动补离今天最近的漏签日并重算连续签到；不可自选日期</p>
+          <ul class="checkin-tip__list">
+            <li>消耗一张补签卡，补签的这一天计入连续签到</li>
+            <li>补签当天不发放惊喜奖励</li>
+            <li>不可自选日期，自动选择离当前最近未签日期</li>
+          </ul>
         </div>
 
         <div class="checkin-stats">
@@ -175,7 +182,7 @@
             stripe
             size="small"
             height="420"
-            empty-text="暂无记录"
+            :empty-text="logLoadFailed ? '记录没能加载出来，稍后再试' : '暂无记录'"
           >
             <el-table-column label="签到时间" min-width="168" align="center" header-align="center">
               <template #default="{ row }">
@@ -282,6 +289,8 @@ const {
   streakRewards,
   submitting,
   weekChartOption,
+  monthLoadFailed,
+  logLoadFailed,
 } = useCheckin()
 </script>
 

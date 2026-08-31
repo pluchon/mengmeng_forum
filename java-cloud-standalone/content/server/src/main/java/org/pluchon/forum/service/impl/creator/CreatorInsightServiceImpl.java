@@ -2,7 +2,6 @@ package org.pluchon.forum.service.impl.creator;
 
 import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +23,6 @@ import org.pluchon.forum.service.remote.ContentAiGatewayService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -219,36 +217,27 @@ public class CreatorInsightServiceImpl implements CreatorInsightService {
         return result;
     }
 
+    // AI 少给字段是常规情况，不是系统故障：原本抛 IllegalStateException
+    // 会一路穿到全局兜底，在日志里留下一条 500
     private void requireComplete(AiHubCreatorInsightResultVO result) {
         if (result == null
                 || !StringUtils.hasText(result.getHeadline())
                 || !StringUtils.hasText(result.getOverview())
                 || (!StringUtils.hasText(result.getHighlight())
                 && (result.getHighlights() == null || result.getHighlights().isEmpty()))) {
-            throw new IllegalStateException("AI 创作小结结果不完整");
+            log.warn("AI 创作小结返回不完整，本次不缓存");
+            throw new ApplicationException(Result.fail(
+                    ResultCode.FAILED_AI_ENGINE, "AI 小结这次没写完，请再试一次"));
         }
     }
 
+    // key 原本把 readCount / likeCount / newFollowerCount 这些一直在变的指标
+    // 也算进了哈希：帖子多一次浏览 key 就变，24 小时 TTL 等于从不命中，
+    // 有流量的创作者每次点生成都是一次全新的 AI 调用。
+    // 周/月回顾本来也不该分钟级刷新，按「谁 + 周期 + 日期区间」缓存即可
     private String cacheKey(Long userId, InsightPeriod period, AiCreatorInsightRequest request) {
-        try {
-            Map<String, Object> metrics = new java.util.LinkedHashMap<>();
-            metrics.put("periodLabel", request.getPeriodLabel());
-            metrics.put("startDate", request.getStartDate());
-            metrics.put("endDate", request.getEndDate());
-            metrics.put("readCount", request.getReadCount());
-            metrics.put("previousReadCount", request.getPreviousReadCount());
-            metrics.put("likeCount", request.getLikeCount());
-            metrics.put("previousLikeCount", request.getPreviousLikeCount());
-            metrics.put("workCount", request.getWorkCount());
-            metrics.put("previousWorkCount", request.getPreviousWorkCount());
-            metrics.put("newFollowerCount", request.getNewFollowerCount());
-            metrics.put("previousNewFollowerCount", request.getPreviousNewFollowerCount());
-            metrics.put("totalFollowerCount", request.getTotalFollowerCount());
-            String hash = DigestUtils.md5DigestAsHex(objectMapper.writeValueAsBytes(metrics));
-            return CACHE_PREFIX + userId + ":" + period.name() + ":" + hash;
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("创作小结指标序列化失败", e);
-        }
+        return CACHE_PREFIX + userId + ":" + period.name()
+                + ":" + request.getStartDate() + ":" + request.getEndDate();
     }
 
     private CreatorInsightVO readCache(String cacheKey) {

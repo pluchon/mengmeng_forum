@@ -542,6 +542,30 @@
   color: #9182ae;
 }
 
+.checkin-week__failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 12px;
+  color: #b3a6c9;
+}
+
+.checkin-tip__list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 19px;
+  color: #9182ae;
+}
+
+.checkin-tip__list li {
+  list-style: disc;
+}
+
 .checkin-stats {
   display: flex;
   flex-direction: column;

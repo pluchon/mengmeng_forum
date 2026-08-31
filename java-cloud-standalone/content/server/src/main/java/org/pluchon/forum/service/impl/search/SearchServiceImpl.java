@@ -430,6 +430,12 @@ public class SearchServiceImpl implements SearchService {
         if (!StringUtils.hasText(query)) {
             return new SearchArticleResponse(Constant.SEARCH_SOURCE_EMPTY, kw, emptyPage(page, size));
         }
+        // 不限次数，但同一次搜索的翻页没必要把整条流水线重跑一遍
+        String cacheKey = creatorRankCacheKey(creatorUserId, query, status);
+        List<Long> cachedIds = readAiRankCache(cacheKey);
+        if (!cachedIds.isEmpty()) {
+            return buildCreatorRagResponse(kw, cachedIds, creatorUserId, status, page, size);
+        }
         // 优先字面相关本人帖；没有再退回最近本人帖做语义打分（避免旧帖挤出候选）
         List<Article> candidates = articleMapper.selectPage(
                 new Page<>(1, Constant.SEARCH_RAG_CANDIDATE_LIMIT, false),
@@ -467,7 +473,7 @@ public class SearchServiceImpl implements SearchService {
                     aiHubService.ragArticleVectorRanked(ragRequest(query, payload)),
                     forumSearchProperties.getArticleHybridMinScore());
         }
-        if (rankedIds.isEmpty()) {
+        if (rankedIds.isEmpty() && shouldTryCreatorVectorFallback(creatorUserId, status)) {
             List<Long> vectorIds = extractArticleHitIds(
                     aiHubService.ragArticleVectorRanked(ragRequest(query, Collections.emptyList())),
                     forumSearchProperties.getArticleVectorMinScore());
@@ -501,14 +507,36 @@ public class SearchServiceImpl implements SearchService {
         if (rankedIds.size() > Constant.SEARCH_RAG_MAX_RESULTS) {
             rankedIds = rankedIds.subList(0, Constant.SEARCH_RAG_MAX_RESULTS);
         }
-        long total = rankedIds.size();
-        int fromIndex = Math.min((page - 1) * size, rankedIds.size());
-        int toIndex = Math.min(fromIndex + size, rankedIds.size());
+        writeAiRankCache(cacheKey, rankedIds);
+        return buildCreatorRagResponse(kw, rankedIds, creatorUserId, status, page, size);
+    }
+
+    private String creatorRankCacheKey(Long creatorUserId, String query, Integer status) {
+        if (creatorUserId == null || !StringUtils.hasText(query)) {
+            return null;
+        }
+        return Constant.REDIS_KEY_AI_SEARCH_RANK + "creator:" + creatorUserId
+                + ":" + (status == null ? "all" : status)
+                + ":" + Integer.toHexString(query.hashCode());
+    }
+
+    // 归属与状态每次现查：缓存里只有顺序，这几分钟内改了状态的帖子不能凭缓存漏出去
+    private SearchArticleResponse buildCreatorRagResponse(String kw, List<Long> rankedIds,
+            Long creatorUserId, Integer status, int page, int size) {
+        List<Long> visibleIds = retainCreatorArticleIds(rankedIds, creatorUserId, status);
+        long total = visibleIds.size();
+        int fromIndex = Math.min((page - 1) * size, visibleIds.size());
+        int toIndex = Math.min(fromIndex + size, visibleIds.size());
         List<ArticleListResponse> records = buildListResponsesForCreator(
-                rankedIds.subList(fromIndex, toIndex), creatorUserId, status);
+                visibleIds.subList(fromIndex, toIndex), creatorUserId, status);
         long pages = total == 0 ? 0 : (total + size - 1) / size;
         return new SearchArticleResponse(Constant.SEARCH_SOURCE_RAG, kw,
                 new PageResult<>(records, total, page, size, pages, toIndex < total));
+    }
+
+    private boolean shouldTryCreatorVectorFallback(Long creatorUserId, Integer status) {
+        Long count = articleMapper.selectCount(creatorArticleBaseQuery(creatorUserId, status));
+        return count != null && count >= Constant.CREATOR_VECTOR_FALLBACK_MIN_ARTICLES;
     }
 
     private LambdaQueryWrapper<Article> creatorArticleBaseQuery(Long creatorUserId, Integer status) {

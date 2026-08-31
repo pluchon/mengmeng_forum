@@ -165,6 +165,8 @@ public final class Constant {
     public static final int PROFILE_CHANGE_MAX_PER_DAY = ForumBusinessConstants.PROFILE_CHANGE_MAX_PER_DAY;
     public static final String REDIS_KEY_PROFILE_CHANGE_DAY = ForumRedisKeys.PROFILE_CHANGE_DAY;
     public static final long REDIS_TTL_PROFILE_CHANGE_DAY = ForumRedisKeys.TTL_PROFILE_CHANGE_DAY;
+    public static final int CREATOR_VECTOR_FALLBACK_MIN_ARTICLES =
+            ForumBusinessConstants.CREATOR_VECTOR_FALLBACK_MIN_ARTICLES;
     public static final int AI_SEARCH_MAX_PER_MINUTE = ForumBusinessConstants.AI_SEARCH_MAX_PER_MINUTE;
     public static final int AI_SEARCH_MAX_PER_DAY = ForumBusinessConstants.AI_SEARCH_MAX_PER_DAY;
     public static final String REDIS_KEY_AI_SEARCH_MINUTE = ForumRedisKeys.AI_SEARCH_MINUTE;

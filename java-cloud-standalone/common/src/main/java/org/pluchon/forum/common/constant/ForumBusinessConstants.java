@@ -35,6 +35,10 @@ public final class ForumBusinessConstants {
     public static final double HOT_SCORE_WEIGHT_FAVORITE = 0.7;
     public static final double HOT_SCORE_WEIGHT_REPLY = 0.5;
 
+    // 创作中心 AI 搜索的向量兜底走的是全站索引，回来再裁到本人帖。
+    // 帖子太少的创作者，全站语义命中里几乎不会有自己的，这次调用大概率裁成空
+    public static final int CREATOR_VECTOR_FALLBACK_MIN_ARTICLES = 30;
+
     // AI 搜索一次最多打三次 Python（候选打分 / 向量兜底 / 作者相似兜底），
     // 且搜不到结果的查询三次全跑，是全站唯一没有配额的 AI 入口
     // 收藏夹名是公开可见的，等于一个文案位；不设上限的话可以无限建

@@ -45,6 +45,7 @@ export function useCreativeCenter(iconSet) {
   const userStore = useUserStore()
   const loading = ref(true)
   const listLoading = ref(false)
+  const listLoadFailed = ref(false)
   const articles = ref([])
   const followerCount = ref(0)
   const monthNewFollowerCount = ref(0)
@@ -166,6 +167,12 @@ export function useCreativeCenter(iconSet) {
         : []
       articles.value = apiRows
       listTotal.value = Number(payload.total) || apiRows.length
+      listLoadFailed.value = false
+    } catch {
+      // 失败要清空：留着上一页的数据配新页码，看起来像"搜到了这些结果"
+      articles.value = []
+      listTotal.value = 0
+      listLoadFailed.value = true
     } finally {
       listLoading.value = false
     }
@@ -185,6 +192,8 @@ export function useCreativeCenter(iconSet) {
       if (response.data.insight) {
         creatorInsights.value = { ...creatorInsights.value, [period]: response.data.insight }
       }
+    } catch {
+      // 失败原因由响应拦截器统一提示，趋势图保持上一次的数据即可
     } finally {
       insightDataLoading.value = false
     }
@@ -210,16 +219,19 @@ export function useCreativeCenter(iconSet) {
     insightLoading.value = true
     try {
       const response = await generateCreatorInsight(insightPeriod.value)
-      if (response.code !== 0 || !response.data) {
-        throw new Error(response.message || response.msg || 'AI 小结生成失败')
+      // code !== 0 的情况响应拦截器已经 reject 并提示过了，这里再弹一次就是双重提示；
+      // 只有"接口成功但没给数据"需要自己兜一句
+      if (!response.data) {
+        ElMessage.error('AI 暂时走神了，请稍后再试')
+        return
       }
       creatorInsights.value = {
         ...creatorInsights.value,
         [insightPeriod.value]: response.data,
       }
       insightPage.value = 4
-    } catch (error) {
-      ElMessage.error(error?.message || 'AI 暂时走神了，请稍后再试')
+    } catch {
+      // 失败原因由响应拦截器统一提示
     } finally {
       insightLoading.value = false
     }
@@ -354,6 +366,9 @@ export function useCreativeCenter(iconSet) {
         await fetchArticles()
       }
       await fetchDashboard()
+    } catch {
+      // 删除失败：把待确认状态收回来，让用户能重新发起
+      deletingArticleId.value = null
     } finally {
       if (deletingArticleId.value === id) deletingArticleId.value = null
     }
@@ -414,6 +429,7 @@ export function useCreativeCenter(iconSet) {
     listTotal,
     loading,
     listLoading,
+    listLoadFailed,
     pageNum,
     pagedArticles,
     postStatus,

@@ -243,7 +243,7 @@
             </div>
             <div v-else class="creative-posts-empty">
               <img :src="creativePostsEmptyImageUrl" alt="暂无帖子" />
-              <p>暂无此类型帖子......</p>
+              <p>{{ listLoadFailed ? '列表没能加载出来，稍后再试' : '暂无此类型帖子......' }}</p>
             </div>
           </div>
 
@@ -315,6 +315,7 @@ const {
   listTotal,
   loading,
   listLoading,
+  listLoadFailed,
   pageNum,
   pagedArticles,
   postStatus,
