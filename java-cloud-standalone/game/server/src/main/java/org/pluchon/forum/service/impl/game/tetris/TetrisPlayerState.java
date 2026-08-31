@@ -1,13 +1,11 @@
 package org.pluchon.forum.service.impl.game.tetris;
 
 import java.util.List;
-import java.util.Random;
 
 // 单个玩家的权威棋盘状态，服务端推进下落与消行
+//
+// 竞速模式下两人各打各的：这里不产生也不接收垃圾行，胜负由房间按消行数与分数裁定。
 public class TetrisPlayerState {
-
-    // tickFall 未发生任何状态变化时的返回值
-    public static final int TICK_UNCHANGED = Integer.MIN_VALUE;
 
     // 落锁后等待消行/生成下一块的毫秒数，与前端 useTetrisEngine 一致
     private static final int LOCK_DELAY_MS = 100;
@@ -110,102 +108,52 @@ public class TetrisPlayerState {
         return seed;
     }
 
-    // 落锁延迟结束后完成消行并生成下一块，返回应攻击对手的垃圾行数
-    public int advanceLockIfReady(long nowMs) {
+    // 落锁延迟结束后完成消行并生成下一块，返回本次是否推进了状态
+    public boolean advanceLockIfReady(long nowMs) {
         if (!pendingLockComplete || nowMs < lockUntilMs) {
-            return TICK_UNCHANGED;
+            return false;
         }
-        return completePendingLock(nowMs);
+        completePendingLock(nowMs);
+        return true;
     }
 
-    // 处理玩家输入，返回本次消行后应给对手增加的垃圾行数
-    public int handleInput(String action, long nowMs) {
+    // 处理玩家输入，返回本次是否改变了棋盘（决定要不要广播）
+    public boolean handleInput(String action, long nowMs) {
         if (gameOver) {
-            return 0;
+            return false;
         }
         if (pendingLockComplete || lock || cur == null) {
-            return 0;
+            return false;
         }
         return switch (action) {
-            case "left" -> {
-                moveHorizontal(true);
-                yield 0;
-            }
-            case "right" -> {
-                moveHorizontal(false);
-                yield 0;
-            }
-            case "down" -> softFall(false, nowMs);
-            case "rotate" -> {
-                rotatePiece();
-                yield 0;
-            }
+            case "left" -> moveHorizontal(true);
+            case "right" -> moveHorizontal(false);
+            case "down" -> softFall(nowMs);
+            case "rotate" -> rotatePiece();
             case "space" -> hardDrop(nowMs);
-            case "hold" -> {
-                holdPiece(nowMs);
-                yield 0;
-            }
-            default -> 0;
+            case "hold" -> holdPiece();
+            default -> false;
         };
     }
 
-    // 服务端重力 tick，未变化返回 TICK_UNCHANGED，否则返回本次消行应攻击对手的垃圾行数
-    public int tickFall(long nowMs) {
+    // 服务端重力 tick，返回本次是否改变了棋盘
+    public boolean tickFall(long nowMs) {
         if (gameOver) {
-            return TICK_UNCHANGED;
+            return false;
         }
-        int garbage = advanceLockIfReady(nowMs);
-        if (garbage != TICK_UNCHANGED) {
-            return garbage;
+        if (advanceLockIfReady(nowMs)) {
+            return true;
         }
         if (pendingLockComplete || lock || cur == null) {
-            return TICK_UNCHANGED;
+            return false;
         }
         if (nowMs < nextFallAtMs) {
-            return TICK_UNCHANGED;
+            return false;
         }
-        return softFall(true, nowMs);
+        return softFall(nowMs);
     }
 
-    public void addGarbageLines(int count, Random random, long nowMs) {
-        if (gameOver || count <= 0) {
-            return;
-        }
-        for (int i = 0; i < count; i++) {
-            if (gameOver) {
-                return;
-            }
-            int hole = random.nextInt(TetrisEngineConstants.COLS);
-            if (TetrisMatrixUtil.isOver(matrix)) {
-                finishGame();
-                return;
-            }
-            String[][] next = TetrisMatrixUtil.copyMatrix(matrix);
-            for (int row = 0; row < TetrisEngineConstants.ROWS - 1; row++) {
-                next[row] = next[row + 1];
-            }
-            String[] garbageRow = new String[TetrisEngineConstants.COLS];
-            for (int col = 0; col < TetrisEngineConstants.COLS; col++) {
-                garbageRow[col] = col == hole ? "" : TetrisEngineConstants.GARBAGE_TYPE;
-            }
-            next[TetrisEngineConstants.ROWS - 1] = garbageRow;
-            matrix = next;
-            if (cur != null && !lock) {
-                TetrisBlock shifted = cur.fall(-1);
-                if (!TetrisMatrixUtil.canPlace(shifted, matrix)) {
-                    finishGame();
-                    return;
-                }
-                cur = shifted;
-                scheduleFall(nowMs);
-            }
-            if (TetrisMatrixUtil.isOver(matrix)) {
-                finishGame();
-            }
-        }
-    }
-
-    private int hardDrop(long nowMs) {
+    private boolean hardDrop(long nowMs) {
         int index = 0;
         TetrisBlock bottom = cur.fall(index);
         while (TetrisMatrixUtil.canPlace(bottom, matrix)) {
@@ -213,36 +161,42 @@ public class TetrisPlayerState {
             bottom = cur.fall(index);
         }
         cur = cur.fall(Math.max(0, index - 1));
-        return lockCurrent(nowMs);
+        lockCurrent(nowMs);
+        return true;
     }
 
-    private void moveHorizontal(boolean left) {
+    private boolean moveHorizontal(boolean left) {
         TetrisBlock next = left ? cur.left() : cur.right();
-        if (TetrisMatrixUtil.canPlace(next, matrix)) {
-            cur = next;
+        if (!TetrisMatrixUtil.canPlace(next, matrix)) {
+            return false;
         }
+        cur = next;
+        return true;
     }
 
-    private void rotatePiece() {
+    private boolean rotatePiece() {
         TetrisBlock next = cur.rotate();
-        if (TetrisMatrixUtil.canPlace(next, matrix)) {
-            cur = next;
+        if (!TetrisMatrixUtil.canPlace(next, matrix)) {
+            return false;
         }
+        cur = next;
+        return true;
     }
 
-    private int softFall(boolean auto, long nowMs) {
+    private boolean softFall(long nowMs) {
         TetrisBlock next = cur.fall(1);
         if (TetrisMatrixUtil.canPlace(next, matrix)) {
             cur = next;
             scheduleFall(nowMs);
-            return 0;
+            return true;
         }
-        return lockCurrent(nowMs);
+        lockCurrent(nowMs);
+        return true;
     }
 
-    private void holdPiece(long nowMs) {
+    private boolean holdPiece() {
         if (!canHold) {
-            return;
+            return false;
         }
         String currentType = cur.getType();
         if (holdType != null && !holdType.isEmpty()) {
@@ -256,9 +210,10 @@ public class TetrisPlayerState {
         if (!TetrisMatrixUtil.canPlace(cur, matrix)) {
             finishGame();
         }
+        return true;
     }
 
-    private int lockCurrent(long nowMs) {
+    private void lockCurrent(long nowMs) {
         String[][] merged = TetrisMatrixUtil.mergeBlock(matrix, cur);
         cur = null;
         lock = true;
@@ -267,10 +222,9 @@ public class TetrisPlayerState {
         canHold = true;
         pendingLockComplete = true;
         lockUntilMs = nowMs + LOCK_DELAY_MS;
-        return 0;
     }
 
-    private int completePendingLock(long nowMs) {
+    private void completePendingLock(long nowMs) {
         pendingLockComplete = false;
         List<Integer> lines = TetrisMatrixUtil.findClearLines(matrix);
         if (lines != null) {
@@ -280,9 +234,8 @@ public class TetrisPlayerState {
             points += TetrisEngineConstants.calcClearScore(lines.size(), combo);
             int speedAdd = clearLines / TetrisEngineConstants.EACH_LINES;
             speedRun = Math.min(6, speedStart + speedAdd);
-            int garbage = TetrisEngineConstants.garbageLinesForClear(lines.size());
             spawnAfterLock(nowMs);
-            return garbage;
+            return;
         }
 
         combo = 0;
@@ -290,10 +243,9 @@ public class TetrisPlayerState {
         if (TetrisMatrixUtil.isOver(matrix)) {
             finishGame();
             lock = false;
-            return 0;
+            return;
         }
         spawnAfterLock(nowMs);
-        return 0;
     }
 
     private void spawnAfterLock(long nowMs) {

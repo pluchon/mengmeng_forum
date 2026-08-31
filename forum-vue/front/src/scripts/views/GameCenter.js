@@ -104,10 +104,10 @@ const GAME_PRESETS = {
   },
   tetris_pk: {
     name: '俄罗斯方块 PK',
-    sub: '动态发牌 · 实时竞速',
+    sub: '3 分钟 · 比谁消行多',
     cover: eluosiPkImg,
     btnClass: 'btn--tetris-pk',
-    idleText: '在线 PK',
+    idleText: '开始竞速',
   },
 }
 

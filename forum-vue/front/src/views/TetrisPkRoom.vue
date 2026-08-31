@@ -6,8 +6,12 @@
           <el-icon><HomeFilled /></el-icon>
         </button>
         <div class="tetris-room-title">
-          <h1>俄罗斯方块<span class="tetris-mode-tag"> · 在线PK模式</span></h1>
+          <h1>俄罗斯方块<span class="tetris-mode-tag"> · 竞速模式</span></h1>
           <span>房间号：{{ room.roomId || roomId }}</span>
+          <span class="tetris-room-viewers" :title="`${spectatorCount} 人观战`">
+            <el-icon><UserFilled /></el-icon>
+            {{ spectatorCount }} 人观战
+          </span>
         </div>
         <div class="tetris-room-conn" :class="{ 'is-online': roomSocket.connected.value, 'is-warning': Boolean(peerStateText) }">
           <span />
@@ -25,53 +29,31 @@
           </div>
 
           <div class="tetris-rail-card tetris-score-card" :class="{ 'is-dual': isSpectator }">
-            <span class="tetris-rail-label">分数</span>
+            <span class="tetris-rail-label">消行 / 分数</span>
             <template v-if="isSpectator">
               <div class="tetris-dual-score">
                 <div class="tetris-dual-score-row is-red">
                   <em>左 · 红方</em>
-                  <strong>{{ room.redScore ?? 0 }}</strong>
+                  <strong>{{ room.redLines ?? 0 }}</strong>
+                  <i>{{ room.redScore ?? 0 }} 分</i>
                 </div>
                 <div class="tetris-dual-score-row is-blue">
                   <em>右 · 蓝方</em>
-                  <strong>{{ room.blueScore ?? 0 }}</strong>
+                  <strong>{{ room.blueLines ?? 0 }}</strong>
+                  <i>{{ room.blueScore ?? 0 }} 分</i>
                 </div>
               </div>
             </template>
-            <strong v-else>{{ myScore }}</strong>
+            <template v-else>
+              <strong>{{ myLines }}</strong>
+              <i class="tetris-score-sub">{{ myScore }} 分</i>
+            </template>
           </div>
 
-          <div class="tetris-rail-card tetris-time-card">
-            <span class="tetris-rail-label">时间</span>
+          <div class="tetris-rail-card tetris-time-card" :class="{ 'is-urgent': timeUrgent }">
+            <span class="tetris-rail-label">剩余时间</span>
             <strong>{{ elapsedText }}</strong>
           </div>
-
-          <section class="gobang-spectator-card">
-            <div v-if="visibleSpectators.length" class="gobang-spectator-list">
-              <div v-for="viewer in visibleSpectators" :key="viewer.userId" class="gobang-mini-user">
-                <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
-                  <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
-                  <b v-else>{{ avatarText(viewer) }}</b>
-                </span>
-                <em>{{ viewer.nickname || viewer.username }}</em>
-              </div>
-              <button v-if="hiddenSpectatorCount" type="button" class="gobang-more-users" @click="spectatorDialogVisible = true">
-                <el-icon><MoreFilled /></el-icon>
-                还有 {{ hiddenSpectatorCount }} 人
-              </button>
-            </div>
-            <div v-else class="gobang-side-empty">暂无观战玩家</div>
-            <button
-              type="button"
-              class="tetris-spectator-count"
-              title="查看观战席"
-              aria-label="查看观战席"
-              @click="spectatorDialogVisible = true"
-            >
-              <el-icon><UserFilled /></el-icon>
-              {{ room.spectatorCount || 0 }}
-            </button>
-          </section>
 
           <section
             v-if="isPlayer && opponentProfile"
@@ -142,16 +124,19 @@
             <div class="tetris-pk-bar">
               <div class="tetris-pk-bar-red" :style="{ width: `${pkBarLeftPercent}%` }">
                 <span class="pk-team-tag">RED</span>
-                <span class="pk-score-num">{{ room.redScore ?? 0 }}</span>
+                <span class="pk-score-num">{{ room.redLines ?? 0 }}</span>
+                <span class="pk-score-unit">行</span>
               </div>
               <div class="tetris-pk-bar-seam" :style="{ left: `${pkBarLeftPercent}%` }" aria-hidden="true">
                 <span class="tetris-pk-bar-seam-core" />
                 <span class="tetris-pk-bar-seam-shimmer" />
                 <span class="tetris-pk-bar-seam-spark" />
               </div>
-              <div class="tetris-pk-vs-badge" aria-hidden="true">VS</div>
+              <!-- 以前这里没绑 left，红蓝条和接缝都在动，只有 VS 被 CSS 钉在正中间 -->
+              <div class="tetris-pk-vs-badge" :style="{ left: `${pkBarLeftPercent}%` }" aria-hidden="true">VS</div>
               <div class="tetris-pk-bar-blue" :style="{ width: `${100 - pkBarLeftPercent}%` }">
-                <span class="pk-score-num">{{ room.blueScore ?? 0 }}</span>
+                <span class="pk-score-unit">行</span>
+                <span class="pk-score-num">{{ room.blueLines ?? 0 }}</span>
                 <span class="pk-team-tag">BLUE</span>
               </div>
             </div>
@@ -191,7 +176,9 @@
           <div v-if="isFinished" class="tetris-pk-result-overlay">
             <div class="tetris-pk-result-card">
               <strong>{{ winnerText }}</strong>
+              <em v-if="finishReasonText" class="tetris-pk-result-reason">{{ finishReasonText }}</em>
               <em>{{ finishCountdown }} 秒后返回匹配页</em>
+              <button type="button" class="tetris-pk-result-back" @click="backMatchNow">立即返回</button>
             </div>
           </div>
         </section>
@@ -222,23 +209,31 @@
               </div>
               <div v-if="!chatMessages.length" class="gobang-chat-empty">暂无消息</div>
             </div>
-            <div v-if="isPlayer" class="gobang-chat-input">
+            <div v-if="isPlayer" class="gobang-chat-input tetris-pk-chat-input">
+              <!-- 一行的输入框写不下一句话。改成随内容长高，三行封顶后内部滚动 -->
               <el-input
                 v-model="chatText"
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 3 }"
+                resize="none"
                 :disabled="!canChat"
-                placeholder="说点什么…"
+                placeholder="说点什么…（Enter 发送，Shift + Enter 换行）"
                 maxlength="200"
-                @keyup.enter="sendChat"
-              >
-                <template #suffix>
-                  <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendChatEmoji" />
-                </template>
-              </el-input>
-              <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
-                发送
-              </el-button>
+                @keydown.enter.exact.prevent="sendChat"
+              />
+              <div class="tetris-pk-chat-actions">
+                <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendChatEmoji" />
+                <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
+                  发送
+                </el-button>
+              </div>
             </div>
           </section>
+
+          <div v-if="isPlayer" class="tetris-rail-card tetris-race-rule">
+            <strong>竞速规则</strong>
+            <p>3 分钟内比谁消的行多，行数相同再比分数。中途堆到顶直接判负。</p>
+          </div>
 
           <div v-if="isPlayer" class="tetris-rail-card tetris-keys">
             <strong>操作说明</strong>
@@ -289,28 +284,6 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="spectatorDialogVisible" title="观战玩家" width="460px" destroy-on-close>
-      <div class="gobang-spectator-dialog-list">
-        <div v-for="viewer in spectatorRows" :key="viewer.userId" class="gobang-dialog-user">
-          <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
-            <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
-            <b v-else>{{ avatarText(viewer) }}</b>
-          </span>
-          <strong>{{ viewer.nickname || viewer.username }}</strong>
-        </div>
-        <div v-if="!spectatorRows.length" class="gobang-side-empty">暂无观战玩家</div>
-      </div>
-      <div v-if="spectators.length > spectatorPageSize" class="gobang-dialog-pager">
-        <AppPagination
-          v-model:current-page="spectatorPage"
-          size="small"
-          :page-size="spectatorPageSize"
-          :total="spectators.length"
-          :pager-count="5"
-          :show-jumper="false"
-        />
-      </div>
-    </el-dialog>
   </div>
 </template>
 

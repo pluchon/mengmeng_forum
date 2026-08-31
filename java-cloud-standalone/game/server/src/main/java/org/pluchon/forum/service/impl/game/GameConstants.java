@@ -30,6 +30,12 @@ public class GameConstants {
     public static final String END_DISCONNECT = "DISCONNECT";
     public static final String END_TIMEOUT = "TIMEOUT";
 
+    // 竞速局打满时长后按消行数裁定。
+    //
+    // 不能复用 END_TIMEOUT：那个在棋类里表示「轮到你却不走棋」，排位结算把它算作逃跑加重扣分，
+    // 而打满全程恰恰是竞速最正常的结束方式。
+    public static final String END_RACE = "RACE";
+
     
     public static final String SETTLEMENT_EVENT_GAME_FINISHED = "GAME_FINISHED";
     public static final String SETTLEMENT_EVENT_CREATED = "CREATED";

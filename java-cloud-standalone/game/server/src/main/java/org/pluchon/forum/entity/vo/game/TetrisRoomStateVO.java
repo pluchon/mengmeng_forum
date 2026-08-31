@@ -57,6 +57,18 @@ public class TetrisRoomStateVO {
     // 蓝方分数
     private Integer blueScore;
 
+    // 红方消行数：竞速的胜负先看它，分数只做决胜
+    private Integer redLines;
+
+    // 蓝方消行数
+    private Integer blueLines;
+
+    // 本局剩余毫秒。
+    //
+    // 下发剩余量而不是终点时刻：终点时刻是服务端时钟，客户端时钟偏几分钟倒计时就废了。
+    // 每帧都会带上，前端本地递减、收到新状态时校正即可。
+    private Long remainingMs;
+
     // PK 进度条左侧占比 0 100
     private Integer pkBarLeftPercent;
 
@@ -68,11 +80,7 @@ public class TetrisRoomStateVO {
 
     // 玩家2展示信息
     private GobangRoomParticipantVO player2;
-
-    // 观战列表
-    private List<GobangRoomParticipantVO> spectators;
-
-    // 观战人数
+    // 观战人数。只报数量不报名单：以前把每个观战者的昵称头像战绩推给房里所有人
     private Integer spectatorCount;
 
     // 房间在线人数

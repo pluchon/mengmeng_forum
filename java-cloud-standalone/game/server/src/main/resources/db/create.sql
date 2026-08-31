@@ -214,6 +214,8 @@ CREATE TABLE `game_tetris_pk_match_record` (
   `loser_user_id` bigint DEFAULT NULL COMMENT '败方用户ID',
   `player1_score` int NOT NULL DEFAULT '0' COMMENT '玩家1得分',
   `player2_score` int NOT NULL DEFAULT '0' COMMENT '玩家2得分',
+  `player1_lines` int NOT NULL DEFAULT '0' COMMENT '玩家1消行数',
+  `player2_lines` int NOT NULL DEFAULT '0' COMMENT '玩家2消行数',
   `end_reason` varchar(32) NOT NULL DEFAULT '' COMMENT '结束原因',
   `score_delta` int NOT NULL DEFAULT '3' COMMENT '积分变动',
   `winner_score_delta` int NOT NULL DEFAULT '0' COMMENT '胜方本局排位分变化',

@@ -33,6 +33,7 @@ import org.pluchon.forum.service.interfaces.game.GameRoomEventBusService;
 import org.pluchon.forum.service.interfaces.game.GameRoomStateCacheService;
 import org.pluchon.forum.service.interfaces.game.GameUserProfileService;
 import org.pluchon.forum.service.interfaces.game.TetrisRoomService;
+import org.pluchon.forum.common.config.OssConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -58,6 +59,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TetrisRoomServiceImpl implements TetrisRoomService {
 
     private static final long RECONNECT_WINDOW_MS = GameConstants.TETRIS_RECONNECT_WINDOW_MS;
+
+    // 单条发言的字数上限，与前端输入框的 maxlength 对齐
+    private static final int MAX_CHAT_LENGTH = 200;
+
+    // 两条发言之间的最小间隔，挡住刷屏
+    private static final long CHAT_INTERVAL_MS = 1_000L;
 
     private final ConcurrentHashMap<String, TetrisRoom> rooms = new ConcurrentHashMap<>();
 
@@ -106,6 +113,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     @Autowired
     private GameMatchRoomHelper gameMatchRoomHelper;
 
+    @Autowired
+    private OssConfig ossConfig;
+
     @Override
     public String createMatchedRoom(Long userIdA, Long userIdB) {
         if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
@@ -139,12 +149,14 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         gameConnectionRegistry.enterRoom(roomId, userId, session);
         if (!spectator) {
             room.getDisconnectDeadlines().remove(userId);
-            broadcast(roomId, GameWsResponse.ok("peer_reconnected", null, toStateVO(room, userId)));
+            // 只广播「谁重连了」。以前这里发的是整份带棋盘的状态，而且是某一个人的视角——
+            // 房里所有人都会收到同一份，既把对手的 hold/next 泄露出去，视角也是错的
+            broadcast(roomId, GameWsResponse.ok("peer_reconnected", null, Map.of("userId", userId)));
         } else {
             room.getSpectatorJoinedAt().putIfAbsent(userId, System.currentTimeMillis());
             broadcastState(room, "room_state_updated", null);
         }
-        return toStateVO(room, userId);
+        return toStateVO(room, userId, true);
     }
 
     @Override
@@ -162,7 +174,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             }
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
-        return toStateVO(room, userId);
+        return toStateVO(room, userId, true);
     }
 
     @Override
@@ -202,9 +214,11 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 return;
             }
             long now = System.currentTimeMillis();
-            int lockGarbage = state.advanceLockIfReady(now);
-            if (lockGarbage != TetrisPlayerState.TICK_UNCHANGED) {
-                applyGarbageToOpponent(room, userId, lockGarbage, now, requestId);
+            if (now >= room.getDeadlineMs()) {
+                finishRoom(room, resolveRaceWinner(room), GameConstants.END_RACE);
+                return;
+            }
+            if (state.advanceLockIfReady(now)) {
                 checkFinishAfterMove(room, userId);
             }
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
@@ -214,8 +228,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 sendRoomError(roomId, userId, requestId, "本局已结束");
                 return;
             }
-            int garbage = state.handleInput(action, now);
-            applyGarbageToOpponent(room, userId, garbage, now, requestId);
+            state.handleInput(action, now);
             checkFinishAfterMove(room, userId);
             if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 broadcastState(room, "room_state_updated", requestId);
@@ -235,23 +248,46 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             sendRoomError(roomId, userId, requestId, "观众不能发言");
             return;
         }
+        if (!room.tryChat(userId, System.currentTimeMillis(), CHAT_INTERVAL_MS)) {
+            sendRoomError(roomId, userId, requestId, "发言太快了，慢一点");
+            return;
+        }
         String messageType = request == null || request.getMessageType() == null
                 ? "TEXT"
                 : request.getMessageType().trim().toUpperCase();
         String content = request == null ? "" : String.valueOf(request.getContent() == null ? "" : request.getContent()).trim();
-        if ("TEXT".equals(messageType) && content.isEmpty()) {
-            sendRoomError(roomId, userId, requestId, "消息不能为空");
-            return;
+        if ("EMOJI".equals(messageType)) {
+            // 表情的 content 会被前端当成 <img src> 渲染给房里所有人，
+            // 不限制来源等于让任何人往别人页面里塞任意外链
+            String emojiUrl = request == null || request.getEmojiUrl() == null || request.getEmojiUrl().isBlank()
+                    ? content
+                    : request.getEmojiUrl().trim();
+            if (!isTrustedEmojiUrl(emojiUrl)) {
+                sendRoomError(roomId, userId, requestId, "表情来源不合法");
+                return;
+            }
+            content = emojiUrl;
+        } else {
+            messageType = "TEXT";
+            if (content.isEmpty()) {
+                sendRoomError(roomId, userId, requestId, "消息不能为空");
+                return;
+            }
+            // 前端的 maxlength 只是提示，服务端不拦就等于没有上限
+            if (content.length() > MAX_CHAT_LENGTH) {
+                sendRoomError(roomId, userId, requestId, "消息太长了，最多 " + MAX_CHAT_LENGTH + " 个字");
+                return;
+            }
         }
         TetrisChatVO vo = new TetrisChatVO(
                 userId,
                 messageType,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl()
+                "EMOJI".equals(messageType) ? content : null
         );
         synchronized (room) {
-            room.getChatHistory().add(vo);
+            room.appendChat(vo);
         }
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
     }
@@ -296,7 +332,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 return;
             }
             room.getDisconnectDeadlines().put(userId, System.currentTimeMillis() + RECONNECT_WINDOW_MS);
-            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, toStateVO(room, room.opponentOf(userId))));
+            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, Map.of("userId", userId)));
         }
     }
 
@@ -382,24 +418,19 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                     continue;
                 }
-                boolean changed = false;
-                Long player1Id = room.getPlayer1UserId();
-                Long player2Id = room.getPlayer2UserId();
-                if (!room.getPlayer1State().isGameOver()) {
-                    int garbage = room.getPlayer1State().tickFall(now);
-                    if (garbage != TetrisPlayerState.TICK_UNCHANGED) {
-                        applyGarbageToOpponent(room, player1Id, garbage, now, null);
-                        checkFinishAfterMove(room, player1Id);
-                        changed = true;
-                    }
+                if (now >= room.getDeadlineMs()) {
+                    finishRoom(room, resolveRaceWinner(room), GameConstants.END_RACE);
+                    continue;
                 }
-                if (!room.getPlayer2State().isGameOver()) {
-                    int garbage = room.getPlayer2State().tickFall(now);
-                    if (garbage != TetrisPlayerState.TICK_UNCHANGED) {
-                        applyGarbageToOpponent(room, player2Id, garbage, now, null);
-                        checkFinishAfterMove(room, player2Id);
-                        changed = true;
-                    }
+                boolean changed = false;
+                if (room.getPlayer1State().tickFall(now)) {
+                    checkFinishAfterMove(room, room.getPlayer1UserId());
+                    changed = true;
+                }
+                if (GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
+                        && room.getPlayer2State().tickFall(now)) {
+                    checkFinishAfterMove(room, room.getPlayer2UserId());
+                    changed = true;
                 }
                 if (!changed) {
                     continue;
@@ -411,27 +442,28 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         }
     }
 
-    // 消行后向对手追加垃圾行，与单人模式 lock → clear 链路一致
-    private void applyGarbageToOpponent(
-            TetrisRoom room,
-            Long actorUserId,
-            int garbage,
-            long nowMs,
-            String requestId
-    ) {
-        if (garbage <= 0) {
-            return;
+    /**
+     * 竞速局到点后的裁定。
+     *
+     * <p>先比消行数——这是竞速真正比的东西；消行数打平再比分数，分数天然把四消与连击
+     * 的技巧含量算进去了。两项都相同才算平局。
+     *
+     * <p>注意分数里含落锁分，所以不能把消行数与分数加权相加：那等于把消行的贡献算两遍。
+     */
+    private Long resolveRaceWinner(TetrisRoom room) {
+        Long player1Id = room.getPlayer1UserId();
+        Long player2Id = room.getPlayer2UserId();
+        int lines1 = room.linesOf(player1Id);
+        int lines2 = room.linesOf(player2Id);
+        if (lines1 != lines2) {
+            return lines1 > lines2 ? player1Id : player2Id;
         }
-        Long opponentId = room.opponentOf(actorUserId);
-        TetrisPlayerState opponentState = room.stateOf(opponentId);
-        if (opponentState == null || opponentState.isGameOver()) {
-            return;
+        int score1 = room.scoreOf(player1Id);
+        int score2 = room.scoreOf(player2Id);
+        if (score1 != score2) {
+            return score1 > score2 ? player1Id : player2Id;
         }
-        opponentState.addGarbageLines(garbage, garbageRandom, nowMs);
-        broadcast(room.getRoomId(), GameWsResponse.ok("garbage_received", requestId, Map.of(
-                "targetUserId", opponentId,
-                "lines", garbage
-        )));
+        return null;
     }
 
     @Scheduled(fixedDelay = 5_000)
@@ -452,6 +484,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         }
     }
 
+    // 竞速局中途堆到顶直接判负，不等时间到——否则「平铺不消行、只刷落锁分」会变成有效战术
     private void checkFinishAfterMove(TetrisRoom room, Long actorUserId) {
         TetrisPlayerState actorState = room.stateOf(actorUserId);
         if (actorState != null && actorState.isGameOver()) {
@@ -485,6 +518,8 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             record.setLoserUserId(loserId);
             record.setPlayer1Score(room.scoreOf(room.getPlayer1UserId()));
             record.setPlayer2Score(room.scoreOf(room.getPlayer2UserId()));
+            record.setPlayer1Lines(room.linesOf(room.getPlayer1UserId()));
+            record.setPlayer2Lines(room.linesOf(room.getPlayer2UserId()));
             record.setEndReason(endReason);
             GameRankSettlementResult rankResult = gameRankService.settleRank(createRankCommand(room, winnerId, loserId, endReason));
             int scoreDelta = winnerDelta(rankResult);
@@ -509,6 +544,8 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             payload.put("player2Seed", room.getPlayer2State().getSeed());
             payload.put("player1Score", room.scoreOf(room.getPlayer1UserId()));
             payload.put("player2Score", room.scoreOf(room.getPlayer2UserId()));
+            payload.put("player1Lines", room.linesOf(room.getPlayer1UserId()));
+            payload.put("player2Lines", room.linesOf(room.getPlayer2UserId()));
             return objectMapper.writeValueAsString(payload);
         } catch (Exception e) {
             return "{}";
@@ -563,11 +600,20 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     }
 
     private TetrisRoomStateVO toStateVO(TetrisRoom room, Long userId) {
+        return toStateVO(room, userId, false);
+    }
+
+    /**
+     * @param includeChat 是否带上聊天记录。棋盘每推进一格都要广播一次，把整段聊天
+     *                    塞进每一帧纯属浪费——只有首次进房和 HTTP 拉取才需要。
+     */
+    private TetrisRoomStateVO toStateVO(TetrisRoom room, Long userId, boolean includeChat) {
         boolean spectator = userId == null || !room.contains(userId);
-        Map<Long, UserInternalVO> userMap = loadRoomUsers(room);
-        Map<Long, GameUserProfile> profileMap = loadRoomProfiles(room);
-        GobangRoomParticipantVO player1 = toParticipant(room.getPlayer1UserId(), "PLAYER1", room.getStartedAt().getTime(), userMap, profileMap);
-        GobangRoomParticipantVO player2 = toParticipant(room.getPlayer2UserId(), "PLAYER2", room.getStartedAt().getTime(), userMap, profileMap);
+        Map<Long, UserInternalVO> userMap = userSnapshotOf(room);
+        Map<Long, GameUserProfile> profileMap = profileSnapshotOf(room);
+        long startedAtMs = room.getStartedAt().getTime();
+        GobangRoomParticipantVO player1 = toParticipant(room.getPlayer1UserId(), "PLAYER1", startedAtMs, userMap, profileMap);
+        GobangRoomParticipantVO player2 = toParticipant(room.getPlayer2UserId(), "PLAYER2", startedAtMs, userMap, profileMap);
         Long opponentId = spectator ? null : room.opponentOf(userId);
         GobangRoomParticipantVO opponentPlayer = null;
         if (opponentId != null) {
@@ -575,9 +621,11 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         }
         int redScore = room.scoreOf(room.getRedUserId());
         int blueScore = room.scoreOf(room.getBlueUserId());
-        int leftPercent = calcPkBarPercent(redScore, blueScore);
-        TetrisBoardViewVO myBoard = null;
-        TetrisBoardViewVO opponentBoard = null;
+        int redLines = room.linesOf(room.getRedUserId());
+        int blueLines = room.linesOf(room.getBlueUserId());
+        int leftPercent = calcPkBarPercent(redLines, blueLines);
+        TetrisBoardViewVO myBoard;
+        TetrisBoardViewVO opponentBoard;
         if (!spectator) {
             myBoard = toBoardView(room.stateOf(userId), true);
             opponentBoard = toBoardView(room.stateOf(opponentId), false);
@@ -585,7 +633,6 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             myBoard = toBoardView(room.stateOf(room.getPlayer1UserId()), false);
             opponentBoard = toBoardView(room.stateOf(room.getPlayer2UserId()), false);
         }
-        List<GobangRoomParticipantVO> spectators = buildSpectators(room, userMap, profileMap);
         return new TetrisRoomStateVO(
                 room.getRoomId(),
                 userId,
@@ -602,21 +649,38 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                 opponentBoard,
                 redScore,
                 blueScore,
+                redLines,
+                blueLines,
+                Math.max(0L, room.getDeadlineMs() - System.currentTimeMillis()),
                 leftPercent,
                 opponentPlayer,
                 player1,
                 player2,
-                spectators,
-                spectators.size(),
+                countSpectators(room),
                 gameConnectionRegistry.countRoomOnline(room.getRoomId()),
-                new ArrayList<>(room.getChatHistory())
+                includeChat ? new ArrayList<>(room.getChatHistory()) : List.of()
         );
     }
 
-    private int calcPkBarPercent(int redScore, int blueScore) {
-        int total = Math.max(1, redScore + blueScore);
-        int percent = (int) Math.round(redScore * 100.0 / total);
-        return Math.max(5, Math.min(95, percent));
+    // 观战人数：房里在线的人减去两位对局玩家
+    private int countSpectators(TetrisRoom room) {
+        int count = 0;
+        for (Long id : gameConnectionRegistry.roomUserIds(room.getRoomId())) {
+            if (id != null && !room.contains(id)) {
+                count++;
+            }
+        }
+        return count;
+    }
+    // 顶部进度条按消行数分配左右宽度。双方都是 0 时必须给 50，
+    // 原来的写法在 0:0 会算出 0% 再被夹到 5%，开局进度条就是歪的
+    private int calcPkBarPercent(int redLines, int blueLines) {
+        int total = redLines + blueLines;
+        if (total <= 0 || redLines == blueLines) {
+            return 50;
+        }
+        int percent = (int) Math.round(redLines * 100.0 / total);
+        return Math.max(15, Math.min(85, percent));
     }
 
     private TetrisBoardViewVO toBoardView(TetrisPlayerState state, boolean revealHoldNext) {
@@ -659,62 +723,63 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         return new TetrisCurPieceVO(block.getType(), block.getXy(), block.getShape());
     }
 
-    private Map<Long, GameUserProfile> loadRoomProfiles(TetrisRoom room) {
-        List<Long> userIds = new ArrayList<>();
-        addRealUserId(userIds, room.getPlayer1UserId());
-        addRealUserId(userIds, room.getPlayer2UserId());
-        gameConnectionRegistry.roomUserIds(room.getRoomId()).forEach(id -> addRealUserId(userIds, id));
-        if (userIds.isEmpty()) {
-            return Map.of();
+    /**
+     * 房内两位玩家的用户资料。
+     *
+     * <p>棋盘每推进一格就要广播一次状态，而一次广播会对房里每个 session 各生成一份 VO。
+     * 以前每份 VO 都去查一次 auth（Feign）和 profile 表，手速快的时候一个房间每秒能打出
+     * 几十次跨域调用，全都只为了拿两个一局里根本不会变的昵称头像。这里在房间上缓存一次。
+     *
+     * <p>观战者不在缓存里——观战席现在只报人数不报名单，不需要他们的资料。
+     */
+    private Map<Long, UserInternalVO> userSnapshotOf(TetrisRoom room) {
+        Map<Long, UserInternalVO> cached = room.getUserSnapshot();
+        if (cached != null) {
+            return cached;
         }
-        Map<Long, GameUserProfile> profileMap = new HashMap<>();
-        gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
-                .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
-                .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
-                .in(GameUserProfile::getUserId, userIds))
-                .forEach(profile -> profileMap.put(profile.getUserId(), profile));
-        return profileMap;
+        loadSnapshots(room);
+        Map<Long, UserInternalVO> loaded = room.getUserSnapshot();
+        return loaded == null ? Map.of() : loaded;
     }
 
-    private Map<Long, UserInternalVO> loadRoomUsers(TetrisRoom room) {
+    private Map<Long, GameUserProfile> profileSnapshotOf(TetrisRoom room) {
+        Map<Long, GameUserProfile> cached = room.getProfileSnapshot();
+        if (cached != null) {
+            return cached;
+        }
+        loadSnapshots(room);
+        Map<Long, GameUserProfile> loaded = room.getProfileSnapshot();
+        return loaded == null ? Map.of() : loaded;
+    }
+
+    private void loadSnapshots(TetrisRoom room) {
         List<Long> userIds = new ArrayList<>();
         addRealUserId(userIds, room.getPlayer1UserId());
         addRealUserId(userIds, room.getPlayer2UserId());
-        gameConnectionRegistry.roomUserIds(room.getRoomId()).forEach(id -> addRealUserId(userIds, id));
         if (userIds.isEmpty()) {
-            return Map.of();
+            room.cacheSnapshots(Map.of(), Map.of());
+            return;
         }
         Map<Long, UserInternalVO> userMap = new HashMap<>();
-        gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
-        return userMap;
+        Map<Long, GameUserProfile> profileMap = new HashMap<>();
+        try {
+            gameUserLookupService.listByIds(userIds).forEach(user -> userMap.put(user.getId(), user));
+            gameUserProfileMapper.selectList(new LambdaQueryWrapper<GameUserProfile>()
+                    .eq(GameUserProfile::getGameCode, GameConstants.TETRIS_PK)
+                    .eq(GameUserProfile::getDeleteState, GameConstants.NOT_DELETED)
+                    .in(GameUserProfile::getUserId, userIds))
+                    .forEach(profile -> profileMap.put(profile.getUserId(), profile));
+        } catch (Exception e) {
+            // 查不到就退化成没有昵称头像，绝不能因为拉资料失败把对局卡住
+            log.warn("加载俄罗斯方块房间用户资料失败 roomId={}", room.getRoomId(), e);
+            return;
+        }
+        room.cacheSnapshots(userMap, profileMap);
     }
-
     private void addRealUserId(List<Long> userIds, Long userId) {
         if (userId != null && userId > 0 && !userIds.contains(userId)) {
             userIds.add(userId);
         }
-    }
-
-    private List<GobangRoomParticipantVO> buildSpectators(
-            TetrisRoom room,
-            Map<Long, UserInternalVO> userMap,
-            Map<Long, GameUserProfile> profileMap
-    ) {
-        Set<Long> onlineIds = gameConnectionRegistry.roomUserIds(room.getRoomId());
-        List<GobangRoomParticipantVO> spectators = new ArrayList<>();
-        onlineIds.forEach(id -> {
-            if (id != null && !room.contains(id)) {
-                spectators.add(toParticipant(
-                        id,
-                        "SPECTATOR",
-                        room.getSpectatorJoinedAt().getOrDefault(id, System.currentTimeMillis()),
-                        userMap,
-                        profileMap
-                ));
-            }
-        });
-        spectators.sort(Comparator.comparing(GobangRoomParticipantVO::getJoinedAtMs));
-        return spectators;
     }
 
     private GobangRoomParticipantVO toParticipant(
@@ -803,6 +868,19 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         } catch (Exception e) {
             log.debug("发布俄罗斯方块定向状态失败 roomId={}, error={}", room.getRoomId(), e.getMessage());
         }
+    }
+
+    // 表情只接受站内地址：相对路径，或配置里那个 OSS 前缀
+    private boolean isTrustedEmojiUrl(String url) {
+        if (url == null || url.isBlank() || url.length() > 512) {
+            return false;
+        }
+        String trimmed = url.trim();
+        if (trimmed.startsWith("/")) {
+            return !trimmed.startsWith("//");
+        }
+        String prefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
+        return !prefix.isEmpty() && trimmed.startsWith(prefix);
     }
 
     private void sendRoomError(String roomId, Long userId, String requestId, String message) {

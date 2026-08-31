@@ -29,6 +29,9 @@ public final class TetrisEngineConstants {
 
     public static final int EACH_LINES = 20;
 
+    // 竞速局时长：到点按消行数判定，消行数相同再比分数
+    public static final long RACE_DURATION_MS = 3 * 60 * 1000L;
+
     static {
         Map<String, int[][]> shapes = new HashMap<>();
         shapes.put("I", new int[][]{{1, 1, 1, 1}});
@@ -63,10 +66,6 @@ public final class TetrisEngineConstants {
         return matrix;
     }
 
-    // PK 消行与单人模式一致：只更新己方棋盘，不向对手发送垃圾行
-    public static int garbageLinesForClear(int lines) {
-        return 0;
-    }
 
     // 连击加成百分比：第 2 次 +10%，第 3 次 +15%，第 4 次起 +20%
     public static int comboBonusPercent(int comboCount) {

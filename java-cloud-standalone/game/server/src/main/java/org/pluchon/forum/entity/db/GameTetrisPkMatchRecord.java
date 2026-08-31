@@ -43,6 +43,12 @@ public class GameTetrisPkMatchRecord {
     // 玩家2得分
     private Integer player2Score;
 
+    // 玩家1消行数：竞速的胜负先看它
+    private Integer player1Lines;
+
+    // 玩家2消行数
+    private Integer player2Lines;
+
     // 结束原因
     private String endReason;
 

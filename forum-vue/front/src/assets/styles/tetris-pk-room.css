@@ -485,3 +485,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 房间号右侧的观战人数。只报数量，不再把观战者的昵称头像战绩摆出来 */
+.tetris-room-viewers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: rgba(237, 245, 243, 0.72);
+}
+
+/* 分数卡片：消行数是主角，分数退居小字 */
+.tetris-score-sub,
+.tetris-dual-score-row i {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  color: rgba(237, 245, 243, 0.5);
+}
+
+/* 最后 30 秒 */
+.tetris-time-card.is-urgent strong {
+  color: #ff6b6b;
+  animation: tetris-time-pulse 1s ease-in-out infinite;
+}
+
+@keyframes tetris-time-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.pk-score-unit {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.7;
+}
+
+/* VS 徽章现在跟着接缝走，补上和接缝一致的过渡 */
+.tetris-pk-vs-badge {
+  transform: translate(-50%, -50%);
+  transition: left 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 聊天输入：发送按钮单独占一行，输入框随内容长高 */
+.tetris-pk-chat-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tetris-pk-chat-input :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  line-height: 1.6;
+  /* 三行封顶后内部滚动，别把聊天列表挤没 */
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.tetris-pk-chat-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tetris-pk-chat-actions .game-chat-send {
+  flex: 1;
+}
+
+.tetris-pk-result-reason {
+  color: rgba(237, 245, 243, 0.62);
+}
+
+.tetris-pk-result-back {
+  margin-top: 10px;
+  padding: 7px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf5f3;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tetris-pk-result-back:hover {
+  border-color: rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tetris-race-rule p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(237, 245, 243, 0.62);
+}
