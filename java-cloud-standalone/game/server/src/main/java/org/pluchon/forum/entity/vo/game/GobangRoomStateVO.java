@@ -71,11 +71,8 @@ public class GobangRoomStateVO {
 
     // 当前用户视角下的对手展示信息
     private GobangRoomParticipantVO opponentPlayer;
-
-    // 当前在线观战用户，按加入观战时间升序
-    private List<GobangRoomParticipantVO> spectators;
-
     // 当前观战人数
+    // 观战人数。只报数量不报名单：名单会把观战者的昵称头像战绩推给房里所有人
     private Integer spectatorCount;
 
     // 当前房间 WebSocket 在线人数

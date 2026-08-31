@@ -2,10 +2,9 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { confirmDialog } from '@/utils/appDialog'
-import { ChatDotRound, Flag, HomeFilled, MoreFilled, Timer, UserFilled } from '@element-plus/icons-vue'
+import { ChatDotRound, Flag, HomeFilled, Timer, UserFilled } from '@element-plus/icons-vue'
 import { getGobangRoom, surrenderGobangRoom } from '@/api/game'
 import PurchasedEmojiPackPopover from '@/components/common/PurchasedEmojiPackPopover.vue'
-import AppPagination from '@/components/common/AppPagination.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import { modelIcon } from '@/constants/aiModels'
@@ -49,9 +48,6 @@ const emojiPacks = ref([])
 const clock = ref(Date.now())
 const syncedAt = ref(Date.now())
 const finishCountdown = ref(60)
-const spectatorDialogVisible = ref(false)
-const spectatorPage = ref(1)
-const spectatorPageSize = 10
 const emojiDialogVisible = ref(false)
 const opponentStatsVisible = ref(false)
 const room = reactive({
@@ -75,7 +71,6 @@ const room = reactive({
   blackPlayer: null,
   whitePlayer: null,
   opponentPlayer: null,
-  spectators: [],
   spectatorCount: 0,
   roomOnlineCount: 0,
 })
@@ -96,15 +91,28 @@ const roomSocket = useGameWebSocket(`games/gobang/rooms/${roomId.value}`, {
       chatMessages.value.push(message.data)
       scrollChatToBottom()
     }
+    // 通知只带 userId，得分清是自己还是对手
     if (message.type === 'peer_disconnected') {
-      peerStateText.value = '对手暂时离线，保留 60 秒重连窗口'
+      if (Number(message.data?.userId) !== Number(room.thisUserId)) {
+        peerStateText.value = '对手暂时离线，保留 60 秒重连窗口'
+      }
     }
     if (message.type === 'peer_reconnected') {
-      peerStateText.value = '对手已重连'
+      const isMe = Number(message.data?.userId) === Number(room.thisUserId)
+      const text = isMe ? '已重新连上' : '对手已重连'
+      peerStateText.value = text
       window.setTimeout(() => {
-        if (peerStateText.value === '对手已重连') peerStateText.value = ''
+        if (peerStateText.value === text) peerStateText.value = ''
       }, 2400)
     }
+  },
+  // 断线期间棋钟没有停，回来得按服务端的状态重画，而不是接着用断线前的棋盘
+  onReconnect() {
+    void loadRoom()
+  },
+  onReconnectFailed() {
+    peerStateText.value = '连接已断开'
+    ElMessage.error('实时连接断开且重连失败，请刷新页面')
   },
 })
 
@@ -181,13 +189,6 @@ const opponentProfile = computed(() => {
   if (room.opponentPlayer) return room.opponentPlayer
   return myChess.value === 1 ? whitePlayer.value : blackPlayer.value
 })
-const visibleSpectators = computed(() => spectators.value.slice(0, 6))
-const hiddenSpectatorCount = computed(() => Math.max(0, spectators.value.length - visibleSpectators.value.length))
-const spectatorRows = computed(() => {
-  const start = (spectatorPage.value - 1) * spectatorPageSize
-  return spectators.value.slice(start, start + spectatorPageSize)
-})
-const spectators = computed(() => Array.isArray(room.spectators) ? room.spectators : [])
 const winnerText = computed(() => {
   if (!isFinished.value) return ''
   if (!room.winnerUserId) return '本局结束'
@@ -288,8 +289,7 @@ function applyRoomState(data) {
   room.blackPlayer = data.blackPlayer || null
   room.whitePlayer = data.whitePlayer || null
   room.opponentPlayer = data.opponentPlayer || null
-  room.spectators = Array.isArray(data.spectators) ? data.spectators : []
-  room.spectatorCount = Number(data.spectatorCount) || room.spectators.length
+  room.spectatorCount = Number(data.spectatorCount) || 0
   room.roomOnlineCount = Number(data.roomOnlineCount) || 0
   syncedAt.value = Date.now()
   if (room.roomStatus === 'FINISHED') {
@@ -391,10 +391,10 @@ function sendEmoji(url) {
 }
 
 function participantName(userId) {
+  // 观战名单不再下发，房里能认出名字的只有两位对局玩家
   const candidates = [
     blackPlayer.value,
     whitePlayer.value,
-    ...spectators.value,
   ]
   const found = candidates.find((item) => item?.userId === userId)
   return found?.nickname || found?.username || `用户 ${userId}`

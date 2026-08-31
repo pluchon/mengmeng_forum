@@ -973,3 +973,42 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 观战只报人数，不再是可点开名单的按钮 */
+.gobang-spectator-count.is-static {
+  cursor: default;
+}
+
+/* 聊天输入：输入框独占一行、表情在框内右下角，发送按钮独占下一行 */
+.gobang-chat-input--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gobang-chat-field {
+  position: relative;
+}
+
+.gobang-chat-input--stacked :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  line-height: 1.6;
+  /* 给右下角的表情按钮让出位置 */
+  padding-right: 38px;
+  /* 三行封顶后内部滚动，别把聊天列表挤没 */
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.gobang-chat-emoji {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gobang-chat-input--stacked .game-chat-send {
+  width: 100%;
+}

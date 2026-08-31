@@ -99,6 +99,9 @@ public class GobangRoom {
     // 断线重连截止时间：userId > 截止时间戳
     private final ConcurrentHashMap<Long, Long> disconnectDeadlines = new ConcurrentHashMap<>();
 
+    // 每人最近一次发言时刻，用于限频
+    private final ConcurrentHashMap<Long, Long> lastChatAtMs = new ConcurrentHashMap<>();
+
     public GobangRoom(String roomId, Long blackUserId, Long whiteUserId) {
         this.roomId = roomId;
         this.blackUserId = blackUserId;
@@ -122,6 +125,16 @@ public class GobangRoom {
 
     public int chessOf(Long userId) {
         return blackUserId.equals(userId) ? 1 : 2;
+    }
+
+    // 距离上次发言不足 interval 毫秒就拒绝，同时记下本次时刻
+    public boolean tryChat(Long userId, long nowMs, long intervalMs) {
+        Long last = lastChatAtMs.get(userId);
+        if (last != null && nowMs - last < intervalMs) {
+            return false;
+        }
+        lastChatAtMs.put(userId, nowMs);
+        return true;
     }
 
     public long currentTurnRemainingMs(long now) {

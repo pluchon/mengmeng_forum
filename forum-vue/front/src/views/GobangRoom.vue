@@ -31,31 +31,11 @@
             <i :class="['gobang-side-piece', secondaryPlayerCard.chess === 2 ? 'is-white' : 'is-black']" />
           </div>
 
-          <button type="button" class="gobang-spectator-count" @click="spectatorDialogVisible = true">
+          <!-- 只报人数不报名单：名单会把观战者的昵称头像战绩推给房里所有人 -->
+          <div class="gobang-spectator-count is-static">
             <el-icon><UserFilled /></el-icon>
             观战人数 {{ room.spectatorCount || 0 }}
-          </button>
-
-          <section class="gobang-spectator-card">
-            <div class="gobang-spectator-list" v-if="visibleSpectators.length">
-              <div
-                v-for="viewer in visibleSpectators"
-                :key="viewer.userId"
-                class="gobang-mini-user"
-              >
-                <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
-                  <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
-                  <b v-else>{{ avatarText(viewer) }}</b>
-                </span>
-                <em>{{ viewer.nickname || viewer.username }}</em>
-              </div>
-              <button v-if="hiddenSpectatorCount" type="button" class="gobang-more-users" @click="spectatorDialogVisible = true">
-                <el-icon><MoreFilled /></el-icon>
-                还有 {{ hiddenSpectatorCount }} 人
-              </button>
-            </div>
-            <div v-else class="gobang-side-empty">暂无观战玩家</div>
-          </section>
+          </div>
 
           <section v-if="isSpectator" class="gobang-observer-card">
             <strong>观战视角</strong>
@@ -147,18 +127,22 @@
               </div>
               <div v-if="!chatMessages.length" class="gobang-chat-empty">暂无消息</div>
             </div>
-            <div v-if="!isSpectator" class="gobang-chat-input">
-              <el-input
-                v-model="chatText"
-                :disabled="!canChat"
-                maxlength="200"
-                placeholder="发送消息"
-                @keyup.enter="sendChat"
-              >
-                <template #suffix>
+            <div v-if="!isSpectator" class="gobang-chat-input gobang-chat-input--stacked">
+              <div class="gobang-chat-field">
+                <el-input
+                  v-model="chatText"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  resize="none"
+                  :disabled="!canChat"
+                  maxlength="200"
+                  placeholder="说点什么…"
+                  @keydown.enter.exact.prevent="sendChat"
+                />
+                <span class="gobang-chat-emoji">
                   <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendEmoji" />
-                </template>
-              </el-input>
+                </span>
+              </div>
               <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
                 发送
               </el-button>
@@ -189,28 +173,6 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="spectatorDialogVisible" title="观战玩家" width="460px" destroy-on-close>
-      <div class="gobang-spectator-dialog-list">
-        <div v-for="viewer in spectatorRows" :key="viewer.userId" class="gobang-dialog-user">
-          <span class="gobang-avatar" :class="{ 'is-vip': viewer.vip }">
-            <img v-if="viewer.avatarUrl" :src="viewer.avatarUrl" alt="" />
-            <b v-else>{{ avatarText(viewer) }}</b>
-          </span>
-          <strong>{{ viewer.nickname || viewer.username }}</strong>
-        </div>
-        <div v-if="!spectatorRows.length" class="gobang-side-empty">暂无观战玩家</div>
-      </div>
-      <div class="gobang-dialog-pager">
-        <AppPagination
-          v-model:current-page="spectatorPage"
-          size="small"
-          :page-size="spectatorPageSize"
-          :total="spectators.length"
-          :pager-count="5"
-          :show-jumper="false"
-        />
-      </div>
-    </el-dialog>
   </div>
 </template>
 

@@ -48,6 +48,7 @@ import org.pluchon.forum.service.impl.game.ai.GobangThreatDetector;
 import org.pluchon.forum.service.impl.game.guard.GobangActionContext;
 import org.pluchon.forum.service.impl.game.guard.GobangGuardChain;
 import org.pluchon.forum.service.impl.game.guard.GobangGuardResult;
+import org.pluchon.forum.common.config.OssConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -78,6 +79,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GobangRoomServiceImpl implements GobangRoomService {
 
     private static final long RECONNECT_WINDOW_MS = GameConstants.GOBANG_RECONNECT_WINDOW_MS;
+
+    // 两条发言之间的最小间隔，挡住刷屏
+    private static final long CHAT_INTERVAL_MS = 1_000L;
 
     private static final int AI_PRO_SCORE_THRESHOLD = 1600;
 
@@ -158,6 +162,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
 
     @Autowired
     private GameMatchRoomHelper gameMatchRoomHelper;
+
+    @Autowired
+    private OssConfig ossConfig;
 
     private final GobangGuardChain gobangGuardChain = GobangGuardChain.defaultChain();
 
@@ -301,6 +308,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             broadcast(roomId, GameWsResponse.ok("move_accepted", requestId, moveVO));
             if (win) {
                 finishRoom(room, winnerId, GameConstants.END_FIVE);
+            } else if (isBoardFull(room.getBoard())) {
+                // 15×15 下满而无人连珠，是平局。以前没有这条判定，
+                // 轮到的一方无处可下只能干等到超时判负
+                finishRoom(room, null, GameConstants.END_DRAW);
             } else if (room.isAiRoom() && GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
                 scheduleAiMove(room);
             }
@@ -331,16 +342,45 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (rejectIfGuardFailed(context)) {
             return;
         }
+        if (!room.tryChat(userId, System.currentTimeMillis(), CHAT_INTERVAL_MS)) {
+            sendRoomError(roomId, userId, requestId, "发言太快了，慢一点");
+            return;
+        }
         String type = context.chatMessageType();
         String content = context.chatContent();
+        if ("EMOJI".equals(type)) {
+            // 表情的地址会被前端当成 <img src> 渲染给房里所有人，
+            // 不限制来源等于让任何人往别人页面里塞任意外链
+            String emojiUrl = request == null || request.getEmojiUrl() == null || request.getEmojiUrl().isBlank()
+                    ? content
+                    : request.getEmojiUrl().trim();
+            if (!isTrustedEmojiUrl(emojiUrl)) {
+                sendRoomError(roomId, userId, requestId, "表情来源不合法");
+                return;
+            }
+            content = emojiUrl;
+        }
         GobangChatVO vo = new GobangChatVO(
                 userId,
                 type,
                 content,
                 request == null ? null : request.getEmojiId(),
-                request == null ? null : request.getEmojiUrl()
+                "EMOJI".equals(type) ? content : null
         );
         broadcast(roomId, GameWsResponse.ok("room_chat", requestId, vo));
+    }
+
+    // 表情只接受站内地址：相对路径，或配置里那个 OSS 前缀
+    private boolean isTrustedEmojiUrl(String url) {
+        if (url == null || url.isBlank() || url.length() > 512) {
+            return false;
+        }
+        String trimmed = url.trim();
+        if (trimmed.startsWith("/")) {
+            return !trimmed.startsWith("//");
+        }
+        String prefix = ossConfig.getUrlPrefix() == null ? "" : ossConfig.getUrlPrefix().trim();
+        return !prefix.isEmpty() && trimmed.startsWith(prefix);
     }
 
     private void requireRoomActionParams(String roomId, Long userId) {
@@ -376,7 +416,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 return;
             }
             room.getDisconnectDeadlines().put(userId, System.currentTimeMillis() + RECONNECT_WINDOW_MS);
-            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, toStateVO(room, room.opponentOf(userId))));
+            // 只广播「谁掉线了」。以前发的是整份按某一个人视角生成的状态，
+            // 房里所有人收到同一份，视角本身就是错的
+            broadcast(roomId, GameWsResponse.ok("peer_disconnected", null, Map.of("userId", userId)));
         }
     }
 
@@ -460,12 +502,22 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                     continue;
                 }
+                List<Long> expired = new ArrayList<>();
                 for (Map.Entry<Long, Long> entry : room.getDisconnectDeadlines().entrySet()) {
                     if (entry.getValue() <= now) {
-                        finishRoom(room, room.opponentOf(entry.getKey()), GameConstants.END_DISCONNECT);
-                        break;
+                        expired.add(entry.getKey());
                     }
                 }
+                if (expired.isEmpty()) {
+                    continue;
+                }
+                if (expired.size() >= 2) {
+                    // 两个人都掉线超时，谁也不该赢。以前是取遍历到的第一个判负，
+                    // 也就是由哈希表的迭代顺序决定谁输
+                    finishRoom(room, null, GameConstants.END_DRAW);
+                    continue;
+                }
+                finishRoom(room, room.opponentOf(expired.get(0)), GameConstants.END_DISCONNECT);
             }
         }
     }
@@ -714,7 +766,6 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         if (opponentId != null) {
             opponentPlayer = opponentId.equals(room.getBlackUserId()) ? blackPlayer : whitePlayer;
         }
-        List<GobangRoomParticipantVO> spectators = buildSpectators(room, userMap, profileMap);
         return new GobangRoomStateVO(
                 room.getRoomId(),
                 userId,
@@ -736,8 +787,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                 blackPlayer,
                 whitePlayer,
                 opponentPlayer,
-                spectators,
-                spectators.size(),
+                countSpectators(room),
                 gameConnectionRegistry.countRoomOnline(room.getRoomId())
         );
     }
@@ -778,29 +828,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
     }
 
-    private List<GobangRoomParticipantVO> buildSpectators(
-            GobangRoom room,
-            Map<Long, UserInternalVO> userMap,
-            Map<Long, GameUserProfile> profileMap
-    ) {
-        Set<Long> onlineIds = gameConnectionRegistry.roomUserIds(room.getRoomId());
-        List<GobangRoomParticipantVO> spectators = new ArrayList<>();
-        onlineIds.forEach(userId -> {
-            if (userId != null && !room.contains(userId)) {
-                spectators.add(toParticipant(
-                        userId,
-                        "SPECTATOR",
-                        room.getSpectatorJoinedAt().getOrDefault(userId, System.currentTimeMillis()),
-                        null,
-                        userMap,
-                        profileMap
-                ));
+    // 观战人数：房里在线的人减去两位对局玩家
+    private int countSpectators(GobangRoom room) {
+        int count = 0;
+        for (Long id : gameConnectionRegistry.roomUserIds(room.getRoomId())) {
+            if (id != null && !room.contains(id)) {
+                count++;
             }
-        });
-        spectators.sort(Comparator.comparing(GobangRoomParticipantVO::getJoinedAtMs));
-        return spectators;
+        }
+        return count;
     }
-
     private GobangRoomParticipantVO toParticipant(
             Long userId,
             String role,
@@ -879,6 +916,17 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         gameGobangRoomMoveMapper.insert(move);
     }
 
+    private boolean isBoardFull(int[][] board) {
+        for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
+                if (board[row][col] == 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private int countMoves(GobangRoom room) {
         int count = 0;
         int[][] board = room.getBoard();
@@ -904,6 +952,16 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         CompletableFuture.runAsync(() -> executeAiTurn(room.getRoomId(), llm, minThinkMs), gameAiExecutor);
     }
 
+    /**
+     * AI 的一手。
+     *
+     * <p>思考必须在房间锁之外做。以前整段 chooseAiMove 都在 synchronized(room) 里，
+     * 而它可能跨服务去问大模型；每秒扫一遍所有房间的超时判定要拿同一把锁，
+     * 于是一个房间等大模型，全部房间的计时与断线判定都被拖住。
+     *
+     * <p>另外 AI 必须落下一手。原来选点失败会直接 return，此时轮次还挂在 AI 身上，
+     * 人类就干等到一分钟单步超时，白赢一局——而人机对局是计分的。
+     */
     private void executeAiTurn(String roomId, boolean consultLlm, long minThinkMs) {
         long started = System.currentTimeMillis();
         try {
@@ -911,17 +969,18 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             if (room == null) {
                 return;
             }
-            int[] move;
+            int[][] snapshot;
+            GobangAiDifficultyProfile difficulty;
             synchronized (room) {
                 if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
                         || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
                     return;
                 }
-                move = chooseAiMove(room, consultLlm);
+                snapshot = room.copyBoard();
+                difficulty = difficultyOf(room);
             }
-            if (move == null) {
-                return;
-            }
+            // 锁外思考：这一步可能要跨服务问大模型
+            int[] move = chooseAiMove(room, snapshot, difficulty, consultLlm);
             long elapsed = System.currentTimeMillis() - started;
             long wait = minThinkMs - elapsed;
             if (wait > 0) {
@@ -932,7 +991,13 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                         || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
                     return;
                 }
-                if (!inBoard(move[0], move[1]) || room.getBoard()[move[0]][move[1]] != 0) {
+                // 锁外思考期间棋盘不会变（这本来就是 AI 的回合），但落点仍然要复核
+                if (!isPlayableCell(room.getBoard(), move)) {
+                    move = fallbackAiMove(room.getBoard(), difficulty);
+                }
+                if (move == null) {
+                    // 一个空位都没有了：棋盘下满，按平局收场，别让人等到超时
+                    finishRoom(room, null, GameConstants.END_DRAW);
                     return;
                 }
                 room.setAiMoveCount(room.getAiMoveCount() + 1);
@@ -943,6 +1008,10 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            // 思考失败也必须把这一手走掉，否则轮次卡在 AI 身上直到超时
+            log.warn("五子棋 AI 落子失败 roomId={}", roomId, e);
+            forceAiFallbackMove(roomId);
         } finally {
             GobangRoom room = rooms.get(roomId);
             if (room != null) {
@@ -952,28 +1021,73 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         }
     }
 
-    private int[] chooseAiMove(GobangRoom room, boolean consultLlm) {
-        GobangAiDifficultyProfile difficulty = difficultyOf(room);
-        GobangThreatDetector.ThreatHit forced = gobangAiEngine.findForcedThreat(room.getBoard());
+    private boolean isPlayableCell(int[][] board, int[] move) {
+        return move != null
+                && move.length == 2
+                && inBoard(move[0], move[1])
+                && board[move[0]][move[1]] == 0;
+    }
+
+    // 本地引擎再选一次；仍然不行就退到第一个空位——宁可下一手烂棋，也不能让人干等到超时
+    private int[] fallbackAiMove(int[][] board, GobangAiDifficultyProfile difficulty) {
+        try {
+            int[] local = gobangAiEngine.chooseMove(board, difficulty);
+            if (isPlayableCell(board, local)) {
+                return local;
+            }
+        } catch (Exception e) {
+            log.debug("五子棋本地引擎兜底选点失败: {}", e.getMessage());
+        }
+        for (int row = 0; row < GameConstants.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameConstants.BOARD_SIZE; col++) {
+                if (board[row][col] == 0) {
+                    return new int[]{row, col};
+                }
+            }
+        }
+        return null;
+    }
+
+    private void forceAiFallbackMove(String roomId) {
+        GobangRoom room = rooms.get(roomId);
+        if (room == null) {
+            return;
+        }
+        synchronized (room) {
+            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())
+                    || !GameConstants.AI_USER_ID.equals(room.getCurrentTurnUserId())) {
+                return;
+            }
+            int[] move = fallbackAiMove(room.getBoard(), difficultyOf(room));
+            if (move == null) {
+                finishRoom(room, null, GameConstants.END_DRAW);
+                return;
+            }
+            room.setAiMoveCount(room.getAiMoveCount() + 1);
+            handleMove(roomId, GameConstants.AI_USER_ID, move[0], move[1], null);
+        }
+    }
+    private int[] chooseAiMove(GobangRoom room, int[][] board, GobangAiDifficultyProfile difficulty, boolean consultLlm) {
+        GobangThreatDetector.ThreatHit forced = gobangAiEngine.findForcedThreat(board);
         if (forced != null) {
             room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
             return new int[] { forced.row(), forced.col() };
         }
         if (consultLlm) {
-            int[] remoteMove = chooseRemoteAiMove(room, difficulty);
+            int[] remoteMove = chooseRemoteAiMove(room, board, difficulty);
             if (remoteMove != null) {
                 return remoteMove;
             }
         }
         room.setAiModelName(GameAiPlanner.formatModelLabel(room.getAiModelCode(), false, false));
-        return gobangAiEngine.chooseMove(room.getBoard(), difficulty);
+        return gobangAiEngine.chooseMove(board, difficulty);
     }
 
-    private int[] chooseRemoteAiMove(GobangRoom room, GobangAiDifficultyProfile difficulty) {
+    private int[] chooseRemoteAiMove(GobangRoom room, int[][] board, GobangAiDifficultyProfile difficulty) {
         try {
-            AiGobangBoardInsight insight = gobangAiEngine.buildBoardInsight(room.getBoard(), difficulty);
+            AiGobangBoardInsight insight = gobangAiEngine.buildBoardInsight(board, difficulty);
             AiGobangMoveRequest request = new AiGobangMoveRequest();
-            request.setBoard(room.copyBoard());
+            request.setBoard(board);
             request.setAiChess(2);
             request.setModelCode(room.getAiModelCode());
             request.setInsight(insight);
