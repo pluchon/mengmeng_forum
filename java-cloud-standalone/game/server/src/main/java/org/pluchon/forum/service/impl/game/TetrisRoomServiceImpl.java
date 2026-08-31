@@ -15,6 +15,7 @@ import org.pluchon.forum.entity.db.GameUserProfile;
 import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.entity.dto.game.TetrisChatRequest;
 import org.pluchon.forum.entity.vo.game.GobangRoomParticipantVO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.TetrisActiveRoomVO;
 import org.pluchon.forum.entity.vo.game.TetrisBoardViewVO;
 import org.pluchon.forum.entity.vo.game.TetrisChatVO;
@@ -296,21 +297,34 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     }
 
     @Override
-    public List<TetrisActiveRoomVO> listActiveRooms() {
-        List<TetrisActiveRoomVO> rows = new ArrayList<>();
-        Set<Long> userIds = new HashSet<>();
+    public PageResult<TetrisActiveRoomVO> pageActiveRooms(String roomId, Integer pageNum, Integer pageSize) {
+        String wanted = roomId == null ? "" : roomId.trim();
+        if (!wanted.isEmpty() && !GameRoomIdGenerator.isValidRoomId(wanted)) {
+            // 房间号固定 6 位数字，非法输入直接返回空而不是拿去查
+            return GameActiveRoomPaging.emptyPage(pageNum, pageSize);
+        }
+        List<TetrisRoom> matched = new ArrayList<>();
         for (TetrisRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
             }
+            if (!wanted.isEmpty() && !wanted.equals(room.getRoomId())) {
+                continue;
+            }
+            matched.add(room);
+        }
+        matched.sort(Comparator.comparing(TetrisRoom::getStartedAt,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        // 先分页再查用户信息
+        List<TetrisRoom> pageRooms = GameActiveRoomPaging.slice(matched, pageNum, pageSize);
+        Set<Long> userIds = new HashSet<>();
+        for (TetrisRoom room : pageRooms) {
             collectActiveUserId(userIds, room.getRedUserId());
             collectActiveUserId(userIds, room.getBlueUserId());
         }
         Map<Long, UserInternalVO> userMap = loadActiveRoomUsers(userIds);
-        for (TetrisRoom room : rooms.values()) {
-            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                continue;
-            }
+        List<TetrisActiveRoomVO> rows = new ArrayList<>(pageRooms.size());
+        for (TetrisRoom room : pageRooms) {
             rows.add(new TetrisActiveRoomVO(
                     room.getRoomId(),
                     room.getPlayer1UserId(),
@@ -324,8 +338,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
                     room.getStartedAt()
             ));
         }
-        rows.sort(Comparator.comparing(TetrisActiveRoomVO::getStartedAt).reversed());
-        return rows;
+        return GameActiveRoomPaging.toPage(rows, matched.size(), pageNum, pageSize);
     }
 
     private void collectActiveUserId(Set<Long> userIds, Long userId) {

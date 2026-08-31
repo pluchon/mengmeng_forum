@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.interfaces.game;
 
 import org.pluchon.forum.entity.vo.game.GobangRoomStateVO;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GobangActiveRoomVO;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
 import org.springframework.web.socket.WebSocketSession;
@@ -30,5 +31,11 @@ public interface GobangRoomService {
 
     void handleDisconnect(String roomId, Long userId, WebSocketSession session);
 
-    List<GobangActiveRoomVO> listActiveRooms();
+    /**
+     * 可观战房间分页。
+     *
+     * <p>roomId 非空时按房间号精确查询——原来是把全量房间下发给前端再本地过滤，
+     * 房间一多响应体会线性膨胀，而且「搜索」只能搜到已加载的那批。
+     */
+    PageResult<GobangActiveRoomVO> pageActiveRooms(String roomId, Integer pageNum, Integer pageSize);
 }

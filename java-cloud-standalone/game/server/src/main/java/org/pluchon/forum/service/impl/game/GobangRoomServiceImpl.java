@@ -22,6 +22,7 @@ import org.pluchon.forum.service.remote.GameAiGatewayService;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementCommand;
 import org.pluchon.forum.entity.bo.game.GameRankSettlementResult;
 import org.pluchon.forum.entity.dto.game.GobangChatRequest;
+import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.game.GobangActiveRoomVO;
 import org.pluchon.forum.entity.vo.game.GobangChatVO;
 import org.pluchon.forum.entity.vo.game.GobangMoveVO;
@@ -376,21 +377,34 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     }
 
     @Override
-    public List<GobangActiveRoomVO> listActiveRooms() {
-        List<GobangActiveRoomVO> rows = new ArrayList<>();
+    public PageResult<GobangActiveRoomVO> pageActiveRooms(String roomId, Integer pageNum, Integer pageSize) {
+        String wanted = roomId == null ? "" : roomId.trim();
+        if (!wanted.isEmpty() && !GameRoomIdGenerator.isValidRoomId(wanted)) {
+            // 房间号固定 6 位数字，非法输入直接返回空而不是拿去查
+            return GameActiveRoomPaging.emptyPage(pageNum, pageSize);
+        }
+        List<GobangRoom> matched = new ArrayList<>();
         Set<Long> userIds = new HashSet<>();
         for (GobangRoom room : rooms.values()) {
             if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
                 continue;
             }
+            if (!wanted.isEmpty() && !wanted.equals(room.getRoomId())) {
+                continue;
+            }
+            matched.add(room);
+        }
+        matched.sort(Comparator.comparing(GobangRoom::getStartedAt,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        // 先分页再查用户信息：原来是把所有房间的对局者一次性全查出来
+        List<GobangRoom> pageRooms = GameActiveRoomPaging.slice(matched, pageNum, pageSize);
+        for (GobangRoom room : pageRooms) {
             collectRealUserId(userIds, room.getBlackUserId());
             collectRealUserId(userIds, room.getWhiteUserId());
         }
         Map<Long, UserInternalVO> userMap = loadActiveRoomUsers(userIds);
-        for (GobangRoom room : rooms.values()) {
-            if (!GameConstants.ROOM_PLAYING.equals(room.getRoomStatus())) {
-                continue;
-            }
+        List<GobangActiveRoomVO> rows = new ArrayList<>(pageRooms.size());
+        for (GobangRoom room : pageRooms) {
             rows.add(new GobangActiveRoomVO(
                     room.getRoomId(),
                     room.getBlackUserId(),
@@ -402,8 +416,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
                     room.getStartedAt()
             ));
         }
-        rows.sort(Comparator.comparing(GobangActiveRoomVO::getStartedAt).reversed());
-        return rows;
+        return GameActiveRoomPaging.toPage(rows, matched.size(), pageNum, pageSize);
     }
 
     private void collectRealUserId(Set<Long> userIds, Long userId) {

@@ -26,7 +26,6 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().add(GameRedisKeys.lobbyOnline(), String.valueOf(userId));
             touchLobby(userId);
         } catch (Exception e) {
             log.debug("写入游戏大厅在线状态失败 userId={}, error={}", userId, e.getMessage());
@@ -39,8 +38,7 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().remove(GameRedisKeys.lobbyOnline(), String.valueOf(userId));
-            stringRedisTemplate.delete(GameRedisKeys.lobbyHeartbeat(userId));
+            stringRedisTemplate.opsForZSet().remove(GameRedisKeys.lobbyOnline(), String.valueOf(userId));
         } catch (Exception e) {
             log.debug("清理游戏大厅在线状态失败 userId={}, error={}", userId, e.getMessage());
         }
@@ -52,8 +50,8 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().add(GameRedisKeys.lobbyOnline(), String.valueOf(userId));
-            stringRedisTemplate.opsForValue().set(GameRedisKeys.lobbyHeartbeat(userId), "1", HEARTBEAT_TTL);
+            stringRedisTemplate.opsForZSet().add(GameRedisKeys.lobbyOnline(),
+                    String.valueOf(userId), System.currentTimeMillis());
         } catch (Exception e) {
             log.debug("刷新游戏大厅心跳失败 userId={}, error={}", userId, e.getMessage());
         }
@@ -70,7 +68,6 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().add(GameRedisKeys.gameOnline(gameCode), String.valueOf(userId));
             touchGame(gameCode, userId);
         } catch (Exception e) {
             log.debug("写入游戏在线状态失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
@@ -83,8 +80,7 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().remove(GameRedisKeys.gameOnline(gameCode), String.valueOf(userId));
-            stringRedisTemplate.delete(GameRedisKeys.gameHeartbeat(gameCode, userId));
+            stringRedisTemplate.opsForZSet().remove(GameRedisKeys.gameOnline(gameCode), String.valueOf(userId));
         } catch (Exception e) {
             log.debug("清理游戏在线状态失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
         }
@@ -96,8 +92,8 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
             return;
         }
         try {
-            stringRedisTemplate.opsForSet().add(GameRedisKeys.gameOnline(gameCode), String.valueOf(userId));
-            stringRedisTemplate.opsForValue().set(GameRedisKeys.gameHeartbeat(gameCode, userId), "1", HEARTBEAT_TTL);
+            stringRedisTemplate.opsForZSet().add(GameRedisKeys.gameOnline(gameCode),
+                    String.valueOf(userId), System.currentTimeMillis());
         } catch (Exception e) {
             log.debug("刷新游戏心跳失败 gameCode={}, userId={}, error={}", gameCode, userId, e.getMessage());
         }
@@ -111,25 +107,20 @@ public class RedisGameOnlineStateServiceImpl implements GameOnlineStateService {
         return countOnline(GameRedisKeys.gameOnline(gameCode), gameCode);
     }
 
+    /**
+     * 用 ZSet 的 score 存最后心跳时间戳。
+     *
+     * <p>原来是 Set 存 userId + 每人一个带 TTL 的心跳 key，计数时遍历 Set 逐个
+     * hasKey——在线 N 人就是 N 次往返，而首页会为每个游戏各调一次、每 5 秒一轮。
+     * 而且 Set 只有被扫到才清理，长期没人看的游戏会一直堆历史 ID。
+     * 现在固定两次往返，与在线人数无关。
+     */
     private int countOnline(String setKey, String gameCode) {
         try {
-            Set<String> userIds = stringRedisTemplate.opsForSet().members(setKey);
-            if (userIds == null || userIds.isEmpty()) {
-                return 0;
-            }
-            int count = 0;
-            for (String userId : userIds) {
-                String heartbeatKey = gameCode == null
-                        ? GameRedisKeys.lobbyHeartbeat(Long.valueOf(userId))
-                        : GameRedisKeys.gameHeartbeat(gameCode, Long.valueOf(userId));
-                Boolean alive = stringRedisTemplate.hasKey(heartbeatKey);
-                if (Boolean.TRUE.equals(alive)) {
-                    count++;
-                } else {
-                    stringRedisTemplate.opsForSet().remove(setKey, userId);
-                }
-            }
-            return count;
+            long now = System.currentTimeMillis();
+            stringRedisTemplate.opsForZSet().removeRangeByScore(setKey, 0, now - HEARTBEAT_TTL.toMillis());
+            Long size = stringRedisTemplate.opsForZSet().zCard(setKey);
+            return size == null ? 0 : size.intValue();
         } catch (Exception e) {
             log.debug("读取游戏在线人数失败 setKey={}, error={}", setKey, e.getMessage());
             return -1;

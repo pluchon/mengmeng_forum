@@ -94,6 +94,11 @@ public class GameConnectionRegistry {
         return sessions != null && send(sessions.get(userId), payload);
     }
 
+    /** 向所有在大厅的连接广播，用于观战列表的实时更新 */
+    public void broadcastLobby(String payload) {
+        lobbySessions.forEach((userId, session) -> send(session, payload));
+    }
+
     public void broadcastRoom(String roomId, String payload) {
         Map<Long, WebSocketSession> sessions = roomSessions.get(roomId);
         if (sessions == null) {
