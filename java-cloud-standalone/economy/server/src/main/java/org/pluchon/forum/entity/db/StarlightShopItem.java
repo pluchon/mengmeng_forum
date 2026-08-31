@@ -36,6 +36,9 @@ public class StarlightShopItem {
     // 0 不限
     private Integer dailyLimit;
 
+    // 每周限购次数，0 不限。AI 额度重置卡这类有真实成本的商品用它约束
+    private Integer weeklyLimit;
+
     private Integer sortOrder;
 
     private Integer enabled;

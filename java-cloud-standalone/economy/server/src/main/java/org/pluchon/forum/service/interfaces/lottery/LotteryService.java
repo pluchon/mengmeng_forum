@@ -18,7 +18,7 @@ public interface LotteryService {
 
     LotteryActivityInfoVO getActivityInfo(Long userId, Long activityId);
 
-    PageResult<LotteryDrawHistoryVO> queryDrawRecords(Long userId, Long activityId, Integer pageNum, Integer pageSize);
+    PageResult<LotteryDrawHistoryVO> queryDrawRecords(Long userId, Long activityId, Boolean rareOnly, Integer pageNum, Integer pageSize);
 
     LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto);
 

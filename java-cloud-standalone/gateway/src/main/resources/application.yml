@@ -50,7 +50,7 @@ spring:
             - id: forum-economy
               uri: lb://forum-economy
               predicates:
-                - Path=/points/**,/checkin/**,/vip/**,/lottery/**,/shop/**,/starlight/**
+                - Path=/points/**,/checkin/**,/vip/**,/lottery/**,/shop/**,/starlight/**,/bag/**
             - id: forum-ai
               uri: lb://forum-ai
               predicates:

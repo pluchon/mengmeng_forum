@@ -31,6 +31,9 @@ public class LotteryPrizeMysteryItem {
 
     private Integer weight;
 
+    // 剩余库存，-1 无限
+    private Integer stockRemaining;
+
     @JsonIgnore
     private Byte deleteState;
 

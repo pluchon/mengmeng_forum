@@ -324,6 +324,7 @@ CREATE TABLE `lottery_prize_mystery_item` (
   `item_value` int NOT NULL COMMENT '积分数或VIP天数',
   `vip_tier` tinyint DEFAULT NULL COMMENT 'VIP天奖项的发放档位: 1PRO 2MAX; 空按PRO',
   `weight` int NOT NULL DEFAULT '1' COMMENT '开奖权重',
+  `stock_remaining` int NOT NULL DEFAULT '-1' COMMENT '剩余库存 -1无限',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '0否 1是',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -593,6 +594,7 @@ CREATE TABLE `starlight_shop_item` (
   `reward_value` int NOT NULL COMMENT '奖励数值(如券张数)',
   `stock_remaining` int NOT NULL DEFAULT '-1' COMMENT '剩余库存,-1不限量',
   `daily_limit` int NOT NULL DEFAULT '0' COMMENT '每日限购次数,0不限',
+  `weekly_limit` int NOT NULL DEFAULT '0' COMMENT '每周限购次数,0不限',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '展示排序,越小越靠前',
   `enabled` tinyint NOT NULL DEFAULT '1' COMMENT '1上架 0下架',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -718,16 +720,17 @@ INSERT INTO `lottery_prize` (`id`, `name`, `prize_type`, `prize_value`, `stock_q
     (1, '谢谢参与', 0, 0, -1, 1, 0, NULL),
     (2, '神秘大奖', 1, 0, -1, 1, 1, NULL),
     (3, '周边小礼品A', 2, 0, -1, 1, 0, NULL),
-    (4, '安慰奖', 3, 0, -1, 1, 0, NULL),
+    (4, '安慰奖·抵扣券×3', 3, 3, -1, 1, 0, NULL),
     (5, '10~50随机积分', 4, -1, -1, 1, 0, NULL),
     (6, '50积分', 4, 50, -1, 0, 0, NULL),
     (7, 'PRO会员体验卡·30天', 5, 30, -1, 1, 0, NULL);
 
--- 神秘大奖子奖项：会员奖项只保留一个 MAX 30 天，权重压到千分之一
-INSERT INTO `lottery_prize_mystery_item` (`id`, `prize_id`, `item_type`, `item_value`, `vip_tier`, `weight`) VALUES
-    (2, 2, 4, 100, NULL, 500),
-    (3, 2, 4, 80, NULL, 500),
-    (4, 2, 5, 30, 2, 1);
+-- 神秘大奖子奖项：500积分 70% / 700积分 25% / MAX会员30天 5%。
+-- 稀缺性由子奖项的库存承担，父档位保持无限，这样硬保底永远有奖可发
+INSERT INTO `lottery_prize_mystery_item` (`id`, `prize_id`, `item_type`, `item_value`, `vip_tier`, `weight`, `stock_remaining`) VALUES
+    (2, 2, 4, 500, NULL, 700, -1),
+    (3, 2, 4, 700, NULL, 250, -1),
+    (4, 2, 5, 30, 2, 50, 20);
 
 INSERT INTO `lottery_activity` (`id`, `title`, `description`, `cover_image_url`, `publisher_id`, `cost_points_per_draw`, `status`, `phase`, `start_time`, `end_time`, `delete_state`)
 VALUES (1, '积分幸运抽',
@@ -736,7 +739,8 @@ VALUES (1, '积分幸运抽',
 
 INSERT INTO `lottery_activity_prize` (`id`, `activity_id`, `prize_id`, `weight`, `stock_remaining`, `is_jackpot`, `image_path`) VALUES
     (1, 1, 1, 5000, -1, 0, NULL),
-    (2, 1, 2, 20, 1, 1, NULL),
+    -- 神秘大奖是盲盒容器，必须无限：库存为 1 时全站只能出一次，硬保底会失效
+    (2, 1, 2, 20, -1, 1, NULL),
     (3, 1, 3, 500, 200, 0, NULL),
     (4, 1, 4, 2000, -1, 0, NULL),
     (5, 1, 5, 2300, -1, 0, NULL),
@@ -748,23 +752,49 @@ INSERT INTO `lottery_pool_task` (`activity_id`, `task_code`, `title`, `target_co
 (1, 'LIKE_3', '点赞 3 次', 3, 1, 20, 1),
 (1, 'CHECKIN_TODAY', '今日签到', 1, 2, 30, 1);
 
+-- 抵扣券与补签卡是可无限生成的虚拟货币，限量没有意义（售罄反而变相涨价）；
+-- 抵扣券按 10 / 9.5 / 9 / 8.5 / 8 星辉每张阶梯折扣。
+-- AI 额度重置卡是唯一有真实调用成本的商品，用周限购 2 张约束
+-- 背包：兑换与中奖的"卡片类"奖品不再立即生效，先入背包由用户择时使用；
+-- 积分与萌星辉是流水型货币，仍然即时到账
+CREATE TABLE `user_bag_item` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '归属用户',
+  `source` varchar(16) NOT NULL COMMENT '来源 EXCHANGE兑换 LOTTERY抽奖',
+  `source_ref_id` bigint DEFAULT NULL COMMENT '来源单据ID 兑换记录/抽奖记录',
+  `item_name` varchar(64) NOT NULL COMMENT '展示名',
+  `reward_type` varchar(32) NOT NULL COMMENT 'LOTTERY_VOUCHER/MAKEUP_CARD/QUOTA_RESET/VIP_DAYS/GOODS',
+  `reward_value` int NOT NULL DEFAULT '0' COMMENT '数量或天数',
+  `vip_tier` tinyint DEFAULT NULL COMMENT '会员档位 1PRO 2MAX',
+  `use_status` tinyint NOT NULL DEFAULT '0' COMMENT '0未使用 1已使用 2待发放(实物)',
+  `use_time` datetime DEFAULT NULL COMMENT '使用时间',
+  `grant_summary` varchar(128) DEFAULT NULL COMMENT '发放结果摘要',
+  `idempotency_key` varchar(128) NOT NULL COMMENT '幂等键',
+  `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '0否 1是',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_bag_user_idem` (`user_id`,`idempotency_key`),
+  KEY `idx_bag_user_status` (`user_id`,`delete_state`,`use_status`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户背包';
+
 INSERT INTO `starlight_shop_item`
-(`name`, `category`, `tag`, `price_starlight`, `reward_type`, `reward_value`, `stock_remaining`, `daily_limit`, `sort_order`, `enabled`, `delete_state`) VALUES
-('AI额度重置卡', 'HOT', '限定', 600, 'QUOTA_RESET', 1, -1, 1, 1, 1, 0),
-('抽奖抵扣券·1张', 'HOT', '热门', 10, 'LOTTERY_VOUCHER', 1, -1, 0, 20, 1, 0),
-('抽奖抵扣券·10张', 'HOT', NULL, 90, 'LOTTERY_VOUCHER', 10, -1, 0, 21, 1, 0),
-('抽奖抵扣券·30张', 'HOT', '热门', 270, 'LOTTERY_VOUCHER', 30, -1, 0, 22, 1, 0),
-('抽奖抵扣券·50张', 'HOT', '新品', 450, 'LOTTERY_VOUCHER', 50, 5000, 0, 23, 1, 0),
-('抽奖抵扣券·100张', 'HOT', '限定', 900, 'LOTTERY_VOUCHER', 100, 2000, 0, 24, 1, 0),
-('签到补签卡·1张', 'HOT', '实用', 50, 'MAKEUP_CARD', 1, -1, 0, 30, 1, 0),
-('签到补签卡·10张', 'HOT', '热门', 450, 'MAKEUP_CARD', 10, 1000, 0, 31, 1, 0),
-('签到补签卡·30张', 'HOT', '限定', 1400, 'MAKEUP_CARD', 30, 500, 0, 32, 1, 0);
+(`name`, `category`, `tag`, `price_starlight`, `reward_type`, `reward_value`, `stock_remaining`, `daily_limit`, `weekly_limit`, `sort_order`, `enabled`, `delete_state`) VALUES
+('AI额度重置卡', 'HOT', '限定', 600, 'QUOTA_RESET', 1, -1, 0, 2, 1, 1, 0),
+('抽奖抵扣券·1张', 'HOT', '热门', 10, 'LOTTERY_VOUCHER', 1, -1, 0, 0, 20, 1, 0),
+('抽奖抵扣券·10张', 'HOT', NULL, 95, 'LOTTERY_VOUCHER', 10, -1, 0, 0, 21, 1, 0),
+('抽奖抵扣券·30张', 'HOT', '热门', 270, 'LOTTERY_VOUCHER', 30, -1, 0, 0, 22, 1, 0),
+('抽奖抵扣券·50张', 'HOT', '新品', 425, 'LOTTERY_VOUCHER', 50, -1, 0, 0, 23, 1, 0),
+('抽奖抵扣券·100张', 'HOT', '限定', 800, 'LOTTERY_VOUCHER', 100, -1, 0, 0, 24, 1, 0),
+('签到补签卡·1张', 'HOT', '实用', 50, 'MAKEUP_CARD', 1, -1, 0, 0, 30, 1, 0),
+('签到补签卡·10张', 'HOT', '热门', 450, 'MAKEUP_CARD', 10, -1, 0, 0, 31, 1, 0),
+('签到补签卡·30张', 'HOT', '限定', 1200, 'MAKEUP_CARD', 30, -1, 0, 0, 32, 1, 0);
 
 INSERT INTO `lottery_collect_milestone`
 (`threshold_count`, `reward_type`, `reward_value`, `alt_reward_value`, `label`, `sort_order`, `enabled`, `delete_state`) VALUES
-(10, 'RANDOM', 1, 30, '抵扣券×1', 10, 1, 0),
-(25, 'POINTS', 50, NULL, '积分×50', 20, 1, 0),
-(50, 'VOUCHER', 3, NULL, '抵扣券×3', 30, 1, 0),
--- 会员体验卡只从抽奖池发放，80 档改为延续抵扣券递进（券×1 → ×3 → ×5）
-(80, 'VOUCHER', 5, NULL, '抵扣券×5', 40, 1, 0);
+-- 会员体验卡只从抽奖池发放；四档都用确定奖励并拉开梯度
+(10, 'VOUCHER', 3, NULL, '抵扣券×3', 10, 1, 0),
+(25, 'POINTS', 200, NULL, '积分×200', 20, 1, 0),
+(50, 'VOUCHER', 10, NULL, '抵扣券×10', 30, 1, 0),
+(80, 'VOUCHER', 20, NULL, '抵扣券×20', 40, 1, 0);
 

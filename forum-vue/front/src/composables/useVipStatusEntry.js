@@ -75,6 +75,15 @@ export function useVipStatusEntry(userStore) {
     { immediate: true },
   )
 
+  // 别处发了会员（背包用体验卡、抽奖中奖）只会更新 userStore，这里跟着走一遍
+  watch(
+    () => [userStore.vipTier, userStore.vipExpireAt],
+    ([tier, expireAt]) => {
+      if (!userStore.isLoggedIn) return
+      applyStatus(tier, expireAt)
+    },
+  )
+
   watch(vipDialogVisible, (open, wasOpen) => {
     // 关闭购买弹窗后回刷一次 试开/支付接通后档位可能变
     if (wasOpen && !open && userStore.isLoggedIn) {

@@ -146,11 +146,7 @@ public class PointsServiceImpl implements PointsService {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
-        int balance = selectBalance(userId);
-        int totalCheckin = sumByPositiveSources(userId
-        );
-        int totalSpend = absSumByNegativeSources(userId);
-        return new PointsWalletVO(balance, totalCheckin, totalSpend);
+        return new PointsWalletVO(selectBalance(userId));
     }
 
     @Override
@@ -165,7 +161,7 @@ public class PointsServiceImpl implements PointsService {
         List<PointsDailyVO> monthTrend = toDailyRows(pointsLogMapper.selectDailyAggregation(userId, monthFrom, monthTo));
         int monthIncome = monthTrend.stream().mapToInt(item -> safeInt(item.getInTotal())).sum();
         int monthExpense = monthTrend.stream().mapToInt(item -> safeInt(item.getOutTotal())).sum();
-        int cumulativeIncome = safeInt(pointsLogMapper.sumPositive(userId));
+        int cumulativeIncome = cumulativeIncome(userId);
 
         PointsCenterOverviewVO overview = new PointsCenterOverviewVO();
         overview.setBalance(selectBalance(userId));
@@ -242,10 +238,16 @@ public class PointsServiceImpl implements PointsService {
     }
 
     private TrendWeek resolveTrendWeek(Long userId, LocalDate today, Integer weekOffset) {
-        UserInternalVO user = userInternalFeignClient.getById(userId);
-        LocalDate registrationDate = user != null && user.getCreateTime() != null
-                ? user.getCreateTime().toInstant().atZone(SHANGHAI).toLocalDate()
-                : today;
+        // 注册日只用来定周区间的左边界，auth 域抖动时退回本周，别让整个萌币中心打不开
+        LocalDate registrationDate = today;
+        try {
+            UserInternalVO user = userInternalFeignClient.getById(userId);
+            if (user != null && user.getCreateTime() != null) {
+                registrationDate = user.getCreateTime().toInstant().atZone(SHANGHAI).toLocalDate();
+            }
+        } catch (Exception e) {
+            log.warn("拉取注册时间失败，萌币足迹按本周展示 userId={}", userId, e);
+        }
         if (registrationDate.isAfter(today)) {
             registrationDate = today;
         }
@@ -285,7 +287,7 @@ public class PointsServiceImpl implements PointsService {
     public int claimMilestone(Long userId, String milestoneCode) {
         validateUserId(userId);
         MilestoneDefinition milestone = findMilestone(milestoneCode);
-        int cumulativeIncome = safeInt(pointsLogMapper.sumPositive(userId));
+        int cumulativeIncome = cumulativeIncome(userId);
         if (cumulativeIncome < milestone.threshold()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "尚未达到该萌币里程碑"));
         }
@@ -310,6 +312,11 @@ public class PointsServiceImpl implements PointsService {
         return addPoints(userId, milestone.reward(), Constant.POINTS_SOURCE_MILESTONE_REWARD,
                 claim.getId(), "萌币里程碑奖励 · " + milestone.title(),
                 "points-milestone:" + userId + ":" + milestone.code());
+    }
+
+    // 里程碑的「累计获得」口径：只算外部挣来的萌币，里程碑奖励本身不计入
+    private int cumulativeIncome(Long userId) {
+        return safeInt(pointsLogMapper.sumPositiveExcluding(userId, Constant.POINTS_SOURCE_MILESTONE_REWARD));
     }
 
     private List<PointsMilestoneVO> buildMilestones(Long userId, int cumulativeIncome) {
@@ -466,6 +473,7 @@ public class PointsServiceImpl implements PointsService {
             case 13 -> "俄罗斯方块";
             case 14 -> "签到惊喜奖励";
             case 15 -> "萌币里程碑奖励";
+            case 16 -> "幸运收集册奖励";
             case 99 -> "管理员调整";
             default -> "其他来源";
         };
@@ -571,13 +579,6 @@ public class PointsServiceImpl implements PointsService {
         }
     }
 
-    private int sumByPositiveSources(Long userId) {
-        return toInt(pointsLogMapper.sumPositiveBySources(userId, new Byte[]{Constant.POINTS_SOURCE_CHECKIN_BASIC, Constant.POINTS_SOURCE_CHECKIN_BONUS}));
-    }
-
-    private int absSumByNegativeSources(Long userId) {
-        return toInt(pointsLogMapper.sumNegativeAbsBySources(userId, new Byte[]{Constant.POINTS_SOURCE_SHOP_PURCHASE}));
-    }
 
     private static int toInt(Object o) {
         if (o == null) {

@@ -13,7 +13,7 @@
       <header class="mxh-shop__header">
         <div class="mxh-shop__title-group">
           <img class="mxh-shop__brand-icon" :src="mengXinghuiIconUrl" alt="" aria-hidden="true" />
-          <h2 class="mxh-shop__title">{{ viewMode === 'backpack' ? '我的背包' : '萌星辉兑换商城' }}</h2>
+          <h2 class="mxh-shop__title">萌星辉兑换商城</h2>
         </div>
         <button type="button" class="mxh-shop__close" aria-label="关闭" @click="closeShop">×</button>
       </header>
@@ -24,7 +24,7 @@
           :key="tab.key"
           type="button"
           class="mxh-shop__tab"
-          :class="{ 'is-active': viewMode === 'shop' && category === tab.key }"
+          :class="{ 'is-active': category === tab.key }"
           @click="onCategory(tab.key)"
         >
           {{ tab.label }}
@@ -43,14 +43,13 @@
           </div>
           <div v-else-if="error" class="mxh-shop__state mxh-shop__state--error">
             <span>{{ error }}</span>
-            <button type="button" class="mxh-shop__retry" @click="reloadCurrent">重试</button>
+            <button type="button" class="mxh-shop__retry" @click="loadItems">重试</button>
           </div>
-          <div v-else-if="viewMode === 'shop' && !items.length" class="mxh-shop__empty">
+          <div v-else-if="!items.length" class="mxh-shop__empty">
             <img class="mxh-shop__empty-img" :src="emptyShopItemUrl" alt="" />
             <p class="mxh-shop__empty-text">该分类暂无商品</p>
           </div>
-          <div v-else-if="viewMode === 'backpack' && !backpackItems.length" class="mxh-shop__state">背包还是空的</div>
-          <div v-else-if="viewMode === 'shop'" class="mxh-shop__grid">
+          <div v-else class="mxh-shop__grid">
           <article v-for="item in items" :key="item.id" class="mxh-shop-card">
             <div class="mxh-shop-card__media" aria-hidden="true">
               <img
@@ -94,74 +93,17 @@
             </button>
           </article>
         </div>
-        <div v-else class="mxh-shop__grid">
-          <article v-for="row in backpackItems" :key="row.id" class="mxh-shop-card">
-            <div class="mxh-shop-card__media" aria-hidden="true">
-              <img
-                v-if="isQuotaResetRecord(row)"
-                class="mxh-shop-card__cover"
-                :src="quotaResetCoverUrl"
-                alt=""
-              />
-              <img
-                v-else-if="isLotteryVoucherRecord(row)"
-                class="mxh-shop-card__cover"
-                :src="voucherCoverUrl"
-                alt=""
-              />
-              <img
-                v-else-if="isMakeupCardRecord(row)"
-                class="mxh-shop-card__cover"
-                :src="makeupCardCoverUrl"
-                alt=""
-              />
-              <span v-else class="mxh-shop-card__placeholder" />
-            </div>
-            <div class="mxh-shop-card__name-row">
-              <span class="mxh-shop-card__name">{{ row.itemName }}</span>
-              <span v-if="row.tag" class="mxh-shop-card__tag">{{ row.tag }}</span>
-            </div>
-            <div class="mxh-shop-card__meta">
-              <span class="mxh-shop-card__price">
-                <img :src="mengXinghuiIconUrl" alt="" />
-                {{ row.pricePaid }}
-              </span>
-              <span class="mxh-shop-card__stock">{{ row.rewardSummary || '背包物品' }}</span>
-            </div>
-            <button
-              type="button"
-              class="mxh-shop-card__btn"
-              :disabled="usingId != null || Number(row.useStatus) === 1 || isLotteryVoucherRecord(row) || isMakeupCardRecord(row)"
-              @click="onUse(row)"
-            >
-              {{
-                usingId === row.id
-                  ? '使用中...'
-                  : Number(row.useStatus) === 1 || isLotteryVoucherRecord(row) || isMakeupCardRecord(row)
-                    ? '已使用'
-                    : '使用'
-              }}
-            </button>
-          </article>
-        </div>
         </div>
       </div>
 
       <footer class="mxh-shop__footer">
-        <button
-          type="button"
-          class="mxh-shop__hint-btn"
-          :class="{ 'is-active': viewMode === 'backpack' }"
-          @click="openBackpack"
-        >
-          我的背包
-        </button>
+        <button type="button" class="mxh-shop__hint-btn" @click="openRules">星辉规则</button>
         <div class="mxh-shop__pager">
           <AppPagination
             :current-page="pageNum"
             size="small"
             :total="total"
-            :page-size="currentPageSize"
+            :page-size="SHOP_PAGE_SIZE"
             :pager-count="5"
             :show-jumper="false"
             :hide-on-single-page="false"
@@ -171,6 +113,23 @@
         <button type="button" class="mxh-shop__history-link" @click="openHistory">兑换记录</button>
       </footer>
     </div>
+
+    <el-dialog
+      v-model="rulesVisible"
+      title="星辉规则"
+      width="min(420px, 92vw)"
+      class="mxh-rules-dialog"
+      align-center
+      append-to-body
+      destroy-on-close
+    >
+      <ul class="mxh-rules__list">
+        <li><span class="rarity is-ssr">SSR</span><span>头奖 / 大奖</span><strong>+50</strong></li>
+        <li><span class="rarity is-sr">SR</span><span>小奖 / VIP 天</span><strong>+15</strong></li>
+        <li><span class="rarity is-r">R</span><span>积分 / 安慰奖</span><strong>+5</strong></li>
+        <li><span class="rarity is-n">普通</span><span>谢谢参与等</span><strong>+1</strong></li>
+      </ul>
+    </el-dialog>
 
     <el-dialog
       v-model="historyVisible"

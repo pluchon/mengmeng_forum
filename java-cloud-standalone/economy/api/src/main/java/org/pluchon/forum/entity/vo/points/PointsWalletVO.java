@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// 积分钱包概览 VO. 给前端 我的积分 页头部使用.
+// 积分钱包概览 VO。累计口径在萌币中心 /points/center/overview 里算，这里只回余额
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,9 +15,4 @@ public class PointsWalletVO {
     @Schema(description = "当前余额")
     private Integer balance;
 
-    @Schema(description = "累计签到入账(基础+连签)")
-    private Integer totalCheckinPoints;
-
-    @Schema(description = "累计商城消费(绝对值)")
-    private Integer totalSpendPoints;
 }

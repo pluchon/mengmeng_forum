@@ -39,13 +39,15 @@
               :key="`${row.nickname}-${row.prizeName}-${idx}`"
               class="lottery-feed-item"
             >
-              <span class="lottery-feed-avatar">{{ row.avatarChar || '用' }}</span>
               <span class="lottery-feed-text">
                 {{ maskFeedNickname(row.nickname) }} 获得了「{{ row.prizeName }}」
               </span>
             </div>
           </div>
-          <p v-else class="lottery-empty-hint">暂无公开中奖动态</p>
+          <div v-else class="lottery-feed-empty">
+            <el-icon class="lottery-feed-empty__icon"><Bell /></el-icon>
+            <p class="lottery-feed-empty__text">暂无动态</p>
+          </div>
           <div v-if="showPublicFeedPager" class="lottery-side-pager">
             <AppPagination
               v-model:current-page="publicFeedPage"
@@ -134,6 +136,14 @@
                 class="lottery-stage-gacha"
                 aria-hidden="true"
               />
+              <button
+                v-if="gachaSkippable"
+                type="button"
+                class="lottery-stage-skip"
+                @click="skipGachaAnimation"
+              >
+                跳过动画
+              </button>
             </div>
             <div class="lottery-action-row">
               <button
@@ -198,8 +208,8 @@
                   </div>
                 </div>
                 <div class="lottery-product__actions">
-                  <button type="button" class="lottery-product__rules" @click="openStarlightRules">
-                    星辉规则
+                  <button type="button" class="lottery-product__rules" @click="openMyBag">
+                    我的背包
                   </button>
                   <button type="button" class="lottery-product__shop" @click="goExchangeShop">
                     兑换商城
@@ -365,6 +375,15 @@
       append-to-body
       destroy-on-close
     >
+      <div class="lottery-history-toolbar">
+        <el-checkbox
+          v-model="historyRareOnly"
+          :disabled="historyLoading"
+          @change="onHistoryRareOnlyChange"
+        >
+          只看稀有
+        </el-checkbox>
+      </div>
       <div v-if="historyLoading || historyTableRows.length">
         <el-table
           v-loading="historyLoading"
@@ -398,7 +417,6 @@
       <div v-else class="lottery-history-empty">
         <img class="lottery-history-empty-icon" :src="recordIconUrl" alt="" />
         <p>暂无抽奖记录</p>
-        <p class="lottery-history-empty-sub">参与抽奖后，将按每次开奖结果分页展示。</p>
       </div>
     </el-dialog>
 
@@ -454,22 +472,8 @@
       @exchanged="onStarlightExchanged"
     />
 
-    <el-dialog
-      v-model="starlightRulesVisible"
-      title="星辉规则"
-      width="min(420px, 92vw)"
-      class="lottery-dialog lottery-dialog--starlight-rules"
-      align-center
-      append-to-body
-      destroy-on-close
-    >
-      <ul class="lottery-starlight-rules__list">
-        <li><span class="rarity is-ssr">SSR</span><span>头奖 / 大奖</span><strong>+50</strong></li>
-        <li><span class="rarity is-sr">SR</span><span>小奖 / VIP 天</span><strong>+15</strong></li>
-        <li><span class="rarity is-r">R</span><span>积分 / 安慰奖</span><strong>+5</strong></li>
-        <li><span class="rarity is-n">普通</span><span>谢谢参与等</span><strong>+1</strong></li>
-      </ul>
-    </el-dialog>
+    <MyBagDialog v-model="bagDialogVisible" @used="onBagItemUsed" />
+
   </div>
 </template>
 

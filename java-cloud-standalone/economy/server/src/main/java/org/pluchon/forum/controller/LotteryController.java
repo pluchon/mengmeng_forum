@@ -64,11 +64,13 @@ public class LotteryController {
     @GetMapping("/records")
     public Result<PageResult<LotteryDrawHistoryVO>> records(
             @RequestParam(required = false) Long activityId,
+            @RequestParam(required = false) Boolean rareOnly,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
         AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(lotteryService.queryDrawRecords(loginUser.getId(), activityId, pageNum, pageSize));
+        return Result.success(lotteryService.queryDrawRecords(
+                loginUser.getId(), activityId, rareOnly, pageNum, pageSize));
     }
 
     @Operation(summary = "抽奖", description = "times=1 单抽 times=10 十连; 可自动使用抵扣券")

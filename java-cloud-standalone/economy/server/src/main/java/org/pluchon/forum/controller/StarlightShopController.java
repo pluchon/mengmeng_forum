@@ -7,12 +7,10 @@ import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.starlight.StarlightExchangeDTO;
-import org.pluchon.forum.entity.dto.starlight.StarlightUseDTO;
 import org.pluchon.forum.entity.vo.common.PageResult;
 import org.pluchon.forum.entity.vo.starlight.StarlightExchangeRecordVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightExchangeResultVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightShopItemVO;
-import org.pluchon.forum.entity.vo.starlight.StarlightUseResultVO;
 import org.pluchon.forum.entity.vo.starlight.StarlightWalletVO;
 import org.pluchon.forum.service.interfaces.starlight.StarlightService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightShopService;
@@ -24,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "萌星辉商城", description = "商品分页 / 兑换入背包 / 使用 / 兑换记录 / 余额")
+@Tag(name = "萌星辉商城", description = "商品分页 / 兑换入背包 / 兑换记录 / 余额")
 @RestController
 @RequestMapping("/starlight")
 public class StarlightShopController {
@@ -51,7 +49,7 @@ public class StarlightShopController {
         return Result.success(starlightShopService.pageItems(category, pageNum, pageSize));
     }
 
-    @Operation(summary = "兑换商品", description = "扣萌星辉并放入背包，奖励需再「使用」才发放")
+    @Operation(summary = "兑换商品", description = "扣萌星辉并放入背包，奖励需到背包点「使用」才发放")
     @PostMapping("/shop/exchange")
     public Result<StarlightExchangeResultVO> exchange(@RequestBody StarlightExchangeDTO dto,
                                                       HttpServletRequest request) {
@@ -59,15 +57,7 @@ public class StarlightShopController {
         return Result.success(starlightShopService.exchange(loginUser.getId(), dto));
     }
 
-    @Operation(summary = "使用背包物品", description = "发放 VIP 等奖励并将记录标为已使用")
-    @PostMapping("/shop/use")
-    public Result<StarlightUseResultVO> use(@RequestBody StarlightUseDTO dto,
-                                            HttpServletRequest request) {
-        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
-        return Result.success(starlightShopService.use(loginUser.getId(), dto));
-    }
-
-    @Operation(summary = "兑换记录 / 背包列表", description = "需登录; 分页，含使用状态")
+    @Operation(summary = "兑换记录", description = "需登录; 分页的购买流水")
     @GetMapping("/shop/exchanges")
     public Result<PageResult<StarlightExchangeRecordVO>> exchanges(
             @RequestParam(defaultValue = "1") Integer pageNum,

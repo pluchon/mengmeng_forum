@@ -27,5 +27,7 @@ public class StarlightShopItemVO {
     // 0 不限
     private Integer dailyLimit;
 
+    private Integer weeklyLimit;
+
     private Integer sortOrder;
 }

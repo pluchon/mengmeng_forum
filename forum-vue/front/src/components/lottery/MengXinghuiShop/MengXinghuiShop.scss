@@ -483,3 +483,63 @@
     gap: 10px;
   }
 }
+
+// 星辉规则：从抽奖页搬进商城页脚，样式随之落到这里
+.mxh-rules__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mxh-rules__list li {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fbfaff;
+  outline: 1px solid #ece8f6;
+  font-size: 13px;
+  color: #5c5668;
+}
+
+.mxh-rules__list .rarity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mxh-rules__list .rarity.is-ssr {
+  color: #c44b86;
+  background: #ffe6f1;
+}
+
+.mxh-rules__list .rarity.is-sr {
+  color: #6f5bc4;
+  background: #ece6ff;
+}
+
+.mxh-rules__list .rarity.is-r {
+  color: #b07a1a;
+  background: #fff1d6;
+}
+
+.mxh-rules__list .rarity.is-n {
+  color: #2f8f84;
+  background: #e4f7f3;
+}
+
+.mxh-rules__list strong {
+  color: #8b75dd;
+  font-size: 15px;
+  font-weight: 800;
+}

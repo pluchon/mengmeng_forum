@@ -26,16 +26,6 @@ export function exchangeStarlightItem(data) {
   })
 }
 
-export function useStarlightItem(data) {
-  return request({
-    url: '/starlight/shop/use',
-    method: 'post',
-    data: {
-      exchangeId: data.exchangeId,
-    },
-  })
-}
-
 export function getStarlightExchanges(params = {}) {
   return request({ url: '/starlight/shop/exchanges', method: 'get', params })
 }

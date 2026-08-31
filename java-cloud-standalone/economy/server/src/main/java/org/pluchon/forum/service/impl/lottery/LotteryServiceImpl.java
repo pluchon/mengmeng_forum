@@ -65,11 +65,12 @@ import org.pluchon.forum.mapper.UserLotteryVoucherMapper;
 import org.pluchon.forum.service.impl.lottery.guard.LotteryDrawContext;
 import org.pluchon.forum.service.impl.lottery.guard.LotteryDrawGuardChain;
 import org.pluchon.forum.service.impl.lottery.guard.LotteryDrawGuardResult;
+import org.pluchon.forum.service.impl.bag.UserBagServiceImpl;
 import org.pluchon.forum.service.impl.starlight.StarlightServiceImpl;
+import org.pluchon.forum.service.interfaces.bag.UserBagService;
 import org.pluchon.forum.service.interfaces.lottery.LotteryService;
 import org.pluchon.forum.service.interfaces.points.PointsService;
 import org.pluchon.forum.service.interfaces.starlight.StarlightService;
-import org.pluchon.forum.service.interfaces.vip.VipSubscribeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -173,7 +174,8 @@ public class LotteryServiceImpl implements LotteryService {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private VipSubscribeService vipSubscribeService;
+    private UserBagService userBagService;
+
 
     @Autowired
     private StarlightService starlightService;
@@ -261,7 +263,7 @@ public class LotteryServiceImpl implements LotteryService {
     }
 
     @Override
-    public PageResult<LotteryDrawHistoryVO> queryDrawRecords(Long userId, Long activityId,
+    public PageResult<LotteryDrawHistoryVO> queryDrawRecords(Long userId, Long activityId, Boolean rareOnly,
                                                              Integer pageNum, Integer pageSize) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
@@ -275,6 +277,12 @@ public class LotteryServiceImpl implements LotteryService {
                 Wrappers.lambdaQuery(LotteryDrawRecord.class)
                         .eq(LotteryDrawRecord::getUserId, userId)
                         .eq(activityId != null && activityId > 0, LotteryDrawRecord::getActivityId, activityId)
+                        // 只看稀有：翻记录多半是想找"我抽到过什么好东西"，
+                        // 谢谢参与和安慰奖占了七成，滤掉之后才看得见
+                        .in(Boolean.TRUE.equals(rareOnly), LotteryDrawRecord::getPrizeType,
+                                Constant.LOTTERY_PRIZE_GRAND,
+                                Constant.LOTTERY_PRIZE_SMALL,
+                                Constant.LOTTERY_PRIZE_VIP_DAYS)
                         .ne(LotteryDrawRecord::getDeleteState, 1)
                         .orderByDesc(LotteryDrawRecord::getCreateTime)
                         .orderByDesc(LotteryDrawRecord::getId));
@@ -691,6 +699,7 @@ public class LotteryServiceImpl implements LotteryService {
                                           String batchKey) {
         int grantPoints = 0;
         int grantVipDays = 0;
+        int grantVouchers = 0;
         // 神秘大奖的 MAX 体验卡需要显式指定档位，普通卡池仍按 PRO
         Byte grantVipTier = Constant.VIP_TIER_PRO;
         Byte mysteryItemType = null;
@@ -718,6 +727,9 @@ public class LotteryServiceImpl implements LotteryService {
             prizeValueSnapshot = grantPoints;
         } else if (Objects.equals(picked.getPrizeType(), Constant.LOTTERY_PRIZE_VIP_DAYS)) {
             grantVipDays = picked.getPrizeValue() == null ? 0 : Math.max(0, picked.getPrizeValue());
+        } else if (Objects.equals(picked.getPrizeType(), Constant.LOTTERY_PRIZE_CONSOLATION)) {
+            // 安慰奖发抵扣券。抵扣券和积分一样是钱包余额，即时到账，不进背包
+            grantVouchers = picked.getPrizeValue() == null ? 0 : Math.max(0, picked.getPrizeValue());
         }
 
         LotteryDrawRecord rec = new LotteryDrawRecord();
@@ -744,9 +756,25 @@ public class LotteryServiceImpl implements LotteryService {
             pointsService.addPoints(userId, grantPoints, Constant.POINTS_SOURCE_LOTTERY_WIN,
                     rec.getId(), "积分抽奖·中奖", "lottery_win:" + userId + ":" + rec.getId());
         }
+        if (grantVouchers > 0) {
+            grantVouchers(userId, grantVouchers, rec.getId(),
+                    "lottery_consolation:" + rec.getId(), "抽奖安慰奖·" + picked.getPrizeName(),
+                    Constant.LOTTERY_VOUCHER_SOURCE_DRAW);
+        }
+        // VIP 体验卡与周边实物不立即生效：先进背包，由用户挑时间用
         if (grantVipDays > 0) {
-            vipSubscribeService.grantTrialVip(
-                    userId, grantVipTier, grantVipDays, "LOTTERY", "LOTTERY:" + rec.getId());
+            // 神秘大奖开出来的体验卡，背包里要写实际奖品名而不是"神秘大奖"
+            String bagName = mysteryItemType != null
+                    ? (Constant.VIP_TIER_MAX.equals(grantVipTier) ? "MAX" : "PRO") + "会员体验卡·" + grantVipDays + "天"
+                    : picked.getPrizeName();
+            userBagService.grant(userId, UserBagServiceImpl.SOURCE_LOTTERY, rec.getId(),
+                    bagName, UserBagServiceImpl.REWARD_VIP_DAYS, grantVipDays,
+                    grantVipTier, "bag_draw:" + rec.getId(), false);
+        } else if (Objects.equals(picked.getPrizeType(), Constant.LOTTERY_PRIZE_SMALL)) {
+            // 周边实物没有线上发放通道，落库即「待发放」，等管理端安排
+            userBagService.grant(userId, UserBagServiceImpl.SOURCE_LOTTERY, rec.getId(),
+                    picked.getPrizeName(), UserBagServiceImpl.REWARD_GOODS, 1,
+                    null, "bag_draw:" + rec.getId(), true);
         }
 
         boolean jackpot = picked.getIsJackpot() != null && picked.getIsJackpot() == 1;
@@ -798,12 +826,13 @@ public class LotteryServiceImpl implements LotteryService {
                 return "积分 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue);
             }
             if (Objects.equals(mysteryItemType, Constant.LOTTERY_PRIZE_VIP_DAYS)) {
-                return tierLabel + "会员体验 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue) + " 天";
+                return tierLabel + "会员体验 " + Math.max(0, mysteryItemValue == null ? 0 : mysteryItemValue)
+                        + " 天（已入背包）";
             }
             return "神秘子项奖励";
         }
         if (grantVipDays > 0) {
-            return tierLabel + "会员体验 " + grantVipDays + " 天";
+            return tierLabel + "会员体验 " + grantVipDays + " 天（已入背包）";
         }
         if (grantPoints > 0) {
             return "积分 " + grantPoints;
@@ -812,7 +841,13 @@ public class LotteryServiceImpl implements LotteryService {
             return "积分 " + prizeValueSnapshot;
         }
         if (Objects.equals(prizeType, Constant.LOTTERY_PRIZE_VIP_DAYS) && prizeValueSnapshot > 0) {
-            return "VIP 体验 " + prizeValueSnapshot + " 天";
+            return "VIP 体验 " + prizeValueSnapshot + " 天（已入背包）";
+        }
+        if (Objects.equals(prizeType, Constant.LOTTERY_PRIZE_SMALL)) {
+            return "周边实物（待发放）";
+        }
+        if (Objects.equals(prizeType, Constant.LOTTERY_PRIZE_CONSOLATION) && prizeValueSnapshot > 0) {
+            return "抵扣券 ×" + prizeValueSnapshot + " 已到账";
         }
         return null;
     }
@@ -822,15 +857,44 @@ public class LotteryServiceImpl implements LotteryService {
                 && p.getIsMysteryBundle() != null && p.getIsMysteryBundle() == 1;
     }
 
+    // 子奖项可以限量（如 MAX 会员体验卡）。售罄的直接不参与抽签；
+    // 抽中限量档时 CAS 扣库存，被别人抢走就重抽——不能把已售罄的奖发出去。
+    // 积分类子奖项是无限的，所以这里不会退化成"无奖可发"
     private LotteryPrizeMysteryItem pickMysteryItem(Long prizeId) {
-        List<LotteryPrizeMysteryItem> items = lotteryPrizeMysteryItemMapper.selectList(
-                Wrappers.lambdaQuery(LotteryPrizeMysteryItem.class)
-                        .eq(LotteryPrizeMysteryItem::getPrizeId, prizeId)
-                        .eq(LotteryPrizeMysteryItem::getDeleteState, (byte) 0));
-        if (items.isEmpty()) {
-            return null;
+        for (int attempt = 0; attempt < MAX_STOCK_RETRY; attempt++) {
+            List<LotteryPrizeMysteryItem> items = lotteryPrizeMysteryItemMapper.selectList(
+                    Wrappers.lambdaQuery(LotteryPrizeMysteryItem.class)
+                            .eq(LotteryPrizeMysteryItem::getPrizeId, prizeId)
+                            .eq(LotteryPrizeMysteryItem::getDeleteState, (byte) 0));
+            List<LotteryPrizeMysteryItem> available = items.stream()
+                    .filter(LotteryServiceImpl::hasMysteryStock)
+                    .collect(Collectors.toList());
+            if (available.isEmpty()) {
+                log.error("神秘大奖子奖项全部售罄 prizeId={}", prizeId);
+                return null;
+            }
+            LotteryPrizeMysteryItem picked = mysteryWeightedPick(available);
+            if (picked == null) {
+                return null;
+            }
+            Integer stock = picked.getStockRemaining();
+            if (stock != null && stock >= 0) {
+                if (lotteryPrizeMysteryItemMapper.decrementStockIfPositive(picked.getId()) != 1) {
+                    continue;
+                }
+            }
+            return picked;
         }
-        return mysteryWeightedPick(items);
+        log.warn("神秘大奖子奖项库存争抢超过重试上限 prizeId={}", prizeId);
+        return null;
+    }
+
+    private static boolean hasMysteryStock(LotteryPrizeMysteryItem item) {
+        if (item == null) {
+            return false;
+        }
+        Integer stock = item.getStockRemaining();
+        return stock == null || stock < 0 || stock > 0;
     }
 
     private LotteryPrizeMysteryItem mysteryWeightedPick(List<LotteryPrizeMysteryItem> pool) {
@@ -1210,9 +1274,10 @@ public class LotteryServiceImpl implements LotteryService {
             String nickname = user != null && user.getNickname() != null && !user.getNickname().isBlank()
                     ? user.getNickname().trim()
                     : (user != null && user.getUsername() != null ? user.getUsername() : "用户");
+            // 昵称做掩码是为了不让人靠公开动态定位到具体用户；
+            // 头像首字同样有指向性，索性不下发
             String first = nickname.isEmpty() ? "用" : nickname.substring(0, 1);
             row.setNickname(first + "...");
-            row.setAvatarChar(first);
             row.setPrizeName(rec.getPrizeName());
             row.setCreateTimeMillis(rec.getCreateTime() == null ? null : rec.getCreateTime().getTime());
             rows.add(row);
@@ -1234,20 +1299,36 @@ public class LotteryServiceImpl implements LotteryService {
         if (tasks == null || tasks.isEmpty()) {
             return List.of();
         }
+        // 评论/点赞两个任务问的是同一份当日互动计数，一次拉完复用，别按任务数重复走 Feign
+        UserDailyEngagementInternalVO engagement = loadDailyEngagement(userId);
         List<LotteryPoolTaskVO> views = new ArrayList<>(tasks.size());
         for (LotteryPoolTask task : tasks) {
-            views.add(buildSingleTaskView(userId, activityId, task));
+            views.add(buildSingleTaskView(userId, activityId, task, engagement));
         }
         return views;
     }
 
+    private UserDailyEngagementInternalVO loadDailyEngagement(Long userId) {
+        try {
+            return userEngagementInternalFeignClient.getDailyEngagement(userId);
+        } catch (Exception e) {
+            log.warn("拉取当日互动计数失败 userId={}", userId, e);
+            return null;
+        }
+    }
+
     private LotteryPoolTaskVO buildSingleTaskView(Long userId, Long activityId, LotteryPoolTask task) {
+        return buildSingleTaskView(userId, activityId, task, loadDailyEngagement(userId));
+    }
+
+    private LotteryPoolTaskVO buildSingleTaskView(Long userId, Long activityId, LotteryPoolTask task,
+                                                  UserDailyEngagementInternalVO engagement) {
         LotteryPoolTaskVO vo = new LotteryPoolTaskVO();
         vo.setTaskCode(task.getTaskCode());
         vo.setTitle(task.getTitle());
         vo.setTargetCount(task.getTargetCount());
         vo.setVoucherReward(task.getVoucherReward());
-        int current = resolveTaskProgress(userId, task.getTaskCode());
+        int current = resolveTaskProgress(userId, task.getTaskCode(), engagement);
         int target = task.getTargetCount() == null ? 1 : task.getTargetCount();
         vo.setCurrentCount(Math.min(current, target));
         LocalDate today = LocalDate.now(ZONE_SH);
@@ -1263,7 +1344,7 @@ public class LotteryServiceImpl implements LotteryService {
         return vo;
     }
 
-    private int resolveTaskProgress(Long userId, String taskCode) {
+    private int resolveTaskProgress(Long userId, String taskCode, UserDailyEngagementInternalVO engagement) {
         if (Constant.LOTTERY_TASK_CHECKIN_TODAY.equals(taskCode)) {
             UserCheckinInfo info = userCheckinInfoMapper.selectOne(Wrappers.lambdaQuery(UserCheckinInfo.class)
                     .eq(UserCheckinInfo::getUserId, userId)
@@ -1278,20 +1359,13 @@ public class LotteryServiceImpl implements LotteryService {
         }
         if (Constant.LOTTERY_TASK_COMMENT_1.equals(taskCode)
                 || Constant.LOTTERY_TASK_LIKE_3.equals(taskCode)) {
-            try {
-                UserDailyEngagementInternalVO engagement =
-                        userEngagementInternalFeignClient.getDailyEngagement(userId);
-                if (engagement == null) {
-                    return 0;
-                }
-                if (Constant.LOTTERY_TASK_COMMENT_1.equals(taskCode)) {
-                    return engagement.getCommentCount() == null ? 0 : engagement.getCommentCount();
-                }
-                return engagement.getLikeCount() == null ? 0 : engagement.getLikeCount();
-            } catch (Exception e) {
-                log.warn("拉取当日互动计数失败 userId={}", userId, e);
+            if (engagement == null) {
                 return 0;
             }
+            if (Constant.LOTTERY_TASK_COMMENT_1.equals(taskCode)) {
+                return engagement.getCommentCount() == null ? 0 : engagement.getCommentCount();
+            }
+            return engagement.getLikeCount() == null ? 0 : engagement.getLikeCount();
         }
         return 0;
     }

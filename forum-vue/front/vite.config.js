@@ -67,7 +67,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // 匹配 API 请求代理到后端（排除 SPA 路由导航）
         // 开发代理打到 java-cloud-standalone Gateway(10086)，前缀与 gateway routes 对齐
-        '^/(user|board|article|articleQuestion|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|game|vip|starlight|profile|recommend|ai|notice|captcha|group-chat|gallery)/': {
+        '^/(user|board|article|articleQuestion|articleDanmaku|message|mail|sms|category|like|file|articleReply|articleSubReply|replyLike|checkin|shop|points|favorite|search|system-message|mascot|lottery|game|vip|starlight|bag|profile|recommend|ai|notice|captcha|group-chat|gallery)/': {
           target: env.VITE_API_BASE_URL || 'http://localhost:10086',
           changeOrigin: true,
           // AI 润色 / 标签 / 配图可达约 5 分钟，避免开发代理先断

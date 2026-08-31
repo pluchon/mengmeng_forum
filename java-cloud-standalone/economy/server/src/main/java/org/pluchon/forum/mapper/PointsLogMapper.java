@@ -31,49 +31,18 @@ public interface PointsLogMapper extends BaseMapper<PointsLog> {
                                                      @Param("from") Date from,
                                                      @Param("to") Date to);
 
-    // 按正向来源统计入账总额.
-    @Select("""
-            <script>
-            SELECT COALESCE(SUM(delta), 0)
-              FROM points_log
-             WHERE user_id = #{userId}
-               AND delete_state = 0
-               AND delta > 0
-               AND source_type IN
-               <foreach collection="sources" item="source" open="(" separator="," close=")">
-                   #{source}
-               </foreach>
-            </script>
-            """)
-    Integer sumPositiveBySources(@Param("userId") Long userId,
-                                 @Param("sources") Byte[] sources);
-
-    // 按负向来源统计消费绝对值总额.
-    @Select("""
-            <script>
-            SELECT COALESCE(SUM(-delta), 0)
-              FROM points_log
-             WHERE user_id = #{userId}
-               AND delete_state = 0
-               AND delta &lt; 0
-               AND source_type IN
-               <foreach collection="sources" item="source" open="(" separator="," close=")">
-                   #{source}
-               </foreach>
-            </script>
-            """)
-    Integer sumNegativeAbsBySources(@Param("userId") Long userId,
-                                    @Param("sources") Byte[] sources);
-
-    // 历史正向萌币累计，用于里程碑解锁
+    // 历史正向萌币累计，用于里程碑解锁。
+    // 排除里程碑奖励自身，否则领了 M1000 的 +50 会把人往 M2000 推，累计变成自我喂养
     @Select("""
             SELECT COALESCE(SUM(delta), 0)
               FROM points_log
              WHERE user_id = #{userId}
                AND delete_state = 0
                AND delta > 0
+               AND source_type <> #{excludeSourceType}
             """)
-    Integer sumPositive(@Param("userId") Long userId);
+    Integer sumPositiveExcluding(@Param("userId") Long userId,
+                                 @Param("excludeSourceType") Byte excludeSourceType);
 
     // 指定周期的收入或消耗来源排行
     @Select("""

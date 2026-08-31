@@ -19,6 +19,7 @@ import {
   Clock,
   VideoCamera,
   Promotion,
+  Bell,
 } from '@element-plus/icons-vue'
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
@@ -32,9 +33,11 @@ import {
   lotteryDraw,
 } from '@/api/lottery'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
+import { useUserStore } from '@/stores/user'
 import EChart from '@/components/common/EChart.vue'
 import AppPagination from '@/components/common/AppPagination.vue'
 import MengXinghuiShop from '@/components/lottery/MengXinghuiShop/MengXinghuiShop.vue'
+import MyBagDialog from '@/components/lottery/MyBagDialog/MyBagDialog.vue'
 import recordIconUrl from '@/assets/svg/抽奖记录.svg?url'
 import mengXinghuiIconUrl from '@/assets/svg/meng_xinghui.svg?url'
 import gachaVideoUrl from '@/assets/vedio/gacha-green.mp4'
@@ -131,13 +134,14 @@ const info = reactive({
 })
 
 const shopDialogVisible = ref(false)
-const starlightRulesVisible = ref(false)
+const bagDialogVisible = ref(false)
 const historyDialogVisible = ref(false)
 const historyLoading = ref(false)
 const historyRecords = ref([])
 const historyPage = ref(1)
 const historyPageSize = ref(HISTORY_PAGE_SIZE)
 const historyTotal = ref(0)
+const historyRareOnly = ref(false)
 const historyTableRows = computed(() =>
   historyRecords.value.map((r) => ({
     id: r.drawRecordId,
@@ -268,6 +272,25 @@ function onGachaVideoEnded() {
     gachaVideoDoneResolve = null
     done()
   }
+}
+
+// 抽奖时展示在背景右上角。动画和请求是 Promise.all 并行的，
+// 跳过只是提前 resolve 动画那一半，不会打断或重复发请求
+const gachaSkippable = computed(() => phase.value === 'single_shuffle' || phase.value === 'ten_shuffle')
+
+function skipGachaAnimation() {
+  if (!gachaVideoDoneResolve) return
+  const el = gachaVideoRef.value
+  if (el) {
+    try {
+      el.pause()
+    } catch {
+      // 忽略
+    }
+  }
+  const done = gachaVideoDoneResolve
+  gachaVideoDoneResolve = null
+  done()
 }
 
 function onGachaVideoError() {
@@ -605,6 +628,7 @@ const singleOutcome = ref(null)
 const tenResults = ref([])
 
 const pointsWallet = usePointsWalletStore()
+const userStore = useUserStore()
 
 function isGrandPrizeHit(row) {
   if (!row) return false
@@ -713,8 +737,17 @@ function goExchangeShop() {
   shopDialogVisible.value = true
 }
 
-function openStarlightRules() {
-  starlightRulesVisible.value = true
+function openMyBag() {
+  bagDialogVisible.value = true
+}
+
+// 背包里用掉的东西会动抵扣券余额，用掉体验卡还会改会员档位，两边都刷一次
+async function onBagItemUsed(item) {
+  const promises = [loadInfo({ silent: true })]
+  if (String(item?.rewardType || '').toUpperCase() === 'VIP_DAYS') {
+    promises.push(userStore.fetchUserInfo())
+  }
+  await Promise.all(promises)
 }
 
 function onStarlightBalanceChange(balance) {
@@ -825,6 +858,9 @@ async function loadHistoryRecords() {
     if (selectedActivityId.value != null) {
       params.activityId = selectedActivityId.value
     }
+    if (historyRareOnly.value) {
+      params.rareOnly = true
+    }
     const res = await getLotteryRecords(params)
     if (res.code === 0 && res.data) {
       historyRecords.value = Array.isArray(res.data.records) ? res.data.records : []
@@ -847,6 +883,12 @@ async function openHistoryDialog() {
 
 async function onHistoryPageChange(page) {
   historyPage.value = page
+  await loadHistoryRecords()
+}
+
+// 切筛选要回第一页：留在第 5 页很可能直接是空的
+async function onHistoryRareOnlyChange() {
+  historyPage.value = 1
   await loadHistoryRecords()
 }
 

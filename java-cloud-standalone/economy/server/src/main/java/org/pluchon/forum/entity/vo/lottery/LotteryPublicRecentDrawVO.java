@@ -9,7 +9,6 @@ public class LotteryPublicRecentDrawVO {
 
     private String nickname;
 
-    private String avatarChar;
 
     private String prizeName;
 

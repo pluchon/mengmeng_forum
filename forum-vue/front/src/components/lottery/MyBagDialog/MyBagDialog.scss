@@ -1,0 +1,28 @@
+// 背包沿用萌星辉商城的外壳样式，这里只补卡片信息行的差异
+
+.mybag-card__meta {
+  justify-content: flex-start;
+}
+
+.mybag-card__detail {
+  min-width: 0;
+  color: #8e8997;
+  font-size: 12px;
+  line-height: 1.4;
+  // 发放说明可能很长（含到期时间），截断而不是把卡片撑高
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mybag .mxh-shop__hint {
+  max-width: 30%;
+}
+
+// 来源角标在背包里只是分类信息，别抢「使用」按钮的注意力
+.mybag .mxh-shop-card__tag {
+  color: #6d5bb8;
+  background: #ece7ff;
+}

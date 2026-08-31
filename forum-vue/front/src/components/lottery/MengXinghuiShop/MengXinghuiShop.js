@@ -5,7 +5,6 @@ import {
   getStarlightExchanges,
   getStarlightShopItems,
   getStarlightWallet,
-  useStarlightItem,
 } from '@/api/starlight'
 import mengXinghuiIconUrl from '@/assets/svg/meng_xinghui.svg?url'
 import AppPagination from '@/components/common/AppPagination.vue'
@@ -24,7 +23,6 @@ const CATEGORIES = [
 ]
 
 const SHOP_PAGE_SIZE = 8
-const BACKPACK_PAGE_SIZE = 8
 const HISTORY_PAGE_SIZE = 5
 
 const props = defineProps({
@@ -39,17 +37,16 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const viewMode = ref('shop')
 const category = ref('HOT')
 const pageNum = ref(1)
 const total = ref(0)
 const items = ref([])
-const backpackItems = ref([])
 const loading = ref(false)
 const error = ref('')
 const exchangingId = ref(null)
-const usingId = ref(null)
 const localBalance = ref(0)
+
+const rulesVisible = ref(false)
 
 const historyVisible = ref(false)
 const historyLoading = ref(false)
@@ -58,18 +55,13 @@ const historyRecords = ref([])
 const historyPage = ref(1)
 const historyTotal = ref(0)
 
-const currentPageSize = computed(() =>
-  viewMode.value === 'backpack' ? BACKPACK_PAGE_SIZE : SHOP_PAGE_SIZE,
-)
-
-const pages = computed(() => Math.max(1, Math.ceil(total.value / currentPageSize.value) || 1))
+const pages = computed(() => Math.max(1, Math.ceil(total.value / SHOP_PAGE_SIZE) || 1))
 
 watch(
   () => props.modelValue,
   async (open) => {
     if (!open) return
     localBalance.value = Number(props.balance) || 0
-    viewMode.value = 'shop'
     category.value = 'HOT'
     pageNum.value = 1
     await Promise.all([refreshBalance(), loadItems()])
@@ -95,13 +87,6 @@ async function refreshBalance() {
   }
 }
 
-async function reloadCurrent() {
-  if (viewMode.value === 'backpack') {
-    await loadBackpack()
-  } else {
-    await loadItems()
-  }
-}
 
 async function loadItems() {
   loading.value = true
@@ -130,34 +115,7 @@ async function loadItems() {
   }
 }
 
-async function loadBackpack() {
-  loading.value = true
-  error.value = ''
-  try {
-    const res = await getStarlightExchanges({
-      pageNum: pageNum.value,
-      pageSize: BACKPACK_PAGE_SIZE,
-    })
-    if (res.code === 0 && res.data) {
-      backpackItems.value = Array.isArray(res.data.records) ? res.data.records : []
-      total.value = Number(res.data.total) || 0
-      pageNum.value = Number(res.data.pageNum) || pageNum.value
-    } else {
-      error.value = res.message || '加载失败'
-      backpackItems.value = []
-      total.value = 0
-    }
-  } catch (e) {
-    error.value = e?.message || '加载失败'
-    backpackItems.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
-}
-
 async function onCategory(key) {
-  viewMode.value = 'shop'
   if (category.value === key && items.value.length) {
     return
   }
@@ -166,22 +124,18 @@ async function onCategory(key) {
   await loadItems()
 }
 
-async function openBackpack() {
-  if (viewMode.value === 'backpack') return
-  viewMode.value = 'backpack'
-  pageNum.value = 1
-  await loadBackpack()
-}
-
 async function goPage(p) {
   if (p < 1 || p > pages.value || p === pageNum.value) return
   pageNum.value = p
-  await reloadCurrent()
+  await loadItems()
 }
 
 function stockText(item) {
   const daily = Number(item?.dailyLimit) || 0
   if (daily > 0) return `每日限购 ${daily} 次`
+  // 有真实调用成本的商品用周限购约束，不写出来用户看不到这个限制
+  const weekly = Number(item?.weeklyLimit) || 0
+  if (weekly > 0) return `每周限购 ${weekly} 次`
   const stock = Number(item?.stockRemaining)
   if (!Number.isFinite(stock) || stock < 0) return '不限量'
   return `剩余 ${stock} 件`
@@ -209,13 +163,7 @@ async function onExchange(item) {
       localBalance.value = Number(res.data.starlightBalanceAfter) || localBalance.value
       emit('balance-change', localBalance.value)
       emit('exchanged', res.data)
-      if (isLotteryVoucherItem(item) || String(res.data.rewardType || '').toUpperCase() === 'LOTTERY_VOUCHER') {
-        ElMessage.success('抵扣券已到账')
-      } else if (isMakeupCardItem(item) || String(res.data.rewardType || '').toUpperCase() === 'MAKEUP_CARD') {
-        ElMessage.success('补签卡已到账')
-      } else {
-        ElMessage.success('奖品已发放至您的背包')
-      }
+      ElMessage.success('已放入背包，去「我的背包」使用')
       await loadItems()
       if (historyVisible.value) {
         historyPage.value = 1
@@ -229,31 +177,8 @@ async function onExchange(item) {
   }
 }
 
-async function onUse(row) {
-  if (!row?.id || usingId.value != null) return
-  if (Number(row.useStatus) === 1 || isLotteryVoucherRecord(row) || isMakeupCardRecord(row)) {
-    ElMessage.info('该物品已使用')
-    return
-  }
-  usingId.value = row.id
-  try {
-    const res = await useStarlightItem({ exchangeId: row.id })
-    if (res.code === 0 && res.data) {
-      ElMessage.success(
-        res.data.rewardSummary && String(res.data.rewardSummary).startsWith('过期时间')
-          ? res.data.rewardSummary
-          : '使用成功',
-      )
-      await loadBackpack()
-      if (historyVisible.value) {
-        await loadHistory()
-      }
-    }
-  } catch {
-    // request 已提示
-  } finally {
-    usingId.value = null
-  }
+function openRules() {
+  rulesVisible.value = true
 }
 
 async function openHistory() {
@@ -296,21 +221,6 @@ function isLotteryVoucherItem(item) {
 
 function isMakeupCardItem(item) {
   return String(item?.rewardType || '').toUpperCase() === 'MAKEUP_CARD'
-}
-
-function isQuotaResetRecord(row) {
-  return String(row?.rewardType || '').toUpperCase() === 'QUOTA_RESET'
-    || String(row?.itemName || '').includes('额度重置卡')
-}
-
-function isLotteryVoucherRecord(row) {
-  return String(row?.rewardType || '').toUpperCase() === 'LOTTERY_VOUCHER'
-    || String(row?.itemName || '').includes('抵扣券')
-}
-
-function isMakeupCardRecord(row) {
-  return String(row?.rewardType || '').toUpperCase() === 'MAKEUP_CARD'
-    || String(row?.itemName || '').includes('补签卡')
 }
 
 async function onHistoryPageChange(p) {

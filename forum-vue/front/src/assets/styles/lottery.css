@@ -247,11 +247,45 @@
   overflow: visible;
 }
 
-.lottery-feed-card .lottery-empty-hint {
+/* 与 lottery-feed-list 等高，条数为空时卡片不塌 */
+/* 抽奖动画期间浮在舞台右上角 */
+.lottery-stage-skip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 6;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lottery-stage-skip:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.lottery-feed-empty {
   min-height: 190px;
-  margin: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lottery-feed-empty__icon {
+  font-size: 34px;
+  color: #cfc9dc;
+}
+
+.lottery-feed-empty__text {
+  margin: 0;
+  font-size: 13px;
+  color: #9a95a8;
 }
 
 .lottery-feed-item {
