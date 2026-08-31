@@ -29,7 +29,7 @@ export function getGobangRecords(params) {
 }
 
 export function getGobangActiveRooms(params = {}) {
-  return request({ url: '/games/gobang/rooms/active', method: 'get', params })
+  return request({ url: '/game/gobang/rooms/active', method: 'get', params })
 }
 
 export function getGobangReplay(recordId) {
@@ -97,7 +97,7 @@ export function getTetrisPkLeaderboard(params) {
 }
 
 export function getTetrisPkActiveRooms(params = {}) {
-  return request({ url: '/games/tetris-pk/rooms/active', method: 'get', params })
+  return request({ url: '/game/tetris-pk/rooms/active', method: 'get', params })
 }
 
 export function getTetrisPkRoom(roomId) {

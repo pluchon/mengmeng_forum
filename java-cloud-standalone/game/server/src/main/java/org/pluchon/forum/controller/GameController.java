@@ -219,8 +219,86 @@ public class GameController {
         return Result.success();
     }
 
-    @Operation(summary = "俄罗斯方块 PK 活跃房间", description = "可观战房间分页; roomId 非空时按房间号精确查询")
-    @GetMapping("/tetris-pk/rooms/active")
+    @Operation(summary = "井字棋认输", description = "HTTP 兜底认输接口，正常房间内优先使用 WebSocket")
+    @PostMapping("/jinzi/rooms/{roomId}/surrender")
+    public Result<Void> jinziSurrender(
+            @PathVariable String roomId,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        jinziRoomService.surrender(roomId, loginUser.getId(), null);
+        return Result.success();
+    }
+
+    /** 俄罗斯方块资料 */
+    @GetMapping("/tetris/profile")
+    public Result<TetrisProfileVO> tetrisProfile(HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisService.getProfile(loginUser.getId()));
+    }
+
+    /** 俄罗斯方块历史记录 */
+    @GetMapping("/tetris/records")
+    public Result<PageResult<TetrisRecordVO>> tetrisRecords(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisService.listRecords(loginUser.getId(), pageNum, pageSize));
+    }
+
+    /** 俄罗斯方块排行榜 */
+    @GetMapping("/tetris/leaderboard")
+    public Result<PageResult<TetrisProfileVO>> tetrisLeaderboard(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return Result.success(tetrisService.listLeaderboard(pageNum, pageSize));
+    }
+
+    /** 俄罗斯方块单局结算 */
+    @PostMapping("/tetris/settle")
+    public Result<TetrisSettleResultVO> tetrisSettle(
+            @Valid @RequestBody TetrisSettleRequest body,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisService.settle(loginUser.getId(), body));
+    }
+
+    /** 俄罗斯方块回放 */
+    @GetMapping("/tetris/records/{recordId}/replay")
+    public Result<TetrisReplayVO> tetrisReplay(
+            @PathVariable Long recordId,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisService.getReplay(loginUser.getId(), recordId));
+    }
+
+    /** 俄罗斯方块 PK 资料 */
+    @GetMapping("/tetris/pk/profile")
+    public Result<GameUserProfileVO> tetrisPkProfile(HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisPkService.getProfile(loginUser.getId()));
+    }
+
+    /** 俄罗斯方块 PK 历史记录 */
+    @GetMapping("/tetris/pk/records")
+    public Result<PageResult<TetrisPkRecordVO>> tetrisPkRecords(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest request) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);
+        return Result.success(tetrisPkService.listRecords(loginUser.getId(), pageNum, pageSize));
+    }
+
+    /** 俄罗斯方块 PK 排行榜 */
+    @GetMapping("/tetris/pk/leaderboard")
+    public Result<PageResult<TetrisPkLeaderboardVO>> tetrisPkLeaderboard(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
+        return Result.success(tetrisPkService.listLeaderboard(pageNum, pageSize));
+    }
+
+    /** 俄罗斯方块 PK 活跃房间 */
+    @GetMapping("/tetris/pk/rooms/active")
     public Result<PageResult<TetrisActiveRoomVO>> tetrisPkActiveRooms(
             @RequestParam(required = false) String roomId,
             @RequestParam(defaultValue = "1") Integer pageNum,
