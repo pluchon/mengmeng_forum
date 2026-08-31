@@ -7,11 +7,25 @@
         </span>
         <h3 class="music-hall-module-card__title">推荐</h3>
       </div>
+      <button
+        type="button"
+        class="music-hall-recommend__filter"
+        :class="{ 'is-active': moods.length }"
+        @click="$emit('open-filter')"
+      >
+        <el-icon><Filter /></el-icon>
+        <span>标签</span>
+        <span v-if="moods.length" class="music-hall-recommend__filter-count">{{ moods.length }}</span>
+      </button>
     </header>
     <div class="music-hall-module-card__body">
       <div class="music-hall-recommend__viewport">
         <div v-if="loading" class="music-hall-recommend__loading">加载中...</div>
-        <MusicHallEmpty v-else-if="!tracks.length" text="暂无推荐歌曲" compact />
+        <MusicHallEmpty
+          v-else-if="!tracks.length"
+          :text="moods.length ? '没有符合所选标签的歌曲' : '暂无推荐歌曲'"
+          compact
+        />
         <div v-else class="music-hall-recommend__grid">
           <article
             v-for="track in tracks"
@@ -43,13 +57,16 @@
       </div>
       <div
         class="music-hall-recommend__pager"
-        :aria-hidden="!(!loading && tracks.length && pageTotal > 1)"
+        :aria-hidden="!(!loading && tracks.length)"
       >
         <AppPagination
-          v-if="!loading && tracks.length && pageTotal > 1"
+          v-if="!loading && tracks.length"
           :current-page="pageNum"
           :total="pageTotal"
           :page-size="1"
+          :pager-count="5"
+          :show-jumper="false"
+          :hide-on-single-page="false"
           @current-change="onPageChange"
         />
       </div>

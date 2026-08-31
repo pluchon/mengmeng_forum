@@ -2,6 +2,7 @@ package org.pluchon.forum.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.constant.ForumTimeZone;
 import org.pluchon.forum.converter.UserMusicConverter;
 import org.pluchon.forum.entity.db.UserMusic;
 import org.pluchon.forum.entity.db.UserMusicPlayStat;
@@ -19,7 +20,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +33,8 @@ import java.util.Objects;
 public class ArticleMusicDiscoverServiceImpl implements ArticleMusicDiscoverService {
 
     private static final int DEFAULT_PAGE_SIZE = 6;
+    // 今日精选的候选池：太小则天天重复，太大会选到几乎没人听的曲子
+    private static final int FEATURED_POOL_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
 
     @Autowired
@@ -47,18 +52,36 @@ public class ArticleMusicDiscoverServiceImpl implements ArticleMusicDiscoverServ
     @Autowired
     private ArticleMusicHotRankingService articleMusicHotRankingService;
 
+    /**
+     * 今日精选。
+     *
+     * <p>原来直接取热榜第 1 名，于是同一个发现页上「今日精选」和「本周热榜」榜首
+     * 永远是同一首歌，两张卡片重复；而且叫「今日」却没有任何按日轮换的成分。
+     * 现在从热榜前 {@value #FEATURED_POOL_SIZE} 名里按当天日期取一首，跳过榜首：
+     * 一天之内稳定，隔天会换，也不会和热榜第一撞车。
+     */
     @Override
     public MusicTrackVO getFeatured() {
-        List<String> keys = articleMusicHotRankingService.listHotMusicKeys(0, 1);
-        if (keys.isEmpty()) {
+        List<String> pool = articleMusicHotRankingService.listHotMusicKeys(0, FEATURED_POOL_SIZE);
+        if (pool.isEmpty()) {
             return null;
         }
-        List<MusicTrackVO> tracks = loadTracksByKeys(keys);
-        return tracks.isEmpty() ? null : tracks.get(0);
+        // 榜首留给热榜，池子里还有别的就从第 2 名开始挑
+        List<String> candidates = pool.size() > 1 ? pool.subList(1, pool.size()) : pool;
+        long day = LocalDate.now(ForumTimeZone.ZONE_ID).toEpochDay();
+        int idx = (int) Math.floorMod(day, candidates.size());
+        List<MusicTrackVO> tracks = loadTracksByKeys(List.of(candidates.get(idx)));
+        if (!tracks.isEmpty()) {
+            return tracks.get(0);
+        }
+        // 选中的那首可能刚被下架，退回池子里第一首能取到的
+        List<MusicTrackVO> fallback = loadTracksByKeys(pool);
+        return fallback.isEmpty() ? null : fallback.get(0);
     }
 
     @Override
-    public PageResult<MusicTrackVO> pageRecommend(Long userId, Integer pageNum, Integer pageSize) {
+    public PageResult<MusicTrackVO> pageRecommend(Long userId, List<String> moods,
+                                                  Integer pageNum, Integer pageSize) {
         List<MusicTrackVO> candidates;
         List<MusicTrackVO> slateTracks = articleMusicRecommendSlateService.loadActiveTracks(userId);
         if (slateTracks != null && !slateTracks.isEmpty()) {
@@ -73,7 +96,113 @@ public class ArticleMusicDiscoverServiceImpl implements ArticleMusicDiscoverServ
                     .filter(item -> item != null && !Objects.equals(item.getMusicKey(), excludeKey))
                     .toList();
         }
+        candidates = applyMoodFilter(candidates, moods);
         return toTrackPage(candidates, pageNum, pageSize);
+    }
+
+    /**
+     * 按勾选的氛围标签过滤并重排推荐候选。
+     *
+     * <p>召回用 OR：标签是 AI 打的，同时要求「深夜」且「伤感」经常直接空集。
+     * 但 OR 会让大量弱相关的歌涌进来，所以排序上做三级惩罚：
+     * 命中数多的优先 → 同命中数按播放量 → 同一作者在一页里限量，
+     * 否则一个高产作者能把整页占满。
+     */
+    private List<MusicTrackVO> applyMoodFilter(List<MusicTrackVO> candidates, List<String> moods) {
+        List<String> wanted = new ArrayList<>();
+        for (String mood : moods == null ? List.<String>of() : moods) {
+            String name = mood == null ? "" : mood.trim();
+            if (!name.isEmpty() && !wanted.contains(name)) {
+                wanted.add(name);
+            }
+            if (wanted.size() >= Constant.MUSIC_MOOD_FILTER_MAX) {
+                break;
+            }
+        }
+        if (wanted.isEmpty() || candidates == null || candidates.isEmpty()) {
+            return candidates;
+        }
+        List<MusicTrackVO> hit = new ArrayList<>();
+        Map<String, Integer> hitCount = new HashMap<>();
+        for (MusicTrackVO track : candidates) {
+            int count = countMoodHits(track, wanted);
+            if (count > 0) {
+                hit.add(track);
+                hitCount.put(track.getMusicKey(), count);
+            }
+        }
+        if (hit.isEmpty()) {
+            return hit;
+        }
+        hit.sort(Comparator
+                .comparingInt((MusicTrackVO t) -> -hitCount.getOrDefault(t.getMusicKey(), 0))
+                .thenComparing(t -> -(t.getPlayCount() == null ? 0L : t.getPlayCount())));
+        return capPerAuthor(hit, loadAuthorMap(hit));
+    }
+
+    private static int countMoodHits(MusicTrackVO track, List<String> wanted) {
+        List<String> tags = track == null ? null : track.getMoodTags();
+        if (tags == null || tags.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (String wantedTag : wanted) {
+            if (tags.contains(wantedTag)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 只在筛选生效时才查一次 musicKey → 作者。
+     *
+     * <p>不把 userId 加进 MusicTrackVO：那是对外的展示模型，没必要把上传者 ID 下发给前端。
+     */
+    private Map<String, Long> loadAuthorMap(List<MusicTrackVO> tracks) {
+        List<String> keys = new ArrayList<>();
+        for (MusicTrackVO track : tracks) {
+            if (track != null && StringUtils.hasText(track.getMusicKey())) {
+                keys.add(track.getMusicKey().trim());
+            }
+        }
+        if (keys.isEmpty()) {
+            return Map.of();
+        }
+        List<UserMusic> rows = userMusicMapper.selectList(new LambdaQueryWrapper<UserMusic>()
+                .select(UserMusic::getMusicKey, UserMusic::getUserId)
+                .in(UserMusic::getMusicKey, keys));
+        Map<String, Long> map = new HashMap<>();
+        for (UserMusic row : rows) {
+            if (row != null && StringUtils.hasText(row.getMusicKey())) {
+                map.put(row.getMusicKey().trim(), row.getUserId());
+            }
+        }
+        return map;
+    }
+
+    // 同一作者在结果里限量，避免高产作者霸屏。热榜那边早有同样的约束
+    private static List<MusicTrackVO> capPerAuthor(List<MusicTrackVO> tracks, Map<String, Long> authorMap) {
+        Map<Long, Integer> perAuthor = new HashMap<>();
+        List<MusicTrackVO> out = new ArrayList<>(tracks.size());
+        List<MusicTrackVO> overflow = new ArrayList<>();
+        for (MusicTrackVO track : tracks) {
+            Long author = authorMap.get(track.getMusicKey());
+            if (author == null) {
+                out.add(track);
+                continue;
+            }
+            int used = perAuthor.getOrDefault(author, 0);
+            if (used < Constant.MUSIC_HOT_AUTHOR_MAX_PER_LIST) {
+                perAuthor.put(author, used + 1);
+                out.add(track);
+            } else {
+                // 超额的不丢弃，挪到末尾——筛选结果本来就不多时全砍掉会很空
+                overflow.add(track);
+            }
+        }
+        out.addAll(overflow);
+        return out;
     }
 
     @Override

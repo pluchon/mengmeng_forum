@@ -4,6 +4,7 @@ import org.pluchon.forum.common.constant.ForumTimeZone;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -31,6 +32,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleMusicPlayStatService;
 import org.pluchon.forum.service.interfaces.article.ArticleUserMusicAuditService;
 import org.pluchon.forum.service.impl.file.AuditedOssImageUploader;
 import org.pluchon.forum.service.interfaces.article.ArticleUserMusicService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +59,14 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
     private static final byte DELETE_TRUE = 1;
     private static final byte DELETE_FALSE = 0;
     private static final int RECENT_PLAY_PAGE_SIZE = 5;
+    // 与前端卡片的格子数对齐：收藏 2列×3行、上传/发布 2列×2行
+    private static final int FAVORITE_PAGE_SIZE = 6;
+    private static final int MINE_PAGE_SIZE = 4;
+    // 同一首歌在这个窗口内重复上报只更新时间，不再累计播放量。
+    // 前端已经要求播够 15 秒才上报，这里是挡直接打接口的兜底。
+    private static final long PLAY_COUNT_WINDOW_MS = 60_000L;
+    // 每人保留的播放历史条数，超出的按最后播放时间从旧到新裁掉
+    private static final int PLAY_HISTORY_KEEP = 200;
     private static final DateTimeFormatter STEM_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     @Autowired
@@ -101,9 +111,9 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         if (!publish && !"draft".equalsIgnoreCase(trimToEmpty(action))) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "action 仅支持 draft 或 publish"));
         }
-        String safeTitle = requireText(title, "请填写歌名");
-        String safeArtist = requireText(artist, "请填写歌手");
-        String safeAlbum = clip(trimToEmpty(album), Constant.MUSIC_TITLE_MAX_LEN);
+        String safeTitle = requireText(title, "请填写歌名", "歌名");
+        String safeArtist = requireText(artist, "请填写歌手", "歌手");
+        String safeAlbum = requireLength(trimToEmpty(album), Constant.MUSIC_TITLE_MAX_LEN, "专辑");
         String safeDuration = clip(trimToEmpty(durationText), 16);
         String mergedLyric = mergeLyric(lyricText, lrc);
         String moodTagsJson = encodeMoodTags(moodTags);
@@ -125,6 +135,17 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         boolean hasAudio = audio != null && !audio.isEmpty();
         if (existing == null && !hasAudio) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先选择歌曲本体"));
+        }
+        // 只拦新建草稿：编辑已有草稿、以及直接发布都不受这个上限影响
+        if (existing == null && !publish) {
+            Long drafts = userMusicMapper.selectCount(new LambdaQueryWrapper<UserMusic>()
+                    .eq(UserMusic::getUserId, userId)
+                    .eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_DRAFT)
+                    .ne(UserMusic::getDeleteState, DELETE_TRUE));
+            if (drafts != null && drafts >= Constant.MUSIC_DRAFT_MAX_COUNT) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                        "草稿最多保存 " + Constant.MUSIC_DRAFT_MAX_COUNT + " 份，请先发布或清理一些"));
+            }
         }
 
         String musicKey;
@@ -205,46 +226,102 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
     }
 
     @Override
-    public List<MusicTrackVO> listMine(Long userId, String scope) {
+    public PageResult<MusicTrackVO> pageMine(Long userId, String scope, String status, String keyword,
+                                             Integer pageNum, Integer pageSize) {
         if (userId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
         String s = trimToEmpty(scope).toLowerCase(Locale.ROOT);
+        boolean publishScope = "publish".equals(s);
         LambdaQueryWrapper<UserMusic> qw = new LambdaQueryWrapper<>();
         qw.eq(UserMusic::getUserId, userId)
-                .ne(UserMusic::getDeleteState, DELETE_TRUE)
-                .orderByDesc(UserMusic::getUpdateTime);
-        if ("publish".equals(s)) {
+                .ne(UserMusic::getDeleteState, DELETE_TRUE);
+        if (publishScope) {
             qw.eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_PUBLISHED);
         } else {
-            qw.in(UserMusic::getStatus,
-                    Constant.USER_MUSIC_STATUS_DRAFT,
-                    Constant.USER_MUSIC_STATUS_REVIEWING,
-                    Constant.USER_MUSIC_STATUS_REJECTED);
+            Byte wanted = statusCodeToDb(status);
+            if (wanted != null) {
+                qw.eq(UserMusic::getStatus, wanted);
+            } else {
+                qw.in(UserMusic::getStatus,
+                        Constant.USER_MUSIC_STATUS_DRAFT,
+                        Constant.USER_MUSIC_STATUS_REVIEWING,
+                        Constant.USER_MUSIC_STATUS_REJECTED);
+            }
         }
-        List<UserMusic> rows = userMusicMapper.selectList(qw);
-        List<MusicTrackVO> out = new ArrayList<>(rows.size());
-        for (UserMusic row : rows) {
-            out.add(UserMusicConverter.toTrackVO(row, true));
+        String kw = trimToEmpty(keyword);
+        if (StringUtils.hasText(kw)) {
+            qw.and(w -> w.like(UserMusic::getTitle, kw).or().like(UserMusic::getArtist, kw));
         }
-        markFavorited(userId, out);
-        return out;
+        qw.orderByDesc(UserMusic::getUpdateTime).orderByDesc(UserMusic::getId);
+
+        Page<UserMusic> page = new Page<>(validPageNum(pageNum), validPageSize(pageSize, MINE_PAGE_SIZE));
+        Page<UserMusic> result = clampPage(userMusicMapper, page, qw);
+        List<MusicTrackVO> records = new ArrayList<>(result.getRecords().size());
+        for (UserMusic row : result.getRecords()) {
+            records.add(UserMusicConverter.toTrackVO(row, true));
+        }
+        markFavorited(userId, records);
+        return toPageResult(records, result);
+    }
+
+    // 前端传的是 statusCode 那套字符串，这里翻回库里的 tinyint
+    private static Byte statusCodeToDb(String status) {
+        String v = trimToEmpty(status).toLowerCase(Locale.ROOT);
+        return switch (v) {
+            case "draft" -> Constant.USER_MUSIC_STATUS_DRAFT;
+            case "reviewing" -> Constant.USER_MUSIC_STATUS_REVIEWING;
+            case "rejected" -> Constant.USER_MUSIC_STATUS_REJECTED;
+            case "published" -> Constant.USER_MUSIC_STATUS_PUBLISHED;
+            default -> null;
+        };
     }
 
     @Override
-    public List<MusicTrackVO> listFavorites(Long userId) {
+    public PageResult<MusicTrackVO> pageFavorites(Long userId, Integer pageNum, Integer pageSize) {
         if (userId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
-        List<UserMusicFavorite> rows = userMusicFavoriteMapper.selectList(new LambdaQueryWrapper<UserMusicFavorite>()
+        Page<UserMusicFavorite> page = new Page<>(validPageNum(pageNum),
+                validPageSize(pageSize, FAVORITE_PAGE_SIZE));
+        LambdaQueryWrapper<UserMusicFavorite> favQw = new LambdaQueryWrapper<UserMusicFavorite>()
                 .eq(UserMusicFavorite::getUserId, userId)
                 .ne(UserMusicFavorite::getDeleteState, DELETE_TRUE)
-                .orderByDesc(UserMusicFavorite::getUpdateTime));
-        List<MusicTrackVO> out = new ArrayList<>(rows.size());
-        for (UserMusicFavorite row : rows) {
-            out.add(UserMusicConverter.toTrackVO(row));
+                // 取消收藏与重新收藏都会刷新 update_time，对可见行来说它就是收藏时间
+                .orderByDesc(UserMusicFavorite::getUpdateTime)
+                .orderByDesc(UserMusicFavorite::getId);
+        Page<UserMusicFavorite> result = clampPage(userMusicFavoriteMapper, page, favQw);
+        List<MusicTrackVO> records = new ArrayList<>(result.getRecords().size());
+        for (UserMusicFavorite row : result.getRecords()) {
+            records.add(UserMusicConverter.toTrackVO(row));
         }
-        return out;
+        return toPageResult(records, result);
+    }
+
+    private static int validPageNum(Integer pageNum) {
+        return pageNum == null || pageNum < 1 ? 1 : pageNum;
+    }
+
+    private static int validPageSize(Integer pageSize, int fallback) {
+        int size = pageSize == null || pageSize < 1 ? fallback : pageSize;
+        return Math.min(size, 50);
+    }
+
+    // 取消收藏 / 删草稿之后总页数会变少，停在越界页上会拿到空列表，
+    // 这里统一把页码收回最后一页再查一次
+    private static <T> Page<T> clampPage(BaseMapper<T> mapper, Page<T> page,
+                                         com.baomidou.mybatisplus.core.conditions.Wrapper<T> wrapper) {
+        Page<T> result = mapper.selectPage(page, wrapper);
+        if (result.getCurrent() > result.getPages() && result.getPages() >= 1) {
+            Page<T> retry = new Page<>(result.getPages(), result.getSize());
+            return mapper.selectPage(retry, wrapper);
+        }
+        return result;
+    }
+
+    private static <T> PageResult<T> toPageResult(List<T> records, Page<?> page) {
+        return new PageResult<>(records, page.getTotal(), (int) page.getCurrent(),
+                (int) page.getSize(), page.getPages(), page.getCurrent() < page.getPages());
     }
 
     @Override
@@ -370,8 +447,13 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
             row.setUpdateTime(now);
             userMusicPlayHistoryMapper.insert(row);
             articleMusicPlayStatService.incrementPlayCount(snapshot.musicKey());
+            trimPlayHistory(userId);
             return;
         }
+
+        Date lastPlayed = existed.getUpdateTime();
+        boolean countable = lastPlayed == null
+                || now.getTime() - lastPlayed.getTime() >= PLAY_COUNT_WINDOW_MS;
         userMusicPlayHistoryMapper.update(null, new LambdaUpdateWrapper<UserMusicPlayHistory>()
                 .eq(UserMusicPlayHistory::getId, existed.getId())
                 .set(UserMusicPlayHistory::getTitle, snapshot.title())
@@ -383,7 +465,30 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
                 .set(UserMusicPlayHistory::getLrcUrl, snapshot.lrcUrl())
                 .set(UserMusicPlayHistory::getDeleteState, DELETE_FALSE)
                 .set(UserMusicPlayHistory::getUpdateTime, now));
-        articleMusicPlayStatService.incrementPlayCount(snapshot.musicKey());
+        if (countable) {
+            articleMusicPlayStatService.incrementPlayCount(snapshot.musicKey());
+        }
+    }
+
+    // 播放历史没有天然上限，听得越多表越长；只保留最近 PLAY_HISTORY_KEEP 条
+    private void trimPlayHistory(Long userId) {
+        Long total = userMusicPlayHistoryMapper.selectCount(new LambdaQueryWrapper<UserMusicPlayHistory>()
+                .eq(UserMusicPlayHistory::getUserId, userId)
+                .ne(UserMusicPlayHistory::getDeleteState, DELETE_TRUE));
+        if (total == null || total <= PLAY_HISTORY_KEEP) {
+            return;
+        }
+        List<UserMusicPlayHistory> stale = userMusicPlayHistoryMapper.selectList(
+                new LambdaQueryWrapper<UserMusicPlayHistory>()
+                        .eq(UserMusicPlayHistory::getUserId, userId)
+                        .ne(UserMusicPlayHistory::getDeleteState, DELETE_TRUE)
+                        .orderByAsc(UserMusicPlayHistory::getUpdateTime)
+                        .last("LIMIT " + (total - PLAY_HISTORY_KEEP)));
+        for (UserMusicPlayHistory row : stale) {
+            userMusicPlayHistoryMapper.update(null, new LambdaUpdateWrapper<UserMusicPlayHistory>()
+                    .eq(UserMusicPlayHistory::getId, row.getId())
+                    .set(UserMusicPlayHistory::getDeleteState, DELETE_TRUE));
+        }
     }
 
     @Override
@@ -483,21 +588,31 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         throw new ApplicationException(Result.fail(ResultCode.FAILED, "生成歌曲文件名失败，请稍后重试"));
     }
 
+    // 前端传的是 JSON 数组，旧实现见到 [ 就只做长度截断直接入库，
+    // 于是数量上限和单标签长度全被绕过，截断后还可能存进一段非法 JSON。
+    // 现在两条路径都先解析成数组再统一清洗限量。
     private String encodeMoodTags(String raw) {
         if (!StringUtils.hasText(raw)) {
             return null;
         }
         String trimmed = raw.trim();
+        List<String> parsed;
         if (trimmed.startsWith("[")) {
-            return trimmed.length() > 512 ? trimmed.substring(0, 512) : trimmed;
-        }
-        List<String> tags = new ArrayList<>();
-        for (String part : trimmed.split("[,，]")) {
-            String tag = part.trim();
-            if (StringUtils.hasText(tag) && !tags.contains(tag) && tags.size() < 8) {
-                tags.add(tag.length() > 16 ? tag.substring(0, 16) : tag);
+            try {
+                parsed = objectMapper.readValue(trimmed, new TypeReference<List<String>>() {
+                });
+            } catch (Exception exception) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "标签格式无效"));
             }
+        } else {
+            parsed = new ArrayList<>(List.of(trimmed.split("[,，]")));
         }
+        int rawCount = parsed == null ? 0 : (int) parsed.stream().filter(StringUtils::hasText).count();
+        if (rawCount > Constant.MUSIC_MOOD_TAG_MAX_COUNT) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    "最多选择 " + Constant.MUSIC_MOOD_TAG_MAX_COUNT + " 个标签"));
+        }
+        List<String> tags = MusicMoodTagServiceImpl.sanitizeTagList(parsed);
         if (tags.isEmpty()) {
             return null;
         }
@@ -656,12 +771,22 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         return t.length() > 40 ? t.substring(0, 40) : t;
     }
 
-    private static String requireText(String value, String message) {
+    private static String requireText(String value, String message, String label) {
         String t = trimToEmpty(value);
         if (!StringUtils.hasText(t)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, message));
         }
-        return clip(t, Constant.MUSIC_TITLE_MAX_LEN);
+        return requireLength(t, Constant.MUSIC_TITLE_MAX_LEN, label);
+    }
+
+    // 超长直接报错。静默截断会让用户以为存成功了，回头发现名字被砍了一半
+    private static String requireLength(String value, int max, String label) {
+        String t = trimToEmpty(value);
+        if (t.length() > max) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE,
+                    label + "不能超过 " + max + " 个字"));
+        }
+        return t;
     }
 
     private static String extOf(String filename, String fallback) {

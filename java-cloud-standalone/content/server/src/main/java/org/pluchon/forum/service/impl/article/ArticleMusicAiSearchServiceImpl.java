@@ -30,7 +30,7 @@ class ArticleMusicAiSearchServiceImpl extends ArticleMusicAiSupport implements A
         List<UserMusic> scopedHits = filterRowsByScopeKeyword(rows, query, scope);
         boolean literalBound = !"all".equals(scope) && !scopedHits.isEmpty();
         List<UserMusic> pool = literalBound ? scopedHits : rows;
-        List<AiMusicCandidateDTO> candidates = buildCandidates(pool);
+        List<AiMusicCandidateDTO> candidates = buildCandidates(pool, query);
         if (candidates.isEmpty()) {
             return buildEmptyResult(EMPTY_SEARCH_HINT);
         }

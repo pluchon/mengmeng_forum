@@ -165,3 +165,46 @@
     height: 32px;
   }
 }
+
+/* 推荐卡片标题行右侧的入口 */
+.music-hall-recommend__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #f0e0ea;
+  border-radius: 999px;
+  background: #fff;
+  color: #7a6b80;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.music-hall-recommend__filter:hover {
+  border-color: #f5c2d5;
+  color: #f07ba8;
+}
+
+.music-hall-recommend__filter.is-active {
+  border-color: transparent;
+  background: #fff0f7;
+  color: #f07ba8;
+  font-weight: 600;
+}
+
+.music-hall-recommend__filter-count {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f07ba8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}

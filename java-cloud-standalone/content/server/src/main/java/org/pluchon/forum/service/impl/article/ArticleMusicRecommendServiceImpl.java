@@ -23,7 +23,9 @@ class ArticleMusicRecommendServiceImpl extends ArticleMusicAiSupport implements 
             return buildEmptyResult(EMPTY_RECOMMEND_HINT);
         }
         List<UserMusic> rows = articleUserMusicService.listPublishedWithAiProfile();
-        List<AiMusicCandidateDTO> candidates = buildCandidates(rows);
+        // 推荐同样要防「盲取前 200」：曲库一大，靠后的歌永远不可能被推荐到。
+        // 这里的相关度信号就是帖子本身，标题权重更高所以放前面。
+        List<AiMusicCandidateDTO> candidates = buildCandidates(rows, title + " " + content);
         if (candidates.isEmpty()) {
             return buildEmptyResult(EMPTY_RECOMMEND_HINT);
         }

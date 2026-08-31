@@ -1,0 +1,172 @@
+.mood-filter__mask {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(61, 43, 63, 0.32);
+}
+
+.mood-filter {
+  display: flex;
+  width: min(520px, 92vw);
+  flex-direction: column;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgb(61 43 63 / 18%);
+}
+
+/* 三列等宽让标题真正居中，两侧留出与关闭按钮同宽的位置 */
+.mood-filter__head {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 32px 1fr 32px;
+  padding: 18px 20px 12px;
+}
+
+.mood-filter__title {
+  color: #3d2b3f;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 关闭只留图标，不要按钮底色 */
+.mood-filter__close {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #a99fb0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.mood-filter__close:hover {
+  color: #f07ba8;
+}
+
+.mood-filter__search {
+  padding: 0 20px 12px;
+}
+
+.mood-filter__body {
+  /* 三行 × 五列的容纳高度，翻页器不随内容跳 */
+  min-height: 168px;
+  max-height: 168px;
+  padding: 0 20px;
+  overflow-y: auto;
+}
+
+.mood-filter__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+}
+
+.mood-filter__chip {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid #f0e0ea;
+  border-radius: 999px;
+  background: #fff;
+  color: #7a6b80;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mood-filter__chip:hover {
+  border-color: #f5c2d5;
+  color: #f07ba8;
+}
+
+.mood-filter__chip.is-active {
+  border-color: transparent;
+  background: #f07ba8;
+  color: #fff;
+}
+
+.mood-filter__chip-badge {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #ece7ff;
+  color: #6d5bb8;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.mood-filter__chip.is-active .mood-filter__chip-badge {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.mood-filter__state {
+  padding: 60px 0;
+  color: #b0a3b5;
+  font-size: 13px;
+  text-align: center;
+}
+
+.mood-filter__pager {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px 0;
+}
+
+.mood-filter__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 18px;
+  border-top: 1px solid #f5edf3;
+  color: #b0a3b5;
+  font-size: 12px;
+}
+
+.mood-filter__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mood-filter__reset {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #f0e0ea;
+  border-radius: 999px;
+  background: #fff;
+  color: #7a6b80;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mood-filter__reset:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mood-filter__save {
+  height: 32px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #f35c91;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}

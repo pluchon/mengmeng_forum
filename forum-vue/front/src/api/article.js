@@ -200,6 +200,9 @@ export function listMusicDiscoverRecommend({ pageNum = 1, pageSize = 6, excludeM
     url: '/article/music/discover/recommend',
     method: 'get',
     params,
+    // axios 默认把数组序列化成 moods[]=a&moods[]=b，Spring 的 List<String> 收不到；
+    // repeat 模式输出 moods=a&moods=b
+    paramsSerializer: { indexes: null },
   })
 }
 
@@ -271,16 +274,12 @@ export function retryArticleMusicAudit(id) {
   })
 }
 
-export function listMyMusic(scope) {
-  return request({
-    url: '/article/music/mine',
-    method: 'get',
-    params: { scope },
-  })
+export function listMyMusic(params = {}) {
+  return request({ url: '/article/music/mine', method: 'get', params })
 }
 
-export function listMusicFavorites() {
-  return request({ url: '/article/music/favorites', method: 'get' })
+export function listMusicFavorites(params = {}) {
+  return request({ url: '/article/music/favorites', method: 'get', params })
 }
 
 export function toggleMusicFavorite(data) {
@@ -312,4 +311,12 @@ export function clearArticleMusic(articleId) {
 // 通过 URL 直接更新帖子封面 避免 CORS 重下载
 export function updateArticleCoverByUrl(articleId, coverUrl) {
   return request({ url: '/article/updateCoverUrl', method: 'post', params: { articleId, coverUrl } })
+}
+
+export function listMusicMoodTagOptions(params = {}) {
+  return request({ url: '/article/music/mood-tags', method: 'get', params })
+}
+
+export function createMusicMoodTag(name) {
+  return request({ url: '/article/music/mood-tags', method: 'post', params: { name } })
 }

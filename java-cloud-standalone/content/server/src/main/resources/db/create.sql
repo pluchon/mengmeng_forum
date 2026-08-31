@@ -543,6 +543,31 @@ CREATE TABLE `user_music` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `music_mood_tag` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `name` varchar(16) NOT NULL COMMENT '标签名',
+  `source` varchar(8) NOT NULL DEFAULT 'AI' COMMENT '来源 BUILTIN内置 AI补充 USER创作者创建',
+  `create_user_id` bigint DEFAULT NULL COMMENT '创建者，仅 source=USER 有值',
+  `use_count` int NOT NULL DEFAULT '0' COMMENT '被歌曲使用次数，筛选栏按此降序',
+  `enabled` tinyint NOT NULL DEFAULT '1' COMMENT '是否可用 0否 1是',
+  `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_music_mood_tag_name` (`name`),
+  KEY `idx_music_mood_tag_rank` (`enabled`,`delete_state`,`use_count`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='音乐氛围标签池';
+
+-- 「热门」是默认态而非真实氛围，不入池
+INSERT INTO `music_mood_tag` (`name`, `source`, `use_count`) VALUES
+  ('治愈', 'BUILTIN', 0),
+  ('清新', 'BUILTIN', 0),
+  ('浪漫', 'BUILTIN', 0),
+  ('轻松', 'BUILTIN', 0),
+  ('深夜', 'BUILTIN', 0),
+  ('轻音乐', 'BUILTIN', 0),
+  ('适合配图', 'BUILTIN', 0);
+
 CREATE TABLE `user_music_favorite` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint NOT NULL COMMENT '收藏用户',

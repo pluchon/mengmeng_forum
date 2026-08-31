@@ -15,4 +15,7 @@ public class AiMusicCandidateDTO {
     private String artist;
 
     private String album;
+
+    /** 氛围标签。描述性 query（如「适合深夜听的伤感歌」）唯一能比对的字段 */
+    private java.util.List<String> moodTags;
 }

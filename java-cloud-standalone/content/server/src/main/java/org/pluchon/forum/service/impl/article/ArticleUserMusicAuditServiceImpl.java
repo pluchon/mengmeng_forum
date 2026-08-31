@@ -13,9 +13,12 @@ import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.ContentAiTask;
 import org.pluchon.forum.entity.db.UserMusic;
 import org.pluchon.forum.mapper.ContentAiTaskMapper;
+import org.pluchon.forum.mapper.UserMusicFavoriteMapper;
 import org.pluchon.forum.mapper.UserMusicMapper;
+import org.pluchon.forum.mapper.UserMusicPlayHistoryMapper;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicHotRankingService;
 import org.pluchon.forum.service.interfaces.article.ArticleUserMusicAuditService;
+import org.pluchon.forum.service.interfaces.article.MusicMoodTagService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +45,8 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
     private static final byte TASK_COMPLETED = 2;
     private static final byte TASK_FAILED = 3;
     private static final byte DELETE_FALSE = 0;
+    // 与 republishPendingTasks 的重投递上限保持一致
+    private static final int MAX_TASK_RETRY = 3;
 
     @Autowired
     private UserMusicMapper userMusicMapper;
@@ -63,6 +68,15 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
 
     @Autowired
     private ArticleMusicHotRankingService articleMusicHotRankingService;
+
+    @Autowired
+    private MusicMoodTagService musicMoodTagService;
+
+    @Autowired
+    private UserMusicFavoriteMapper userMusicFavoriteMapper;
+
+    @Autowired
+    private UserMusicPlayHistoryMapper userMusicPlayHistoryMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -133,7 +147,8 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
             applyServiceUnavailable(row, task, readMap(result.get("reviewResult")));
             return;
         }
-        List<String> moodTags = readStringList(result.get("moodTags"));
+        // AI 允许在候选集之外补新词，这里统一清洗+限量，别让模型的输出直接决定入库形状
+        List<String> moodTags = MusicMoodTagServiceImpl.sanitizeTagList(readStringList(result.get("moodTags")));
         Map<String, Object> aiProfile = readMap(result.get("aiProfile"));
         Map<String, Object> reviewResult = readMap(result.get("reviewResult"));
         boolean passed = reviewResult != null && Boolean.TRUE.equals(reviewResult.get("pass"));
@@ -159,6 +174,9 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
                 .set(ContentAiTask::getResultCode, passed ? "PUBLISHED" : "REJECTED")
                 .set(ContentAiTask::getResultReason, null));
         if (passed) {
+            // 标签只在过审后入池，未通过的歌不该把它的标签带进公共池子
+            musicMoodTagService.touchAll(moodTags, MusicMoodTagServiceImpl.SOURCE_AI);
+            refreshSnapshots(row);
             notifyAuditResult(row, task.getTaskId(), "PUBLISHED",
                     Constant.SYSTEM_MSG_TYPE_AUDIT_PASS,
                     Constant.SYSTEM_MSG_TITLE_MUSIC_AUDIT_PASS,
@@ -184,7 +202,7 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
                 .eq(ContentAiTask::getStatus, TASK_PENDING)
                 .eq(ContentAiTask::getDeleteState, DELETE_FALSE)
                 .le(ContentAiTask::getUpdateTime, before)
-                .lt(ContentAiTask::getRetryCount, 3)
+                .lt(ContentAiTask::getRetryCount, MAX_TASK_RETRY)
                 .last("LIMIT 20"));
         int count = 0;
         for (ContentAiTask task : tasks) {
@@ -198,7 +216,64 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
                     .set(ContentAiTask::getRetryCount, task.getRetryCount() + 1));
             count++;
         }
+        return count + giveUpExhaustedTasks(before);
+    }
+
+    /**
+     * 重投递次数耗尽的任务要有终态。
+     *
+     * <p>否则任务永远停在 PENDING、歌永远停在 REVIEWING：这时 retryAudit 会因为
+     * reviewKind 不是 service_error 而拒绝，upload 又只允许编辑 DRAFT/REJECTED，
+     * 用户既重试不了也改不了。这里把它标成 service_error，让页面上现成的
+     * 「重新审核」按钮可用。
+     */
+    private int giveUpExhaustedTasks(Date before) {
+        List<ContentAiTask> exhausted = taskMapper.selectList(new LambdaQueryWrapper<ContentAiTask>()
+                .eq(ContentAiTask::getTaskType, TASK_TYPE_USER_MUSIC)
+                .eq(ContentAiTask::getStatus, TASK_PENDING)
+                .eq(ContentAiTask::getDeleteState, DELETE_FALSE)
+                .le(ContentAiTask::getUpdateTime, before)
+                .ge(ContentAiTask::getRetryCount, MAX_TASK_RETRY)
+                .last("LIMIT 20"));
+        int count = 0;
+        for (ContentAiTask task : exhausted) {
+            UserMusic row = userMusicMapper.selectById(task.getTargetId());
+            if (row == null || row.getStatus() == null
+                    || row.getStatus() != Constant.USER_MUSIC_STATUS_REVIEWING) {
+                // 歌已经有结论了，任务本身收个尾就行
+                taskMapper.update(null, new LambdaUpdateWrapper<ContentAiTask>()
+                        .eq(ContentAiTask::getId, task.getId())
+                        .set(ContentAiTask::getStatus, TASK_FAILED)
+                        .set(ContentAiTask::getResultCode, "GIVE_UP"));
+                continue;
+            }
+            log.warn("用户歌曲审核重投递耗尽，标记为可重试 userMusicId={} taskId={}",
+                    row.getId(), task.getTaskId());
+            applyServiceUnavailable(row, task, null);
+            count++;
+        }
         return count;
+    }
+
+    /**
+     * 收藏与播放历史各存了一份曲目快照，作者改名换封面后那边还是旧的。
+     *
+     * <p>发布是低频动作，过审时顺手刷一遍展示字段就够，不必额外挂定时任务。
+     * audio_url / lrc_url 不刷——那正是快照的意义所在。
+     */
+    private void refreshSnapshots(UserMusic row) {
+        if (row == null || !StringUtils.hasText(row.getMusicKey())) {
+            return;
+        }
+        try {
+            userMusicFavoriteMapper.refreshSnapshot(row.getMusicKey(), row.getTitle(),
+                    row.getArtist(), row.getAlbum(), row.getCoverUrl());
+            userMusicPlayHistoryMapper.refreshSnapshot(row.getMusicKey(), row.getTitle(),
+                    row.getArtist(), row.getAlbum(), row.getCoverUrl());
+        } catch (Exception e) {
+            // 快照是展示用的冗余，刷不动不该把审核结果一起回滚
+            log.warn("刷新曲目快照失败 musicKey={}", row.getMusicKey(), e);
+        }
     }
 
     private Map<String, Object> taskPayload(ContentAiTask task, UserMusic row) {

@@ -12,8 +12,10 @@
       :page-num="recommendPageNum"
       :page-total="recommendPageTotal"
       :active-music-key="activeMusicKey"
+      :moods="moodFilter"
       @play="onPlay"
       @page-change="onRecommendPageChange"
+      @open-filter="moodDialogVisible = true"
     />
     <MusicHallHot
       :tracks="hotTracks"
@@ -23,6 +25,12 @@
       :active-music-key="activeMusicKey"
       @play="onPlay"
       @page-change="onHotPageChange"
+    />
+
+    <MusicMoodFilterDialog
+      v-model="moodDialogVisible"
+      :selected="moodFilter"
+      @apply="onMoodFilterApply"
     />
   </div>
 </template>

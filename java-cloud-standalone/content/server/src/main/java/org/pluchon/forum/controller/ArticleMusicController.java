@@ -15,6 +15,7 @@ import org.pluchon.forum.entity.dto.article.ToggleMusicFavoriteRequest;
 import org.pluchon.forum.entity.vo.article.MusicHotTrackVO;
 import org.pluchon.forum.entity.vo.article.MusicMatchResultVO;
 import org.pluchon.forum.entity.vo.article.MusicParseResultVO;
+import org.pluchon.forum.entity.vo.article.MusicMoodTagVO;
 import org.pluchon.forum.entity.vo.article.MusicTrackVO;
 import org.pluchon.forum.entity.vo.article.MusicTrimResultVO;
 import org.pluchon.forum.entity.vo.common.PageResult;
@@ -25,6 +26,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleMusicParseService;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicRecommendService;
 import org.pluchon.forum.service.interfaces.article.ArticleMusicTrimService;
 import org.pluchon.forum.service.interfaces.article.ArticleUserMusicService;
+import org.pluchon.forum.service.interfaces.article.MusicMoodTagService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,10 +70,46 @@ public class ArticleMusicController {
     @Autowired
     private ForumMusicProperties forumMusicProperties;
 
-    /** 氛围标签候选集，供前端筛选栏与投稿快选使用 */
+    @Autowired
+    private MusicMoodTagService musicMoodTagService;
+
+    /**
+     * 曲库筛选栏的标签。「热门」是不过滤的默认态而非真实氛围，它不在标签池里，
+     * 由这里补在最前面——顺带也让 AI 不会再把它当成可选氛围挑走。
+     */
     @GetMapping("/music/moods")
     public Result<List<String>> musicMoodTags() {
-        return Result.success(forumMusicProperties.resolvedMoodTags());
+        List<String> names = musicMoodTagService.listNames();
+        if (names.isEmpty()) {
+            return Result.success(forumMusicProperties.resolvedMoodTags());
+        }
+        List<String> out = new ArrayList<>(names.size() + 1);
+        out.add(Constant.MUSIC_MOOD_DEFAULT);
+        for (String name : names) {
+            if (!Constant.MUSIC_MOOD_DEFAULT.equals(name)) {
+                out.add(name);
+            }
+        }
+        return Result.success(out);
+    }
+
+    /** 标签选择器：带来源与使用次数，关键词搜索与分页都在后端 */
+    @GetMapping("/music/mood-tags")
+    public Result<PageResult<MusicMoodTagVO>> musicMoodTagOptions(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest httpServletRequest) {
+        requireLogin(httpServletRequest);
+        return Result.success(musicMoodTagService.page(keyword, pageNum, pageSize));
+    }
+
+    /** 创作者创建氛围标签，需过 AI 审核 */
+    @PostMapping("/music/mood-tags")
+    public Result<String> createMusicMoodTag(@RequestParam("name") String name,
+                                             HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = requireLogin(httpServletRequest);
+        return Result.success(musicMoodTagService.createByUser(loginUser.getId(), name));
     }
 
     /** 已发布且 AI 画像就绪的曲库分页 */
@@ -103,12 +142,14 @@ public class ArticleMusicController {
 
     /** 发现页推荐列表 */
     @GetMapping("/music/discover/recommend")
-    public Result<PageResult<MusicTrackVO>> discoverRecommend(@RequestParam(defaultValue = "1") Integer pageNum,
-                                                              @RequestParam(required = false) Integer pageSize,
-                                                              HttpServletRequest httpServletRequest) {
+    public Result<PageResult<MusicTrackVO>> discoverRecommend(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) List<String> moods,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         Long userId = loginUser == null ? null : loginUser.getId();
-        PageResult<MusicTrackVO> page = articleMusicDiscoverService.pageRecommend(userId, pageNum, pageSize);
+        PageResult<MusicTrackVO> page = articleMusicDiscoverService.pageRecommend(userId, moods, pageNum, pageSize);
         if (loginUser != null) {
             articleUserMusicService.markFavorited(loginUser.getId(), page.getRecords());
         }
@@ -194,19 +235,28 @@ public class ArticleMusicController {
         return Result.success(articleUserMusicService.retryAudit(loginUser.getId(), id));
     }
 
-    /** 我的上传/我的发布：scope=upload|publish */
+    /** 我的上传/我的发布：scope=upload|publish; status 与 keyword 一并由后端筛 */
     @GetMapping("/music/mine")
-    public Result<List<MusicTrackVO>> listMine(@RequestParam(defaultValue = "upload") String scope,
-                                               HttpServletRequest httpServletRequest) {
+    public Result<PageResult<MusicTrackVO>> listMine(
+            @RequestParam(defaultValue = "upload") String scope,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = requireLogin(httpServletRequest);
-        return Result.success(articleUserMusicService.listMine(loginUser.getId(), scope));
+        return Result.success(articleUserMusicService.pageMine(
+                loginUser.getId(), scope, status, keyword, pageNum, pageSize));
     }
 
-    /** 我的收藏 */
+    /** 我的收藏，按收藏时间倒序分页 */
     @GetMapping("/music/favorites")
-    public Result<List<MusicTrackVO>> listFavorites(HttpServletRequest httpServletRequest) {
+    public Result<PageResult<MusicTrackVO>> listFavorites(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false) Integer pageSize,
+            HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = requireLogin(httpServletRequest);
-        return Result.success(articleUserMusicService.listFavorites(loginUser.getId()));
+        return Result.success(articleUserMusicService.pageFavorites(loginUser.getId(), pageNum, pageSize));
     }
 
     /** 收藏或取消收藏，返回当前是否已收藏 */

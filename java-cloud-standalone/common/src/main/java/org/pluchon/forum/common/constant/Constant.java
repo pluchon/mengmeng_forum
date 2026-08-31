@@ -212,6 +212,11 @@ public final class Constant {
     public static final long MUSIC_LRC_MAX_SIZE = ForumBusinessConstants.MUSIC_LRC_MAX_SIZE;
     public static final int MUSIC_TITLE_MAX_LEN = ForumBusinessConstants.MUSIC_TITLE_MAX_LEN;
     public static final int MUSIC_LYRIC_TEXT_MAX_LEN = ForumBusinessConstants.MUSIC_LYRIC_TEXT_MAX_LEN;
+    public static final int MUSIC_MOOD_TAG_MAX_COUNT = ForumBusinessConstants.MUSIC_MOOD_TAG_MAX_COUNT;
+    public static final int MUSIC_MOOD_TAG_NAME_MAX_LEN = ForumBusinessConstants.MUSIC_MOOD_TAG_NAME_MAX_LEN;
+    public static final String MUSIC_MOOD_DEFAULT = ForumBusinessConstants.MUSIC_MOOD_DEFAULT;
+    public static final int MUSIC_DRAFT_MAX_COUNT = ForumBusinessConstants.MUSIC_DRAFT_MAX_COUNT;
+    public static final int MUSIC_MOOD_FILTER_MAX = ForumBusinessConstants.MUSIC_MOOD_FILTER_MAX;
     public static final byte USER_MUSIC_STATUS_DRAFT = ForumBusinessConstants.USER_MUSIC_STATUS_DRAFT;
     public static final byte USER_MUSIC_STATUS_REVIEWING = ForumBusinessConstants.USER_MUSIC_STATUS_REVIEWING;
     public static final byte USER_MUSIC_STATUS_PUBLISHED = ForumBusinessConstants.USER_MUSIC_STATUS_PUBLISHED;

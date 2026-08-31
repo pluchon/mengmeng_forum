@@ -279,9 +279,14 @@
   position: relative;
 }
 
-.music-hall__mine-card {
-  flex: 0 0 auto;
-  flex-shrink: 0;
+/* 播放器与最近播放的白底卡片。上一批清死样式时，正则把这条逗号选择器
+   连同 .music-hall__mine-card / .music-hall__ai-card 一起吃掉了 */
+.music-hall__player-card,
+.music-hall__recent-card {
+  border-radius: 16px;
+  border: 1px solid #f0e0ea;
+  background: #fff;
+  padding: 16px;
 }
 
 .music-hall__mine-stack {
@@ -483,40 +488,6 @@
   cursor: pointer;
 }
 
-.music-hall__moods {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.music-hall__mood {
-  padding: 8px 14px;
-  border-radius: 16px;
-  border: 1px solid #f0e0ea;
-  background: #fff;
-  color: #7a6b80;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.music-hall__mood.is-active {
-  border-color: transparent;
-  background: #f07ba8;
-  color: #fff;
-  font-weight: 600;
-}
-
-.music-hall__mine-card,
-.music-hall__ai-card,
-.music-hall__player-card,
-.music-hall__recent-card {
-  border-radius: 16px;
-  border: 1px solid #f0e0ea;
-  background: #fff;
-  padding: 16px;
-}
-
 .music-hall__track-glow .music-hall__track-card {
   border-radius: 16px;
   border: 1px solid #f0e0ea;
@@ -667,29 +638,6 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
-}
-
-.music-hall__mine-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 0;
-}
-
-.music-hall__mine-tab {
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 16px;
-  background: #fff0f7;
-  color: #f07ba8;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.music-hall__mine-tab.is-active {
-  background: #f07ba8;
-  color: #fff;
 }
 
 .music-hall__parse-btn {
@@ -1424,62 +1372,6 @@
   border-radius: 8px;
 }
 
-.music-hall__ai-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.music-hall__ai-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #3d2b3f;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.music-hall__ai-title .el-icon {
-  color: #9b8eea;
-}
-
-.music-hall__ai-badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #f3eeff;
-  color: #9b8eea;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.music-hall__dev-stub {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 16px 12px;
-  color: #9b8eea;
-  background: rgba(255, 249, 252, 0.9);
-  border-radius: 14px;
-}
-
-.music-hall__dev-stub--panel {
-  box-shadow: 0 8px 24px rgba(155, 142, 234, 0.2);
-  background: #fff;
-  outline: 1px solid #f0e0ea;
-  margin: auto;
-  inset: auto;
-  position: relative;
-  width: fit-content;
-  max-width: calc(100% - 24px);
-  padding: 16px 28px;
-  border-radius: 16px;
-}
-
 .music-hall__section-panel--mine {
   /* 双列 × 3 行空态位 */
   height: 236px;
@@ -1504,39 +1396,6 @@
   height: 100%;
   min-height: 0;
   align-content: start;
-}
-
-.music-hall__section-panel--ai {
-  /* 设计稿 AI控制台容器 h-[200px] */
-  height: 200px;
-  min-height: 200px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fff8fc 0%, #f7f3ff 100%);
-  outline: 1px solid #f0e0ea;
-  outline-offset: -1px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.music-hall__section-panel--mine .music-hall__dev-stub {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 249, 252, 0.92);
-}
-
-.music-hall__dev-title {
-  color: #3d2b3f;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.music-hall__dev-sub {
-  color: #b0a3b5;
-  font-size: 12px;
 }
 
 .music-hall__player-card {
@@ -2197,4 +2056,387 @@
   .music-hall__top {
     padding: 0 16px;
   }
+}
+
+/* ---- 最近播放行：歌名 / 歌手 + 时长 + 跳动条 ---- */
+.music-hall__recent-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.music-hall__recent-artist {
+  color: #b0a3b5;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-hall__recent-duration {
+  flex-shrink: 0;
+  color: #b0a3b5;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.music-hall__mine-duration {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-right: 6px;
+  color: #b0a3b5;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 波形：播放时呼吸，表达“在播”而不只是染色 ---- */
+@keyframes music-hall-wave-pulse {
+  0%, 100% { transform: scaleY(0.72); }
+  50% { transform: scaleY(1.18); }
+}
+
+.music-hall__wave.is-playing .music-hall__wave-bar {
+  transform-origin: bottom;
+  animation: music-hall-wave-pulse 1.1s ease-in-out infinite;
+}
+
+.music-hall__wave.is-analyzing {
+  opacity: 0.45;
+}
+
+/* ---- 进度条拖拽 ---- */
+.music-hall__progress-track.is-dragging {
+  cursor: grabbing;
+}
+
+.music-hall__progress-track.is-dragging .music-hall__progress-fill {
+  transition: none;
+}
+
+.music-hall__audio-state {
+  padding: 2px 0;
+  color: #b0a3b5;
+  font-size: 11px;
+  text-align: center;
+}
+
+.music-hall__audio-state--error {
+  color: #e8709a;
+}
+
+.music-hall__lrc-retry {
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: #f07ba8;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* 歌名较长时给两行，单行省略号会把 remix 之类的后缀全吃掉 */
+.music-hall__player-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.music-hall__tags-more {
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid #f0e0ea;
+  background: #fdf3f8;
+  color: #d9709c;
+  font-size: 11px;
+  cursor: default;
+}
+
+/* ---- 歌词区可手动滚动 ---- */
+.music-hall__lrc-viewport {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* ---- 上传表单：歌词条与标签条 ---- */
+.music-hall__lrc-entry-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.music-hall__lrc-entry-hint {
+  color: #e8709a;
+  font-size: 11px;
+}
+
+.music-hall__lrc-entry.is-invalid {
+  border-color: #f5c2d5;
+}
+
+.music-hall__tag-entry {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #f0e0ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #7a6b80;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.music-hall__tag-entry-empty {
+  color: #c4b0c0;
+}
+
+.music-hall__tag-entry-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.music-hall__tag-entry-list span {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #fdf0f6;
+  color: #d9709c;
+  font-size: 11px;
+}
+
+/* ---- 歌词 dialog 的不支持态 ---- */
+.music-hall__lrc-dialog-warn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #e8709a;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.music-hall__lrc-dialog-head {
+  position: relative;
+}
+
+.music-hall__lrc-dialog-body.is-disabled {
+  color: #b7b0bd;
+  opacity: 0.55;
+}
+
+.music-hall__lrc-dialog-body.is-disabled textarea {
+  color: #b7b0bd;
+}
+
+/* ---- 标签选择 dialog ---- */
+.music-hall__tag-dialog {
+  display: flex;
+  width: min(520px, 92vw);
+  max-height: min(70vh, 560px);
+  flex-direction: column;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(21, 17, 38, 0.28);
+}
+
+.music-hall__tag-dialog-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.music-hall__tag-create {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #f35c91;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.music-hall__tag-create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.music-hall__tag-dialog-body {
+  flex: 1;
+  min-height: 160px;
+  padding: 0 20px;
+  overflow-y: auto;
+}
+
+.music-hall__tag-dialog-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.music-hall__tag-dialog-state {
+  padding: 40px 0;
+  color: #b0a3b5;
+  font-size: 13px;
+  text-align: center;
+}
+
+.music-hall__tag-chip-badge {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #ece7ff;
+  color: #6d5bb8;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.music-hall__tag-dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 18px;
+  border-top: 1px solid #f5edf3;
+  color: #b0a3b5;
+  font-size: 12px;
+}
+
+/* ---- 收藏 / 发布：卡片高度固定，翻页器常驻，歌少也不塌 ---- */
+.music-hall__module-card--favorite .music-hall__module-card__body,
+.music-hall__module-card--publish .music-hall__module-card__body {
+  /* 标题与列表之间留出间距，否则列表框会顶到上面卡片的描边上 */
+  margin-top: 6px;
+}
+
+.music-hall__mine-pager {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding-top: 4px;
+}
+
+/* 空态占满一整页的高度，和有歌时保持同样的卡片尺寸 */
+.music-hall__empty-state--fixed {
+  height: 100%;
+  min-height: 0;
+}
+
+.music-hall__module-card--favorite .music-hall__module-card__body {
+  height: 272px;
+  min-height: 272px;
+}
+
+.music-hall__module-card--publish .music-hall__module-card__body {
+  height: 190px;
+  min-height: 190px;
+}
+
+.music-hall__mine-grid--favorite,
+.music-hall__mine-grid--publish {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- 标签 dialog：标题居中，关闭按钮不要底色 ---- */
+.music-hall__tag-dialog-head {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 32px 1fr 32px;
+  padding: 18px 20px 12px;
+}
+
+.music-hall__tag-dialog-head .music-hall__lrc-dialog-title {
+  text-align: center;
+}
+
+.music-hall__tag-dialog-close {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #a99fb0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.music-hall__tag-dialog-close:hover {
+  color: #f07ba8;
+}
+
+.music-hall__tag-dialog-pager {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px 0;
+}
+
+.music-hall__tag-dialog-body {
+  /* 三行 × 六列的容纳高度，翻页位置才不会随内容跳 */
+  min-height: 170px;
+  max-height: 170px;
+}
+
+/* 「继续编辑 / 重新提交」原来没有指针与悬停反馈，看着不像能点 */
+.music-hall__pick {
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.music-hall__pick:hover {
+  background: #f07ba8;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(240, 123, 168, 0.28);
+}
+
+.music-hall__pick:active {
+  transform: translateY(1px);
+}
+
+.music-hall__upload-mid {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 搜索结果区在音乐大厅里要铺满发现流原本占的高度，
+   原来固定 316px，一搜索下面就空出一大片白 */
+.music-hall--embedded .music-hall__section-panel--tracks {
+  /* 双列 × 6 行(80) + gap12×5 + 翻页区 40 + gap12 */
+  height: 604px;
+  min-height: 604px;
+}
+
+.music-hall__track-duration {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #b0a3b5;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 结果卡片里的播放标记跟着卡片走，不额外抢点击 */
+.music-hall__track .music-hall__mine-play {
+  margin-left: 0;
+  pointer-events: none;
 }

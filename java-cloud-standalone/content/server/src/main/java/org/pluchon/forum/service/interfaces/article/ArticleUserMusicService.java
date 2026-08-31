@@ -15,9 +15,16 @@ public interface ArticleUserMusicService {
                         String durationText, String lyricText, String moodTags,
                         MultipartFile audio, MultipartFile cover, MultipartFile lrc);
 
-    List<MusicTrackVO> listMine(Long userId, String scope);
+    /**
+     * 我的上传 / 我的发布。
+     *
+     * <p>状态筛选与关键词一并下推到 SQL：分页留在后端而筛选留在前端的话，
+     * 会出现「第 2 页搜不到第 1 页的歌」。
+     */
+    PageResult<MusicTrackVO> pageMine(Long userId, String scope, String status, String keyword,
+                                      Integer pageNum, Integer pageSize);
 
-    List<MusicTrackVO> listFavorites(Long userId);
+    PageResult<MusicTrackVO> pageFavorites(Long userId, Integer pageNum, Integer pageSize);
 
     boolean toggleFavorite(Long userId, ToggleMusicFavoriteRequest req);
 

@@ -145,6 +145,16 @@ public final class ForumBusinessConstants {
     public static final long MUSIC_LRC_MAX_SIZE = (long) 1024 * 1024;
     public static final int MUSIC_TITLE_MAX_LEN = 100;
     public static final int MUSIC_LYRIC_TEXT_MAX_LEN = 100_000;
+    // 一首歌最多挂 6 个氛围标签：播放器卡片一行放得下 3 个，再多就换行撑变形
+    public static final int MUSIC_MOOD_TAG_MAX_COUNT = 6;
+    public static final int MUSIC_MOOD_TAG_NAME_MAX_LEN = 8;
+    // 曲库筛选栏的默认态，语义是「不过滤」，不是真实氛围，因此不进标签池
+    public static final String MUSIC_MOOD_DEFAULT = "热门";
+    // 每份草稿都会往 OSS 写一个最大 50MB 的音频，不设上限等于开着一个刷存储的口子
+    public static final int MUSIC_DRAFT_MAX_COUNT = 20;
+    // 推荐筛选最多勾几个氛围标签。再多的话 OR 召回等于没筛，
+    // 命中数排序的区分度也会被稀释
+    public static final int MUSIC_MOOD_FILTER_MAX = 5;
     public static final byte USER_MUSIC_STATUS_DRAFT = 0;
     public static final byte USER_MUSIC_STATUS_REVIEWING = 1;
     public static final byte USER_MUSIC_STATUS_PUBLISHED = 2;

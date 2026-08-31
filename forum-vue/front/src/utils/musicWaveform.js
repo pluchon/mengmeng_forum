@@ -6,9 +6,29 @@ function fallbackPeaks(barCount = DEFAULT_BAR_COUNT) {
   return Array.from({ length: barCount }, (_, i) => MIN_HEIGHT + ((i * 7) % 5) * 4)
 }
 
-function normalizePeaks(rawPeaks, barCount) {
-  const top = Math.max(...rawPeaks, 0.001)
-  return rawPeaks.map((peak) => Math.round(MIN_HEIGHT + (peak / top) * (MAX_HEIGHT - MIN_HEIGHT)))
+// 取 5%~95% 分位做归一化基准，再用 gamma 把中段拉开。
+// 之前是「块内最大绝对值 / 全曲最大值」：现代母带把响度压到接近 0dB，
+// 几乎每个块的瞬时峰值都贴着 1.0，画出来就是一条平的栅栏。
+const PEAK_GAMMA = 0.65
+
+function quantile(sorted, ratio) {
+  if (!sorted.length) return 0
+  const pos = (sorted.length - 1) * Math.min(1, Math.max(0, ratio))
+  const low = Math.floor(pos)
+  const high = Math.min(sorted.length - 1, low + 1)
+  return sorted[low] + (sorted[high] - sorted[low]) * (pos - low)
+}
+
+function normalizePeaks(rawPeaks) {
+  const sorted = [...rawPeaks].sort((a, b) => a - b)
+  const floor = quantile(sorted, 0.05)
+  const ceil = quantile(sorted, 0.95)
+  const span = Math.max(ceil - floor, 1e-6)
+  return rawPeaks.map((peak) => {
+    const clamped = Math.min(1, Math.max(0, (peak - floor) / span))
+    const shaped = Math.pow(clamped, PEAK_GAMMA)
+    return Math.round(MIN_HEIGHT + shaped * (MAX_HEIGHT - MIN_HEIGHT))
+  })
 }
 
 export function peaksFromBuffer(buffer, barCount = DEFAULT_BAR_COUNT) {
@@ -17,13 +37,17 @@ export function peaksFromBuffer(buffer, barCount = DEFAULT_BAR_COUNT) {
   const raw = []
   for (let i = 0; i < barCount; i += 1) {
     const start = i * blockSize
-    let max = 0
-    for (let j = start; j < start + blockSize && j < channel.length; j += 1) {
-      max = Math.max(max, Math.abs(channel[j]))
+    const end = Math.min(start + blockSize, channel.length)
+    // RMS 而不是 max：峰值几乎恒等于满刻度，均方根才反映这一段的实际响度
+    let sum = 0
+    let count = 0
+    for (let j = start; j < end; j += 1) {
+      sum += channel[j] * channel[j]
+      count += 1
     }
-    raw.push(max)
+    raw.push(count ? Math.sqrt(sum / count) : 0)
   }
-  return normalizePeaks(raw, barCount)
+  return normalizePeaks(raw)
 }
 
 async function readArrayBuffer(source) {

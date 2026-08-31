@@ -62,6 +62,8 @@
               class="music-hall__search-input"
               :placeholder="aiSearchEnabled ? '向 AI 描述你想找的歌曲' : '搜你想听......'"
               @keydown.enter.prevent="onCatalogSearch"
+              @input="onSearchKeywordInput"
+              @search="onSearchKeywordInput"
             >
             <button
               type="button"
@@ -91,19 +93,6 @@
         />
 
         <template v-else>
-        <div v-if="!embedded" class="music-hall__moods">
-          <button
-            v-for="tag in moodTags"
-            :key="tag"
-            type="button"
-            class="music-hall__mood"
-            :class="{ 'is-active': isMoodActive(tag) }"
-            @click="onMoodClick(tag)"
-          >
-            {{ tag }}
-          </button>
-        </div>
-
         <BorderGlow
           class="music-hall__track-glow"
           :animated="aiLoading"
@@ -148,8 +137,19 @@
                   </div>
                   <div class="music-hall__meta">
                     <div class="music-hall__name">{{ track.title }}</div>
-                    <div class="music-hall__sub">{{ track.artist || '曲库配乐' }}</div>
+                    <div class="music-hall__sub">{{ artistText(track.artist) || '曲库配乐' }}</div>
                   </div>
+                  <span class="music-hall__track-duration">
+                    {{ track.durationText || '--:--' }}
+                  </span>
+                  <span
+                    v-if="!isPickerMode"
+                    class="music-hall__mine-play"
+                    role="button"
+                    aria-label="播放"
+                  >
+                    <el-icon><VideoPlay /></el-icon>
+                  </span>
                   <span v-if="isPickerMode" class="music-hall__pick">
                     {{ draftSelected?.musicKey === track.musicKey ? '已选择' : '选择' }}
                   </span>
@@ -160,6 +160,9 @@
                   :current-page="catalogPageNum"
                   :total="catalogPageTotal"
                   :page-size="1"
+                  :pager-count="5"
+                  :show-jumper="false"
+                  :hide-on-single-page="false"
                   @current-change="onCatalogPageChange"
                 />
               </div>
@@ -169,60 +172,11 @@
         </template>
         </template>
 
-        <div v-if="showMinePanel" :class="embedded ? 'music-hall__mine-stack' : 'music-hall__mine-card'">
-          <div v-if="!embedded" class="music-hall__mine-head">
-            <div class="music-hall__mine-tabs">
-              <button
-                type="button"
-                class="music-hall__mine-tab"
-                :class="{ 'is-active': mineTab === 'favorite' }"
-                @click="mineTab = 'favorite'"
-              >
-                我的收藏
-              </button>
-              <button
-                type="button"
-                class="music-hall__mine-tab"
-                :class="{ 'is-active': mineTab === 'compose' }"
-                @click="mineTab = 'compose'"
-              >
-                上传歌曲
-              </button>
-              <button
-                type="button"
-                class="music-hall__mine-tab"
-                :class="{ 'is-active': mineTab === 'upload' }"
-                @click="mineTab = 'upload'"
-              >
-                我的上传
-              </button>
-              <button
-                type="button"
-                class="music-hall__mine-tab"
-                :class="{ 'is-active': mineTab === 'publish' }"
-                @click="mineTab = 'publish'"
-              >
-                我的发布
-              </button>
-            </div>
-            <button
-              v-if="mineTab === 'compose'"
-              type="button"
-              class="music-hall__parse-btn"
-              :disabled="parsing || composeLocked"
-              @click="onOneClickParse"
-            >
-              <el-icon><MagicStick /></el-icon>
-              一键上传解析
-            </button>
-          </div>
-
-          <component
-            :is="embedded ? 'section' : 'div'"
-            v-if="embedded || mineTab === 'favorite'"
-            :class="embedded ? 'music-hall__module-card music-hall__module-card--favorite' : 'music-hall__section-panel music-hall__section-panel--mine'"
-          >
-            <header v-if="embedded" class="music-hall__module-card__head">
+        <!-- 创作页与公众大厅统一成竖排卡片：创作页原来是四个 tab 挤在一个卡片里，
+             上传歌曲/我的上传属于公众大厅的创作界面，不该出现在选配乐的场景 -->
+        <div v-if="showMinePanel" class="music-hall__mine-stack">
+          <section class="music-hall__module-card music-hall__module-card--favorite">
+            <header class="music-hall__module-card__head">
               <div class="music-hall__module-card__head-left">
                 <span class="music-hall__module-card__icon" aria-hidden="true">
                   <el-icon><Star /></el-icon>
@@ -230,8 +184,8 @@
                 <h3 class="music-hall__module-card__title">我的收藏</h3>
               </div>
             </header>
-            <div :class="embedded ? 'music-hall__module-card__body' : undefined">
-            <div v-if="!favoriteTracks.length" class="music-hall__empty-state">
+            <div class="music-hall__module-card__body">
+            <div v-if="!favoriteTracks.length" class="music-hall__empty-state music-hall__empty-state--fixed">
               <img :src="emptyMusicUrl" alt="">
               <p>暂无收藏</p>
             </div>
@@ -254,19 +208,43 @@
                 </div>
                 <div class="music-hall__meta">
                   <div class="music-hall__name">{{ track.title }}</div>
-                  <div class="music-hall__sub">{{ track.artist || track.durationText || '收藏曲目' }}</div>
+                  <div class="music-hall__sub">{{ artistText(track.artist) || '未知歌手' }}</div>
                 </div>
+                <span class="music-hall__mine-duration">
+                  {{ track.durationText || '--:--' }}
+                </span>
+                <button
+                  v-if="!isPickerMode"
+                  type="button"
+                  class="music-hall__mine-play"
+                  aria-label="播放"
+                  @click.stop="selectTrack(track)"
+                >
+                  <el-icon><VideoPlay /></el-icon>
+                </button>
                 <span v-if="isPickerMode" class="music-hall__pick">
                   {{ draftSelected?.musicKey === track.musicKey ? '已选择' : '选择' }}
                 </span>
               </button>
             </div>
+            <div class="music-hall__mine-pager">
+              <AppPagination
+                :current-page="favoritePage"
+                :total="favoritePageTotal"
+                :page-size="1"
+                size="small"
+                :pager-count="5"
+                :show-jumper="false"
+                :hide-on-single-page="false"
+                @current-change="onFavoritePageChange"
+              />
             </div>
-          </component>
+            </div>
+          </section>
 
           <component
             :is="embedded ? 'section' : 'div'"
-            v-if="embedded || mineTab === 'compose'"
+            v-if="embedded"
             :class="embedded ? 'music-hall__module-card' : undefined"
           >
             <header v-if="embedded" class="music-hall__module-card__head">
@@ -423,28 +401,35 @@
                 <div class="music-hall__meta-row music-hall__meta-row--2">
                   <div class="music-hall__field">
                     <span>歌词</span>
-                    <button type="button" class="music-hall__lrc-entry" @click="openComposeLrc">
+                    <button
+                      type="button"
+                      class="music-hall__lrc-entry"
+                      :class="{ 'is-invalid': composeLrcUnsupported }"
+                      @click="openComposeLrc"
+                    >
                       <span>
                         <el-icon><Document /></el-icon>
                         {{ songForm.lrcText ? '查看歌词' : '暂无歌词' }}
                       </span>
-                      <el-icon><ArrowRight /></el-icon>
+                      <span class="music-hall__lrc-entry-right">
+                        <span v-if="composeLrcEntryHint" class="music-hall__lrc-entry-hint">
+                          {{ composeLrcEntryHint }}
+                        </span>
+                        <el-icon><ArrowRight /></el-icon>
+                      </span>
                     </button>
                   </div>
                   <div class="music-hall__field">
                     <span>标签</span>
-                    <div class="music-hall__tag-inline">
-                      <button
-                        v-for="tag in composeTagOptions"
-                        :key="`ct-${tag}`"
-                        type="button"
-                        class="music-hall__tag-chip"
-                        :class="{ 'is-active': songForm.tags?.includes(tag) }"
-                        @click="toggleComposeTag(tag)"
-                      >
-                        {{ tag }}
-                      </button>
-                    </div>
+                    <button type="button" class="music-hall__tag-entry" @click="openTagDialog">
+                      <span v-if="!songForm.tags?.length" class="music-hall__tag-entry-empty">
+                        暂无标签，AI 会自动选择
+                      </span>
+                      <span v-else class="music-hall__tag-entry-list">
+                        <span v-for="tag in songForm.tags" :key="`ct-${tag}`">{{ tag }}</span>
+                      </span>
+                      <el-icon><ArrowRight /></el-icon>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -472,11 +457,11 @@
                 <h3 class="music-hall__module-card__title">我的上传</h3>
               </div>
             </header>
-          <div v-if="embedded || mineTab === 'upload'" class="music-hall__my-upload">
+          <div v-if="embedded" class="music-hall__my-upload">
             <div class="music-hall__upload-toolbar">
               <label class="music-hall__upload-search">
                 <el-icon><Search /></el-icon>
-                <input v-model="uploadKeyword" type="search" placeholder="搜索歌名 / 歌手">
+                <input v-model="uploadKeyword" type="search" placeholder="搜索歌名 / 歌手" @input="onUploadSearchInput">
               </label>
               <div class="music-hall__status-track">
                 <button
@@ -485,7 +470,7 @@
                   type="button"
                   class="music-hall__status-chip"
                   :class="{ 'is-active': uploadStatus === item.id }"
-                  @click="uploadStatus = item.id"
+                  @click="onUploadStatusChange(item.id)"
                 >
                   {{ item.label }}
                 </button>
@@ -493,13 +478,13 @@
             </div>
             <div class="music-hall__section-panel music-hall__section-panel--mine">
               <div v-if="mineLoading" class="music-hall__empty">加载中...</div>
-              <div v-else-if="!filteredUploadTracks.length" class="music-hall__empty-state">
+              <div v-else-if="!uploadTracks.length" class="music-hall__empty-state">
                 <img :src="emptyMusicUrl" alt="">
                 <p>没有歌曲</p>
               </div>
               <div v-else class="music-hall__mine-grid">
                 <div
-                  v-for="track in filteredUploadTracks"
+                  v-for="track in uploadTracks"
                   :key="`up-${track.musicKey}`"
                   class="music-hall__upload-row"
                 >
@@ -521,10 +506,8 @@
                       {{ track.reviewReason }}
                     </p>
                   </div>
-                  <div class="music-hall__upload-mid">
-                    <span>{{ track.artist || '未知歌手' }}</span>
-                    <span>·</span>
-                    <span>{{ track.album || '未填专辑' }}</span>
+                  <div class="music-hall__upload-mid" :title="artistFullText(track.artist)">
+                    <span>{{ artistText(track.artist) }}</span>
                   </div>
                   <button type="button" class="music-hall__pick" @click="onUploadAction(track)">
                     {{ uploadActionLabel(track) }}
@@ -532,15 +515,23 @@
                 </div>
               </div>
             </div>
+            <div class="music-hall__mine-pager">
+              <AppPagination
+                :current-page="uploadPage"
+                :total="uploadPageTotal"
+                :page-size="1"
+                size="small"
+                :pager-count="5"
+                :show-jumper="false"
+                :hide-on-single-page="false"
+                @current-change="onUploadPageChange"
+              />
+            </div>
           </div>
           </component>
 
-          <component
-            :is="embedded ? 'section' : 'div'"
-            v-if="embedded || mineTab === 'publish'"
-            :class="embedded ? 'music-hall__module-card music-hall__module-card--publish' : 'music-hall__section-panel music-hall__section-panel--mine'"
-          >
-            <header v-if="embedded" class="music-hall__module-card__head">
+          <section class="music-hall__module-card music-hall__module-card--publish">
+            <header class="music-hall__module-card__head">
               <div class="music-hall__module-card__head-left">
                 <span class="music-hall__module-card__icon" aria-hidden="true">
                   <el-icon><Promotion /></el-icon>
@@ -548,9 +539,9 @@
                 <h3 class="music-hall__module-card__title">我的发布</h3>
               </div>
             </header>
-            <div :class="embedded ? 'music-hall__module-card__body' : undefined">
+            <div class="music-hall__module-card__body">
             <div v-if="mineLoading" class="music-hall__empty">加载中...</div>
-            <div v-else-if="!publishTracks.length" class="music-hall__empty-state">
+            <div v-else-if="!publishTracks.length" class="music-hall__empty-state music-hall__empty-state--fixed">
               <img :src="emptyMusicUrl" alt="">
               <p>暂无发布的歌曲</p>
             </div>
@@ -564,7 +555,7 @@
                   'is-selected': isPickerMode
                     ? draftSelected?.musicKey === track.musicKey
                     : previewTrack?.musicKey === track.musicKey,
-                  'music-hall__mine-item--publish': embedded,
+                  'music-hall__mine-item--publish': true,
                 }"
                 @click="selectTrack(track)"
               >
@@ -574,10 +565,13 @@
                 </div>
                 <div class="music-hall__meta">
                   <div class="music-hall__name">{{ track.title }}</div>
-                  <div class="music-hall__sub">{{ embedded ? (track.durationText || '--:--') : (track.artist || track.durationText || '我的发布') }}</div>
+                  <div class="music-hall__sub">{{ artistText(track.artist) || '未知歌手' }}</div>
                 </div>
+                <span class="music-hall__mine-duration">
+                  {{ track.durationText || '--:--' }}
+                </span>
                 <button
-                  v-if="embedded && !isPickerMode"
+                  v-if="!isPickerMode"
                   type="button"
                   class="music-hall__mine-play"
                   aria-label="播放"
@@ -590,8 +584,20 @@
                 </span>
               </button>
             </div>
+            <div class="music-hall__mine-pager">
+              <AppPagination
+                :current-page="publishPage"
+                :total="publishPageTotal"
+                :page-size="1"
+                size="small"
+                :pager-count="5"
+                :show-jumper="false"
+                :hide-on-single-page="false"
+                @current-change="onPublishPageChange"
+              />
             </div>
-          </component>
+            </div>
+          </section>
 
           <input ref="audioInputRef" class="music-hall__file-input" type="file" :accept="AUDIO_ACCEPT" @change="onUploadFileChange('audio', $event)">
           <input ref="coverInputRef" class="music-hall__file-input" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" @change="onUploadFileChange('cover', $event)">
@@ -599,22 +605,6 @@
           <input ref="parseInputRef" class="music-hall__file-input" type="file" multiple :accept="`${AUDIO_ACCEPT},.jpg,.jpeg,.png,.gif,.lrc,.txt,image/jpeg,image/png,image/gif,text/plain`" @change="onParseFilesChange">
         </div>
 
-        <div v-if="isPickerMode" class="music-hall__ai-card">
-          <div class="music-hall__ai-head">
-            <div class="music-hall__ai-title">
-              <el-icon><MagicStick /></el-icon>
-              <span>AI 创作音乐</span>
-            </div>
-            <span class="music-hall__ai-badge">开发中</span>
-          </div>
-          <div class="music-hall__section-panel music-hall__section-panel--ai">
-            <div class="music-hall__dev-stub music-hall__dev-stub--panel">
-              <el-icon><Upload /></el-icon>
-              <div class="music-hall__dev-title">功能开发中</div>
-              <div class="music-hall__dev-sub">控制台即将开放，敬请期待</div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <aside class="music-hall__preview">
@@ -624,25 +614,41 @@
               <img v-if="previewTrack?.coverUrl" :src="previewTrack.coverUrl" alt="">
               <el-icon v-else :size="40"><Headset /></el-icon>
             </div>
-            <div class="music-hall__player-title">{{ previewTrack?.title || '选择一首歌开始听' }}</div>
+            <div class="music-hall__player-title" :title="previewTrack?.title || ''">
+              {{ previewTrack?.title || '选择一首歌开始听' }}
+            </div>
             <div class="music-hall__player-meta">
               <div class="music-hall__player-sub">歌手：{{ previewArtistText }}</div>
               <div class="music-hall__player-sub">专辑：{{ previewAlbumText }}</div>
             </div>
             <div class="music-hall__tags">
-              <span v-for="tag in previewTags" :key="`pt-${tag}`">{{ tag }}</span>
+              <span v-for="tag in previewTagsVisible" :key="`pt-${tag}`">{{ tag }}</span>
+              <span
+                v-if="previewTagsOverflow > 0"
+                class="music-hall__tags-more"
+                :title="previewTags.join('、')"
+              >+{{ previewTagsOverflow }}</span>
               <span v-if="!previewTags.length" class="music-hall__tags-empty">暂无标签</span>
             </div>
           </div>
 
-          <div class="music-hall__wave" aria-hidden="true">
+          <div
+            class="music-hall__wave"
+            :class="{ 'is-playing': playing, 'is-analyzing': waveAnalyzing }"
+            aria-hidden="true"
+          >
             <span
               v-for="(h, idx) in waveHeights"
               :key="`w-${idx}`"
               class="music-hall__wave-bar"
               :class="{ 'is-played': idx < wavePlayedCount }"
-              :style="{ height: `${h}px` }"
+              :style="{ height: `${h}px`, animationDelay: `${(idx % 12) * 0.08}s` }"
             />
+          </div>
+
+          <div v-if="audioLoading || audioError" class="music-hall__audio-state">
+            <span v-if="audioError" class="music-hall__audio-state--error">{{ audioError }}</span>
+            <span v-else>音频加载中...</span>
           </div>
 
           <div class="music-hall__progress">
@@ -650,8 +656,10 @@
             <button
               type="button"
               class="music-hall__progress-track"
+              :class="{ 'is-dragging': dragging }"
               :disabled="!previewTrack?.audioUrl"
               @click="seekByClick"
+              @pointerdown="onProgressPointerDown"
             >
               <span class="music-hall__progress-fill" :style="{ width: `${progressPercent}%` }" />
               <span
@@ -702,11 +710,15 @@
             </button>
           </div>
 
-          <div v-if="showLrc && hasPlayerLyrics" class="music-hall__lrc-viewport">
+          <div
+            v-if="showLrc && hasPlayerLyrics"
+            class="music-hall__lrc-viewport"
+            @scroll.passive="onLrcScroll"
+          >
             <div
               v-if="timedLrcLines.length"
               class="music-hall__lrc-strip"
-              :style="{ transform: `translateY(-${karaokeOffset}px)` }"
+              :style="karaokeStripStyle"
             >
               <p
                 v-for="(line, idx) in timedLrcLines"
@@ -732,6 +744,13 @@
               </p>
             </div>
           </div>
+          <div v-else-if="showLrc && lrcUnsupported" class="music-hall__lrc music-hall__lrc--empty">
+            歌词结构不支持（逐字歌词）
+          </div>
+          <div v-else-if="showLrc && lrcError" class="music-hall__lrc music-hall__lrc--empty">
+            {{ lrcError }}
+            <button type="button" class="music-hall__lrc-retry" @click="retryLrc">重试</button>
+          </div>
           <div v-else-if="showLrc" class="music-hall__lrc music-hall__lrc--empty">暂无歌词</div>
         </div>
 
@@ -756,7 +775,11 @@
                   <img v-if="track.coverUrl" :src="track.coverUrl" alt="">
                   <el-icon v-else><Headset /></el-icon>
                 </div>
-                <span class="music-hall__recent-name">{{ track.title }}</span>
+                <span class="music-hall__recent-meta">
+                  <span class="music-hall__recent-name">{{ track.title }}</span>
+                  <span class="music-hall__recent-artist">{{ track.artist || '未知歌手' }}</span>
+                </span>
+                <span class="music-hall__recent-duration">{{ track.durationText || '--:--' }}</span>
                 <span
                   v-if="isRecentPlaying(track)"
                   class="music-hall__recent-eq"
@@ -783,17 +806,94 @@
         </div>
       </aside>
     </div>
-    <audio ref="audioRef" preload="metadata" @timeupdate="onTimeUpdate" @loadedmetadata="onMeta" @ended="onEnded" />
+    <audio
+      ref="audioRef"
+      preload="metadata"
+      @timeupdate="onTimeUpdate"
+      @loadedmetadata="onMeta"
+      @ended="onEnded"
+      @error="onAudioError"
+      @waiting="onAudioWaiting"
+      @canplay="onAudioCanPlay"
+    />
+
+    <div v-if="showTagDialog" class="music-hall__lrc-mask" @click.self="closeTagDialog">
+      <div class="music-hall__tag-dialog" role="dialog" aria-modal="true" aria-label="选择氛围标签">
+        <div class="music-hall__tag-dialog-head">
+          <span aria-hidden="true" />
+          <div class="music-hall__lrc-dialog-title">选择标签</div>
+          <button type="button" class="music-hall__tag-dialog-close" aria-label="关闭" @click="closeTagDialog">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+        <div class="music-hall__tag-dialog-search">
+          <el-input
+            v-model="tagDialogKeyword"
+            placeholder="搜索标签，没有就创建一个"
+            clearable
+            maxlength="8"
+            @input="onTagKeywordChange"
+            @clear="onTagKeywordChange"
+          />
+          <button
+            type="button"
+            class="music-hall__tag-create"
+            :disabled="tagCreating || !tagDialogKeyword.trim()"
+            @click="onCreateTag"
+          >
+            {{ tagCreating ? '审核中...' : '创建' }}
+          </button>
+        </div>
+        <div class="music-hall__tag-dialog-body">
+          <div v-if="tagDialogLoading" class="music-hall__tag-dialog-state">加载中...</div>
+          <div v-else-if="!tagDialogOptions.length" class="music-hall__tag-dialog-state">
+            没有匹配的标签，可以直接创建
+          </div>
+          <div v-else class="music-hall__tag-dialog-grid">
+            <button
+              v-for="item in tagDialogOptions"
+              :key="`mt-${item.name}`"
+              type="button"
+              class="music-hall__tag-chip"
+              :class="{ 'is-active': songForm.tags?.includes(item.name) }"
+              @click="toggleComposeTag(item.name)"
+            >
+              {{ item.name }}
+              <i v-if="item.source === 'AI'" class="music-hall__tag-chip-badge">AI</i>
+            </button>
+          </div>
+        </div>
+        <div class="music-hall__tag-dialog-pager">
+          <AppPagination
+            :current-page="tagDialogPage"
+            :total="tagDialogPageTotal"
+            :page-size="1"
+            size="small"
+            :pager-count="5"
+            :show-jumper="false"
+            :hide-on-single-page="false"
+            @current-change="onTagDialogPageChange"
+          />
+        </div>
+        <div class="music-hall__tag-dialog-foot">
+          <span>已选 {{ songForm.tags?.length || 0 }} / {{ MOOD_TAG_MAX_COUNT }}</span>
+          <button type="button" class="music-hall__publish-btn" @click="closeTagDialog">完成</button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="showComposeLrc" class="music-hall__lrc-mask" @click.self="closeComposeLrc">
       <div class="music-hall__lrc-dialog" role="dialog" aria-modal="true" aria-label="歌词预览">
         <div class="music-hall__lrc-dialog-head">
           <div class="music-hall__lrc-dialog-title">歌词预览</div>
+          <div v-if="composeLrcUnsupported" class="music-hall__lrc-dialog-warn">
+            歌词结构不支持，请修改
+          </div>
           <button type="button" class="music-hall__lrc-close" aria-label="关闭" @click="closeComposeLrc">
             <el-icon><Close /></el-icon>
           </button>
         </div>
-        <div class="music-hall__lrc-dialog-body">
+        <div class="music-hall__lrc-dialog-body" :class="{ 'is-disabled': composeLrcUnsupported }">
           <textarea
             v-if="editingComposeLrc"
             v-model="songForm.lrcText"

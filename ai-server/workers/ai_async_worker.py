@@ -196,6 +196,7 @@ def _execute_user_music_analyze(task: dict[str, Any], base: dict[str, Any]) -> d
     merged_risk = text_risk if _RISK_ORDER[text_risk] >= _RISK_ORDER[audio_risk] else audio_risk
     text_violation = (not text_safe) or text_risk == "high"
     audio_violation = (not audio_safe) or audio_risk == "high"
+    reasons = _merge_music_reasons(text_result.get("reasons"), audio_result.get("reasons"))
     if text_violation or audio_violation:
         if text_violation and audio_violation:
             reason = "文本、音频内容违规"
@@ -206,13 +207,20 @@ def _execute_user_music_analyze(task: dict[str, Any], base: dict[str, Any]) -> d
         passed = False
         kind = "violation"
     elif merged_risk == "medium":
-        reason = "文本内容违规" if _RISK_ORDER[text_risk] >= _RISK_ORDER[audio_risk] else "音频内容违规"
+        # 提示词里 medium 的语义是「把握不足」，不是「确认违规」。
+        # 原来这里直接判 violation 并甩一句「文本内容违规」，等于把不确定当成有罪，
+        # 作者还看不到模型到底在犹豫什么。仍然拦下，但说清楚是待确认并带上理由。
+        side = "文本" if _RISK_ORDER[text_risk] >= _RISK_ORDER[audio_risk] else "音频"
+        detail = "；".join(reasons[:3])
+        reason = f"{side}内容需要人工确认" + (f"：{detail}" if detail else "")
         passed = False
-        kind = "violation"
+        kind = "needs_review"
     else:
         reason = ""
         passed = True
         kind = "passed"
+    if not passed and kind == "violation" and reasons:
+        reason = f"{reason}：" + "；".join(reasons[:3])
     ai_profile = {
         "genre": str(audio_result.get("genre") or "").strip()[:40],
         "energy": str(audio_result.get("energy") or "").strip()[:16],
@@ -230,9 +238,27 @@ def _execute_user_music_analyze(task: dict[str, Any], base: dict[str, Any]) -> d
             "kind": kind,
             "risk": merged_risk,
             "reason": reason,
+            # 两个模块本来就认真收集了 reasons，之前全程没往外传，
+            # 被拒的人只看得到一句固定文案，不知道具体存疑点在哪
+            "reasons": reasons,
         },
         "usage": usage,
     }
+
+
+def _merge_music_reasons(*groups: Any) -> list[str]:
+    """合并两侧的 reasons：去空白、去重、限长。"""
+    out: list[str] = []
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        for item in group:
+            text = str(item or "").strip()[:120]
+            if text and text not in out:
+                out.append(text)
+            if len(out) >= 6:
+                return out
+    return out
 
 
 def _index_music_rag_quietly(

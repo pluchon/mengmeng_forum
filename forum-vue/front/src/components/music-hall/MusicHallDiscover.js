@@ -6,6 +6,7 @@ import {
 } from '@/api/article'
 import MusicHallFeatured from './MusicHallFeatured.vue'
 import MusicHallRecommend from './MusicHallRecommend.vue'
+import MusicMoodFilterDialog from './MusicMoodFilterDialog.vue'
 import MusicHallHot from './MusicHallHot.vue'
 
 const PAGE_SIZE = 6
@@ -15,6 +16,7 @@ export default {
   components: {
     MusicHallFeatured,
     MusicHallRecommend,
+    MusicMoodFilterDialog,
     MusicHallHot,
   },
   props: {
@@ -24,6 +26,11 @@ export default {
   setup(props, { emit }) {
     const featured = ref(null)
     const featuredLoading = ref(false)
+
+    // 只影响推荐：热榜的语义是全站热度排名，被个人筛选切一刀就不叫榜了。
+    // 存 localStorage 而不是后端——为一个筛选器新建用户偏好表不划算。
+    const moodFilter = ref(readSavedMoods())
+    const moodDialogVisible = ref(false)
 
     const recommendTracks = ref([])
     const recommendLoading = ref(false)
@@ -54,6 +61,7 @@ export default {
           pageNum,
           pageSize: PAGE_SIZE,
           excludeMusicKey: featured.value?.musicKey,
+          moods: moodFilter.value.length ? moodFilter.value : undefined,
         })
         const page = res?.data
         recommendTracks.value = page?.records || []
@@ -65,6 +73,14 @@ export default {
       } finally {
         recommendLoading.value = false
       }
+    }
+
+    const onMoodFilterApply = (moods) => {
+      moodFilter.value = Array.isArray(moods) ? moods : []
+      saveMoods(moodFilter.value)
+      // 换了筛选条件必须回第一页，否则会停在新条件下不存在的页码上
+      recommendPageNum.value = 1
+      loadRecommend(1)
     }
 
     const loadHot = async (pageNum = hotPageNum.value) => {
@@ -105,6 +121,9 @@ export default {
     return {
       featured,
       featuredLoading,
+      moodFilter,
+      moodDialogVisible,
+      onMoodFilterApply,
       recommendTracks,
       recommendLoading,
       recommendPageNum,
@@ -119,4 +138,28 @@ export default {
       refreshAll,
     }
   },
+}
+
+// 隐私模式或站点数据被清时 localStorage 会直接抛，不能让它拖垮整个发现页
+const MOOD_FILTER_KEY = 'music-hall:recommend-moods'
+const MOOD_FILTER_MAX = 5
+
+function readSavedMoods() {
+  try {
+    const raw = window.localStorage.getItem(MOOD_FILTER_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item) => typeof item === 'string' && item.trim()).slice(0, MOOD_FILTER_MAX)
+  } catch {
+    return []
+  }
+}
+
+function saveMoods(moods) {
+  try {
+    window.localStorage.setItem(MOOD_FILTER_KEY, JSON.stringify(moods.slice(0, MOOD_FILTER_MAX)))
+  } catch {
+    // 存不下就算了，本次会话内筛选依然有效
+  }
 }
