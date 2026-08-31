@@ -106,7 +106,7 @@ const GAME_PRESETS = {
     idleText: '开始游戏',
   },
   tetris_pk: {
-    name: '俄罗斯方块 PK',
+    name: '俄罗斯方块竞速',
     sub: '双人竞速 · 3 分钟内比谁消行多',
     cover: eluosiPkImg,
     btnClass: 'btn--tetris-pk',

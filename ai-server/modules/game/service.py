@@ -244,11 +244,17 @@ def _sparse_board_stones(board: list[list[int]]) -> list[dict[str, int]]:
     return stones
 
 
+# Java 侧按玩家段位选档，请求里带的是档位而不是某个具体模型。
+# 只比对 == pro 是危险的：那等于要求 Java 的硬编码和这里的配置值一字不差，
+# 运维在 config 里换个深度模型，高段位玩家就会静默退回 flash，没有任何报错。
+_GOBANG_DEEP_ALIASES = {"deep", "pro", "max", "qwen3.7-max"}
+
+
 def _resolve_gobang_model(dashscope: dict[str, Any], model_code: str | None) -> str:
     requested = (model_code or "").strip()
     flash = str(dashscope.get("model_text_flash") or dashscope.get("model_text") or "qwen3.7-flash").strip()
     pro = str(dashscope.get("model_text_deep") or "qwen3.7-max").strip()
-    if requested == pro:
+    if requested and requested.lower() in _GOBANG_DEEP_ALIASES | {pro.lower()}:
         return pro
     return flash
 

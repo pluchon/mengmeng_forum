@@ -581,8 +581,11 @@
   transition: left 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 聊天输入：发送按钮单独占一行，输入框随内容长高 */
-.tetris-pk-chat-input {
+/* 聊天输入：发送按钮单独占一行，输入框随内容长高。
+   多带一层父选择器是必要的——这个页面最后引入的是 gobang-room.css，
+   里面 .gobang-chat-input 的 grid 两列布局和本类特异性相同，靠顺序会赢，
+   把发送按钮又拉回输入框旁边 */
+.tetris-pk-chat-panel .gobang-chat-input {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -592,7 +595,7 @@
   position: relative;
 }
 
-.tetris-pk-chat-input :deep(.el-textarea__inner) {
+.tetris-pk-chat-panel .gobang-chat-input :deep(.el-textarea__inner) {
   border-radius: 8px;
   line-height: 1.6;
   /* 给右下角的表情按钮让出位置 */
@@ -611,7 +614,7 @@
   align-items: center;
 }
 
-.tetris-pk-chat-input .game-chat-send {
+.tetris-pk-chat-panel .gobang-chat-input .game-chat-send {
   width: 100%;
 }
 
@@ -655,12 +658,12 @@
 }
 
 /* 滚动条藏起来，但保留滚动能力 */
-.tetris-pk-chat-input :deep(.el-textarea__inner) {
+.tetris-pk-chat-panel .gobang-chat-input :deep(.el-textarea__inner) {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.tetris-pk-chat-input :deep(.el-textarea__inner)::-webkit-scrollbar {
+.tetris-pk-chat-panel .gobang-chat-input :deep(.el-textarea__inner)::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;

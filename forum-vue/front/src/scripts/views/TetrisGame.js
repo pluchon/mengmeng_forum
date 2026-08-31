@@ -82,7 +82,7 @@ function useTetrisGame() {
   })
 
   const modeLabel = computed(() => {
-    if (route.meta?.tetrisMode === 'pk') return '在线PK模式'
+    if (route.meta?.tetrisMode === 'pk') return '竞速模式'
     return '单人模式'
   })
 

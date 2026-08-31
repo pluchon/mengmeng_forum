@@ -182,9 +182,9 @@ function useTetrisPkRoom() {
   })
   const playerStatsTitle = computed(() => {
     if (!selectedPlayer.value) return '选手资料'
-    if (selectedPlayer.value.userId === room.redUserId) return '红方俄罗斯方块 PK 资料'
-    if (selectedPlayer.value.userId === room.blueUserId) return '蓝方俄罗斯方块 PK 资料'
-    return '俄罗斯方块 PK 资料'
+    if (selectedPlayer.value.userId === room.redUserId) return '红方俄罗斯方块竞速 资料'
+    if (selectedPlayer.value.userId === room.blueUserId) return '蓝方俄罗斯方块竞速 资料'
+    return '俄罗斯方块竞速 资料'
   })
   const myScore = computed(() => room.myBoard?.points ?? 0)
   // 倒计时。以前是本地从 0 自增的正计时，刷新页面就归零，跟服务端毫无关系
@@ -416,7 +416,7 @@ function useTetrisPkRoom() {
   async function surrender() {
     if (isFinished.value || surrendering.value || isSpectator.value) return
     try {
-      await confirmDialog('确认认输并结束本局吗？', '俄罗斯方块 PK', {
+      await confirmDialog('确认认输并结束本局吗？', '俄罗斯方块竞速', {
         type: 'warning',
         confirmButtonText: '认输',
         cancelButtonText: '继续对局',

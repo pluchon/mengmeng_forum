@@ -149,7 +149,7 @@
                 五子棋
               </button>
               <button type="button" :class="{ 'is-active': watchGameCode === 'tetris_pk' }" @click="setWatchGame('tetris_pk')">
-                俄罗斯方块 PK
+                俄罗斯方块竞速
               </button>
             </div>
             <div v-if="pagedWatchRooms.length" class="game-room-list">
@@ -223,7 +223,7 @@
           :class="{ active: leaderboardGameCode === 'tetris_pk' }"
           @click="onLeaderboardGameChange('tetris_pk')"
         >
-          俄罗斯方块 PK
+          俄罗斯方块竞速
         </button>
       </div>
 
@@ -298,7 +298,7 @@
       </template>
 
       <div class="pencil-stats-shell">
-      <!-- 游戏 Tab 切换 保留五子棋、井字棋、俄罗斯方块 PK 3个 -->
+      <!-- 游戏 Tab 切换 保留五子棋、井字棋、俄罗斯方块竞速 3个 -->
       <div class="pencil-dialog-tabs">
         <button
           type="button"
@@ -322,7 +322,7 @@
           :class="{ active: statsGameCode === 'tetris_pk' }"
           @click="onStatsGameChange('tetris_pk')"
         >
-          俄罗斯方块 PK
+          俄罗斯方块竞速
         </button>
       </div>
 
@@ -378,7 +378,7 @@
             <span class="col-delta">段位分变化</span>
           </div>
 
-          <!-- 俄罗斯方块 PK 专属列头 无回放操作 -->
+          <!-- 俄罗斯方块竞速 专属列头 无回放操作 -->
           <div v-else class="pencil-record-head record-head--tetris-pk">
             <span class="col-result">对局结果</span>
             <span class="col-opponent">对手</span>
@@ -439,7 +439,7 @@
                 </span>
               </template>
 
-              <!-- 俄罗斯方块 PK 行 5 列：对局结果、对手头像昵称、结束原因、对局时间、段位分变化，无回放 -->
+              <!-- 俄罗斯方块竞速 行 5 列：对局结果、对手头像昵称、结束原因、对局时间、段位分变化，无回放 -->
               <template v-else>
                 <span class="record-badge col-result" :class="`badge--${(row.resultCode || 'DRAW').toLowerCase()}`">
                   {{ recordResultText(row) }}
