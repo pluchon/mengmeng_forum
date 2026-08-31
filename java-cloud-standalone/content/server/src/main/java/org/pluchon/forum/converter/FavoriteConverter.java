@@ -33,6 +33,16 @@ public final class FavoriteConverter {
         return new FolderArticleVO(articleVO, authorVO, favoriteTime);
     }
 
+    // 帖子行整个查不到（硬删）时的占位：没有它这条收藏就成了用户删不掉的幽灵
+    public static FolderArticleVO toMissingFolderArticleVO(Long articleId, Date favoriteTime) {
+        ArticleBriefVO articleVO = new ArticleBriefVO();
+        articleVO.setId(articleId);
+        articleVO.setTitle("内容已不存在");
+        articleVO.setContent("暂无正文");
+        articleVO.setStatus(null);
+        return new FolderArticleVO(articleVO, null, favoriteTime);
+    }
+
     private static UserBriefVO copyAuthor(UserBriefVO author) {
         if (author == null) {
             return null;

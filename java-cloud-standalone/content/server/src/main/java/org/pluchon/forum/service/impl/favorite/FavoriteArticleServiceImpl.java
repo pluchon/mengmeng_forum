@@ -40,6 +40,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -238,13 +239,18 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
                 .ne(ArticleFavorite::getDeleteState, DELETE_YES)
                 .orderByDesc(ArticleFavorite::getCreateTime));
         List<FolderArticleVO> records = new ArrayList<>(result.getRecords().size());
-        // 批量加载 article + author, 避免 N+1; 详情失败的帖子被跳过 可能被作者删了 / 禁言
+        // 非已发布的帖子照常返回，由前端置灰并说明状态：
+        // 原本静默跳过，收藏记录还在但用户既看不见也删不掉，itemCount 也对不上
         List<Long> articleIds = result.getRecords().stream().map(ArticleFavorite::getArticleId).collect(Collectors.toList());
         Map<Long, Article> articleMap = batchLoadArticles(articleIds);
         Map<Long, UserBriefVO> userMap = batchLoadAuthors(articleMap.values());
         for (ArticleFavorite fav : result.getRecords()) {
             Article article = articleMap.get(fav.getArticleId());
-            if (article == null) continue;
+            if (article == null) {
+                // 整行都查不到（硬删）时给一个占位，至少让用户能把这条收藏移除
+                records.add(FavoriteConverter.toMissingFolderArticleVO(fav.getArticleId(), fav.getCreateTime()));
+                continue;
+            }
             UserBriefVO author = userMap.get(article.getUserId());
             records.add(FavoriteConverter.toFolderArticleVO(article, author, fav.getCreateTime()));
         }
@@ -252,28 +258,29 @@ public class FavoriteArticleServiceImpl implements FavoriteArticleService {
     }
 
     
+    // 不再按状态筛：审核中 / 未通过 / 已删除的帖子都要能显示出来供用户移除，
+    // 具体怎么置灰交给前端按 status 判断
     private Map<Long, Article> batchLoadArticles(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return new HashMap<>();
         List<Article> rows = articleMapper.selectList(new LambdaQueryWrapper<Article>()
-                .in(Article::getId, ids).ne(Article::getDeleteState, DELETE_YES)
-                .ne(Article::getState, (byte) 1));
+                .in(Article::getId, ids));
         Map<Long, Article> map = new HashMap<>(rows.size() * 2);
         for (Article a : rows) map.put(a.getId(), a);
         return map;
     }
 
+    // 名字叫 batch，实现却是逐个跨域 Feign：一页 5 个不同作者就是 5 次调用
     private Map<Long, UserBriefVO> batchLoadAuthors(Collection<Article> articles) {
-        Map<Long, UserBriefVO> map = new HashMap<>();
-        for (Article a : articles) {
-            Long uid = a.getUserId();
-            if (map.containsKey(uid)) continue;
-            try {
-                UserInternalVO u = userService.getUserInfoById(uid);
-                if (u != null) map.put(uid, org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u));
-            } catch (ApplicationException e) {
-                log.warn("收藏夹列表中作者 {} 已不可用, 跳过", uid);
-            }
+        Set<Long> authorIds = articles.stream()
+                .map(Article::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (authorIds.isEmpty()) {
+            return new HashMap<>();
         }
+        Map<Long, UserBriefVO> map = new HashMap<>();
+        userService.loadActiveUsers(authorIds).forEach((uid, u) ->
+                map.put(uid, org.pluchon.forum.converter.ContentUserBriefConverter.toBrief(u)));
         return map;
     }
 }

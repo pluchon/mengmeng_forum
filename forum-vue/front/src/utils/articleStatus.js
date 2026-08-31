@@ -42,6 +42,19 @@ export function articleDetailBlockedHint(status) {
   return '帖子未通过审核，可在下方查看原因或点编辑修改'
 }
 
+// 收藏夹里帖子失效时盖在卡片上的说明。用户看的是"为什么打不开"，
+// 不是创作者视角的审核流程，所以文案比 articleStatusLabel 更直白
+export function favoriteBlockedReason(status) {
+  if (status === null || status === undefined || status === '') return '该帖子已删除'
+  const s = Number(status)
+  if (s === ARTICLE_STATUS.PUBLISHED) return ''
+  if (s === ARTICLE_STATUS.DRAFT) return '该帖子已转为草稿'
+  if (s === ARTICLE_STATUS.PENDING_AUDIT || s === ARTICLE_STATUS.APPROVED) return '该帖子审核中'
+  if (s === ARTICLE_STATUS.REJECTED) return '该帖子未通过审核'
+  if (s === ARTICLE_STATUS.AUDIT_ERROR) return '该帖子审核异常'
+  return '该帖子已失效'
+}
+
 export function isArticleEditingLocked(status) {
   return Number(status) === ARTICLE_STATUS.PENDING_AUDIT
 }

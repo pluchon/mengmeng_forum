@@ -6,6 +6,7 @@ import { useUserStore } from '@/stores/user'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import { getArticleListWithUser } from '@/api/article'
 import { getMyLikeList, getUserLikeList } from '@/api/like'
+import { cancelArticleFavorite } from '@/api/favorite'
 import {
   getFavoriteFolderArticles,
   getMyFavoriteFolders,
@@ -29,6 +30,7 @@ import { DEFAULT_AVATAR } from '@/utils/constants'
 import { openImageUploadLoading, validateLocalImageFile } from '@/utils/imageUploadFeedback'
 import { clientOssUrl } from '@/utils/clientOss'
 import { parseForumDateTime } from '@/utils/datetime'
+import { canOpenArticleDetail, favoriteBlockedReason } from '@/utils/articleStatus'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { captureFeedOpenFrom, getFeedReturnPath } from '@/utils/feedNavigation'
 import emptyFavoriteArticleUrl from '@/assets/images/shoucang_article_not.png'
@@ -318,6 +320,13 @@ export function useProfile() {
     const targetId = resolveProfileUserId()
     return String(targetId) === String(userStore.id)
   })
+
+  // 默认收藏夹不能改名，按钮直接不显示，不要让用户点了才知道
+  const canRenameActiveFavoriteFolder = computed(() =>
+    isMe.value
+      && activeFavoriteFolder.value?.id != null
+      && !isDefaultFavoriteFolder(activeFavoriteFolder.value),
+  )
 
   const canDeleteActiveFavoriteFolder = computed(() =>
     isMe.value
@@ -719,9 +728,60 @@ export function useProfile() {
     captureFeedOpenFrom(profilePath)
   }
 
+  const favoriteRemovingId = ref(null)
+
+  function favoriteRowBlockedReason(row) {
+    return favoriteBlockedReason(row?.article?.status)
+  }
+
+  function isFavoriteRowBlocked(row) {
+    return Boolean(favoriteRowBlockedReason(row))
+  }
+
+  // 从当前收藏夹移除。失效的帖子原本静默不显示，用户既看不见也删不掉，
+  // 现在置灰展示 + 这个入口，才算能自己清理
+  async function removeFavoriteRow(row) {
+    const articleId = row?.article?.id
+    if (!articleId || favoriteRemovingId.value != null) return
+    try {
+      await confirmDialog('确定把这条帖子从收藏夹移除吗？', '移除收藏', {
+        confirmButtonText: '移除',
+        closeOnClickModal: false,
+      })
+    } catch {
+      return
+    }
+    favoriteRemovingId.value = articleId
+    try {
+      await cancelArticleFavorite(articleId)
+      favoriteDialogItems.value = favoriteDialogItems.value
+        .filter((item) => Number(item?.article?.id) !== Number(articleId))
+      favoriteDialogTotal.value = Math.max(0, favoriteDialogTotal.value - 1)
+      const folder = activeFavoriteFolder.value
+      if (folder) folder.itemCount = Math.max(0, Number(folder.itemCount || 0) - 1)
+      ElMessage.success('已移除')
+      // 移空了就退回上一页，别停在空列表
+      if (favoriteDialogItems.value.length === 0 && favoriteDialogPageNum.value > 1) {
+        const maxPage = Math.max(1, Math.ceil(favoriteDialogTotal.value / FAVORITE_DIALOG_PAGE_SIZE))
+        await loadFavoriteDialogArticles(Math.min(favoriteDialogPageNum.value - 1, maxPage))
+      }
+    } catch {
+      // 失败原因由响应拦截器统一提示
+    } finally {
+      favoriteRemovingId.value = null
+    }
+  }
+
   function openArticleFromFavorite(row) {
     const id = row?.article?.id
     if (!id) return
+    // 失效的帖子点进去也会被详情页弹回来，直接在这儿说清楚原因
+    const blocked = favoriteRowBlockedReason(row)
+    if (blocked) {
+      ElMessage.info(`${blocked}，无法查看`)
+      return
+    }
+    if (!canOpenArticleDetail(row?.article?.status)) return
     saveProfileReturnState({
       tab: 'collect',
       folderId: activeFavoriteFolder.value?.id,
@@ -895,6 +955,7 @@ export function useProfile() {
     bgFileInput,
     bgStyle,
     canDeleteActiveFavoriteFolder,
+    canRenameActiveFavoriteFolder,
     confirmFavoriteFolderRename,
     coverStyle,
     defaultAvatar,
@@ -903,6 +964,10 @@ export function useProfile() {
     emptyFavoriteArticleUrl,
     favoriteCoverInputRef,
     favoriteCoverStyle,
+    favoriteRemovingId,
+    favoriteRowBlockedReason,
+    isFavoriteRowBlocked,
+    removeFavoriteRow,
     favoriteCoverUploadingId,
     favoriteCreateForm,
     favoriteCreateSaving,

@@ -439,7 +439,7 @@
             <template v-else>
               <span class="profile-fav-dialog-title">{{ favoriteDialogTitle }}</span>
               <button
-                v-if="isMe"
+                v-if="canRenameActiveFavoriteFolder"
                 type="button"
                 class="profile-fav-edit-btn"
                 aria-label="编辑收藏夹名称"
@@ -486,11 +486,15 @@
           v-for="row in favoriteDialogItems"
           :key="row.article?.id"
           class="profile-fav-item-row"
+          :class="{ 'is-blocked': isFavoriteRowBlocked(row) }"
           role="button"
           tabindex="0"
           @click="openArticleFromFavorite(row)"
           @keydown.enter.prevent="openArticleFromFavorite(row)"
         >
+          <div v-if="isFavoriteRowBlocked(row)" class="profile-fav-item-mask">
+            <span class="profile-fav-item-mask__text">{{ favoriteRowBlockedReason(row) }}</span>
+          </div>
           <div class="profile-fav-item-cover" :style="favoriteCoverStyle(row.article)">
             <img v-if="row.article?.coverImg" :src="row.article.coverImg" alt="">
           </div>
@@ -519,6 +523,18 @@
                 :src="row.author?.avatarUrl || defaultAvatar"              />
               <span :title="row.author?.nickname || '匿名用户'">{{ displayAuthorNickname(row.author?.nickname) }}</span>
             </div>
+            <button
+              v-if="isMe"
+              type="button"
+              class="profile-fav-item-remove"
+              :disabled="favoriteRemovingId === row.article?.id"
+              title="从收藏夹移除"
+              aria-label="从收藏夹移除"
+              @click.stop="removeFavoriteRow(row)"
+              @keydown.enter.stop.prevent="removeFavoriteRow(row)"
+            >
+              <Trash2 :size="16" />
+            </button>
           </div>
         </div>
         <div
@@ -624,6 +640,7 @@ const {
   bgFileInput,
   bgStyle,
   canDeleteActiveFavoriteFolder,
+  canRenameActiveFavoriteFolder,
   confirmFavoriteFolderRename,
   coverStyle,
   defaultAvatar,
@@ -653,6 +670,10 @@ const {
   favoriteCreateSaving,
   favoriteCreateVisible,
   favoriteCoverStyle,
+  favoriteRemovingId,
+  favoriteRowBlockedReason,
+  isFavoriteRowBlocked,
+  removeFavoriteRow,
   favoriteDialogItems,
   favoriteDialogLoading,
   favoriteDialogPageNum,
