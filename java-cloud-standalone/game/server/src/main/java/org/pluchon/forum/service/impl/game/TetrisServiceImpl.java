@@ -73,7 +73,7 @@ public class TetrisServiceImpl implements TetrisService {
                 .eq(GameTetrisRecord::getUserId, userId)
                 .eq(GameTetrisRecord::getGameCode, TetrisConstants.GAME_CODE)
                 .eq(GameTetrisRecord::getDeleteState, GameConstants.NOT_DELETED)
-                .eq(GameTetrisRecord::getValidationStatus, TetrisConstants.VALIDATION_VALID)
+                .in(GameTetrisRecord::getValidationStatus, TetrisConstants.COUNTED_VALIDATION_STATUSES)
                 .orderByDesc(GameTetrisRecord::getEndedAt)
                 .orderByDesc(GameTetrisRecord::getId);
         Page<GameTetrisRecord> result = gameTetrisRecordMapper.selectPage(page, wrapper);

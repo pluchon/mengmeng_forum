@@ -99,11 +99,11 @@ public class GameStatisticsServiceImpl implements GameStatisticsService {
                     opponentIds.add(record.getOpponentUserId());
                 }
             }
+            // 一次批量查完。原来是在循环里逐个 getById，一页十条就是十次跨域调用
             java.util.Map<Long, UserInternalVO> userMap = new java.util.HashMap<>();
-            for (Long oppId : opponentIds) {
-                UserInternalVO opp = gameUserLookupService.getById(oppId);
-                if (opp != null) {
-                    userMap.put(oppId, opp);
+            for (UserInternalVO opp : gameUserLookupService.listByIds(new java.util.ArrayList<>(opponentIds))) {
+                if (opp != null && opp.getId() != null) {
+                    userMap.put(opp.getId(), opp);
                 }
             }
             for (GameStatisticsRecordVO record : records) {

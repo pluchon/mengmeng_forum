@@ -46,7 +46,7 @@ public interface GameStatisticsMapper {
                        score, level, lines_cleared, started_at, ended_at,
                        NULL, NULL, NULL
                 FROM game_tetris_record
-                WHERE delete_state = 0 AND validation_status = 'VALID' AND user_id = #{userId}
+                WHERE delete_state = 0 AND validation_status IN ('VALID', 'REPLAY_OK', 'SKIPPED', 'MISMATCH') AND user_id = #{userId}
                 UNION ALL
                 SELECT id, 'tetris_pk', room_id,
                        CASE WHEN winner_user_id IS NULL THEN 'DRAW'
@@ -85,7 +85,7 @@ public interface GameStatisticsMapper {
                 UNION ALL
                 SELECT id, 'tetris'
                 FROM game_tetris_record
-                WHERE delete_state = 0 AND validation_status = 'VALID' AND user_id = #{userId}
+                WHERE delete_state = 0 AND validation_status IN ('VALID', 'REPLAY_OK', 'SKIPPED', 'MISMATCH') AND user_id = #{userId}
                 UNION ALL
                 SELECT id, 'tetris_pk'
                 FROM game_tetris_pk_match_record
