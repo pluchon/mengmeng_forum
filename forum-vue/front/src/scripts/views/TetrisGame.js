@@ -1,3 +1,4 @@
+import { extractApiErrorMessage } from '@/api/httpError'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -46,6 +47,9 @@ function useTetrisGame() {
   const loading = ref(false)
   const settling = ref(false)
   const settleResult = ref(null)
+  const settleError = ref('')
+  // 结算失败后重试用的载荷快照
+  const pendingSettlePayload = ref(null)
   const gameOverVisible = ref(false)
   const recordsVisible = ref(false)
   const leaderboardVisible = ref(false)
@@ -195,28 +199,41 @@ function useTetrisGame() {
   async function submitSettle() {
     if (settling.value) return
     settling.value = true
+    settleError.value = ''
     settleResult.value = null
     try {
-      const payload = engine.getSettlePayload()
-      const res = await settleTetris(payload)
+      // 载荷在首次结算时定格：重试要提交同一局，不能因为 Date.now() 变了而改写时长
+      if (!pendingSettlePayload.value) {
+        pendingSettlePayload.value = engine.getSettlePayload()
+      }
+      const res = await settleTetris(pendingSettlePayload.value)
       if (res.code === 0 && res.data) {
         settleResult.value = res.data
+        pendingSettlePayload.value = null
         Promise.all([
           loadProfile(),
           refreshForumPointsBalance(),
         ]).catch(() => {})
       } else {
-        ElMessage.warning(res.message || '成绩保存失败')
+        // 只弹 toast 的话几秒就消失，dialog 看起来和保存成功一模一样
+        settleError.value = res.message || '成绩保存失败'
       }
-    } catch {
-      ElMessage.error('成绩保存失败，请稍后重试')
+    } catch (error) {
+      settleError.value = extractApiErrorMessage(error) || '成绩保存失败，请检查网络后重试'
     } finally {
       settling.value = false
     }
   }
 
+  function retrySettle() {
+    if (settling.value) return
+    submitSettle()
+  }
+
   function startGame() {
     settleResult.value = null
+    settleError.value = ''
+    pendingSettlePayload.value = null
     gameOverVisible.value = false
     engine.startGame()
     startElapsedTimer()
@@ -225,6 +242,8 @@ function useTetrisGame() {
 
   function restartGame() {
     settleResult.value = null
+    settleError.value = ''
+    pendingSettlePayload.value = null
     gameOverVisible.value = false
     engine.restartGame()
     startElapsedTimer()
@@ -353,6 +372,8 @@ function useTetrisGame() {
     restartGame,
     settleResult,
     settling,
+    settleError,
+    retrySettle,
     startReplayPlayback,
     statusText,
     stopReplay,
@@ -393,6 +414,8 @@ const {
   restartGame,
   settleResult,
   settling,
+  settleError,
+  retrySettle,
   startReplayPlayback,
   statusText,
   stopReplay,

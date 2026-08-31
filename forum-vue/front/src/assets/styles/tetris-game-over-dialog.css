@@ -171,3 +171,45 @@
   color: #fff !important;
   transform: translateY(-2px);
 }
+
+/* 历史最高：后端本来就返回了 bestScore，之前没展示，玩家看不出离纪录多远 */
+.tetris-over-best {
+  margin-top: 6px;
+  color: #9fb3d9;
+  font-size: 13px;
+  text-align: center;
+}
+
+.tetris-over-best strong {
+  margin-left: 4px;
+  color: #ffd479;
+  font-size: 15px;
+}
+
+/* 保存失败原来只弹一个几秒就消失的 toast，dialog 看起来和成功一模一样 */
+.tetris-over-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: #ff8a8a;
+  font-size: 13px;
+}
+
+.tetris-over-retry {
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 138, 138, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #ff8a8a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tetris-over-retry:hover {
+  background: #ff8a8a;
+  color: #1b2338;
+}

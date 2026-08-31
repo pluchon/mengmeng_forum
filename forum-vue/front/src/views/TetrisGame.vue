@@ -129,13 +129,28 @@
           </div>
           <div class="tetris-over-score-center">
             <span class="tetris-over-score-label">本局得分</span>
-            <strong class="tetris-over-score-number">{{ engine.points.value }}</strong>
+            <!-- 以服务端回执为准：重放校验上线后，服务端算出的分数可能与本地不同 -->
+            <strong class="tetris-over-score-number">
+              {{ settleResult ? settleResult.score : engine.points.value }}
+            </strong>
+          </div>
+          <div v-if="settleResult" class="tetris-over-best">
+            历史最高 <strong>{{ settleResult.bestScore }}</strong>
           </div>
           <p v-if="settling" class="tetris-over-saving">成绩保存中…</p>
+          <div v-else-if="settleError" class="tetris-over-error">
+            <span>{{ settleError }}</span>
+            <button type="button" class="tetris-over-retry" @click="retrySettle">重试</button>
+          </div>
         </div>
 
         <div class="tetris-over-actions">
-          <el-button class="tetris-btn-star tetris-action-btn primary-btn" type="primary" @click="restartGame">
+          <el-button
+            class="tetris-btn-star tetris-action-btn primary-btn"
+            type="primary"
+            :disabled="settling"
+            @click="restartGame"
+          >
             再来一局
           </el-button>
           <el-button class="tetris-over-close tetris-action-btn ghost-btn" @click="backCenter">
