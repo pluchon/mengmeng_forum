@@ -28,26 +28,24 @@
             </div>
           </div>
 
-          <div class="tetris-rail-card tetris-score-card" :class="{ 'is-dual': isSpectator }">
-            <span class="tetris-rail-label">消行 / 分数</span>
-            <template v-if="isSpectator">
-              <div class="tetris-dual-score">
-                <div class="tetris-dual-score-row is-red">
-                  <em>左 · 红方</em>
-                  <strong>{{ room.redLines ?? 0 }}</strong>
-                  <i>{{ room.redScore ?? 0 }} 分</i>
-                </div>
-                <div class="tetris-dual-score-row is-blue">
-                  <em>右 · 蓝方</em>
-                  <strong>{{ room.blueLines ?? 0 }}</strong>
-                  <i>{{ room.blueScore ?? 0 }} 分</i>
-                </div>
-              </div>
-            </template>
-            <template v-else>
-              <strong>{{ myLines }}</strong>
-              <i class="tetris-score-sub">{{ myScore }} 分</i>
-            </template>
+          <div class="tetris-rail-card tetris-stat-card is-lines">
+            <span class="tetris-stat-label">消行</span>
+            <strong v-if="isSpectator" class="tetris-stat-value is-dual">
+              <em class="is-red">{{ room.redLines ?? 0 }}</em>
+              <i>:</i>
+              <em class="is-blue">{{ room.blueLines ?? 0 }}</em>
+            </strong>
+            <strong v-else class="tetris-stat-value">{{ myLines }}</strong>
+          </div>
+
+          <div class="tetris-rail-card tetris-stat-card is-score">
+            <span class="tetris-stat-label">分数</span>
+            <strong v-if="isSpectator" class="tetris-stat-value is-dual">
+              <em class="is-red">{{ room.redScore ?? 0 }}</em>
+              <i>:</i>
+              <em class="is-blue">{{ room.blueScore ?? 0 }}</em>
+            </strong>
+            <strong v-else class="tetris-stat-value">{{ myScore }}</strong>
           </div>
 
           <div class="tetris-rail-card tetris-time-card" :class="{ 'is-urgent': timeUrgent }">
@@ -211,28 +209,30 @@
             </div>
             <div v-if="isPlayer" class="gobang-chat-input tetris-pk-chat-input">
               <!-- 一行的输入框写不下一句话。改成随内容长高，三行封顶后内部滚动 -->
-              <el-input
-                v-model="chatText"
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 3 }"
-                resize="none"
-                :disabled="!canChat"
-                placeholder="说点什么…（Enter 发送，Shift + Enter 换行）"
-                maxlength="200"
-                @keydown.enter.exact.prevent="sendChat"
-              />
-              <div class="tetris-pk-chat-actions">
-                <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendChatEmoji" />
-                <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
-                  发送
-                </el-button>
+              <div class="tetris-pk-chat-field">
+                <el-input
+                  v-model="chatText"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  resize="none"
+                  :disabled="!canChat"
+                  placeholder="说点什么…"
+                  maxlength="200"
+                  @keydown.enter.exact.prevent="sendChat"
+                />
+                <span class="tetris-pk-chat-emoji">
+                  <PurchasedEmojiPackPopover :disabled="!canChat" @pick="sendChatEmoji" />
+                </span>
               </div>
+              <el-button class="game-chat-send" :disabled="!canChat || !chatText.trim()" @click="sendChat">
+                发送
+              </el-button>
             </div>
           </section>
 
           <div v-if="isPlayer" class="tetris-rail-card tetris-race-rule">
             <strong>竞速规则</strong>
-            <p>3 分钟内比谁消的行多，行数相同再比分数。中途堆到顶直接判负。</p>
+            <p>3 分钟内比谁消的行多，行数相同比分数，中途堆到顶直接判输。</p>
           </div>
 
           <div v-if="isPlayer" class="tetris-rail-card tetris-keys">

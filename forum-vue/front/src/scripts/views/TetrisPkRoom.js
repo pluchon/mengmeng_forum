@@ -227,23 +227,34 @@ function useTetrisPkRoom() {
     if (isSpectator.value) return room.winnerUserId === room.redUserId ? '红方获胜' : '蓝方获胜'
     return room.winnerUserId === room.thisUserId ? '你赢了' : '你输了'
   })
-  // 胜负是怎么定的要说清楚：以前界面比分数、判定看谁先堆死，玩家会输得莫名其妙
+  // 胜负是怎么定的要说清楚，而且要分得清是谁——「有人认输了」等于没说
   const finishReasonText = computed(() => {
     if (!isFinished.value) return ''
+    const redLines = room.redLines ?? 0
+    const blueLines = room.blueLines ?? 0
+    if (room.endReason === 'RACE') {
+      if (!room.winnerUserId) return `时间到 · 消行与分数都是 ${redLines} 行、${room.redScore ?? 0} 分`
+      if (redLines !== blueLines) return `时间到 · 消行 ${redLines} : ${blueLines}，多的一方获胜`
+      return `时间到 · 消行同为 ${redLines}，按分数 ${room.redScore ?? 0} : ${room.blueScore ?? 0} 决胜`
+    }
+    if (!room.winnerUserId) return ''
+    // 观战按红蓝称呼，对局中人按你我称呼
+    const loserSide = room.winnerUserId === room.redUserId ? '蓝方' : '红方'
+    const iWon = room.winnerUserId === room.thisUserId
     switch (room.endReason) {
-      case 'LINE':
-        return '有人先堆到顶了'
-      case 'RACE':
-        return `时间到 · 消行 ${room.redLines} : ${room.blueLines}`
       case 'SURRENDER':
-        return '有人认输了'
+        if (isSpectator.value) return `${loserSide}主动认输`
+        return iWon ? '对手主动认输' : '你主动认输了'
+      case 'LINE':
+        if (isSpectator.value) return `${loserSide}先堆到顶`
+        return iWon ? '对手先堆到顶了' : '你先堆到顶了'
       case 'DISCONNECT':
-        return '有人掉线太久'
+        if (isSpectator.value) return `${loserSide}掉线太久`
+        return iWon ? '对手掉线太久' : '你掉线太久了'
       default:
         return ''
     }
   })
-
   function triggerComboFlash(comboCount) {
     if (comboCount < 2) return
     comboFlash.value = comboCount >= 3 ? 3 : 2

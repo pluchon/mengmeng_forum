@@ -495,15 +495,67 @@
   color: rgba(237, 245, 243, 0.72);
 }
 
-/* 分数卡片：消行数是主角，分数退居小字 */
-.tetris-score-sub,
-.tetris-dual-score-row i {
-  display: block;
-  margin-top: 2px;
+/* 消行与分数各占一张卡片，标签在左、数值在右 */
+.tetris-stat-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.tetris-stat-label {
+  color: #a8b7bd;
   font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.tetris-stat-value {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.tetris-stat-card.is-lines {
+  background: linear-gradient(135deg, rgba(35, 105, 92, 0.28), rgba(255, 255, 255, 0.06));
+  border-color: rgba(92, 202, 154, 0.28);
+}
+
+.tetris-stat-card.is-lines .tetris-stat-value {
+  color: #7dd3fc;
+}
+
+.tetris-stat-card.is-score .tetris-stat-value {
+  color: #a5f3d0;
+}
+
+/* 观战时一张卡片里并排显示红蓝 */
+.tetris-stat-value.is-dual {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 22px;
+}
+
+.tetris-stat-value.is-dual em {
   font-style: normal;
-  font-weight: 700;
-  color: rgba(237, 245, 243, 0.5);
+}
+
+.tetris-stat-value.is-dual .is-red {
+  color: #ff8686;
+}
+
+.tetris-stat-value.is-dual .is-blue {
+  color: #7db4ff;
+}
+
+.tetris-stat-value.is-dual i {
+  font-style: normal;
+  font-size: 15px;
+  color: rgba(237, 245, 243, 0.4);
 }
 
 /* 最后 30 秒 */
@@ -536,23 +588,31 @@
   gap: 8px;
 }
 
+.tetris-pk-chat-field {
+  position: relative;
+}
+
 .tetris-pk-chat-input :deep(.el-textarea__inner) {
   border-radius: 8px;
   line-height: 1.6;
+  /* 给右下角的表情按钮让出位置 */
+  padding-right: 38px;
   /* 三行封顶后内部滚动，别把聊天列表挤没 */
   max-height: 96px;
   overflow-y: auto;
 }
 
-.tetris-pk-chat-actions {
-  display: flex;
+.tetris-pk-chat-emoji {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 2;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
-.tetris-pk-chat-actions .game-chat-send {
-  flex: 1;
+.tetris-pk-chat-input .game-chat-send {
+  width: 100%;
 }
 
 .tetris-pk-result-reason {
@@ -573,6 +633,18 @@
 .tetris-pk-result-back:hover {
   border-color: rgba(255, 255, 255, 0.46);
   background: rgba(255, 255, 255, 0.16);
+}
+
+/* .tetris-rail-card 本身没有内边距，各卡片自己加，这张漏了 */
+.tetris-race-rule {
+  padding: 14px 16px;
+}
+
+.tetris-race-rule strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  color: #edf5f3;
 }
 
 .tetris-race-rule p {
