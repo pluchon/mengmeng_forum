@@ -244,6 +244,7 @@ CREATE TABLE `game_tetris_record` (
   `replay_payload` mediumtext NOT NULL COMMENT '回放JSON',
   `forum_points_awarded` int NOT NULL DEFAULT '0' COMMENT '本次论坛积分奖励',
   `validation_status` varchar(16) NOT NULL DEFAULT 'VALID' COMMENT '校验状态 VALID/REJECTED',
+  `replay_score` int DEFAULT NULL COMMENT '服务端重放算出的分数; NULL 表示未校验',
   `started_at` datetime NOT NULL COMMENT '开局时间',
   `ended_at` datetime NOT NULL COMMENT '结束时间',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除: 0否 1是',

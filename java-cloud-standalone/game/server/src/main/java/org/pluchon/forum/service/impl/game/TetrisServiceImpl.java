@@ -23,6 +23,7 @@ import org.pluchon.forum.service.security.GameUserLookupService;
 import org.pluchon.forum.service.interfaces.game.TetrisService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 // 俄罗斯方块单人模式服务：结算、历史、排行榜
+@Slf4j
 @Service
 public class TetrisServiceImpl implements TetrisService {
 
@@ -47,6 +49,9 @@ public class TetrisServiceImpl implements TetrisService {
 
     @Autowired
     private TetrisScoreValidator tetrisScoreValidator;
+
+    @Autowired
+    private TetrisReplayVerifier tetrisReplayVerifier;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -137,7 +142,22 @@ public class TetrisServiceImpl implements TetrisService {
         record.setSeed(request.getSeed());
         record.setReplayPayload(request.getReplayPayload());
         record.setForumPointsAwarded(0);
-        record.setValidationStatus(TetrisConstants.VALIDATION_VALID);
+        // 灰度期：只记录重放结论，不据此拒绝。服务端引擎万一与前端有细微差异，
+        // 宁可漏过作弊也不能把真实成绩判死；等 MISMATCH 率确认为 0 再改成拒绝
+        TetrisReplayVerifier.Result replay = tetrisReplayVerifier.verify(request.getReplayPayload());
+        if (!replay.verified()) {
+            record.setValidationStatus(TetrisConstants.VALIDATION_SKIPPED);
+        } else {
+            record.setReplayScore(replay.score());
+            record.setValidationStatus(replay.score() == request.getScore()
+                    ? TetrisConstants.VALIDATION_REPLAY_OK
+                    : TetrisConstants.VALIDATION_MISMATCH);
+            if (replay.score() != request.getScore()) {
+                log.warn("俄罗斯方块重放分数不一致 userId={} 自报={} 重放={} 行数自报={} 重放={}",
+                        userId, request.getScore(), replay.score(),
+                        request.getLinesCleared(), replay.lines());
+            }
+        }
         record.setStartedAt(startedAt);
         record.setEndedAt(endedAt);
         record.setDeleteState(GameConstants.NOT_DELETED);

@@ -46,6 +46,9 @@ public class GameTetrisRecord {
     // 校验状态
     private String validationStatus;
 
+    // 服务端重放算出的分数; null 表示未校验
+    private Integer replayScore;
+
     // 开局时间
     private Date startedAt;
 

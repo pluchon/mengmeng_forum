@@ -559,6 +559,9 @@
           aria-label="俄罗斯方块回放棋盘"
         />
       </div>
+      <p v-if="tetrisReplayApproximate" class="tetris-replay-hint">
+        旧录像只存了按键，自然下落的方块无迹可寻，回放为近似效果
+      </p>
       <el-progress :percentage="tetrisReplayProgress" :stroke-width="8" />
       <div class="gobang-replay-actions tetris-replay-actions">
         <el-button class="gobang-replay-auto" :disabled="!tetrisReplayRecord" @click="toggleTetrisReplayAuto">

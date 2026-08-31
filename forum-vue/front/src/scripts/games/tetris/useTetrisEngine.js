@@ -49,6 +49,7 @@ export function useTetrisEngine(options = {}) {
   const seed = ref(0)
   const startedAt = ref(null)
   const inputs = ref([])
+  const locks = ref([])
   const replayMode = ref(false)
 
   let rng = createRng(1)
@@ -71,6 +72,23 @@ export function useTetrisEngine(options = {}) {
     if (!cur.value) return null
     return ghostDrop(cur.value, matrix.value)
   })
+
+  // 落子序列：重放校验按它重建盘面，与时间无关。
+  // 只录旋转「次数」而不是 rotateIndex——后者按各方块自己的 kick 表长度取模
+  // （I 是 2、T 是 4、其余 1），决定不了形状。
+  let rotationCount = 0
+  let heldThisPiece = false
+
+  function recordLock(block) {
+    if (replayMode.value || !block) return
+    locks.value.push({
+      t: block.type,
+      x: block.xy[1],
+      y: block.xy[0],
+      r: rotationCount % 4,
+      h: heldThisPiece,
+    })
+  }
 
   function recordInput(action) {
     if (replayMode.value || !playing.value) return
@@ -146,6 +164,8 @@ export function useTetrisEngine(options = {}) {
     const type = nextType.value || drawNextType()
     nextType.value = drawNextType()
     cur.value = new Block({ type })
+    rotationCount = 0
+    heldThisPiece = false
     lock.value = false
     if (!want(cur.value, matrix.value)) {
       finishGame()
@@ -160,6 +180,7 @@ export function useTetrisEngine(options = {}) {
 
   function lockCurrent(stopDownTrigger) {
     if (!cur.value) return
+    recordLock(cur.value)
     const merged = mergeBlock(matrix.value, cur.value)
     cur.value = null
     afterLock(merged, stopDownTrigger)
@@ -190,6 +211,7 @@ export function useTetrisEngine(options = {}) {
     const next = cur.value.rotate()
     if (want(next, matrix.value)) {
       cur.value = next
+      rotationCount += 1
       recordInput('rotate')
     }
   }
@@ -223,6 +245,8 @@ export function useTetrisEngine(options = {}) {
       nextType.value = drawNextType()
     }
     holdType.value = currentType
+    rotationCount = 0
+    heldThisPiece = true
     canHold.value = false
     if (!want(cur.value, matrix.value)) {
       finishGame()
@@ -271,6 +295,7 @@ export function useTetrisEngine(options = {}) {
     dropAnim.value = false
     lock.value = false
     inputs.value = []
+    locks.value = []
     startedAt.value = null
     startedAtMs = 0
   }
@@ -294,9 +319,12 @@ export function useTetrisEngine(options = {}) {
 
   function buildReplayPayload() {
     return JSON.stringify({
-      v: 2,
+      // v3 起带落子序列，服务端据此做与时间无关的重放校验；
+      // inputs 保留给回放动画与排障
+      v: 3,
       seed: seed.value,
       inputs: inputs.value,
+      locks: locks.value,
     })
   }
 

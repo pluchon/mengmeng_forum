@@ -288,10 +288,7 @@ function useTetrisGame() {
   function startReplayPlayback() {
     if (!replayPayload.value?.seed) return
     stopReplay()
-    replayRunner = createReplayRunner(
-      replayPayload.value.seed,
-      replayPayload.value.inputs || [],
-    )
+    replayRunner = createReplayRunner(replayPayload.value.seed, replayPayload.value)
     replayStartedAt = Date.now()
     replayPlaying.value = true
     replayTimer = setInterval(() => {
@@ -318,10 +315,7 @@ function useTetrisGame() {
     replayProgress.value = 0
     replayVisible.value = true
     await nextTick()
-    replayRunner = createReplayRunner(
-      replayPayload.value.seed || res.data.seed,
-      replayPayload.value.inputs || [],
-    )
+    replayRunner = createReplayRunner(replayPayload.value.seed || res.data.seed, replayPayload.value)
     paintReplayFrame()
   }
 

@@ -23,7 +23,7 @@ import { useForumPointsBalance } from '@/composables/useForumPointsBalance'
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import AppPagination from '@/components/common/AppPagination.vue'
 import { drawBoard } from '@/scripts/games/tetris/canvas'
-import { createReplayRunner } from '@/scripts/games/tetris/replayRunner'
+import { createReplayRunner, isApproximateReplay } from '@/scripts/games/tetris/replayRunner'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { parseForumDateTime } from '@/utils/datetime'
 import { DEFAULT_AVATAR } from '@/utils/constants'
@@ -137,6 +137,7 @@ const leaderboardTotal = ref(0)
 const tetrisReplayVisible = ref(false)
 const tetrisReplayPlaying = ref(false)
 const tetrisReplayProgress = ref(0)
+const tetrisReplayApproximate = ref(false)
 const tetrisReplayRecord = ref(null)
 const tetrisReplayBoardRef = ref(null)
 const tetrisProfile = reactive({
@@ -655,14 +656,11 @@ async function openTetrisReplay(row) {
   } catch {
     payload = { seed: res.data.seed, inputs: [] }
   }
+  tetrisReplayApproximate.value = isApproximateReplay(payload)
   tetrisReplayProgress.value = 0
   tetrisReplayVisible.value = true
   await nextTick()
-  tetrisReplayRunner = createReplayRunner(
-    payload.seed || res.data.seed,
-    payload.inputs || [],
-    payload.v || 1,
-  )
+  tetrisReplayRunner = createReplayRunner(payload.seed || res.data.seed, payload)
   paintTetrisReplayFrame()
 }
 

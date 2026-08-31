@@ -2213,3 +2213,11 @@
   color: #9a879c;
 }
 
+
+.tetris-replay-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9aa4b2;
+  text-align: center;
+}
