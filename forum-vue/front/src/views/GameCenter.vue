@@ -176,8 +176,9 @@
                 <AppPagination
                   v-model:current-page="watchPage"
                   size="small"
-                  :page-size="watchPageSize"
-                  :total="watchTotal"
+                  :total="watchPageTotal"
+                  :page-size="1"
+                  :hide-on-single-page="false"
                   :pager-count="5"
                   :show-jumper="false"
                   @current-change="onWatchPageChange"

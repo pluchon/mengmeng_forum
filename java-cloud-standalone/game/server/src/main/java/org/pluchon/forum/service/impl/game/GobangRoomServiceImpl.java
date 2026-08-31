@@ -91,6 +91,9 @@ public class GobangRoomServiceImpl implements GobangRoomService {
     private final ConcurrentHashMap<String, GobangRoom> rooms = new ConcurrentHashMap<>();
 
     // 房间号必须对活跃房间查重：撞号会让后建的房间把先建的从 rooms 里挤掉
+    @Autowired
+    private GameLobbyBroadcaster gameLobbyBroadcaster;
+
     private String nextRoomId() {
         return GameRoomIdGenerator.generateRoomId(rooms::containsKey);
     }
@@ -176,6 +179,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
         GobangRoom room = new GobangRoom(nextRoomId(), userIdA, userIdB);
         room.setRoomStatus(GameConstants.ROOM_PLAYING);
         rooms.put(room.getRoomId(), room);
+        gameLobbyBroadcaster.roomsChanged(GameConstants.GOBANG);
         userRoomIds.put(userIdA, room.getRoomId());
         userRoomIds.put(userIdB, room.getRoomId());
         gameUserProfileService.updateStatus(userIdA, GameConstants.GOBANG, GameConstants.PROFILE_PLAYING, room.getRoomId());
@@ -488,6 +492,7 @@ public class GobangRoomServiceImpl implements GobangRoomService {
             return;
         }
         room.setRoomStatus(GameConstants.ROOM_FINISHED);
+        gameLobbyBroadcaster.roomsChanged(GameConstants.GOBANG);
         room.setWinnerUserId(winnerId);
         room.setEndReason(endReason);
         Long loserId = winnerId == null ? null : room.opponentOf(winnerId);

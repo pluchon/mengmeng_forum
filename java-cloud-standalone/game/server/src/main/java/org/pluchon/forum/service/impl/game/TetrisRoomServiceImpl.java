@@ -62,6 +62,9 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
     private final ConcurrentHashMap<String, TetrisRoom> rooms = new ConcurrentHashMap<>();
 
     // 房间号必须对活跃房间查重：撞号会让后建的房间把先建的从 rooms 里挤掉
+    @Autowired
+    private GameLobbyBroadcaster gameLobbyBroadcaster;
+
     private String nextRoomId() {
         return GameRoomIdGenerator.generateRoomId(rooms::containsKey);
     }
@@ -120,6 +123,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
         Long blueUserId = swap ? userIdA : userIdB;
         TetrisRoom room = new TetrisRoom(nextRoomId(), userIdA, userIdB, redUserId, blueUserId);
         rooms.put(room.getRoomId(), room);
+        gameLobbyBroadcaster.roomsChanged(GameConstants.TETRIS_PK);
         userRoomIds.put(userIdA, room.getRoomId());
         userRoomIds.put(userIdB, room.getRoomId());
         gameUserProfileService.updateStatus(userIdA, GameConstants.TETRIS_PK, GameConstants.PROFILE_PLAYING, room.getRoomId());
@@ -466,6 +470,7 @@ public class TetrisRoomServiceImpl implements TetrisRoomService {
             return;
         }
         room.setRoomStatus(GameConstants.ROOM_FINISHED);
+        gameLobbyBroadcaster.roomsChanged(GameConstants.TETRIS_PK);
         room.setWinnerUserId(winnerId);
         room.setEndReason(endReason);
         Long loserId = winnerId == null ? null : room.opponentOf(winnerId);

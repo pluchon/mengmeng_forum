@@ -123,6 +123,8 @@ const leaderboardGameCode = ref('tetris')
 const watchGameCode = ref('gobang')
 const watchKeyword = ref('')
 const watchSearchKeyword = ref('')
+const watchPageTotal = ref(1)
+const watchTotalCount = ref(0)
 const watchPage = ref(1)
 const watchPageSize = ref(4)
 const statRecords = ref([])
@@ -173,6 +175,14 @@ const statisticsSummary = reactive({
 
 const lobbySocket = useGameWebSocket('game-center/lobby', {
   onMessage(message) {
+    // 房间开始/结束由服务端推送，不再靠 5 秒轮询把观战列表拉一遍
+    if (message.type === 'active_rooms_changed') {
+      const changed = message.data?.gameCode
+      const watching = watchGameCode.value === 'tetris_pk' ? 'tetris_pk' : 'gobang'
+      if (!changed || changed === watching) {
+        void loadActiveRooms()
+      }
+    }
     if (message.type === 'lobby_ready' && message.data) {
       overview.lobbyOnlineCount = Number(message.data.lobbyOnlineCount ?? message.data.onlineCount) || overview.lobbyOnlineCount
     }
@@ -249,20 +259,10 @@ const rankProgressText = computed(() => {
   return `${current} / ${total}`
 })
 const watchRooms = computed(() => (watchGameCode.value === 'tetris_pk' ? tetrisPkRooms.value : activeRooms.value))
-const watchCountText = computed(() => `${watchRooms.value.length} 场可观战`)
-const filteredWatchRooms = computed(() => {
-  const keyword = normalizeWatchKeyword(watchSearchKeyword.value)
-  if (!keyword) return watchRooms.value
-  return watchRooms.value.filter((row) => {
-    return [watchRoomTitle(row), row?.roomId]
-      .some((text) => normalizeWatchKeyword(text).includes(keyword))
-  })
-})
-const watchTotal = computed(() => filteredWatchRooms.value.length)
-const pagedWatchRooms = computed(() => {
-  const start = (watchPage.value - 1) * watchPageSize.value
-  return filteredWatchRooms.value.slice(start, start + watchPageSize.value)
-})
+// 总数来自后端，不再是「当前已加载数组的长度」
+const watchCountText = computed(() => `${watchTotalCount.value} 场可观战`)
+// 过滤与分页都在后端做了，这里直接用返回的这一页
+const pagedWatchRooms = computed(() => watchRooms.value)
 const leaderboardRows = computed(() => leaderboard.value)
 
 function normalizeWatchKeyword(value) {
@@ -440,15 +440,39 @@ async function loadOverview(silent = false) {
   }
 }
 
+// 观战列表现在由后端分页，房间号也在后端精确查询。
+// 快速切换观战的游戏类型时，先发的请求可能后返回，用序号丢弃过期响应。
+let watchRequestSequence = 0
+
 async function loadActiveRooms() {
-  const [gobangRes, tetrisPkRes] = await Promise.all([getGobangActiveRooms(), getTetrisPkActiveRooms()])
-  if (gobangRes.code === 0) {
-    activeRooms.value = Array.isArray(gobangRes.data) ? gobangRes.data : []
+  const sequence = ++watchRequestSequence
+  const gameCode = watchGameCode.value
+  const params = {
+    pageNum: watchPage.value,
+    pageSize: watchPageSize.value,
+    roomId: watchSearchKeyword.value.trim() || undefined,
   }
-  if (tetrisPkRes.code === 0) {
-    tetrisPkRooms.value = Array.isArray(tetrisPkRes.data) ? tetrisPkRes.data : []
+  const request = gameCode === 'tetris_pk' ? getTetrisPkActiveRooms : getGobangActiveRooms
+  try {
+    const res = await request(params)
+    if (sequence !== watchRequestSequence) return
+    const page = res?.code === 0 ? res.data : null
+    const rows = Array.isArray(page?.records) ? page.records : []
+    if (gameCode === 'tetris_pk') {
+      tetrisPkRooms.value = rows
+    } else {
+      activeRooms.value = rows
+    }
+    watchPage.value = Number(page?.pageNum) || watchPage.value
+    watchPageTotal.value = Math.max(1, Number(page?.pages) || 1)
+    watchTotalCount.value = Number(page?.total) || 0
+  } catch {
+    if (sequence !== watchRequestSequence) return
+    if (gameCode === 'tetris_pk') tetrisPkRooms.value = []
+    else activeRooms.value = []
+    watchPageTotal.value = 1
+    watchTotalCount.value = 0
   }
-  clampWatchPage()
 }
 
 async function loadLeaderboard(gameCode = leaderboardGameCode.value) {
@@ -475,7 +499,6 @@ async function refreshLobby(silent = false) {
     loadOverview(silent),
     loadGamePage(gamePageNum.value),
     loadStatisticsSummary(),
-    loadActiveRooms(),
     loadProfileByGame('tetris'),
     loadProfileByGame('tetris_pk'),
   ])
@@ -724,15 +747,18 @@ function onLeaderboardPageChange(page) {
 }
 
 function setWatchGame(gameCode) {
+  if (watchGameCode.value === gameCode) return
   watchGameCode.value = gameCode
   watchKeyword.value = ''
   watchSearchKeyword.value = ''
   watchPage.value = 1
+  void loadActiveRooms()
 }
 
 function searchWatchRooms() {
   watchSearchKeyword.value = watchKeyword.value.trim()
   watchPage.value = 1
+  void loadActiveRooms()
 }
 
 function handleWatchSearchKeyup(event) {
@@ -743,13 +769,7 @@ function handleWatchSearchKeyup(event) {
 
 function onWatchPageChange(page) {
   watchPage.value = page
-}
-
-function clampWatchPage() {
-  const maxPage = Math.max(1, Math.ceil(watchTotal.value / watchPageSize.value))
-  if (watchPage.value > maxPage) {
-    watchPage.value = maxPage
-  }
+  void loadActiveRooms()
 }
 
 function recordResultText(row) {
