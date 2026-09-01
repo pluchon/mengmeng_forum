@@ -17,4 +17,7 @@ public class MessageSessionResponse {
     private Long unReadMessage;
     // 最新的消息的时间
     private Date lastMessageTime;
+
+    // 置顶时刻；NULL 表示未置顶
+    private Date pinnedAt;
 }

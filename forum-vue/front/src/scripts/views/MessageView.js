@@ -11,6 +11,7 @@ import {
   ArrowRight,
   ArrowLeft,
   ArrowDown,
+  Top,
   Bell,
   CircleCheck,
   Star,
@@ -53,6 +54,7 @@ import {
   restoreMessageSession,
   getHiddenMessageSessions,
   reportChatMessage,
+  pinMessageSession,
 } from '@/api/message'
 import { getShopEmojiAvailability } from '@/api/shop'
 import { getUserIsOnline } from '@/api/user'
@@ -300,6 +302,8 @@ export function useMessageView() {
   // 是否还跟着最新消息；离底时新消息只攒角标不强行拉回
   const following = ref(true)
   const pendingNewCount = ref(0)
+  // 正在置顶哪个会话，防连点
+  const pinningPeerId = ref(null)
   const recallClock = ref(Date.now())
   const expiredRecallIds = ref(new Set())
   const mediaNaturalSizes = ref({})
@@ -345,6 +349,7 @@ export function useMessageView() {
         key: `pm-${s.user?.id}`,
         kind: 'pm',
         session: s,
+        pinned: !!s.pinnedAt,
         name,
         time: matched?.matchedMessageTime || s.lastMessageTime,
         preview,
@@ -1335,6 +1340,27 @@ const GROUP_NOTIFY_OPTIONS = [
       await loadHiddenSessions()
     } else if (searchQuery.value.trim()) {
       await runPrivateTextSearch()
+    }
+  }
+
+  // 置顶顺序由服务端按置顶时刻倒序给出，这里只负责发起并重拉列表
+  async function togglePinPrivateSession(item) {
+    const peerUserId = item?.session?.user?.id ?? item?.user?.id
+    if (!peerUserId || pinningPeerId.value) return
+    const nextPinned = !item.pinned
+    pinningPeerId.value = Number(peerUserId)
+    try {
+      const res = await pinMessageSession({ peerUserId, pinned: nextPinned })
+      if (res.code !== 0) {
+        ElMessage.warning(res.message || (nextPinned ? '置顶失败' : '取消置顶失败'))
+        return
+      }
+      await loadSessions()
+      ElMessage.success(nextPinned ? '已置顶' : '已取消置顶')
+    } catch {
+      ElMessage.error(nextPinned ? '置顶失败，请稍后重试' : '取消置顶失败，请稍后重试')
+    } finally {
+      pinningPeerId.value = null
     }
   }
 
@@ -3532,6 +3558,8 @@ const GROUP_NOTIFY_OPTIONS = [
     openCurrentPeerProfile,
     openEmojiShopFromMessage,
     openAlbumPreview,
+    pinningPeerId,
+    togglePinPrivateSession,
     hidePrivateSession,
     restorePrivateSession,
     toggleHiddenManagement,

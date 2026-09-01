@@ -3242,3 +3242,44 @@
 .mc-new-msg-pill:hover {
   background: #fff5f9;
 }
+
+/* 置顶按钮：在删除按钮左侧 */
+.mc-conv-pin-action {
+  position: absolute;
+  right: 40px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #b6bfcb;
+  cursor: pointer;
+}
+
+.mc-conv-pin-action:hover:not(:disabled) {
+  background: rgba(236, 72, 153, 0.1);
+  color: #ec4899;
+}
+
+.mc-conv-pin-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.mc-conv-pin-action.is-pinned {
+  color: #ec4899;
+}
+
+/* 置顶的卡片未选中时是灰底，选中后仍走粉色的选中态 */
+.mc-conv.is-pinned:not(.is-on) {
+  background: #f2f3f5;
+}
+
+.mc-conv.is-pinned:not(.is-on):hover {
+  background: #e9ebee;
+}

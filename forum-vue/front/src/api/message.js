@@ -31,6 +31,11 @@ export function updateMessageStatusByMessageId(messageId, status = 1) {
 }
 
 // 发送私信
+// 置顶 / 取消置顶私信会话，最多十个
+export function pinMessageSession(data) {
+  return request({ url: '/message/session/pin', method: 'post', data })
+}
+
 export function sendMessage(data) {
   return request({ url: '/message/sendMessage', method: 'post', data })
 }

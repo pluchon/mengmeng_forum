@@ -203,12 +203,14 @@ CREATE TABLE `message_session_visibility` (
   `user_id` bigint NOT NULL COMMENT '状态所属用户ID',
   `peer_user_id` bigint NOT NULL COMMENT '私信对方用户ID',
   `hidden_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否在会话列表隐藏: 0否 1是',
+  `pinned_at` datetime DEFAULT NULL COMMENT '置顶时刻; NULL 表示未置顶',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除: 0否 1是',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_message_session_visibility_user_peer` (`user_id`,`peer_user_id`),
-  KEY `idx_message_session_visibility_user_hidden_time` (`user_id`,`hidden_state`,`delete_state`,`update_time`)
+  KEY `idx_message_session_visibility_user_hidden_time` (`user_id`,`hidden_state`,`delete_state`,`update_time`),
+  KEY `idx_message_session_visibility_user_pinned` (`user_id`,`pinned_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='私信会话用户视角显示状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

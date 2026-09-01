@@ -9,6 +9,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.message.FavoriteEmojiRequest;
 import org.pluchon.forum.entity.dto.message.MessageReplyRequest;
+import org.pluchon.forum.entity.dto.message.MessageSessionPinRequest;
 import org.pluchon.forum.entity.dto.message.MessageSessionVisibilityRequest;
 import org.pluchon.forum.entity.dto.message.SendAlbumMessageRequest;
 import org.pluchon.forum.entity.dto.message.SendImageMessageRequest;
@@ -164,6 +165,16 @@ public class MessageController {
                                               HttpServletRequest httpServletRequest) {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         messageService.restoreMessageSession(sessionUser.getId(), request.getPeerUserId());
+        return Result.success();
+    }
+
+    /** 置顶或取消置顶私信会话，最多置顶十个 */
+    @PostMapping("/session/pin")
+    public Result<Void> pinMessageSession(@Valid @RequestBody MessageSessionPinRequest request,
+                                          HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        messageService.pinMessageSession(sessionUser.getId(), request.getPeerUserId(),
+                Boolean.TRUE.equals(request.getPinned()));
         return Result.success();
     }
 

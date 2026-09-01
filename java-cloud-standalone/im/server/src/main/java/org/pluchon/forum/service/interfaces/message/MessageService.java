@@ -52,6 +52,9 @@ public interface MessageService {
     // 恢复当前用户视角下的私信会话
     void restoreMessageSession(Long userId, Long peerUserId);
 
+    // 置顶或取消置顶一个私信会话
+    void pinMessageSession(Long userId, Long peerUserId, boolean pinned);
+
     // 查询当前用户主动隐藏的私信会话
     PageResult<MessageSessionResponse> queryHiddenMessageSessions(Long userId, Integer pageNum, Integer pageSize);
 

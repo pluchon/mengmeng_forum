@@ -126,6 +126,9 @@ public class MessageServiceImpl implements MessageService {
     private ObjectMapper objectMapper;
 
     @Autowired
+    // 最多能置顶多少个会话
+    private static final int MAX_PINNED_SESSIONS = 10;
+
     private OssConfig ossConfig;
 
     @Autowired
@@ -439,9 +442,14 @@ public class MessageServiceImpl implements MessageService {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Set<Long> hiddenPeerIds = queryHiddenPeerIds(userId);
+        Map<Long, Date> pinnedAtByPeer = queryPinnedAtByPeer(userId);
         List<MessageSessionResponse> all = buildAllSessions(userId).stream()
                 .filter(session -> session.getUser() != null
                         && !hiddenPeerIds.contains(session.getUser().getId()))
+                .peek(session -> session.setPinnedAt(pinnedAtByPeer.get(session.getUser().getId())))
+                // buildAllSessions 已按最后消息时间倒序；这里只把置顶的提到前面。
+                // sorted 是稳定排序，未置顶的那批仍保持原有的时间顺序
+                .sorted(pinnedFirst())
                 .collect(Collectors.toList());
         return pageList(all, validPageNum, validPageSize);
     }
@@ -504,7 +512,56 @@ public class MessageServiceImpl implements MessageService {
                 || Objects.equals(current.getDeleteState(), Constant.DELETE_STATE_TRUE)) {
             updateSessionHiddenState(userId, peerUserId, (byte) 1);
         }
+        // 归档的同时收回置顶，否则一个看不见的会话还占着十个名额里的一个
+        clearSessionPin(userId, peerUserId);
         invalidateUnreadCache(userId);
+    }
+
+    /**
+     * 置顶或取消置顶。
+     *
+     * <p>置顶状态与归档共用 message_session_visibility 的同一行：这张表本来就是
+     * 「某用户对某会话的个人设置」，两者天然属于一起，也省掉跨表一致性。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void pinMessageSession(Long userId, Long peerUserId, boolean pinned) {
+        validateSessionPeer(userId, peerUserId);
+        if (!pinned) {
+            clearSessionPin(userId, peerUserId);
+            return;
+        }
+        boolean sessionExists = buildAllSessions(userId).stream()
+                .anyMatch(session -> session.getUser() != null
+                        && Objects.equals(session.getUser().getId(), peerUserId));
+        if (!sessionExists) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "私信会话不存在"));
+        }
+        MessageSessionVisibility current = querySessionVisibility(userId, peerUserId);
+        if (current != null && current.getPinnedAt() != null
+                && !Objects.equals(current.getDeleteState(), Constant.DELETE_STATE_TRUE)) {
+            // 已经是置顶了，重复点不该刷新它的位置
+            return;
+        }
+        if (countPinnedSessions(userId) >= MAX_PINNED_SESSIONS) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED,
+                    "最多只能置顶 " + MAX_PINNED_SESSIONS + " 个聊天"));
+        }
+        Date now = new Date();
+        if (current == null) {
+            MessageSessionVisibility visibility = new MessageSessionVisibility();
+            visibility.setUserId(userId);
+            visibility.setPeerUserId(peerUserId);
+            visibility.setHiddenState((byte) 0);
+            visibility.setPinnedAt(now);
+            try {
+                messageSessionVisibilityMapper.insert(visibility);
+            } catch (DuplicateKeyException exception) {
+                updateSessionPinnedAt(userId, peerUserId, now);
+            }
+            return;
+        }
+        updateSessionPinnedAt(userId, peerUserId, now);
     }
 
     @Override
@@ -992,6 +1049,60 @@ public class MessageServiceImpl implements MessageService {
                 .eq(MessageSessionVisibility::getPeerUserId, peerUserId)
                 .set(MessageSessionVisibility::getHiddenState, hiddenState)
                 .set(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_FALSE));
+    }
+
+    // 置顶的会话排在最前，按置顶时刻由近及远；未置顶的保持原有的时间顺序
+    private Comparator<MessageSessionResponse> pinnedFirst() {
+        return (left, right) -> {
+            Date leftPinned = left.getPinnedAt();
+            Date rightPinned = right.getPinnedAt();
+            if (leftPinned != null && rightPinned != null) {
+                return rightPinned.compareTo(leftPinned);
+            }
+            if (leftPinned != null) {
+                return -1;
+            }
+            if (rightPinned != null) {
+                return 1;
+            }
+            return 0;
+        };
+    }
+
+    private Map<Long, Date> queryPinnedAtByPeer(Long userId) {
+        Map<Long, Date> result = new HashMap<>();
+        for (MessageSessionVisibility record : messageSessionVisibilityMapper.selectList(
+                new LambdaQueryWrapper<MessageSessionVisibility>()
+                        .eq(MessageSessionVisibility::getUserId, userId)
+                        .isNotNull(MessageSessionVisibility::getPinnedAt)
+                        .ne(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_TRUE))) {
+            result.put(record.getPeerUserId(), record.getPinnedAt());
+        }
+        return result;
+    }
+
+    private long countPinnedSessions(Long userId) {
+        Long count = messageSessionVisibilityMapper.selectCount(
+                new LambdaQueryWrapper<MessageSessionVisibility>()
+                        .eq(MessageSessionVisibility::getUserId, userId)
+                        .isNotNull(MessageSessionVisibility::getPinnedAt)
+                        .ne(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_TRUE));
+        return count == null ? 0L : count;
+    }
+
+    private void updateSessionPinnedAt(Long userId, Long peerUserId, Date pinnedAt) {
+        messageSessionVisibilityMapper.update(null, new LambdaUpdateWrapper<MessageSessionVisibility>()
+                .eq(MessageSessionVisibility::getUserId, userId)
+                .eq(MessageSessionVisibility::getPeerUserId, peerUserId)
+                .set(MessageSessionVisibility::getPinnedAt, pinnedAt)
+                .set(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_FALSE));
+    }
+
+    private void clearSessionPin(Long userId, Long peerUserId) {
+        messageSessionVisibilityMapper.update(null, new LambdaUpdateWrapper<MessageSessionVisibility>()
+                .eq(MessageSessionVisibility::getUserId, userId)
+                .eq(MessageSessionVisibility::getPeerUserId, peerUserId)
+                .set(MessageSessionVisibility::getPinnedAt, null));
     }
 
     private Set<Long> queryHiddenPeerIds(Long userId) {

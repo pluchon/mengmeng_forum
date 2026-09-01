@@ -93,6 +93,7 @@
               'is-on': isActiveItem(item),
               'is-focus-ring': focusedConvKey === item.key,
               'is-group-private': item.kind === 'group' && Number(item.group?.groupType) === 1,
+              'is-pinned': item.kind === 'pm' && item.pinned,
             }"
             @click="selectListItem(item)"
             @keydown.enter.prevent="selectListItem(item)"
@@ -139,6 +140,18 @@
                   {{ groupTypeLabel(item.group?.groupType) }}
                 </span>
               </div>
+              <!-- 置顶按钮在删除左侧；归档列表里不提供置顶 -->
+              <button
+                v-if="item.kind === 'pm' && !item.hidden"
+                type="button"
+                class="mc-conv-pin-action"
+                :class="{ 'is-pinned': item.pinned }"
+                :disabled="Number(pinningPeerId) === Number(item.user?.id)"
+                :title="item.pinned ? '取消置顶' : '置顶聊天'"
+                @click.stop="togglePinPrivateSession(item)"
+              >
+                <el-icon><Top /></el-icon>
+              </button>
               <button
                 v-if="item.kind === 'pm'"
                 type="button"
@@ -1556,6 +1569,8 @@ const {
   openCurrentPeerProfile,
   openEmojiShopFromMessage,
   openAlbumPreview,
+  pinningPeerId,
+  togglePinPrivateSession,
   hidePrivateSession,
   restorePrivateSession,
   toggleHiddenManagement,
