@@ -3243,27 +3243,25 @@
   background: #fff5f9;
 }
 
-/* 置顶按钮：在删除按钮左侧 */
+/* 置顶按钮：与删除按钮同一行，尺寸和纵向位置都对齐 */
 .mc-conv-pin-action {
   position: absolute;
   right: 40px;
-  bottom: 10px;
+  bottom: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: none;
-  border-radius: 6px;
   background: transparent;
-  color: #b6bfcb;
+  color: #a8adb7;
   cursor: pointer;
 }
 
 .mc-conv-pin-action:hover:not(:disabled) {
-  background: rgba(236, 72, 153, 0.1);
-  color: #ec4899;
+  color: #d4537e;
 }
 
 .mc-conv-pin-action:disabled {
@@ -3282,4 +3280,24 @@
 
 .mc-conv.is-pinned:not(.is-on):hover {
   background: #e9ebee;
+}
+
+/* 右侧顶部的头像与昵称是跳转入口，但不该长得像个按钮 */
+.mc-rhead-avatar-btn,
+.mc-rname-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.mc-rhead-avatar-btn {
+  display: inline-flex;
+}
+
+.mc-rname-link:hover {
+  color: #d4537e;
 }

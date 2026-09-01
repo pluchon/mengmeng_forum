@@ -460,6 +460,9 @@ export function useMessageView() {
       + appliedJoinRequests.value.filter((item) => Number(item.applicantReadState) === 0).length,
   )
 
+  // 归档列表里的会话是只读的，恢复后才能发言
+  const sessionReadonly = computed(() => hiddenManagementMode.value)
+
   const isPrivateChat = computed(() => !!currentSession.value && !currentGroupSession.value)
 
   const activeChatTitle = computed(() => {
@@ -1831,7 +1834,8 @@ const GROUP_NOTIFY_OPTIONS = [
 
   async function selectListItem(item) {
     focusedConvKey.value = item.key
-    if (item.kind === 'pm' && !item.hidden) await selectPmSession(item.session)
+    // 归档的会话也要能点开：能翻记录，只是不能发言（发送区已禁用）
+    if (item.kind === 'pm') await selectPmSession(item.session)
     else if (item.kind === 'group') await selectGroupSession(item.group)
     else if (item.kind === 'join-request-group') await selectJoinRequestGroup(item)
     else if (item.kind === 'sys-group') await selectSysGroup(item)
@@ -3560,6 +3564,7 @@ const GROUP_NOTIFY_OPTIONS = [
     openAlbumPreview,
     pinningPeerId,
     togglePinPrivateSession,
+    sessionReadonly,
     hidePrivateSession,
     restorePrivateSession,
     toggleHiddenManagement,

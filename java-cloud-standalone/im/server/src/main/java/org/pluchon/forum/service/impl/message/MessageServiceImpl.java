@@ -66,14 +66,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -82,6 +75,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class MessageServiceImpl implements MessageService {
+
+    // 最多能置顶多少个会话
+    private static final int MAX_PINNED_SESSIONS = 10;
 
     // 私信群邀请卡片内容格式
     private static final Pattern GROUP_INVITE_CARD_PATTERN = Pattern.compile("^\\[\\[GROUP_INVITE:(\\d+)]]$");
@@ -126,9 +122,6 @@ public class MessageServiceImpl implements MessageService {
     private ObjectMapper objectMapper;
 
     @Autowired
-    // 最多能置顶多少个会话
-    private static final int MAX_PINNED_SESSIONS = 10;
-
     private OssConfig ossConfig;
 
     @Autowired

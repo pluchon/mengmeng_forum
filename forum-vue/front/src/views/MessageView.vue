@@ -902,13 +902,14 @@
               <textarea
                 ref="inputBoxRef"
                 v-model="sendContent"
+                :disabled="sessionReadonly"
                 class="mc-ibox"
                 rows="1"
                 placeholder="在此输入消息内容…"
                 @input="autoResizeInput"
                 @keydown="onComposerKeydown"
               />
-              <button type="button" class="mc-sbtn" :disabled="sending" @click="sendMsg">
+              <button type="button" class="mc-sbtn" :disabled="sending || sessionReadonly" @click="sendMsg">
                 <el-icon><Promotion /></el-icon>
                 <span>{{ sending ? '发送中' : '发送' }}</span>
               </button>
@@ -1571,6 +1572,7 @@ const {
   openAlbumPreview,
   pinningPeerId,
   togglePinPrivateSession,
+  sessionReadonly,
   hidePrivateSession,
   restorePrivateSession,
   toggleHiddenManagement,
