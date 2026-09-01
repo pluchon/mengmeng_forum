@@ -166,7 +166,7 @@ export function useHome() {
     try {
       const [msgRes, sysRes] = await Promise.all([getUnReadCount(), getSystemMessageUnreadCount()])
       const api = msgRes?.code === 0 ? Number(msgRes.data) || 0 : 0
-      messageStore.setUnreadCount(api, { keepTip: messageStore.showTip })
+      messageStore.setUnreadCount(api)
       if (sysRes?.code === 0) {
         messageStore.setSystemUnreadCount(Number(sysRes.data) || 0)
       }
@@ -198,7 +198,6 @@ export function useHome() {
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
         await fetchUnread()
-        messageStore.showIncomingTip()
       }, 500)
     },
   )

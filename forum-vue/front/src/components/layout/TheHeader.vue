@@ -40,7 +40,6 @@
             <el-badge :value="msgUnread" :hidden="msgUnread === 0" class="red-badge">
               <el-icon class="icon-btn" @click="openMessageCenter"><Message /></el-icon>
             </el-badge>
-            <MessageIncomingBubble />
           </div>
 
           <button
@@ -101,7 +100,6 @@
 <script setup>
 import PawCoinIcon from '@/components/common/PawCoinIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
-import MessageIncomingBubble from '@/components/layout/MessageIncomingBubble.vue'
 import VipSubscribeDialog from '@/components/vip/VipSubscribeDialog/VipSubscribeDialog.vue'
 import { useTheHeader } from '@scripts/components/layout/TheHeader'
 import { SITE_NAME as siteName } from '@/constants/site'

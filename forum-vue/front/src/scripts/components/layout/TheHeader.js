@@ -54,7 +54,7 @@ export function useTheHeader() {
       const [msgRes, sysRes] = await Promise.all([getUnReadCount(), getSystemMessageUnreadCount()])
       const privateCount = msgRes?.code === 0 ? Number(msgRes.data) || 0 : 0
       const systemCount = sysRes?.code === 0 ? Number(sysRes.data) || 0 : 0
-      messageStore.setUnreadCount(privateCount, { keepTip: messageStore.showTip })
+      messageStore.setUnreadCount(privateCount)
       messageStore.setSystemUnreadCount(systemCount)
     } catch {}
   }
@@ -89,7 +89,6 @@ export function useTheHeader() {
       clearTimeout(incomingUnreadTimer)
       incomingUnreadTimer = setTimeout(async () => {
         await fetchUnread()
-        messageStore.showIncomingTip()
       }, 500)
     },
   )

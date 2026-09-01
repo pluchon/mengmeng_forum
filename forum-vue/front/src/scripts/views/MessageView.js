@@ -1792,7 +1792,7 @@ const GROUP_NOTIFY_OPTIONS = [
     try {
       const res = await getUnReadCount()
       if (res?.code === 0) {
-        messageStore.setUnreadCount(Number(res.data) || 0, { keepTip: messageStore.showTip })
+        messageStore.setUnreadCount(Number(res.data) || 0)
       }
     } catch {
       // 忽略

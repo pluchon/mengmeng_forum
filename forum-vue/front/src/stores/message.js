@@ -17,32 +17,17 @@ export const useMessageStore = defineStore('message', () => {
   const groupMessageSignal = ref(null)
   const groupAuditSignal = ref(null)
   const privateMessageMutationSignal = ref(null)
-  const showTip = ref(false)
-  const tipText = ref('')
+  // 到达提示只剩右上角那张卡（utils/messageIncomingToast.js）。
+  // 原来还有一张挂在信封图标下的小气泡，同一个信号会让两张一起弹；
+  // 而且它是看 incomingPreview 显示的，来一条系统通知就会把上一条旧聊天重新弹一遍。
   const incomingPreview = ref(null)
 
-  function setUnreadCount(count, { keepTip = false } = {}) {
-    const next = Math.max(0, Number(count) || 0)
-    const shouldKeepTip = keepTip || showTip.value || !!incomingPreview.value
-    unreadCount.value = next
-    if (unreadCount.value === 0 && !shouldKeepTip) {
-      showTip.value = false
-    }
-  }
-
-  function showIncomingTip() {
-    showTip.value = true
-  }
-
-  function hideTip() {
-    showTip.value = false
+  function setUnreadCount(count) {
+    unreadCount.value = Math.max(0, Number(count) || 0)
   }
 
   function decrementUnread(count = 1) {
     unreadCount.value = Math.max(0, unreadCount.value - count)
-    if (unreadCount.value === 0) {
-      showTip.value = false
-    }
   }
 
   function onNewMessage(msg) {
@@ -91,8 +76,6 @@ export const useMessageStore = defineStore('message', () => {
     showMessageIncomingToast(signal)
 
     unreadCount.value = Math.max(0, Number(unreadCount.value) || 0) + 1
-    showTip.value = true
-    tipText.value = body ? `${sender}：${body}` : '您收到一条新消息'
   }
 
   function notifyPeerRead(payload) {
@@ -120,8 +103,6 @@ export const useMessageStore = defineStore('message', () => {
   function onSystemMessage(payload) {
     systemMessageSignal.value = { ...payload, seq: Date.now() }
     systemUnreadCount.value += 1
-    showTip.value = true
-    tipText.value = payload?.title || '您有一条新的系统通知'
   }
 
   // 建群审核结果：只是一个信号，页面自己去刷新
@@ -137,7 +118,6 @@ export const useMessageStore = defineStore('message', () => {
     if (payload?.notify === false) {
       return
     }
-    showTip.value = true
     const sender = String(payload?.senderNickname || '群成员').trim() || '群成员'
     const preview = String(payload?.summary || payload?.content || '你收到一条新的群聊消息').trim()
       || '你收到一条新的群聊消息'
@@ -158,7 +138,6 @@ export const useMessageStore = defineStore('message', () => {
     }
     incomingSignal.value = signal
     showMessageIncomingToast(signal)
-    tipText.value = `${sender}：${preview}`
   }
 
   function onPrivateMessageMutation(payload) {
@@ -176,11 +155,7 @@ export const useMessageStore = defineStore('message', () => {
     systemMessageSignal,
     groupMessageSignal,
     privateMessageMutationSignal,
-    showTip,
-    tipText,
     setUnreadCount,
-    showIncomingTip,
-    hideTip,
     onNewMessage,
     decrementUnread,
     notifyPeerRead,
