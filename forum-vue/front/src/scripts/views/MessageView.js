@@ -910,8 +910,9 @@ const GROUP_NOTIFY_OPTIONS = [
 
   function parseSystemMessageContent(msg) {
     const content = msg?.content || ''
-    const relatedId = msg?.relatedId
     const isMusic = isMusicAuditMessage(msg)
+    // 不指向帖子的通知不要把《标题》做成链接，点了也是跳错地方
+    const relatedId = isMusic || isArticleJumpable(msg) ? msg?.relatedId : null
     const match = content.match(/《([^》]+)》/)
     if (match && relatedId) {
       const start = match.index ?? 0
@@ -3602,6 +3603,14 @@ const GROUP_NOTIFY_OPTIONS = [
     return formatChatSessionTimeShanghai(time)
   }
 
+  /**
+   * 点开一条通知要跳到哪儿。
+   *
+   * <p>relatedId 并不总是帖子 ID：私信举报给的是消息 ID，群聊通知给的是群 ID，
+   * 原来一律按 `/article/${relatedId}` 跳，会跳到一个不相干的帖子上，或者 404。
+   * 服务端现在在 payload 里写了 kind，按 kind 分流；没有 payload 的历史通知
+   * 再看文案兜底。
+   */
   function openArticleFromSystem(msg) {
     if (isMusicAuditMessage(msg)) {
       const payload = parseSystemMessagePayload(msg)
@@ -3613,7 +3622,22 @@ const GROUP_NOTIFY_OPTIONS = [
       }
       return
     }
-    if (msg?.relatedId) router.push(`/article/${msg.relatedId}`)
+    if (!isArticleJumpable(msg)) return
+    const payload = parseSystemMessagePayload(msg)
+    const target = payload?.articleId || msg?.relatedId
+    if (target) router.push(`/article/${target}`)
+  }
+
+  // 这条通知的 relatedId 是不是真的指向一个帖子
+  function isArticleJumpable(msg) {
+    const kind = String(parseSystemMessagePayload(msg)?.kind || '')
+    if (kind === 'content_report') return true
+    if (kind === 'chat_report' || kind === 'group_notice' || kind === 'tag_approved') return false
+    // 历史通知没有 payload，只能看文案：这几类的开头都是固定的
+    const content = String(msg?.content || '')
+    return !content.includes('您举报的私信消息')
+      && !content.includes('您举报的群聊消息')
+      && !content.includes('您提交的标签')
   }
 
   return {

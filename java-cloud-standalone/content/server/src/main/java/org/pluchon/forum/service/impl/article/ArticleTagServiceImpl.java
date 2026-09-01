@@ -250,7 +250,8 @@ public class ArticleTagServiceImpl implements ArticleTagService {
                 Constant.SYSTEM_MSG_TITLE_TAG_APPROVED,
                 String.format("您提交的标签「%s」已通过审核，现已可在发帖时选用。", name),
                 tag.getId(),
-                null);
+                // relatedId 这里是标签 ID，不是帖子 ID；标明类型，免得前端按帖子跳
+                "{\"kind\":\"tag_approved\",\"tagId\":" + tag.getId() + "}");
 
         return toTagFeedbackVO(tag.getId());
     }

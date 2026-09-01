@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -391,8 +392,21 @@ public class ChatMessageReportServiceImpl implements ChatMessageReportService {
         String reason = normalizeResultReason(resultReason, type);
         String content = "您举报的" + targetLabel + "“" + targetSummary + "”" + outcome
                 + "，因为" + reason + "。";
+        // 与内容举报共用 5/6/7 类型码，靠 kind 告诉前端 relatedId 是私信而不是帖子
+        String payloadJson = buildChatReportPayload(report.getMessageId());
         TransactionHooks.afterCommit(() -> systemMessageService.createMessage(
-                report.getReporterUserId(), type, title, content, report.getMessageId(), null));
+                report.getReporterUserId(), type, title, content, report.getMessageId(), payloadJson));
+    }
+
+    private String buildChatReportPayload(Long messageId) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("kind", "chat_report");
+            payload.put("messageId", messageId);
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String normalizeResultReason(String resultReason, byte messageType) {

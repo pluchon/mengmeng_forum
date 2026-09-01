@@ -1,5 +1,6 @@
 package org.pluchon.forum.service.impl.moderation;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
@@ -34,6 +35,8 @@ import org.springframework.util.StringUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -90,6 +93,9 @@ public class ContentReportServiceImpl implements ContentReportService {
 
     @Autowired
     private ContentSystemMessageInternalFeignClient systemMessageClient;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -278,9 +284,62 @@ public class ContentReportServiceImpl implements ContentReportService {
         String outcome = type == 5 ? "举报成功" : type == 6 ? "不通过" : "处理异常";
         String reason = normalizeResultReason(resultReason, type);
         String content = "您举报的" + target + outcome + "，因为" + reason + "。";
+        byte targetType = safeByte(report.getTargetType());
+        Long articleId = resolveArticleId(targetType, report.getTargetId());
+        // relatedId 是前端点开通知时的跳转目标，只认帖子 ID
+        Long relatedId = articleId != null ? articleId : report.getTargetId();
+        String payloadJson = buildReportPayload(targetType, report.getTargetId(), articleId);
         TransactionHooks.afterCommit(() -> systemMessageClient.createMessage(
                 report.getReporterUserId(), type, title, content,
-                report.getTargetId(), null));
+                relatedId, payloadJson));
+    }
+
+    /**
+     * 举报的目标属于哪个帖子。
+     *
+     * <p>原来 relatedId 直接给 targetId，评论/回复/弹幕的 ID 被前端当成帖子 ID 用，
+     * 点开通知就跳到了另一个帖子，或者干脆 404。这里统一换算成所属帖子。
+     */
+    private Long resolveArticleId(byte targetType, Long targetId) {
+        if (targetId == null) {
+            return null;
+        }
+        if (TARGET_ARTICLE == targetType) {
+            return targetId;
+        }
+        if (TARGET_REPLY == targetType) {
+            ArticleReply reply = articleReplyMapper.selectById(targetId);
+            return reply == null ? null : reply.getArticleId();
+        }
+        if (TARGET_SUB_REPLY == targetType) {
+            ArticleSubReply reply = articleSubReplyMapper.selectById(targetId);
+            return reply == null ? null : reply.getArticleId();
+        }
+        if (TARGET_DANMAKU == targetType) {
+            ArticleVideoDanmaku danmaku = articleVideoDanmakuMapper.selectById(targetId);
+            return danmaku == null ? null : danmaku.getArticleId();
+        }
+        return null;
+    }
+
+    /**
+     * 通知里附带跳转信息。
+     *
+     * <p>举报结果的类型码（5/6/7）站内两处在用：内容举报和私信举报，
+     * 光看类型分不出 relatedId 是帖子还是私信。kind 就是用来区分的。
+     */
+    private String buildReportPayload(byte targetType, Long targetId, Long articleId) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("kind", "content_report");
+            payload.put("targetType", targetType);
+            payload.put("targetId", targetId);
+            payload.put("articleId", articleId);
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            // 跳转信息可有可无，序列化失败就退回纯文本通知
+            return null;
+        }
     }
 
     private static String normalizeResultReason(String resultReason, byte messageType) {

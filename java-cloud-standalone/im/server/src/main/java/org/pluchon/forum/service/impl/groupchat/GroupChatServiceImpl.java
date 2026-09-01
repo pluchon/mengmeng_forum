@@ -660,6 +660,23 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (affected <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED));
         }
+        obsoletePendingJoinRequests(groupId);
+    }
+
+    /**
+     * 群解散后把还挂着的入群申请/邀请一并作废。
+     *
+     * <p>不作废也点不动——批准时 assertJoinable 会拦下已解散的群——
+     * 但那条申请会一直停在「待处理」，两边列表里都像是还有事没办完。
+     */
+    private void obsoletePendingJoinRequests(Long groupId) {
+        groupChatJoinRequestMapper.update(null, new LambdaUpdateWrapper<GroupChatJoinRequest>()
+                .eq(GroupChatJoinRequest::getGroupId, groupId)
+                .eq(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
+                .set(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.OBSOLETE.getCode())
+                .set(GroupChatJoinRequest::getOwnerReadState, GroupChatJoinRequestReadState.READ.getCode())
+                .set(GroupChatJoinRequest::getHandleTime, ForumDateTimes.now())
+                .set(GroupChatJoinRequest::getUpdateTime, ForumDateTimes.now()));
     }
 
     @Override
@@ -1052,8 +1069,26 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .set(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
         // 系统消息类型 8 = 群聊通知（1~3 审核 / 4 标签 / 5~7 举报 / 99 公告）
         systemMessageService.createMessage(ownerUserId, SYSTEM_MESSAGE_TYPE_GROUP_NOTICE,
-                "群聊创建未通过", "「" + name + "」未通过审核：" + violation, groupId, null);
+                "群聊创建未通过", "「" + name + "」未通过审核：" + violation, groupId,
+                buildGroupNoticePayload(groupId));
         pushGroupAuditResult(ownerUserId, groupId, false, violation);
+    }
+
+    /**
+     * 群聊通知的跳转信息。
+     *
+     * <p>relatedId 这里是群 ID，前端默认按帖子 ID 跳，会跳到不相干的帖子上去。
+     * 建群没过的群已经被收回，所以这条只标明类型、不给跳转。
+     */
+    private String buildGroupNoticePayload(Long groupId) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("kind", "group_notice");
+            payload.put("groupId", groupId);
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String firstViolation(String name, String intro) {
