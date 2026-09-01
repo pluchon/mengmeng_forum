@@ -3219,10 +3219,17 @@
 }
 
 /* 正在翻历史时的新消息角标：点一下才回到最新，不打断阅读 */
+/* 零高度的定位锚：角标由它定位，底边贴住消息区下沿 */
+.mc-new-msg-anchor {
+  position: relative;
+  height: 0;
+  overflow: visible;
+}
+
 .mc-new-msg-pill {
   position: absolute;
   left: 50%;
-  bottom: 92px;
+  bottom: 6px;
   z-index: 6;
   display: inline-flex;
   align-items: center;
@@ -3330,4 +3337,49 @@
 
 .mc-mute-trigger.is-muted {
   color: #d4537e;
+}
+
+/* 下载原图：与收藏并排，放在它左边 */
+.mc-dl-img-btn {
+  margin-right: 6px;
+}
+
+.mc-dl-img-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* 图集预览里每张图右下角的下载 */
+.mc-album-preview-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.mc-album-dl-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mc-album-dl-btn:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.mc-album-dl-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }

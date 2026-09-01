@@ -1,4 +1,5 @@
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -1012,117 +1013,13 @@ export function useArticleDetail() {
     mainImagePreviewVisible.value = false
   }
 
-  function guessImageFileName(url, articleId, index) {
-    const base = `article-${articleId || 'image'}-${index}`
-    try {
-      const path = new URL(url, window.location.origin).pathname
-      const last = path.split('/').pop() || ''
-      const extMatch = last.match(/\.(jpe?g|png|webp|gif|bmp)$/i)
-      if (extMatch) return `${base}.${extMatch[1].toLowerCase()}`
-    } catch {
-      // 忽略
-    }
-    return `${base}.jpg`
-  }
-
-  // 开发态 / 生产同源代理：把阿里云 OSS 地址改写到 /oss dl/，避免浏览器 CORS
-  function toDownloadFetchUrl(url) {
-    try {
-      const u = new URL(url, window.location.origin)
-      if (!/\.aliyuncs\.com$/i.test(u.hostname)) return url
-      return `/oss-dl/${u.hostname}${u.pathname}${u.search}`
-    } catch {
-      return url
-    }
-  }
-
-  function triggerBlobDownload(href, fileName, shouldRevoke) {
-    const a = document.createElement('a')
-    a.href = href
-    a.download = fileName
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    if (shouldRevoke && href.startsWith('blob:')) {
-      URL.revokeObjectURL(href)
-    }
-  }
-
-  async function fetchBlobFromUrl(url) {
-    const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store' })
-    if (!res.ok) throw new Error(`download status ${res.status}`)
-    return res.blob()
-  }
-
-  // OSS 开启跨域时，用 canvas 导出为 blob 不新开标签
-  function blobFromCrossOriginImage(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas')
-          canvas.width = img.naturalWidth || img.width
-          canvas.height = img.naturalHeight || img.height
-          if (!canvas.width || !canvas.height) {
-            reject(new Error('empty image'))
-            return
-          }
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(img, 0, 0)
-          canvas.toBlob((blob) => {
-            if (blob) resolve(blob)
-            else reject(new Error('toBlob failed'))
-          }, 'image/jpeg', 0.92)
-        } catch (err) {
-          reject(err)
-        }
-      }
-      img.onerror = () => reject(new Error('image load failed'))
-      // 强制走带 CORS 头的新请求，避开无 CORS 的缓存副本
-      try {
-        const u = new URL(url, window.location.origin)
-        u.searchParams.set('_dl', String(Date.now()))
-        img.src = u.toString()
-      } catch {
-        img.src = url
-      }
-    })
-  }
-
   async function downloadCurrentGalleryImage() {
     const url = mainDisplayImageUrl.value
     if (!url || isVideoArticle.value) return
-    const name = guessImageFileName(url, article.value?.id, activeGalleryIndex.value + 1)
-    try {
-      if (url.startsWith('blob:') || url.startsWith('data:')) {
-        triggerBlobDownload(url, name, false)
-        return
-      }
-
-      const candidates = []
-      const proxied = toDownloadFetchUrl(url)
-      if (proxied !== url) candidates.push(proxied)
-      if (/^https?:\/\//i.test(url) || url.startsWith('/')) candidates.push(url)
-
-      let blob = null
-      for (const candidate of candidates) {
-        try {
-          blob = await fetchBlobFromUrl(candidate)
-          break
-        } catch {
-          // 尝试下一候选
-        }
-      }
-      if (!blob && /^https?:\/\//i.test(url)) {
-        blob = await blobFromCrossOriginImage(url)
-      }
-      if (!blob) throw new Error('no blob')
-
-      const objectUrl = URL.createObjectURL(blob)
-      triggerBlobDownload(objectUrl, name, true)
-    } catch {
+    const name = guessImageFileName(url, `article-${article.value?.id || 'image'}`,
+      activeGalleryIndex.value + 1)
+    const ok = await downloadImageByUrl(url, name)
+    if (!ok) {
       ElMessage.error('下载失败：图片跨域受限，请稍后重试或联系管理员配置 OSS 跨域')
     }
   }

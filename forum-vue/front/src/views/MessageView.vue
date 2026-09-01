@@ -433,6 +433,15 @@
                           >
                             <span class="mc-btime">{{ formatTime(row.msg.message?.createTime) }}</span>
                             <button
+                              type="button"
+                              class="mc-fav-img-btn mc-dl-img-btn"
+                              :disabled="Boolean(downloadingMediaUrl)"
+                              title="下载原图"
+                              @click="downloadChatImage(row.msg.message?.mediaUrl)"
+                            >
+                              下载
+                            </button>
+                            <button
                               v-if="canFavoriteChatImage(row.msg)"
                               type="button"
                               class="mc-fav-img-btn"
@@ -497,16 +506,19 @@
             </div>
           </el-scrollbar>
 
-          <!-- 正在翻历史时不把人拽回底部，只在这里攒一个角标 -->
-          <button
-            v-if="pendingNewCount > 0"
-            type="button"
-            class="mc-new-msg-pill"
-            @click="jumpToLatest"
-          >
-            <el-icon><ArrowDown /></el-icon>
-            {{ pendingNewCount }} 条新消息
-          </button>
+          <!-- 正在翻历史时不把人拽回底部，只在这里攒一个角标。
+               外面这层是零高度的定位锚，让角标底边正好贴住消息区的下沿 -->
+          <div class="mc-new-msg-anchor">
+            <button
+              v-if="pendingNewCount > 0"
+              type="button"
+              class="mc-new-msg-pill"
+              @click="jumpToLatest"
+            >
+              <el-icon><ArrowDown /></el-icon>
+              {{ pendingNewCount }} 条新消息
+            </button>
+          </div>
 
           <footer class="mc-rinput">
             <input
@@ -1094,7 +1106,19 @@
       arrow="always"
     >
       <el-carousel-item v-for="(image, index) in albumPreviewImages" :key="image.id || index">
-        <img :src="image.mediaUrl" :alt="`图集第 ${index + 1} 张图片`" class="mc-album-preview-image">
+        <div class="mc-album-preview-wrap">
+          <img :src="image.mediaUrl" :alt="`图集第 ${index + 1} 张图片`" class="mc-album-preview-image">
+          <button
+            type="button"
+            class="mc-album-dl-btn"
+            :disabled="Boolean(downloadingMediaUrl)"
+            title="下载原图"
+            @click="downloadChatImage(image.mediaUrl, index + 1)"
+          >
+            <el-icon><Download /></el-icon>
+            下载
+          </button>
+        </div>
       </el-carousel-item>
     </el-carousel>
   </el-dialog>
@@ -1582,6 +1606,8 @@ const {
   openCurrentPeerProfile,
   openEmojiShopFromMessage,
   openAlbumPreview,
+  downloadChatImage,
+  downloadingMediaUrl,
   currentSessionMuted,
   mutingSession,
   onSessionListScroll,

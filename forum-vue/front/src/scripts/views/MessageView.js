@@ -13,6 +13,7 @@ import {
   ArrowDown,
   Top,
   Bell,
+  Download,
   MuteNotification,
   CircleCheck,
   Star,
@@ -36,6 +37,7 @@ import {
   RotateCcw,
 } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
+import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useMessageCenterUiStore } from '@/stores/messageCenterUi'
 import {
@@ -1410,6 +1412,22 @@ const GROUP_NOTIFY_OPTIONS = [
       await loadHiddenSessions()
     } else if (searchQuery.value.trim()) {
       await runPrivateTextSearch()
+    }
+  }
+
+  // 下载原图。图片消息与图集里的每一张都用它
+  const downloadingMediaUrl = ref('')
+
+  async function downloadChatImage(url, index = 1) {
+    const target = String(url || '').trim()
+    if (!target || downloadingMediaUrl.value) return
+    downloadingMediaUrl.value = target
+    try {
+      const ok = await downloadImageByUrl(target, guessImageFileName(target, 'chat', index))
+      if (ok) ElMessage.success('已开始下载原图')
+      else ElMessage.error('下载失败：图片跨域受限，请稍后重试')
+    } finally {
+      downloadingMediaUrl.value = ''
     }
   }
 
@@ -3705,6 +3723,8 @@ const GROUP_NOTIFY_OPTIONS = [
     openCurrentPeerProfile,
     openEmojiShopFromMessage,
     openAlbumPreview,
+    downloadChatImage,
+    downloadingMediaUrl,
     currentSessionMuted,
     mutingSession,
     toggleMuteCurrentSession,
