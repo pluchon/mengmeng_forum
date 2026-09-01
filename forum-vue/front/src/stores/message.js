@@ -135,10 +135,16 @@ export const useMessageStore = defineStore('message', () => {
     const sender = String(payload?.senderNickname || '群成员').trim() || '群成员'
     const preview = String(payload?.summary || payload?.content || '你收到一条新的群聊消息').trim()
       || '你收到一条新的群聊消息'
-    incomingPreview.value = { sender, preview }
+    // 群聊的卡片要说清楚是哪个群：第一行群名，第二行「谁说了什么」
+    const groupName = String(payload?.groupName || '').trim()
+    const groupAvatarUrl = String(payload?.groupAvatarUrl || '').trim()
+    incomingPreview.value = { sender, preview, groupName, groupAvatarUrl, kind: 'group' }
     const signal = {
       sender,
       preview,
+      groupName,
+      groupAvatarUrl,
+      kind: 'group',
       fromUserId: payload?.fromUserId != null ? Number(payload.fromUserId) : null,
       seq: Date.now(),
     }

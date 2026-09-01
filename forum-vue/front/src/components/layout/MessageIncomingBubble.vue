@@ -9,7 +9,16 @@
       @keydown.enter.prevent="onOpen"
     >
       <div class="tip-content">
-        <span class="tip-title">{{ preview?.sender || '新私信' }}</span>
+        <!-- 群聊：第一行群头像与群名，第二行「谁说了什么」 -->
+        <span class="tip-title">
+          <img
+            v-if="displayAvatarUrl"
+            class="tip-group-avatar"
+            :src="displayAvatarUrl"
+            alt=""
+          >
+          {{ displayTitle }}
+        </span>
         <span class="tip-preview">{{ displayPreview }}</span>
         <span v-if="unread > 0" class="tip-count">{{ unread }} 条未读</span>
       </div>

@@ -18,7 +18,9 @@ public class SendGroupChatMessageRequest {
 
     // 消息内容
     @NotBlank
-    private String content;
+    private String content;
+    // 本条消息 @ 到的成员 ID。前端选人时就知道是谁，不该让服务端去猜昵称
+    private java.util.List<Long> mentionedUserIds;
 
     // 回复的群消息 ID
     private Long replyMessageId;

@@ -306,6 +306,8 @@ export function useMessageView() {
   // 是否还跟着最新消息；离底时新消息只攒角标不强行拉回
   const following = ref(true)
   const pendingNewCount = ref(0)
+  // 本条消息 @ 过谁：userId -> 昵称，发送后清空
+  const pendingMentions = ref(new Map())
   // 正在设置免打扰，防连点
   const mutingSession = ref(false)
   // 正在置顶哪个会话，防连点
@@ -1600,6 +1602,7 @@ const GROUP_NOTIFY_OPTIONS = [
       await loadGroupInviteCards()
       // 进入会话总是从最新一条看起
       following.value = true
+      pendingMentions.value.clear()
       pendingNewCount.value = 0
       await scrollToBottom()
     }
@@ -2073,9 +2076,11 @@ const GROUP_NOTIFY_OPTIONS = [
           messageType: 0,
           content: text,
           replyMessageId: replyTarget.value?.id,
+          mentionedUserIds: collectMentionedIds(text),
         })
         if (res.code === 0 && res.data) {
           messages.value.push(mapGroupMessage(res.data))
+          pendingMentions.value.clear()
           sendContent.value = ''
           clearReplyTarget()
           await nextTick()
@@ -2636,8 +2641,21 @@ const GROUP_NOTIFY_OPTIONS = [
   function selectMentionMember(member) {
     const name = memberDisplayName(member).trim()
     if (!name) return
+    // 记下 ID：昵称会改也会互为前缀，服务端按 ID 判定才准
+    const uid = Number(member?.user?.id)
+    if (Number.isFinite(uid) && uid > 0) pendingMentions.value.set(uid, name)
     insertMentionText(`@${name}`)
     mentionPopoverVisible.value = false
+  }
+
+  // 发送前对一遍文本：被删掉的 @ 不该还算数
+  function collectMentionedIds(text) {
+    const content = String(text || '')
+    const ids = []
+    pendingMentions.value.forEach((name, uid) => {
+      if (name && content.includes(`@${name}`)) ids.push(uid)
+    })
+    return ids
   }
 
   function selectMentionAll() {

@@ -26,7 +26,9 @@ public class GroupChatMessage {
     private Byte messageType;
 
     // 消息内容
-    private String content;
+    private String content;
+    // 被 @ 的用户 ID，逗号分隔。发送时就记下来，不再靠昵称去猜
+    private String mentionedUserIds;
 
     // 回复的群消息 ID
     private Long replyMessageId;

@@ -124,6 +124,7 @@ CREATE TABLE `group_chat_message` (
   `sender_user_id` bigint DEFAULT NULL COMMENT '发送者用户ID，系统消息为空',
   `message_type` tinyint NOT NULL DEFAULT '0' COMMENT '消息类型: 0文本 1表情 2图片 4图集 9系统',
   `content` varchar(500) NOT NULL COMMENT '消息内容',
+  `mentioned_user_ids` varchar(512) DEFAULT NULL COMMENT '被@的用户ID, 逗号分隔; NULL 表示没有或为历史数据',
   `reply_message_id` bigint DEFAULT NULL COMMENT '回复的群消息ID',
   `reply_sender_name` varchar(64) DEFAULT NULL COMMENT '被回复消息发送者昵称快照',
   `reply_content` varchar(200) DEFAULT NULL COMMENT '被回复消息内容快照',

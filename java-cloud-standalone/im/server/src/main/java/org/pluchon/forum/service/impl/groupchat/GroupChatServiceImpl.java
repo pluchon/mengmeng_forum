@@ -85,6 +85,8 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     // 私信邀请卡片内容前缀
     // 带关键词搜申请时的候选上限：匹配要用到跨库的群主昵称，没法下推数据库
+    // 一条消息最多记多少个被 @ 的人，避免有人拿它当夹带字段
+    private static final int MAX_MENTIONED_USERS = 50;
     private static final int JOIN_REQUEST_SEARCH_CANDIDATE_LIMIT = 500;
     private static final String GROUP_INVITE_CARD_PREFIX = "[[GROUP_INVITE:";
 
@@ -224,7 +226,10 @@ public class GroupChatServiceImpl implements GroupChatService {
         List<GroupChatSessionVO> all = members.stream()
                 .map(member -> buildSession(member, loginUserId))
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(GroupChatSessionVO::getLastMessageTime,
+                // 还没说过话的群用创建时间排：只按最后消息时间的话，
+                // 刚建好的群因为 lastMessageTime 为空会被甩到最后，
+                // 而这时候人恰恰最想看到它
+                .sorted(Comparator.comparing(GroupChatServiceImpl::sessionOrderTime,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
         return pageList(all, validPageNum, validPageSize);
@@ -677,6 +682,7 @@ public class GroupChatServiceImpl implements GroupChatService {
             message.setReplySenderName(replySenderName(repliedMessage));
             message.setReplyContent(replyContent(repliedMessage));
         }
+        message.setMentionedUserIds(normalizeMentionedIds(request.getMentionedUserIds()));
         message.setStatus(GroupChatMessageStatus.NORMAL.getCode());
         message.setDeleteState(Constant.DELETE_STATE_FALSE);
         message.setCreateTime(now);
@@ -1374,6 +1380,10 @@ public class GroupChatServiceImpl implements GroupChatService {
                     payload.put("dbMessageId", message.getId());
                     payload.put("fromUserId", senderUserId);
                     payload.put("senderNickname", senderNickname);
+                    // 群名与群头像：通知卡片第一行要显示是哪个群，
+                    // 否则收到消息只看得到「谁说了什么」，不知道在哪儿说的
+                    payload.put("groupName", group.getName());
+                    payload.put("groupAvatarUrl", group.getAvatarUrl());
                     payload.put("summary", messageSummary(message));
                     payload.put("mentioned", !isSender && isMemberMentioned(message, member));
                     payload.put("notify", !isSender && shouldNotifyMember(message, member));
@@ -1408,6 +1418,10 @@ public class GroupChatServiceImpl implements GroupChatService {
                 }
             }
         });
+    }
+
+    private static Date sessionOrderTime(GroupChatSessionVO session) {
+        return session.getLastMessageTime() != null ? session.getLastMessageTime() : session.getCreateTime();
     }
 
     private GroupChatSessionVO buildSession(GroupChatMember member, Long loginUserId) {
@@ -1542,9 +1556,39 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (content.contains("@所有人")) {
             return true;
         }
+        // 优先用发送时记下的 ID：昵称会改、也会互为前缀，ID 不会
+        if (mentionedIdsContain(message.getMentionedUserIds(), member.getUserId())) {
+            return true;
+        }
+        // 手输的 @昵称 以及这个字段上线之前的历史消息，仍然靠昵称兜底
         UserInternalVO user = queryUserNullable(member.getUserId());
         return user != null && StringUtils.hasText(user.getNickname())
                 && mentionsNickname(content, user.getNickname());
+    }
+
+    private String normalizeMentionedIds(java.util.List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        String joined = ids.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .limit(MAX_MENTIONED_USERS)
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    private boolean mentionedIdsContain(String mentionedUserIds, Long userId) {
+        if (!StringUtils.hasText(mentionedUserIds) || userId == null) {
+            return false;
+        }
+        for (String part : mentionedUserIds.split(",")) {
+            if (userId.toString().equals(part.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

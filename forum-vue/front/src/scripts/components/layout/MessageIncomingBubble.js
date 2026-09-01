@@ -15,8 +15,22 @@ const visible = computed(() =>
 const preview = computed(() => messageStore.incomingPreview)
 const unread = computed(() => Number(messageStore.unreadCount) || 0)
 
+const isGroupTip = computed(() => preview.value?.kind === 'group' && !!preview.value?.groupName)
+
+// 群聊卡片第一行是群名，私信第一行是对方昵称
+const displayTitle = computed(() => {
+  if (isGroupTip.value) return preview.value.groupName
+  return preview.value?.sender || '新私信'
+})
+
+const displayAvatarUrl = computed(() => (isGroupTip.value ? preview.value?.groupAvatarUrl || '' : ''))
+
+// 群聊第二行是「谁说了什么」，一行放不下就截断——卡片要轻
 const displayPreview = computed(() => {
-  const text = (preview.value?.preview || '').toString()
+  const body = (preview.value?.preview || '').toString()
+  const text = isGroupTip.value
+    ? `${preview.value?.sender || '群成员'}：${body || '发来一条消息'}`
+    : body
   if (!text) return '您收到一条新私信'
   return text.length > PREVIEW_MAX ? `${text.slice(0, PREVIEW_MAX)}…` : text
 })
