@@ -155,14 +155,19 @@ services:
 volumes:
   forum_dev_nacos_data:
     external: true
+    name: meng_community_forum_dev_nacos_data
   forum_dev_mysql_data:
     external: true
+    name: meng_community_forum_dev_mysql_data
   forum_dev_redis_data:
     external: true
+    name: meng_community_forum_dev_redis_data
   forum_dev_rabbitmq_data:
     external: true
+    name: meng_community_forum_dev_rabbitmq_data
   forum_dev_postgres_data:
     external: true
+    name: meng_community_forum_dev_postgres_data
 
 networks:
   forum-dev-net:

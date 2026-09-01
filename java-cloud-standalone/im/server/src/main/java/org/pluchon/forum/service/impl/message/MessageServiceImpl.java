@@ -214,7 +214,7 @@ public class MessageServiceImpl implements MessageService {
         newMessage.setPostUserId(sendUserId);
         newMessage.setReceiveUserId(receiveUserId);
         newMessage.setMessageType(req.getMessageType());
-        newMessage.setContent(null);
+        newMessage.setContent(normalizeAlbumContent(req.getContent()));
         newMessage.setMediaUrl(req.getMediaUrl());
         newMessage.setMediaMime(req.getMediaMime());
         newMessage.setMediaSize(req.getMediaSize());
@@ -230,6 +230,9 @@ public class MessageServiceImpl implements MessageService {
         incrementUnreadCount(receiveUserId, 1L);
         invalidateSessionCache(sendUserId, receiveUserId);
         restoredUsers.forEach(this::invalidateUnreadCache);
+        // 附带的文字同样要走后审，否则单图会成为绕过文本审核的口子
+        outboundMessageTextAuditService.schedulePrivateTextAudit(
+                newMessage.getId(), newMessage.getContent(), sendUserId, receiveUserId);
         return MessageConverter.toMessageVO(queryMessageByMessageId(newMessage.getId()));
     }
 
@@ -538,9 +541,9 @@ public class MessageServiceImpl implements MessageService {
                         .and(i -> i.eq(Message::getPostUserId, userId).eq(Message::getReceiveUserId, receiveId))
                         .or(j -> j.eq(Message::getPostUserId, receiveId).eq(Message::getReceiveUserId, userId)))
                 .ne(Message::getDeleteState, Constant.DELETE_STATE_TRUE)
-                .and(w -> w.ne(Message::getState, Constant.MESSAGE_STATE_AUDIT_FAILED)
-                        .or(o -> o.eq(Message::getState, Constant.MESSAGE_STATE_AUDIT_FAILED)
-                                .eq(Message::getPostUserId, userId)))
+                // 后审没过的消息双方都不再出现：发送方那侧原来还留着一条「未通过审核」，
+                // 现在一并隐藏，聊天记录里就像这条消息没发生过
+                .ne(Message::getState, Constant.MESSAGE_STATE_AUDIT_FAILED)
                 .orderByAsc(Message::getCreateTime));
         Map<Long, List<MessageAlbumImage>> albumImages = queryAlbumImages(result.getRecords());
         List<MessageDetailResponse> records = result.getRecords().stream().map(msg -> {
@@ -701,8 +704,10 @@ public class MessageServiceImpl implements MessageService {
         LambdaQueryWrapper<UserChatEmoji> wrapper = new LambdaQueryWrapper<UserChatEmoji>()
                 .eq(UserChatEmoji::getUserId, userId)
                 .ne(UserChatEmoji::getDeleteState, Constant.DELETE_STATE_TRUE)
-                .orderByAsc(UserChatEmoji::getCreateTime)
-                .orderByAsc(UserChatEmoji::getId);
+                // 新收藏/新上传的排最前。原来是升序，最早的占着第一页，
+                // 前端只好在上传后手动跳到最后一页去找刚传的那张
+                .orderByDesc(UserChatEmoji::getCreateTime)
+                .orderByDesc(UserChatEmoji::getId);
         // 私信来源与群聊来源都算「收藏」；两者皆空且 URL 落在 emoji 子目录才是自上传
         if ("uploaded".equals(normalizedSource)) {
             wrapper.isNull(UserChatEmoji::getOriginMessageId)
@@ -823,8 +828,11 @@ public class MessageServiceImpl implements MessageService {
         }
         if (Constant.MESSAGE_TYPE_IMAGE.equals(msg.getMessageType())
                 || Constant.MESSAGE_TYPE_GIF.equals(msg.getMessageType())) {
-            return isChatMediaUnderPrefix(msg.getMediaUrl(), Constant.OSS_PATH_EMOJI_SHOP)
-                    ? "[表情符号]" : "[图片]";
+            if (isChatMediaUnderPrefix(msg.getMediaUrl(), Constant.OSS_PATH_EMOJI_SHOP)) {
+                return "[表情符号]";
+            }
+            String imageText = msg.getContent() == null ? "" : msg.getContent().trim();
+            return imageText.isEmpty() ? "[图片]" : "[图片] " + imageText;
         }
         if (Constant.MESSAGE_TYPE_ALBUM.equals(msg.getMessageType())) {
             String albumText = msg.getContent() == null ? "" : msg.getContent().trim();
@@ -1032,9 +1040,8 @@ public class MessageServiceImpl implements MessageService {
     private @NonNull List<MessageSessionResponse> getMessageSessionResponses(Long userId, List<Message> allMessages) {
         Map<Long, MessageSessionResponse> sessionMap = new LinkedHashMap<>();
         for (Message msg : allMessages) {
-            // 审核失败消息仅发送方可见
-            if (Constant.MESSAGE_STATE_AUDIT_FAILED.equals(msg.getState())
-                    && !Objects.equals(msg.getPostUserId(), userId)) {
+            // 审核失败的消息双方都不可见，也不参与会话列表的「最后一条」
+            if (Constant.MESSAGE_STATE_AUDIT_FAILED.equals(msg.getState())) {
                 continue;
             }
             Long otherId = msg.getPostUserId().equals(userId) ? msg.getReceiveUserId() : msg.getPostUserId();

@@ -3217,3 +3217,28 @@
   overflow: visible;
   white-space: normal;
 }
+
+/* 正在翻历史时的新消息角标：点一下才回到最新，不打断阅读 */
+.mc-new-msg-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(236, 72, 153, 0.28);
+  border-radius: 999px;
+  background: #fff;
+  color: #ec4899;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.mc-new-msg-pill:hover {
+  background: #fff5f9;
+}

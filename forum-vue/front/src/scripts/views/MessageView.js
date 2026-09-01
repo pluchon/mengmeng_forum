@@ -10,6 +10,7 @@ import {
   Plus,
   ArrowRight,
   ArrowLeft,
+  ArrowDown,
   Bell,
   CircleCheck,
   Star,
@@ -296,6 +297,9 @@ export function useMessageView() {
   const replyTarget = ref(null)
   const peerOnline = ref(false)
   const selfOnline = ref(false)
+  // 是否还跟着最新消息；离底时新消息只攒角标不强行拉回
+  const following = ref(true)
+  const pendingNewCount = ref(0)
   const recallClock = ref(Date.now())
   const expiredRecallIds = ref(new Set())
   const mediaNaturalSizes = ref({})
@@ -522,6 +526,9 @@ export function useMessageView() {
     return emojiShopStore.myPacks.filter((p) => !set.has(Number(p.userEmojiId)))
   })
 
+// 一次最多上传多少张表情。图集是十张，表情商城是六十张，这里原来没有上限
+const EMOJI_UPLOAD_BATCH_MAX = 20
+
 const FAVORITES_PAGE_SIZE = 8
 const MENTION_PAGE_SIZE = 5
 const GROUP_NOTIFY_OPTIONS = [
@@ -591,13 +598,14 @@ const GROUP_NOTIFY_OPTIONS = [
     emojiPopoverVisible.value = true
   }
 
-  function openPeerProfile(item) {
-    if (item?.kind !== 'pm') return
-    const uid = item?.user?.id ?? item?.session?.user?.id
-    if (!uid) return
+  // 右侧顶部的「查看对方主页」。会话列表不再承担跳转，避免翻列表时误点
+  function openCurrentPeerProfile() {
+    const uid = currentSession.value?.user?.id
+    if (!uid || currentSession.value?._virtual) return
     handleClose()
     router.push(`/profile/${uid}`)
   }
+
 
   async function onFavoritePageChange(page) {
     favoritePage.value = page
@@ -1028,6 +1036,8 @@ const GROUP_NOTIFY_OPTIONS = [
     const currentId = currentSession.value?.user?.id ? Number(currentSession.value.user.id) : null
 
     if (currentId && fromId === currentId && !currentSession.value?._virtual) {
+      // 在列表变长之前记下「原本是否贴着底」
+      const wasFollowing = captureFollowing()
       if (Number.isFinite(dbMessageId) && dbMessageId > 0) {
         try {
           const res = await getMessageDetailById(dbMessageId)
@@ -1048,7 +1058,7 @@ const GROUP_NOTIFY_OPTIONS = [
         await loadMessagesForPeer(currentId)
       }
       await nextTick()
-      scrollToBottom()
+      await settleIncomingScroll(wasFollowing)
       await markRead(fromId)
       await syncPmUnreadFromServer()
     } else {
@@ -1072,18 +1082,11 @@ const GROUP_NOTIFY_OPTIONS = [
           || (receiveId === loginId && currentId === senderId)
         )
       if (inCurrentSession) {
+        // 双方都移除：发送方那侧原来会留一条「未通过审核」的气泡，
+        // 现在聊天记录里就像这条消息没发生过
+        messages.value = messages.value.filter((item) => String(item.message?.id) !== String(event.messageId))
         if (senderId === loginId) {
-          const row = messages.value.find((item) => String(item.message?.id) === String(event.messageId))
-          if (row?.message) {
-            row.auditFailed = true
-            row.message.auditFailed = true
-            row.message.state = 3
-            row.message.content = ''
-          } else {
-            await loadMessagesForPeer(currentId)
-          }
-        } else {
-          messages.value = messages.value.filter((item) => String(item.message?.id) !== String(event.messageId))
+          ElMessage.warning('你的一条消息未通过审核，已被移除')
         }
         await nextTick()
         scrollToBottom()
@@ -1452,6 +1455,9 @@ const GROUP_NOTIFY_OPTIONS = [
     if (res.code === 0) {
       messages.value = unwrapPageRecords(res.data).map(mapPrivateMessageRow)
       await loadGroupInviteCards()
+      // 进入会话总是从最新一条看起
+      following.value = true
+      pendingNewCount.value = 0
       await scrollToBottom()
     }
   }
@@ -1859,6 +1865,13 @@ const GROUP_NOTIFY_OPTIONS = [
   }
 
   async function sendMsg() {
+    // 归档（已删除）的会话是只读的：要发言得先恢复。
+    // 服务端在发消息时会自动把归档恢复出来，那是给「对方来消息」用的兜底，
+    // 不该让人在归档列表里直接开聊，否则「删除聊天」就形同虚设
+    if (hiddenManagementMode.value) {
+      ElMessage.warning('这是已删除的聊天，恢复后才能发消息')
+      return
+    }
     const text = sendContent.value.trim()
     const hasPendingAlbum = !!(currentSession.value || currentGroupSession.value)
       && pendingAlbumFiles.value.length > 0
@@ -2809,6 +2822,11 @@ const GROUP_NOTIFY_OPTIONS = [
         row.pendingAlbumError = '部分图片上传失败，请重试'
         return
       }
+      // 一张图就是一张图，不该当成图集发出去。
+      // 群聊这条路暂时不分流：群聊的单图消息用 content 存图片地址，带不了说明文字，
+      // 分流反而会把文字弄丢，等群聊补上独立的媒体字段再说。
+      const singleImage = task.context.kind !== 'group' && result.images.length === 1
+      const only = singleImage ? result.images[0] : null
       const response = task.context.kind === 'group'
         ? await sendGroupChatAlbum({
           groupId: task.context.groupId,
@@ -2816,11 +2834,22 @@ const GROUP_NOTIFY_OPTIONS = [
           replyMessageId: task.context.replyMessageId,
           images: result.images,
         })
-        : await sendAlbumMessage({
-          receiveUserId: task.context.receiveUserId,
-          content: task.text || undefined,
-          images: result.images,
-        })
+        : singleImage
+          ? await sendImageMessage({
+            receiveUserId: task.context.receiveUserId,
+            messageType: String(only.mediaMime || '').toLowerCase() === 'image/gif' ? 2 : 1,
+            mediaUrl: only.mediaUrl,
+            mediaMime: only.mediaMime,
+            mediaSize: only.mediaSize,
+            mediaWidth: only.mediaWidth,
+            mediaHeight: only.mediaHeight,
+            content: task.text || undefined,
+          })
+          : await sendAlbumMessage({
+            receiveUserId: task.context.receiveUserId,
+            content: task.text || undefined,
+            images: result.images,
+          })
       if (response.code !== 0 || !response.data) {
         row.pendingAlbumState = 'failed'
         row.pendingAlbumError = response.message || '图集发送失败，请重试'
@@ -2976,8 +3005,15 @@ const GROUP_NOTIFY_OPTIONS = [
     const files = Array.from(e.target.files || [])
     e.target.value = ''
     if (!files.length) return
+    // 一次选多少传多少会把一整个相册灌进来。图集有十张的上限，
+    // 表情商城有六十张，这里原来一个都没有
+    let picked = files
+    if (picked.length > EMOJI_UPLOAD_BATCH_MAX) {
+      ElMessage.warning(`一次最多上传 ${EMOJI_UPLOAD_BATCH_MAX} 张，已保留前 ${EMOJI_UPLOAD_BATCH_MAX} 张`)
+      picked = picked.slice(0, EMOJI_UPLOAD_BATCH_MAX)
+    }
     const validFiles = []
-    for (const file of files) {
+    for (const file of picked) {
       const mimeOk = validateChatImageMime(file)
       if (!mimeOk.ok) {
         ElMessage.warning(`${file.name}：${mimeOk.message}`)
@@ -3015,12 +3051,9 @@ const GROUP_NOTIFY_OPTIONS = [
       const okCount = Number(result?.okCount) || 0
       if (okCount > 0) {
         ElMessage.success(okCount === 1 ? '已添加到我的上传' : `已添加 ${okCount} 张到我的上传`)
+        // 列表已经改成按时间降序，刚传的就在第一页，不用再跳到最后一页去找
+        uploadedPage.value = 1
         await chatEmojiStore.fetchPage('uploaded', 1, FAVORITES_PAGE_SIZE)
-        const imageTotal = Math.max(0, Number(chatEmojiStore.pagination.uploaded.total) || 0)
-        uploadedPage.value = Math.max(1, Math.ceil(imageTotal / FAVORITES_PAGE_SIZE))
-        if (uploadedPage.value > 1) {
-          await chatEmojiStore.fetchPage('uploaded', uploadedPage.value, FAVORITES_PAGE_SIZE)
-        }
           } else {
         ElMessage.warning('未能添加到我的上传，请稍后重试')
       }
@@ -3248,6 +3281,8 @@ const GROUP_NOTIFY_OPTIONS = [
   }
 
   function rememberBubbleNaturalSize(message, event) {
+    // 尺寸定下来意味着气泡高度变了，滚动位置会偏；仍在跟随就重新贴底
+    onBubbleMediaLoad()
     if (Number(message?.mediaWidth) > 0 && Number(message?.mediaHeight) > 0) return
     const image = event?.target || event
     const width = Number(image?.naturalWidth)
@@ -3258,6 +3293,53 @@ const GROUP_NOTIFY_OPTIONS = [
       ...mediaNaturalSizes.value,
       [key]: { width, height },
     }
+  }
+
+  // 距底多少像素之内算「还在跟着最新消息」
+  const NEAR_BOTTOM_PX = 120
+
+  function isNearBottom() {
+    const wrap = msgScrollbar.value?.wrapRef
+    if (!wrap) return true
+    return wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight <= NEAR_BOTTOM_PX
+  }
+
+  // 滚动到底部附近就恢复跟随，并清掉未读浮标
+  function onMessagesScroll() {
+    following.value = isNearBottom()
+    if (following.value) pendingNewCount.value = 0
+  }
+
+  /**
+   * 收到新消息后的定位。
+   *
+   * <p>务必在把消息塞进列表「之前」调用它取快照：一旦 push，scrollHeight 就变大了，
+   * 再判断永远算不出「原本贴着底」。
+   */
+  function captureFollowing() {
+    following.value = isNearBottom()
+    return following.value
+  }
+
+  // 原本贴着底就跟到最新；正在翻历史就只攒一个角标，不打断阅读
+  async function settleIncomingScroll(wasFollowing) {
+    if (wasFollowing) {
+      await scrollToBottom()
+      pendingNewCount.value = 0
+      return
+    }
+    pendingNewCount.value += 1
+  }
+
+  async function jumpToLatest() {
+    pendingNewCount.value = 0
+    following.value = true
+    await scrollToBottom()
+  }
+
+  // 图片撑开气泡后原来的位置就偏了，若此刻仍在跟随则重新贴底
+  function onBubbleMediaLoad() {
+    if (following.value) void scrollToBottom()
   }
 
   async function scrollToBottom() {
@@ -3415,6 +3497,12 @@ const GROUP_NOTIFY_OPTIONS = [
     invitingGroupId,
     groupInviteInfo,
     groupInviteStatusText,
+    following,
+    isNearBottom,
+    jumpToLatest,
+    onBubbleMediaLoad,
+    onMessagesScroll,
+    pendingNewCount,
     messageTimeline,
     messages,
     msgContainer,
@@ -3441,7 +3529,7 @@ const GROUP_NOTIFY_OPTIONS = [
     openGroupSettings,
     openGroupMemberProfile,
     openMessageSenderProfile,
-    openPeerProfile,
+    openCurrentPeerProfile,
     openEmojiShopFromMessage,
     openAlbumPreview,
     hidePrivateSession,

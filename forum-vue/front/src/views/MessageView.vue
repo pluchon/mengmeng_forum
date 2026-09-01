@@ -99,7 +99,7 @@
             @focus="onConvFocus(item)"
             @blur="onConvBlur(item)"
           >
-            <div class="mc-conv-ava" @click.stop="openPeerProfile(item)">
+            <div class="mc-conv-ava">
               <template v-if="item.kind === 'pm'">
                 <UserAvatarVip
                   :size="38"
@@ -116,7 +116,7 @@
             </div>
             <div class="mc-conv-body">
               <div class="mc-conv-row">
-                <span class="mc-conv-name mc-conv-name--link" @click.stop="openPeerProfile(item)">
+                <span class="mc-conv-name">
                   <template v-for="(segment, index) in highlightSegments(item.name)" :key="index">
                     <mark v-if="['pm', 'group'].includes(item.kind) && item.nameMatched && segment.matched" class="mc-search-mark">{{ segment.text }}</mark>
                     <span v-else>{{ segment.text }}</span>
@@ -186,17 +186,32 @@
         <template v-if="currentSession || currentGroupSession">
           <header class="mc-rhead">
             <div class="mc-rhead-left">
-              <UserAvatarVip
+              <!-- 跳转入口放在这里而不是会话列表：列表是用来找人的，误点一下就跳走 -->
+              <button
                 v-if="currentSession"
-                :size="34"
-                :src="currentSession.user?.avatarUrl || defaultAvatar"              />
+                type="button"
+                class="mc-rhead-avatar-btn"
+                title="查看对方主页"
+                @click="openCurrentPeerProfile"
+              >
+                <UserAvatarVip
+                  :size="34"
+                  :src="currentSession.user?.avatarUrl || defaultAvatar"                />
+              </button>
               <div v-else class="mc-group-avatar mc-group-avatar--head">
                 <img v-if="groupAvatarUrl(currentGroupSession)" :src="groupAvatarUrl(currentGroupSession)" alt="">
                 <span v-else>{{ groupAvatarText(currentGroupSession) }}</span>
               </div>
               <div class="mc-rtitle-stack">
                 <span class="mc-rname">
-                  {{ activeChatTitle }}
+                  <button
+                    v-if="currentSession"
+                    type="button"
+                    class="mc-rname-link"
+                    title="查看对方主页"
+                    @click="openCurrentPeerProfile"
+                  >{{ activeChatTitle }}</button>
+                  <template v-else>{{ activeChatTitle }}</template>
                   <button
                     v-if="currentGroupSession"
                     type="button"
@@ -216,7 +231,7 @@
             </div>
           </header>
 
-          <el-scrollbar ref="msgScrollbar" class="mc-rbody-scroll">
+          <el-scrollbar ref="msgScrollbar" class="mc-rbody-scroll" @scroll="onMessagesScroll">
             <div ref="msgContainer" class="mc-rbody mc-rbody--chat">
               <template v-for="row in messageTimeline" :key="row.key">
               <div v-if="row.type === 'date'" class="mc-date-divider">
@@ -278,12 +293,6 @@
                       </button>
                       <button type="button" @click="startReply(row.msg)">回复</button>
                     </div>
-                    <span
-                      v-if="row.msg.isOwner && (row.msg.message?.auditFailed || row.msg.auditFailed)"
-                      class="mc-audit-fail-icon"
-                      title="消息未通过审核"
-                      aria-label="消息未通过审核"
-                    >!</span>
                     <div
                       class="mc-bbl"
                       :class="{
@@ -331,7 +340,7 @@
                             class="mc-album-cover"
                             @click="openAlbumPreview(row.msg, 0)"
                           >
-                            <img :src="row.msg.message.albumImages[0].mediaUrl" alt="图集封面">
+                            <img :src="row.msg.message.albumImages[0].mediaUrl" alt="图集封面" @load="onBubbleMediaLoad">
                             <span class="mc-album-cover-mask">查看图集</span>
                           </button>
                           <div v-if="!row.msg.isOwner" class="mc-album-meta">
@@ -462,6 +471,17 @@
               </template>
             </div>
           </el-scrollbar>
+
+          <!-- 正在翻历史时不把人拽回底部，只在这里攒一个角标 -->
+          <button
+            v-if="pendingNewCount > 0"
+            type="button"
+            class="mc-new-msg-pill"
+            @click="jumpToLatest"
+          >
+            <el-icon><ArrowDown /></el-icon>
+            {{ pendingNewCount }} 条新消息
+          </button>
 
           <footer class="mc-rinput">
             <input
@@ -1503,6 +1523,10 @@ const {
   ownedGroupsLoading,
   ownedGroupMemberText,
   invitingGroupId,
+  jumpToLatest,
+  onBubbleMediaLoad,
+  onMessagesScroll,
+  pendingNewCount,
   messageTimeline,
   messages,
   msgContainer,
@@ -1529,7 +1553,7 @@ const {
   openArticleFromSystem,
   openGroupMemberProfile,
   openMessageSenderProfile,
-  openPeerProfile,
+  openCurrentPeerProfile,
   openEmojiShopFromMessage,
   openAlbumPreview,
   hidePrivateSession,
