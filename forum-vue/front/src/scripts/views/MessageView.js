@@ -941,13 +941,14 @@ const GROUP_NOTIFY_OPTIONS = [
   async function loadReceivedJoinRequests() {
     joinRequestsLoading.value = true
     try {
-      const [received, applied] = await Promise.all([
-        // 服务端已改成数据库分页；这里取第一页即可，不再把所有页拉完
+      // 服务端已改成数据库分页；这里取第一页即可，不再把所有页拉完。
+      // 注意直调接口拿到的是响应体，要 unwrap 成数组——上游是按数组用的
+      const [receivedRes, appliedRes] = await Promise.all([
         getReceivedGroupJoinRequests({ pageNum: 1, pageSize: JOIN_REQUEST_PAGE_SIZE }),
         getAppliedGroupJoinRequests({ pageNum: 1, pageSize: JOIN_REQUEST_PAGE_SIZE }),
       ])
-      receivedJoinRequests.value = received
-      appliedJoinRequests.value = applied
+      receivedJoinRequests.value = receivedRes.code === 0 ? unwrapPageRecords(receivedRes.data) : []
+      appliedJoinRequests.value = appliedRes.code === 0 ? unwrapPageRecords(appliedRes.data) : []
     } finally {
       joinRequestsLoading.value = false
     }
