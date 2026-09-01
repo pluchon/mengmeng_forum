@@ -2791,6 +2791,13 @@
   height: 26px;
   padding: 0;
   font-size: 15px;
+  /* 禁言是警示动作，原来的灰太淡，跟旁边的移除完全不是一个量级 */
+  color: #b45309;
+}
+
+.mc-member-action--icon:hover {
+  background: #fff7ed;
+  color: #92400e;
 }
 
 .mc-member-action--icon.is-muted {
@@ -3382,4 +3389,15 @@
 .mc-album-dl-btn:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+/* 群名一直是可编辑的输入框，就该长得像输入框——原来没有边框，
+   不点一下根本看不出能改 */
+.mc-group-profile-name-input :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #e4e7ed inset;
+  background: #fff;
+}
+
+.mc-group-profile-name-input :deep(.el-input__wrapper):hover {
+  box-shadow: 0 0 0 1px #d4537e inset;
 }

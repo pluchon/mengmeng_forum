@@ -1225,7 +1225,6 @@
         </strong>
         <span class="mc-group-profile-count">{{ Number(currentGroupSession?.memberCount) || groupMembersTotal || 0 }} 人</span>
       </div>
-      <span v-if="groupEditDirty" class="mc-group-save-hint">保存后生效</span>
 
       <section class="mc-group-settings-section">
         <div class="mc-group-settings-head">

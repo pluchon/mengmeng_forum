@@ -63,6 +63,11 @@ export const useMessageStore = defineStore('message', () => {
       return
     }
 
+    // 免打扰：消息该进列表还是进列表，只是不弹提示。与群聊同一套约定
+    if (payload?.notify === false) {
+      return
+    }
+
     const sender = (
       payload.fromUser
       || payload.senderNickname

@@ -896,11 +896,7 @@ public class MessageServiceImpl implements MessageService {
 
     private void pushMessageNotify(MessageNotifyMqVO vo) {
         try {
-            // 免打扰只掐掉实时提醒：消息已经入库，未读数也照常算，
-            // 对方下次打开消息中心仍然看得到
-            if (isMutedBy(vo.getReceiveUserId(), vo.getSendUserId())) {
-                return;
-            }
+
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("type", "message");
             payload.put("dbMessageId", vo.getDbMessageId());
@@ -908,6 +904,9 @@ public class MessageServiceImpl implements MessageService {
             payload.put("fromUser", vo.getSendUsername());
             payload.put("senderNickname", vo.getSendUsername());
             payload.put("summary", vo.getContentSummary());
+            // 免打扰只抑制提示音/弹框，推送本身照发——正开着这个会话的人
+            // 仍要实时看到新消息。与群聊的 notify 字段是同一套约定。
+            payload.put("notify", !isMutedBy(vo.getReceiveUserId(), vo.getSendUserId()));
             webSocketPushService.push(vo.getReceiveUserId(), objectMapper.writeValueAsString(payload));
         } catch (Exception e) {
             log.warn("私信 WebSocket 推送失败 receiveUserId={} dbMessageId={}",

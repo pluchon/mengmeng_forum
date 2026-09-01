@@ -59,7 +59,8 @@ import org.pluchon.forum.service.impl.remote.ImUserLookupService;
 import org.pluchon.forum.service.impl.remote.ImUserMuteGuard;
 import org.pluchon.forum.service.remote.ImShopEmojiAvailabilityService;
 import org.pluchon.forum.service.interfaces.groupchat.GroupChatService;
-import org.pluchon.forum.service.interfaces.message.MessageService;
+import org.pluchon.forum.service.interfaces.message.MessageService;
+import org.pluchon.forum.service.remote.ImAiGatewayService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,6 +89,9 @@ public class GroupChatServiceImpl implements GroupChatService {
     private static final String GROUP_INVITE_CARD_PREFIX = "[[GROUP_INVITE:";
 
     // 群聊主表 Mapper
+    @Autowired
+    private ImAiGatewayService imAiGatewayService;
+
     @Autowired
     private GroupChatMapper groupChatMapper;
 
@@ -142,6 +146,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         String name = normalizeName(request.getName());
         String intro = normalizeIntro(request.getIntro());
         assertCreateQuota(owner);
+        // 群名与简介是公开可见的（公开群还会出现在群列表里），必须过内容审核。
+        // 帖子标题、昵称、个人简介都走了这一步，群聊这里原来是漏的。
+        assertGroupTextClean(name, intro);
 
         Date now = ForumDateTimes.now();
         GroupChat group = new GroupChat();
@@ -186,6 +193,10 @@ public class GroupChatServiceImpl implements GroupChatService {
         Byte type = request.getGroupType() == null ? group.getGroupType() : normalizeGroupType(request.getGroupType());
         String name = request.getName() == null ? group.getName() : normalizeName(request.getName());
         String intro = request.getIntro() == null ? group.getIntro() : normalizeIntro(request.getIntro());
+        // 只有真的改了才送审，免得每次保存都白跑一次 AI
+        assertGroupTextClean(
+                Objects.equals(name, group.getName()) ? null : name,
+                Objects.equals(intro, group.getIntro()) ? null : intro);
         Date now = ForumDateTimes.now();
         int affected = groupChatMapper.update(null, new LambdaUpdateWrapper<GroupChat>()
                 .eq(GroupChat::getId, groupId)
@@ -983,6 +994,34 @@ public class GroupChatServiceImpl implements GroupChatService {
         }
     }
 
+    /**
+     * 群名与群简介的内容审核。
+     *
+     * <p>审核不可用时放行而不是卡住创建：宁可漏一条也不该让人建不了群，
+     * 与站内其它文本审核的取舍一致。
+     */
+    private void assertGroupTextClean(String name, String intro) {
+        assertTextClean(name, "群名称");
+        assertTextClean(intro, "群简介");
+    }
+
+    private void assertTextClean(String text, String label) {
+        if (!StringUtils.hasText(text)) {
+            return;
+        }
+        String violation;
+        try {
+            violation = imAiGatewayService.validateText(text);
+        } catch (Exception e) {
+            log.warn("{}审核调用失败，放行", label, e);
+            return;
+        }
+        if (violation != null) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED,
+                    label + "未通过审核：" + violation));
+        }
+    }
+
     private void assertCreateQuota(UserInternalVO owner) {
         Long count = groupChatMapper.selectCount(new LambdaQueryWrapper<GroupChat>()
                 .eq(GroupChat::getOwnerUserId, owner.getId())
@@ -1503,8 +1542,39 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (content.contains("@所有人")) {
             return true;
         }
-        UserInternalVO user = userLookupService.queryUserByUserId(member.getUserId());
-        return user != null && StringUtils.hasText(user.getNickname()) && content.contains("@" + user.getNickname());
+        UserInternalVO user = queryUserNullable(member.getUserId());
+        return user != null && StringUtils.hasText(user.getNickname())
+                && mentionsNickname(content, user.getNickname());
+    }
+
+    /**
+     * 文本里是否真的 @ 了这个昵称。
+     *
+     * <p>原来是 content.contains("@" + 昵称)，昵称互为前缀时会误伤——
+     * 「@小明明」里含有「@小明」，于是叫「小明」的人也会收到提醒。
+     * 这里要求 @昵称 后面是结尾或分隔符；前端插入时本来就会补一个空格。
+     */
+    private boolean mentionsNickname(String content, String nickname) {
+        String token = "@" + nickname;
+        int from = 0;
+        while (true) {
+            int index = content.indexOf(token, from);
+            if (index < 0) {
+                return false;
+            }
+            int after = index + token.length();
+            if (after >= content.length() || isMentionBoundary(content.charAt(after))) {
+                return true;
+            }
+            from = index + 1;
+        }
+    }
+
+    private boolean isMentionBoundary(char ch) {
+        return Character.isWhitespace(ch) || ch == '@'
+                || ch == ',' || ch == '，' || ch == '.' || ch == '。'
+                || ch == '!' || ch == '！' || ch == '?' || ch == '？'
+                || ch == ':' || ch == '：' || ch == ';' || ch == '；';
     }
 
     private UserInternalVO queryUserNullable(Long userId) {
