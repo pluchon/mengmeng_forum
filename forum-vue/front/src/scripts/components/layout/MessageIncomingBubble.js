@@ -25,6 +25,9 @@ const displayTitle = computed(() => {
 
 const displayAvatarUrl = computed(() => (isGroupTip.value ? preview.value?.groupAvatarUrl || '' : ''))
 
+// 被 @ 时单独挑出来着色，一眼能看见是不是叫自己
+const isMentioned = computed(() => isGroupTip.value && preview.value?.mentioned === true)
+
 // 群聊第二行是「谁说了什么」，一行放不下就截断——卡片要轻
 const displayPreview = computed(() => {
   const body = (preview.value?.preview || '').toString()
@@ -32,7 +35,9 @@ const displayPreview = computed(() => {
     ? `${preview.value?.sender || '群成员'}：${body || '发来一条消息'}`
     : body
   if (!text) return '您收到一条新私信'
-  return text.length > PREVIEW_MAX ? `${text.slice(0, PREVIEW_MAX)}…` : text
+  // 前缀单独渲染，截断只算正文那部分
+  const limit = isMentioned.value ? PREVIEW_MAX - 6 : PREVIEW_MAX
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
 })
 
 function onOpen() {

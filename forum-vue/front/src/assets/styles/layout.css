@@ -401,3 +401,11 @@
 .has-header-padding {
   padding-top: 70px;
 }
+
+/* 群聊通知里「有人@你」的前缀，颜色要跳出来 */
+.tip-mention-flag {
+  margin-right: 4px;
+  color: var(--primary-red);
+  font-style: normal;
+  font-weight: 800;
+}

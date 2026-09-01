@@ -15,6 +15,7 @@ export const useMessageStore = defineStore('message', () => {
   const systemUnreadCount = ref(0)
   const systemMessageSignal = ref(null)
   const groupMessageSignal = ref(null)
+  const groupAuditSignal = ref(null)
   const privateMessageMutationSignal = ref(null)
   const showTip = ref(false)
   const tipText = ref('')
@@ -123,6 +124,11 @@ export const useMessageStore = defineStore('message', () => {
     tipText.value = payload?.title || '您有一条新的系统通知'
   }
 
+  // 建群审核结果：只是一个信号，页面自己去刷新
+  function onGroupCreateAudit(payload) {
+    groupAuditSignal.value = { ...payload, seq: Date.now() }
+  }
+
   function onGroupMessage(payload) {
     groupMessageSignal.value = { ...payload, seq: Date.now() }
     if (['group_message_recalled', 'group_message_deleted', 'group_message_audit_failed', 'private_message_deleted'].includes(payload?.type)) {
@@ -138,13 +144,15 @@ export const useMessageStore = defineStore('message', () => {
     // 群聊的卡片要说清楚是哪个群：第一行群名，第二行「谁说了什么」
     const groupName = String(payload?.groupName || '').trim()
     const groupAvatarUrl = String(payload?.groupAvatarUrl || '').trim()
-    incomingPreview.value = { sender, preview, groupName, groupAvatarUrl, kind: 'group' }
+    const mentioned = payload?.mentioned === true
+    incomingPreview.value = { sender, preview, groupName, groupAvatarUrl, mentioned, kind: 'group' }
     const signal = {
       sender,
       preview,
       groupName,
       groupAvatarUrl,
       kind: 'group',
+      mentioned,
       fromUserId: payload?.fromUserId != null ? Number(payload.fromUserId) : null,
       seq: Date.now(),
     }
@@ -180,6 +188,8 @@ export const useMessageStore = defineStore('message', () => {
     onAuditResult,
     setSystemUnreadCount,
     onSystemMessage,
+    groupAuditSignal,
+    onGroupCreateAudit,
     onGroupMessage,
     onPrivateMessageMutation,
   }

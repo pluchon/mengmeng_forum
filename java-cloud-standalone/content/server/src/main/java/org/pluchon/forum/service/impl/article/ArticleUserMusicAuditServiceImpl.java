@@ -180,7 +180,7 @@ public class ArticleUserMusicAuditServiceImpl implements ArticleUserMusicAuditSe
             notifyAuditResult(row, task.getTaskId(), "PUBLISHED",
                     Constant.SYSTEM_MSG_TYPE_AUDIT_PASS,
                     Constant.SYSTEM_MSG_TITLE_MUSIC_AUDIT_PASS,
-                    String.format("你的歌曲《%s》已通过审核, 已发布到音乐馆.", safeTitle(row.getTitle())));
+                    String.format("你的歌曲《%s》已通过审核, 已发布到音乐中心.", safeTitle(row.getTitle())));
             refreshHotScoreQuietly(row.getMusicKey());
         } else {
             String reason = reviewResult != null && StringUtils.hasText(text(reviewResult.get("reason")))

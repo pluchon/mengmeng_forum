@@ -111,6 +111,11 @@ function handleNotifyMessage(notifyData) {
     messageStore.onPrivateMessageMutation(notifyData)
     return
   }
+  if (notifyData.type === 'group_create_audit') {
+    const messageStore = useMessageStore()
+    messageStore.onGroupCreateAudit(notifyData)
+    return
+  }
   if (['group_message', 'group_message_recalled', 'group_message_deleted', 'group_message_audit_failed', 'private_message_deleted'].includes(notifyData.type)) {
     const messageStore = useMessageStore()
     messageStore.onGroupMessage(notifyData)

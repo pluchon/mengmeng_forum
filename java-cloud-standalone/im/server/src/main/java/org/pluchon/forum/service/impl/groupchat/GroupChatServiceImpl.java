@@ -76,7 +76,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.stream.Collectors;
+import org.pluchon.forum.service.interfaces.message.SystemMessageService;
+import org.springframework.beans.factory.annotation.Qualifier;
+import java.util.concurrent.ExecutorService;
 
 @Service
 @Slf4j
@@ -86,11 +89,20 @@ public class GroupChatServiceImpl implements GroupChatService {
     // 私信邀请卡片内容前缀
     // 带关键词搜申请时的候选上限：匹配要用到跨库的群主昵称，没法下推数据库
     // 一条消息最多记多少个被 @ 的人，避免有人拿它当夹带字段
+    // 系统消息类型 8 = 群聊通知
+    private static final byte SYSTEM_MESSAGE_TYPE_GROUP_NOTICE = 8;
     private static final int MAX_MENTIONED_USERS = 50;
     private static final int JOIN_REQUEST_SEARCH_CANDIDATE_LIMIT = 500;
     private static final String GROUP_INVITE_CARD_PREFIX = "[[GROUP_INVITE:";
 
     // 群聊主表 Mapper
+    @Autowired
+    private SystemMessageService systemMessageService;
+
+    @Autowired
+    @Qualifier("imTextAuditExecutor")
+    private ExecutorService imTextAuditExecutor;
+
     @Autowired
     private ImAiGatewayService imAiGatewayService;
 
@@ -148,9 +160,6 @@ public class GroupChatServiceImpl implements GroupChatService {
         String name = normalizeName(request.getName());
         String intro = normalizeIntro(request.getIntro());
         assertCreateQuota(owner);
-        // 群名与简介是公开可见的（公开群还会出现在群列表里），必须过内容审核。
-        // 帖子标题、昵称、个人简介都走了这一步，群聊这里原来是漏的。
-        assertGroupTextClean(name, intro);
 
         Date now = ForumDateTimes.now();
         GroupChat group = new GroupChat();
@@ -161,7 +170,9 @@ public class GroupChatServiceImpl implements GroupChatService {
         group.setGroupType(type);
         group.setMemberLimit(memberLimitFor(owner));
         group.setMemberCount(1);
-        group.setStatus(GroupChatStatus.NORMAL.getCode());
+        // 先落库为「待审核」，审核在事务提交后异步做：
+        // 建群对话框不必卡在那儿等 AI，通过了再让它出现在群列表里
+        group.setStatus(GroupChatStatus.PENDING_AUDIT.getCode());
         group.setDeleteState(Constant.DELETE_STATE_FALSE);
         group.setCreateTime(now);
         group.setUpdateTime(now);
@@ -184,6 +195,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         if (groupChatMemberMapper.insert(ownerMember) <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_CREATE));
         }
+        scheduleGroupAudit(group.getId(), loginUserId, name, intro);
         return GroupChatConverter.toDetailVO(group);
     }
 
@@ -1001,6 +1013,71 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     /**
+     * 建群的异步审核。
+     *
+     * <p>事务提交后再送审：AI 可能要几秒，不该让建群对话框一直转圈。
+     * 通过就把群转正并推一条消息让前端刷新列表；不通过就把群收回，
+     * 并给群主发一条系统通知说明原因——群主那边什么都不会看到，除了这条通知。
+     */
+    private void scheduleGroupAudit(Long groupId, Long ownerUserId, String name, String intro) {
+        TransactionHooks.afterCommit(() -> imTextAuditExecutor.execute(
+                () -> auditCreatedGroup(groupId, ownerUserId, name, intro)));
+    }
+
+    private void auditCreatedGroup(Long groupId, Long ownerUserId, String name, String intro) {
+        String violation = null;
+        try {
+            violation = firstViolation(name, intro);
+        } catch (Exception e) {
+            // 审核服务不可用时放行，与站内其它文本审核的取舍一致
+            log.warn("建群审核调用失败，放行 groupId={}", groupId, e);
+        }
+        if (violation == null) {
+            groupChatMapper.update(null, new LambdaUpdateWrapper<GroupChat>()
+                    .eq(GroupChat::getId, groupId)
+                    .eq(GroupChat::getStatus, GroupChatStatus.PENDING_AUDIT.getCode())
+                    .set(GroupChat::getStatus, GroupChatStatus.NORMAL.getCode())
+                    .set(GroupChat::getUpdateTime, ForumDateTimes.now()));
+            pushGroupAuditResult(ownerUserId, groupId, true, null);
+            return;
+        }
+        // 没通过就把群收回：软删群与群主的成员记录，创建配额也随之释放
+        groupChatMapper.update(null, new LambdaUpdateWrapper<GroupChat>()
+                .eq(GroupChat::getId, groupId)
+                .set(GroupChat::getStatus, GroupChatStatus.AUDIT_FAILED.getCode())
+                .set(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE)
+                .set(GroupChat::getUpdateTime, ForumDateTimes.now()));
+        groupChatMemberMapper.update(null, new LambdaUpdateWrapper<GroupChatMember>()
+                .eq(GroupChatMember::getGroupId, groupId)
+                .set(GroupChatMember::getDeleteState, Constant.DELETE_STATE_TRUE));
+        // 系统消息类型 8 = 群聊通知（1~3 审核 / 4 标签 / 5~7 举报 / 99 公告）
+        systemMessageService.createMessage(ownerUserId, SYSTEM_MESSAGE_TYPE_GROUP_NOTICE,
+                "群聊创建未通过", "「" + name + "」未通过审核：" + violation, groupId, null);
+        pushGroupAuditResult(ownerUserId, groupId, false, violation);
+    }
+
+    private String firstViolation(String name, String intro) {
+        String nameViolation = StringUtils.hasText(name) ? imAiGatewayService.validateText(name) : null;
+        if (nameViolation != null) {
+            return "群名称" + nameViolation;
+        }
+        return StringUtils.hasText(intro) ? imAiGatewayService.validateText(intro) : null;
+    }
+
+    private void pushGroupAuditResult(Long ownerUserId, Long groupId, boolean passed, String reason) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("type", "group_create_audit");
+            payload.put("groupId", groupId);
+            payload.put("passed", passed);
+            payload.put("reason", reason == null ? "" : reason);
+            webSocketPushService.push(ownerUserId, objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.warn("建群审核结果推送失败 groupId={}", groupId, e);
+        }
+    }
+
+    /**
      * 群名与群简介的内容审核。
      *
      * <p>审核不可用时放行而不是卡住创建：宁可漏一条也不该让人建不了群，
@@ -1034,7 +1111,9 @@ public class GroupChatServiceImpl implements GroupChatService {
                 .in(GroupChat::getStatus, List.of(
                         GroupChatStatus.NORMAL.getCode(),
                         GroupChatStatus.FULL.getCode(),
-                        GroupChatStatus.OVER_LIMIT_LOCKED.getCode()))
+                        GroupChatStatus.OVER_LIMIT_LOCKED.getCode(),
+                        // 待审的也算数，免得靠反复提交绕过上限；审核不通过时会被收回
+                        GroupChatStatus.PENDING_AUDIT.getCode()))
                 .ne(GroupChat::getDeleteState, Constant.DELETE_STATE_TRUE));
         if (count != null && count >= createLimitFor(owner)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "你的群聊创建数量已达上限"));
@@ -1054,7 +1133,9 @@ public class GroupChatServiceImpl implements GroupChatService {
     }
 
     private void assertChatAvailable(GroupChat group) {
-        if (GroupChatStatus.DISSOLVED.getCode().equals(group.getStatus())
+        if (GroupChatStatus.PENDING_AUDIT.getCode().equals(group.getStatus())
+                || GroupChatStatus.AUDIT_FAILED.getCode().equals(group.getStatus())
+                || GroupChatStatus.DISSOLVED.getCode().equals(group.getStatus())
                 || GroupChatStatus.BANNED.getCode().equals(group.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_FORBIDDEN, "群聊当前不可发言"));
         }

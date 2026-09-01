@@ -136,6 +136,7 @@ const SYS_GROUP_META = {
   musicAudit: { key: 'sys-group-music-audit', name: '歌曲审核', listIcon: Headset },
   tag: { key: 'sys-group-tag', name: '标签通知', listIcon: Document },
   report: { key: 'sys-group-report', name: '举报结果', listIcon: Warning },
+  groupNotice: { key: 'sys-group-group-notice', name: '群聊通知', listIcon: UserFilled },
   notice: { key: 'sys-group-notice', name: '系统公告', listIcon: Bell },
   other: { key: 'sys-group-other', name: '系统通知', listIcon: Bell },
 }
@@ -145,6 +146,7 @@ const JOIN_REQUEST_PAGE_SIZE = 7
 const SYSTEM_NOTIFY_PAGE_SIZE = 6
 
 function systemGroupCategory(groupId) {
+  if (groupId === 'groupNotice') return 'GROUP'
   if (groupId === 'audit') return 'AUDIT'
   if (groupId === 'tag') return 'TAG'
   if (groupId === 'musicAudit') return 'MUSIC'
@@ -171,6 +173,8 @@ function getSysGroupId(type) {
   if (t === 1 || t === 2 || t === 3) return 'audit'
   if (t === 4) return 'tag'
   if (t === 5 || t === 6 || t === 7) return 'report'
+  // 8 = 群聊通知，目前只有建群未通过
+  if (t === 8) return 'groupNotice'
   if (t === 99) return 'notice'
   return 'other'
 }
@@ -816,6 +820,16 @@ const GROUP_NOTIFY_OPTIONS = [
     return text || '暂无消息'
   }
 
+  // 进群申请里点头像或昵称，去看看对方是谁——申请者看群主，群主看申请人
+  function openJoinRequestProfile(item) {
+    const uid = item?.viewerSide === 'applicant'
+      ? item?.ownerUser?.id
+      : item?.targetUser?.id
+    if (!uid) return
+    handleClose()
+    router.push(`/profile/${uid}`)
+  }
+
   function openGroupMemberProfile(member) {
     const uid = member?.user?.id
     if (!uid) return
@@ -1143,6 +1157,20 @@ const GROUP_NOTIFY_OPTIONS = [
       scrollToBottom()
     }
     await loadSessions()
+  })
+
+  // 建群审核结果：通过就把新群拉进列表并打开，没过就说明原因
+  watch(() => messageStore.groupAuditSignal, async (event) => {
+    if (!event) return
+    if (!event.passed) {
+      ElMessage.warning(event.reason ? `群聊创建未通过：${event.reason}` : '群聊创建未通过审核')
+      await loadSystemMessages()
+      return
+    }
+    ElMessage.success('群聊已通过审核')
+    await loadGroupSessions()
+    const created = groupSessions.value.find((item) => String(item.groupId) === String(event.groupId))
+    if (created && messageCenterUi.visible) await selectGroupSession(created)
   })
 
   watch(() => messageStore.groupMessageSignal, async (newMsg) => {
@@ -2157,17 +2185,22 @@ const GROUP_NOTIFY_OPTIONS = [
         intro: groupCreateForm.value.intro?.trim() || undefined,
       })
       if (res.code === 0) {
-        ElMessage.success('群聊已创建')
+        // 审核挪到了服务端异步做：这里不等结果，通过与否都会推回来
+        ElMessage.info('已提交审核，通过后会出现在群聊列表里')
         groupCreateVisible.value = false
-        await loadGroupSessions()
-        const created = groupSessions.value.find((item) => String(item.groupId) === String(res.data?.id))
-        if (created) await selectGroupSession(created)
+        resetGroupCreateForm()
       }
     } catch {
       // 拦截器已提示
     } finally {
       creatingGroup.value = false
     }
+  }
+
+  function resetGroupCreateForm() {
+    groupCreateForm.value.name = ''
+    groupCreateForm.value.intro = ''
+    groupCreateForm.value.groupType = 0
   }
 
   async function refreshCurrentGroupSession() {
@@ -3736,6 +3769,7 @@ const GROUP_NOTIFY_OPTIONS = [
     toggleGroupAdminRole,
     openArticleFromSystem,
     openGroupSettings,
+    openJoinRequestProfile,
     openGroupMemberProfile,
     openMessageSenderProfile,
     openCurrentPeerProfile,

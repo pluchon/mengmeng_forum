@@ -965,12 +965,19 @@
                   :key="item.id"
                   class="mc-join-request-row"
                 >
-                  <UserAvatarVip
-                    :size="34"
-                    :src="(item.viewerSide === 'applicant' ? item.ownerUser?.avatarUrl : item.targetUser?.avatarUrl) || defaultAvatar"                  />
-                  <span class="mc-join-request-name">
-                    {{ item.viewerSide === 'applicant' ? (item.ownerUser?.nickname || '群主') : (item.targetUser?.nickname || '用户') }}
-                  </span>
+                  <button
+                    type="button"
+                    class="mc-join-request-user"
+                    title="查看对方主页"
+                    @click="openJoinRequestProfile(item)"
+                  >
+                    <UserAvatarVip
+                      :size="34"
+                      :src="(item.viewerSide === 'applicant' ? item.ownerUser?.avatarUrl : item.targetUser?.avatarUrl) || defaultAvatar"                    />
+                    <span class="mc-join-request-name">
+                      {{ item.viewerSide === 'applicant' ? (item.ownerUser?.nickname || '群主') : (item.targetUser?.nickname || '用户') }}
+                    </span>
+                  </button>
                   <div class="mc-join-request-group">
                     <div class="mc-group-avatar mc-group-avatar--mini">
                       <img v-if="groupAvatarUrl(item.group)" :src="groupAvatarUrl(item.group)" alt="">
@@ -1005,6 +1012,7 @@
                 size="small"
                 :total="notificationTotal"
                 :page-size="JOIN_REQUEST_PAGE_SIZE"
+                :hide-on-single-page="false"
                 :pager-count="5"
                 :show-jumper="false"
                 @current-change="onNotificationPageChange"
@@ -1064,15 +1072,14 @@
                 </article>
               </div>
             </el-scrollbar>
-            <div
-              v-if="['audit', 'tag', 'musicAudit'].includes(currentSystemGroup.groupId)"
-              class="mc-notification-pager"
-            >
+            <!-- 翻页器常驻：只在部分分类显示的话，切过去会觉得少了一块 -->
+            <div class="mc-notification-pager">
               <AppPagination
                 v-model:current-page="notificationPage"
                 size="small"
                 :total="notificationTotal"
                 :page-size="SYSTEM_NOTIFY_PAGE_SIZE"
+                :hide-on-single-page="false"
                 :pager-count="5"
                 :show-jumper="false"
                 @current-change="onNotificationPageChange"
@@ -1600,6 +1607,7 @@ const {
   toggleGroupAdminPicker,
   toggleGroupAdminRole,
   openArticleFromSystem,
+  openJoinRequestProfile,
   openGroupMemberProfile,
   openMessageSenderProfile,
   openCurrentPeerProfile,

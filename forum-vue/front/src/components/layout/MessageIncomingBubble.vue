@@ -19,7 +19,10 @@
           >
           {{ displayTitle }}
         </span>
-        <span class="tip-preview">{{ displayPreview }}</span>
+        <span class="tip-preview">
+          <em v-if="isMentioned" class="tip-mention-flag">[有人@你]</em>
+          {{ displayPreview }}
+        </span>
         <span v-if="unread > 0" class="tip-count">{{ unread }} 条未读</span>
       </div>
       <el-icon class="tip-close" @click.stop="onClose"><Close /></el-icon>
