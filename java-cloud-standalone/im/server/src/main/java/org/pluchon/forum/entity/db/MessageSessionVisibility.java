@@ -29,6 +29,9 @@ public class MessageSessionVisibility {
     // 不会出现布尔与时间彼此矛盾的状态
     private Date pinnedAt;
 
+    // 免打扰：不再收到这个会话的实时提醒，未读数仍照常累计
+    private Byte mutedState;
+
     // 创建时间
     private Date createTime;
 

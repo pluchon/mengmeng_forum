@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { useUserStore } from '../stores/user'
 import { useMessageStore } from '../stores/message'
 
@@ -8,6 +9,12 @@ let heartbeatInterval = null
 let reconnectTimer = null
 let allowReconnect = false
 const pendingMessages = []
+
+// 通知长连接是否连着。自己是否在线不必再问服务端——页面开着、连接开着就是在线
+const notifyConnected = ref(false)
+// 每次「断开后重新连上」自增一次，供页面补拉断线期间落下的数据
+const notifyReconnectedSignal = ref(0)
+let notifyEverConnected = false
 
 function stopHeartbeat() {
   if (heartbeatInterval) {
@@ -41,6 +48,10 @@ function attachHandlers(socket) {
     stopHeartbeat()
     clearReconnectTimer()
     flushPendingMessages()
+    notifyConnected.value = true
+    // 首次连上不算重连；只有断过再连上才需要补拉
+    if (notifyEverConnected) notifyReconnectedSignal.value += 1
+    notifyEverConnected = true
     heartbeatInterval = setInterval(() => {
       if (sharedSocket?.readyState === WebSocket.OPEN) {
         sharedSocket.send('ping')
@@ -58,6 +69,7 @@ function attachHandlers(socket) {
 
   socket.onclose = () => {
     stopHeartbeat()
+    notifyConnected.value = false
     if (sharedSocket === socket) {
       sharedSocket = null
       sharedToken = ''
@@ -153,6 +165,8 @@ export function useWebSocket() {
 
   const closeWebSocket = () => {
     allowReconnect = false
+    notifyConnected.value = false
+    notifyEverConnected = false
     clearReconnectTimer()
     stopHeartbeat()
     pendingMessages.length = 0
@@ -186,5 +200,5 @@ export function useWebSocket() {
     pending: pendingMessages.length,
   })
 
-  return { initWebSocket, closeWebSocket, notifySocketState, sendNotifyMessage }
+  return { initWebSocket, closeWebSocket, notifyConnected, notifyReconnectedSignal, notifySocketState, sendNotifyMessage }
 }

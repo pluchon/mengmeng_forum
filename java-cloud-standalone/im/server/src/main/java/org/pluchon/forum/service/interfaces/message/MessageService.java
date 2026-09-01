@@ -55,6 +55,9 @@ public interface MessageService {
     // 置顶或取消置顶一个私信会话
     void pinMessageSession(Long userId, Long peerUserId, boolean pinned);
 
+    // 开启或关闭某个私信会话的免打扰
+    void muteMessageSession(Long userId, Long peerUserId, boolean muted);
+
     // 查询当前用户主动隐藏的私信会话
     PageResult<MessageSessionResponse> queryHiddenMessageSessions(Long userId, Integer pageNum, Integer pageSize);
 

@@ -20,4 +20,7 @@ public class MessageSessionResponse {
 
     // 置顶时刻；NULL 表示未置顶
     private Date pinnedAt;
+
+    // 是否对这个会话开了免打扰
+    private Boolean muted;
 }

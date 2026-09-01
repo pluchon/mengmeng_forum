@@ -83,6 +83,8 @@ import java.util.stream.Collectors;
 public class GroupChatServiceImpl implements GroupChatService {
 
     // 私信邀请卡片内容前缀
+    // 带关键词搜申请时的候选上限：匹配要用到跨库的群主昵称，没法下推数据库
+    private static final int JOIN_REQUEST_SEARCH_CANDIDATE_LIMIT = 500;
     private static final String GROUP_INVITE_CARD_PREFIX = "[[GROUP_INVITE:";
 
     // 群聊主表 Mapper
@@ -383,15 +385,12 @@ public class GroupChatServiceImpl implements GroupChatService {
         userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        List<GroupChatJoinRequestVO> filtered = groupChatJoinRequestMapper.selectList(new LambdaQueryWrapper<GroupChatJoinRequest>()
+        LambdaQueryWrapper<GroupChatJoinRequest> wrapper = new LambdaQueryWrapper<GroupChatJoinRequest>()
                 .eq(GroupChatJoinRequest::getOwnerUserId, loginUserId)
                 .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
                 .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
-                .orderByDesc(GroupChatJoinRequest::getId)).stream()
-                .map(this::toJoinRequestVO)
-                .filter(vo -> joinRequestMatches(vo, keyword))
-                .collect(Collectors.toList());
-        return pageJoinRequestVOs(filtered, validPageNum, validPageSize);
+                .orderByDesc(GroupChatJoinRequest::getId);
+        return pageJoinRequests(wrapper, keyword, validPageNum, validPageSize);
     }
 
     @Override
@@ -414,17 +413,41 @@ public class GroupChatServiceImpl implements GroupChatService {
         userLookupService.queryUserByUserId(loginUserId);
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
-        List<GroupChatJoinRequestVO> filtered = groupChatJoinRequestMapper.selectList(
-                new LambdaQueryWrapper<GroupChatJoinRequest>()
+        LambdaQueryWrapper<GroupChatJoinRequest> wrapper = new LambdaQueryWrapper<GroupChatJoinRequest>()
                         .eq(GroupChatJoinRequest::getTargetUserId, loginUserId)
                         .eq(GroupChatJoinRequest::getRequestType, GroupChatJoinRequestType.APPLY.getCode())
                         .ne(GroupChatJoinRequest::getStatus, GroupChatJoinRequestStatus.PENDING.getCode())
                         .ne(GroupChatJoinRequest::getDeleteState, Constant.DELETE_STATE_TRUE)
-                        .orderByDesc(GroupChatJoinRequest::getId)).stream()
+                        .orderByDesc(GroupChatJoinRequest::getId);
+        return pageJoinRequests(wrapper, keyword, validPageNum, validPageSize);
+    }
+
+    /**
+     * 申请列表的分页。
+     *
+     * <p>没有关键词时直接让数据库分页——原来是把该用户的全部申请查出来，
+     * 在内存里转成 VO（每条都要回查群与用户）再切片，申请一多就很吃亏。
+     *
+     * <p>带关键词时只能内存过滤：匹配的是群名与群主昵称，后者在 auth 库，
+     * 跨库没法下推。这条路给候选集封了个上限，不至于无限扩散。
+     */
+    private PageResult<GroupChatJoinRequestVO> pageJoinRequests(
+            LambdaQueryWrapper<GroupChatJoinRequest> wrapper, String keyword, int pageNum, int pageSize) {
+        if (keyword == null || keyword.isBlank()) {
+            Page<GroupChatJoinRequest> page = groupChatJoinRequestMapper.selectPage(
+                    new Page<>(pageNum, pageSize), wrapper);
+            List<GroupChatJoinRequestVO> rows = page.getRecords().stream()
+                    .map(this::toJoinRequestVO)
+                    .collect(Collectors.toList());
+            return new PageResult<>(rows, page.getTotal(), pageNum, pageSize,
+                    page.getPages(), page.hasNext());
+        }
+        List<GroupChatJoinRequestVO> filtered = groupChatJoinRequestMapper
+                .selectList(wrapper.last("LIMIT " + JOIN_REQUEST_SEARCH_CANDIDATE_LIMIT)).stream()
                 .map(this::toJoinRequestVO)
                 .filter(vo -> joinRequestMatches(vo, keyword))
                 .collect(Collectors.toList());
-        return pageJoinRequestVOs(filtered, validPageNum, validPageSize);
+        return pageJoinRequestVOs(filtered, pageNum, pageSize);
     }
 
     private boolean joinRequestMatches(GroupChatJoinRequestVO vo, String keyword) {

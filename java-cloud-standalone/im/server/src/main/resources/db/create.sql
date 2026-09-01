@@ -204,6 +204,7 @@ CREATE TABLE `message_session_visibility` (
   `peer_user_id` bigint NOT NULL COMMENT '私信对方用户ID',
   `hidden_state` tinyint NOT NULL DEFAULT '0' COMMENT '是否在会话列表隐藏: 0否 1是',
   `pinned_at` datetime DEFAULT NULL COMMENT '置顶时刻; NULL 表示未置顶',
+  `muted_state` tinyint NOT NULL DEFAULT '0' COMMENT '免打扰: 0否 1是',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `delete_state` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除: 0否 1是',

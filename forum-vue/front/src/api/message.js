@@ -31,6 +31,11 @@ export function updateMessageStatusByMessageId(messageId, status = 1) {
 }
 
 // 发送私信
+// 开关私信会话免打扰；只影响实时提醒，消息与未读数照常
+export function muteMessageSession(data) {
+  return request({ url: '/message/session/mute', method: 'post', data })
+}
+
 // 置顶 / 取消置顶私信会话，最多十个
 export function pinMessageSession(data) {
   return request({ url: '/message/session/pin', method: 'post', data })

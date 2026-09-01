@@ -82,7 +82,7 @@
           </div>
         </div>
 
-        <el-scrollbar class="mc-list-scroll">
+        <el-scrollbar class="mc-list-scroll" @scroll="onSessionListScroll">
           <div
             v-for="item in listItems"
             :key="item.key"
@@ -233,6 +233,18 @@
                     @click="openGroupSettings"
                   >
                     <el-icon><Setting /></el-icon>
+                  </button>
+                  <!-- 免打扰：铃铛亮着表示会提醒，划一道表示不提醒 -->
+                  <button
+                    v-if="currentSession && !currentSession._virtual"
+                    type="button"
+                    class="mc-mute-trigger"
+                    :class="{ 'is-muted': currentSessionMuted }"
+                    :disabled="mutingSession"
+                    :title="currentSessionMuted ? '已免打扰，点击恢复提醒' : '开启免打扰'"
+                    @click="toggleMuteCurrentSession"
+                  >
+                    <el-icon><MuteNotification v-if="currentSessionMuted" /><Bell v-else /></el-icon>
                   </button>
                 </span>
                 <span v-if="currentGroupSession" class="mc-rmeta">{{ activeChatSubtitle }}</span>
@@ -1570,6 +1582,10 @@ const {
   openCurrentPeerProfile,
   openEmojiShopFromMessage,
   openAlbumPreview,
+  currentSessionMuted,
+  mutingSession,
+  onSessionListScroll,
+  toggleMuteCurrentSession,
   pinningPeerId,
   togglePinPrivateSession,
   sessionReadonly,

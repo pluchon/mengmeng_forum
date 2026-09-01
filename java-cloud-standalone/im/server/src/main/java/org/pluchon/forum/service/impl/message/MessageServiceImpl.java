@@ -76,6 +76,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MessageServiceImpl implements MessageService {
 
+    // 私信发送限频：窗口长度与窗口内的条数上限
+    private static final long SEND_RATE_WINDOW_SECONDS = 10L;
+    private static final long SEND_RATE_MAX_IN_WINDOW = 20L;
+
     // 最多能置顶多少个会话
     private static final int MAX_PINNED_SESSIONS = 10;
 
@@ -436,10 +440,14 @@ public class MessageServiceImpl implements MessageService {
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Set<Long> hiddenPeerIds = queryHiddenPeerIds(userId);
         Map<Long, Date> pinnedAtByPeer = queryPinnedAtByPeer(userId);
+        Set<Long> mutedPeerIds = queryMutedPeerIds(userId);
         List<MessageSessionResponse> all = buildAllSessions(userId).stream()
                 .filter(session -> session.getUser() != null
                         && !hiddenPeerIds.contains(session.getUser().getId()))
-                .peek(session -> session.setPinnedAt(pinnedAtByPeer.get(session.getUser().getId())))
+                .peek(session -> {
+                    session.setPinnedAt(pinnedAtByPeer.get(session.getUser().getId()));
+                    session.setMuted(mutedPeerIds.contains(session.getUser().getId()));
+                })
                 // buildAllSessions 已按最后消息时间倒序；这里只把置顶的提到前面。
                 // sorted 是稳定排序，未置顶的那批仍保持原有的时间顺序
                 .sorted(pinnedFirst())
@@ -594,9 +602,18 @@ public class MessageServiceImpl implements MessageService {
                 // 后审没过的消息双方都不再出现：发送方那侧原来还留着一条「未通过审核」，
                 // 现在一并隐藏，聊天记录里就像这条消息没发生过
                 .ne(Message::getState, Constant.MESSAGE_STATE_AUDIT_FAILED)
-                .orderByAsc(Message::getCreateTime));
-        Map<Long, List<MessageAlbumImage>> albumImages = queryAlbumImages(result.getRecords());
-        List<MessageDetailResponse> records = result.getRecords().stream().map(msg -> {
+                // 倒序分页：第一页是「最近的一页」。
+                //
+                // 原来是正序分页，于是第一页永远是最古老的那批——前端固定取第一页，
+                // 一旦某个会话超过一页，打开它看到的就是最早的消息而不是最新的，
+                // 也没法「往上翻更早」。现在 pageNum 越大越往前翻。
+                .orderByDesc(Message::getCreateTime)
+                .orderByDesc(Message::getId));
+        // 取出来是倒序，按时间正序交给前端渲染
+        List<Message> rows = new ArrayList<>(result.getRecords());
+        Collections.reverse(rows);
+        Map<Long, List<MessageAlbumImage>> albumImages = queryAlbumImages(rows);
+        List<MessageDetailResponse> records = rows.stream().map(msg -> {
             boolean isSelf = Objects.equals(msg.getPostUserId(), userId);
             UserInternalVO fromUser = isSelf ? selfUser : otherUser;
             return new MessageDetailResponse(org.pluchon.forum.converter.ImUserBriefConverter.toBrief(fromUser),
@@ -805,7 +822,35 @@ public class MessageServiceImpl implements MessageService {
     // 内部共用
     
 
+    /**
+     * 私信发送限频。
+     *
+     * <p>原来完全没有限制，而每条文本都会触发一次 AI 后审——刷消息就是刷 AI 额度，
+     * 对方那边还会被通知刷屏。用 Redis 计数窗口挡住，超了直接拒绝。
+     */
+    private void assertSendRate(Long sendUserId) {
+        if (sendUserId == null) {
+            return;
+        }
+        String key = "forum:im:send-rate:" + sendUserId;
+        try {
+            Long count = stringRedisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1L) {
+                stringRedisTemplate.expire(key, SEND_RATE_WINDOW_SECONDS, TimeUnit.SECONDS);
+            }
+            if (count != null && count > SEND_RATE_MAX_IN_WINDOW) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED, "发送太频繁了，歇一会儿再说"));
+            }
+        } catch (ApplicationException e) {
+            throw e;
+        } catch (Exception e) {
+            // Redis 不可用时不该连消息都发不出去
+            log.debug("私信限频检查失败 sendUserId={}, error={}", sendUserId, e.getMessage());
+        }
+    }
+
     private void checkMessageSendGuard(MessageSendContext context) {
+        assertSendRate(context == null ? null : context.getSenderUserId());
         MessageSendGuardResult result = messageSendGuardChain.check(context);
         if (!result.isPassed()) {
             throw new ApplicationException(result.getErrorResult());
@@ -851,6 +896,11 @@ public class MessageServiceImpl implements MessageService {
 
     private void pushMessageNotify(MessageNotifyMqVO vo) {
         try {
+            // 免打扰只掐掉实时提醒：消息已经入库，未读数也照常算，
+            // 对方下次打开消息中心仍然看得到
+            if (isMutedBy(vo.getReceiveUserId(), vo.getSendUserId())) {
+                return;
+            }
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("type", "message");
             payload.put("dbMessageId", vo.getDbMessageId());
@@ -1042,6 +1092,62 @@ public class MessageServiceImpl implements MessageService {
                 .eq(MessageSessionVisibility::getPeerUserId, peerUserId)
                 .set(MessageSessionVisibility::getHiddenState, hiddenState)
                 .set(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_FALSE));
+    }
+
+    /**
+     * 开关免打扰。
+     *
+     * <p>只影响实时提醒：消息照常入库、未读数照常累计，只是不再推送给对方的客户端。
+     * 与群聊的 notifyMode=NONE 是同一个语义。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void muteMessageSession(Long userId, Long peerUserId, boolean muted) {
+        validateSessionPeer(userId, peerUserId);
+        byte target = muted ? (byte) 1 : (byte) 0;
+        MessageSessionVisibility current = querySessionVisibility(userId, peerUserId);
+        if (current == null) {
+            MessageSessionVisibility visibility = new MessageSessionVisibility();
+            visibility.setUserId(userId);
+            visibility.setPeerUserId(peerUserId);
+            visibility.setHiddenState((byte) 0);
+            visibility.setMutedState(target);
+            try {
+                messageSessionVisibilityMapper.insert(visibility);
+            } catch (DuplicateKeyException exception) {
+                updateSessionMutedState(userId, peerUserId, target);
+            }
+            return;
+        }
+        updateSessionMutedState(userId, peerUserId, target);
+    }
+
+    private void updateSessionMutedState(Long userId, Long peerUserId, byte mutedState) {
+        messageSessionVisibilityMapper.update(null, new LambdaUpdateWrapper<MessageSessionVisibility>()
+                .eq(MessageSessionVisibility::getUserId, userId)
+                .eq(MessageSessionVisibility::getPeerUserId, peerUserId)
+                .set(MessageSessionVisibility::getMutedState, mutedState)
+                .set(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_FALSE));
+    }
+
+    private Set<Long> queryMutedPeerIds(Long userId) {
+        Set<Long> result = new HashSet<>();
+        for (MessageSessionVisibility record : messageSessionVisibilityMapper.selectList(
+                new LambdaQueryWrapper<MessageSessionVisibility>()
+                        .eq(MessageSessionVisibility::getUserId, userId)
+                        .eq(MessageSessionVisibility::getMutedState, (byte) 1)
+                        .ne(MessageSessionVisibility::getDeleteState, Constant.DELETE_STATE_TRUE))) {
+            result.add(record.getPeerUserId());
+        }
+        return result;
+    }
+
+    // 接收方是否对这个发送方开了免打扰
+    private boolean isMutedBy(Long receiveUserId, Long peerUserId) {
+        MessageSessionVisibility record = querySessionVisibility(receiveUserId, peerUserId);
+        return record != null
+                && Objects.equals(record.getMutedState(), (byte) 1)
+                && !Objects.equals(record.getDeleteState(), Constant.DELETE_STATE_TRUE);
     }
 
     // 置顶的会话排在最前，按置顶时刻由近及远；未置顶的保持原有的时间顺序

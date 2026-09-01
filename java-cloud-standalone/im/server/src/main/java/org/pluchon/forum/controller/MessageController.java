@@ -9,6 +9,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.message.FavoriteEmojiRequest;
 import org.pluchon.forum.entity.dto.message.MessageReplyRequest;
+import org.pluchon.forum.entity.dto.message.MessageSessionMuteRequest;
 import org.pluchon.forum.entity.dto.message.MessageSessionPinRequest;
 import org.pluchon.forum.entity.dto.message.MessageSessionVisibilityRequest;
 import org.pluchon.forum.entity.dto.message.SendAlbumMessageRequest;
@@ -175,6 +176,16 @@ public class MessageController {
         AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
         messageService.pinMessageSession(sessionUser.getId(), request.getPeerUserId(),
                 Boolean.TRUE.equals(request.getPinned()));
+        return Result.success();
+    }
+
+    /** 开启或关闭私信会话的免打扰；只影响实时提醒，消息与未读数照常 */
+    @PostMapping("/session/mute")
+    public Result<Void> muteMessageSession(@Valid @RequestBody MessageSessionMuteRequest request,
+                                           HttpServletRequest httpServletRequest) {
+        AuthenticatedUser sessionUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        messageService.muteMessageSession(sessionUser.getId(), request.getPeerUserId(),
+                Boolean.TRUE.equals(request.getMuted()));
         return Result.success();
     }
 

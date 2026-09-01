@@ -13,6 +13,7 @@ import {
   ArrowDown,
   Top,
   Bell,
+  MuteNotification,
   CircleCheck,
   Star,
   ChatLineSquare,
@@ -54,6 +55,7 @@ import {
   restoreMessageSession,
   getHiddenMessageSessions,
   reportChatMessage,
+  muteMessageSession,
   pinMessageSession,
 } from '@/api/message'
 import { getShopEmojiAvailability } from '@/api/shop'
@@ -205,7 +207,7 @@ function sortByTimeDesc(a, b) {
 export function useMessageView() {
   const router = useRouter()
   const userStore = useUserStore()
-  const { initWebSocket } = useWebSocket()
+  const { initWebSocket, notifyConnected, notifyReconnectedSignal } = useWebSocket()
   const messageStore = useMessageStore()
   const messageCenterUi = useMessageCenterUiStore()
   const chatEmojiStore = useChatEmojiStore()
@@ -298,12 +300,25 @@ export function useMessageView() {
   const groupInviteCards = ref({})
   const replyTarget = ref(null)
   const peerOnline = ref(false)
-  const selfOnline = ref(false)
+  const selfOnline = notifyConnected
   // 是否还跟着最新消息；离底时新消息只攒角标不强行拉回
   const following = ref(true)
   const pendingNewCount = ref(0)
+  // 正在设置免打扰，防连点
+  const mutingSession = ref(false)
   // 正在置顶哪个会话，防连点
   const pinningPeerId = ref(null)
+  // 会话列表分页游标
+  const sessionPage = ref(1)
+  const sessionHasMore = ref(false)
+  const sessionLoading = ref(false)
+  const hiddenSessionPage = ref(1)
+  const hiddenSessionHasMore = ref(false)
+  const hiddenSessionLoading = ref(false)
+  // 会话内消息的向上翻页游标
+  const messagePage = ref(1)
+  const messageHasMore = ref(false)
+  const loadingOlderMessages = ref(false)
   const recallClock = ref(Date.now())
   const expiredRecallIds = ref(new Set())
   const mediaNaturalSizes = ref({})
@@ -535,6 +550,17 @@ export function useMessageView() {
   })
 
 // 一次最多上传多少张表情。图集是十张，表情商城是六十张，这里原来没有上限
+// 会话列表每页条数；往下滚再续下一页
+const SESSION_PAGE_SIZE = 20
+// 会话内消息每页条数；向上翻更早的记录
+const MESSAGE_PAGE_SIZE = 30
+// 搜索只取第一页
+const SEARCH_PAGE_SIZE = 50
+// 入群申请每页条数
+const JOIN_REQUEST_PAGE_SIZE = 50
+// loadAllPages 的页数上限，防止 hasNextPage 异常时无限翻页
+const MAX_AUTO_PAGES = 10
+
 const EMOJI_UPLOAD_BATCH_MAX = 20
 
 const FAVORITES_PAGE_SIZE = 8
@@ -916,8 +942,9 @@ const GROUP_NOTIFY_OPTIONS = [
     joinRequestsLoading.value = true
     try {
       const [received, applied] = await Promise.all([
-        loadAllPages((pageNum) => getReceivedGroupJoinRequests({ pageNum, pageSize: 50 })),
-        loadAllPages((pageNum) => getAppliedGroupJoinRequests({ pageNum, pageSize: 50 })),
+        // 服务端已改成数据库分页；这里取第一页即可，不再把所有页拉完
+        getReceivedGroupJoinRequests({ pageNum: 1, pageSize: JOIN_REQUEST_PAGE_SIZE }),
+        getAppliedGroupJoinRequests({ pageNum: 1, pageSize: JOIN_REQUEST_PAGE_SIZE }),
       ])
       receivedJoinRequests.value = received
       appliedJoinRequests.value = applied
@@ -1265,27 +1292,70 @@ const GROUP_NOTIFY_OPTIONS = [
     }
   }
 
+  /**
+   * 把若干页一次取完。仅用于数量天然有限的列表（群聊会话、入群申请）。
+   *
+   * <p>原来是 while(true)，翻到没有下一页为止，既没有上限，hasNextPage 一旦有问题
+   * 就会无限循环。这里封了页数上限当安全网。
+   */
   async function loadAllPages(fetchPage) {
     const records = []
-    let pageNum = 1
-    while (true) {
+    for (let pageNum = 1; pageNum <= MAX_AUTO_PAGES; pageNum += 1) {
       const res = await fetchPage(pageNum)
       if (res.code !== 0) break
       records.push(...unwrapPageRecords(res.data))
       if (!res.data?.hasNextPage) break
-      pageNum += 1
     }
     return records
   }
 
-  async function loadSessions() {
-    const records = await loadAllPages((pageNum) => getSessionList({ pageNum, pageSize: 50 }))
-    sessionList.value = records.filter((s) => s?.user?.id != null)
+  /**
+   * 会话列表按页取。
+   *
+   * <p>原来是一个 while(true) 把所有页拉完塞进内存，既没有页数上限，也让「搜索」
+   * 看起来像纯前端搜索——因为整份列表本来就躺在本地。现在首屏只要一页，往下滚再续。
+   */
+  async function loadSessions({ append = false } = {}) {
+    if (sessionLoading.value) return
+    const targetPage = append ? sessionPage.value + 1 : 1
+    sessionLoading.value = true
+    try {
+      const res = await getSessionList({ pageNum: targetPage, pageSize: SESSION_PAGE_SIZE })
+      if (res.code !== 0) return
+      const rows = unwrapPageRecords(res.data).filter((item) => item?.user?.id != null)
+      sessionList.value = append ? [...sessionList.value, ...rows] : rows
+      sessionPage.value = targetPage
+      sessionHasMore.value = !!res.data?.hasNextPage
+    } finally {
+      sessionLoading.value = false
+    }
   }
 
-  async function loadHiddenSessions() {
-    const records = await loadAllPages((pageNum) => getHiddenMessageSessions({ pageNum, pageSize: 50 }))
-    hiddenSessionList.value = records.filter((s) => s?.user?.id != null)
+  async function loadHiddenSessions({ append = false } = {}) {
+    if (hiddenSessionLoading.value) return
+    const targetPage = append ? hiddenSessionPage.value + 1 : 1
+    hiddenSessionLoading.value = true
+    try {
+      const res = await getHiddenMessageSessions({ pageNum: targetPage, pageSize: SESSION_PAGE_SIZE })
+      if (res.code !== 0) return
+      const rows = unwrapPageRecords(res.data).filter((item) => item?.user?.id != null)
+      hiddenSessionList.value = append ? [...hiddenSessionList.value, ...rows] : rows
+      hiddenSessionPage.value = targetPage
+      hiddenSessionHasMore.value = !!res.data?.hasNextPage
+    } finally {
+      hiddenSessionLoading.value = false
+    }
+  }
+
+  // 左侧列表滚到底就续下一页
+  function onSessionListScroll(event) {
+    const el = event?.target
+    if (!el || el.scrollHeight - el.scrollTop - el.clientHeight > 80) return
+    if (hiddenManagementMode.value) {
+      if (hiddenSessionHasMore.value) void loadHiddenSessions({ append: true })
+      return
+    }
+    if (activeTab.value === 'pm' && sessionHasMore.value) void loadSessions({ append: true })
   }
 
   async function runPrivateTextSearch() {
@@ -1298,12 +1368,10 @@ const GROUP_NOTIFY_OPTIONS = [
     }
     textSearchLoading.value = true
     try {
-      const records = await loadAllPages((pageNum) => searchMessageSessions({
-        keyword,
-        pageNum,
-        pageSize: 50,
-      }))
+      // 只取第一页：命中的会话按相关度/时间排在前面，翻到几百条之后已无意义
+      const res = await searchMessageSessions({ keyword, pageNum: 1, pageSize: SEARCH_PAGE_SIZE })
       if (requestSequence !== searchRequestSequence) return
+      const records = res.code === 0 ? unwrapPageRecords(res.data) : []
       textSearchMatches.value = new Map(records.map((item) => [Number(item.peerUserId), item]))
     } finally {
       if (requestSequence === searchRequestSequence) textSearchLoading.value = false
@@ -1320,11 +1388,9 @@ const GROUP_NOTIFY_OPTIONS = [
     }
     groupTextSearchLoading.value = true
     try {
-      const records = await loadAllPages((pageNum) => searchGroupChatSessions({
-        keyword,
-        pageNum,
-        pageSize: 50,
-      }))
+      // 与私信搜索一致：只取第一页
+      const searchRes = await searchGroupChatSessions({ keyword, pageNum: 1, pageSize: SEARCH_PAGE_SIZE })
+      const records = searchRes.code === 0 ? unwrapPageRecords(searchRes.data) : []
       if (requestSequence !== groupSearchRequestSequence) return
       groupTextSearchMatches.value = new Map(records.map((item) => [Number(item.groupId), item]))
     } finally {
@@ -1343,6 +1409,32 @@ const GROUP_NOTIFY_OPTIONS = [
       await loadHiddenSessions()
     } else if (searchQuery.value.trim()) {
       await runPrivateTextSearch()
+    }
+  }
+
+  // 当前会话是否免打扰。铃铛就画在对方昵称右边
+  const currentSessionMuted = computed(() => !!currentSession.value?.muted)
+
+  async function toggleMuteCurrentSession() {
+    const peerUserId = currentSession.value?.user?.id
+    if (!peerUserId || currentSession.value?._virtual || mutingSession.value) return
+    const nextMuted = !currentSessionMuted.value
+    mutingSession.value = true
+    try {
+      const res = await muteMessageSession({ peerUserId, muted: nextMuted })
+      if (res.code !== 0) {
+        ElMessage.warning(res.message || '设置失败')
+        return
+      }
+      // 就地更新，避免整份列表重拉导致滚动位置跳走
+      currentSession.value.muted = nextMuted
+      const row = sessionList.value.find((item) => Number(item?.user?.id) === Number(peerUserId))
+      if (row) row.muted = nextMuted
+      ElMessage.success(nextMuted ? '已开启免打扰' : '已恢复消息提醒')
+    } catch {
+      ElMessage.error('设置失败，请稍后重试')
+    } finally {
+      mutingSession.value = false
     }
   }
 
@@ -1475,19 +1567,58 @@ const GROUP_NOTIFY_OPTIONS = [
     }
   }
 
+  // 首屏取「最近的一页」。服务端已改成倒序分页，pageNum 越大越往前翻
   async function loadMessagesForPeer(peerUserId) {
     const res = await getMessageList({
       receiveId: peerUserId,
       pageNum: 1,
-      pageSize: 100,
+      pageSize: MESSAGE_PAGE_SIZE,
     })
     if (res.code === 0) {
       messages.value = unwrapPageRecords(res.data).map(mapPrivateMessageRow)
+      messagePage.value = 1
+      messageHasMore.value = !!res.data?.hasNextPage
       await loadGroupInviteCards()
       // 进入会话总是从最新一条看起
       following.value = true
       pendingNewCount.value = 0
       await scrollToBottom()
+    }
+  }
+
+  /**
+   * 往上翻更早的消息。
+   *
+   * <p>新内容插在最前面会把已有内容整体推下去，视觉上等于跳走了。
+   * 所以记下插入前的滚动高度，插完再把差值补回去，让手指底下的那条消息不动。
+   */
+  async function loadOlderMessages() {
+    const peerId = currentSession.value?.user?.id
+    if (!peerId || currentSession.value?._virtual) return
+    if (!messageHasMore.value || loadingOlderMessages.value) return
+    const wrap = msgScrollbar.value?.wrapRef
+    const beforeHeight = wrap ? wrap.scrollHeight : 0
+    const beforeTop = wrap ? wrap.scrollTop : 0
+    loadingOlderMessages.value = true
+    try {
+      const res = await getMessageList({
+        receiveId: peerId,
+        pageNum: messagePage.value + 1,
+        pageSize: MESSAGE_PAGE_SIZE,
+      })
+      if (res.code !== 0) return
+      const older = unwrapPageRecords(res.data).map(mapPrivateMessageRow)
+      if (older.length) {
+        messages.value = [...older, ...messages.value]
+        messagePage.value += 1
+      }
+      messageHasMore.value = !!res.data?.hasNextPage
+      await nextTick()
+      if (wrap) {
+        wrap.scrollTop = beforeTop + (wrap.scrollHeight - beforeHeight)
+      }
+    } finally {
+      loadingOlderMessages.value = false
     }
   }
 
@@ -1565,16 +1696,21 @@ const GROUP_NOTIFY_OPTIONS = [
     await loadGroupInviteCards()
   }
 
-  async function refreshOnlineStatus() {
-    const selfId = userStore.id
-    if (selfId) {
-      try {
-        const res = await getUserIsOnline(selfId)
-        selfOnline.value = res?.code === 0 && res.data === true
-      } catch {
-        selfOnline.value = false
-      }
+  // 自己是否在线不再问服务端：页面开着、通知长连接连着，就是在线。
+  // 原来每 20 秒为此多发一个请求，而答案本地就有
+  // 断线期间对方发来的消息不会补推，重连后按服务端状态重新对齐一次
+  watch(() => notifyReconnectedSignal.value, async () => {
+    if (!messageCenterUi.visible && router.currentRoute.value.name !== 'messages') return
+    await syncPmUnreadFromServer()
+    await loadSessions()
+    const peerId = currentSession.value?.user?.id
+    if (peerId && !currentSession.value?._virtual) {
+      await loadMessagesForPeer(peerId)
     }
+    void refreshOnlineStatus()
+  })
+
+  async function refreshOnlineStatus() {
     const peerId = currentSession.value?.user?.id
     if (peerId && !currentSession.value?._virtual) {
       try {
@@ -3338,6 +3474,8 @@ const GROUP_NOTIFY_OPTIONS = [
   function onMessagesScroll() {
     following.value = isNearBottom()
     if (following.value) pendingNewCount.value = 0
+    const wrap = msgScrollbar.value?.wrapRef
+    if (wrap && wrap.scrollTop <= 40) void loadOlderMessages()
   }
 
   /**
@@ -3533,6 +3671,10 @@ const GROUP_NOTIFY_OPTIONS = [
     onBubbleMediaLoad,
     onMessagesScroll,
     pendingNewCount,
+    loadingOlderMessages,
+    messageHasMore,
+    onSessionListScroll,
+    sessionLoading,
     messageTimeline,
     messages,
     msgContainer,
@@ -3562,6 +3704,9 @@ const GROUP_NOTIFY_OPTIONS = [
     openCurrentPeerProfile,
     openEmojiShopFromMessage,
     openAlbumPreview,
+    currentSessionMuted,
+    mutingSession,
+    toggleMuteCurrentSession,
     pinningPeerId,
     togglePinPrivateSession,
     sessionReadonly,

@@ -3301,3 +3301,33 @@
 .mc-rname-link:hover {
   color: #d4537e;
 }
+
+/* 免打扰开关：铃铛亮着表示会提醒，划一道表示不提醒 */
+.mc-mute-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin-left: 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #a8adb7;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.mc-mute-trigger:hover:not(:disabled) {
+  color: #d4537e;
+}
+
+.mc-mute-trigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.mc-mute-trigger.is-muted {
+  color: #d4537e;
+}
