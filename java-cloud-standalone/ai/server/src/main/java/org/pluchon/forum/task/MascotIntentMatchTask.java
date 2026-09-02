@@ -60,7 +60,7 @@ public class MascotIntentMatchTask {
     private boolean matchEnabled;
 
     /** 每天凌晨跑一次。人少的时候大多数轮次什么都不会发生，这很正常。 */
-    @Scheduled(cron = "0 20 4 * * *", zone = ForumTimeZone.ZONE_NAME)
+    @Scheduled(cron = "0 20 4 * * *", zone = ForumTimeZone.ID)
     public void run() {
         if (!matchEnabled) {
             return;

@@ -67,7 +67,8 @@ management:
 forum:
   domain: ai
   features:
-    scheduling: false
+    # 打开是为了看板娘牵线的匹配任务（每天 4:20）；ai 域此前没有任何 @Scheduled
+    scheduling: true
     mq: false
     mq-consumer: false
     websocket: false

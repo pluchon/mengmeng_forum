@@ -562,7 +562,6 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
-    @Override
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> matchMascotIntents(List<Map<String, Object>> pairs) {
         if (pairs == null || pairs.isEmpty()) {
