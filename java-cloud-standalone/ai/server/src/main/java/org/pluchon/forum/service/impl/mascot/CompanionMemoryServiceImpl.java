@@ -36,6 +36,10 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     private static final int MAX_HISTORY_TURNS = 16;
     private static final int TITLE_MAX = 48;
     private static final long CONTEXT_MAX_TOKENS = 128_000L;
+    // 粗估：一个字符约 0.8 token。中文偏低估，但这里只用来画进度条
+    private static final double TOKENS_PER_CHAR = 0.8D;
+    // 低于这个量压缩不值得：压缩本身要烧一次 flash 配额
+    private static final long COMPRESS_MIN_TOKENS = 800L;
 
     @Autowired
     private ForumCompanionSessionMapper companionSessionMapper;
@@ -274,25 +278,39 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     @Override
     public CompanionContextWindowVO getContextWindow(Long userId, Long sessionId) {
         requireOwnedSession(userId, sessionId);
-        long used = estimateTokens(loadCompressibleHistory(userId, sessionId));
+        // 只是画进度条，不需要把整个会话查回来再逐条数长度——交给数据库聚合。
+        // 这个接口在「打开面板」和「流结束」都会跑，长会话时全量读是主要卡顿源。
+        ForumCompanionMessage latestSummary = latestContextSummary(sessionId);
+        long chars = latestSummary != null && latestSummary.getContent() != null
+                ? latestSummary.getContent().trim().length()
+                : 0L;
+        Long tail = companionMessageMapper.sumContentLength(
+                sessionId, latestSummary == null ? 0L : latestSummary.getId());
+        chars += tail == null ? 0L : tail;
+        long used = Math.max(0L, (long) Math.ceil(chars * TOKENS_PER_CHAR));
         CompanionContextWindowVO vo = new CompanionContextWindowVO();
         vo.setUsedTokens(used);
         vo.setMaxTokens(CONTEXT_MAX_TOKENS);
-        vo.setCanCompress(used > 0);
+        // 只有一两条消息时压缩没有意义，白烧一次配额
+        vo.setCanCompress(used >= COMPRESS_MIN_TOKENS);
         return vo;
     }
 
-    @Override
-    public List<MascotHistoryTurn> loadCompressibleHistory(Long userId, Long sessionId) {
-        requireOwnedSession(userId, sessionId);
-        List<MascotHistoryTurn> out = new ArrayList<>();
-        ForumCompanionMessage latestSummary = companionMessageMapper.selectOne(
+    private ForumCompanionMessage latestContextSummary(Long sessionId) {
+        return companionMessageMapper.selectOne(
                 new LambdaQueryWrapper<ForumCompanionMessage>()
                         .eq(ForumCompanionMessage::getSessionId, sessionId)
                         .eq(ForumCompanionMessage::getMsgType, "context_summary")
                         .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
                         .orderByDesc(ForumCompanionMessage::getId)
                         .last("LIMIT 1"));
+    }
+
+    @Override
+    public List<MascotHistoryTurn> loadCompressibleHistory(Long userId, Long sessionId) {
+        requireOwnedSession(userId, sessionId);
+        List<MascotHistoryTurn> out = new ArrayList<>();
+        ForumCompanionMessage latestSummary = latestContextSummary(sessionId);
         if (latestSummary != null && latestSummary.getContent() != null && !latestSummary.getContent().isBlank()) {
             MascotHistoryTurn summary = new MascotHistoryTurn();
             summary.setRole("assistant");
@@ -466,13 +484,6 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         return out;
     }
 
-    private long estimateTokens(List<MascotHistoryTurn> turns) {
-        long chars = 0L;
-        for (MascotHistoryTurn turn : turns) {
-            chars += turn.getContent() == null ? 0 : turn.getContent().length();
-        }
-        return Math.max(0L, (long) Math.ceil(chars * 0.8D));
-    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)

@@ -22,7 +22,6 @@ from config import settings
 from mcp.registry import invoke_tool
 from utils.mascot_article_rag import fetch_related_articles
 from utils.mcp_routing import local_kb_covers_writing
-from utils.mascot_skill_router import route_mascot_skill
 from utils.site_help import get_site_help_snippet
 from utils.json_parse import parse_json_object
 
@@ -80,6 +79,10 @@ class MascotState(TypedDict, total=False):
     # 规划器判定为越界；判定为真时不再调用回答模型
     blocked: bool
     block_reason: str
+    # skill 是否已经定死；未定时由规划器在同一次调用里顺带给出
+    skill_decided: bool
+    # 这一轮要不要跑长期记忆抽取（由 Java 按会话轮次决定）
+    memory_probe: bool
     # 这两次调用的用量原来被直接丢掉，导致每轮少算两次 flash
     router_usage: dict[str, Any]
     memory_usage: dict[str, Any]
@@ -111,16 +114,20 @@ def _effective_skill(state: dict[str, Any]) -> str:
 
 
 def node_route_skill(state: MascotState) -> MascotState:
+    """定 skill，但能不打模型就不打。
+
+    skill=chat 时到底是「站点帮助」还是「写作/闲聊」原来单独打一次 flash 来判，
+    而紧接着的工具规划器也要把同一段话、同一段历史再读一遍。两次调用串行，
+    首字延迟里白白多一个完整往返。现在把这个判断并进规划器的 JSON 里一起出，
+    这里只先给一个临时值。
+    """
     skill = (state.get("skill") or "writing").lower()
     if skill in ("writing", "help"):
-        return {"routed_skill": skill}
+        return {"routed_skill": skill, "skill_decided": True}
     if skill == "chat":
-        routed, router_usage = route_mascot_skill(
-            (state.get("message") or "").strip(),
-            state.get("history") or [],
-        )
-        return {"routed_skill": routed, "router_usage": router_usage or {}}
-    return {"routed_skill": "writing"}
+        # 先按 writing 走，规划器出结果后再改写
+        return {"routed_skill": "writing", "skill_decided": False}
+    return {"routed_skill": "writing", "skill_decided": True}
 
 
 def node_supervisor(state: MascotState) -> MascotState:
@@ -217,8 +224,11 @@ def _plan_tool_calls(
         "need_search_images": bool(state.get("need_search_images")),
         "blocked": False,
         "block_reason": "",
+        "skill": "",
     }
-    if _effective_skill(state) == "help" or int(state.get("tool_round") or 0) >= _MAX_TOOL_ROUNDS:
+    decided = bool(state.get("skill_decided", True))
+    if (decided and _effective_skill(state) == "help") \
+            or int(state.get("tool_round") or 0) >= _MAX_TOOL_ROUNDS:
         return [], {}, empty_meta
     message = (state.get("message") or "").strip()
     if not message:
@@ -232,6 +242,13 @@ def _plan_tool_calls(
         content = str(item.get("content") or "").strip()
         if role in {"user", "assistant"} and content:
             history_text += f"{role}: {content[:280]}\n"
+    skill_clause = """
+本轮还要顺带判定用户更需要哪种能力，写进 skill 字段：
+- help：仅当用户在问本站「怎么用/规则是什么」——功能入口、版规、积分、VIP、发帖流程、
+  消息、审核、账号设置等操作或规则说明。help 时 tool_calls 必须为空。
+- writing：闲聊陪聊、想看/找/推荐站内帖子、代写润色、查外部事实、需要联网或生图等。
+  找帖看帖属于 writing，不是 help。
+同样禁止关键词字面匹配，要理解整轮语义。""" if not decided else ""
     system = """你是论坛看板娘的唯一规划器。核心是发挥模型自主规划：理解整轮语义后决定工具与是否试探部落帖。
 禁止用关键词字面规则代替理解。
 
@@ -275,7 +292,9 @@ def _plan_tool_calls(
 {"tool_calls":[{"name":"rag|web_search|image_generation","query":"","include_images":false,"prompt":""}],
 "complexity":"SIMPLE|COMPLEX","action":"CHAT|IMAGE","image_prompt":"",
 "suggest_related_search":false,"related_search_query":"","need_search_images":false,
-"ask_offer":null,"blocked":false,"block_reason":""}
+"ask_offer":null,"blocked":false,"block_reason":"","skill":"writing|help"}"""
+    system += skill_clause
+    system += """
 ask_offer 示例：
 {"purpose":"search|search_images|draw|chat|clarify","questions":[
   {"id":"q1","question":"简短问题","options":[{"label":"短标签","value":"可执行答案"}]}
@@ -316,6 +335,10 @@ ask_offer 示例：
         blocked_meta["block_reason"] = str(data.get("block_reason") or "").strip()[:200]
         return [], usage, blocked_meta
 
+    planned_skill = str(data.get("skill") or "").strip().lower()
+    if planned_skill not in ("writing", "help"):
+        planned_skill = ""
+
     complexity = str(data.get("complexity") or "SIMPLE").strip().upper()
     if complexity not in {"SIMPLE", "COMPLEX"}:
         complexity = "SIMPLE"
@@ -350,6 +373,14 @@ ask_offer 示例：
         calls_blocked = False
 
     calls: list[dict[str, Any]] = []
+    if planned_skill == "help":
+        # 站点帮助模式不调工具，也不试探部落帖
+        calls_blocked = True
+        suggest = False
+        related_query = ""
+        action = "CHAT"
+        image_prompt = ""
+        need_search_images = False
     raw_calls = data.get("tool_calls")
     if not isinstance(raw_calls, list):
         raw_calls = []
@@ -403,6 +434,7 @@ ask_offer 示例：
     meta = {
         "blocked": False,
         "block_reason": "",
+        "skill": planned_skill,
         "action": action,
         "image_prompt": image_prompt,
         "complexity": complexity,
@@ -460,14 +492,23 @@ def node_tool_planner(state: MascotState) -> MascotState:
     complexity = str(meta.get("complexity") or state.get("complexity") or "SIMPLE").upper()
     if calls and any(call["name"] in {"rag", "web_search"} for call in calls):
         complexity = "COMPLEX"
+    # skill 还没定的话，用规划器这一次顺带给出的结论定下来
+    resolved = dict(state)
+    if not state.get("skill_decided", True):
+        planned_skill = str(meta.get("skill") or "").strip().lower()
+        if planned_skill in ("writing", "help"):
+            resolved["routed_skill"] = planned_skill
+            resolved["skill_decided"] = True
     out: MascotState = {
         "blocked": bool(meta.get("blocked")),
         "block_reason": str(meta.get("block_reason") or ""),
         "planned_tools": calls,
         "complexity": complexity,
         "need_search_images": bool(meta.get("need_search_images") or state.get("need_search_images")),
-        "use_interest_hints": _should_use_interest_hints(state),
+        "use_interest_hints": _should_use_interest_hints(resolved),
         "supervisor_usage": _merge_usage(usage, state.get("supervisor_usage")),
+        "routed_skill": resolved.get("routed_skill") or "writing",
+        "skill_decided": True,
     }
     if int(state.get("tool_round") or 0) == 0:
         out["action"] = str(meta.get("action") or "CHAT")
@@ -651,6 +692,7 @@ def _prepare_mascot_context(
     client_datetime: str = "",
     memory_summary: str = "",
     memory_facts: list[str] | None = None,
+    memory_probe: bool = True,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -804,7 +846,8 @@ def stream_mascot_chat(
 
     reply_text = "".join(reply_pieces)
     memory_usage: dict[str, Any] = {}
-    if reply_text:
+    # 抽取挂在流的最末尾，跑不完前端就一直转圈。Java 说这轮不用探就整轮跳过。
+    if reply_text and memory_probe:
         memory_write, memory_usage = _maybe_write_memory(ctx, reply_text)
         if memory_write:
             yield ("meta", {"memoryWrite": memory_write})
@@ -1268,7 +1311,10 @@ def node_agent(state: MascotState) -> MascotState:
     if sug not in (None, "standard", "keyboard", "gamepad"):
         sug = None
 
-    memory_write, memory_usage = _maybe_write_memory(state, reply)
+    memory_write: dict[str, Any] = {}
+    memory_usage: dict[str, Any] = {}
+    if state.get("memory_probe", True):
+        memory_write, memory_usage = _maybe_write_memory(state, reply)
 
     return {
         "reply": reply[:4000],
@@ -1487,6 +1533,7 @@ def run_mascot_chat(
     client_datetime: str = "",
     memory_summary: str = "",
     memory_facts: list[str] | None = None,
+    memory_probe: bool = True,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -1506,6 +1553,7 @@ def run_mascot_chat(
             "client_datetime": client_datetime or "",
             "memory_summary": memory_summary or "",
             "memory_facts": memory_facts or [],
+            "memory_probe": bool(memory_probe),
             "liked_titles": liked_titles or [],
             "favorite_songs": favorite_songs or [],
         }

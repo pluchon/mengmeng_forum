@@ -93,8 +93,15 @@ public class MascotController {
             HttpServletRequest httpServletRequest) {
         AiUserContext user = currentUser(httpServletRequest);
         SseEmitter emitter = new SseEmitter(180_000L);
-        emitter.onTimeout(emitter::complete);
-        emitter.onError((e) -> emitter.complete());
+        emitter.onTimeout(() -> {
+            log.info("看板娘 SSE 超时关闭");
+            emitter.complete();
+        });
+        // 原来这里直接 complete，出问题时日志里什么都没有，事后无从查起
+        emitter.onError((e) -> {
+            log.warn("看板娘 SSE 连接异常: {}", e == null ? "unknown" : e.getMessage());
+            emitter.complete();
+        });
         if (user == null) {
             try {
                 emitter.send(SseEmitter.event().data("{\"error\":\"未登录\"}"));

@@ -60,6 +60,8 @@ import org.pluchon.forum.service.security.MascotPromptGuard;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.config.ForumMascotComplexityProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.function.Supplier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -115,6 +117,17 @@ public class MascotServiceImpl implements MascotService {
     // 同一用户同时进行的看板娘流式对话上限
     @Value("${forum.mascot.max-inflight:2}")
     private int mascotMaxInflight;
+
+    // 会话开头这么多轮每轮都探记忆，之后按间隔探
+    @Value("${forum.mascot.memory-probe-warmup:3}")
+    private int memoryProbeWarmupExchanges;
+
+    @Value("${forum.mascot.memory-probe-every:3}")
+    private int memoryProbeEvery;
+
+    // 兴趣提示的缓存时长；这些数据几分钟内基本不变
+    @Value("${forum.mascot.interest-cache-minutes:5}")
+    private int interestCacheMinutes;
 
     @Autowired
     private ForumMascotComplexityProperties mascotComplexityProperties;
@@ -842,22 +855,66 @@ public class MascotServiceImpl implements MascotService {
         }
     }
 
-    private List<String> loadLikedTitles(Long userId) {
-        try {
-            return articleInternalFeignClient.listLikedTitles(userId, 6);
-        } catch (Exception ex) {
-            log.warn("读取点赞帖子标题失败 userId={}", userId, ex);
-            return List.of();
+    /**
+     * 这一轮要不要跑长期记忆抽取。
+     *
+     * <p>抽取是一次完整的 flash 调用，而且挂在流的最末尾——它没跑完，前端的
+     * 转圈就不停、「重新生成」也不出现。但绝大多数轮次（「今天天气不错」这种）
+     * 根本没有值得记的东西，每轮都跑是纯浪费。
+     *
+     * <p>会话开头几轮信息量最大，全跑；之后按固定间隔跑。漏掉一轮无所谓——
+     * 稳定偏好不会只出现一次，下一次探测照样能捞到。
+     */
+    private boolean shouldProbeMemory(List<MascotHistoryTurn> history) {
+        int exchanges = (history == null ? 0 : history.size()) / 2;
+        if (exchanges < memoryProbeWarmupExchanges) {
+            return true;
         }
+        int every = Math.max(1, memoryProbeEvery);
+        return exchanges % every == 0;
+    }
+
+    /**
+     * 兴趣提示（近期点赞的帖子标题、收藏的歌）。
+     *
+     * <p>每轮对话都要跨域拉两次，而这些数据几分钟内基本不变，纯属白等。
+     * 缓存一小段时间；过期或读写失败就退回直连，不影响正确性。
+     */
+    private List<String> loadLikedTitles(Long userId) {
+        return cachedInterest("liked", userId,
+                () -> articleInternalFeignClient.listLikedTitles(userId, 6));
     }
 
     private List<String> loadFavoriteSongs(Long userId) {
+        return cachedInterest("songs", userId,
+                () -> articleInternalFeignClient.listFavoriteSongTitles(userId, 6));
+    }
+
+    private List<String> cachedInterest(String kind, Long userId, Supplier<List<String>> loader) {
+        String key = "mascot:interest:" + kind + ":" + userId;
         try {
-            return articleInternalFeignClient.listFavoriteSongTitles(userId, 6);
+            String cached = stringRedisTemplate.opsForValue().get(key);
+            if (cached != null) {
+                return objectMapper.readValue(cached, new TypeReference<List<String>>() { });
+            }
         } catch (Exception ex) {
-            log.warn("读取收藏歌曲失败 userId={}", userId, ex);
+            log.warn("兴趣提示缓存读取失败 kind={} userId={}", kind, userId, ex);
+        }
+        List<String> fresh;
+        try {
+            fresh = loader.get();
+        } catch (Exception ex) {
+            log.warn("读取兴趣提示失败 kind={} userId={}", kind, userId, ex);
             return List.of();
         }
+        List<String> safe = fresh == null ? List.of() : fresh;
+        try {
+            stringRedisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(safe),
+                    Duration.ofMinutes(interestCacheMinutes));
+        } catch (Exception ex) {
+            log.warn("兴趣提示缓存写入失败 kind={} userId={}", kind, userId, ex);
+        }
+        return safe;
     }
 
     private AiImageResponseVO delegateMascotImage(
@@ -980,6 +1037,7 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("llm_provider", route);
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
+        pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
         pyBody.put("liked_titles", likedTitles);
         pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
@@ -1442,6 +1500,7 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("llm_provider", route);
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
+        pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
         pyBody.put("liked_titles", likedTitles);
         pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {

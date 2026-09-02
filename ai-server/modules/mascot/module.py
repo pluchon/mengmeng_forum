@@ -142,6 +142,8 @@ def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "client_datetime": str(raw.get("clientDatetime") or raw.get("client_datetime") or "").strip()[:64],
         "memory_summary": str(raw.get("memorySummary") or raw.get("memory_summary") or "").strip()[:240],
         "memory_facts": _string_list(raw.get("memoryFacts") or raw.get("memory_facts"), 10, 40),
+        # 由 Java 决定这一轮要不要探长期记忆；缺省为 True 兼容旧调用方
+        "memory_probe": bool(raw.get("memoryProbe", raw.get("memory_probe", True))),
         "liked_titles": _string_list(raw.get("likedTitles") or raw.get("liked_titles"), 6, 80),
         "favorite_songs": _string_list(raw.get("favoriteSongs") or raw.get("favorite_songs"), 6, 80),
     }
