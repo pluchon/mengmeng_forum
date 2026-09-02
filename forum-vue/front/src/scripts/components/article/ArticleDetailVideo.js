@@ -603,9 +603,8 @@ function useArticleDetailVideo(props, emit) {
         danmakuEngine.updateDanmakuLike(danmakuId, wasLiked)
         ElMessage.error(res?.message || '操作失败')
       }
-    } catch (err) {
+    } catch {
       danmakuEngine.updateDanmakuLike(danmakuId, wasLiked)
-      ElMessage.error(err?.message || '操作失败')
     } finally {
       const next = new Set(danmakuLikePending.value)
       next.delete(danmakuId)
@@ -662,8 +661,8 @@ function useArticleDetailVideo(props, emit) {
       clearDanmuComposeSession(true)
       danmakuEngine.pushLocalDanmaku(res.data)
       ElMessage.success('弹幕已发送')
-    } catch (err) {
-      ElMessage.error(err?.message || '弹幕发送失败')
+    } catch {
+      // 拦截器已弹出真实原因，这里不再重复提示
     } finally {
       danmuSending.value = false
     }

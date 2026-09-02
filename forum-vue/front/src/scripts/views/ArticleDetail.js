@@ -1794,8 +1794,8 @@ export function useArticleDetail() {
       }
       ElMessage.success('三连成功，感谢支持！')
       await handleShare()
-    } catch (error) {
-      ElMessage.error(error?.message || '三连未完成，请稍后重试')
+    } catch {
+      // 拦截器已弹出真实原因，这里不再重复提示
     } finally {
       engagementSubmitting.value = false
     }

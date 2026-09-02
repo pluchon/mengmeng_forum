@@ -354,9 +354,8 @@ export function usePointsWallet() {
       if (response.code !== 0) throw new Error(response.message || '萌币足迹加载失败')
       trendCache.set(trendWeekOffset.value, response.data || {})
       applyTrend(response.data)
-    } catch (error) {
+    } catch {
       if (Number.isInteger(previousOffset)) trendWeekOffset.value = previousOffset
-      ElMessage.error(error?.message || '萌币足迹加载失败')
     }
   }
 
@@ -371,8 +370,7 @@ export function usePointsWallet() {
       }
       logRows.value = unwrapPageRecords(response.data)
       logTotal.value = Number(response.data?.total) || 0
-    } catch (error) {
-      ElMessage.error(error?.message || '萌币流水加载失败')
+    } catch {
       logRows.value = []
       logTotal.value = 0
     } finally {
@@ -393,8 +391,8 @@ export function usePointsWallet() {
       const chartData = response.data || {}
       chartIsEmpty.value = Number(chartData.incomeTotal) <= 0 && Number(chartData.expenseTotal) <= 0
       ledgerChartOption.value = buildLedgerChartOption(chartData)
-    } catch (error) {
-      ElMessage.error(error?.message || '萌币图表加载失败')
+    } catch {
+      // 拦截器已弹出真实原因，这里不再重复提示
     } finally {
       chartLoading.value = false
     }
@@ -438,8 +436,8 @@ export function usePointsWallet() {
       trendCache.clear()
       trendWeekOffset.value = 0
       await Promise.all([walletStore.refresh(), loadOverview(), reloadLog()])
-    } catch (error) {
-      ElMessage.error(error?.message || '领取失败，请稍后重试')
+    } catch {
+      // 拦截器已弹出真实原因，这里不再重复提示
     } finally {
       claimingCode.value = ''
     }

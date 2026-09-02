@@ -2,7 +2,8 @@ import request from './request'
 
 // POST 无 body，幂等签到
 export function doCheckin() {
-  return request({ url: '/checkin/doCheckin', method: 'post' })
+  // 1129「今日已签到」不是错误，交给调用方弹更温和的 warning，避免红色报错 + 重复提示
+  return request({ url: '/checkin/doCheckin', method: 'post', silentBizCodes: [1129] })
 }
 
 export function getCheckinInfo() {

@@ -60,8 +60,8 @@ async function selectVersion(version) {
       selected: item.id === version.id,
     }))
     emit('selected', version)
-  } catch (requestError) {
-    ElMessage.error(requestError?.message || '版本选择失败')
+  } catch {
+    // 拦截器已弹出真实原因，这里不再重复提示
   } finally {
     selectingId.value = null
   }

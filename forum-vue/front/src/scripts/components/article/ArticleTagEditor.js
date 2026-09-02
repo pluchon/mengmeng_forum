@@ -66,9 +66,8 @@ async function loadTags() {
       m[t.id] = t
     }
     tagMap.value = m
-  } catch (e) {
+  } catch {
     availableTags.value = []
-    ElMessage.error(e?.message || '加载标签失败')
   } finally {
     loading.value = false
   }
@@ -132,8 +131,8 @@ async function submitFeedback() {
     }
     feedbackName.value = ''
     ElMessage.success(res?.data?.message || '标签已通过审核')
-  } catch (e) {
-    ElMessage.error(e?.message || '提交失败')
+  } catch {
+    // 拦截器已弹出真实原因，这里不再重复提示
   } finally {
     feedbackLoading.value = false
   }

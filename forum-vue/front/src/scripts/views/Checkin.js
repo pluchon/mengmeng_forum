@@ -9,6 +9,7 @@ import {
 } from '@/api/checkin'
 import { useCheckinSnapshotStore } from '@/stores/checkinSnapshot'
 import { apiErrorCode, unwrapPageRecords } from '@/utils/apiData'
+import { extractApiErrorMessage } from '@/api/httpError'
 import { clientOssUrl } from '@/utils/clientOss'
 import iconPrevUrl from '@/assets/svg/后退.svg?url'
 import iconNextUrl from '@/assets/svg/前进.svg?url'
@@ -296,7 +297,7 @@ export function useCheckin() {
       }
     } catch (e) {
       if (apiErrorCode(e) === 1129) {
-        ElMessage.warning(e.message || '今日已签到, 请明天再来')
+        ElMessage.warning(extractApiErrorMessage(e, '今日已签到, 请明天再来'))
         if (status.value) status.value = { ...status.value, todaySigned: true }
       }
       // 网络中断时响应可能丢了但服务端已经签上，回读一次真实状态，

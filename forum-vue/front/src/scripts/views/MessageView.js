@@ -2728,9 +2728,8 @@ const GROUP_NOTIFY_OPTIONS = [
       if (currentGroupSession.value) currentGroupSession.value.notifyMode = actualMode
       setGroupMemberSettingsSnapshot()
       await refreshCurrentGroupSession()
-    } catch (error) {
+    } catch {
       groupRemarkForm.value.notifyMode = Number(myGroupMember.value?.notifyMode) || 0
-      ElMessage.error(error?.message || '消息提醒模式更新失败')
     }
   }
 

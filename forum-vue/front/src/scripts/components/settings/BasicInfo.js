@@ -147,8 +147,8 @@ export function useBasicInfo() {
       } else {
         ElMessage.error(res.message || '提交审核失败')
       }
-    } catch (error) {
-      ElMessage.error(error?.response?.data?.message || error?.message || '更新失败')
+    } catch {
+      // 拦截器已弹出真实原因，这里不再重复提示
     } finally {
       saving.value = false
     }
