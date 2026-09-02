@@ -93,7 +93,6 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     }
 
     @Override
-    @Override
     public String loadContextSummary(Long sessionId) {
         ForumCompanionMessage latest = latestContextSummary(sessionId);
         if (latest == null || latest.getContent() == null || latest.getContent().isBlank()) {

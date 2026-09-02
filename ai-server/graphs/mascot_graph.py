@@ -781,6 +781,7 @@ def _build_agent_messages(state: dict[str, Any], *, stream: bool = False) -> tup
         tool_observations=_format_tool_observations(state),
         related_search_offer=bool(state.get("related_search_offer")),
         ask_offer=bool(state.get("ask_offer")),
+        image_action=str(state.get("action") or "CHAT").upper() == "IMAGE",
     )
     msgs: list = [SystemMessage(content=sys)]
     for item in history[-max_turns:]:
@@ -971,6 +972,7 @@ def _skill_system_stream(
     tool_observations: str = "",
     related_search_offer: bool = False,
     ask_offer: bool = False,
+    image_action: bool = False,
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
@@ -1009,6 +1011,14 @@ def _skill_system_stream(
             extra += f"\n【联网参考】\n{mcp_context}\n"
         if worker_notes:
             extra += f"\n【回答提纲】\n{worker_notes}\n"
+        if image_action:
+            extra += (
+                "\n【系统提示】本轮**已经在为用户生成图片**，图片会紧跟在这条回复下面出现。"
+                "正文只说一两句自然的话（比如一句画面构思或期待），"
+                "严禁说自己不能画图、不能出图、只是文字助手，"
+                "也不要让用户自己去创作页或别的工具画，更不要罗列提示词教程"
+                "——图已经在生成了。\n"
+            )
         if related_search_offer:
             extra += "\n【系统提示】本条消息下方会给出「看看部落相关帖」的确认按钮（尚未真正检索）。\n"
         if ask_offer:
@@ -1047,6 +1057,7 @@ def _skill_system(
     tool_observations: str = "",
     related_search_offer: bool = False,
     ask_offer: bool = False,
+    image_action: bool = False,
 ) -> str:
     base = f"""你是论坛网站的看板娘助手，用自然、简短、有聊天感的中文回复。
 
@@ -1086,6 +1097,14 @@ reply 先回应用户真正关心的内容，不要描述自己的工作流程�
             extra += f"\n【联网参考】\n{mcp_context}\n"
         if worker_notes:
             extra += f"\n【回答提纲】\n{worker_notes}\n"
+        if image_action:
+            extra += (
+                "\n【系统提示】本轮**已经在为用户生成图片**，图片会紧跟在这条回复下面出现。"
+                "正文只说一两句自然的话（比如一句画面构思或期待），"
+                "严禁说自己不能画图、不能出图、只是文字助手，"
+                "也不要让用户自己去创作页或别的工具画，更不要罗列提示词教程"
+                "——图已经在生成了。\n"
+            )
         if related_search_offer:
             extra += "\n【系统提示】本条消息下方会给出「看看部落相关帖」的确认按钮（尚未真正检索）。\n"
         if ask_offer:
@@ -1326,6 +1345,7 @@ def node_agent(state: MascotState) -> MascotState:
         tool_observations=_format_tool_observations(state),
         related_search_offer=bool(state.get("related_search_offer")),
         ask_offer=bool(state.get("ask_offer")),
+        image_action=str(state.get("action") or "CHAT").upper() == "IMAGE",
     )
 
     msgs: list = [SystemMessage(content=sys)]
