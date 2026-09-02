@@ -143,6 +143,11 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         }
     }
 
+    /** 能不能用生图（进阶档同此门槛）：有效会员即可。 */
+    private boolean isImageEligible(AiUserContext user) {
+        return user != null && user.isVipActive() && effectiveVipTier(user) >= Constant.VIP_TIER_PRO;
+    }
+
     private void assertCoverVip(AiUserContext user) {
         boolean proOrMax = user != null && user.isVipActive()
                 && (Constant.VIP_TIER_PRO.equals(user.getVipTier())
@@ -252,7 +257,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         try {
             aiQuotaService.consumeQwenFlash(user);
             reservedQwenFlash = true;
-            aiQuotaService.consumeImageNormal(user);
+            aiQuotaService.consumeImage(user, 1);
             reservedNormal = true;
             AiHubArticleCoverResultVO hubResult = aiHubService.articleCover(user.getId(), req);
             if (!StringUtils.hasText(hubResult.getUrl())) {
@@ -332,11 +337,20 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         String q = req.getQuality().trim().toLowerCase(Locale.ROOT);
-        req.setQuality(q);
-        if (!"normal".equals(q)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图仅支持 normal 档"));
+        if (!"normal".equals(q) && !"premium".equals(q)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "生图档位只能是 normal 或 premium"));
         }
-        String modelCode = Constant.AI_MODEL_IMAGE_NORMAL;
+        // 进阶档是会员权益，且档位由模型判定——前端传什么都要按登录态复核一遍
+        if ("premium".equals(q) && !isImageEligible(user)) {
+            q = "normal";
+        }
+        req.setQuality(q);
+        boolean premium = "premium".equals(q);
+        String modelCode = premium
+                ? Constant.AI_MODEL_IMAGE_DASH_PREMIUM
+                : Constant.AI_MODEL_IMAGE_NORMAL;
+        // 进阶档单价是普通档的 2.5 倍，额度按两张扣
+        int wanUnits = premium ? AiPointsBillingService.PREMIUM_WAN_UNITS : 1;
 
         boolean reservedNormal = false;
         boolean reservedQwenFlash = false;
@@ -347,7 +361,7 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         try {
             aiQuotaService.consumeQwenFlash(user);
             reservedQwenFlash = true;
-            aiQuotaService.consumeImageNormal(user);
+            aiQuotaService.consumeImage(user, wanUnits);
             reservedNormal = true;
             boolean ephemeral = Boolean.TRUE.equals(req.getEphemeral());
             Long dbSessionId = null;
@@ -406,14 +420,14 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
             return response;
         } catch (ApplicationException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseImageReservation(user, reservedNormal);
+            releaseImageReservation(user, reservedNormal, wanUnits);
             if (reservedQwenFlash) {
                 aiQuotaService.releaseQwenFlash(user);
             }
             throw ex;
         } catch (RuntimeException ex) {
             aiCallRecordService.markFailure(begin, AiCallState.FAILED, ex.getMessage());
-            releaseImageReservation(user, reservedNormal);
+            releaseImageReservation(user, reservedNormal, wanUnits);
             if (reservedQwenFlash) {
                 aiQuotaService.releaseQwenFlash(user);
             }
@@ -442,8 +456,12 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     }
 
     private void releaseImageReservation(AiUserContext user, boolean reservedNormal) {
+        releaseImageReservation(user, reservedNormal, 1);
+    }
+
+    private void releaseImageReservation(AiUserContext user, boolean reservedNormal, int units) {
         if (reservedNormal) {
-            aiQuotaService.releaseImageNormal(user);
+            aiQuotaService.releaseImage(user, units);
         }
     }
 

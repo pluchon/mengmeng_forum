@@ -44,6 +44,8 @@ class MascotState(TypedDict, total=False):
     routed_skill: str
     action: str
     image_prompt: str
+    # 生图档位：normal | premium，由规划器按画面复杂度自主判定
+    image_quality: str
     supervisor_usage: dict[str, Any]
     complexity: str
     related_search_offer: bool
@@ -157,6 +159,7 @@ def node_supervisor(state: MascotState) -> MascotState:
     return {
         "action": "CHAT",
         "image_prompt": "",
+        "image_quality": "normal",
         "complexity": "SIMPLE",
         "related_search_offer": False,
         "related_search_query": "",
@@ -246,6 +249,7 @@ def _plan_tool_calls(
         "blocked": False,
         "block_reason": "",
         "skill": "",
+        "image_quality": "normal",
     }
     decided = bool(state.get("skill_decided", True))
     if (decided and _effective_skill(state) == "help") \
@@ -307,13 +311,16 @@ def _plan_tool_calls(
 画图：
 - 画面已足够具体 → image_generation 且 action=IMAGE；
 - 否则用 ask_offer 澄清，严禁一边追问一边生图。
+- image_quality 由你自己判断，默认 normal。只有当画面确实需要更高画质才用 premium：
+  用户明确要求高清/精细/大图/壁纸/海报，或画面本身元素多、细节密、要看清纹理文字。
+  普通头像、表情、简单场景、随手一张一律 normal——premium 更贵，非必需不要用。
 
 首轮可输出 action=IMAGE（仅明确新生图）。后续轮次观察已够则空 tool_calls。
 只输出 JSON：
 {"tool_calls":[{"name":"rag|web_search|image_generation","query":"","include_images":false,"prompt":""}],
 "complexity":"SIMPLE|COMPLEX","action":"CHAT|IMAGE","image_prompt":"",
 "suggest_related_search":false,"related_search_query":"","need_search_images":false,
-"ask_offer":null,"blocked":false,"block_reason":"","skill":"writing|help"}"""
+"ask_offer":null,"blocked":false,"block_reason":"","skill":"writing|help","image_quality":"normal|premium"}"""
     system += skill_clause
     system += """
 ask_offer 示例：
@@ -363,6 +370,9 @@ ask_offer 示例：
     complexity = str(data.get("complexity") or "SIMPLE").strip().upper()
     if complexity not in {"SIMPLE", "COMPLEX"}:
         complexity = "SIMPLE"
+    image_quality = str(data.get("image_quality") or "normal").strip().lower()
+    if image_quality != "premium":
+        image_quality = "normal"
     action = str(data.get("action") or "CHAT").strip().upper()
     image_prompt = str(data.get("image_prompt") or "").strip()[:1600]
     if action != "IMAGE" or not image_prompt or _vip_tier_num(state) < 1:
@@ -456,6 +466,7 @@ ask_offer 示例：
         "blocked": False,
         "block_reason": "",
         "skill": planned_skill,
+        "image_quality": image_quality if action == "IMAGE" else "normal",
         "action": action,
         "image_prompt": image_prompt,
         "complexity": complexity,
@@ -534,6 +545,7 @@ def node_tool_planner(state: MascotState) -> MascotState:
     if int(state.get("tool_round") or 0) == 0:
         out["action"] = str(meta.get("action") or "CHAT")
         out["image_prompt"] = str(meta.get("image_prompt") or "")
+        out["image_quality"] = str(meta.get("image_quality") or "normal")
         out["related_search_offer"] = bool(meta.get("related_search_offer"))
         out["related_search_query"] = str(meta.get("related_search_query") or "")
         out["ask_offer"] = meta.get("ask_offer") or {}
@@ -839,7 +851,11 @@ def stream_mascot_chat(
             },
         })
     elif ctx.get("action") == "IMAGE":
-        yield ("meta", {"action": "IMAGE", "imagePrompt": ctx.get("image_prompt") or ""})
+        yield ("meta", {
+            "action": "IMAGE",
+            "imagePrompt": ctx.get("image_prompt") or "",
+            "imageQuality": ctx.get("image_quality") or "normal",
+        })
     if ctx.get("related_search_offer") and ctx.get("related_search_query"):
         yield ("meta", {
             "relatedSearchOffer": True,

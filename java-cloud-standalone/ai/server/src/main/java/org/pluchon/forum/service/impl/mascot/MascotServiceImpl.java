@@ -903,6 +903,7 @@ public class MascotServiceImpl implements MascotService {
             AiUserContext user,
             MascotChatRequest request,
             String imagePrompt,
+            String imageQuality,
             String sessionKey,
             Long dbSessionId) {
         if (!isVip(user)) {
@@ -910,7 +911,8 @@ public class MascotServiceImpl implements MascotService {
         }
         AiImageRequest imageRequest = new AiImageRequest();
         imageRequest.setPrompt(imagePrompt);
-        imageRequest.setQuality("normal");
+        // 档位由规划器按画面复杂度自主判定；服务端再按登录档位复核一次
+        imageRequest.setQuality("premium".equals(imageQuality) ? "premium" : "normal");
         imageRequest.setSessionId(sessionKey);
         imageRequest.setEphemeral(true);
         imageRequest.setClientRequestId(imageRequestId(request, sessionKey));
@@ -1116,12 +1118,13 @@ public class MascotServiceImpl implements MascotService {
         // 主回复与计费已完成，生图这一步失败（含生图额度用尽）只降级成提示，不能让整次对话失败
         if (isImageAction(moduleData)) {
             String imagePrompt = String.valueOf(moduleData.getOrDefault("imagePrompt", "")).trim();
+            String imageQuality = String.valueOf(moduleData.getOrDefault("imageQuality", "normal")).trim();
             if (imagePrompt.isBlank()) {
                 imageError = "生图提示词不能为空";
             } else {
                 try {
                     AiImageResponseVO image = delegateMascotImage(
-                            user, request, imagePrompt, pySessionKey, dbSessionId);
+                            user, request, imagePrompt, imageQuality, pySessionKey, dbSessionId);
                     imageUrl = image.getUrl();
                 } catch (ApplicationException ex) {
                     log.warn("看板娘生图失败 userId={}: {}", user.getId(), ex.getMessage());
@@ -1441,6 +1444,8 @@ public class MascotServiceImpl implements MascotService {
         final AtomicReference<Object> streamMemoryWrite = new AtomicReference<>(null);
         boolean imageRequested = false;
         String imagePrompt = "";
+        // 生图档位由规划器给；服务端还会按登录档位复核一次
+        String imageQuality = "normal";
         final String billingRelatedId = billingRelatedId(request, pySessionKey);
         final AtomicBoolean terminalHandled = new AtomicBoolean(false);
         final AiCallBeginResult streamBegin = aiCallRecordService.beginCall(
@@ -1573,6 +1578,7 @@ public class MascotServiceImpl implements MascotService {
                         if (isImageAction(metaMap)) {
                             imageRequested = true;
                             imagePrompt = String.valueOf(metaMap.getOrDefault("imagePrompt", "")).trim();
+                            imageQuality = String.valueOf(metaMap.getOrDefault("imageQuality", "normal")).trim();
                         }
                         List<CompanionImageGalleryItemVO> gallery = parseImageGallery(metaMap.get("searchImageGallery"));
                         if (!gallery.isEmpty()) {
@@ -1602,6 +1608,7 @@ public class MascotServiceImpl implements MascotService {
                         if (isImageAction(finalData)) {
                             imageRequested = true;
                             imagePrompt = String.valueOf(finalData.getOrDefault("imagePrompt", "")).trim();
+                            imageQuality = String.valueOf(finalData.getOrDefault("imageQuality", "normal")).trim();
                         }
                         if (Boolean.TRUE.equals(finalData.get("relatedSearchOffer"))
                                 && finalData.get("relatedSearchQuery") != null) {
@@ -1735,7 +1742,7 @@ public class MascotServiceImpl implements MascotService {
                     sendMascotSse(emitter, Map.of("meta", Map.of("imageGenerating", true)));
                     try {
                         delegatedImage = delegateMascotImage(
-                                user, request, imagePrompt, pySessionKey, persistSessionId);
+                                user, request, imagePrompt, imageQuality, pySessionKey, persistSessionId);
                     } catch (ApplicationException ex) {
                         log.warn("看板娘流式生图失败 userId={}: {}", user.getId(), ex.getMessage());
                         imageError = ex.getMessage() != null ? ex.getMessage() : "生成图片失败，请稍后再试";

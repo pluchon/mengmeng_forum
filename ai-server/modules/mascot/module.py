@@ -36,6 +36,7 @@ class MascotChatModule:
                 "mcpUsed": bool(result.get("mcp_used")),
                 "action": result.get("action") or "CHAT",
                 "imagePrompt": result.get("image_prompt") or "",
+                "imageQuality": result.get("image_quality") or "normal",
                 "complexity": result.get("complexity") or "SIMPLE",
                 "relatedSearchOffer": bool(result.get("related_search_offer")),
                 "relatedSearchQuery": result.get("related_search_query") or "",

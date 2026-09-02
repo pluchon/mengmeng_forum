@@ -330,5 +330,6 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 ('qwen3-vl-plus', 'dashscope', 'per_1m_output', 10.000000, 0, 1, '视觉兜底'),
 ('tongyi-embedding-vision-flash', 'dashscope', 'per_1m_input', 0.150000, 0, 1, 'RAG向量'),
 ('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 1, 'prompt_extend=false'),
-('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)');
+('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)'),
+('wan2.7-image-pro', 'dashscope', 'per_image', 0.500000, 1, 1, '万相2.7进阶生图，额度按两张扣');
 

@@ -227,8 +227,8 @@ class ImageGenerationModule:
         quality = str(request.payload.get("quality") or "normal").strip().lower()
         if not prompt:
             raise ModuleRequestError("INVALID_IMAGE_PAYLOAD", "prompt 不能为空")
-        if quality != "normal":
-            raise ModuleRequestError("INVALID_IMAGE_PAYLOAD", "quality 仅支持 normal")
+        if quality not in ("normal", "premium"):
+            raise ModuleRequestError("INVALID_IMAGE_PAYLOAD", "quality 只能是 normal 或 premium")
         url, usage, mcp_used = await asyncio.to_thread(generate_image, prompt, quality)
         return ModuleResult(
             success=True,

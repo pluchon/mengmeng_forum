@@ -11,13 +11,14 @@ public interface AiQuotaService {
 
     void consumeAdvancedLlm(AiUserContext user);
 
-    void consumeImageNormal(AiUserContext user);
+    /** 预占生图额度。units：普通档 1，进阶档 2。 */
+    void consumeImage(AiUserContext user, int units);
 
     void releaseQwenFlash(AiUserContext user);
 
     void releaseAdvancedLlm(AiUserContext user);
 
-    void releaseImageNormal(AiUserContext user);
+    void releaseImage(AiUserContext user, int units);
 
     void settleUsage(AiUserContext user, boolean qwenReserved, BigDecimal qwenCost,
                      int wanImageCount);

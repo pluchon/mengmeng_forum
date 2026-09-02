@@ -69,13 +69,14 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     @Override
     // 判定口径与文本一致：都读周期表的已用 + 预占。
     // 不能从 usage_log 实时聚合张数——日志是不可变审计流水，聚合出来的用量无法被额度重置卡清零。
-    public void consumeImageNormal(AiUserContext user) {
+    public void consumeImage(AiUserContext user, int units) {
+        int need = Math.max(1, units);
         PeriodWindow window = periodWindow(user);
         // 生图是会员权益：看板娘与帖子封面两个入口都拦了会员，
         // 通用生图端点也已下线，basic 不该再留可用张数
         int cap = isMax(user) ? 50 : (isProOrMax(user) ? 20 : 0);
         ensurePeriodRow(user, window);
-        if (forumAiQuotaPeriodUsageMapper.reserveWan(user.getId(), window.key, cap) != 1) {
+        if (forumAiQuotaPeriodUsageMapper.reserveWan(user.getId(), window.key, need, cap) != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_QUOTA_EXCEEDED));
         }
     }
@@ -99,9 +100,9 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     }
 
     @Override
-    public void releaseImageNormal(AiUserContext user) {
+    public void releaseImage(AiUserContext user, int units) {
         PeriodWindow window = periodWindow(user);
-        forumAiQuotaPeriodUsageMapper.releaseWan(user.getId(), window.key);
+        forumAiQuotaPeriodUsageMapper.releaseWan(user.getId(), window.key, Math.max(1, units));
     }
 
     @Override

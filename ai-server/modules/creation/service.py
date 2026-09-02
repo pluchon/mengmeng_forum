@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from clients.dashscope_chat_client import dashscope_chat_completion
-from clients.dashscope_image import dashscope_text_to_image
+from clients.dashscope_image import dashscope_premium_text_to_image, dashscope_text_to_image
 from clients.llm import flash_model_name
 from graphs.text_generation import run_text_generation
 from utils.image_mcp import enrich_image_prompt
@@ -55,8 +55,17 @@ def generate_cover_hints(article: str) -> tuple[str, dict[str, Any]]:
 
 
 def generate_image(prompt: str, quality: str, *, enrich: bool = True) -> tuple[str, dict[str, Any], bool]:
+    """生成一张图。quality: normal | premium。
+
+    档位由看板娘的规划器按画面复杂度自主判定，Java 侧再按会员档位复核一次并
+    据此扣额度（进阶档算两张），这里只负责按档位选模型。
+    """
     enhanced_prompt, mcp_used = enrich_image_prompt(prompt) if enrich else (prompt, False)
-    if quality and quality != "normal":
-        raise CreationConfigError("进阶生图已下线，请使用普通档 Wan 生图")
-    url, usage = dashscope_text_to_image(enhanced_prompt)
+    normalized = (quality or "normal").strip().lower()
+    if normalized not in ("normal", "premium"):
+        raise CreationConfigError("生图档位只能是 normal 或 premium")
+    if normalized == "premium":
+        url, usage = dashscope_premium_text_to_image(enhanced_prompt)
+    else:
+        url, usage = dashscope_text_to_image(enhanced_prompt)
     return url, usage, mcp_used

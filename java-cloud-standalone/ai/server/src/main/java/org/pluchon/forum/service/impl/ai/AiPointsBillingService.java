@@ -45,6 +45,9 @@ import java.util.Map;
 @Service
 public class AiPointsBillingService {
 
+    /** 进阶档生图占几张额度 */
+    public static final int PREMIUM_WAN_UNITS = 2;
+
     private static final ZoneId ZONE = ForumTimeZone.ZONE_ID;
     private static final BigDecimal POINTS_PER_YUAN = new BigDecimal("100");
 
@@ -431,9 +434,10 @@ public class AiPointsBillingService {
             if (model.startsWith("qwen")) {
                 qwenCost = qwenCost.add(calcYuan(usage));
             }
-            if (Constant.AI_MODEL_IMAGE_DASH_PREMIUM.equals(model)
-                    || "wan2.7-image".equals(model)
-                    || model.startsWith("wan")) {
+            if (Constant.AI_MODEL_IMAGE_DASH_PREMIUM.equals(model)) {
+                // 钱按「张数 × 进阶档单价」算，额度按两张扣——两者口径本来就不同
+                wanImages += images * PREMIUM_WAN_UNITS;
+            } else if (model.startsWith("wan")) {
                 wanImages += images;
             }
         }
