@@ -485,6 +485,24 @@ export function useMascotDock() {
     }
   }
 
+  /**
+   * 存盘用的消息快照。
+   *
+   * <p>直接存 messages.value 会把「还在流的那条占位气泡」一起存下去：
+   * 它 content 为空、streaming 为 true、thinkingText 是三个点。存进去之后
+   * 这个会话每次打开都挂着一个永远转圈的气泡——切会话时最容易撞上，
+   * 因为 startNewSession 正是在清空前调的存盘。
+   *
+   * <p>没出内容的直接丢掉；出了内容的保留，但把流式标记摘掉。
+   */
+  function messagesForPersist(rows) {
+    return (rows || []).filter((m) => !(m?.streaming && !String(m?.content || '').trim()))
+      .map((m) => {
+        if (!m?.streaming && !m?.thinkingText) return { ...m }
+        return { ...m, streaming: false, thinkingText: '' }
+      })
+  }
+
   function persistCurrentMessages() {
     const nav = activeNav.value
     const id = activeLocalSessionId.value[nav]
@@ -494,11 +512,12 @@ export function useMascotDock() {
     if (idx < 0) return
     const firstUser = messages.value.find((m) => m.role === 'user' && m.type !== 'image')
     const title = (firstUser?.content || '').trim().slice(0, 28) || uiLabels.untitledSession
+    const persistable = messagesForPersist(messages.value)
     const prevLen = (list[idx].messages || []).length
-    const nextLen = messages.value.length
+    const nextLen = persistable.length
     list[idx] = {
       ...list[idx],
-      messages: messages.value.map((m) => ({ ...m })),
+      messages: persistable,
       title,
       updateTime: nextLen > prevLen ? Date.now() : (list[idx].updateTime || Date.now()),
     }
@@ -551,7 +570,7 @@ export function useMascotDock() {
       try {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
-          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), sess.messages || [])
+          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), messagesForPersist(sess.messages))
           await restoreRelatedRecommendations(id)
           restoreAskWizardFromMessages()
           cacheSessionMessages(nav, id, messages.value)
@@ -562,7 +581,8 @@ export function useMascotDock() {
       } catch {
       }
     }
-    messages.value = (sess.messages || []).map((m) => ({ ...m }))
+    // localStorage 里可能还留着这个 bug 修好之前存下的占位气泡
+    messages.value = messagesForPersist(sess.messages)
     await restoreRelatedRecommendations(id)
     restoreAskWizardFromMessages()
     scrollFsToBottom()
@@ -806,7 +826,7 @@ export function useMascotDock() {
       try {
         const res = await getCompanionMessages(id)
         if (res.code === 0 && Array.isArray(res.data)) {
-          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), localMsgs)
+          messages.value = mergeLocalMessageExtras(mapVoToMessages(res.data), messagesForPersist(localMsgs))
           await restoreRelatedRecommendations(id)
           restoreAskWizardFromMessages()
           cacheSessionMessages(nav, id, messages.value)
@@ -816,7 +836,7 @@ export function useMascotDock() {
       } catch {
       }
     }
-    messages.value = localMsgs.map((m) => ({ ...m }))
+    messages.value = messagesForPersist(localMsgs)
     await restoreRelatedRecommendations(id)
     restoreAskWizardFromMessages()
     scrollFsToBottom()
@@ -928,7 +948,7 @@ export function useMascotDock() {
       list[serverIndex] = {
         ...list[serverIndex],
         title: list[serverIndex].title || currentTitle,
-        messages: messages.value.map((message) => ({ ...message })),
+        messages: messagesForPersist(messages.value),
         updateTime: Date.now(),
       }
       if (provisionalIndex >= 0 && provisionalIndex !== serverIndex) {
@@ -1358,12 +1378,13 @@ export function useMascotDock() {
   }
 
   function startNewSession() {
-    messagesEpoch += 1
     const nav = activeNav.value
     if (isCurrentSessionEmpty()) {
       ElMessage.info(uiLabels.alreadyNewSession)
       return
     }
+    // 确认真要新建了再作废在途的流，别在「已经是新会话」那条分支上白白打断
+    messagesEpoch += 1
     persistCurrentMessages()
     const id = newLocalSessionId()
     const sess = { id, title: uiLabels.untitledSession, messages: [], updateTime: Date.now() }
