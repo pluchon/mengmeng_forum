@@ -164,7 +164,10 @@ public class AiPointsBillingService {
         if (img > 0 && units.containsKey("per_image")) {
             yuan = yuan.add(units.get("per_image").multiply(BigDecimal.valueOf(img)));
         }
-        if (yuan.compareTo(BigDecimal.ZERO) <= 0 && units.containsKey("per_call")) {
+        int calls = Math.max(0, u.getCallCount() != null ? u.getCallCount() : 0);
+        if (calls > 0 && units.containsKey("per_call")) {
+            yuan = yuan.add(units.get("per_call").multiply(BigDecimal.valueOf(calls)));
+        } else if (yuan.compareTo(BigDecimal.ZERO) <= 0 && units.containsKey("per_call")) {
             yuan = units.get("per_call");
         }
         if (yuan.compareTo(BigDecimal.ZERO) <= 0) {

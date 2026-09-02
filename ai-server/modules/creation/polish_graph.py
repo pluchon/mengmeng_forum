@@ -24,6 +24,8 @@ from modules.creation.format_guard import (
 from modules.creation.usage import aggregate_usage, usage_item
 from runtime.graph_run import invoke_with_fanout_limit
 
+from utils.escalation_stats import record as record_escalation
+
 logger = logging.getLogger(__name__)
 
 _PASS_SCORE = 70
@@ -335,6 +337,10 @@ def _normalize_plan(plan: PolishPlan, allow_deep: bool = False) -> PolishPlan:
     # needs_deep 是模型自己报的，再叠一层自报置信度兜底；
     # 但最终能不能用深度模型由档位说了算，免费用户一律 False。
     wants_deep = plan.needs_deep or plan.confidence < 0.65
+    # 与文本审核同一个模式：模型自报置信度决定要不要换贵模型。
+    # 记的是「模型想升级」而不是「实际升了」——档位限制是另一回事，
+    # 要评估阈值就得看模型本身的判定倾向。
+    record_escalation("polish", bool(wants_deep))
     return plan.model_copy(update={
         "worker_count": expected,
         "strategies": strategies[:expected],

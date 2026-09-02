@@ -12,6 +12,8 @@ from typing_extensions import TypedDict
 from clients.dashscope_chat_client import dashscope_chat_completion
 from clients.llm import deep_model_name, flash_model_name
 
+from utils.escalation_stats import record as record_escalation
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,6 +64,18 @@ def run_text_moderation(title: str, content: str, report_reason: str = "") -> di
     decision = result.get("final") or result.get("flash")
     if not decision:
         raise RuntimeError("文本审核没有产生结论")
+    deep_used = bool(result.get("deep_used"))
+    # 升级到 deep 意味着这次审核用的是 qwen3.7-max（比 flash 贵一个量级）。
+    # 阈值 confidence < 0.72 定得合不合适，先看真实升级率再说。
+    record_escalation("text_audit", deep_used)
+    flash = result.get("flash")
+    logger.info(
+        "TEXT_AUDIT 结论 allowed=%s deep=%s flashConf=%.2f borderline=%s category=%s",
+        decision.allowed, deep_used,
+        float(getattr(flash, "confidence", 0.0) or 0.0),
+        bool(getattr(flash, "borderline", False)),
+        decision.category,
+    )
     return {
         "allowed": decision.allowed,
         "reason": decision.reason,

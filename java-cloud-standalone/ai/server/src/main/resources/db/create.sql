@@ -317,8 +317,8 @@ CREATE TABLE `user_mascot_preference` (
 -- Demo seeds: AI model price catalog
 -- ----------------------------
 INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `price_yuan`, `vip_only`, `enabled`, `remark`) VALUES
-('qwen3.6-flash', 'dashscope', 'per_1m_input', 1.200000, 0, 1, '中国内地'),
-('qwen3.6-flash', 'dashscope', 'per_1m_output', 7.200000, 0, 1, '中国内地'),
+('qwen3.6-flash', 'dashscope', 'per_1m_input', 1.200000, 0, 0, '中国内地'),
+('qwen3.6-flash', 'dashscope', 'per_1m_output', 7.200000, 0, 0, '中国内地'),
 ('qwen3.7-flash', 'dashscope', 'per_1m_input', 0.200000, 0, 1, '中国内地<=32K'),
 ('qwen3.7-flash', 'dashscope', 'per_1m_output', 0.800000, 0, 1, '中国内地<=32K'),
 ('qwen3.7-max', 'dashscope', 'per_1m_input', 12.000000, 0, 1, '中国内地标准价'),
@@ -328,8 +328,9 @@ INSERT INTO `forum_ai_model_price` (`model_code`, `provider`, `bill_unit`, `pric
 ('qwen3-vl-flash', 'dashscope', 'per_1m_output', 1.500000, 0, 1, '视觉审核'),
 ('qwen3-vl-plus', 'dashscope', 'per_1m_input', 1.000000, 0, 1, '视觉兜底'),
 ('qwen3-vl-plus', 'dashscope', 'per_1m_output', 10.000000, 0, 1, '视觉兜底'),
-('tongyi-embedding-vision-flash', 'dashscope', 'per_1m_input', 0.150000, 0, 1, 'RAG向量'),
-('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 1, 'prompt_extend=false'),
-('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 1, '通义万相进阶生图(兜底)'),
-('wan2.7-image-pro', 'dashscope', 'per_image', 0.500000, 1, 1, '万相2.7进阶生图，额度按两张扣');
+('tongyi-embedding-vision-flash', 'dashscope', 'per_1m_input', 0.150000, 0, 0, 'RAG向量'),
+('z-image-turbo', 'dashscope', 'per_image', 0.100000, 0, 0, 'prompt_extend=false'),
+('wanx2.1-t2i-plus', 'dashscope', 'per_image', 0.100000, 1, 0, '通义万相进阶生图(兜底)'),
+('wan2.7-image-pro', 'dashscope', 'per_image', 0.500000, 1, 1, '万相2.7进阶生图，额度按两张扣'),
+('tavily-search', 'tavily', 'per_call', 0.058000, 0, 1, 'Tavily 联网检索，按次计费');
 

@@ -438,6 +438,8 @@ public final class AiHubConverter {
             images = intVal(um.get("images"));
         }
         dto.setImageCount(images);
+        // 按次计费的服务（Tavily 联网检索）没有 token，只有次数
+        dto.setCallCount(intVal(um.get("call_count")));
         Object estimated = um.get("estimated");
         if (estimated != null) {
             dto.setEstimated(estimated instanceof Boolean b
