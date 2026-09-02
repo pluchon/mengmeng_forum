@@ -91,8 +91,26 @@ def flash_review(state: ModerationState) -> dict[str, Any]:
 
 
 def route_after_flash(state: ModerationState) -> str:
+    """要不要让 deep 再看一遍。
+
+    原来是 borderline or confidence < 0.72——不看结论方向，一篇干干净净的帖子
+    只要 flash 随口报个 0.7 也要送进 qwen3.7-max 复核一遍。而 LLM 的自报置信度
+    本来就没校准，0.72 换成 0.6 或 0.8 同样是拍脑袋。
+
+    改成按「这个结论错了会怎样」决定，两个方向的代价并不对称：
+      - 判违规错了 → 误杀用户内容，用户当场就看见。必须复核，
+        而且复核还能给出更准的违规理由文案。
+      - 判合规错了 → 漏放。只有模型自己说拿不准（borderline）时才值得复核。
+      - 判合规且不 borderline → 绝大多数正常内容，直接放行。
+
+    这样升级率自然收敛到「违规率 + borderline 率」，不需要靠数据去凑一个阈值。
+    escalation_stats 的观测保留，但用途从「定阈值」变成「监控异常」：
+    哪天升级率跳到 40%，说明 flash 在乱报违规，那是另一个问题。
+    """
     decision = state["flash"]
-    return "deep" if decision.borderline or decision.confidence < 0.72 else "done"
+    if not decision.allowed:
+        return "deep"
+    return "deep" if decision.borderline else "done"
 
 
 def deep_review(state: ModerationState) -> dict[str, Any]:

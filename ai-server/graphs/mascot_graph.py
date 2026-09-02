@@ -36,6 +36,8 @@ _MEMORY_MAX_TOKENS = 400
 _TAVILY_MODEL_CODE = "tavily-search"
 # 前端把追问答案拼成一条带这个开头的用户消息；见 MascotDock.js 的 buildAskConfirmMessage
 _ASK_ANSWER_MARK = "【用户澄清回答】"
+# 规划器没给开场白时的兜底
+_ASK_FALLBACK_INTRO = "想先跟你确认几点，麻烦在上面的面板里选一下～"
 
 
 class MascotState(TypedDict, total=False):
@@ -55,6 +57,8 @@ class MascotState(TypedDict, total=False):
     related_search_offer: bool
     related_search_query: str
     ask_offer: dict[str, Any]
+    # 追问轮的开场白：规划器顺带给出，直接当正文用，省掉一次回答模型调用
+    ask_intro: str
     need_search_images: bool
     llm_route: str
     history: list[dict[str, str]]
@@ -168,6 +172,7 @@ def node_supervisor(state: MascotState) -> MascotState:
         "related_search_offer": False,
         "related_search_query": "",
         "ask_offer": {},
+        "ask_intro": "",
         "need_search_images": False,
         "planned_tools": [],
         "completed_tools": [],
@@ -249,6 +254,7 @@ def _plan_tool_calls(
         "related_search_offer": False,
         "related_search_query": "",
         "ask_offer": {},
+        "ask_intro": "",
         "need_search_images": bool(state.get("need_search_images")),
         "blocked": False,
         "block_reason": "",
@@ -306,6 +312,8 @@ def _plan_tool_calls(
 - 意图不清、关键信息缺失、或多种合理解读都可能时，不要猜着执行，输出 ask_offer（1~3 题）。
 - 每题 2~4 个短选项；options.value 写可直接执行的答案摘要（生图则写完整画面描述）。
 - 有 ask_offer 时：tool_calls 为空、action=CHAT、suggest_related_search=false、need_search_images=false。
+- 有 ask_offer 时另写 ask_intro：一两句自然的开场白，告诉用户你想先确认几点。
+  它会直接作为这一轮的正文发给用户，所以别复述选项、别说自己在检索或绘制。
 - 用户消息已含「【用户澄清回答】」且信息足够时，禁止再问，直接按澄清结果规划。
 - 意图已明确时不要为了问而问。
 
@@ -321,7 +329,7 @@ def _plan_tool_calls(
 {"tool_calls":[{"name":"rag|web_search|image_generation","query":"","include_images":false,"prompt":""}],
 "complexity":"SIMPLE|COMPLEX","action":"CHAT|IMAGE","image_prompt":"",
 "suggest_related_search":false,"related_search_query":"","need_search_images":false,
-"ask_offer":null,"blocked":false,"block_reason":"","skill":"writing|help","image_quality":"normal|premium"}"""
+"ask_offer":null,"ask_intro":"","blocked":false,"block_reason":"","skill":"writing|help","image_quality":"normal|premium"}"""
     system += skill_clause
     system += """
 ask_offer 示例：
@@ -486,6 +494,7 @@ ask_offer 示例：
         "related_search_offer": suggest,
         "related_search_query": related_query,
         "ask_offer": ask_offer,
+        "ask_intro": str(data.get("ask_intro") or "").strip()[:200] if ask_offer else "",
         "need_search_images": need_search_images or any(
             bool(item.get("include_images")) for item in calls if item.get("name") == "web_search"
         ),
@@ -562,6 +571,7 @@ def node_tool_planner(state: MascotState) -> MascotState:
         out["related_search_offer"] = bool(meta.get("related_search_offer"))
         out["related_search_query"] = str(meta.get("related_search_query") or "")
         out["ask_offer"] = meta.get("ask_offer") or {}
+        out["ask_intro"] = str(meta.get("ask_intro") or "")
         if out["ask_offer"]:
             out["action"] = "CHAT"
             out["image_prompt"] = ""
@@ -864,6 +874,12 @@ def stream_mascot_chat(
                 "questions": ask_offer.get("questions") or [],
             },
         })
+        # 追问轮的正文只需要一两句「我确认一下」，规划器那次调用已经顺带给出了。
+        # 再动用一次完整的回答模型纯属浪费——这一轮到此为止。
+        yield ("text", str(ctx.get("ask_intro") or "").strip() or _ASK_FALLBACK_INTRO)
+        yield ("usage", _merge_usage(_merge_usage({}, ctx.get("supervisor_usage")),
+                                     ctx.get("router_usage")))
+        return
     elif ctx.get("action") == "IMAGE":
         yield ("meta", {
             "action": "IMAGE",
@@ -1303,6 +1319,17 @@ _BLOCKED_FALLBACK_REPLY = "这个我做不到哦～换个话题聊聊？比如�
 
 
 def node_agent(state: MascotState) -> MascotState:
+    ask_offer = state.get("ask_offer") or {}
+    if isinstance(ask_offer, dict) and ask_offer.get("questions"):
+        # 与流式一致：追问轮的正文由规划器顺带给出，不再单独调回答模型
+        return {
+            "reply": str(state.get("ask_intro") or "").strip() or _ASK_FALLBACK_INTRO,
+            "live2d": {},
+            "suggested_appearance": None,
+            "usage": _merge_usage(_merge_usage({}, state.get("supervisor_usage")),
+                                  state.get("router_usage")),
+            "memory_write": {},
+        }
     if state.get("blocked"):
         # 已经判定越界，就别再花一次回答模型的钱了
         return {
