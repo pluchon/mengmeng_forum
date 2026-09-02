@@ -10,11 +10,9 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.security.AuthenticatedUser;
 import org.pluchon.forum.entity.dto.AiArticleCoverRequest;
 import org.pluchon.forum.entity.dto.AiCoverHintsRequest;
-import org.pluchon.forum.entity.dto.AiImageRequest;
 import org.pluchon.forum.entity.dto.AiPolishRequest;
 import org.pluchon.forum.entity.vo.ai.AiArticleCoverResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiHubCoverHintsResultVO;
-import org.pluchon.forum.entity.vo.ai.AiImageResponseVO;
 import org.pluchon.forum.entity.vo.ai.AiPolishResponseVO;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,11 +56,6 @@ public class AiController {
     }
 
     @Operation(summary = "AI 生图", description = "质量: 目前仅支持普通档")
-    @PostMapping("/image")
-    public Result<AiImageResponseVO> image(@RequestBody AiImageRequest req, HttpServletRequest request) {
-        AuthenticatedUser user = requireLoginUser(request);
-        return Result.success(aiCompanionApiService.image(user.getId(), req));
-    }
 
     private static AuthenticatedUser requireLoginUser(HttpServletRequest request) {
         AuthenticatedUser user = (AuthenticatedUser) request.getAttribute(Constant.USER_SESSION);

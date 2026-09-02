@@ -13,15 +13,6 @@ export function aiCoverHints(data) {
   })
 }
 
-// AI 生图 Java BFF > ai server
-export function aiImage(data) {
-  return request({
-    url: '/ai/image',
-    method: 'post',
-    data,
-    timeout: AI_LONG_TIMEOUT_MS,
-  })
-}
 
 // 帖子正文一键生成封面 理解正文 > 按需检索 > 生图
 export function aiArticleCover(data) {

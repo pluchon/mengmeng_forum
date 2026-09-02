@@ -133,6 +133,7 @@ public class AiHubServiceImpl implements AiHubService {
         payload.put("title", request.getTitle());
         payload.put("content", request.getContent());
         payload.put("editorMode", request.getEditorMode());
+        payload.put("vipTier", request.getVipTier() == null ? 0 : request.getVipTier());
         return AiHubConverter.toPolishResult(invokeGateway("POST_CREATION", "POLISH", userId, payload));
     }
 

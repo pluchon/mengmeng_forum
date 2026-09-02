@@ -23,11 +23,20 @@ class PostPolishModule:
             raise ModuleRequestError("INVALID_POLISH_PAYLOAD", "content 为必填字段")
         if editor_mode not in {"rich", "markdown"}:
             raise ModuleRequestError("INVALID_POLISH_PAYLOAD", "editorMode 必须为 rich 或 markdown")
+        # 档位由 Java 按登录态填入。深度模型只对 PRO/MAX 开放，
+        # 这个限制必须在代码里卡死——提示词里写「你是免费用户别用深度模型」拦不住，
+        # 因为选模型的是下面的代码，不是模型自己。
+        vip_tier = 0
+        try:
+            vip_tier = int(request.payload.get("vipTier") or 0)
+        except (TypeError, ValueError):
+            vip_tier = 0
         result = await asyncio.to_thread(
             run_polish_graph,
             title[:200],
             content[:32000],
             editor_mode,
+            vip_tier >= 1,
         )
         return ModuleResult(
             success=True,

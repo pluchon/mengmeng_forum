@@ -31,6 +31,12 @@ import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.service.interfaces.ai.AiWorkspaceService;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.time.temporal.ChronoUnit;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.Duration;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -73,8 +79,47 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Value("${forum.ai.polish-basic-hourly-limit:5}")
+    private int polishBasicHourlyLimit;
+
     // 生图配额 consumeImageNormal 与通用生图共用，非会员额度并非 0，
     // 所以会员校验必须放在封面这个入口上，而不是去改共用的配额数字
+    private int effectiveVipTier(AiUserContext user) {
+        if (user == null || !user.isVipActive() || user.getVipTier() == null) {
+            return 0;
+        }
+        return user.getVipTier().intValue();
+    }
+
+    /**
+     * 免费用户的润色限频。
+     *
+     * <p>润色是站内单次最贵的 AI 动作（1 个规划 + 1~4 个 worker + 1 次评审，
+     * 还可能精修一轮），却是唯一没有任何短周期限制的入口——月额度可以在几分钟内被烧光。
+     * 这里只按小时数**尝试次数**，失败也算：限频要防的就是反复重试。
+     */
+    private void assertPolishRate(AiUserContext user) {
+        if (user == null || user.getId() == null) {
+            return;
+        }
+        if (effectiveVipTier(user) >= Constant.VIP_TIER_PRO) {
+            return;
+        }
+        String key = "ai:polish:rate:" + user.getId() + ":"
+                + ZonedDateTime.now(ZoneId.of("Asia/Taipei")).truncatedTo(ChronoUnit.HOURS);
+        Long count = stringRedisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1L) {
+            stringRedisTemplate.expire(key, Duration.ofHours(2));
+        }
+        if (count != null && count > polishBasicHourlyLimit) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_QUOTA_EXCEEDED,
+                    "AI 润色本小时次数已用完，开通会员可解除限制"));
+        }
+    }
+
     private void assertCoverVip(AiUserContext user) {
         boolean proOrMax = user != null && user.isVipActive()
                 && (Constant.VIP_TIER_PRO.equals(user.getVipTier())
@@ -108,6 +153,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
         if (!StringUtils.hasText(req.getClientRequestId())) {
             req.setClientRequestId(UUID.randomUUID().toString());
         }
+        // 档位由服务端说了算，前端传上来的一律覆盖
+        req.setVipTier(effectiveVipTier(user));
+        assertPolishRate(user);
         String modelCode = Constant.AI_MODEL_QWEN_FLASH;
         Long workspaceId = req.getWorkspaceId();
         if (workspaceId != null) {

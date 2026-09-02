@@ -71,7 +71,9 @@ public class AiQuotaServiceImpl implements AiQuotaService {
     // 不能从 usage_log 实时聚合张数——日志是不可变审计流水，聚合出来的用量无法被额度重置卡清零。
     public void consumeImageNormal(AiUserContext user) {
         PeriodWindow window = periodWindow(user);
-        int cap = isMax(user) ? 50 : (isProOrMax(user) ? 20 : 15);
+        // 生图是会员权益：看板娘与帖子封面两个入口都拦了会员，
+        // 通用生图端点也已下线，basic 不该再留可用张数
+        int cap = isMax(user) ? 50 : (isProOrMax(user) ? 20 : 0);
         ensurePeriodRow(user, window);
         if (forumAiQuotaPeriodUsageMapper.reserveWan(user.getId(), window.key, cap) != 1) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AI_QUOTA_EXCEEDED));

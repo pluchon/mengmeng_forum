@@ -53,6 +53,8 @@ class PolishEvaluation(BaseModel):
 
 
 class PolishState(TypedDict, total=False):
+    # 允不允许升级到深度模型（PRO/MAX 才给），由 Java 按登录档位传入
+    allow_deep: bool
     title: str
     content: str
     editor_mode: str
@@ -78,13 +80,19 @@ class PolishWorkerState(TypedDict, total=False):
     usages: Annotated[list[dict[str, Any]], operator.add]
 
 
-def run_polish_graph(title: str, content: str, editor_mode: str) -> dict[str, Any]:
+def run_polish_graph(
+    title: str,
+    content: str,
+    editor_mode: str,
+    allow_deep: bool = False,
+) -> dict[str, Any]:
     if len(content or "") > _MAX_INPUT_CHARS:
         raise ValueError(f"正文超过 {_MAX_INPUT_CHARS} 字，无法整篇润色")
     state = invoke_with_fanout_limit(_POLISH_GRAPH, {
         "title": title,
         "content": content,
         "editor_mode": editor_mode,
+        "allow_deep": bool(allow_deep),
         "candidates": [],
         "usages": [],
         "deep_used": False,
@@ -119,7 +127,7 @@ def node_analyze(state: PolishState) -> dict[str, Any]:
     try:
         raw, usage = _json_completion(flash, prompt, temperature=0.1)
         plan = PolishPlan.model_validate_json(raw)
-        plan = _normalize_plan(plan)
+        plan = _normalize_plan(plan, bool(state.get("allow_deep")))
         return {
             "plan": plan,
             "worker_tasks": _build_worker_tasks(plan),
@@ -316,7 +324,7 @@ def _json_completion(model: str, prompt: str, *, temperature: float) -> tuple[st
     )
 
 
-def _normalize_plan(plan: PolishPlan) -> PolishPlan:
+def _normalize_plan(plan: PolishPlan, allow_deep: bool = False) -> PolishPlan:
     expected = {"simple": 1, "medium": 2, "complex": max(3, min(4, plan.worker_count))}[plan.complexity]
     strategies = [item.strip()[:40] for item in plan.strategies if item and item.strip()]
     for fallback in _DEFAULT_STRATEGIES:
@@ -324,10 +332,13 @@ def _normalize_plan(plan: PolishPlan) -> PolishPlan:
             break
         if fallback not in strategies:
             strategies.append(fallback)
+    # needs_deep 是模型自己报的，再叠一层自报置信度兜底；
+    # 但最终能不能用深度模型由档位说了算，免费用户一律 False。
+    wants_deep = plan.needs_deep or plan.confidence < 0.65
     return plan.model_copy(update={
         "worker_count": expected,
         "strategies": strategies[:expected],
-        "needs_deep": plan.needs_deep or plan.confidence < 0.65,
+        "needs_deep": bool(wants_deep and allow_deep),
     })
 
 
