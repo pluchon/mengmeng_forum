@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.api.UserInternalVO;
 import org.pluchon.forum.api.economy.ShopEmojiAvailability;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -82,6 +83,9 @@ public class EmojiShopServiceImpl implements EmojiShopService {
     };
 
     @Autowired
+    private OssPendingPromoter ossPendingPromoter;
+
+    @Autowired
     private EmojiShopMapper emojiShopMapper;
 
     @Autowired
@@ -130,7 +134,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (price == null || price < Constant.EMOJI_SHOP_PRICE_MIN || price > Constant.EMOJI_SHOP_PRICE_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_PRICE_INVALID));
         }
-        validateShopUrl(req.getCoverUrl(), "封面图 URL 非法");
+        req.setCoverUrl(validateShopUrl(req.getCoverUrl(), "封面图 URL 非法"));
         List<String> imageUrls = req.getImageUrls() == null ? Collections.emptyList()
                 : new ArrayList<>(new LinkedHashSet<>(req.getImageUrls()));
         if (imageUrls.isEmpty()) {
@@ -139,9 +143,11 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (imageUrls.size() > Constant.EMOJI_SHOP_ITEM_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_ITEMS_LIMIT));
         }
+        List<String> promotedUrls = new ArrayList<>(imageUrls.size());
         for (String url : imageUrls) {
-            validateShopUrl(url, "包内图片 URL 非法");
+            promotedUrls.add(validateShopUrl(url, "包内图片 URL 非法"));
         }
+        imageUrls = promotedUrls;
         String description = req.getDescription() == null ? "" : req.getDescription().trim();
         if (!StringUtils.hasLength(description) || description.length() > 50) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "表情包说明必须 1-50 字"));
@@ -484,7 +490,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         if (price == null || price < Constant.EMOJI_SHOP_PRICE_MIN || price > Constant.EMOJI_SHOP_PRICE_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_PRICE_INVALID));
         }
-        validateShopUrl(request.getCoverUrl(), "封面图 URL 非法");
+        request.setCoverUrl(validateShopUrl(request.getCoverUrl(), "封面图 URL 非法"));
         List<String> imageUrls = normalizeShopImageUrls(request.getImageUrls());
         if (imageUrls.isEmpty()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_ITEMS_EMPTY));
@@ -605,7 +611,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
         }
         String coverUrl = req.getCoverUrl() == null ? "" : req.getCoverUrl().trim();
         if (StringUtils.hasText(coverUrl)) {
-            validateShopUrl(coverUrl, "草稿封面图 URL 非法");
+            coverUrl = validateShopUrl(coverUrl, "草稿封面图 URL 非法");
         }
         List<String> imageUrls = normalizeShopImageUrls(req.getImageUrls());
         return new DraftPayload(StringUtils.hasText(name) ? name : DEFAULT_DRAFT_NAME,
@@ -624,8 +630,7 @@ public class EmojiShopServiceImpl implements EmojiShopService {
             if (!StringUtils.hasText(url)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图片地址不能为空"));
             }
-            validateShopUrl(url, "草稿包内图片 URL 非法");
-            uniqueUrls.add(url);
+            uniqueUrls.add(validateShopUrl(url, "草稿包内图片 URL 非法"));
         }
         if (uniqueUrls.size() > Constant.EMOJI_SHOP_ITEM_MAX) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SHOP_ITEMS_LIMIT));
@@ -1392,11 +1397,13 @@ public class EmojiShopServiceImpl implements EmojiShopService {
     }
 
     // 校验 URL 必须是 OSS_PATH_EMOJI_SHOP 下的本站资源. 不允许外链 / 其他业务目录. 额外拒绝 .. / 反斜杠 / 控制字符等可能绕过前缀语义的路径段 防 CDN 端规范化后实际指向别处 .
-    private void validateShopUrl(String url, String hint) {
-        if (!ossConfig.matchesPublicObjectUrl(url, Constant.OSS_PATH_EMOJI_SHOP)) {
+    private String validateShopUrl(String url, String hint) {
+        String promoted = ossPendingPromoter.promoteIfPending(url, Constant.OSS_PATH_EMOJI_SHOP);
+        if (!ossConfig.matchesPublicObjectUrl(promoted, Constant.OSS_PATH_EMOJI_SHOP)) {
             log.warn("商城 URL 校验失败: {}", hint);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
+        return promoted;
     }
 
     private void invalidateShopDetailCache(Long shopId) {

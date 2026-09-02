@@ -3,6 +3,7 @@ package org.pluchon.forum.service.impl.ai;
 import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.AiCallState;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -51,6 +52,9 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class AiCompanionApiServiceImpl implements AiCompanionApiService {
+
+    @Autowired
+    private OssPendingPromoter ossPendingPromoter;
 
     @Autowired
     private AiUserLookupService aiUserLookupService;
@@ -391,18 +395,24 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                         "AI 未返回图片地址，请稍后重试"));
             }
             String storedUrl;
+            String storedPath;
             long ts = System.currentTimeMillis();
             if (req.getArticleId() != null && req.getArticleId() > 0) {
                 String base = user.getId() + "_" + req.getArticleId() + "_" + ts;
+                storedPath = Constant.OSS_PATH_AI_GENERATION_ARTICLE;
                 storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
-                        new AiGeneratedImageUploadRequest(user.getId(), url, Constant.OSS_PATH_AI_GENERATION_ARTICLE, base));
+                        new AiGeneratedImageUploadRequest(user.getId(), url, storedPath, base));
             } else {
                 String sid = (req.getSessionId() != null && !req.getSessionId().isBlank())
                         ? req.getSessionId().trim() : "session";
                 String base = user.getId() + "_" + sid + "_" + ts;
+                storedPath = Constant.OSS_PATH_AI_GENERATION_SESSION;
                 storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
-                        new AiGeneratedImageUploadRequest(user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base));
+                        new AiGeneratedImageUploadRequest(user.getId(), url, storedPath, base));
             }
+            // 这张图马上就要写进会话记录，等于当场绑定，所以现在就转正。
+            // 留在 _pending/ 的话 7 天后会被生命周期规则收走，聊天记录里的图就没了
+            storedUrl = ossPendingPromoter.promoteIfPending(storedUrl, storedPath);
             // 生成图落在 OSS 上是公开可访问的，链接能被转发出去。
             // 帖子里的图一直走 validateImageUrl，AI 生成的这条路原来是空的。
             assertGeneratedImageClean(storedUrl);

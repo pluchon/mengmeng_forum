@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
-// 图片上传：pending OSS → URL 审图 → 通过 promote / 失败 delete（同请求内清理，无需轮询）
+// 图片上传：pending OSS → URL 审图 → 过审留在 _pending/ 等绑定转正 / 不过审当场删除
 @Component
 @Slf4j
 public class AuditedOssImageUploader {
@@ -47,7 +47,6 @@ public class AuditedOssImageUploader {
         }
         String pendingFolder = OssPaths.pendingFolder(businessPath);
         String pendingKey = ossConfig.objectKey(pendingFolder, fileName);
-        String finalKey = ossConfig.objectKey(businessPath, fileName);
         boolean pendingWritten = false;
         try {
             putObject(ossClient, pendingFolder, pendingKey, file);
@@ -55,10 +54,11 @@ public class AuditedOssImageUploader {
             waitUntilObjectExists(ossClient, pendingKey);
             String pendingUrl = publicUrl(pendingKey);
             auditOrCleanup(ossClient, pendingKey, pendingUrl, businessPath);
-            promoteObject(ossClient, pendingKey, finalKey, businessPath);
-            String finalUrl = publicUrl(finalKey);
-            log.info("OSS 审图上传成功 key={} size={}KB", finalKey, file.getSize() / 1024);
-            return finalUrl;
+            // 到此为止：**不转正**。对象留在 _pending/，等业务真的绑定它时才搬进正式目录。
+            // 没人绑定的会被 OSS 生命周期规则（_pending/ 前缀 7 天）自动收走，
+            // 这样「传了但没提交」就再也产生不了孤儿文件。
+            log.info("OSS 审图上传成功（待定）key={} size={}KB", pendingKey, file.getSize() / 1024);
+            return pendingUrl;
         } catch (ApplicationException exception) {
             if (pendingWritten) {
                 safeDelete(ossClient, pendingKey);
@@ -73,7 +73,7 @@ public class AuditedOssImageUploader {
         }
     }
 
-    // 批量：并行写 pending → 一次批量审图 → 通过 promote / 失败 delete；最多 9 张，允许部分成功
+    // 批量：并行写 pending → 一次批量审图 → 过审返回待定 URL / 不过审删除；最多 9 张，允许部分成功
     public BatchImageUploadResultVO uploadBatch(
             List<MultipartFile> files,
             String businessPath,
@@ -105,7 +105,6 @@ public class AuditedOssImageUploader {
             slot.index = i;
             slot.file = file;
             slot.pendingKey = ossConfig.objectKey(pendingFolder, fileName);
-            slot.finalKey = ossConfig.objectKey(businessPath, fileName);
             slots.add(slot);
         }
 
@@ -164,21 +163,12 @@ public class AuditedOssImageUploader {
             AiImageModerationItemResultVO itemResult = byAuditIndex.get(auditIndex);
             boolean allowed = itemResult != null && itemResult.isAllowed();
             if (allowed) {
-                try {
-                    promoteObject(ossClient, slot.pendingKey, slot.finalKey, businessPath);
-                    BatchImageUploadResultVO.SuccessItem success = new BatchImageUploadResultVO.SuccessItem();
-                    success.setIndex(slot.index);
-                    success.setUrl(publicUrl(slot.finalKey));
-                    result.getSuccess().add(success);
-                    log.info("OSS 批量审图上传成功 index={} key={}", slot.index, slot.finalKey);
-                } catch (Exception exception) {
-                    safeDelete(ossClient, slot.pendingKey);
-                    BatchImageUploadResultVO.FailedItem failed = new BatchImageUploadResultVO.FailedItem();
-                    failed.setIndex(slot.index);
-                    failed.setReason("文件上传 OSS 失败: " + exception.getMessage());
-                    result.getFailed().add(failed);
-                    log.error("OSS 批量 promote 失败 index={} pendingKey={}", slot.index, slot.pendingKey, exception);
-                }
+                // 同单张：过审也**不转正**，返回待定 URL，等绑定时才搬进正式目录
+                BatchImageUploadResultVO.SuccessItem success = new BatchImageUploadResultVO.SuccessItem();
+                success.setIndex(slot.index);
+                success.setUrl(slot.pendingUrl);
+                result.getSuccess().add(success);
+                log.info("OSS 批量审图上传成功（待定）index={} key={}", slot.index, slot.pendingKey);
             } else {
                 safeDelete(ossClient, slot.pendingKey);
                 BatchImageUploadResultVO.FailedItem failed = new BatchImageUploadResultVO.FailedItem();
@@ -264,12 +254,6 @@ public class AuditedOssImageUploader {
         }
     }
 
-    private void promoteObject(OSS ossClient, String pendingKey, String finalKey, String businessPath) {
-        OssFolderSupport.ensureFolderExists(ossClient, ossConfig, businessPath);
-        String bucket = ossConfig.getBucketName();
-        ossClient.copyObject(bucket, pendingKey, bucket, finalKey);
-        safeDelete(ossClient, pendingKey);
-    }
 
     private void safeDelete(OSS ossClient, String objectKey) {
         try {
@@ -292,7 +276,6 @@ public class AuditedOssImageUploader {
         private int index;
         private MultipartFile file;
         private String pendingKey;
-        private String finalKey;
         private String pendingUrl;
         private boolean written;
         private String putError;

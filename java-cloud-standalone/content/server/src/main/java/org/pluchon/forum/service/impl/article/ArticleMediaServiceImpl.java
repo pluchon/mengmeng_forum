@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.config.OssConfig;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ArticleStatus;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -47,6 +48,9 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
     private OssConfig ossConfig;
 
     @Autowired
+    private OssPendingPromoter ossPendingPromoter;
+
+    @Autowired
     private ArticlePublishSideEffectService articlePublishSideEffectService;
 
     @Autowired
@@ -62,7 +66,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         if (!article.getUserId().equals(loginUserId)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
         }
-        validateArticleCoverUrl(coverUrl);
+        coverUrl = validateArticleCoverUrl(coverUrl);
         if (ArticleStatus.isEditingLocked(article.getStatus())) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_AUDIT_EDIT_LOCKED));
         }
@@ -114,9 +118,12 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE_GALLERY_NEEDS_CONTENT));
             }
         }
+        // 逐张转正，落库用转正后的正式 URL
+        List<String> promotedUrls = new ArrayList<>(urls.size());
         for (String url : urls) {
-            validateArticleImageUrl(url);
+            promotedUrls.add(validateArticleImageUrl(url));
         }
+        urls = promotedUrls;
         articleMapper.update(null, new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
                 .ne(Article::getDeleteState, DELETE_TRUE)
@@ -155,7 +162,7 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
         if (videoUrl == null || videoUrl.isBlank()) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请先上传视频"));
         }
-        validateArticleVideoUrl(videoUrl);
+        videoUrl = validateArticleVideoUrl(videoUrl);
         Article article = articleMapper.selectByIdForUpdate(articleId);
         if (article == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_ARTICLE));
@@ -415,18 +422,20 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
     // 封面此前完全不校验来源，可以指向任意外部地址：内容不可控、防盗链失效，
     // 超过 cover_img varchar(255) 还会直接撞数据库约束。
     // 合法来源只有两处：用户经 /file/uploadCover 上传的封面，以及 AI 生成后回传本站 OSS 的图
-    private void validateArticleCoverUrl(String url) {
+    private String validateArticleCoverUrl(String url) {
         if (url == null || url.isBlank()) {
             // 允许留空表示清空封面
-            return;
+            return url;
         }
-        String trimmed = url.trim();
+        // 待定对象在这里转正：绑定成功才把它搬进正式目录，没绑定的留在 _pending/ 由生命周期规则收走
+        String trimmed = ossPendingPromoter.promoteIfPending(url.trim(), Constant.OSS_PATH_COVER);
+        trimmed = ossPendingPromoter.promoteIfPending(trimmed, Constant.OSS_PATH_AI_GENERATION_ARTICLE);
         if (trimmed.length() > 255) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
         if (ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_COVER)
                 || ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_AI_GENERATION_ARTICLE)) {
-            return;
+            return trimmed;
         }
         log.warn("帖子封面 URL 非法: {}", trimmed);
         throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
@@ -435,20 +444,24 @@ public class ArticleMediaServiceImpl implements ArticleMediaService {
     // 视频比封面更需要校验来源：审核链会拿这个 URL 去下载分析，
     // 不限定来源等于给了一个让服务端主动请求任意地址的口子。
     // 另外 video_url 是 varchar(500)，超长会直接撞数据库约束
-    private void validateArticleVideoUrl(String url) {
+    private String validateArticleVideoUrl(String url) {
         String trimmed = url == null ? "" : url.trim();
+        trimmed = ossPendingPromoter.promoteIfPending(trimmed, Constant.OSS_PATH_ARTICLE_VIDEO);
         if (trimmed.length() > 500
                 || !ossConfig.matchesPublicObjectUrl(trimmed, Constant.OSS_PATH_ARTICLE_VIDEO)) {
             log.warn("帖子视频 URL 非法: {}", trimmed);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
+        return trimmed;
     }
 
-    private void validateArticleImageUrl(String url) {
-        if (!ossConfig.matchesPublicObjectUrl(url, Constant.OSS_PATH_ARTICLE_IMAGE)) {
-            log.warn("帖子相册 URL 非法: {}", url);
+    private String validateArticleImageUrl(String url) {
+        String promoted = ossPendingPromoter.promoteIfPending(url, Constant.OSS_PATH_ARTICLE_IMAGE);
+        if (!ossConfig.matchesPublicObjectUrl(promoted, Constant.OSS_PATH_ARTICLE_IMAGE)) {
+            log.warn("帖子相册 URL 非法: {}", promoted);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
+        return promoted;
     }
 
     private boolean containsControlChar(String s) {

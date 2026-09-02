@@ -3,6 +3,8 @@ package org.pluchon.forum.service.impl.user;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
+import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -47,7 +49,13 @@ import java.util.concurrent.TimeUnit;
 public class UserServiceImpl implements UserService {
 
     @Autowired
+    private OssPendingPromoter ossPendingPromoter;
+
+    @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private OssConfig ossConfig;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -542,16 +550,30 @@ public class UserServiceImpl implements UserService {
     
     @Override
     public void updateAvatarUrl(Long userId, String url) {
+        String finalUrl = requireOwnOssUrl(url, Constant.OSS_PATH_AVATAR);
         userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, userId).set(User::getAvatarUrl, url));
+                .eq(User::getId, userId).set(User::getAvatarUrl, finalUrl));
         userDerivedCacheInvalidator.invalidateUserCaches(userId);
     }
 
     @Override
     public void updateBackgroundUrl(Long userId, String url) {
+        String finalUrl = requireOwnOssUrl(url, Constant.OSS_PATH_BACKGROUND);
         userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, userId).set(User::getBackgroundUrl, url));
+                .eq(User::getId, userId).set(User::getBackgroundUrl, finalUrl));
         userDerivedCacheInvalidator.invalidateUserCaches(userId);
+    }
+
+    // 待定对象转正 + 来源校验。这两个接口此前完全不校验来源，任意外链都能落库
+    private String requireOwnOssUrl(String url, String businessPath) {
+        if (url == null || url.isBlank()) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+        String promoted = ossPendingPromoter.promoteIfPending(url.trim(), businessPath);
+        if (!ossConfig.matchesPublicObjectUrl(promoted, businessPath)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+        return promoted;
     }
 
     

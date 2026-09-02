@@ -25,12 +25,16 @@ public final class OssPaths {
     public static final String LEGACY_ROOT = "forum_db_item/";
     public static final String PENDING_SEGMENT = "_pending/";
 
+    // 待定区放在**顶层**：_pending/{业务目录}/。
+    // 这样 OSS 生命周期规则只要一条 `_pending/` 前缀就能覆盖全部业务目录，
+    // 以后新增目录自动生效，不用再去控制台补规则。
+    // 注意：OSS 的前缀是字面匹配、不支持中间通配，写成 {业务目录}/_pending/ 就得配十几条。
     public static String pendingFolder(String businessPath) {
         if (businessPath == null || businessPath.isBlank()) {
             return PENDING_SEGMENT;
         }
         String folder = businessPath.endsWith("/") ? businessPath : businessPath + "/";
-        return folder + PENDING_SEGMENT;
+        return PENDING_SEGMENT + folder;
     }
 
     public static String[] allBusinessPaths() {

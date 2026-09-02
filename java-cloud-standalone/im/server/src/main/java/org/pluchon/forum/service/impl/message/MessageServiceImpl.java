@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.converter.MessageConverter;
@@ -85,6 +86,9 @@ public class MessageServiceImpl implements MessageService {
 
     // 私信群邀请卡片内容格式
     private static final Pattern GROUP_INVITE_CARD_PATTERN = Pattern.compile("^\\[\\[GROUP_INVITE:(\\d+)]]$");
+
+    @Autowired
+    private OssPendingPromoter ossPendingPromoter;
 
     @Autowired
     private MessageMapper messageMapper;
@@ -204,6 +208,13 @@ public class MessageServiceImpl implements MessageService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MessageVO sendImage(SendImageMessageRequest req, Long sendUserId) {
+        if (req != null && StringUtils.hasText(req.getMediaUrl())) {
+            // 守卫链只认正式目录，所以转正必须发生在它之前。
+            // 商城表情本来就是正式地址，promoteIfPending 对它是空操作
+            String promoted = ossPendingPromoter.promoteIfPending(
+                    req.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE);
+            req.setMediaUrl(ossPendingPromoter.promoteIfPending(promoted, Constant.OSS_PATH_CHAT_EMOJI));
+        }
         if (req != null && ossConfig.matchesPublicObjectUrl(req.getMediaUrl(), Constant.OSS_PATH_EMOJI_SHOP)) {
             shopEmojiAvailabilityService.assertAvailable(sendUserId, req.getEmojiShopId(), req.getMediaUrl());
         }
@@ -667,7 +678,8 @@ public class MessageServiceImpl implements MessageService {
         }
 
         if (!quoteFromPrivateChat && !quoteFromGroupChat) {
-            // 自上传 > 必须落在 emoji 子目录
+            // 自上传 > 必须落在 emoji 子目录；收藏即绑定，先转正
+            mediaUrl = ossPendingPromoter.promoteIfPending(mediaUrl, Constant.OSS_PATH_CHAT_EMOJI);
             validateChatMediaUrl(mediaUrl, Constant.OSS_PATH_CHAT_EMOJI);
         } else {
             // 收藏会话中的图/GIF：仅允许对方自上传 message/ 或聊天表情库 emoji/ ，禁止商城图 emoji_shop/
@@ -994,8 +1006,12 @@ public class MessageServiceImpl implements MessageService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
         }
         for (AlbumImageRequest image : req.getImages()) {
-            if (image == null || !StringUtils.hasText(image.getMediaUrl())
-                    || !ossConfig.matchesPublicObjectUrl(image.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE)) {
+            if (image == null || !StringUtils.hasText(image.getMediaUrl())) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+            }
+            image.setMediaUrl(ossPendingPromoter.promoteIfPending(
+                    image.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE));
+            if (!ossConfig.matchesPublicObjectUrl(image.getMediaUrl(), Constant.OSS_PATH_CHAT_MESSAGE)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
             }
         }

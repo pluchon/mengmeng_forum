@@ -3,6 +3,7 @@ package org.pluchon.forum.service.impl.article;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.pluchon.forum.cloud.feign.ShopEntitlementInternalFeignClient;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
@@ -25,6 +26,9 @@ import java.util.Set;
 
 @Service
 public class ArticleReplyMediaServiceImpl implements ArticleReplyMediaService {
+
+    @Autowired
+    private OssPendingPromoter ossPendingPromoter;
 
     @Autowired
     private ArticleReplyMediaMapper articleReplyMediaMapper;
@@ -120,6 +124,12 @@ public class ArticleReplyMediaServiceImpl implements ArticleReplyMediaService {
             ArticleReplyMediaItemDTO item = new ArticleReplyMediaItemDTO();
             item.setMediaUrl(url);
             if (Constant.REPLY_MEDIA_TYPE_IMAGE.equals(type)) {
+                // isAllowedUserImageUrl 用的是 contains，待定 URL 里同样含有业务目录名，
+                // 不先转正就会静默落库，然后 7 天后被生命周期规则收走。必须转正在前
+                url = ossPendingPromoter.promoteIfPending(url, Constant.OSS_PATH_ARTICLE_IMAGE);
+                url = ossPendingPromoter.promoteIfPending(url, Constant.OSS_PATH_CHAT_MESSAGE);
+                url = ossPendingPromoter.promoteIfPending(url, Constant.OSS_PATH_CHAT_EMOJI);
+                item.setMediaUrl(url);
                 if (!isAllowedUserImageUrl(url)) {
                     throw new ApplicationException(Result.fail(ResultCode.FAILED_REPLY_MEDIA_INVALID));
                 }

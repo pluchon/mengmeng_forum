@@ -7,6 +7,7 @@ import com.aliyun.oss.model.ObjectMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.constant.Constant;
+import org.pluchon.forum.common.constant.OssPaths;
 import org.pluchon.forum.common.utils.RedisWindowCounter;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
@@ -122,13 +123,16 @@ public class FileServiceImpl implements FileService {
         ensureOssReady();
         validateVideoFile(file);
         MultipartFile uploadFile = maybeCompressVideo(file);
-        String objectName = ossConfig.objectKey(Constant.OSS_PATH_ARTICLE_VIDEO, buildVideoObjectName(userId));
+        // 视频和图片一样先落待定区，等绑定到帖子时才转正。
+        // 视频是站里最大的文件，「传了没提交」的浪费也最明显
+        String pendingFolder = OssPaths.pendingFolder(Constant.OSS_PATH_ARTICLE_VIDEO);
+        String objectName = ossConfig.objectKey(pendingFolder, buildVideoObjectName(userId));
         OSS ossClient = this.ossClient;
         try (InputStream inputStream = uploadFile.getInputStream()) {
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentType("video/mp4");
             metadata.setContentLength(uploadFile.getSize());
-            OssFolderSupport.ensureFolderExists(ossClient, ossConfig, Constant.OSS_PATH_ARTICLE_VIDEO);
+            OssFolderSupport.ensureFolderExists(ossClient, ossConfig, pendingFolder);
             ossClient.putObject(ossConfig.getBucketName(), objectName, inputStream, metadata);
             log.info("OSS 视频上传成功, userId={}, key={}, size={}MB",
                     userId, objectName, uploadFile.getSize() / 1024 / 1024);
@@ -451,7 +455,9 @@ public class FileServiceImpl implements FileService {
     private String buildVideoObjectName(Long userId) {
         String timeStr = ZonedDateTime.now(ForumTimeZone.ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        return userId + "_" + timeStr + ".mp4";
+        // 补上 UUID：只有 userId+秒 会撞 key。开了版本控制之后撞 key 不再是明显的覆盖，
+        // 而是静默产生一个永久计费的历史版本，图片那边一直是带 UUID 的，视频漏了
+        return userId + "_" + timeStr + "_" + IdUtil.simpleUUID() + ".mp4";
     }
 
     // >200MB 走 ffmpeg 优先 remux 不重编码 ，否则原样上传 OSS

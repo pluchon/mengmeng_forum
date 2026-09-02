@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.pinyin4j.PinyinHelper;
 import org.pluchon.forum.api.UserInternalVO;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.enums.GroupChatJoinRequestReadState;
@@ -97,6 +98,9 @@ public class GroupChatServiceImpl implements GroupChatService {
 
     // 群聊主表 Mapper
     @Autowired
+    private OssPendingPromoter ossPendingPromoter;
+
+    @Autowired
     private SystemMessageService systemMessageService;
 
     @Autowired
@@ -166,7 +170,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         group.setOwnerUserId(loginUserId);
         group.setName(name);
         group.setIntro(intro);
-        group.setAvatarUrl(normalizeOptional(request.getAvatarUrl()));
+        group.setAvatarUrl(promoteGroupAvatar(normalizeOptional(request.getAvatarUrl())));
         group.setGroupType(type);
         group.setMemberLimit(memberLimitFor(owner));
         group.setMemberCount(1);
@@ -690,7 +694,7 @@ public class GroupChatServiceImpl implements GroupChatService {
         assertNotMuted(member);
         Byte messageType = normalizeMessageType(request.getMessageType());
         String content = normalizeMessageContent(request.getContent());
-        validateGroupMediaContent(messageType, content);
+        content = validateGroupMediaContent(messageType, content);
         if (GroupChatMessageType.EMOJI.getCode().equals(messageType)
                 && ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_EMOJI_SHOP)) {
             shopEmojiAvailabilityService.assertAvailable(loginUserId, request.getEmojiShopId(), content);
@@ -1844,10 +1848,16 @@ public class GroupChatServiceImpl implements GroupChatService {
         return content;
     }
 
-    private void validateGroupMediaContent(Byte messageType, String content) {
-        if (GroupChatMessageType.IMAGE.getCode().equals(messageType)
-                && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_MESSAGE)) {
-            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+    private String validateGroupMediaContent(Byte messageType, String content) {
+        if (GroupChatMessageType.IMAGE.getCode().equals(messageType)) {
+            content = ossPendingPromoter.promoteIfPending(content, Constant.OSS_PATH_CHAT_MESSAGE);
+            if (!ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_MESSAGE)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+            }
+        }
+        if (GroupChatMessageType.EMOJI.getCode().equals(messageType)) {
+            // 商城表情用的是已发布商品的正式地址，只有自定义表情才可能还在待定区
+            content = ossPendingPromoter.promoteIfPending(content, Constant.OSS_PATH_CHAT_EMOJI);
         }
         if (GroupChatMessageType.EMOJI.getCode().equals(messageType)
                 && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_CHAT_EMOJI)
@@ -1855,6 +1865,19 @@ public class GroupChatServiceImpl implements GroupChatService {
                 && !ossConfig.matchesPublicObjectUrl(content, Constant.OSS_PATH_EMOJI_SHOP)) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
         }
+        return content;
+    }
+
+    // 群头像走的是普通头像目录，同样要转正后才允许落库
+    private String promoteGroupAvatar(String url) {
+        if (url == null || url.isBlank()) {
+            return url;
+        }
+        String promoted = ossPendingPromoter.promoteIfPending(url.trim(), Constant.OSS_PATH_AVATAR);
+        if (!ossConfig.matchesPublicObjectUrl(promoted, Constant.OSS_PATH_AVATAR)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+        }
+        return promoted;
     }
 
     private void validateGroupAlbumRequest(SendGroupChatAlbumMessageRequest request) {
@@ -1862,8 +1885,12 @@ public class GroupChatServiceImpl implements GroupChatService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "图集需包含1至10张图片"));
         }
         for (GroupChatAlbumImageRequest image : request.getImages()) {
-            if (image == null || !StringUtils.hasText(image.getMediaUrl())
-                    || !ossConfig.matchesPublicObjectUrl(image.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE)) {
+            if (image == null || !StringUtils.hasText(image.getMediaUrl())) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
+            }
+            image.setMediaUrl(ossPendingPromoter.promoteIfPending(
+                    image.getMediaUrl().trim(), Constant.OSS_PATH_CHAT_MESSAGE));
+            if (!ossConfig.matchesPublicObjectUrl(image.getMediaUrl(), Constant.OSS_PATH_CHAT_MESSAGE)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_INVALID_OSS_URL));
             }
         }

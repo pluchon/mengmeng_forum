@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
+import org.pluchon.forum.common.utils.OssPendingPromoter;
 import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.config.OssConfig;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -46,6 +47,9 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
     private static final int FOLDER_VISIBILITY_CHANGE_LIMIT = 8;
     private static final long FOLDER_VISIBILITY_WINDOW_MS = 10 * 60 * 1000L;
     private static final String REDIS_FOLDER_VISIBILITY_CHANGES = "forum:folder:visibility:changes:";
+
+    @Autowired
+    private OssPendingPromoter ossPendingPromoter;
 
     @Autowired
     private UserFavoriteFolderMapper folderMapper;
@@ -136,7 +140,8 @@ public class FavoriteFolderServiceImpl implements FavoriteFolderService {
             folder.setSortOrder(req.getSortOrder());
         }
         if (StringUtils.hasText(req.getCoverUrl())) {
-            String coverUrl = req.getCoverUrl().trim();
+            String coverUrl = ossPendingPromoter.promoteIfPending(
+                    req.getCoverUrl().trim(), Constant.OSS_PATH_FAVORITE_FOLDER);
             if (!ossConfig.matchesPublicObjectUrl(coverUrl, Constant.OSS_PATH_FAVORITE_FOLDER)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "封面图片无效，请重新上传"));
             }
