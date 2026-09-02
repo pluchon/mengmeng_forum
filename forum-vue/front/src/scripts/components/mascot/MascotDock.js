@@ -1277,7 +1277,7 @@ export function useMascotDock() {
 
   async function acceptIntentOffer(message) {
     const offer = message?.intentOffer
-    if (!offer?.text || intentSubmitting.value) return
+    if (!offer?.text || intentSubmitting.value || !userStore.isLoggedIn) return
     intentSubmitting.value = true
     try {
       const res = await createMascotIntent({
@@ -1290,6 +1290,9 @@ export function useMascotDock() {
       message.intentAccepted = offer.text
       persistCurrentMessages()
       ElMessage.success('好的，我记下了～有合适的人再告诉你')
+    } catch {
+      // 错误提示由 api/request.js 的拦截器统一弹；这里只负责别把 rejection 漏出去，
+      // 漏出去就是一条 unhandled rejection，控制台会一直报
     } finally {
       intentSubmitting.value = false
     }

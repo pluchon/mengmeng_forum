@@ -46,8 +46,14 @@ public class MascotIntentServiceImpl implements MascotIntentService {
     @Value("${forum.mascot.intent-max-active:5}")
     private int intentMaxActive;
 
+    /**
+     * 入池。
+     *
+     * <p>刻意**不加事务**：这里要先调一次内容审核（Java → Python → DashScope），
+     * 那是个可能跑几秒的远程调用。包在事务里等于让一条数据库连接干等，
+     * 而后面真正的写只有单条 insert，本来就不需要事务。
+     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public MascotIntentVO create(Long userId, MascotIntentCreateRequest request) {
         if (userId == null || userId <= 0 || request == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
