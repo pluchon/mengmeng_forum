@@ -1064,15 +1064,25 @@ export function useMascotDock() {
     wizard.customText = prev?.custom ? String(prev.value || '') : ''
   }
 
+  // 澄清答案里的自定义文本是用户自己敲的，会被拼进一条带固定结构的消息。
+  // 去掉换行和【】，免得有人用它伪造出额外的「段落」。
+  function askFieldText(raw, max = 400) {
+    return String(raw || '')
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/[【】]/g, '')
+      .trim()
+      .slice(0, max)
+  }
+
   function buildAskConfirmMessage(wizard) {
     const lines = ['【用户澄清回答】']
     wizard.questions.forEach((q, i) => {
       const ans = wizard.answers[i]
       if (!ans) return
-      lines.push(`Q${i + 1}：${q.question}`)
-      lines.push(`选择：${ans.label}`)
+      lines.push(`Q${i + 1}：${askFieldText(q.question, 120)}`)
+      lines.push(`选择：${askFieldText(ans.label, 80)}`)
       if (ans.value && ans.value !== ans.label) {
-        lines.push(`说明：${ans.value}`)
+        lines.push(`说明：${askFieldText(ans.value)}`)
       }
       lines.push('')
     })

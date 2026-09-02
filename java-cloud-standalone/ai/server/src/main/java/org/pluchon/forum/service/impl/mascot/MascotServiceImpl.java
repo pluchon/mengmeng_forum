@@ -56,6 +56,7 @@ import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
 import org.pluchon.forum.service.security.AiUserContext;
+import org.pluchon.forum.service.security.MascotPromptGuard;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.pluchon.forum.config.ForumMascotComplexityProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -909,6 +910,11 @@ public class MascotServiceImpl implements MascotService {
     @Override
     @SuppressWarnings("rawtypes")
     public MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request, String clientIp) {
+        String guardHit = MascotPromptGuard.firstViolation(request.getMessage());
+        if (guardHit != null) {
+            log.info("看板娘输入被本地守卫拦下 userId={}", user.getId());
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, guardHit));
+        }
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
 
@@ -1298,6 +1304,19 @@ public class MascotServiceImpl implements MascotService {
 
     @Override
     public void streamChat(AiUserContext user, MascotChatRequest request, String clientIp, SseEmitter emitter) {
+        // 第一层守卫：纯本地正则，命中就直接回一句，不占并发槽、不扣额度、不调模型。
+        // 语义层面的攻击交给第二层——工具规划器那一次调用顺带给出的 blocked 判定。
+        String guardHit = MascotPromptGuard.firstViolation(request.getMessage());
+        if (guardHit != null) {
+            log.info("看板娘输入被本地守卫拦下 userId={}", user.getId());
+            try {
+                sendMascotSse(emitter, Map.of("text", guardHit));
+                emitter.complete();
+            } catch (Exception ex) {
+                emitter.completeWithError(ex);
+            }
+            return;
+        }
         String skill = normalizeSkill(request);
         boolean ephemeral = Boolean.TRUE.equals(request.getEphemeral());
         boolean vip = isVip(user);
