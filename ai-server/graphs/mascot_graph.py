@@ -34,6 +34,8 @@ _PLANNER_MAX_TOKENS = 600
 _MEMORY_MAX_TOKENS = 400
 # Tavily 在计价表里的标识；按次计费（per_call）
 _TAVILY_MODEL_CODE = "tavily-search"
+# 前端把追问答案拼成一条带这个开头的用户消息；见 MascotDock.js 的 buildAskConfirmMessage
+_ASK_ANSWER_MARK = "【用户澄清回答】"
 
 
 class MascotState(TypedDict, total=False):
@@ -394,6 +396,15 @@ ask_offer 示例：
     ask_offer = _normalize_ask_offer(
         data.get("ask_offer") if data.get("ask_offer") is not None else data.get("draw_confirm_offer")
     )
+    # 熔断：用户刚答完澄清，这一轮就不许再问了。
+    #
+    # 提示词里写了「已含【用户澄清回答】且信息足够时禁止再问」，但那是软约束——
+    # 模型不听就会「问→答→又问」地转下去，每转一圈都烧一次规划器调用。
+    # 而 _MAX_TOOL_ROUNDS 管的是单轮内的工具轮次：追问是跨请求的，
+    # 每次答完都是新的一轮，tool_round 又从 0 开始，它拦不住。
+    if ask_offer and message.startswith(_ASK_ANSWER_MARK):
+        logger.info("用户刚答完澄清，本轮强制不再追问")
+        ask_offer = {}
     # 澄清未完成：本轮禁止任何工具与生图，避免边问边做
     if ask_offer:
         action = "CHAT"

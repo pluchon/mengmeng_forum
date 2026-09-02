@@ -616,7 +616,8 @@ export function useMascotDock() {
       renamingSessionId.value = ''
       renameDraft.value = ''
     } catch (error) {
-      ElMessage.error(error?.message || '修改失败')
+      // 错误提示由 api/request.js 的拦截器统一弹；这里再弹一次是重复，
+      // HTTP 4xx 时 error.message 还是「Request failed with status code 400」这种英文模板
       nextTick(focusRenameInput)
     } finally {
       renameSubmitting.value = false
@@ -680,7 +681,6 @@ export function useMascotDock() {
       saveLocalSessionsToStorage()
       ElMessage.success('会话已删除')
     } catch (error) {
-      ElMessage.error(error?.message || '删除失败')
     } finally {
       deletingSessionId.value = ''
     }
@@ -1024,6 +1024,28 @@ export function useMascotDock() {
     wizard.customText = prev?.custom ? String(prev.value || '') : ''
   }
 
+  // 追问答案发出去时是一整块结构化文本（模型需要那个结构），但用户点的是按钮，
+  // 把这块原样显示成他自己说的话很别扭。这里把它压成一行摘要用于展示；
+  // 落库的仍是原文，所以刷新后重新加载也能压缩——判定只看内容不看客户端状态。
+  const ASK_ANSWER_MARK = '【用户澄清回答】'
+
+  function isAskAnswerMessage(content) {
+    return String(content || '').startsWith(ASK_ANSWER_MARK)
+  }
+
+  function askAnswerSummary(content) {
+    const picked = []
+    String(content || '').split('\n').forEach((line) => {
+      const text = line.trim()
+      if (text.startsWith('选择：')) picked.push(text.slice(3).trim())
+      else if (text.startsWith('说明：')) {
+        const extra = text.slice(3).trim()
+        if (extra && picked.length) picked[picked.length - 1] = extra
+      }
+    })
+    return picked.filter(Boolean).join(' · ')
+  }
+
   // 澄清答案里的自定义文本是用户自己敲的，会被拼进一条带固定结构的消息。
   // 去掉换行和【】，免得有人用它伪造出额外的「段落」。
   function askFieldText(raw, max = 400) {
@@ -1227,7 +1249,6 @@ export function useMascotDock() {
       await refreshContextWindow({ autoCompress: false })
       if (!automatic) ElMessage.success('上下文已压缩')
     } catch (error) {
-      ElMessage.error(error?.message || '上下文压缩失败')
     } finally {
       contextCompressing.value = false
     }
@@ -1297,7 +1318,6 @@ export function useMascotDock() {
       memoryEditDraft.value = ''
       ElMessage.success('记忆已更新')
     } catch (error) {
-      ElMessage.error(error?.message || '记忆更新失败')
     } finally {
       memorySaving.value = false
     }
@@ -1367,7 +1387,8 @@ export function useMascotDock() {
       ElMessage.info(uiLabels.alreadyNewSession)
       return
     }
-    // 确认真要新建了再作废在途的流，别在「已经是新会话」那条分支上白白打断
+    // 待答的追问面板挂在旧会话那条消息上，不清的话会跟到新会话里继续显示
+    askWizard.value = null
     persistCurrentMessages()
     const id = newLocalSessionId()
     const sess = { id, title: uiLabels.untitledSession, messages: [], updateTime: Date.now() }
@@ -1985,6 +2006,8 @@ export function useMascotDock() {
     dismissRelatedSearchOffer,
     draft,
     pickAskOption,
+    askAnswerSummary,
+    isAskAnswerMessage,
     downloadMascotImage,
     downloadingImageUrl,
     streamInCurrentView,

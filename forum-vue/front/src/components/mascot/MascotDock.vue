@@ -230,6 +230,12 @@
                                   ><el-icon><Picture /></el-icon></button>
                                 </div>
                               </template>
+                              <template v-else-if="isAskAnswerMessage(m.content)">
+                                <span class="mascot-ask-answer">
+                                  <span class="mascot-ask-answer__tag">已确认</span>
+                                  {{ askAnswerSummary(m.content) }}
+                                </span>
+                              </template>
                               <template v-else>
                                 {{ m.content }}<span v-if="m.streaming" class="mascot-stream-cursor">▍</span>
                               </template>
@@ -465,6 +471,8 @@ const {
   dismissActiveAsk,
   dismissRelatedSearchOffer,
   pickAskOption,
+  askAnswerSummary,
+  isAskAnswerMessage,
   downloadMascotImage,
   downloadingImageUrl,
   streamInCurrentView,
