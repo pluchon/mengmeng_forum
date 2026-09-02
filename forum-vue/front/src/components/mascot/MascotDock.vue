@@ -166,17 +166,19 @@
                       <div class="mascot-msg-col">
                         <template v-if="m.type === 'image' && m.url">
                           <div class="mascot-img-wrap">
-                            <img :src="m.url" alt="AI image" class="mascot-img">
-                            <button
-                              type="button"
-                              class="mascot-img-download"
-                              :disabled="downloadingImageUrl === m.url"
-                              title="下载原图"
-                              aria-label="下载原图"
-                              @click="downloadMascotImage(m.url)"
-                            >
-                              <el-icon><Download /></el-icon>
-                            </button>
+                            <span class="mascot-img-frame">
+                              <img :src="m.url" alt="AI image" class="mascot-img">
+                              <button
+                                type="button"
+                                class="mascot-img-download"
+                                :disabled="downloadingImageUrl === m.url"
+                                title="下载原图"
+                                aria-label="下载原图"
+                                @click="downloadMascotImage(m.url)"
+                              >
+                                <el-icon><Download /></el-icon>
+                              </button>
+                            </span>
                             <a class="mascot-img-link" :href="m.url" target="_blank" rel="noreferrer">{{ uiLabels.openImageInNewTab }}</a>
                           </div>
                           <div v-if="m.usageStats" class="mascot-bubble-meta mascot-bubble-meta--assistant">

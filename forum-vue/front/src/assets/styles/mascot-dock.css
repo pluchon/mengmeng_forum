@@ -613,8 +613,21 @@
   gap: 6px;
 }
 
-.mascot-img {
+/* 紧贴图片的框：图片 width:auto，实际宽度随比例变化，
+   按钮必须锚在图片本身上，锚在外层容器会飘到消息区最右边 */
+.mascot-img-frame {
+  position: relative;
+  display: inline-block;
+  align-self: flex-start;
+  /* 尺寸上限放在框上：放在 img 上的话，百分比要相对这个收缩包裹的框解析，
+     成了循环依赖，不同宽高比的图会算出不一样的结果 */
   max-width: min(240px, 48%);
+  line-height: 0;
+}
+
+.mascot-img {
+  display: block;
+  max-width: 100%;
   width: auto;
   height: auto;
   border-radius: 10px;
@@ -1370,12 +1383,13 @@
   background: rgba(0, 0, 0, 0.45);
   color: #fff;
   font-size: 15px;
+  line-height: 1;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-.mascot-img-wrap:hover .mascot-img-download,
+.mascot-img-frame:hover .mascot-img-download,
 .mascot-img-download:focus-visible {
   opacity: 1;
 }
