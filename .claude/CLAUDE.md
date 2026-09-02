@@ -23,6 +23,15 @@ AI 增强的社区论坛。四块：`java-cloud-standalone`（Spring Boot 3.5 �
 - 建库文件在各域 `server/src/main/resources/db/create.sql`。
 - **有数据的库禁止跑 `init-db` / `reset-db`**，改表只用审核过的前向迁移。
 
+## OSS 文件
+
+- **上传只落 `_pending/`，业务绑定时才转正**（`OssPendingPromoter.promoteIfPending`）。
+  没人绑定的由 OSS 生命周期规则按天数收走，孤儿文件因此不会产生。
+- 新增上传路径或绑定路径，**两件事都要做**：上传写待定区，绑定处调转正。
+- **正式目录校验不得削弱**——它只认正式目录，是漏改绑定点时的唯一警报，
+  能让问题当场报错而不是几天后文件被删才发现。
+- 不要用 `url.contains(业务目录)` 判来源：待定 URL 同样能通过。
+
 ## 发布
 
 - 生产密钥在服务器 `/opt/forum-config/prod.env`，发布包不带真实 `.env`。
