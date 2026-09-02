@@ -24,6 +24,8 @@ import org.pluchon.forum.service.interfaces.mascot.MascotService;
 import org.pluchon.forum.entity.dto.MascotIntentCreateRequest;
 import org.pluchon.forum.entity.vo.MascotIntentVO;
 import org.pluchon.forum.service.interfaces.mascot.MascotIntentService;
+import org.pluchon.forum.entity.vo.MascotIntentMatchVO;
+import org.pluchon.forum.service.interfaces.mascot.MascotIntentMatchService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +62,9 @@ public class MascotController {
 
     @Autowired
     private MascotIntentService mascotIntentService;
+
+    @Autowired
+    private MascotIntentMatchService mascotIntentMatchService;
 
     @Autowired
     private AiUserLookupService aiUserLookupService;
@@ -218,6 +223,29 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotIntentService.create(user.getId(), request));
+    }
+
+    @Operation(summary = "我收到的牵线", description = "对方是谁只有双方都点头之后才可见")
+    @GetMapping("/intent/match")
+    public Result<List<MascotIntentMatchVO>> listMatches(HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotIntentMatchService.listMine(user.getId()));
+    }
+
+    @Operation(summary = "回应一次牵线", description = "任何一方拒绝就整条关掉，且对方不会收到任何通知")
+    @PostMapping("/intent/match/{matchId}")
+    public Result<MascotIntentMatchVO> respondMatch(
+            @PathVariable @Positive Long matchId,
+            @RequestParam boolean accept,
+            HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotIntentMatchService.respond(user.getId(), matchId, accept));
     }
 
     @Operation(summary = "我在留意什么")

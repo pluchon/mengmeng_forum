@@ -12,7 +12,12 @@ from typing import Any
 from config import settings
 
 from modules.moderation import ContentModerationModule
-from modules.mascot import MascotChatModule, MascotContextCompressModule, MascotMemoryEditModule
+from modules.mascot import (
+    MascotChatModule,
+    MascotContextCompressModule,
+    MascotIntentMatchModule,
+    MascotMemoryEditModule,
+)
 from modules.creation import (
     ArticleCoverModule,
     ArticleTagRecommendModule,
@@ -75,6 +80,7 @@ _registry.register("RECOMMENDATION", "MUSIC_TASTE", "v1", MusicTasteModule())
 _registry.register("MASCOT", "CHAT", "v1", MascotChatModule())
 _registry.register("MASCOT", "CONTEXT_COMPRESS", "v1", MascotContextCompressModule())
 _registry.register("MASCOT", "MEMORY_EDIT", "v1", MascotMemoryEditModule())
+_registry.register("MASCOT", "INTENT_MATCH", "v1", MascotIntentMatchModule())
 
 
 def execute_gateway(raw: dict[str, Any]) -> tuple[dict[str, Any], int]:

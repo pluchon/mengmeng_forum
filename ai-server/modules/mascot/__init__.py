@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
-from modules.mascot.module import MascotChatModule, MascotContextCompressModule, MascotMemoryEditModule
+from modules.mascot.module import (
+    MascotChatModule,
+    MascotContextCompressModule,
+    MascotIntentMatchModule,
+    MascotMemoryEditModule,
+)
 
-__all__ = ["MascotChatModule", "MascotContextCompressModule", "MascotMemoryEditModule"]
+__all__ = [
+    "MascotChatModule",
+    "MascotContextCompressModule",
+    "MascotIntentMatchModule",
+    "MascotMemoryEditModule",
+]

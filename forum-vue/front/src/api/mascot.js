@@ -253,3 +253,19 @@ export function cancelAllMascotIntents() {
     method: 'delete',
   })
 }
+
+// 牵线邀约：对方是谁，只有双方都点头之后才会返回
+export function listMascotIntentMatches() {
+  return request({
+    url: '/mascot/intent/match',
+    method: 'get',
+  })
+}
+
+export function respondMascotIntentMatch(matchId, accept) {
+  return request({
+    url: `/mascot/intent/match/${matchId}`,
+    method: 'post',
+    params: { accept },
+  })
+}

@@ -15,6 +15,7 @@ from clients.llm import flash_model_name
 from config import settings
 from graphs.mascot_graph import run_mascot_chat, stream_mascot_chat
 from graphs.mascot_context_graph import compress_mascot_context
+from graphs.mascot_intent_match import match_intent_pairs
 from runtime.contracts import ModuleEvent, ModuleRequest, ModuleRequestError, ModuleResult
 
 _ALLOWED_SKILLS = {"writing", "help", "chat"}
@@ -60,6 +61,35 @@ class MascotChatModule:
             elif event_type == "usage" and isinstance(data, dict):
                 yield ModuleEvent("usage", data)
 
+
+
+class MascotIntentMatchModule:
+    """判断两条牵线意愿能不能互相帮上。
+
+    刻意只收两段脱敏文本，**不接收也不需要 userId**——身份、可见性、要不要通知
+    全在 Java。这边给出的只是「配不配 + 一句交集描述」，那句描述会原样发给双方，
+    所以不能出现任何指向具体某个人的说法。
+    """
+
+    async def run(self, request: ModuleRequest) -> ModuleResult:
+        pairs = request.payload.get("pairs")
+        if not isinstance(pairs, list) or not pairs:
+            raise ModuleRequestError("INVALID_MATCH_PAYLOAD", "pairs 不能为空")
+        if len(pairs) > 30:
+            raise ModuleRequestError("INVALID_MATCH_PAYLOAD", "单次最多判定 30 对")
+        cleaned = []
+        for item in pairs:
+            if not isinstance(item, dict):
+                continue
+            a = str(item.get("a") or "").strip()[:120]
+            b = str(item.get("b") or "").strip()[:120]
+            key = str(item.get("key") or "").strip()[:64]
+            if a and b and key:
+                cleaned.append({"key": key, "a": a, "b": b})
+        if not cleaned:
+            return ModuleResult(success=True, data={"results": []}, usage={})
+        results, usage = await asyncio.to_thread(match_intent_pairs, cleaned)
+        return ModuleResult(success=True, data={"results": results}, usage=usage)
 
 class MascotContextCompressModule:
     """看板娘会话记忆压缩；持久化仍由 Java 会话服务负责。"""

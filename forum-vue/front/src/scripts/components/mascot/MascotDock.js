@@ -28,7 +28,11 @@ import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/security'
 import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
-import { createMascotIntent } from '@/api/mascot'
+import {
+  createMascotIntent,
+  listMascotIntentMatches,
+  respondMascotIntentMatch,
+} from '@/api/mascot'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -1271,7 +1275,50 @@ export function useMascotDock() {
     }
   }
 
-  // 看板娘牵线（第一期只做「识别 → 你点头 → 记下来」，还没有匹配）。
+  // 收到的牵线邀约。在双方都点头之前，返回里**没有**对方的任何身份信息——
+  // 这条边界在服务端守着，前端只是照着渲染，别在这里自己拼出「对方是谁」。
+  const intentMatches = ref([])
+  const respondingMatchId = ref(0)
+
+  async function refreshIntentMatches() {
+    if (!userStore.isLoggedIn) {
+      intentMatches.value = []
+      return
+    }
+    try {
+      const res = await listMascotIntentMatches()
+      intentMatches.value = res.code === 0 && Array.isArray(res.data) ? res.data : []
+    } catch {
+      intentMatches.value = []
+    }
+  }
+
+  async function respondIntentMatch(match, accept) {
+    if (!match?.id || respondingMatchId.value) return
+    respondingMatchId.value = match.id
+    try {
+      const res = await respondMascotIntentMatch(match.id, accept)
+      if (res.code !== 0) return
+      await refreshIntentMatches()
+      if (accept) {
+        const done = res.data?.state === 'CONNECTED'
+        ElMessage.success(done
+          ? `认识一下吧～对方是 ${res.data.peerNickname || '这位站友'}`
+          : '好的，等对方回应～')
+      }
+    } catch {
+      // 提示由拦截器统一弹
+    } finally {
+      respondingMatchId.value = 0
+    }
+  }
+
+  function openPeerChat(match) {
+    if (!match?.peerUserId) return
+    router.push({ path: '/message', query: { peerId: String(match.peerUserId) } })
+  }
+
+  // 看板娘牵线（识别 → 你点头 → 记下来 → 有人对上了再问双方）。
   // 没点头的内容一律不入池——这是这个功能的隐私基石，别为了方便省掉这一步。
   const intentSubmitting = ref(false)
 
@@ -1666,6 +1713,7 @@ export function useMascotDock() {
     await loadMessagesForNav(activeNav.value)
     scrollFsToBottom()
     refreshQuota()
+    void refreshIntentMatches()
     await refreshContextWindow()
   }
   
@@ -2047,6 +2095,10 @@ export function useMascotDock() {
     draft,
     pickAskOption,
     acceptIntentOffer,
+    intentMatches,
+    openPeerChat,
+    respondIntentMatch,
+    respondingMatchId,
     dismissIntentOffer,
     intentSubmitting,
     askAnswerSummary,

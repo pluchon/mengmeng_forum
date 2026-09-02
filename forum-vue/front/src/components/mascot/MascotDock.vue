@@ -128,6 +128,30 @@
               </aside>
 
               <div class="mascot-fs-main">
+                <div v-if="intentMatches.length" class="mascot-match-bar">
+                  <div v-for="mt in intentMatches" :key="mt.id" class="mascot-match-item">
+                    <span class="mascot-match-item__reason">{{ mt.reason }}</span>
+                    <template v-if="mt.state === 'CONNECTED'">
+                      <span class="mascot-match-item__peer">已连上：{{ mt.peerNickname }}</span>
+                      <button type="button" class="mascot-match-item__ok" @click="openPeerChat(mt)">去聊聊</button>
+                    </template>
+                    <template v-else-if="mt.myState === 'PENDING'">
+                      <button
+                        type="button"
+                        class="mascot-match-item__ok"
+                        :disabled="respondingMatchId === mt.id"
+                        @click="respondIntentMatch(mt, true)"
+                      >愿意</button>
+                      <button
+                        type="button"
+                        class="mascot-match-item__no"
+                        :disabled="respondingMatchId === mt.id"
+                        @click="respondIntentMatch(mt, false)"
+                      >算了</button>
+                    </template>
+                    <span v-else class="mascot-match-item__wait">等对方回应…</span>
+                  </div>
+                </div>
                 <div class="mascot-fs-messages-pane">
                   <div v-if="!messages.length && !loading" class="mascot-fs-chat-empty">
                     <img :src="aiMessageEmptyUrl" alt="">
@@ -495,6 +519,10 @@ const {
   dismissRelatedSearchOffer,
   pickAskOption,
   acceptIntentOffer,
+  intentMatches,
+  openPeerChat,
+  respondIntentMatch,
+  respondingMatchId,
   dismissIntentOffer,
   intentSubmitting,
   askAnswerSummary,

@@ -1487,3 +1487,64 @@
   font-size: 11px;
   color: var(--el-text-color-placeholder, #a8abb2);
 }
+
+/* 牵线邀约条：出现频率很低，所以给它一点存在感，但别抢对话区 */
+.mascot-match-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mascot-match-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(212, 83, 126, 0.12), rgba(212, 83, 126, 0.04));
+  font-size: 13px;
+}
+
+.mascot-match-item__reason {
+  flex: 1;
+  min-width: 0;
+  color: var(--el-text-color-primary, #303133);
+}
+
+.mascot-match-item__peer {
+  color: var(--primary-red, #d4537e);
+  font-weight: 600;
+}
+
+.mascot-match-item__wait {
+  color: var(--el-text-color-placeholder, #a8abb2);
+  font-size: 12px;
+}
+
+.mascot-match-item__ok,
+.mascot-match-item__no {
+  flex-shrink: 0;
+  padding: 3px 14px;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mascot-match-item__ok {
+  background: var(--primary-red, #d4537e);
+  color: #fff;
+}
+
+.mascot-match-item__no {
+  background: var(--el-fill-color, #f0f2f5);
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.mascot-match-item__ok:disabled,
+.mascot-match-item__no:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

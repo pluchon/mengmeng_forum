@@ -86,6 +86,15 @@ public interface AiHubService {
 
     List<Long> rankSemanticCandidates(String query, List<Map<String, Object>> candidates);
 
+    /**
+     * 判定一批牵线意愿能不能互相帮上。
+     *
+     * <p>只送脱敏文本过去，**不带 userId**——身份与可见性全在 Java。
+     * 入参每项 {key, a, b}，返回每项 {key, match, reason}。
+     */
+    java.util.List<java.util.Map<String, Object>> matchMascotIntents(
+            java.util.List<java.util.Map<String, Object>> pairs);
+
     String validateText(String content);
 
     boolean validateImageUrl(String imageUrl, String objectKey);

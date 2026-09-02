@@ -562,6 +562,31 @@ public class AiHubServiceImpl implements AiHubService {
     }
 
     @Override
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> matchMascotIntents(List<Map<String, Object>> pairs) {
+        if (pairs == null || pairs.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("pairs", pairs);
+        // userId 传 null：这条链路刻意不让 Python 知道是谁在牵谁
+        Map<String, Object> data = invokeGateway("MASCOT", "INTENT_MATCH", null, payload);
+        if (data == null || !(data.get("results") instanceof List<?> rows)) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object row : rows) {
+            if (row instanceof Map<?, ?> m) {
+                Map<String, Object> item = new HashMap<>();
+                m.forEach((k, v) -> item.put(String.valueOf(k), v));
+                out.add(item);
+            }
+        }
+        return out;
+    }
+
+    @Override
     public String validateText(String content) {
         if (content == null || content.isBlank()) {
             return null;
