@@ -83,7 +83,7 @@ public class MascotController {
         if (user == null) {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
-        return Result.success(mascotService.chat(user, request, resolveClientIp(httpServletRequest)));
+        return Result.success(mascotService.chat(user, request));
     }
 
     @Operation(summary = "看板娘流式对话", description = "SSE 流式返回；data 含 text / meta / error")
@@ -111,10 +111,9 @@ public class MascotController {
             }
             return emitter;
         }
-        String clientIp = resolveClientIp(httpServletRequest);
         sseExecutor.execute(() -> {
             try {
-                mascotService.streamChat(user, request, clientIp, emitter);
+                mascotService.streamChat(user, request, emitter);
             } catch (Exception ex) {
                 log.warn("看板娘 SSE 线程未捕获异常: {}", ex.getMessage());
                 try {
@@ -248,15 +247,6 @@ public class MascotController {
         }
         companionMemoryService.deleteSession(user.getId(), sessionId);
         return Result.success();
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        String remote = request.getRemoteAddr();
-        if (remote != null && !remote.isBlank() && !remote.startsWith("127.") && !"::1".equals(remote)) {
-            return remote.trim();
-        }
-        String forwarded = request.getHeader("X-Real-IP");
-        return forwarded == null ? "" : forwarded.trim().split(",")[0].trim();
     }
 
     private AiUserContext currentUser(HttpServletRequest request) {

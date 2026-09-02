@@ -950,7 +950,7 @@ public class MascotServiceImpl implements MascotService {
 
     @Override
     @SuppressWarnings("rawtypes")
-    public MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request, String clientIp) {
+    public MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request) {
         String guardHit = MascotPromptGuard.firstViolation(request.getMessage());
         if (guardHit != null) {
             log.info("看板娘输入被本地守卫拦下 userId={}", user.getId());
@@ -1030,9 +1030,8 @@ public class MascotServiceImpl implements MascotService {
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
-        if (isPublicClientIp(clientIp)) {
-            pyBody.put("client_ip", clientIp.trim());
-        }
+        // 不再把真实 IP 送给 Python：那边一处都没用它，
+        // 白白让一份 PII 跨了服务边界
 
         RestTemplate restTemplate = forumRestTemplate;
         HttpHeaders headers = new HttpHeaders();
@@ -1333,25 +1332,12 @@ public class MascotServiceImpl implements MascotService {
         return gallery;
     }
 
-    private boolean isPublicClientIp(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        try {
-            InetAddress address = InetAddress.getByName(value.trim());
-            return !(address.isAnyLocalAddress() || address.isLoopbackAddress()
-                    || address.isSiteLocalAddress() || address.isLinkLocalAddress());
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
     private void sendMascotSse(SseEmitter emitter, Map<String, Object> payload) throws Exception {
         emitter.send(SseEmitter.event().data(objectMapper.writeValueAsString(payload)));
     }
 
     @Override
-    public void streamChat(AiUserContext user, MascotChatRequest request, String clientIp, SseEmitter emitter) {
+    public void streamChat(AiUserContext user, MascotChatRequest request, SseEmitter emitter) {
         // 第一层守卫：纯本地正则，命中就直接回一句，不占并发槽、不扣额度、不调模型。
         // 语义层面的攻击交给第二层——工具规划器那一次调用顺带给出的 blocked 判定。
         String guardHit = MascotPromptGuard.firstViolation(request.getMessage());
@@ -1503,9 +1489,8 @@ public class MascotServiceImpl implements MascotService {
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
             pyBody.put("client_datetime", request.getClientDatetime().trim());
         }
-        if (isPublicClientIp(clientIp)) {
-            pyBody.put("client_ip", clientIp.trim());
-        }
+        // 不再把真实 IP 送给 Python：那边一处都没用它，
+        // 白白让一份 PII 跨了服务边界
 
         HttpURLConnection conn = null;
         try {

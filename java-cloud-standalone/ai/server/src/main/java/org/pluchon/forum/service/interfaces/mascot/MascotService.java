@@ -17,10 +17,10 @@ import java.util.List;
 public interface MascotService {
 
     // 转发 Python 看板娘接口；普通用户受每日次数限制.
-    MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request, String clientIp);
+    MascotChatResponseVO chat(AiUserContext user, MascotChatRequest request);
 
     // 流式对话 SSE ，积分在流结束后结算
-    void streamChat(AiUserContext user, MascotChatRequest request, String clientIp, SseEmitter emitter);
+    void streamChat(AiUserContext user, MascotChatRequest request, SseEmitter emitter);
 
     CompanionContextWindowVO getContextWindow(AiUserContext user, Long sessionId);
 
