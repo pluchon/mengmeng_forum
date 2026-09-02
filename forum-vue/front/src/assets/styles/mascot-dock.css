@@ -607,6 +607,7 @@
   border-radius: 14px 14px 4px 14px;
 }
 .mascot-img-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1351,4 +1352,39 @@
 .mascot-ask-panel__other-submit:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* 生成图右下角的下载按钮：悬浮在图上，不占布局 */
+.mascot-img-download {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.mascot-img-wrap:hover .mascot-img-download,
+.mascot-img-download:focus-visible {
+  opacity: 1;
+}
+
+.mascot-img-download:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.mascot-img-download:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }

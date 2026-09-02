@@ -27,6 +27,7 @@ import { formatAiUsageLine, usageStatsFromApi } from '@/utils/aiUsageDisplay'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/security'
+import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -1232,6 +1233,22 @@ export function useMascotDock() {
     }
   }
 
+  // 生成图的下载。走和帖子详情页同一套（OSS 跨域时经 /oss-dl/ 代理）
+  const downloadingImageUrl = ref('')
+
+  async function downloadMascotImage(url) {
+    const target = String(url || '').trim()
+    if (!target || downloadingImageUrl.value) return
+    downloadingImageUrl.value = target
+    try {
+      const ok = await downloadImageByUrl(target, guessImageFileName(target, 'mascot', 1))
+      if (ok) ElMessage.success('已开始下载')
+      else ElMessage.error('下载失败：图片跨域受限，请稍后重试')
+    } finally {
+      downloadingImageUrl.value = ''
+    }
+  }
+
   async function refreshMascotMemory() {
     if (!userStore.isLoggedIn) {
       memorySummary.value = ''
@@ -1736,8 +1753,12 @@ export function useMascotDock() {
               if (meta?.imageGenerating) {
                 imageGenerating.value = true
                 setAgentSpriteState('running')
-                if (row?.streaming && !(row.content || '').length) {
-                  row.thinkingText = '正在绘制画面…'
+                if (row) {
+                  // 文本这时已经流完了，光标还在闪会让人以为它还在写；
+                  // 下面那条「正在绘制画面」才是当前真正在做的事
+                  row.streaming = false
+                  row.thinkingText = ''
+                  persistCurrentMessages()
                 }
               }
               if (meta?.imageUrl && isSafeMascotImageUrl(meta.imageUrl)) {
@@ -1964,6 +1985,8 @@ export function useMascotDock() {
     dismissRelatedSearchOffer,
     draft,
     pickAskOption,
+    downloadMascotImage,
+    downloadingImageUrl,
     streamInCurrentView,
     submitAskCustom,
     formatAiUsageLine,

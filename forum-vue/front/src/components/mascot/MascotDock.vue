@@ -167,6 +167,16 @@
                         <template v-if="m.type === 'image' && m.url">
                           <div class="mascot-img-wrap">
                             <img :src="m.url" alt="AI image" class="mascot-img">
+                            <button
+                              type="button"
+                              class="mascot-img-download"
+                              :disabled="downloadingImageUrl === m.url"
+                              title="下载原图"
+                              aria-label="下载原图"
+                              @click="downloadMascotImage(m.url)"
+                            >
+                              <el-icon><Download /></el-icon>
+                            </button>
                             <a class="mascot-img-link" :href="m.url" target="_blank" rel="noreferrer">{{ uiLabels.openImageInNewTab }}</a>
                           </div>
                           <div v-if="m.usageStats" class="mascot-bubble-meta mascot-bubble-meta--assistant">
@@ -421,7 +431,7 @@
 </template>
 
 <script setup>
-import { Delete, Edit, Picture, Plus, Refresh } from '@element-plus/icons-vue'
+import { Delete, Download, Edit, Picture, Plus, Refresh } from '@element-plus/icons-vue'
 import aiMessageEmptyUrl from '@/assets/images/ai_message_empty.png'
 import MascotChatInput from '@/components/mascot/MascotChatInput.vue'
 import TopTitleDialog from '@/components/dialog/TopTitleDialog.vue'
@@ -453,6 +463,8 @@ const {
   dismissActiveAsk,
   dismissRelatedSearchOffer,
   pickAskOption,
+  downloadMascotImage,
+  downloadingImageUrl,
   streamInCurrentView,
   submitAskCustom,
   formatAiUsageLine,

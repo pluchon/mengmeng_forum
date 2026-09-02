@@ -1443,6 +1443,8 @@ public class MascotServiceImpl implements MascotService {
         final AtomicReference<List<CompanionImageGalleryItemVO>> streamSearchImageGallery = new AtomicReference<>(List.of());
         final AtomicReference<Object> streamMemoryWrite = new AtomicReference<>(null);
         boolean imageRequested = false;
+        // 回复落库只允许发生一次：正常流程在文本流完就落，异常出口也会兜底
+        final AtomicBoolean replyPersisted = new AtomicBoolean(false);
         String imagePrompt = "";
         // 生图档位由规划器给；服务端还会按登录档位复核一次
         String imageQuality = "normal";
@@ -1525,7 +1527,7 @@ public class MascotServiceImpl implements MascotService {
                 }
                 releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
                 aiCallRecordService.markFailure(streamBegin, AiCallState.TIMEOUT, "stream http " + code);
-                persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
+                persistReplyOnce(replyPersisted, ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
                 sendMascotSse(emitter, Map.of("error", "AI 服务暂时不可用"));
                 emitter.complete();
                 return;
@@ -1722,7 +1724,7 @@ public class MascotServiceImpl implements MascotService {
                 }
                 releaseAiQuota(user, reservedQwenFlash[0], reservedAdvanced[0]);
                 aiCallRecordService.markFailure(streamBegin, AiCallState.FAILED, ex.getMessage());
-                persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
+                persistReplyOnce(replyPersisted, ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
                 sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
                         ? ex.getMessage() : "扣费失败，请稍后再试"));
                 emitter.complete();
@@ -1730,6 +1732,12 @@ public class MascotServiceImpl implements MascotService {
             }
 
             autoSaveMemoryWrite(user.getId(), streamMemoryWrite.get());
+
+            // 文本此时已经完整流给前端，先落库再去生图。
+            // 生图要跑十几秒，期间用户切走再切回来会从库里重新加载——没落库的话
+            // 那条回复会凭空消失，等图出来才又冒出来。
+            Long assistantMessageId = persistReplyOnce(
+                    replyPersisted, ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
 
             AiImageResponseVO delegatedImage = null;
             // 文字回复此时已流给前端且已结算，生图这一步失败（含生图额度用尽）
@@ -1769,8 +1777,6 @@ public class MascotServiceImpl implements MascotService {
             meta.put("usageStats", billing.get("usageStats"));
             meta.put("modelCode", usage.getModelCode());
             meta.put("llmRoute", route);
-            Long assistantMessageId = persistCompanionAssistantReply(
-                    ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
             if (assistantMessageId != null) {
                 meta.put("assistantMessageId", assistantMessageId);
             }
@@ -1797,7 +1803,7 @@ public class MascotServiceImpl implements MascotService {
             } else {
                 aiCallRecordService.markFailure(streamBegin, AiCallState.DISCONNECTED, e.getMessage());
             }
-            persistCompanionAssistantReply(ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
+            persistReplyOnce(replyPersisted, ephemeral, persistSessionId, replyBuffer, streamSearchImageGallery.get());
             try {
                 sendMascotSse(emitter, Map.of("error", "对话失败，请稍后重试"));
                 emitter.complete();
@@ -1810,6 +1816,20 @@ public class MascotServiceImpl implements MascotService {
                 conn.disconnect();
             }
         }
+    }
+
+    /**
+     * 落库助手回复，最多只写一次。
+     *
+     * <p>正常流程在文本流完就落库（不等生图），异常出口也会兜底调一次，
+     * 所以要有这道闸，否则一轮对话可能出现两条一样的回复。
+     */
+    private Long persistReplyOnce(AtomicBoolean done, boolean ephemeral, Long sessionId,
+                                  CharSequence reply, List<CompanionImageGalleryItemVO> gallery) {
+        if (!done.compareAndSet(false, true)) {
+            return null;
+        }
+        return persistCompanionAssistantReply(ephemeral, sessionId, reply, gallery);
     }
 
     private Long persistCompanionAssistantReply(
