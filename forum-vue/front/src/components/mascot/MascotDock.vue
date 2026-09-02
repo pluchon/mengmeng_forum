@@ -351,6 +351,7 @@
                   :loading="loading"
                   :image-generating="imageGenerating"
                   :disabled="contextCompressing"
+                  :quota-exhausted="quotaExhausted"
                   :vip="isVip"
                   :placeholder="inputPlaceholder"
                   generation-hint="AI 也有可能出错，请自行甄别"

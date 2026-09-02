@@ -10,6 +10,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   imageGenerating: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
+  // 额度用尽只封输入与发送；查看记忆、压缩上下文这些不该跟着一起锁
+  quotaExhausted: { type: Boolean, default: false },
   placeholder: { type: String, default: '说点什么…' },
   vip: { type: Boolean, default: false },
   generationHint: { type: String, default: '' },

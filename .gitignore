@@ -219,3 +219,6 @@ forum-vue/front/public/draco/draco_encoder.js
 .agents/
 skills-lock.json
 skills/
+
+# 本地参考文档，不入库
+docs/api-model-pricing.md

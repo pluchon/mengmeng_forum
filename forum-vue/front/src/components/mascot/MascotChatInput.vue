@@ -9,7 +9,7 @@
           :placeholder="placeholder"
           rows="1"
           maxlength="2000"
-          :disabled="disabled"
+          :disabled="disabled || quotaExhausted"
           @input="onInput"
           @keydown.enter.exact.prevent="onEnter"
         />
@@ -17,7 +17,7 @@
       <button
         type="button"
         class="mascot-send-btn"
-        :disabled="disabled || loading || !modelValue.trim()"
+        :disabled="disabled || quotaExhausted || loading || !modelValue.trim()"
         aria-label="发送"
         @click="emit('send')"
       >

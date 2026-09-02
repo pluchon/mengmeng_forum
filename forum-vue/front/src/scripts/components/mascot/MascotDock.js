@@ -257,6 +257,10 @@ export function useMascotDock() {
   })
   const spritePaused = computed(() => spriteHovered.value || pageHidden.value)
   let chatStreamAbort = null
+  // 流式期间用户可能切走或新建会话，messages 会被整体换掉。
+  // 这个计数每换一次 +1，流式回调据此判断自己这一轮还属不属于当前视图；
+  // 不属于就只丢弃界面写入——服务端照常落库，切回来会重新加载到。
+  let messagesEpoch = 0
   let stopThinkingRotation = null
   let idleTipsTimer = null
   let idleFirstTipTimer = null
@@ -534,6 +538,7 @@ export function useMascotDock() {
   }
 
   async function selectLocalSession(id, persistBeforeSelect = true) {
+    messagesEpoch += 1
     if (persistBeforeSelect) {
       persistCurrentMessages()
     }
@@ -631,6 +636,7 @@ export function useMascotDock() {
   }
 
   async function deleteSession(session) {
+    messagesEpoch += 1
     const id = String(session?.id || '')
     const nav = activeNav.value
     if (!id || deletingSessionId.value) return
@@ -791,6 +797,7 @@ export function useMascotDock() {
   }
 
   async function loadMessagesForNav(nav) {
+    messagesEpoch += 1
     ensureActiveSession(nav)
     const id = activeLocalSessionId.value[nav]
     const localSess = (localSessionsByMode.value[nav] || []).find((s) => String(s.id) === String(id))
@@ -904,6 +911,10 @@ export function useMascotDock() {
     if (!/^\d+$/.test(sid)) return
     const nav = activeNav.value
     const previousId = String(sessionId.value || activeLocalSessionId.value[nav] || '')
+    // 本地会话首次落库时把临时 id 换成服务端 id。
+    // 已经是数字 id 却对不上，说明用户中途切走了——再覆盖会把人拽回旧会话，
+    // 还会把当前显示的消息拷进旧会话的本地记录。
+    if (/^\d+$/.test(previousId) && previousId !== sid) return
     sessionId.value = sid
     activeLocalSessionId.value = { ...activeLocalSessionId.value, [nav]: sid }
     const list = [...(localSessionsByMode.value[nav] || [])]
@@ -1347,6 +1358,7 @@ export function useMascotDock() {
   }
 
   function startNewSession() {
+    messagesEpoch += 1
     const nav = activeNav.value
     if (isCurrentSessionEmpty()) {
       ElMessage.info(uiLabels.alreadyNewSession)
@@ -1657,6 +1669,7 @@ export function useMascotDock() {
   }
 
   async function regenerateAssistant(index) {
+    messagesEpoch += 1
     const i = Number(index)
     if (!Number.isFinite(i) || i < 0 || messages.value[i]?.role !== 'assistant') return
     if (!userStore.isLoggedIn) {
@@ -1693,6 +1706,9 @@ export function useMascotDock() {
     }
 
     const history = buildChatHistory()
+    // 本轮流所属的视图快照；切走后回调只做收尾、不再碰 messages
+    const epoch = messagesEpoch
+    const isStale = () => epoch !== messagesEpoch
 
     const skill = activeNav.value === 'drawing' ? 'drawing' : 'chat'
     let streamHadError = false
@@ -1732,6 +1748,7 @@ export function useMascotDock() {
           },
           {
             onChunk(piece) {
+              if (isStale()) return
               const row = messages.value[assistantIdx]
               if (!row) return
               if (row.thinkingText) row.thinkingText = ''
@@ -1741,6 +1758,7 @@ export function useMascotDock() {
               scrollFsToBottom()
             },
             onMeta(meta) {
+              if (isStale()) return
               applyServerSessionId(meta)
               const row = messages.value[assistantIdx]
               const statusText = streamStatusText(meta?.status)
@@ -1830,6 +1848,11 @@ export function useMascotDock() {
             },
             onDone() {
               clearThinkingRotation()
+              if (isStale()) {
+                chatStreamAbort = null
+                resolve()
+                return
+              }
               const row = messages.value[assistantIdx]
               if (row) {
                 row.streaming = false
@@ -1841,6 +1864,8 @@ export function useMascotDock() {
               }
               chatStreamAbort = null
               refreshContextWindow()
+              // 这一轮已经花掉额度，左下角要跟上，否则得关掉面板重开才更新
+              refreshQuotaHint()
               persistCurrentMessages()
               if (!streamHadError) {
                 clearAgentSpriteState()
@@ -1854,6 +1879,10 @@ export function useMascotDock() {
               playSpriteReaction('failed')
               clearThinkingRotation()
               chatStreamAbort = null
+              if (isStale()) {
+                reject(new Error(msg || 'stream failed'))
+                return
+              }
               const row = messages.value[assistantIdx]
               if (row) {
                 row.streaming = false
@@ -1872,6 +1901,7 @@ export function useMascotDock() {
         )
       })
     } catch (e) {
+      if (isStale()) throw e
       if (!streamHadError) {
         playSpriteReaction('failed')
         if (!skipPushUser) messages.value.pop()
@@ -1886,7 +1916,7 @@ export function useMascotDock() {
       loading.value = false
       imageGenerating.value = false
       clearAgentSpriteState()
-      if (assistantIdx >= 0) {
+      if (assistantIdx >= 0 && !isStale()) {
         const row = messages.value[assistantIdx]
         if (row?.streaming) {
           row.streaming = false
@@ -1905,13 +1935,13 @@ export function useMascotDock() {
       ElMessage.warning('请先登录')
       return
     }
-    await refreshContextWindow()
-    if (contextCompressing.value) return
     draft.value = ''
+    // 失败要把草稿还回去，但用户中途切了会话就别还——那是另一个会话的输入框
+    const epoch = messagesEpoch
     try {
       await sendInternal(text)
     } catch {
-      draft.value = text
+      if (epoch === messagesEpoch) draft.value = text
     }
   }
   
