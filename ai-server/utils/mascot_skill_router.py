@@ -13,6 +13,9 @@ from clients.dashscope_chat_client import dashscope_chat_completion
 from config import settings
 logger = logging.getLogger(__name__)
 
+# 只要一个 {"intent":"..."}，给它封顶，异常时不至于一路生成到默认上限
+_ROUTE_MAX_TOKENS = 64
+
 
 def _parse_json(text: str) -> dict[str, Any] | None:
     text = (text or "").strip()
@@ -25,7 +28,7 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         return None
 
 
-def _llm_route(message: str, history: list[dict[str, str]]) -> str:
+def _llm_route(message: str, history: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
     ds = settings.dashscope
     model = str(ds.get("model_text_flash") or ds.get("model_text") or "qwen3.7-flash")
     hist_txt = ""
@@ -44,21 +47,26 @@ def _llm_route(message: str, history: list[dict[str, str]]) -> str:
     )
     user = f"近期对话：\n{hist_txt}\n本轮用户：{message[:800]}"
     try:
-        raw, _ = dashscope_chat_completion(
+        # 这一次调用的用量原来被直接丢掉，等于每轮对话都少算一次 flash
+        raw, usage = dashscope_chat_completion(
             model,
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
             temperature=0.05,
+            max_tokens=_ROUTE_MAX_TOKENS,
         )
     except Exception:
         logger.exception("看板娘意图路由 LLM 失败")
-        return "writing"
+        return "writing", {}
     data = _parse_json(raw)
     if not isinstance(data, dict):
-        return "writing"
+        return "writing", usage
     intent = str(data.get("intent") or "").strip().lower()
-    return "help" if intent == "help" else "writing"
+    return ("help" if intent == "help" else "writing"), usage
 
 
-def route_mascot_skill(message: str, history: list[dict[str, str]] | None) -> str:
-    """由 Flash 模型返回 writing 或 help。"""
+def route_mascot_skill(
+    message: str,
+    history: list[dict[str, str]] | None,
+) -> tuple[str, dict[str, Any]]:
+    """由 Flash 模型返回 (writing|help, 本次用量)。"""
     return _llm_route(message, history or [])

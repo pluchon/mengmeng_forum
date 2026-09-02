@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 _AGENT_TOOL_NAMES = {"rag", "web_search", "image_generation"}
 _MAX_TOOL_ROUNDS = 2
+# 规划器与记忆抽取都只要一小段 JSON；不封顶的话异常时会一路生成到模型默认上限
+_PLANNER_MAX_TOKENS = 600
+_MEMORY_MAX_TOKENS = 400
 
 
 class MascotState(TypedDict, total=False):
@@ -74,6 +77,9 @@ class MascotState(TypedDict, total=False):
     tool_observations: list[str]
     tool_round: int
     memory_write: dict[str, Any]
+    # 这两次调用的用量原来被直接丢掉，导致每轮少算两次 flash
+    router_usage: dict[str, Any]
+    memory_usage: dict[str, Any]
 
 
 def _vip_tier_num(state: MascotState) -> int:
@@ -106,11 +112,11 @@ def node_route_skill(state: MascotState) -> MascotState:
     if skill in ("writing", "help"):
         return {"routed_skill": skill}
     if skill == "chat":
-        routed = route_mascot_skill(
+        routed, router_usage = route_mascot_skill(
             (state.get("message") or "").strip(),
             state.get("history") or [],
         )
-        return {"routed_skill": routed}
+        return {"routed_skill": routed, "router_usage": router_usage or {}}
     return {"routed_skill": "writing"}
 
 
@@ -277,6 +283,7 @@ ask_offer 示例：
             model,
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=0.0,
+            max_tokens=_PLANNER_MAX_TOKENS,
         )
     except Exception as exc:
         # 规划失败则本轮不调工具；常见为 DashScope 读超时，降级告警避免误当成业务崩了
@@ -746,12 +753,18 @@ def stream_mascot_chat(
         usage = {"model_code": route, "estimated": True}
 
     reply_text = "".join(reply_pieces)
+    memory_usage: dict[str, Any] = {}
     if reply_text:
-        memory_write = _maybe_write_memory(ctx, reply_text)
+        memory_write, memory_usage = _maybe_write_memory(ctx, reply_text)
         if memory_write:
             yield ("meta", {"memoryWrite": memory_write})
 
-    yield ("usage", _merge_usage(attach_latency(usage, t0), ctx.get("supervisor_usage")))
+    # 一轮对话实际打了 4 次模型：意图路由、工具规划、正式回答、记忆抽取。
+    # 前面只报了规划和回答两次，另外两次的钱是白花的。
+    yield ("usage", _merge_usage(
+        _merge_usage(_merge_usage(attach_latency(usage, t0), ctx.get("supervisor_usage")),
+                     ctx.get("router_usage")),
+        memory_usage))
 
 
 def _stream_mascot_context(
@@ -1184,13 +1197,16 @@ def node_agent(state: MascotState) -> MascotState:
     if sug not in (None, "standard", "keyboard", "gamepad"):
         sug = None
 
-    memory_write = _maybe_write_memory(state, reply)
+    memory_write, memory_usage = _maybe_write_memory(state, reply)
 
     return {
         "reply": reply[:4000],
         "live2d": live2d,
         "suggested_appearance": sug,
-        "usage": _merge_usage(usage, state.get("supervisor_usage")),
+        "usage": _merge_usage(
+            _merge_usage(_merge_usage(usage, state.get("supervisor_usage")),
+                         state.get("router_usage")),
+            memory_usage),
         "memory_write": memory_write,
     }
 
@@ -1198,13 +1214,17 @@ def node_agent(state: MascotState) -> MascotState:
 def _maybe_write_memory(
     state: MascotState,
     reply: str,
-) -> dict[str, Any]:
-    """让 flash 模型判断本轮对话是否揭示了值得持久化的稳定偏好。"""
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """让 flash 模型判断本轮对话是否揭示了值得持久化的稳定偏好。
+
+    返回 (待写入的记忆, 本次用量)。用量必须带出去——它原来被丢掉，
+    等于每轮对话都有一次 flash 调用没进账。
+    """
     summary = str(state.get("memory_summary") or "").strip()
     facts = [str(f).strip() for f in (state.get("memory_facts") or []) if str(f).strip()]
     user_msg = str(state.get("message") or "").strip()
     if not user_msg or not reply:
-        return {}
+        return {}, {}
     history_tail = ""
     raw_history = state.get("history") or []
     for turn in raw_history[-4:]:
@@ -1225,12 +1245,14 @@ def _maybe_write_memory(
         "只输出一行合法 JSON，不要解释。"
     )
     model = str(settings.dashscope.get("model_text_flash") or "qwen3.7-flash")
+    usage: dict[str, Any] = {}
     try:
-        raw, _usage = dashscope_chat_completion(
+        raw, usage = dashscope_chat_completion(
             model,
             [{"role": "system", "content": "你是受控工作流节点，只输出 JSON。"},
              {"role": "user", "content": prompt}],
             temperature=0.0,
+            max_tokens=_MEMORY_MAX_TOKENS,
         )
         data = parse_json_object(raw)
         if isinstance(data, dict) and data.get("write"):
@@ -1242,10 +1264,10 @@ def _maybe_write_memory(
                     new_facts.append(text)
                 if len(new_facts) >= 10:
                     break
-            return {"summary": new_summary, "facts": new_facts}
+            return {"summary": new_summary, "facts": new_facts}, usage
     except Exception:
         logger.exception("看板娘 maybe_write_memory 失败")
-    return {}
+    return {}, usage
 
 
 def _merge_usage(main: dict[str, Any], supervisor: Any) -> dict[str, Any]:

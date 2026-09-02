@@ -133,8 +133,15 @@ public class AiPointsBillingService {
         String model = u.getModelCode().trim();
         Map<String, BigDecimal> units = pricesForModel(model);
         if (units.isEmpty()) {
-            log.warn("未配置模型单价: {}", model);
-            return BigDecimal.ZERO;
+            // 漏配价格原来是静默按 0 元结算——换模型忘了加价格行，额度就永远扣不动，
+            // 而且只留一行 warn，没人会发现。退回到已知会配的 flash 单价，
+            // 宁可算得不准，也不能算成免费。
+            units = pricesForModel(Constant.AI_MODEL_QWEN_FLASH);
+            if (units.isEmpty()) {
+                log.error("模型单价缺失且无兜底单价，本次按 0 元结算: {}", model);
+                return BigDecimal.ZERO;
+            }
+            log.error("未配置模型单价，已按 {} 的单价兜底结算: {}", Constant.AI_MODEL_QWEN_FLASH, model);
         }
         BigDecimal yuan = BigDecimal.ZERO;
         int in = Math.max(0, u.getInputTokens() != null ? u.getInputTokens() : 0);

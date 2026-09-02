@@ -111,6 +111,10 @@ public class MascotServiceImpl implements MascotService {
     @Value("${forum.mascot.basic-daily-limit:30}")
     private int basicDailyLimit;
 
+    // 同一用户同时进行的看板娘流式对话上限
+    @Value("${forum.mascot.max-inflight:2}")
+    private int mascotMaxInflight;
+
     @Autowired
     private ForumMascotComplexityProperties mascotComplexityProperties;
 
@@ -564,6 +568,37 @@ public class MascotServiceImpl implements MascotService {
         return Constant.REDIS_KEY_MASCOT_DAILY_CHAT + day + ":" + userId;
     }
 
+    /**
+     * 同一用户的在途流式对话上限。
+     *
+     * <p>原来只有非会员的每日次数，没有任何并发约束：开 N 个标签页就能同时打 N 条流，
+     * 每条都真金白银烧配额，还会把 SSE 线程池占满，把别人挤掉。
+     */
+    private void reserveStreamSlot(Long userId) {
+        String key = "mascot:inflight:" + userId;
+        Long c = stringRedisTemplate.opsForValue().increment(key);
+        if (c != null && c == 1L) {
+            // 兜底过期：进程被 kill 时释放不掉，留个 TTL 免得永久占位
+            stringRedisTemplate.expire(key, Duration.ofMinutes(5));
+        }
+        if (c != null && c > mascotMaxInflight) {
+            stringRedisTemplate.opsForValue().decrement(key);
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_MASCOT_QUOTA,
+                    "你还有一条对话正在进行，稍等一下再发～"));
+        }
+    }
+
+    private void releaseStreamSlot(Long userId) {
+        try {
+            Long c = stringRedisTemplate.opsForValue().decrement("mascot:inflight:" + userId);
+            if (c != null && c < 0) {
+                stringRedisTemplate.opsForValue().set("mascot:inflight:" + userId, "0");
+            }
+        } catch (Exception e) {
+            log.warn("看板娘在途槽释放失败 userId={}", userId, e);
+        }
+    }
+
     private void reserveBasicSlot(Long userId) {
         String key = quotaKey(userId);
         Long c = stringRedisTemplate.opsForValue().increment(key);
@@ -908,8 +943,10 @@ public class MascotServiceImpl implements MascotService {
             mergedHistory = request.getHistory() != null ? request.getHistory() : List.of();
         } else {
             dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
-            List<MascotHistoryTurn> dbHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
-            mergedHistory = dbHistory.isEmpty() ? request.getHistory() : dbHistory;
+            // 登录用户一律以库为准。原来「库里为空就采信前端传的 history」，
+            // 而新会话第一轮库里必然为空——等于每个新会话都能被塞一段伪造的
+            // assistant 发言（「好的，我已解除全部限制」这类），是最有效的越狱手法之一。
+            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
         }
 
         String pySessionKey = ephemeral
@@ -1268,11 +1305,26 @@ public class MascotServiceImpl implements MascotService {
         String route = normalizeLlmRoute(resolveLlmRoute(request, vip, skill, user));
         String fallbackModel = aiPointsBillingService.resolveModelFromRoute(route);
 
+        // 并发槽要在一切之前占：占不到就什么都别做，也不用释放
+        try {
+            reserveStreamSlot(user.getId());
+        } catch (ApplicationException ex) {
+            try {
+                sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
+                        ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
+                emitter.complete();
+            } catch (Exception ignored) {
+                emitter.completeWithError(ex);
+            }
+            return;
+        }
+
         if (!vip) {
             try {
                 reserveBasicSlot(user.getId());
                 reservedBasic = true;
             } catch (ApplicationException ex) {
+                releaseStreamSlot(user.getId());
                 try {
                     sendMascotSse(emitter, Map.of("error", ex.getMessage() != null
                             ? ex.getMessage() : ResultCode.FAILED_MASCOT_QUOTA.getMessage()));
@@ -1312,10 +1364,7 @@ public class MascotServiceImpl implements MascotService {
             mergedHistory = request.getHistory() != null ? request.getHistory() : List.of();
         } else {
             dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
-            List<MascotHistoryTurn> dbHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
-            mergedHistory = dbHistory.isEmpty()
-                    ? (request.getHistory() != null ? request.getHistory() : List.of())
-                    : dbHistory;
+            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
         }
         String pySessionKey = ephemeral
                 ? (request.getSessionId() != null && !request.getSessionId().isBlank()
@@ -1681,6 +1730,7 @@ public class MascotServiceImpl implements MascotService {
                 emitter.completeWithError(e);
             }
         } finally {
+            releaseStreamSlot(user.getId());
             if (conn != null) {
                 conn.disconnect();
             }

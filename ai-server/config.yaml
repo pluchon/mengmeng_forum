@@ -23,6 +23,8 @@ dashscope:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   # wan2.7 / 旧 z-image 文生图均走 multimodal-generation（现有 dashscope 域名仍可用）
   image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+  # Qwen3 的思考模式：显式钉死，不吃服务端默认值
+  enable_thinking: false
   # 模型分配（名称以 Dashscope 控制台为准，可按环境微调）
   model_text: "qwen3.7-flash"                   # 文本审核 / 摘要（默认与 flash 对齐）
   model_text_flash: "qwen3.7-flash"             # 看板娘等低成本对话

@@ -78,6 +78,18 @@ def lc_messages_to_openai(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     return out
 
 
+def _thinking_payload(model: str) -> dict[str, Any]:
+    """把 Qwen3 的思考模式显式钉住。
+
+    Qwen3 是混合推理模型，开不开思考由服务端默认值决定——代码一行不改，
+    换个模型版本或服务端改默认，所有调用的延迟就会成倍上涨。所以显式写死，
+    要开也只能从配置里开。只对 qwen3 系列发这个参数，别的模型会 400。
+    """
+    if not str(model or "").lower().startswith("qwen3"):
+        return {}
+    return {"enable_thinking": bool(settings.dashscope.get("enable_thinking", False))}
+
+
 def dashscope_chat_completion(
     model: str,
     messages: list[dict[str, Any]],
@@ -85,6 +97,7 @@ def dashscope_chat_completion(
     temperature: float = 0.0,
     timeout: int = 45,
     response_format: dict[str, Any] | None = None,
+    max_tokens: int | None = None,
     retries: int = 1,
 ) -> tuple[str, dict[str, Any]]:
     """调用一次对话补全。
@@ -99,6 +112,7 @@ def dashscope_chat_completion(
             return _post_chat_completion(
                 model, messages, temperature=temperature,
                 timeout=timeout, response_format=response_format,
+                max_tokens=max_tokens,
             )
         except Exception as exc:
             last_error = exc
@@ -121,6 +135,7 @@ def _post_chat_completion(
     temperature: float,
     timeout: int,
     response_format: dict[str, Any] | None,
+    max_tokens: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
     api_key = settings.dashscope.get("api_key") or ""
     base = dashscope_compat_base()
@@ -133,6 +148,9 @@ def _post_chat_completion(
     }
     if response_format:
         payload["response_format"] = response_format
+    if max_tokens and max_tokens > 0:
+        payload["max_tokens"] = int(max_tokens)
+    payload.update(_thinking_payload(model))
     r = _SESSION.post(url, headers=headers, json=payload, timeout=timeout)
     if not r.ok:
         logger.warning("Dashscope HTTP %s: %s", r.status_code, r.text[:500])

@@ -87,6 +87,29 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
 
     // 生图配额 consumeImageNormal 与通用生图共用，非会员额度并非 0，
     // 所以会员校验必须放在封面这个入口上，而不是去改共用的配额数字
+    /**
+     * AI 生成图的出图审核。
+     *
+     * <p>审核服务不可用时放行，与站内其它审核的取舍一致——宁可漏一张，
+     * 也不该因为审核抖动就把用户已经扣过额度的图判死。
+     */
+    private void assertGeneratedImageClean(String storedUrl) {
+        if (!StringUtils.hasText(storedUrl)) {
+            return;
+        }
+        boolean allowed;
+        try {
+            allowed = aiHubService.validateImageUrl(storedUrl, null);
+        } catch (Exception ex) {
+            log.warn("AI 生成图审核调用失败，放行 url={}", storedUrl, ex);
+            return;
+        }
+        if (!allowed) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED,
+                    "生成的图片未通过内容审核，请换个描述再试"));
+        }
+    }
+
     private int effectiveVipTier(AiUserContext user) {
         if (user == null || !user.isVipActive() || user.getVipTier() == null) {
             return 0;
@@ -366,6 +389,9 @@ public class AiCompanionApiServiceImpl implements AiCompanionApiService {
                 storedUrl = aiFileInternalFeignClient.uploadAiGeneratedImage(
                         new AiGeneratedImageUploadRequest(user.getId(), url, Constant.OSS_PATH_AI_GENERATION_SESSION, base));
             }
+            // 生成图落在 OSS 上是公开可访问的，链接能被转发出去。
+            // 帖子里的图一直走 validateImageUrl，AI 生成的这条路原来是空的。
+            assertGeneratedImageClean(storedUrl);
             if (!ephemeral && dbSessionId != null) {
                 companionMemoryService.appendImageMessage(dbSessionId, "assistant", storedUrl, null);
             }

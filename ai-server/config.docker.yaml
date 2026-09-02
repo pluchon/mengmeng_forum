@@ -19,6 +19,8 @@ dashscope:
   api_key: ""
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   image_generation_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+  # Qwen3 的思考模式：显式钉死，不吃服务端默认值
+  enable_thinking: false
   model_text: "qwen3.7-flash"
   model_text_flash: "qwen3.7-flash"
   model_text_deep: "qwen3.7-max"
