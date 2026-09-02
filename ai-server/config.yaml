@@ -75,6 +75,8 @@ postgres:
   db: langgraph_db
   # PostgresSaver 首次启动自动 CREATE TABLE
   auto_setup: true
+  # checkpointer 连接池上限；审核 worker 是多线程的
+  pool_max_size: 8
 
 audit:
   # LangGraph 单次审核内部最大并发图片审任务数 (cover + gallery 一并审)

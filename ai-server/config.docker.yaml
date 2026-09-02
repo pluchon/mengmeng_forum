@@ -65,6 +65,8 @@ postgres:
   password: ""
   db: langgraph_db
   auto_setup: true
+  # checkpointer 连接池上限；审核 worker 是多线程的
+  pool_max_size: 8
 
 audit:
   max_image_workers: 3
