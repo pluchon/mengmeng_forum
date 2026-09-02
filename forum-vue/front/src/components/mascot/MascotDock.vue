@@ -273,7 +273,7 @@
                         </div>
                       </div>
                       <div
-                        v-else-if="loading && !(messages.length && messages[messages.length - 1]?.streaming)"
+                        v-else-if="loading && streamInCurrentView && !(messages.length && messages[messages.length - 1]?.streaming)"
                         class="mascot-msg-row assistant"
                       >
                         <img :src="companionAvatarSrc" alt="" class="mascot-msg-avatar mascot-msg-avatar--ai">
@@ -453,6 +453,7 @@ const {
   dismissActiveAsk,
   dismissRelatedSearchOffer,
   pickAskOption,
+  streamInCurrentView,
   submitAskCustom,
   formatAiUsageLine,
   formatMessageDay,
