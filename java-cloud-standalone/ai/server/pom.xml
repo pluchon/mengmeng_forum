@@ -37,6 +37,11 @@
             <groupId>org.pluchon.forum</groupId>
             <artifactId>economy-api</artifactId>
         </dependency>
+        <!-- 牵线邀约要往 im 投系统消息，只依赖对方的 api，不碰实现 -->
+        <dependency>
+            <groupId>org.pluchon.forum</groupId>
+            <artifactId>im-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
