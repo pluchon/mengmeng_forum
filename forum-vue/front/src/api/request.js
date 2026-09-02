@@ -27,6 +27,25 @@ function notifyBusinessError(code, message, config, fallback) {
   ElMessage.error(message || fallback)
 }
 
+// 已经报过的 URL 不再重复刷屏；只观测不干预，不影响任何既有行为
+const noCodeSeen = new Set()
+
+function warnIfNoBizCode(res, url) {
+  if (res !== null && typeof res === 'object' && res.code !== undefined) {
+    return
+  }
+  const key = String(url || '(unknown)').split('?')[0]
+  if (noCodeSeen.has(key)) {
+    return
+  }
+  noCodeSeen.add(key)
+  console.warn(
+    '[code-invariant] 该接口的响应不带 code 字段，拦截器无法拦截它的业务失败，' +
+      '调用处的 catch / code 判断在这条链路上是活的，不可当作死代码删除：',
+    key,
+  )
+}
+
 const request = axios.create({
   // 开发环境下使用代理，因此不需要配置写死的 base URL，由 vite.config 代理
   baseURL: '/', 
@@ -68,6 +87,10 @@ request.interceptors.response.use(
       notifyBusinessError(res.code, res.message, response.config, '操作失败，请稍后重试')
       return Promise.reject(res)
     }
+    // 走到这里 code 只可能是 0 或不存在。组件里大量 catch 与错误分支都建立在
+    // 「业务失败到不了组件」这条不变量上——不带 code 的响应会绕过上面的 reject，
+    // 让那条不变量在这条链路上失效。真出现了必须知道，所以按 URL 去重报一次
+    warnIfNoBizCode(res, response.config?.url)
     return res
   },
   async error => {

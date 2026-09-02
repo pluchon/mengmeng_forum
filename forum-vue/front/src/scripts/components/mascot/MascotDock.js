@@ -606,9 +606,6 @@ export function useMascotDock() {
     try {
       if (userStore.isLoggedIn && /^\d+$/.test(id)) {
         const res = await renameCompanionSession(id, { title })
-        if (res.code !== 0) {
-          throw new Error(res.message || '修改失败')
-        }
       }
       const sessions = [...(localSessionsByMode.value[nav] || [])]
       const index = sessions.findIndex((item) => String(item.id) === id)
@@ -652,9 +649,6 @@ export function useMascotDock() {
     try {
       if (userStore.isLoggedIn && /^\d+$/.test(id)) {
         const res = await deleteCompanionSession(id)
-        if (res.code !== 0) {
-          throw new Error(res.message || '删除失败')
-        }
       }
       const currentList = [...(localSessionsByMode.value[nav] || [])]
       const removedIndex = currentList.findIndex((item) => String(item.id) === id)
@@ -685,7 +679,8 @@ export function useMascotDock() {
       }
       saveLocalSessionsToStorage()
       ElMessage.success('会话已删除')
-    } catch (error) {
+    } catch {
+      // 拦截器已弹出真实原因，这里只做收尾
     } finally {
       deletingSessionId.value = ''
     }
@@ -1163,10 +1158,6 @@ export function useMascotDock() {
         sourceMessageId,
         query: offer.query,
       })
-      if (res.code !== 0) {
-        ElMessage.error(res.message || '相关帖子检索失败')
-        return
-      }
       message.relatedSearchOffer = null
       const items = Array.isArray(res.data?.items) ? res.data.items : []
       const relatedQuery = normalizeRelatedQuery(res.data?.query || offer.query)
@@ -1245,7 +1236,6 @@ export function useMascotDock() {
     contextCompressing.value = true
     try {
       const res = await compressCompanionContext(id)
-      if (res.code !== 0) throw new Error(res.message || '上下文压缩失败')
       if (res.data && typeof res.data === 'object') {
         contextWindow.value = res.data
       }
@@ -1253,7 +1243,8 @@ export function useMascotDock() {
       // 压缩后始终从服务端回读，避免只刷新消息列表而上下文进度条仍是旧值
       await refreshContextWindow({ autoCompress: false })
       if (!automatic) ElMessage.success('上下文已压缩')
-    } catch (error) {
+    } catch {
+      // 拦截器已弹出真实原因，这里只做收尾
     } finally {
       contextCompressing.value = false
     }
@@ -1298,7 +1289,6 @@ export function useMascotDock() {
     respondingMatchId.value = match.id
     try {
       const res = await respondMascotIntentMatch(match.id, accept)
-      if (res.code !== 0) return
       await refreshIntentMatches()
       if (accept) {
         const done = res.data?.state === 'CONNECTED'
@@ -1332,7 +1322,6 @@ export function useMascotDock() {
         text: offer.text,
         sessionId: /^\d+$/.test(String(sessionId.value)) ? Number(sessionId.value) : null,
       })
-      if (res.code !== 0) return
       message.intentOffer = null
       message.intentAccepted = offer.text
       persistCurrentMessages()
@@ -1398,7 +1387,8 @@ export function useMascotDock() {
         .slice(0, MEMORY_FACTS_MAX)
       memoryEditDraft.value = ''
       ElMessage.success('记忆已更新')
-    } catch (error) {
+    } catch {
+      // 拦截器已弹出真实原因，这里只做收尾
     } finally {
       memorySaving.value = false
     }

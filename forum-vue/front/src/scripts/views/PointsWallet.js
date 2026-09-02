@@ -304,9 +304,6 @@ export function usePointsWallet() {
     pageError.value = ''
     try {
       const response = await getMengCoinCenterOverview({ weekOffset: trendWeekOffset.value })
-      if (response.code !== 0) {
-        throw new Error(response.message || '萌币中心加载失败')
-      }
       overview.value = { ...EMPTY_OVERVIEW, ...(response.data || {}) }
       trendCache.set(trendWeekOffset.value, {
         trendStartDate: overview.value.trendStartDate,
@@ -351,7 +348,6 @@ export function usePointsWallet() {
     }
     try {
       const response = await getMengCoinCenterTrend({ weekOffset: trendWeekOffset.value })
-      if (response.code !== 0) throw new Error(response.message || '萌币足迹加载失败')
       trendCache.set(trendWeekOffset.value, response.data || {})
       applyTrend(response.data)
     } catch {
@@ -365,9 +361,6 @@ export function usePointsWallet() {
       const params = { ...logQuery.value }
       if (params.sourceType == null) delete params.sourceType
       const response = await getMengCoinCenterLog(params)
-      if (response.code !== 0) {
-        throw new Error(response.message || '萌币流水加载失败')
-      }
       logRows.value = unwrapPageRecords(response.data)
       logTotal.value = Number(response.data?.total) || 0
     } catch {
@@ -387,7 +380,6 @@ export function usePointsWallet() {
       delete params.pageSize
       if (params.sourceType == null) delete params.sourceType
       const response = await getMengCoinCenterChart(params)
-      if (response.code !== 0) throw new Error(response.message || '萌币图表加载失败')
       const chartData = response.data || {}
       chartIsEmpty.value = Number(chartData.incomeTotal) <= 0 && Number(chartData.expenseTotal) <= 0
       ledgerChartOption.value = buildLedgerChartOption(chartData)
@@ -429,9 +421,6 @@ export function usePointsWallet() {
     claimingCode.value = item.code
     try {
       const response = await claimMengCoinMilestone(item.code)
-      if (response.code !== 0) {
-        throw new Error(response.message || '领取失败')
-      }
       ElMessage.success(`已领取 ${item.reward} 萌币`)
       trendCache.clear()
       trendWeekOffset.value = 0

@@ -474,10 +474,6 @@ export function useArticleCreate() {
     const loading = openImageUploadLoading(file, '正在上传封面，请稍候…')
     try {
       const uploadRes = await uploadCoverFile(file)
-      if (uploadRes.code !== 0) {
-        ElMessage.error(uploadRes.message || '封面上传失败')
-        return
-      }
       revokeCoverPreviewIfNeeded()
       coverPreview.value = uploadRes.data
       ElMessage.success('封面已就绪')

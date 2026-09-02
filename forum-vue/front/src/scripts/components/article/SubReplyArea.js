@@ -1,5 +1,4 @@
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { CaretBottom, CaretTop, ChatDotRound, Flag } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -103,7 +102,6 @@ async function loadSubs(p = 1) {
   try {
     const res = await getSubReplyList({ replyId: props.replyId, pageNum: p, pageSize: pageSize.value })
     if (seq !== loadSeq) return
-    if (res.code !== 0) return
     const raw = res.data
     subList.value = unwrapPageRecords(raw).map((row) => ({
       ...row,

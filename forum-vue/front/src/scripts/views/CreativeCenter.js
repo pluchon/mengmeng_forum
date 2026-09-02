@@ -135,7 +135,6 @@ export function useCreativeCenter(iconSet) {
     }
     try {
       const response = await getCreatorDashboard({ weekOffset: 0 })
-      if (response.code !== 0) return
       dashboard.value = response.data || null
     } catch {
       dashboard.value = null
@@ -159,7 +158,6 @@ export function useCreativeCenter(iconSet) {
             ai: searchMode.value === 'ai' ? 1 : undefined,
           })
         : await getArticleListByUser({ ...params, userId: userStore.id })
-      if (response.code !== 0) return
       const payload = searchKeyword ? (response.data?.page || {}) : (response.data || {})
       const rawList = payload.records || payload.list || payload || []
       const apiRows = Array.isArray(rawList)
@@ -354,7 +352,6 @@ export function useCreativeCenter(iconSet) {
     if (deletingArticleId.value !== id) return
     try {
       const response = await deleteArticle(id)
-      if (response.code !== 0) return
       const removedLastItem = articles.value.length === 1 && pageNum.value > 1
       articles.value = articles.value.filter((row) => row.article.id !== id)
       listTotal.value = Math.max(0, listTotal.value - 1)

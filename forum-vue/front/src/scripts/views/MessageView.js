@@ -1355,7 +1355,6 @@ const GROUP_NOTIFY_OPTIONS = [
     sessionLoading.value = true
     try {
       const res = await getSessionList({ pageNum: targetPage, pageSize: SESSION_PAGE_SIZE })
-      if (res.code !== 0) return
       const rows = unwrapPageRecords(res.data).filter((item) => item?.user?.id != null)
       sessionList.value = append ? [...sessionList.value, ...rows] : rows
       sessionPage.value = targetPage
@@ -1371,7 +1370,6 @@ const GROUP_NOTIFY_OPTIONS = [
     hiddenSessionLoading.value = true
     try {
       const res = await getHiddenMessageSessions({ pageNum: targetPage, pageSize: SESSION_PAGE_SIZE })
-      if (res.code !== 0) return
       const rows = unwrapPageRecords(res.data).filter((item) => item?.user?.id != null)
       hiddenSessionList.value = append ? [...hiddenSessionList.value, ...rows] : rows
       hiddenSessionPage.value = targetPage
@@ -1472,10 +1470,6 @@ const GROUP_NOTIFY_OPTIONS = [
     mutingSession.value = true
     try {
       const res = await muteMessageSession({ peerUserId, muted: nextMuted })
-      if (res.code !== 0) {
-        ElMessage.warning(res.message || '设置失败')
-        return
-      }
       // 就地更新，避免整份列表重拉导致滚动位置跳走
       currentSession.value.muted = nextMuted
       const row = sessionList.value.find((item) => Number(item?.user?.id) === Number(peerUserId))
@@ -1496,10 +1490,6 @@ const GROUP_NOTIFY_OPTIONS = [
     pinningPeerId.value = Number(peerUserId)
     try {
       const res = await pinMessageSession({ peerUserId, pinned: nextPinned })
-      if (res.code !== 0) {
-        ElMessage.warning(res.message || (nextPinned ? '置顶失败' : '取消置顶失败'))
-        return
-      }
       await loadSessions()
       ElMessage.success(nextPinned ? '已置顶' : '已取消置顶')
     } catch {
@@ -1521,7 +1511,6 @@ const GROUP_NOTIFY_OPTIONS = [
         type: 'warning',
       })
       const res = await hideMessageSession(peerUserId)
-      if (res.code !== 0) return
       if (Number(currentSession.value?.user?.id) === peerUserId) {
         currentSession.value = null
         messages.value = []
@@ -1537,7 +1526,6 @@ const GROUP_NOTIFY_OPTIONS = [
     const peerUserId = Number(item?.user?.id)
     if (!peerUserId) return
     const res = await restoreMessageSession(peerUserId)
-    if (res.code !== 0) return
     await Promise.all([loadHiddenSessions(), loadSessions(), syncPmUnreadFromServer()])
     ElMessage.success('聊天已恢复')
   }
@@ -1657,7 +1645,6 @@ const GROUP_NOTIFY_OPTIONS = [
         pageNum: messagePage.value + 1,
         pageSize: MESSAGE_PAGE_SIZE,
       })
-      if (res.code !== 0) return
       const older = unwrapPageRecords(res.data).map(mapPrivateMessageRow)
       if (older.length) {
         messages.value = [...older, ...messages.value]
@@ -2722,7 +2709,6 @@ const GROUP_NOTIFY_OPTIONS = [
         remarkName: undefined,
         notifyMode: nextMode,
       })
-      if (res.code !== 0) throw new Error(res.message || '消息提醒模式更新失败')
       const actualMode = Number(res.data?.notifyMode) || 0
       groupRemarkForm.value.notifyMode = actualMode
       if (currentGroupSession.value) currentGroupSession.value.notifyMode = actualMode
@@ -2860,10 +2846,6 @@ const GROUP_NOTIFY_OPTIONS = [
         messageId: msgRow.message?.id,
         reason: String(reason || '').trim(),
       })
-      if (response.code !== 0) {
-        ElMessage.error(response.message || '举报提交失败')
-        return
-      }
       chatReportDialogVisible.value = false
       pendingChatReport.value = null
       ElMessage.success('已收到举报，结果会通过消息中心通知')

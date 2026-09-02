@@ -821,14 +821,10 @@ export function useArticleDetail() {
     if (!pendingContentReport.value || contentReportSubmitting.value) return
     contentReportSubmitting.value = true
     try {
-      const response = await reportArticleContent({
+      await reportArticleContent({
         ...pendingContentReport.value,
         reason,
       })
-      if (response.code !== 0) {
-
-        return
-      }
       contentReportDialogVisible.value = false
       pendingContentReport.value = null
       ElMessage.success('已收到举报，结果会通过消息中心通知')
@@ -1448,7 +1444,6 @@ export function useArticleDetail() {
         pageNum,
         pageSize: replyPageSize.value,
       })
-      if (res.code !== 0) return
       const raw = res.data
       const rows = unwrapPageRecords(raw).map((row) => ({
         ...row,
@@ -1781,14 +1776,12 @@ export function useArticleDetail() {
     engagementSubmitting.value = true
     try {
       if (!isLiked.value) {
-        const likeRes = await likeArticle(article.value.id)
-        if (likeRes.code !== 0) throw new Error(likeRes.message || '点赞失败')
+        await likeArticle(article.value.id)
         isLiked.value = true
         article.value.likeCount = (Number(article.value.likeCount) || 0) + 1
       }
       if (!isFavorited.value) {
-        const favoriteRes = await saveArticleFavorite({ articleId: article.value.id, folderId: null })
-        if (favoriteRes.code !== 0) throw new Error(favoriteRes.message || '收藏失败')
+        await saveArticleFavorite({ articleId: article.value.id, folderId: null })
         isFavorited.value = true
         article.value.favoriteCount = (Number(article.value.favoriteCount) || 0) + 1
       }

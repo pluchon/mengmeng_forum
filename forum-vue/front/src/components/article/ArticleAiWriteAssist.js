@@ -63,10 +63,6 @@ async function runPolish() {
       clientRequestId: requestId,
     })
     if (activeRequestId !== requestId) return
-    if (res.code !== 0) {
-      ElMessage.error(res.message || 'AI 写作失败')
-      return
-    }
     const text = stripCodeFence(res.data?.content || res.data?.text || '')
     if (!text) {
       ElMessage.warning('模型未返回有效正文')

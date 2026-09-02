@@ -603,10 +603,8 @@ export function useEmojiShopUploadDialog({
       }
       const payload = buildPayload()
       delete payload.draftId
-      const updateRes = await updateShopMyPublished(publishedShopId.value, payload)
-      if (updateRes.code !== 0) return
-      const relistRes = await relistShopMyPublished(publishedShopId.value)
-      if (relistRes.code !== 0) return
+      await updateShopMyPublished(publishedShopId.value, payload)
+      await relistShopMyPublished(publishedShopId.value)
       publishedStatus.value = 1
       rememberSavedForm()
       ElMessage.success('表情包已重新上架')

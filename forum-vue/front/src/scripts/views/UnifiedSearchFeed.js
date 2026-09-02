@@ -91,10 +91,6 @@ function useUnifiedSearchFeed() {
           ...(preferAiRag.value ? { ai: 1 } : {}),
         })
         if (seq !== searchSeq) return
-        if (res.code !== 0) {
-          ElMessage.error(res.message || '搜索失败')
-          return
-        }
         source.value = res.data?.source || 'empty'
         const page = res.data?.page || {}
         userRecords.value = page.records || []
@@ -108,10 +104,6 @@ function useUnifiedSearchFeed() {
           ...(preferAiRag.value ? { ai: 1 } : {}),
         })
         if (seq !== searchSeq) return
-        if (res.code !== 0) {
-          ElMessage.error(res.message || '搜索失败')
-          return
-        }
         source.value = res.data?.source || 'empty'
         const page = res.data?.page || {}
         articleRecords.value = page.records || []
@@ -173,10 +165,6 @@ function useUnifiedSearchFeed() {
     setFollowSaving(user.id, true)
     try {
       const res = await (wasFollowing ? unfollowUser(user.id) : followUser(user.id))
-      if (res.code !== 0) {
-        ElMessage.error(res.message || '操作失败')
-        return
-      }
       user.isFollowing = !wasFollowing
       const currentFollowers = Number(user.followerCount) || 0
       user.followerCount = Math.max(0, currentFollowers + (wasFollowing ? -1 : 1))

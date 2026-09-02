@@ -1578,10 +1578,6 @@ async function onCreateTag() {
   tagCreating.value = true
   try {
     const res = await createMusicMoodTag(name)
-    if (res?.code !== 0) {
-      ElMessage.error(res?.message || '创建失败')
-      return
-    }
     ElMessage.success('标签已创建')
     await loadTagOptions()
     toggleComposeTag(res.data || name)
@@ -1768,10 +1764,6 @@ async function submitMusic(action) {
   composeSubmitting.value = true
   try {
     const res = await uploadArticleMusic(buildUploadFormData(action))
-    if (res?.code !== 0) {
-      ElMessage.error(res?.message || '保存失败')
-      return
-    }
     ElMessage.success(action === 'publish' ? '提交成功，审核将在后台进行' : '草稿已保存')
     resetCompose()
     mineTab.value = action === 'publish' ? 'upload' : 'upload'

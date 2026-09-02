@@ -38,10 +38,6 @@ export async function submitArticleForAuditWithPrompt(articleId, options = {}) {
   }
 
   const res = await submitForAudit({ articleId: Number(articleId) })
-  if (res.code !== 0) {
-    ElMessage.error(res.message || '提交审核失败')
-    return { ok: false, message: res.message }
-  }
   ElMessage.success('审核结果可以在消息中心查看')
   return { ok: true, taskId: res.data }
 }

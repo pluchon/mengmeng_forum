@@ -64,10 +64,6 @@ export function useSearchUser() {
         pageSize: pageSize.value,
         ...(preferAiRag.value ? { ai: 1 } : {}),
       })
-      if (res.code !== 0) {
-        ElMessage.error(res.message || '搜索失败')
-        return
-      }
       source.value = res.data?.source || 'empty'
       const page = res.data?.page || { records: [], total: 0 }
       records.value = page?.records || []

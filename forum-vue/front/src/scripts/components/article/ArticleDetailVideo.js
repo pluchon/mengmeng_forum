@@ -599,10 +599,6 @@ function useArticleDetailVideo(props, emit) {
     danmakuEngine.updateDanmakuLike(danmakuId, nextLiked)
     try {
       const res = nextLiked ? await likeDanmaku(danmakuId) : await unlikeDanmaku(danmakuId)
-      if (res?.code !== 0) {
-        danmakuEngine.updateDanmakuLike(danmakuId, wasLiked)
-        ElMessage.error(res?.message || '操作失败')
-      }
     } catch {
       danmakuEngine.updateDanmakuLike(danmakuId, wasLiked)
     } finally {
@@ -652,10 +648,6 @@ function useArticleDetailVideo(props, emit) {
         fontSize: danmuFontSize.value,
         videoTimeMs,
       })
-      if (res?.code !== 0) {
-        ElMessage.error(res?.message || '弹幕发送失败')
-        return
-      }
       danmuText.value = ''
       colorPickerOpen.value = false
       clearDanmuComposeSession(true)

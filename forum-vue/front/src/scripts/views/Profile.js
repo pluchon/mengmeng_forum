@@ -252,14 +252,10 @@ export function useProfile() {
         ElMessage.error(uploadRes.message || '封面上传失败')
         return
       }
-      const updateRes = await updateFavoriteFolder({
+      await updateFavoriteFolder({
         folderId: folder.id,
         coverUrl: uploadRes.data,
       })
-      if (updateRes.code !== 0) {
-        ElMessage.error(updateRes.message || '封面保存失败')
-        return
-      }
       folder.coverUrl = uploadRes.data
       if (Number(activeFavoriteFolder.value?.id) === Number(folder.id)) {
         activeFavoriteFolder.value.coverUrl = uploadRes.data
@@ -695,10 +691,6 @@ export function useProfile() {
     favoriteDialogLoading.value = true
     try {
       const res = await deleteFavoriteFolder(folder.id)
-      if (res.code !== 0) {
-        ElMessage.error(res.message || '删除失败')
-        return
-      }
       favoriteDialogVisible.value = false
       activeFavoriteFolder.value = null
       const remaining = Math.max(0, favoriteFolderTotal.value - 1)

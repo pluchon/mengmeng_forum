@@ -429,10 +429,6 @@ function useTetrisPkRoom() {
       // WS 通道优先；发不出去（正在重连）就走 HTTP，别让人点了没反应
       if (!roomSocket.send('surrender')) {
         const res = await surrenderTetrisPkRoom(roomId.value)
-        if (res?.code !== 0) {
-          ElMessage.warning(res?.message || '认输失败，请重试')
-          return
-        }
         await loadRoom()
       }
     } catch {

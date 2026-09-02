@@ -1,6 +1,5 @@
-import { ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { apiErrorCode } from '@/utils/apiData'
-import { ElMessage } from 'element-plus'
 import { getAiWorkspaceVersions, selectAiWorkspaceVersion } from '@/api/ai'
 
 const props = defineProps({
@@ -51,10 +50,6 @@ async function selectVersion(version) {
   selectingId.value = version.id
   try {
     const res = await selectAiWorkspaceVersion(props.workspaceId, version.id)
-    if (res.code !== 0) {
-      ElMessage.error(res.message || '版本选择失败')
-      return
-    }
     versions.value = versions.value.map((item) => ({
       ...item,
       selected: item.id === version.id,
