@@ -4,16 +4,6 @@ import { useUserStore } from '@/stores/user'
 // 流式空闲超时略短于网关上限，避免浏览器无限等待
 const STREAM_IDLE_MS = 145_000
 
-// 看板娘对话 经 Java BFF > Python
-// 通用额度使用率 会员用满 100% 后可启用萌币扣费
-export function getMascotQuotaHint(llmProvider) {
-  return request({
-    url: '/mascot/quota-hint',
-    method: 'get',
-    params: { llmProvider },
-  })
-}
-
 export function postMascotChat(data) {
   return request({
     url: '/mascot/chat',

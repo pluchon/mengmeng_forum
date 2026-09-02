@@ -11,8 +11,9 @@
           maxlength="2000"
           :disabled="disabled || quotaExhausted"
           @input="onInput"
-          @keydown.enter.exact.prevent="onEnter"
+          @keydown.enter.exact="onEnterKey"
         />
+        <span class="mascot-input-counter" aria-live="polite">{{ charCount }} / 2000</span>
       </div>
       <button
         type="button"
@@ -86,20 +87,19 @@
               aria-hidden="true"
             />
           </button>
-          <button
-            type="button"
-            class="mascot-context-control__memory"
-            :disabled="disabled || loading"
-            title="查看记忆"
-            aria-label="查看记忆"
-            @click="emit('open-memory')"
-          >
-            <span class="mascot-context-control__memory-icon" aria-hidden="true" />
-          </button>
         </div>
       </div>
       <span class="mascot-generation-hint">{{ generationHint }}</span>
-      <span class="mascot-counter" aria-live="polite">{{ charCount }} / 2000</span>
+      <button
+        type="button"
+        class="mascot-memory-btn"
+        :disabled="disabled || loading"
+        title="查看记忆"
+        aria-label="查看记忆"
+        @click="emit('open-memory')"
+      >
+        <span class="mascot-memory-btn__icon" aria-hidden="true" />
+      </button>
     </div>
   </div>
 </template>

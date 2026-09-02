@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePointsWalletStore } from '@/stores/pointsWallet'
 import {
-  getMascotQuotaHint,
   getMascotRelatedRecommendations,
   listMascotRelatedRecommendations,
   streamMascotChat,
@@ -96,9 +95,6 @@ const SPRITE_IDLE_MAX_MS = 36_000
 const SPRITE_PATROL_CHANCE = 0.28
 
 export function useMascotDock() {
-  const LLM_CHAT_KEY = 'mascot_llm_chat_v1'
-  const LLM_WRITING_KEY = 'mascot_llm_writing_v3'
-  const LLM_HELP_KEY = 'mascot_llm_help_v3'
   const IMAGE_QUALITY_KEY = 'mascot_image_quality_v1'
   const relatedDialogVisible = ref(false)
   const relatedDialogItems = ref([])
@@ -138,7 +134,6 @@ export function useMascotDock() {
   }
   
   // 文本模型由服务端按会员档位自动选择；前端不提供切换
-  const ALL_LLM_OPTIONS = [{ id: 'qwen-flash' }]
   const IMAGE_MODEL_OPTIONS = MASCOT_IMAGE_QUALITY_OPTIONS
   
   const userStore = useUserStore()
@@ -169,9 +164,7 @@ export function useMascotDock() {
   })
   const activeSkill = ref('chat')
   
-  const selectedLlmChat = ref('qwen-flash')
   const imageQuality = ref('normal')
-  const quotaHint = ref({ percent: 0, canUsePointsPay: false, quotaLabel: '' })
   const quotaPanel = ref(null)
   const contextWindow = ref({ usedTokens: 0, maxTokens: 128000, canCompress: false })
   const contextCompressing = ref(false)
@@ -201,14 +194,6 @@ export function useMascotDock() {
     return out
   })
 
-  const estimateHintText = computed(() => {
-    if (userStore.isLoggedIn) {
-      const p = quotaHint.value?.percent ?? 0
-      const label = quotaHint.value?.quotaLabel || '通用额度'
-      return p > 0 ? `${label} 已用 ${p}%` : '使用方案额度'
-    }
-    return '登录后使用免费方案额度'
-  })
   const quotaRows = computed(() => {
     const panel = quotaPanel.value || {}
     const qwenLimit = Number(panel.qwenBudgetMicros) || 0
@@ -344,24 +329,9 @@ export function useMascotDock() {
     }
   }
   
-  const FLASH_LLM = ['qwen-flash']
   
-  function llmStorageKey() {
-    return LLM_CHAT_KEY
-  }
   
-  function currentLlmStorageKey() {
-    return LLM_CHAT_KEY
-  }
   
-  const selectedLlm = computed({
-    get() {
-      return selectedLlmChat.value
-    },
-    set(v) {
-      selectedLlmChat.value = v
-    },
-  })
 
   const activeImageOption = computed(() => findImageQualityOption(imageQuality.value) || IMAGE_MODEL_OPTIONS[0])
 
@@ -395,17 +365,6 @@ export function useMascotDock() {
     return IMAGE_MODEL_OPTIONS.filter((o) => !o.vipOnly || tier >= 1)
   })
   
-  const llmOptions = computed(() => {
-    const tier = vipTierNum.value
-    const list = ALL_LLM_OPTIONS.filter((o) => {
-      if (o.maxOnly && tier < 2)
-        return false
-      if (o.vipOnly && tier < 1)
-        return false
-      return true
-    })
-    return list
-  })
   
   const sessionListForNav = computed(() => {
     const nav = activeNav.value
@@ -1362,18 +1321,10 @@ export function useMascotDock() {
     return current.toDateString() !== previous.toDateString()
   }
 
-  async function refreshQuotaHint() {
+  // 两条额度进度条用的是 getVipQuota；原来还有一条 /mascot/quota-hint，
+  // 但它的结果在界面上从来没有渲染过——每次开面板、切 nav、发完消息都白打一次跨域请求。
+  async function refreshQuota() {
     void refreshQuotaPanel()
-    if (!userStore.isLoggedIn || activeNav.value === 'drawing') {
-      quotaHint.value = { percent: 0, canUsePointsPay: false, quotaLabel: '' }
-      return
-    }
-    try {
-      const res = await getMascotQuotaHint(selectedLlm.value)
-      quotaHint.value = res?.data || { percent: 0, canUsePointsPay: false, quotaLabel: '' }
-    } catch {
-      quotaHint.value = { percent: 0, canUsePointsPay: false, quotaLabel: '' }
-    }
   }
 
   async function refreshQuotaPanel() {
@@ -1416,17 +1367,6 @@ export function useMascotDock() {
   
   function loadSavedPreferences() {
     try {
-      const chat = localStorage.getItem(LLM_CHAT_KEY)
-      const w = localStorage.getItem(LLM_WRITING_KEY)
-      const h = localStorage.getItem(LLM_HELP_KEY)
-      const legacy = localStorage.getItem('mascot_llm_provider_v1')
-      const legacyMap = { qwen: 'qwen-flash' }
-      const leg = legacy && legacyMap[legacy] ? legacyMap[legacy] : ''
-      const pick = chat || w || h || leg
-      if (pick && ALL_LLM_OPTIONS.some(x => x.id === pick))
-        selectedLlmChat.value = pick
-      else
-        selectedLlmChat.value = 'qwen-flash'
       const q = localStorage.getItem(IMAGE_QUALITY_KEY)
       if (q === 'normal')
         imageQuality.value = q
@@ -1437,47 +1377,14 @@ export function useMascotDock() {
   
   function saveLlmPrefs() {
     try {
-      localStorage.setItem(LLM_CHAT_KEY, selectedLlmChat.value)
       localStorage.setItem(IMAGE_QUALITY_KEY, imageQuality.value)
     }
     catch {
     }
   }
   
-  watch([selectedLlmChat, imageQuality], () => saveLlmPrefs())
+  watch(imageQuality, () => saveLlmPrefs())
   
-  watch(llmOptions, (opts) => {
-    const cur = selectedLlm.value
-    if (!opts.some(x => x.id === cur)) {
-      selectedLlmChat.value = 'qwen-flash'
-      saveLlmPrefs()
-    }
-  }, { immediate: true })
-
-  watch(imageModelOptions, (opts) => {
-    if (!opts.some((x) => x.id === imageQuality.value)) {
-      imageQuality.value = opts[0]?.id || 'normal'
-      saveLlmPrefs()
-    }
-  }, { immediate: true })
-  
-  watch([activeNav, selectedLlm, imageQuality, () => userStore.isLoggedIn], () => {
-    if (assistantOpen.value) {
-      refreshQuotaHint()
-    }
-  }, { immediate: false })
-
-  watch(assistantOpen, (open) => {
-    if (open) {
-      stopMascotIdleTips()
-      clearStageCloudTip()
-      cancelPatrol()
-    }
-    else {
-      startMascotIdleTips()
-      schedulePatrol()
-    }
-  })
 
   function viewportMaxX() {
     if (typeof window === 'undefined') return SPRITE_EDGE_MARGIN
@@ -1650,7 +1557,7 @@ export function useMascotDock() {
       await syncServerSessions(nav)
     }
     await loadMessagesForNav(nav)
-    refreshQuotaHint()
+    refreshQuota()
   }
   
   function ensureSessionId() {
@@ -1686,7 +1593,7 @@ export function useMascotDock() {
     await syncServerSessions(activeNav.value)
     await loadMessagesForNav(activeNav.value)
     scrollFsToBottom()
-    refreshQuotaHint()
+    refreshQuota()
     await refreshContextWindow()
   }
   
@@ -1923,7 +1830,7 @@ export function useMascotDock() {
               chatStreamAbort = null
               refreshContextWindow()
               // 这一轮已经花掉额度，左下角要跟上，否则得关掉面板重开才更新
-              refreshQuotaHint()
+              refreshQuota()
               persistCurrentMessages()
               if (!streamHadError) {
                 clearAgentSpriteState()

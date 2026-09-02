@@ -189,7 +189,9 @@ image:
 mascot:
   internal_key: ""
   max_user_message_len: 2000
-  max_history_turns: 8
+  # 送进模型的历史消息条数（不是轮数）。与 Java 的 forum.mascot.history-exchanges
+  # 对齐：8 轮问答 = 16 条消息。改一个要一起改。
+  max_history_messages: 16
 
 # Tavily 联网搜索（MCP 工具 tavily_search）；密钥用环境变量 TAVILY_API_KEY
 tavily:

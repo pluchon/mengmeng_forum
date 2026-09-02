@@ -93,15 +93,25 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
     }
 
     @Override
+    @Override
+    public String loadContextSummary(Long sessionId) {
+        ForumCompanionMessage latest = latestContextSummary(sessionId);
+        if (latest == null || latest.getContent() == null || latest.getContent().isBlank()) {
+            return "";
+        }
+        return latest.getContent().trim();
+    }
+
+    /**
+     * 会话最近若干条真实对话。
+     *
+     * <p>这里**不再**把压缩摘要塞进返回列表：它原来放在第一条，而 Python 侧还要
+     * 再截一次尾部，摘要一旦被挤出窗口，压缩就等于白做了。摘要现在由
+     * loadContextSummary 单独取，作为独立字段送给模型。
+     */
     public List<MascotHistoryTurn> loadHistoryTurns(Long sessionId, int maxTurns) {
         int limit = maxTurns > 0 ? maxTurns : MAX_HISTORY_TURNS;
-        ForumCompanionMessage latestSummary = companionMessageMapper.selectOne(
-                new LambdaQueryWrapper<ForumCompanionMessage>()
-                        .eq(ForumCompanionMessage::getSessionId, sessionId)
-                        .eq(ForumCompanionMessage::getMsgType, "context_summary")
-                        .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
-                        .orderByDesc(ForumCompanionMessage::getId)
-                        .last("LIMIT 1"));
+        ForumCompanionMessage latestSummary = latestContextSummary(sessionId);
         LambdaQueryWrapper<ForumCompanionMessage> query = new LambdaQueryWrapper<ForumCompanionMessage>()
                 .eq(ForumCompanionMessage::getSessionId, sessionId)
                 .eq(ForumCompanionMessage::getDeleteState, (byte) 0)
@@ -113,12 +123,6 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
         List<ForumCompanionMessage> rows = companionMessageMapper.selectPage(new Page<>(1, limit * 2L, false),
                 query).getRecords();
         List<MascotHistoryTurn> turns = new ArrayList<>();
-        if (latestSummary != null && latestSummary.getContent() != null && !latestSummary.getContent().isBlank()) {
-            MascotHistoryTurn summary = new MascotHistoryTurn();
-            summary.setRole("assistant");
-            summary.setContent("【已压缩的先前上下文】\n" + latestSummary.getContent().trim());
-            turns.add(summary);
-        }
         for (int i = rows.size() - 1; i >= 0; i--) {
             ForumCompanionMessage m = rows.get(i);
             MascotHistoryTurn t = new MascotHistoryTurn();
@@ -375,6 +379,30 @@ public class CompanionMemoryServiceImpl implements CompanionMemoryService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void mergeMascotMemory(Long userId, String summary, List<String> facts) {
+        if (userId == null || userId <= 0) {
+            return;
+        }
+        MascotMemoryVO current = getMascotMemory(userId);
+        String mergedSummary = summary == null || summary.isBlank()
+                ? current.getSummary()
+                : summary.trim();
+        // 新事实排前面，老事实按原序补在后面；超出上限时丢的是最旧的
+        List<String> merged = new ArrayList<>();
+        for (String item : sanitizeFacts(facts)) {
+            if (!merged.contains(item)) {
+                merged.add(item);
+            }
+        }
+        for (String item : current.getFacts() == null ? List.<String>of() : current.getFacts()) {
+            if (item != null && !item.isBlank() && !merged.contains(item.trim())) {
+                merged.add(item.trim());
+            }
+        }
+        saveMascotMemory(userId, mergedSummary, merged);
+    }
+
+    @Override
     public void saveMascotMemory(Long userId, String summary, List<String> facts) {
         if (userId == null || userId <= 0) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));

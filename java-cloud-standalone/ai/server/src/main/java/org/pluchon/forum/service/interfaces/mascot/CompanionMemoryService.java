@@ -18,6 +18,18 @@ public interface CompanionMemoryService {
 
     List<MascotHistoryTurn> loadHistoryTurns(Long sessionId, int maxTurns);
 
+    /** 会话最近一次压缩产出的摘要；没有压缩过返回空串。 */
+    String loadContextSummary(Long sessionId);
+
+    /**
+     * 自动抽取产出的记忆按**增量**合入：新事实追加在前，老事实保留在后。
+     *
+     * <p>用户在面板里手改记忆走 saveMascotMemory（全量覆盖，那是用户的意思）；
+     * 模型自动写入不能覆盖——它每轮只看到最近几句话，少返一条旧事实是常事，
+     * 全量覆盖会让那条事实永久消失。
+     */
+    void mergeMascotMemory(Long userId, String summary, java.util.List<String> facts);
+
     void appendTextMessage(Long sessionId, String role, String content);
 
     // 助手文本消息；searchImageUrl 为联网检索配图 存 image_url，msg_type 仍为 text

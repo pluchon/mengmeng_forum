@@ -1,4 +1,5 @@
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { getEnterToSendEnabled, onEnterToSendChanged } from '@/utils/chatSendPreference'
 import { Loading, Promotion } from '@element-plus/icons-vue'
 import { findImageQualityOption } from '@/constants/aiModels'
 
@@ -31,6 +32,17 @@ const emit = defineEmits([
 
 const textareaRef = ref(null)
 const charCount = computed(() => (props.modelValue || '').length)
+
+const enterToSendEnabled = ref(getEnterToSendEnabled())
+let offEnterToSend = null
+onMounted(() => {
+  offEnterToSend = onEnterToSendChanged((enabled) => {
+    enterToSendEnabled.value = enabled
+  })
+})
+onBeforeUnmount(() => {
+  offEnterToSend?.()
+})
 const activeImageOption = computed(() =>
   props.imageOptions.find((item) => item.id === props.imageQuality)
   || findImageQualityOption(props.imageQuality)
@@ -52,6 +64,13 @@ function resizeTextarea() {
 function onInput(e) {
   emit('update:modelValue', e.target.value)
   nextTick(resizeTextarea)
+}
+
+// 「回车发送」是全站设置（设置页里能关），私信一直在读它，看板娘原来是硬编码的
+function onEnterKey(event) {
+  if (!enterToSendEnabled.value) return
+  event.preventDefault()
+  onEnter()
 }
 
 function onEnter() {

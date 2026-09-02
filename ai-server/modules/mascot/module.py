@@ -144,6 +144,8 @@ def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "memory_facts": _string_list(raw.get("memoryFacts") or raw.get("memory_facts"), 10, 40),
         # 由 Java 决定这一轮要不要探长期记忆；缺省为 True 兼容旧调用方
         "memory_probe": bool(raw.get("memoryProbe", raw.get("memory_probe", True))),
+        # 压缩摘要走独立字段，不混进 history——history 会被窗口截断
+        "context_summary": str(raw.get("contextSummary") or raw.get("context_summary") or "").strip()[:2000],
         "liked_titles": _string_list(raw.get("likedTitles") or raw.get("liked_titles"), 6, 80),
         "favorite_songs": _string_list(raw.get("favoriteSongs") or raw.get("favorite_songs"), 6, 80),
     }
@@ -153,7 +155,8 @@ def _clean_history(raw: Any, max_length: int) -> list[dict[str, str]]:
     history: list[dict[str, str]] = []
     if not isinstance(raw, list):
         return history
-    for item in raw[-16:]:
+    window = int(settings.mascot.get("max_history_messages", 16))
+    for item in raw[-window:]:
         if not isinstance(item, dict):
             continue
         role = str(item.get("role") or "").strip().lower()

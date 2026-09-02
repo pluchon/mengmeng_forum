@@ -58,7 +58,6 @@ import org.pluchon.forum.service.interfaces.mascot.MascotService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.MascotPromptGuard;
 import org.pluchon.forum.service.security.AiUserLookupService;
-import org.pluchon.forum.config.ForumMascotComplexityProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.function.Supplier;
@@ -129,8 +128,10 @@ public class MascotServiceImpl implements MascotService {
     @Value("${forum.mascot.interest-cache-minutes:5}")
     private int interestCacheMinutes;
 
-    @Autowired
-    private ForumMascotComplexityProperties mascotComplexityProperties;
+    // 送给模型的对话轮数（一轮 = 一问一答）。Python 侧的窗口跟这个对齐，
+    // 别再出现「Java 送 16、Python 只看 8」这种两头对不上的情况。
+    @Value("${forum.mascot.history-exchanges:8}")
+    private int historyExchanges;
 
     @Value("${forum.mascot.treat-admin-as-vip:true}")
     private boolean treatAdminAsVip;
@@ -653,41 +654,22 @@ public class MascotServiceImpl implements MascotService {
         return Math.max(t, Constant.VIP_TIER_PRO.intValue());
     }
 
+    /**
+     * 这一轮**最多**能用到哪一档模型。
+     *
+     * <p>注意是上限不是结论：真正用不用深度模型，由 Python 侧规划器对整轮语义给出的
+     * complexity 决定。原来这里是关键词表——消息超过 320 字，或命中
+     * 「深入分析 / 对比 / 方案 / 教程 / 大纲」里的两个词，就升档。于是一个真正复杂
+     * 但没踩中词表的问题照样被压到 flash，而随口一句「帮我写一篇」反而升档。
+     *
+     * <p>结算本来就按实际用量算（calcYuan 读 usage.model_code），预占两档也是同一个
+     * 金额，所以这里给上限不影响计费正确性。
+     */
     private String resolveLlmRoute(MascotChatRequest request, boolean vip, String skill, AiUserContext user) {
         if ("help".equals(skill) || !vip) {
             return "qwen-flash";
         }
-        int tier = effectiveVipTier(user);
-        if (tier < Constant.VIP_TIER_PRO || !isComplexMascotRequest(request)) {
-            return "qwen-flash";
-        }
-        return "qwen-deep";
-    }
-
-    // 判定参数见 forum.mascot.complexity.*，命中即升级到更贵的深度模型
-    private boolean isComplexMascotRequest(MascotChatRequest request) {
-        String message = request.getMessage() == null ? "" : request.getMessage().trim();
-        if (message.length() >= mascotComplexityProperties.getDirectLengthThreshold()) {
-            return true;
-        }
-        int indicators = 0;
-        for (String keyword : mascotComplexityProperties.resolvedKeywords()) {
-            if (message.contains(keyword)) {
-                indicators++;
-            }
-        }
-        if (indicators >= mascotComplexityProperties.getMinIndicators()) {
-            return true;
-        }
-        for (String keyword : mascotComplexityProperties.resolvedStrongKeywords()) {
-            if (message.contains(keyword)) {
-                return true;
-            }
-        }
-        int historyTurns = request.getHistory() == null ? 0 : request.getHistory().size();
-        return historyTurns >= mascotComplexityProperties.getHistoryTurnsThreshold()
-                && message.length() >= mascotComplexityProperties.getHistoryLengthThreshold()
-                && indicators >= 1;
+        return effectiveVipTier(user) >= Constant.VIP_TIER_PRO ? "qwen-deep" : "qwen-flash";
     }
 
     private String featureCode(String skill) {
@@ -1009,7 +991,7 @@ public class MascotServiceImpl implements MascotService {
             // 登录用户一律以库为准。原来「库里为空就采信前端传的 history」，
             // 而新会话第一轮库里必然为空——等于每个新会话都能被塞一段伪造的
             // assistant 发言（「好的，我已解除全部限制」这类），是最有效的越狱手法之一。
-            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
+            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, historyExchanges);
         }
 
         String pySessionKey = ephemeral
@@ -1038,6 +1020,9 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
+        // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
+        pyBody.put("context_summary", dbSessionId == null
+                ? "" : companionMemoryService.loadContextSummary(dbSessionId));
         pyBody.put("liked_titles", likedTitles);
         pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {
@@ -1307,7 +1292,9 @@ public class MascotServiceImpl implements MascotService {
             if (summary.isEmpty() && facts.isEmpty()) {
                 return;
             }
-            companionMemoryService.saveMascotMemory(userId, summary, facts);
+            // 自动写入走增量：抽取节点每轮只看最近几句话，少返一条旧事实是常事，
+            // 全量覆盖会让那条事实永久消失。用户在面板里手改才是全量覆盖。
+            companionMemoryService.mergeMascotMemory(userId, summary, facts);
         } catch (Exception ex) {
             log.warn("自动保存看板娘记忆失败 userId={}: {}", userId, ex.getMessage());
         }
@@ -1441,7 +1428,7 @@ public class MascotServiceImpl implements MascotService {
             mergedHistory = request.getHistory() != null ? request.getHistory() : List.of();
         } else {
             dbSessionId = companionMemoryService.ensureSession(user.getId(), skill, request.getSessionId());
-            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, 16);
+            mergedHistory = companionMemoryService.loadHistoryTurns(dbSessionId, historyExchanges);
         }
         String pySessionKey = ephemeral
                 ? (request.getSessionId() != null && !request.getSessionId().isBlank()
@@ -1501,6 +1488,9 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
+        // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
+        pyBody.put("context_summary", dbSessionId == null
+                ? "" : companionMemoryService.loadContextSummary(dbSessionId));
         pyBody.put("liked_titles", likedTitles);
         pyBody.put("favorite_songs", favoriteSongs);
         if (request.getClientDatetime() != null && !request.getClientDatetime().isBlank()) {

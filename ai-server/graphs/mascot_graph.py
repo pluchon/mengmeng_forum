@@ -83,6 +83,10 @@ class MascotState(TypedDict, total=False):
     skill_decided: bool
     # 这一轮要不要跑长期记忆抽取（由 Java 按会话轮次决定）
     memory_probe: bool
+    # 上一次压缩产出的摘要。独立字段，不混进 history——history 会被窗口截断
+    context_summary: str
+    # 本轮各工具的结构化结果：[{"name":..., "status":"ok|empty|fail"}]
+    tool_results: list[dict[str, Any]]
     # 这两次调用的用量原来被直接丢掉，导致每轮少算两次 flash
     router_usage: dict[str, Any]
     memory_usage: dict[str, Any]
@@ -101,9 +105,23 @@ def _vip_tier_num(state: MascotState) -> int:
 
 
 def _normalize_llm_route(raw: str | None, vip_tier: int, skill: str) -> str:
+    """Java 传来的是**上限**：够不着 deep 就只能 flash。"""
     if skill == "help" or vip_tier < 1 or raw != "qwen-deep":
         return "qwen-flash"
     return "qwen-deep"
+
+
+def _answer_route(state: dict[str, Any], vip_tier: int, skill: str) -> str:
+    """这一轮实际用哪个模型回答。
+
+    上限由 Java 按档位给，实际升不升档看规划器对整轮语义给出的 complexity——
+    规划器本来就要跑一次，它的结论比关键词表准得多，也不额外花钱。
+    """
+    ceiling = _normalize_llm_route(state.get("llm_route"), vip_tier, skill)
+    if ceiling != "qwen-deep":
+        return ceiling
+    return "qwen-deep" if str(state.get("complexity") or "SIMPLE").upper() == "COMPLEX" \
+        else "qwen-flash"
 
 
 def _effective_skill(state: dict[str, Any]) -> str:
@@ -131,7 +149,11 @@ def node_route_skill(state: MascotState) -> MascotState:
 
 
 def node_supervisor(state: MascotState) -> MascotState:
-    """仅初始化工具环状态；语义决策交给 tool_planner。"""
+    """把一轮开始时该清零的状态一次性归位。
+
+    它不做任何判断——语义决策全在 tool_planner。原来还挂了一条只有一个目的地的
+    条件边（_route_after_supervisor 恒返回 "tool_planner"），已经换成普通边。
+    """
     return {
         "action": "CHAT",
         "image_prompt": "",
@@ -143,6 +165,7 @@ def node_supervisor(state: MascotState) -> MascotState:
         "planned_tools": [],
         "completed_tools": [],
         "tool_observations": [],
+        "tool_results": [],
         "tool_round": 0,
         "supervisor_usage": {},
         "use_interest_hints": False,
@@ -152,9 +175,6 @@ def node_supervisor(state: MascotState) -> MascotState:
         "block_reason": "",
     }
 
-
-def _route_after_supervisor(state: MascotState) -> Literal["tool_planner"]:
-    return "tool_planner"
 
 
 def _route_after_planner(state: MascotState) -> Literal["execute_tools", "task_worker", "agent"]:
@@ -194,12 +214,13 @@ def _format_tool_observations(state: MascotState) -> str:
 
 
 def _tool_round_needs_replan(state: MascotState) -> bool:
-    """仅当本轮有失败/空结果时才再进规划器，避免成功后多打一次易超时的 LLM。"""
-    rows = [str(item).strip() for item in (state.get("tool_observations") or []) if str(item).strip()]
-    if not rows:
-        return False
-    for row in rows:
-        if " fail" in row or row.endswith("fail") or " empty" in row:
+    """仅当本轮有工具失败/空结果时才再进规划器，避免成功后多打一次易超时的 LLM。
+
+    原来是拿观察文本去 in " fail"、endswith("fail")——观察的措辞一改，这里就悄悄失效。
+    现在执行节点会同时记一份结构化结果，判定只看它。
+    """
+    for item in state.get("tool_results") or []:
+        if isinstance(item, dict) and item.get("status") in ("fail", "empty"):
             return True
     return False
 
@@ -706,6 +727,7 @@ def _prepare_mascot_context(
         "history": history or [],
         "client_datetime": client_datetime or "",
         "memory_summary": memory_summary or "",
+        "context_summary": context_summary or "",
         "memory_facts": memory_facts or [],
         "liked_titles": liked_titles or [],
         "favorite_songs": favorite_songs or [],
@@ -729,16 +751,17 @@ def _build_agent_messages(state: dict[str, Any], *, stream: bool = False) -> tup
     appearance = (state.get("appearance") or "xiaomeng").lower()
     skill = _effective_skill(state)
     vip_tier = _vip_tier_num(state)
-    llm_route = _normalize_llm_route(state.get("llm_route"), vip_tier, skill)
+    llm_route = _answer_route(state, vip_tier, skill)
     user_msg = (state.get("message") or "").strip()
     history = state.get("history") or []
-    max_turns = int(settings.mascot.get("max_history_turns", 8))
+    max_turns = int(settings.mascot.get("max_history_messages", 16))
     sys_fn = _skill_system_stream if stream else _skill_system
     sys = sys_fn(
         skill,
         tier,
         appearance,
         memory_block=_format_memory_block(state),
+        context_summary=str(state.get("context_summary") or "")[:2000],
         interest_hints=_format_interest_hints(state),
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
@@ -773,6 +796,7 @@ def stream_mascot_chat(
     vip_tier: int = 0,
     client_datetime: str = "",
     memory_summary: str = "",
+    context_summary: str = "",
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
     liked_titles: list[str] | None = None,
@@ -792,6 +816,7 @@ def stream_mascot_chat(
         vip_tier=vip_tier,
         client_datetime=client_datetime,
         memory_summary=memory_summary,
+        context_summary=context_summary,
         memory_facts=memory_facts,
         liked_titles=liked_titles,
         favorite_songs=favorite_songs,
@@ -872,6 +897,7 @@ def _stream_mascot_context(
     vip_tier: int,
     client_datetime: str,
     memory_summary: str,
+    context_summary: str = "",
     memory_facts: list[str] | None,
     liked_titles: list[str] | None,
     favorite_songs: list[str] | None,
@@ -891,6 +917,7 @@ def _stream_mascot_context(
         "history": history or [],
         "client_datetime": client_datetime or "",
         "memory_summary": memory_summary or "",
+        "context_summary": context_summary or "",
         "memory_facts": memory_facts or [],
         "liked_titles": liked_titles or [],
         "favorite_songs": favorite_songs or [],
@@ -920,6 +947,7 @@ def _skill_system_stream(
     appearance: str,
     *,
     memory_block: str = "",
+    context_summary: str = "",
     interest_hints: str = "",
     local_kb: str = "",
     mcp_context: str = "",
@@ -953,6 +981,8 @@ def _skill_system_stream(
         extra = ""
         if tool_observations and tool_observations != "（无）":
             extra += f"\n【本轮工具观察】\n{tool_observations}\n"
+        if context_summary:
+            extra += f"\n【已压缩的先前上下文】\n{context_summary}\n"
         if memory_block:
             extra += f"\n{memory_block}\n"
         if interest_hints:
@@ -993,6 +1023,7 @@ def _skill_system(
     appearance: str,
     *,
     memory_block: str = "",
+    context_summary: str = "",
     interest_hints: str = "",
     local_kb: str = "",
     mcp_context: str = "",
@@ -1027,6 +1058,8 @@ reply 先回应用户真正关心的内容，不要描述自己的工作流程�
         extra = ""
         if tool_observations and tool_observations != "（无）":
             extra += f"\n【本轮工具观察】\n{tool_observations}\n"
+        if context_summary:
+            extra += f"\n【已压缩的先前上下文】\n{context_summary}\n"
         if memory_block:
             extra += f"\n{memory_block}\n"
         if interest_hints:
@@ -1084,6 +1117,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
     gallery = list(state.get("search_image_gallery") or [])
     completed = list(state.get("completed_tools") or [])
     observations = list(state.get("tool_observations") or [])
+    results: list[dict[str, Any]] = []
     image_prompt = state.get("image_prompt") or ""
     action = state.get("action") or "CHAT"
     need_search_images = bool(state.get("need_search_images"))
@@ -1106,8 +1140,10 @@ def node_execute_tools(state: MascotState) -> MascotState:
                     local_kb = "\n\n".join(part for part in (local_kb, rag_context) if part)[:4000]
                     context_parts.append(f"【{source}】\n{rag_context}")
                     observations.append(f"rag ok source={source}")
+                    results.append({"name": "rag", "status": "ok"})
                 else:
                     observations.append("rag empty")
+                    results.append({"name": "rag", "status": "empty"})
             elif name == "web_search":
                 web_state: MascotState = dict(state)
                 web_state["mcp_query"] = query
@@ -1123,8 +1159,10 @@ def node_execute_tools(state: MascotState) -> MascotState:
                 need_search_images = bool(call.get("include_images")) or want_images or need_search_images
                 if web_context or image_count:
                     observations.append(f"web_search ok images={image_count} query={query[:80]}")
+                    results.append({"name": "web_search", "status": "ok"})
                 else:
                     observations.append(f"web_search empty query={query[:80]}")
+                    results.append({"name": "web_search", "status": "empty"})
             elif name == "image_generation":
                 image_state: MascotState = dict(state)
                 image_state["image_prompt"] = str(call.get("prompt") or query).strip()
@@ -1133,6 +1171,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
                 image_prompt = str(node_image_action(image_state).get("image_prompt") or "")
                 action = "IMAGE"
                 observations.append("image_generation ok")
+                results.append({"name": "image_generation", "status": "ok"})
             else:
                 observations.append(f"{name or 'unknown'} skip")
                 continue
@@ -1140,6 +1179,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
         except Exception as exc:
             logger.exception("看板娘工具执行失败 tool=%s", name)
             observations.append(f"{name} fail:{type(exc).__name__}")
+            results.append({"name": name, "status": "fail"})
     return {
         "mcp_context": "\n\n".join(context_parts)[-6000:],
         "local_kb_snippet": local_kb[:4000],
@@ -1148,6 +1188,7 @@ def node_execute_tools(state: MascotState) -> MascotState:
         "mcp_used": bool(completed),
         "completed_tools": completed,
         "tool_observations": observations[-20:],
+        "tool_results": results,
         "planned_tools": [],
         "tool_round": int(state.get("tool_round") or 0) + 1,
         "action": action,
@@ -1251,16 +1292,17 @@ def node_agent(state: MascotState) -> MascotState:
     appearance = (state.get("appearance") or "xiaomeng").lower()
     skill = _effective_skill(state)
     vip_tier = _vip_tier_num(state)
-    llm_route = _normalize_llm_route(state.get("llm_route"), vip_tier, skill)
+    llm_route = _answer_route(state, vip_tier, skill)
     user_msg = (state.get("message") or "").strip()
     history = state.get("history") or []
-    max_turns = int(settings.mascot.get("max_history_turns", 8))
+    max_turns = int(settings.mascot.get("max_history_messages", 16))
 
     sys = _skill_system(
         skill,
         tier,
         appearance,
         memory_block=_format_memory_block(state),
+        context_summary=str(state.get("context_summary") or "")[:2000],
         interest_hints=_format_interest_hints(state),
         local_kb=state.get("local_kb_snippet") or "",
         mcp_context=state.get("mcp_context") or "",
@@ -1470,12 +1512,11 @@ def build_mascot_graph() -> Any:
     g.add_node("supervisor", node_supervisor)
     g.add_node("tool_planner", node_tool_planner)
     g.add_node("execute_tools", node_execute_tools)
-    g.add_node("tavily_search", node_tavily_search)
     g.add_node("task_worker", node_task_worker)
     g.add_node("agent", node_agent)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"tool_planner": "tool_planner"})
+    g.add_edge("supervisor", "tool_planner")
     g.add_conditional_edges(
         "tool_planner",
         _route_after_planner,
@@ -1501,7 +1542,7 @@ def build_mascot_prepare_graph() -> Any:
     g.add_node("task_worker", node_task_worker)
     g.add_edge(START, "route_skill")
     g.add_edge("route_skill", "supervisor")
-    g.add_conditional_edges("supervisor", _route_after_supervisor, {"tool_planner": "tool_planner"})
+    g.add_edge("supervisor", "tool_planner")
     g.add_conditional_edges(
         "tool_planner",
         _route_after_planner,
@@ -1532,6 +1573,7 @@ def run_mascot_chat(
     vip_tier: int = 0,
     client_datetime: str = "",
     memory_summary: str = "",
+    context_summary: str = "",
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
     liked_titles: list[str] | None = None,
@@ -1552,6 +1594,8 @@ def run_mascot_chat(
             "history": history or [],
             "client_datetime": client_datetime or "",
             "memory_summary": memory_summary or "",
+            "context_summary": context_summary or "",
+        "context_summary": context_summary or "",
             "memory_facts": memory_facts or [],
             "memory_probe": bool(memory_probe),
             "liked_titles": liked_titles or [],

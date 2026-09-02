@@ -20,6 +20,7 @@
 }
 
 .mascot-input-shell {
+  position: relative;
   flex: 1;
   min-width: 0;
   border-radius: 12px;
@@ -39,6 +40,7 @@
 .mascot-input-box {
   display: block;
   width: 100%;
+  padding-bottom: 12px;
   min-height: 22px;
   max-height: 120px;
   padding: 0;
@@ -191,39 +193,6 @@
   animation: rotating 2s linear infinite;
 }
 
-.mascot-context-control__memory {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.mascot-context-control__memory:hover:not(:disabled) {
-  color: var(--el-color-primary, #409eff);
-  background: var(--el-fill-color-light, #f5f7fa);
-}
-
-.mascot-context-control__memory:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.mascot-context-control__memory-icon {
-  display: block;
-  width: 36px;
-  height: 36px;
-  background: currentColor;
-  -webkit-mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
-  mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
-}
-
 .mascot-generation-hint {
   min-width: 0;
   overflow: hidden;
@@ -275,8 +244,51 @@
   opacity: 0.72;
 }
 
-.mascot-counter {
+/* 字数贴在输入框内右下角：输入框自由伸缩时它跟着一起走 */
+.mascot-input-counter {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
   font-size: 11px;
+  line-height: 1;
   color: var(--el-text-color-placeholder, #a8abb2);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 记忆按钮移到底行最右，尺寸也收小一点，别挡视线 */
+.mascot-memory-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--el-text-color-secondary, #909399);
+  cursor: pointer;
+}
+
+.mascot-memory-btn:hover:not(:disabled) {
+  color: var(--el-color-primary, #409eff);
+  background: var(--el-fill-color-light, #f5f7fa);
+}
+
+.mascot-memory-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.mascot-memory-btn__icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
+  mask: url('@/assets/svg/记忆.svg') center / contain no-repeat;
 }
 
