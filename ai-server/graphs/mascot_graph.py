@@ -59,6 +59,10 @@ class MascotState(TypedDict, total=False):
     ask_offer: dict[str, Any]
     # 追问轮的开场白：规划器顺带给出，直接当正文用，省掉一次回答模型调用
     ask_intro: str
+    # 这一轮准不准问「要不要我留意一下」；由 Java 按会话与上限决定
+    intent_probe: bool
+    # 规划器识别出的可牵线意愿（未经用户确认，只是一个建议）
+    intent_offer: dict[str, Any]
     need_search_images: bool
     llm_route: str
     history: list[dict[str, str]]
@@ -173,6 +177,7 @@ def node_supervisor(state: MascotState) -> MascotState:
         "related_search_query": "",
         "ask_offer": {},
         "ask_intro": "",
+        "intent_offer": {},
         "need_search_images": False,
         "planned_tools": [],
         "completed_tools": [],
@@ -255,6 +260,7 @@ def _plan_tool_calls(
         "related_search_query": "",
         "ask_offer": {},
         "ask_intro": "",
+        "intent_offer": {},
         "need_search_images": bool(state.get("need_search_images")),
         "blocked": False,
         "block_reason": "",
@@ -317,6 +323,17 @@ def _plan_tool_calls(
 - 用户消息已含「【用户澄清回答】」且信息足够时，禁止再问，直接按澄清结果规划。
 - 意图已明确时不要为了问而问。
 
+牵线意愿（intent_offer，默认不给）：
+- 只有当用户表达出「想找个人问 / 想找人一起做 / 我能帮别人做」这类**指向具体的人**的需求时才给。
+- 判据是「这件事发帖不值当，但站里可能正好有人对得上」。旅行搭子、想请教某个具体做法、
+  想找人一起玩某个游戏、自己刚好懂某件事愿意被问——都算。
+- 以下一律不给：找帖子看、要你帮写东西、查外部事实、闲聊、问站点怎么用。
+  「帮我找篇讲 X 的帖子」是检索，不是牵线，绝不要混。
+- text 用第一人称写成一句话，20~40 字，只保留能用来配对的信息，
+  不要写进具体时间、地点门牌、联系方式这类私人细节——它将来会被展示给另一个人看。
+- kind：seek=想找人 / offer=能帮人。
+- **宁可不给**。一次对话里最多给一次；拿不准就不给。给多了用户会把这个功能关掉。
+
 画图：
 - 画面已足够具体 → image_generation 且 action=IMAGE；
 - 否则用 ask_offer 澄清，严禁一边追问一边生图。
@@ -329,7 +346,7 @@ def _plan_tool_calls(
 {"tool_calls":[{"name":"rag|web_search|image_generation","query":"","include_images":false,"prompt":""}],
 "complexity":"SIMPLE|COMPLEX","action":"CHAT|IMAGE","image_prompt":"",
 "suggest_related_search":false,"related_search_query":"","need_search_images":false,
-"ask_offer":null,"ask_intro":"","blocked":false,"block_reason":"","skill":"writing|help","image_quality":"normal|premium"}"""
+"ask_offer":null,"ask_intro":"","blocked":false,"block_reason":"","skill":"writing|help","intent_offer":null,"image_quality":"normal|premium"}"""
     system += skill_clause
     system += """
 ask_offer 示例：
@@ -401,6 +418,9 @@ ask_offer 示例：
         suggest = False
         related_query = ""
     need_search_images = bool(data.get("need_search_images"))
+    intent_offer = _normalize_intent_offer(data.get("intent_offer")) \
+        if bool(state.get("intent_probe")) else {}
+
     ask_offer = _normalize_ask_offer(
         data.get("ask_offer") if data.get("ask_offer") is not None else data.get("draw_confirm_offer")
     )
@@ -495,11 +515,31 @@ ask_offer 示例：
         "related_search_query": related_query,
         "ask_offer": ask_offer,
         "ask_intro": str(data.get("ask_intro") or "").strip()[:200] if ask_offer else "",
+        # 追问和牵线不同时出：一次只让用户回答一件事
+        "intent_offer": {} if ask_offer else intent_offer,
         "need_search_images": need_search_images or any(
             bool(item.get("include_images")) for item in calls if item.get("name") == "web_search"
         ),
     }
     return calls, usage, meta
+
+
+def _normalize_intent_offer(raw: Any) -> dict[str, Any]:
+    """把规划器给的牵线意愿收干净。
+
+    这段文本将来会被展示给**另一个用户**，所以宁可截短也不能放行奇怪的内容：
+    去掉换行（它会被塞进卡片里）、限长、只认两种 kind。
+    真正的内容审核在 Java 落库前做（validateText），这里只做形状约束。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    text = str(raw.get("text") or "").replace("\n", " ").strip()[:120]
+    if len(text) < 6:
+        return {}
+    kind = str(raw.get("kind") or "seek").strip().lower()
+    if kind not in ("seek", "offer"):
+        kind = "seek"
+    return {"kind": kind, "text": text}
 
 
 def _normalize_ask_offer(raw: Any) -> dict[str, Any]:
@@ -572,6 +612,7 @@ def node_tool_planner(state: MascotState) -> MascotState:
         out["related_search_query"] = str(meta.get("related_search_query") or "")
         out["ask_offer"] = meta.get("ask_offer") or {}
         out["ask_intro"] = str(meta.get("ask_intro") or "")
+        out["intent_offer"] = meta.get("intent_offer") or {}
         if out["ask_offer"]:
             out["action"] = "CHAT"
             out["image_prompt"] = ""
@@ -835,6 +876,7 @@ def stream_mascot_chat(
     context_summary: str = "",
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
+    intent_probe: bool = False,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ):
@@ -842,6 +884,7 @@ def stream_mascot_chat(
     yield ("status", "preparing")
     ctx: dict[str, Any] = {}
     for status, current_state in _stream_mascot_context(
+        intent_probe=intent_probe,
         message=message,
         session_id=session_id,
         appearance=appearance,
@@ -892,6 +935,14 @@ def stream_mascot_chat(
             "relatedSearchQuery": ctx.get("related_search_query") or "",
             "complexity": ctx.get("complexity") or "SIMPLE",
         })
+    intent_offer = ctx.get("intent_offer") or {}
+    if isinstance(intent_offer, dict) and intent_offer.get("text"):
+        # 只是一个建议：用户在卡片上点头之后，Java 才会把它写进意愿池
+        yield ("meta", {"intentOffer": {
+            "kind": intent_offer.get("kind") or "seek",
+            "text": intent_offer.get("text") or "",
+        }})
+
     search_gallery = ctx.get("search_image_gallery") or []
     if search_gallery:
         yield ("meta", {"searchImageGallery": search_gallery})
@@ -947,6 +998,7 @@ def _stream_mascot_context(
     memory_facts: list[str] | None,
     liked_titles: list[str] | None,
     favorite_songs: list[str] | None,
+    intent_probe: bool = False,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """通过 LangGraph 逐节点产出看板娘准备阶段的真实状态。"""
     global _STREAM_PREPARE_GRAPH
@@ -965,6 +1017,7 @@ def _stream_mascot_context(
         "memory_summary": memory_summary or "",
         "context_summary": context_summary or "",
         "memory_facts": memory_facts or [],
+        "intent_probe": bool(intent_probe),
         "liked_titles": liked_titles or [],
         "favorite_songs": favorite_songs or [],
     }
@@ -1635,6 +1688,7 @@ def run_mascot_chat(
     context_summary: str = "",
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
+    intent_probe: bool = False,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -1654,9 +1708,9 @@ def run_mascot_chat(
             "client_datetime": client_datetime or "",
             "memory_summary": memory_summary or "",
             "context_summary": context_summary or "",
-        "context_summary": context_summary or "",
             "memory_facts": memory_facts or [],
             "memory_probe": bool(memory_probe),
+            "intent_probe": bool(intent_probe),
             "liked_titles": liked_titles or [],
             "favorite_songs": favorite_songs or [],
         }

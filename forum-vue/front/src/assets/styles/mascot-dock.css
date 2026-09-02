@@ -1419,3 +1419,71 @@
   font-size: 11px;
   opacity: 0.9;
 }
+
+/* 牵线确认卡：克制一点，它只是一句顺带的询问，不该抢正文的注意力 */
+.mascot-intent-card {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(212, 83, 126, 0.45);
+  border-radius: 10px;
+  background: rgba(212, 83, 126, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mascot-intent-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mascot-intent-card__tip {
+  font-size: 12px;
+  color: var(--el-text-color-regular, #606266);
+}
+
+.mascot-intent-card__text {
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.mascot-intent-card__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mascot-intent-card__ok,
+.mascot-intent-card__no {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mascot-intent-card__ok {
+  background: var(--primary-red, #d4537e);
+  color: #fff;
+}
+
+.mascot-intent-card__no {
+  background: var(--el-fill-color, #f0f2f5);
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.mascot-intent-card__ok:disabled,
+.mascot-intent-card__no:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mascot-intent-done {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder, #a8abb2);
+}

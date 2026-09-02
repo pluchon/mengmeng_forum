@@ -145,6 +145,8 @@ def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "memory_facts": _string_list(raw.get("memoryFacts") or raw.get("memory_facts"), 10, 40),
         # 由 Java 决定这一轮要不要探长期记忆；缺省为 True 兼容旧调用方
         "memory_probe": bool(raw.get("memoryProbe", raw.get("memory_probe", True))),
+        # 这一轮准不准问「要不要我留意一下」；由 Java 按会话与上限决定，默认不问
+        "intent_probe": bool(raw.get("intentProbe", raw.get("intent_probe", False))),
         # 压缩摘要走独立字段，不混进 history——history 会被窗口截断
         "context_summary": str(raw.get("contextSummary") or raw.get("context_summary") or "").strip()[:2000],
         "liked_titles": _string_list(raw.get("likedTitles") or raw.get("liked_titles"), 6, 80),

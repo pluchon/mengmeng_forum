@@ -241,6 +241,29 @@
                               </template>
                             </div>
                           </div>
+                          <div v-if="m.intentOffer?.text && !m.streaming" class="mascot-intent-card">
+                            <div class="mascot-intent-card__body">
+                              <span class="mascot-intent-card__tip">要不要我帮你留意一下站里的同好？</span>
+                              <span class="mascot-intent-card__text">「{{ m.intentOffer.text }}」</span>
+                            </div>
+                            <div class="mascot-intent-card__actions">
+                              <button
+                                type="button"
+                                class="mascot-intent-card__ok"
+                                :disabled="intentSubmitting"
+                                @click="acceptIntentOffer(m)"
+                              >好呀</button>
+                              <button
+                                type="button"
+                                class="mascot-intent-card__no"
+                                :disabled="intentSubmitting"
+                                @click="dismissIntentOffer(m)"
+                              >不用</button>
+                            </div>
+                          </div>
+                          <div v-else-if="m.intentAccepted" class="mascot-intent-done">
+                            已记下：{{ m.intentAccepted }}
+                          </div>
                           <div
                             v-if="m.role === 'assistant' && m.type !== 'image' && !m.streaming"
                             class="mascot-bubble-meta mascot-bubble-meta--assistant"
@@ -471,6 +494,9 @@ const {
   dismissActiveAsk,
   dismissRelatedSearchOffer,
   pickAskOption,
+  acceptIntentOffer,
+  dismissIntentOffer,
+  intentSubmitting,
   askAnswerSummary,
   isAskAnswerMessage,
   downloadMascotImage,

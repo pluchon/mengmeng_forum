@@ -28,6 +28,7 @@ import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { marked } from 'marked'
 import { sanitizeHtml } from '@/utils/security'
 import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
+import { createMascotIntent } from '@/api/mascot'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -1270,6 +1271,36 @@ export function useMascotDock() {
     }
   }
 
+  // 看板娘牵线（第一期只做「识别 → 你点头 → 记下来」，还没有匹配）。
+  // 没点头的内容一律不入池——这是这个功能的隐私基石，别为了方便省掉这一步。
+  const intentSubmitting = ref(false)
+
+  async function acceptIntentOffer(message) {
+    const offer = message?.intentOffer
+    if (!offer?.text || intentSubmitting.value) return
+    intentSubmitting.value = true
+    try {
+      const res = await createMascotIntent({
+        kind: offer.kind,
+        text: offer.text,
+        sessionId: /^\d+$/.test(String(sessionId.value)) ? Number(sessionId.value) : null,
+      })
+      if (res.code !== 0) return
+      message.intentOffer = null
+      message.intentAccepted = offer.text
+      persistCurrentMessages()
+      ElMessage.success('好的，我记下了～有合适的人再告诉你')
+    } finally {
+      intentSubmitting.value = false
+    }
+  }
+
+  function dismissIntentOffer(message) {
+    if (!message?.intentOffer) return
+    message.intentOffer = null
+    persistCurrentMessages()
+  }
+
   async function refreshMascotMemory() {
     if (!userStore.isLoggedIn) {
       memorySummary.value = ''
@@ -1795,6 +1826,12 @@ export function useMascotDock() {
                 persistCurrentMessages()
                 scrollFsToBottom()
               }
+              if (meta?.intentOffer?.text && row) {
+                row.intentOffer = {
+                  kind: String(meta.intentOffer.kind || 'seek'),
+                  text: String(meta.intentOffer.text).slice(0, 120),
+                }
+              }
               if (meta?.relatedSearchOffer && meta?.relatedSearchQuery && row) {
                 row.relatedSearchOffer = {
                   query: String(meta.relatedSearchQuery).slice(0, 500),
@@ -2006,6 +2043,9 @@ export function useMascotDock() {
     dismissRelatedSearchOffer,
     draft,
     pickAskOption,
+    acceptIntentOffer,
+    dismissIntentOffer,
+    intentSubmitting,
     askAnswerSummary,
     isAskAnswerMessage,
     downloadMascotImage,

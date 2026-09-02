@@ -224,6 +224,22 @@ CREATE TABLE `forum_companion_session` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `forum_mascot_intent` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `intent_kind` varchar(16) NOT NULL COMMENT 'seek=想找人 offer=能帮人',
+  `intent_text` varchar(200) NOT NULL COMMENT '用户确认过的那句意愿描述',
+  `source_session_id` bigint DEFAULT NULL COMMENT '来自哪个看板娘会话，用于「同一会话不重复问」',
+  `state` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE|MATCHED|EXPIRED|CANCELLED',
+  `expire_at` datetime NOT NULL COMMENT '过期时间；到期自动作废，避免拿着半年前的需求去牵线',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `delete_state` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0=正常 1=已删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_mascot_intent_user` (`user_id`,`state`,`delete_state`),
+  KEY `idx_mascot_intent_session` (`source_session_id`,`delete_state`),
+  KEY `idx_mascot_intent_pool` (`state`,`expire_at`,`delete_state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='看板娘牵线意愿池';
 CREATE TABLE `forum_mascot_memory` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint NOT NULL COMMENT '用户ID',

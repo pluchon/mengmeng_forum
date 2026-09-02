@@ -21,6 +21,9 @@ import org.pluchon.forum.entity.vo.mascot.MascotQuotaHintVO;
 import org.pluchon.forum.entity.vo.MascotRelatedRecommendationVO;
 import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
+import org.pluchon.forum.entity.dto.MascotIntentCreateRequest;
+import org.pluchon.forum.entity.vo.MascotIntentVO;
+import org.pluchon.forum.service.interfaces.mascot.MascotIntentService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.AiUserLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +57,9 @@ public class MascotController {
 
     @Autowired
     private CompanionMemoryService companionMemoryService;
+
+    @Autowired
+    private MascotIntentService mascotIntentService;
 
     @Autowired
     private AiUserLookupService aiUserLookupService;
@@ -200,6 +206,52 @@ public class MascotController {
             return Result.fail(ResultCode.USER_UNLOGIN);
         }
         return Result.success(mascotService.compressContext(user, sessionId));
+    }
+
+    @Operation(summary = "留意一件事", description = "用户在看板娘的确认卡片上点头后才会调到这里；没点头的内容一律不入池")
+    @PostMapping("/intent")
+    public Result<MascotIntentVO> createIntent(
+            @Valid @RequestBody MascotIntentCreateRequest request,
+            HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotIntentService.create(user.getId(), request));
+    }
+
+    @Operation(summary = "我在留意什么")
+    @GetMapping("/intent")
+    public Result<List<MascotIntentVO>> listIntents(HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        return Result.success(mascotIntentService.listMine(user.getId()));
+    }
+
+    @Operation(summary = "撤掉一条留意")
+    @DeleteMapping("/intent/{intentId}")
+    public Result<Void> cancelIntent(
+            @PathVariable @Positive Long intentId,
+            HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        mascotIntentService.cancel(user.getId(), intentId);
+        return Result.success();
+    }
+
+    @Operation(summary = "别再帮我留意了", description = "一次清空全部意愿")
+    @DeleteMapping("/intent")
+    public Result<Void> cancelAllIntents(HttpServletRequest httpServletRequest) {
+        AiUserContext user = currentUser(httpServletRequest);
+        if (user == null) {
+            return Result.fail(ResultCode.USER_UNLOGIN);
+        }
+        mascotIntentService.cancelAll(user.getId());
+        return Result.success();
     }
 
     @GetMapping("/companion/memory")

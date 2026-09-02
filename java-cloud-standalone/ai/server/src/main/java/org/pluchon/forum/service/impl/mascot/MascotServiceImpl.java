@@ -55,6 +55,7 @@ import org.pluchon.forum.service.interfaces.mascot.CompanionMemoryService;
 import org.pluchon.forum.service.interfaces.ai.AiQuotaService;
 import org.pluchon.forum.service.interfaces.ai.AiCompanionApiService;
 import org.pluchon.forum.service.interfaces.mascot.MascotService;
+import org.pluchon.forum.service.interfaces.mascot.MascotIntentService;
 import org.pluchon.forum.service.security.AiUserContext;
 import org.pluchon.forum.service.security.MascotPromptGuard;
 import org.pluchon.forum.service.security.AiUserLookupService;
@@ -156,6 +157,9 @@ public class MascotServiceImpl implements MascotService {
 
     @Resource
     private CompanionMemoryService companionMemoryService;
+
+    @Autowired
+    private MascotIntentService mascotIntentService;
 
     @Resource
     private ObjectMapper objectMapper;
@@ -1022,6 +1026,8 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
+        // 牵线意愿：同一会话只问一次、攒够上限就不问，闸在 Java 这边
+        pyBody.put("intent_probe", mascotIntentService.shouldProbeIntent(user.getId(), dbSessionId));
         // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
         pyBody.put("context_summary", dbSessionId == null
                 ? "" : companionMemoryService.loadContextSummary(dbSessionId));
@@ -1481,6 +1487,8 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_summary", mascotMemory.getSummary());
         pyBody.put("memory_facts", mascotMemory.getFacts());
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
+        // 牵线意愿：同一会话只问一次、攒够上限就不问，闸在 Java 这边
+        pyBody.put("intent_probe", mascotIntentService.shouldProbeIntent(user.getId(), dbSessionId));
         // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
         pyBody.put("context_summary", dbSessionId == null
                 ? "" : companionMemoryService.loadContextSummary(dbSessionId));

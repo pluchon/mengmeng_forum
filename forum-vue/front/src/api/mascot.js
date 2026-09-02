@@ -223,3 +223,33 @@ export function renameCompanionSession(sessionId, data) {
     data,
   })
 }
+
+// 看板娘牵线：意愿池。用户在确认卡片上点头后才会调到这里
+export function createMascotIntent(data) {
+  return request({
+    url: '/mascot/intent',
+    method: 'post',
+    data,
+  })
+}
+
+export function listMascotIntents() {
+  return request({
+    url: '/mascot/intent',
+    method: 'get',
+  })
+}
+
+export function cancelMascotIntent(intentId) {
+  return request({
+    url: `/mascot/intent/${intentId}`,
+    method: 'delete',
+  })
+}
+
+export function cancelAllMascotIntents() {
+  return request({
+    url: '/mascot/intent',
+    method: 'delete',
+  })
+}
