@@ -692,7 +692,6 @@ def _prepare_mascot_context(
     client_datetime: str = "",
     memory_summary: str = "",
     memory_facts: list[str] | None = None,
-    memory_probe: bool = True,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -775,6 +774,7 @@ def stream_mascot_chat(
     client_datetime: str = "",
     memory_summary: str = "",
     memory_facts: list[str] | None = None,
+    memory_probe: bool = True,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ):
