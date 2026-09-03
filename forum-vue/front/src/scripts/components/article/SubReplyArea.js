@@ -87,7 +87,7 @@ function isViolated(sub) {
 
 function isOwnSub(sub) {
   const uid = sub?.postUser?.id
-  const me = userStore.userInfo?.id
+  const me = userStore.id
   if (uid == null || me == null) return false
   return Number(uid) === Number(me)
 }

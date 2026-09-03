@@ -784,7 +784,7 @@ export function useArticleDetail() {
 
   function isOwnComment(item) {
     const uid = item?.user?.id
-    const me = userStore.userInfo?.id
+    const me = userStore.id
     if (uid == null || me == null) return false
     return Number(uid) === Number(me)
   }
