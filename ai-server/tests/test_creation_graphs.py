@@ -57,7 +57,9 @@ class PolishGraphTest(unittest.TestCase):
             patch("modules.creation.polish_graph._flash_model", return_value="flash-model"),
             patch("modules.creation.polish_graph._deep_model", return_value="deep-model"),
         ):
-            result = run_polish_graph("标题", source, "markdown")
+            # allow_deep 由 Java 按 vipTier 填入，不传等于免费档。
+            # 这一条测的是 PRO/MAX 路径，必须显式打开
+            result = run_polish_graph("标题", source, "markdown", allow_deep=True)
 
         self.assertEqual(4, worker_calls)
         self.assertEqual(4, result["candidateCount"])
@@ -65,6 +67,49 @@ class PolishGraphTest(unittest.TestCase):
         self.assertIn("https://example.com/a", result["content"])
         self.assertIn("print('ok')", result["content"])
         self.assertIn("deep-model", models)
+
+    def test_free_tier_never_gets_deep_model(self) -> None:
+        """深度模型是计费门：同样的复杂内容，免费档必须被卡在 flash。
+
+        这个限制只能靠代码卡死——提示词里写「你是免费用户别用深度模型」拦不住，
+        因为选模型的是代码，不是模型自己。
+        """
+        models: list[str] = []
+
+        def completion(model: str, messages: list[dict[str, str]], **kwargs: object):
+            models.append(model)
+            prompt = messages[-1]["content"]
+            if "语义复杂度" in prompt:
+                return json.dumps({
+                    "complexity": "complex",
+                    "worker_count": 4,
+                    "strategies": ["自然表达", "清晰结构", "保持语气", "简洁得体"],
+                    "needs_deep": True,
+                    "confidence": 0.55,
+                    "reason": "事实和逻辑层次较多",
+                }, ensure_ascii=False), _usage(model)
+            if "评估润色候选" in prompt:
+                return json.dumps({
+                    "selected_index": 0,
+                    "selected_score": 88,
+                    "acceptable": True,
+                    "needs_refine": False,
+                    "feedback": "表达自然",
+                }, ensure_ascii=False), _usage(model)
+            return prompt.split("\n正文：\n", 1)[1], _usage(model)
+
+        source = "# 标题\n\n这段话有点绕。\n\n[参考](https://example.com/a)"
+        with (
+            patch("modules.creation.polish_graph.json_chat_completion", side_effect=completion),
+            patch("modules.creation.polish_graph.dashscope_chat_completion", side_effect=completion),
+            patch("modules.creation.polish_graph._flash_model", return_value="flash-model"),
+            patch("modules.creation.polish_graph._deep_model", return_value="deep-model"),
+        ):
+            result = run_polish_graph("标题", source, "markdown", allow_deep=False)
+
+        # 模型自己报了 needs_deep=True，也照样得被挡回去
+        self.assertFalse(result["deepUsed"])
+        self.assertNotIn("deep-model", models)
 
     def test_failed_analysis_degrades_to_one_flash_worker(self) -> None:
         worker_calls = 0
