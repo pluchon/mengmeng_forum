@@ -45,10 +45,29 @@ spring:
     openfeign:
       client:
         config:
+          # 默认按「域间快调用」定超时：查用户存在、拿档位快照这类都是毫秒级的单条索引查询。
+          # 原来默认 60 秒，而 Tomcat 默认只有 200 个工作线程——被调方一卡，
+          # 调用方几秒内线程就填满，整个服务连不需要它的接口一起不响应。
+          # 走 AI 的调用是例外，在下面逐个放宽
           default:
+            connect-timeout: 2000
+            read-timeout: 5000
+            logger-level: basic
+          # 下面三个都是 validateText 文本审核，Python 侧 text_audit_timeout 就是 45 秒，
+          # 保持原来的 60 秒不动
+          authAiHubInternalFeignClient:
             connect-timeout: 5000
             read-timeout: 60000
-            logger-level: basic
+          imAiHubInternalFeignClient:
+            connect-timeout: 5000
+            read-timeout: 60000
+          economyAiHubInternalFeignClient:
+            connect-timeout: 5000
+            read-timeout: 60000
+          # ai 域把生成的图回传 content 落 OSS，走的是图片字节，比普通内部调用慢
+          aiFileInternalFeignClient:
+            connect-timeout: 5000
+            read-timeout: 30000
 
 logging:
   level:
