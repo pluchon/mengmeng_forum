@@ -44,6 +44,7 @@ public final class UserMusicConverter {
         ReviewDisplay review = parseReviewDisplay(row.getReviewResult());
         MusicTrackVO vo = new MusicTrackVO();
         vo.setId(row.getId());
+        vo.setUserId(row.getUserId());
         vo.setMusicKey(row.getMusicKey());
         vo.setTitle(row.getTitle());
         vo.setArtist(row.getArtist());

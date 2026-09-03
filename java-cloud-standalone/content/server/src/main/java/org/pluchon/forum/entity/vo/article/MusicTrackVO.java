@@ -14,6 +14,9 @@ public class MusicTrackVO {
     private Long id;
 
     @Schema(description = "曲库键(文件名 stem)")
+    // 上传者，前端据此隐藏「举报自己的歌」入口
+    private Long userId;
+
     private String musicKey;
 
     @Schema(description = "歌名")

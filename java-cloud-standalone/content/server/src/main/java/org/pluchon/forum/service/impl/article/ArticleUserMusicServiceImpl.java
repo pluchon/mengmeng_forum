@@ -529,7 +529,13 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
             UserMusic row = byKey.get(track.getMusicKey());
             if (row == null || (row.getDeleteState() != null && row.getDeleteState() == DELETE_TRUE)) {
                 track.setAvailability("deleted");
-            } else if (!Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(row.getStatus())) {
+                continue;
+            }
+            // 快照本身不存歌曲 ID，这里顺手补上——举报要按 ID 提交，
+            // 否则从收藏里点开的歌就没法举报
+            track.setId(row.getId());
+            track.setUserId(row.getUserId());
+            if (!Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(row.getStatus())) {
                 track.setAvailability("offline");
             } else {
                 track.setAvailability("ok");

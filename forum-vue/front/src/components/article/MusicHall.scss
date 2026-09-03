@@ -2534,3 +2534,31 @@
   letter-spacing: 0.5px;
   pointer-events: none;
 }
+
+/* 播放卡片右上角的举报入口：平时很淡，悬停才明显，不跟播放控件抢注意力 */
+.music-hall__player-card {
+  position: relative;
+}
+
+.music-hall__report-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #c9ccd4;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.music-hall__report-btn:hover {
+  background: #fff0f7;
+  color: #f07ba8;
+}

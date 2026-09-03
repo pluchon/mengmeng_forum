@@ -20,6 +20,15 @@ forum:
     mq-consumer: true
     websocket: false
     game-runtime: false
+  report:
+    # 歌曲举报累计到几个不同用户才送 AI 复审。
+    # 帖子/评论违规要快速处理所以是单人直通，歌曲不急——
+    # 单人举报直通 AI 等于把成本敞开给任何人
+    music-ai-threshold: 3
+    # 每人每天最多提交几条举报
+    daily-limit: 20
+    # 近 30 天被判失实多少次后暂停举报资格
+    rejected-block: 5
   search:
     # 相关度阈值：需要按召回效果反复调参，改这里重启即可，不必重新编译。
     # ai-server 的 config.yaml 里有一组同类阈值各自独立生效，调参时两边一起看。

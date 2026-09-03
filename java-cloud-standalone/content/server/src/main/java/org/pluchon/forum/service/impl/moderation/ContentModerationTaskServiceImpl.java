@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.pluchon.forum.common.mq.ForumProducer;
 import org.pluchon.forum.common.utils.TransactionHooks;
+import org.pluchon.forum.entity.db.UserMusic;
+import org.pluchon.forum.mapper.UserMusicMapper;
+import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.entity.db.ArticleReply;
 import org.pluchon.forum.entity.db.ArticleSubReply;
 import org.pluchon.forum.entity.db.ArticleVideoDanmaku;
@@ -37,6 +40,7 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
     private static final byte TARGET_REPLY = 2;
     private static final byte TARGET_SUB_REPLY = 3;
     private static final byte TARGET_DANMAKU = 4;
+    private static final byte TARGET_MUSIC = 5;
     private static final byte TASK_PENDING = 0;
     private static final byte TASK_COMPLETED = 2;
     private static final byte TASK_FAILED = 3;
@@ -54,6 +58,9 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
 
     @Autowired
     private ArticleVideoDanmakuMapper articleVideoDanmakuMapper;
+
+    @Autowired
+    private UserMusicMapper userMusicMapper;
 
     @Autowired
     private ArticleService articleService;
@@ -195,6 +202,20 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
                     .eq(ArticleVideoDanmaku::getId, danmaku.getId())
                     .ne(ArticleVideoDanmaku::getDeleteState, DELETE_TRUE)
                     .set(ArticleVideoDanmaku::getDeleteState, DELETE_TRUE));
+            return;
+        }
+        if (TARGET_MUSIC == safeByte(targetType)) {
+            UserMusic music = userMusicMapper.selectById(targetId);
+            if (music == null || DELETE_TRUE == safeByte(music.getDeleteState())
+                    || !Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(music.getStatus())) {
+                return;
+            }
+            // 违规歌曲回到「未发布」：从曲库消失，作者能看到未通过原因去改。
+            // OSS 不在这里动——收藏过的人靠快照仍能播；要真正断播得另配 _removed/ 生命周期规则
+            userMusicMapper.update(null, new LambdaUpdateWrapper<UserMusic>()
+                    .eq(UserMusic::getId, music.getId())
+                    .eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_PUBLISHED)
+                    .set(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_DRAFT));
             return;
         }
         if (TARGET_REPLY == safeByte(targetType)) {

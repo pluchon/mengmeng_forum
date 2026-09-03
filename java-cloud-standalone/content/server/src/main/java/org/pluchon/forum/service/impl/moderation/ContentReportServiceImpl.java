@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.pluchon.forum.cloud.feign.ContentSystemMessageInternalFeignClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.pluchon.forum.entity.db.UserMusic;
+import org.pluchon.forum.mapper.UserMusicMapper;
+import java.util.Date;
+import org.pluchon.forum.common.constant.Constant;
 import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.mq.ForumProducer;
@@ -54,6 +59,9 @@ public class ContentReportServiceImpl implements ContentReportService {
     private static final byte TARGET_REPLY = 2;
     private static final byte TARGET_SUB_REPLY = 3;
     private static final byte TARGET_DANMAKU = 4;
+    private static final byte TARGET_MUSIC = 5;
+    // 攒举报时的占位任务号，达到阈值后统一改写成真正的 taskId
+    private static final String PENDING_TASK_PREFIX = "waiting-";
     private static final byte TASK_PENDING = 0;
     private static final byte TASK_COMPLETED = 2;
     private static final byte TASK_FAILED = 3;
@@ -63,6 +71,18 @@ public class ContentReportServiceImpl implements ContentReportService {
     private static final byte REPORT_ERROR = 3;
     private static final byte DELETE_FALSE = 0;
     private static final byte DELETE_TRUE = 1;
+
+    /** 歌曲举报累计到几个不同用户才送 AI 复审——单人举报直通 AI 等于把成本敞开 */
+    @Value("${forum.report.music-ai-threshold:3}")
+    private int musicAiThreshold;
+
+    /** 每人每天最多提交几条举报 */
+    @Value("${forum.report.daily-limit:20}")
+    private int reportDailyLimit;
+
+    /** 近 30 天被判失实多少次后暂停举报资格 */
+    @Value("${forum.report.rejected-block:5}")
+    private int reportRejectedBlock;
 
     @Autowired
     private ContentReportMapper reportMapper;
@@ -81,6 +101,9 @@ public class ContentReportServiceImpl implements ContentReportService {
 
     @Autowired
     private ArticleVideoDanmakuMapper articleVideoDanmakuMapper;
+
+    @Autowired
+    private UserMusicMapper userMusicMapper;
 
     @Autowired
     private ArticleService articleService;
@@ -103,6 +126,7 @@ public class ContentReportServiceImpl implements ContentReportService {
         if (reporterUserId == null) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_USER_NOT_EXISTS));
         }
+        assertReportAllowed(reporterUserId);
         byte targetType = parseTargetType(request.getTargetType());
         TargetSnapshot snapshot = loadSnapshot(targetType, request.getTargetId());
         if (snapshot.ownerUserId() != null && snapshot.ownerUserId().equals(reporterUserId)) {
@@ -132,8 +156,19 @@ public class ContentReportServiceImpl implements ContentReportService {
             notifyReporter(report, snapshot.title(), "目标内容此前已被处理");
             return toVO(report);
         }
+        if (shared == null && TARGET_MUSIC == targetType
+                && countTargetReports(targetType, request.getTargetId(), contentHash) + 1 < musicAiThreshold) {
+            // 还没攒够：先记下来，不建任务也不花 AI 的钱。
+            // 占位号按目标算，达到阈值那一刻一次性改写成真正的 taskId，
+            // 这样之前攒着的举报人也能收到结论通知
+            report.setTaskId(pendingTaskId(targetType, request.getTargetId(), contentHash));
+            report.setResultStatus(REPORT_PROCESSING);
+            insertReport(report);
+            return toVO(report);
+        }
         if (shared == null) {
             shared = createTask(reporterUserId, targetType, request.getTargetId(), contentHash);
+            adoptPendingReports(targetType, request.getTargetId(), contentHash, shared.getTaskId());
             // 此处举报单尚未 insert，理由取当前这条，不能走聚合查询
             Map<String, Object> payload = taskPayload(shared, snapshot, report.getReason());
             TransactionHooks.afterCommit(() -> forumProducer.sendAiAsyncTask(payload));
@@ -372,6 +407,26 @@ public class ContentReportServiceImpl implements ContentReportService {
             return new TargetSnapshot(reply.getPostUserId(), reply.getContent(), summarize(reply.getContent()),
                     DELETE_TRUE == safeByte(reply.getDeleteState()));
         }
+        if (TARGET_MUSIC == targetType) {
+            UserMusic music = userMusicMapper.selectById(targetId);
+            if (music == null) {
+                return new TargetSnapshot(null, "", "相关歌曲", true);
+            }
+            // 复审看的是文本信息：歌名、歌手、专辑、歌词。
+            // 音频本体在上传时已经过一次 USER_MUSIC_ANALYZE，这里不重复烧钱
+            StringBuilder sb = new StringBuilder();
+            sb.append(music.getTitle()).append(' ').append(music.getArtist());
+            if (StringUtils.hasText(music.getAlbum())) {
+                sb.append(' ').append(music.getAlbum());
+            }
+            if (StringUtils.hasText(music.getLyricText())) {
+                sb.append(' ').append(music.getLyricText());
+            }
+            // 已删除、或已经不在发布状态，都算「已处理」——不必再走一遍 AI
+            boolean handled = DELETE_TRUE == safeByte(music.getDeleteState())
+                    || !Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(music.getStatus());
+            return new TargetSnapshot(music.getUserId(), sb.toString(), music.getTitle(), handled);
+        }
         if (TARGET_DANMAKU == targetType) {
             ArticleVideoDanmaku danmaku = articleVideoDanmakuMapper.selectById(targetId);
             if (danmaku == null) {
@@ -499,19 +554,69 @@ public class ContentReportServiceImpl implements ContentReportService {
         return task.getRetryCount() == null ? 0 : task.getRetryCount();
     }
 
+    /** 每天上限 + 失实降权。两条都只挡滥用，正常用户碰不到 */
+    private void assertReportAllowed(Long reporterUserId) {
+        Date dayStart = new Date(System.currentTimeMillis() - 24L * 60 * 60 * 1000);
+        Long today = reportMapper.selectCount(new LambdaQueryWrapper<ContentReport>()
+                .eq(ContentReport::getReporterUserId, reporterUserId)
+                .eq(ContentReport::getDeleteState, DELETE_FALSE)
+                .ge(ContentReport::getCreateTime, dayStart));
+        if (today != null && today >= reportDailyLimit) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED, "今天的举报次数已用完，明天再来吧"));
+        }
+        Date monthStart = new Date(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000);
+        Long rejected = reportMapper.selectCount(new LambdaQueryWrapper<ContentReport>()
+                .eq(ContentReport::getReporterUserId, reporterUserId)
+                .eq(ContentReport::getResultStatus, REPORT_REJECTED)
+                .eq(ContentReport::getDeleteState, DELETE_FALSE)
+                .ge(ContentReport::getCreateTime, monthStart));
+        if (rejected != null && rejected >= reportRejectedBlock) {
+            throw new ApplicationException(Result.fail(
+                    ResultCode.FAILED, "最近多次举报被判定为失实，举报功能已暂停"));
+        }
+    }
+
+    private String pendingTaskId(byte targetType, Long targetId, String contentHash) {
+        return PENDING_TASK_PREFIX + targetType + "-" + targetId + "-" + contentHash;
+    }
+
+    /** 同一目标已攒了多少条举报（唯一索引保证一人一条，所以这就是不同用户数） */
+    private long countTargetReports(byte targetType, Long targetId, String contentHash) {
+        Long n = reportMapper.selectCount(new LambdaQueryWrapper<ContentReport>()
+                .eq(ContentReport::getTargetType, targetType)
+                .eq(ContentReport::getTargetId, targetId)
+                .eq(ContentReport::getContentHash, contentHash)
+                .eq(ContentReport::getDeleteState, DELETE_FALSE));
+        return n == null ? 0L : n;
+    }
+
+    /** 把攒着的举报单挂到刚建好的任务上，它们才会跟着一起收到结论 */
+    private void adoptPendingReports(byte targetType, Long targetId, String contentHash, String taskId) {
+        reportMapper.update(null, new LambdaUpdateWrapper<ContentReport>()
+                .eq(ContentReport::getTargetType, targetType)
+                .eq(ContentReport::getTargetId, targetId)
+                .eq(ContentReport::getContentHash, contentHash)
+                .eq(ContentReport::getResultStatus, REPORT_PROCESSING)
+                .likeRight(ContentReport::getTaskId, PENDING_TASK_PREFIX)
+                .set(ContentReport::getTaskId, taskId));
+    }
+
     private byte parseTargetType(String value) {
         return switch (value.trim().toUpperCase(Locale.ROOT)) {
             case "ARTICLE" -> TARGET_ARTICLE;
             case "REPLY" -> TARGET_REPLY;
             case "SUB_REPLY" -> TARGET_SUB_REPLY;
             case "DANMAKU" -> TARGET_DANMAKU;
+            case "MUSIC" -> TARGET_MUSIC;
             default -> throw new ApplicationException(Result.fail(
-                    ResultCode.FAILED_PARAMS_VALIDATE, "targetType 仅允许 ARTICLE、REPLY、SUB_REPLY、DANMAKU"));
+                    ResultCode.FAILED_PARAMS_VALIDATE,
+                    "targetType 仅允许 ARTICLE、REPLY、SUB_REPLY、DANMAKU、MUSIC"));
         };
     }
 
     private String targetTypeName(Byte value) {
         return switch (safeByte(value)) {
+            case TARGET_MUSIC -> "MUSIC";
             case TARGET_ARTICLE -> "ARTICLE";
             case TARGET_REPLY -> "REPLY";
             case TARGET_DANMAKU -> "DANMAKU";

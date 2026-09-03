@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { confirmDialog } from '@/utils/appDialog'
+import ReportReasonDialog from '@/components/common/ReportReasonDialog.vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,11 +21,12 @@ import {
   Search,
   SoldOut,
   Star,
+  WarnTriangleFilled,
   Upload,
   VideoPause,
   VideoPlay,
 } from '@element-plus/icons-vue'
-import { listMusicCatalog, listMusicMoodTags, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay, listMusicMoodTagOptions, createMusicMoodTag, offlineMyMusic, deleteMyMusic } from '@/api/article'
+import { listMusicCatalog, listMusicMoodTags, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay, listMusicMoodTagOptions, createMusicMoodTag, offlineMyMusic, deleteMyMusic, reportArticleContent } from '@/api/article'
 import { extractApiErrorMessage } from '@/api/httpError'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import BorderGlow from '@/components/common/BorderGlow.vue'
@@ -1627,6 +1629,35 @@ function unavailableLabel(track) {
   if (track?.availability === 'deleted') return '已删除'
   if (track?.availability === 'offline') return '已下架'
   return ''
+}
+
+// 举报：只对曲库里真实存在的歌开放（快照补过 id 之后，收藏里点开的也能举报）
+const musicReportVisible = ref(false)
+const musicReportSubmitting = ref(false)
+
+function canReportTrack(track) {
+  if (!track?.id) return false
+  // 自己的歌不用举报，下架/删除的也没必要
+  if (Number(track.userId) === Number(userStore.id)) return false
+  return !unavailableLabel(track)
+}
+
+function openMusicReport() {
+  if (!canReportTrack(previewTrack.value)) return
+  musicReportVisible.value = true
+}
+
+async function submitMusicReport(reason) {
+  const id = previewTrack.value?.id
+  if (!id || musicReportSubmitting.value) return
+  musicReportSubmitting.value = true
+  try {
+    await reportArticleContent({ targetType: 'MUSIC', targetId: id, reason })
+    musicReportVisible.value = false
+    ElMessage.success('已收到举报，结果会通过消息中心通知')
+  } finally {
+    musicReportSubmitting.value = false
+  }
 }
 
 const musicActionId = ref(null)

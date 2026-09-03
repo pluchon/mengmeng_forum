@@ -646,6 +646,16 @@
 
       <aside class="music-hall__preview">
         <div class="music-hall__player-card">
+          <button
+            v-if="canReportTrack(previewTrack)"
+            type="button"
+            class="music-hall__report-btn"
+            aria-label="举报这首歌"
+            title="举报"
+            @click="openMusicReport"
+          >
+            <el-icon :size="14"><WarnTriangleFilled /></el-icon>
+          </button>
           <div class="music-hall__album-block">
             <div class="music-hall__album" :style="coverStyle(previewTrack)">
               <img v-if="previewTrack?.coverUrl" :src="previewTrack.coverUrl" alt="">
@@ -1025,6 +1035,12 @@
       </div>
     </div>
   </div>
+    <ReportReasonDialog
+      v-model:visible="musicReportVisible"
+      title="举报歌曲"
+      :submitting="musicReportSubmitting"
+      @submit="submitMusicReport"
+    />
 </template>
 
 <script setup src="./MusicHall.js"></script>
