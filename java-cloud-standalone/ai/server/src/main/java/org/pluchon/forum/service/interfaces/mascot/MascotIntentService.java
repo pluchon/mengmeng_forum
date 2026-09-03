@@ -32,4 +32,10 @@ public interface MascotIntentService {
      * 代码级的闸，不靠模型自觉——同一会话问过一次就不再问，攒够上限也不再问。
      */
     boolean shouldProbeIntent(Long userId, Long sessionId);
+
+    /**
+     * 只看硬上限（同时挂着的意愿条数），不管「同一会话只问一次」。
+     * 用户自己开口要牵线时用这个——那不算「动不动就问」。
+     */
+    boolean intentSlotAvailable(Long userId);
 }

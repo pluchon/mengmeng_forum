@@ -92,8 +92,9 @@ public interface AiHubService {
      * <p>只送脱敏文本过去，**不带 userId**——身份与可见性全在 Java。
      * 入参每项 {key, a, b}，返回每项 {key, match, reason}。
      */
+    // maxPairs 是本轮真正送去判定的上限；候选可以多给，Python 用向量从中挑
     java.util.List<java.util.Map<String, Object>> matchMascotIntents(
-            java.util.List<java.util.Map<String, Object>> pairs);
+            java.util.List<java.util.Map<String, Object>> pairs, int maxPairs);
 
     String validateText(String content);
 

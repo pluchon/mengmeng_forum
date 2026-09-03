@@ -31,6 +31,7 @@ public class MascotIntentMatchServiceImpl implements MascotIntentMatchService {
     private static final String DECLINED = "DECLINED";
     private static final String CONNECTED = "CONNECTED";
     private static final String CLOSED = "CLOSED";
+    private static final String REJECTED = "REJECTED";
     private static final String STATE_ACTIVE = "ACTIVE";
     private static final String STATE_MATCHED = "MATCHED";
 
@@ -136,6 +137,23 @@ public class MascotIntentMatchServiceImpl implements MascotIntentMatchService {
                 .eq(ForumMascotIntent::getState, STATE_ACTIVE)
                 .set(ForumMascotIntent::getState, STATE_MATCHED)
                 .set(ForumMascotIntent::getUpdateTime, new Date()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordNotMatched(ForumMascotIntent a, ForumMascotIntent b) {
+        ForumMascotIntentMatch row = new ForumMascotIntentMatch();
+        row.setIntentAId(a.getId());
+        row.setIntentBId(b.getId());
+        row.setUserAId(a.getUserId());
+        row.setUserBId(b.getUserId());
+        row.setReason("");
+        row.setAState(DECLINED);
+        row.setBState(DECLINED);
+        row.setState(REJECTED);
+        row.setDeleteState((byte) 0);
+        // **不要**调 markMatched：这两条意愿没被牵成，还要继续参与后面的配对
+        matchMapper.insert(row);
     }
 
     @Override

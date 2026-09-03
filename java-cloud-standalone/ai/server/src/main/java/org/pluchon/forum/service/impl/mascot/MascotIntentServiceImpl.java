@@ -140,6 +140,14 @@ public class MascotIntentServiceImpl implements MascotIntentService {
     }
 
     @Override
+    public boolean intentSlotAvailable(Long userId) {
+        if (userId == null || userId <= 0) {
+            return false;
+        }
+        return countActive(userId) < intentMaxActive;
+    }
+
+    @Override
     public boolean shouldProbeIntent(Long userId, Long sessionId) {
         if (userId == null || userId <= 0) {
             return false;

@@ -61,6 +61,7 @@ class MascotState(TypedDict, total=False):
     ask_intro: str
     # 这一轮准不准问「要不要我留意一下」；由 Java 按会话与上限决定
     intent_probe: bool
+    intent_allowed: bool
     # 规划器识别出的可牵线意愿（未经用户确认，只是一个建议）
     intent_offer: dict[str, Any]
     need_search_images: bool
@@ -333,6 +334,11 @@ def _plan_tool_calls(
   不要写进具体时间、地点门牌、联系方式这类私人细节——它将来会被展示给另一个人看。
 - kind：seek=想找人 / offer=能帮人。
 - **宁可不给**。一次对话里最多给一次；拿不准就不给。给多了用户会把这个功能关掉。
+- **用户主动开口要你牵线／找人时是例外**（「帮我牵个线」「有没有人也想…」
+  「帮我找个能一起…的人」这类）：只要这句或前文已经说清了要找什么样的人，
+  就直接给 intent_offer 并把 solicited 设为 true，**不受「一次对话最多一次」的限制**。
+  他只说了「我要牵线」还没说要找什么，就正常回一句问他想找人问什么 / 能帮别人什么，
+  这一轮不要给——等他下一句说清了再给。
 
 画图：
 - 画面已足够具体 → image_generation 且 action=IMAGE；
@@ -346,7 +352,8 @@ def _plan_tool_calls(
 {"tool_calls":[{"name":"rag|web_search|image_generation","query":"","include_images":false,"prompt":""}],
 "complexity":"SIMPLE|COMPLEX","action":"CHAT|IMAGE","image_prompt":"",
 "suggest_related_search":false,"related_search_query":"","need_search_images":false,
-"ask_offer":null,"ask_intro":"","blocked":false,"block_reason":"","skill":"writing|help","intent_offer":null,"image_quality":"normal|premium"}"""
+"ask_offer":null,"ask_intro":"","blocked":false,"block_reason":"","skill":"writing|help","intent_offer":null,  // 给的时候形如 {"kind":"seek|offer","text":"...","solicited":false}
+"image_quality":"normal|premium"}"""
     system += skill_clause
     system += """
 ask_offer 示例：
@@ -418,8 +425,15 @@ ask_offer 示例：
         suggest = False
         related_query = ""
     need_search_images = bool(data.get("need_search_images"))
-    intent_offer = _normalize_intent_offer(data.get("intent_offer")) \
-        if bool(state.get("intent_probe")) else {}
+    intent_offer = _normalize_intent_offer(data.get("intent_offer"))
+    if intent_offer:
+        # 主动问要过 intent_probe（含「同一会话一次」）；
+        # 用户自己开口的只看硬上限——他都点名要了，再拦就是装没听见
+        allowed = bool(state.get("intent_probe")) or (
+            intent_offer.get("solicited") and bool(state.get("intent_allowed"))
+        )
+        if not allowed:
+            intent_offer = {}
 
     ask_offer = _normalize_ask_offer(
         data.get("ask_offer") if data.get("ask_offer") is not None else data.get("draw_confirm_offer")
@@ -539,7 +553,8 @@ def _normalize_intent_offer(raw: Any) -> dict[str, Any]:
     kind = str(raw.get("kind") or "seek").strip().lower()
     if kind not in ("seek", "offer"):
         kind = "seek"
-    return {"kind": kind, "text": text}
+    # solicited=用户自己开口要的。它决定能不能绕过「同一会话只问一次」
+    return {"kind": kind, "text": text, "solicited": bool(raw.get("solicited"))}
 
 
 def _normalize_ask_offer(raw: Any) -> dict[str, Any]:
@@ -877,6 +892,7 @@ def stream_mascot_chat(
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
     intent_probe: bool = False,
+    intent_allowed: bool = False,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ):
@@ -885,6 +901,7 @@ def stream_mascot_chat(
     ctx: dict[str, Any] = {}
     for status, current_state in _stream_mascot_context(
         intent_probe=intent_probe,
+        intent_allowed=intent_allowed,
         message=message,
         session_id=session_id,
         appearance=appearance,
@@ -999,6 +1016,7 @@ def _stream_mascot_context(
     liked_titles: list[str] | None,
     favorite_songs: list[str] | None,
     intent_probe: bool = False,
+    intent_allowed: bool = False,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """通过 LangGraph 逐节点产出看板娘准备阶段的真实状态。"""
     global _STREAM_PREPARE_GRAPH
@@ -1018,6 +1036,7 @@ def _stream_mascot_context(
         "context_summary": context_summary or "",
         "memory_facts": memory_facts or [],
         "intent_probe": bool(intent_probe),
+        "intent_allowed": bool(intent_allowed),
         "liked_titles": liked_titles or [],
         "favorite_songs": favorite_songs or [],
     }
@@ -1689,6 +1708,7 @@ def run_mascot_chat(
     memory_facts: list[str] | None = None,
     memory_probe: bool = True,
     intent_probe: bool = False,
+    intent_allowed: bool = False,
     liked_titles: list[str] | None = None,
     favorite_songs: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -1711,6 +1731,7 @@ def run_mascot_chat(
             "memory_facts": memory_facts or [],
             "memory_probe": bool(memory_probe),
             "intent_probe": bool(intent_probe),
+            "intent_allowed": bool(intent_allowed),
             "liked_titles": liked_titles or [],
             "favorite_songs": favorite_songs or [],
         }

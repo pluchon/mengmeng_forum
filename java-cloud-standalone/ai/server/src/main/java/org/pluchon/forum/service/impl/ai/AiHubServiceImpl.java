@@ -563,12 +563,13 @@ public class AiHubServiceImpl implements AiHubService {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> matchMascotIntents(List<Map<String, Object>> pairs) {
+    public List<Map<String, Object>> matchMascotIntents(List<Map<String, Object>> pairs, int maxPairs) {
         if (pairs == null || pairs.isEmpty()) {
             return List.of();
         }
         Map<String, Object> payload = new HashMap<>();
         payload.put("pairs", pairs);
+        payload.put("maxPairs", maxPairs);
         // userId 传 null：这条链路刻意不让 Python 知道是谁在牵谁
         Map<String, Object> data = invokeGateway("MASCOT", "INTENT_MATCH", null, payload);
         if (data == null || !(data.get("results") instanceof List<?> rows)) {

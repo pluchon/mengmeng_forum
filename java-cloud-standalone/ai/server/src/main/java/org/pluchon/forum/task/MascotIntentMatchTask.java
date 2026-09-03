@@ -53,8 +53,12 @@ public class MascotIntentMatchTask {
     private AiSystemMessageInternalFeignClient systemMessageClient;
 
     /** 单次任务最多送多少对去判定，给成本封顶 */
-    @Value("${forum.mascot.intent-match-batch:30}")
+    @Value("${forum.mascot.intent-match-batch:100}")
     private int matchBatch;
+
+    /** 候选凑到预算的几倍：多给一些让向量有得挑，判定数仍由 matchBatch 封顶 */
+    @Value("${forum.mascot.intent-match-candidate-multiplier:5}")
+    private int candidateMultiplier;
 
     @Value("${forum.mascot.intent-match-enabled:true}")
     private boolean matchEnabled;
@@ -109,6 +113,9 @@ public class MascotIntentMatchTask {
         }
 
         Set<String> tried = loadTriedPairs();
+        int budget = Math.max(1, matchBatch);
+        // 多凑一些候选交给向量挑，真正判定的仍然不超过 budget
+        int candidateLimit = Math.min(600, budget * Math.max(1, candidateMultiplier));
         List<Map<String, Object>> pairs = new ArrayList<>();
         Map<String, ForumMascotIntent[]> byKey = new HashMap<>();
         outer:
@@ -128,7 +135,7 @@ public class MascotIntentMatchTask {
                 pair.put("b", offer.getIntentText());
                 pairs.add(pair);
                 byKey.put(key, new ForumMascotIntent[]{seek, offer});
-                if (pairs.size() >= Math.max(1, matchBatch)) {
+                if (pairs.size() >= candidateLimit) {
                     break outer;
                 }
             }
@@ -137,16 +144,32 @@ public class MascotIntentMatchTask {
             return;
         }
 
-        List<Map<String, Object>> results = aiHubService.matchMascotIntents(pairs);
+        List<Map<String, Object>> results = aiHubService.matchMascotIntents(pairs, budget);
         int connected = 0;
         Set<Long> usedIntents = new HashSet<>();
         for (Map<String, Object> row : results) {
-            if (!Boolean.TRUE.equals(row.get("match"))) {
-                continue;
-            }
             String key = String.valueOf(row.get("key"));
             ForumMascotIntent[] both = byKey.get(key);
+            if (!Boolean.TRUE.equals(row.get("match"))) {
+                // 判过就要留痕，否则明天原样再判一遍，永远轮不到第 batch+1 对
+                if (both != null) {
+                    try {
+                        matchService.recordNotMatched(both[0], both[1]);
+                    } catch (Exception e) {
+                        log.warn("[牵线] 记录不匹配失败 key={}", key, e);
+                    }
+                }
+                continue;
+            }
             String reason = row.get("reason") == null ? "" : String.valueOf(row.get("reason")).trim();
+            if (both != null && reason.isEmpty()) {
+                // 说配上却说不出交集，按不配处理，同样要留痕
+                try {
+                    matchService.recordNotMatched(both[0], both[1]);
+                } catch (Exception e) {
+                    log.warn("[牵线] 记录不匹配失败 key={}", key, e);
+                }
+            }
             if (both == null || reason.isEmpty()) {
                 continue;
             }
@@ -162,7 +185,7 @@ public class MascotIntentMatchTask {
                 log.warn("[牵线] 建立匹配失败 key={}", key, e);
             }
         }
-        log.info("[牵线] 本轮判定 {} 对，牵成 {} 对", pairs.size(), connected);
+        log.info("[牵线] 候选 {} 对，实判 {} 对，牵成 {} 对", pairs.size(), results.size(), connected);
     }
 
     /**

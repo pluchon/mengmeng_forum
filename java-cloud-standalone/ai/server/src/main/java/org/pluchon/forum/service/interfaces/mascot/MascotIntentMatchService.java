@@ -18,6 +18,12 @@ public interface MascotIntentMatchService {
     /** 匹配任务调用：落一条牵线，并把两条意愿标记为已牵。 */
     ForumMascotIntentMatch createMatch(ForumMascotIntent a, ForumMascotIntent b, String reason);
 
+    /**
+     * 判定为不匹配时也要落一行，否则下一轮又会把同一对送去判定，
+     * 任务会永远卡在前 batch 对上，后面的永远轮不到。
+     */
+    void recordNotMatched(ForumMascotIntent a, ForumMascotIntent b);
+
     /** 牵线邀约用的系统消息类型。 */
     byte noticeType();
 }

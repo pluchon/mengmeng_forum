@@ -75,8 +75,13 @@ class MascotIntentMatchModule:
         pairs = request.payload.get("pairs")
         if not isinstance(pairs, list) or not pairs:
             raise ModuleRequestError("INVALID_MATCH_PAYLOAD", "pairs 不能为空")
-        if len(pairs) > 30:
-            raise ModuleRequestError("INVALID_MATCH_PAYLOAD", "单次最多判定 30 对")
+        # 候选可以多送，真正判几对由 maxPairs 决定（Java 掌握预算）
+        if len(pairs) > 600:
+            raise ModuleRequestError("INVALID_MATCH_PAYLOAD", "单次候选最多 600 对")
+        try:
+            max_pairs = int(request.payload.get("maxPairs") or 0)
+        except (TypeError, ValueError):
+            max_pairs = 0
         cleaned = []
         for item in pairs:
             if not isinstance(item, dict):
@@ -88,7 +93,7 @@ class MascotIntentMatchModule:
                 cleaned.append({"key": key, "a": a, "b": b})
         if not cleaned:
             return ModuleResult(success=True, data={"results": []}, usage={})
-        results, usage = await asyncio.to_thread(match_intent_pairs, cleaned)
+        results, usage = await asyncio.to_thread(match_intent_pairs, cleaned, max_pairs)
         return ModuleResult(success=True, data={"results": results}, usage=usage)
 
 class MascotContextCompressModule:
@@ -177,6 +182,7 @@ def _normalize_payload(raw: dict[str, Any]) -> dict[str, Any]:
         "memory_probe": bool(raw.get("memoryProbe", raw.get("memory_probe", True))),
         # 这一轮准不准问「要不要我留意一下」；由 Java 按会话与上限决定，默认不问
         "intent_probe": bool(raw.get("intentProbe", raw.get("intent_probe", False))),
+        "intent_allowed": bool(raw.get("intentAllowed", raw.get("intent_allowed", False))),
         # 压缩摘要走独立字段，不混进 history——history 会被窗口截断
         "context_summary": str(raw.get("contextSummary") or raw.get("context_summary") or "").strip()[:2000],
         "liked_titles": _string_list(raw.get("likedTitles") or raw.get("liked_titles"), 6, 80),

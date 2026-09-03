@@ -1028,6 +1028,8 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
         // 牵线意愿：同一会话只问一次、攒够上限就不问，闸在 Java 这边
         pyBody.put("intent_probe", mascotIntentService.shouldProbeIntent(user.getId(), dbSessionId));
+        // 用户自己开口要牵线时只受硬上限约束，不受「同一会话只问一次」限制
+        pyBody.put("intent_allowed", mascotIntentService.intentSlotAvailable(user.getId()));
         // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
         pyBody.put("context_summary", dbSessionId == null
                 ? "" : companionMemoryService.loadContextSummary(dbSessionId));
@@ -1489,6 +1491,8 @@ public class MascotServiceImpl implements MascotService {
         pyBody.put("memory_probe", shouldProbeMemory(mergedHistory));
         // 牵线意愿：同一会话只问一次、攒够上限就不问，闸在 Java 这边
         pyBody.put("intent_probe", mascotIntentService.shouldProbeIntent(user.getId(), dbSessionId));
+        // 用户自己开口要牵线时只受硬上限约束，不受「同一会话只问一次」限制
+        pyBody.put("intent_allowed", mascotIntentService.intentSlotAvailable(user.getId()));
         // 压缩摘要单独送：塞进 history 会被下游的窗口截掉
         pyBody.put("context_summary", dbSessionId == null
                 ? "" : companionMemoryService.loadContextSummary(dbSessionId));

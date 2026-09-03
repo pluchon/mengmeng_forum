@@ -14,13 +14,16 @@ import logging
 from typing import Any
 
 from clients.dashscope_chat_client import dashscope_chat_completion
+from clients.dashscope_embedding import _cosine, embed_texts
 from config import settings
 from utils.json_parse import parse_json_object
 
 logger = logging.getLogger(__name__)
 
-# 只要一小段 JSON，封顶避免异常时一路生成
-_MATCH_MAX_TOKENS = 800
+# 每对结果约 20 token，必须跟着 Java 的 intent-match-batch 一起涨。
+# 截断的后果很隐蔽：漏答的对会被下面「模型漏掉一律按不配」兜底，
+# 于是整批白跑还看不出错
+_MATCH_MAX_TOKENS = 3000
 
 _SYSTEM = """你在给一个论坛做「牵线」判定。下面每一对是两个人分别说过的需求或能力，
 判断他们**互相认识一下是否真的有用**。
@@ -39,8 +42,61 @@ _SYSTEM = """你在给一个论坛做「牵线」判定。下面每一对是两�
 每个 key 都要出现在结果里；不配的写 match=false、reason 留空。"""
 
 
-def match_intent_pairs(pairs: list[dict[str, str]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """判定一批意愿对。返回 (结果列表, 用量)。"""
+
+
+# 一次给 DashScope 的文本条数，多了会被拒
+_EMBED_CHUNK = 20
+
+
+def _embed_all(texts: list[str]) -> dict[str, list[float]] | None:
+    """分片取向量。任何一片失败就返回 None，调用方退回不预筛。"""
+    out: dict[str, list[float]] = {}
+    for start in range(0, len(texts), _EMBED_CHUNK):
+        chunk = texts[start : start + _EMBED_CHUNK]
+        vecs = embed_texts(chunk)
+        if not vecs or len(vecs) != len(chunk):
+            return None
+        for text, vec in zip(chunk, vecs):
+            out[text] = vec
+    return out
+
+
+def _prefilter(pairs: list[dict[str, str]], max_pairs: int) -> list[dict[str, str]]:
+    """候选多于预算时，按两段文本的余弦相似度挑出最靠前的一批。
+
+    **只做排序，不做判定**——「配不配」是语义互补关系而不是相似度：
+    两个人都想问同一件事，相似度很高但都是 seek，根本配不上。
+    判定仍然全部交给 flash，这里只决定这笔预算花在哪几对上。
+
+    拿不到向量就按原顺序截断，功能不受影响，只是挑得没那么准。
+    """
+    if max_pairs <= 0 or len(pairs) <= max_pairs:
+        return pairs
+    seen: dict[str, None] = {}
+    for item in pairs:
+        seen.setdefault(item["a"], None)
+        seen.setdefault(item["b"], None)
+    vec_by_text = _embed_all(list(seen))
+    if not vec_by_text:
+        logger.info("牵线预筛拿不到向量，按原顺序截断 candidates=%d budget=%d", len(pairs), max_pairs)
+        return pairs[:max_pairs]
+    scored = []
+    for item in pairs:
+        va = vec_by_text.get(item["a"])
+        vb = vec_by_text.get(item["b"])
+        scored.append((_cosine(va, vb) if va and vb else 0.0, item))
+    scored.sort(key=lambda row: -row[0])
+    return [item for _, item in scored[:max_pairs]]
+
+
+def match_intent_pairs(
+    pairs: list[dict[str, str]], max_pairs: int = 0
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """判定一批意愿对。返回 (结果列表, 用量)。
+
+    max_pairs 是 Java 给的预算：候选可以多送，真正送去判定的不超过这个数。
+    """
+    pairs = _prefilter(pairs, max_pairs)
     lines = []
     for item in pairs:
         lines.append(f'- key={item["key"]}\n  甲：{item["a"]}\n  乙：{item["b"]}')
