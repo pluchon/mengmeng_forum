@@ -1,7 +1,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import {
   ChatDotRound,
   Share,
@@ -800,8 +801,7 @@ export function useArticleDetail() {
     const replyId = item?.articleReply?.id
     if (!replyId || deletingReplyId.value) return
     try {
-      await ElMessageBox.confirm('删除后无法恢复，楼中楼里别人的回复会保留。确定删除吗？', '删除评论', {
-        type: 'warning',
+      await confirmDialog('删除后无法恢复，楼中楼里别人的回复会保留。确定删除吗？', '删除评论', {
         confirmButtonText: '删除',
         cancelButtonText: '再想想',
       })

@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import { CaretBottom, CaretTop, ChatDotRound, Delete, Flag } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
@@ -98,8 +99,7 @@ async function removeOwnSub(sub) {
   const subReplyId = sub?.subReply?.id
   if (!subReplyId || deletingSubId.value) return
   try {
-    await ElMessageBox.confirm('删除后无法恢复，确定删除这条回复吗？', '删除回复', {
-      type: 'warning',
+    await confirmDialog('删除后无法恢复，确定删除这条回复吗？', '删除回复', {
       confirmButtonText: '删除',
       cancelButtonText: '再想想',
     })
