@@ -78,6 +78,8 @@ public final class AuthApiPaths {
                 "/user/internal/**",
                 "/points/internal/**",
                 "/vip/internal/**",
+                // 支付渠道服务器回调，没有登录态。它的防护是验签，不是会话
+                "/vip/payment/callback/**",
                 "/shop/internal/**",
                 "/mascot/internal/**",
                 "/ai/internal/**",

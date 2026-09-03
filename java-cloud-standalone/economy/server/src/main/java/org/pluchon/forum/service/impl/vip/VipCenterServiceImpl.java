@@ -15,6 +15,7 @@ import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.converter.VipPurchaseRecordConverter;
 import org.pluchon.forum.entity.db.UserVipSubscription;
+import org.pluchon.forum.entity.enums.VipOrderKind;
 import org.pluchon.forum.entity.vo.vip.VipCenterVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanFeatureVO;
 import org.pluchon.forum.entity.vo.vip.VipPlanVO;
@@ -57,6 +58,9 @@ public class VipCenterServiceImpl implements VipCenterService {
     @Resource
     private VipPurchaseRecordMapper vipPurchaseRecordMapper;
 
+    @Resource
+    private VipOrderQuoter vipOrderQuoter;
+
     private boolean vipActive(UserVipSubscription sub) {
         if (sub == null) {
             return false;
@@ -90,12 +94,10 @@ public class VipCenterServiceImpl implements VipCenterService {
         vo.setVipExpireAt(vipExpireAt);
         vo.setPoints(pointsService.getWallet(userId).getBalance());
         vo.setVipActive(active);
-        boolean firstPurchaseEligible = vipPurchaseRecordMapper.selectCount(
-                Wrappers.lambdaQuery(VipPurchaseRecord.class)
-                        .eq(VipPurchaseRecord::getUserId, userId)
-                        .eq(VipPurchaseRecord::getPaymentState, (byte) 1)
-                        .eq(VipPurchaseRecord::getDeleteState, (byte) 0)) == 0;
-        vo.setPlans(buildPlans(cur, active, firstPurchaseEligible));
+        // 升级差价由报价器算，和真正下单读的是同一份逻辑，
+        // 免得出现"卡片写 2 元、下单收 3 元"。首购资格顺带从这次报价里取，不再多查一次
+        VipOrderQuoter.VipQuote maxQuote = vipOrderQuoter.quote(userId, Constant.VIP_TIER_MAX, sub);
+        vo.setPlans(buildPlans(cur, active, maxQuote.isFirstPurchaseEligible(), maxQuote));
         vo.setQuota(buildQuotaPanel(userId, active ? vipTier : Constant.VIP_TIER_FREE, sub));
         return vo;
     }
@@ -164,11 +166,12 @@ public class VipCenterServiceImpl implements VipCenterService {
         }
     }
 
-    private List<VipPlanVO> buildPlans(int curTier, boolean active, boolean firstPurchaseEligible) {
+    private List<VipPlanVO> buildPlans(int curTier, boolean active, boolean firstPurchaseEligible,
+                                       VipOrderQuoter.VipQuote maxQuote) {
         List<VipPlanVO> list = new ArrayList<>();
         list.add(planFree(curTier, active));
         list.add(planPro(curTier, active, firstPurchaseEligible));
-        list.add(planMax(curTier, active, firstPurchaseEligible));
+        list.add(planMax(curTier, active, firstPurchaseEligible, maxQuote));
         return list;
     }
 
@@ -178,7 +181,6 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setCode("free");
         p.setName("免费");
         p.setSubtitle("基础体验，免费使用");
-        p.setPricePoints(0);
         p.setDurationDays(0);
         p.setFeatured(false);
         p.setOriginalPrice(BigDecimal.ZERO);
@@ -188,7 +190,7 @@ public class VipCenterServiceImpl implements VipCenterService {
                 feat("通用额度6元/月"),
                 feat("Wan 15张/月"),
                 feat("更多免费权益......")));
-        applyPlanQuota(p, new BigDecimal("6.0"), 15);
+        applyPlanQuota(p, Constant.VIP_TIER_FREE);
         if (!active || curTier == 0) {
             p.setButtonState("current");
             p.setButtonLabel("当前方案");
@@ -206,55 +208,69 @@ public class VipCenterServiceImpl implements VipCenterService {
         p.setName("PRO");
         p.setSubtitle("进阶创作者");
         p.setBadge("最受欢迎");
-        p.setPricePoints(null);
-        p.setDurationDays(30);
+        p.setDurationDays(VipPricingCatalog.PERIOD_DAYS);
         p.setFeatured(true);
         p.setFeatures(List.of(
                 feat("通用额度10.9元/月"),
                 feat("Wan 20张/月"),
                 feat("更多会员隐藏福利......")));
-        applyPlanPricing(p, new BigDecimal("9.9"), new BigDecimal("3.9"), firstPurchaseEligible);
-        applyPlanQuota(p, new BigDecimal("10.9"), 20);
-        applyPlanButton(p, curTier, active, 1);
+        applyPlanPricing(p, Constant.VIP_TIER_PRO, firstPurchaseEligible);
+        applyPlanQuota(p, Constant.VIP_TIER_PRO);
+        applyPlanButton(p, curTier, active, 1, null);
         return p;
     }
 
-    private VipPlanVO planMax(int curTier, boolean active, boolean firstPurchaseEligible) {
+    private VipPlanVO planMax(int curTier, boolean active, boolean firstPurchaseEligible,
+                              VipOrderQuoter.VipQuote maxQuote) {
         VipPlanVO p = new VipPlanVO();
         p.setTier(Constant.VIP_TIER_MAX);
         p.setCode("max");
         p.setName("MAX");
         p.setSubtitle("重度创作者专属");
         p.setBadge("顶配体验");
-        p.setPricePoints(null);
-        p.setDurationDays(30);
+        p.setDurationDays(VipPricingCatalog.PERIOD_DAYS);
         p.setFeatured(false);
         p.setFeatures(List.of(
                 feat("通用额度20.9元/月"),
                 feat("Wan 50张/月"),
                 feat("更多会员隐藏福利......")));
-        applyPlanPricing(p, new BigDecimal("15.9"), new BigDecimal("6.9"), firstPurchaseEligible);
-        applyPlanQuota(p, new BigDecimal("20.9"), 50);
-        applyPlanButton(p, curTier, active, 2);
+        applyPlanPricing(p, Constant.VIP_TIER_MAX, firstPurchaseEligible);
+        applyPlanQuota(p, Constant.VIP_TIER_MAX);
+        applyPlanButton(p, curTier, active, 2, maxQuote);
         return p;
     }
 
-    private void applyPlanPricing(VipPlanVO plan, BigDecimal original, BigDecimal firstMonth,
-                                  boolean firstPurchaseEligible) {
-        plan.setOriginalPrice(original);
-        plan.setFirstMonthPrice(firstMonth);
+    private void applyPlanPricing(VipPlanVO plan, Byte tier, boolean firstPurchaseEligible) {
+        plan.setOriginalPrice(VipPricingCatalog.originalPrice(tier));
+        plan.setFirstMonthPrice(VipPricingCatalog.firstMonthPrice(tier));
         plan.setFirstPurchaseEligible(firstPurchaseEligible);
     }
 
-    private void applyPlanQuota(VipPlanVO plan, BigDecimal qwenBudget, int wanLimit) {
-        plan.setQwenBudgetMicros(qwenBudget.multiply(BigDecimal.valueOf(1_000_000)).longValue());
-        plan.setWanImageLimit(wanLimit);
+    private void applyPlanQuota(VipPlanVO plan, Byte tier) {
+        plan.setQwenBudgetMicros(VipPricingCatalog.qwenBudget(tier)
+                .multiply(BigDecimal.valueOf(1_000_000)).longValue());
+        plan.setWanImageLimit(VipPricingCatalog.wanImageLimit(tier));
     }
 
-    private void applyPlanButton(VipPlanVO p, int curTier, boolean active, int planTier) {
-        if (active && curTier >= planTier) {
+    private void applyPlanButton(VipPlanVO p, int curTier, boolean active, int planTier,
+                                 VipOrderQuoter.VipQuote quote) {
+        if (active && curTier > planTier) {
+            // MAX 用户看 PRO 卡片。写"已经拥有"会让人以为自己买的就是 PRO
             p.setButtonState("owned");
-            p.setButtonLabel("已经拥有");
+            p.setButtonLabel("已拥有更高档位");
+            return;
+        }
+        if (active && curTier == planTier) {
+            p.setButtonState("renew");
+            p.setButtonLabel("续费 " + p.getName());
+            return;
+        }
+        if (quote != null && quote.getKind() == VipOrderKind.UPGRADE) {
+            // PRO 用户看 MAX 卡片：这是升级，收的是按剩余天数折算的差价，不是整月价
+            p.setButtonState("upgrade");
+            p.setButtonLabel("升级为 " + p.getName());
+            p.setUpgradePrice(quote.getAmount());
+            p.setUpgradeRemainingDays(quote.getRemainingDays());
             return;
         }
         p.setButtonState("subscribe");
@@ -284,10 +300,9 @@ public class VipCenterServiceImpl implements VipCenterService {
         // 上限按当前生效档位取，与 AI 域判定同口径。
         // 不能用 base_quota_tier：体验卡期间它可能还停在免费档，会出现
         // 「面板显示免费额度、实际按 PRO 放行」。
-        long qwenBudgetMicros = Constant.VIP_TIER_MAX.equals(tier) ? 20_900_000L
-                : (Constant.VIP_TIER_PRO.equals(tier) ? 10_900_000L : 6_000_000L);
-        int wanLimit = Constant.VIP_TIER_MAX.equals(tier) ? 50
-                : (Constant.VIP_TIER_PRO.equals(tier) ? 20 : 15);
+        long qwenBudgetMicros = VipPricingCatalog.qwenBudget(tier)
+                .multiply(BigDecimal.valueOf(1_000_000)).longValue();
+        int wanLimit = VipPricingCatalog.wanImageLimit(tier);
         long qwenUsed = Math.max(0L, nvl(usage.getQwenCostMicros()));
         panel.setQwenBudgetMicros(qwenBudgetMicros);
         panel.setQwenUsedMicros(qwenUsed);

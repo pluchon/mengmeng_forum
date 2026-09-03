@@ -12,3 +12,10 @@ forum:
     mq-consumer: false
     websocket: false
     game-runtime: false
+
+  payment:
+    # 模拟渠道的回调验签密钥。接入真实渠道后各家自带自己的密钥配置，这条保留给本地联调
+    mock:
+      secret: ${FORUM_PAYMENT_MOCK_SECRET:forum-mock-payment-secret}
+    # 待支付订单超时关闭的分钟数。它同时是"挂单不付、等续费后再付"那套白嫖手法的第一道防线
+    order-timeout-minutes: 30

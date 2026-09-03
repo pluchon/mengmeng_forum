@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.interfaces.vip;
 
 import org.pluchon.forum.entity.db.UserVipSubscription;
+import org.pluchon.forum.entity.enums.VipOrderKind;
 
 import java.util.Date;
 
@@ -14,4 +15,13 @@ public interface VipEntitlementService {
 
     Date extendVipHours(Long userId, Byte tier, int hours);
 
+    // 支付成功后发货：按订单类型推进档位、到期日与配额周期，返回新的权益周期
+    VipDeliveryResult deliverPaidOrder(Long userId, Byte tier, VipOrderKind kind, Date expectedExpireAt);
+
+    // 发货结果：会员到期时间 + 本次计入订单的权益周期
+    class VipDeliveryResult {
+        public Date vipExpireAt;
+        public Date periodStart;
+        public Date periodEnd;
+    }
 }

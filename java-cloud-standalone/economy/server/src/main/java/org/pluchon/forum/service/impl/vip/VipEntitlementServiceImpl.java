@@ -6,6 +6,7 @@ import org.pluchon.forum.common.enums.ResultCode;
 import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.entity.db.UserVipSubscription;
+import org.pluchon.forum.entity.enums.VipOrderKind;
 import org.pluchon.forum.mapper.UserVipSubscriptionMapper;
 import org.pluchon.forum.service.impl.user.UserDerivedCacheInvalidator;
 import org.pluchon.forum.service.interfaces.vip.VipEntitlementService;
@@ -84,6 +85,86 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
         }
         userDerivedCacheInvalidator.invalidateUserCaches(userId);
         return newExpire;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public VipDeliveryResult deliverPaidOrder(Long userId, Byte tier, VipOrderKind kind, Date expectedExpireAt) {
+        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
+        Date now = new Date();
+        boolean active = vipActive(sub);
+        Byte currentTier = active && sub.getVipTier() != null ? sub.getVipTier() : Constant.VIP_TIER_FREE;
+
+        // 下单到付款之间用户档位反而变高了（例如中途领到体验卡）。
+        // 继续发货会用低档位的钱延长高档位权益，这里宁可拒收让他重新下单
+        if (currentTier > tier) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_VIP_ORDER_STATE_CHANGED));
+        }
+
+        Date newExpire;
+        Date periodStart;
+        Date periodEnd;
+        if (kind == VipOrderKind.UPGRADE) {
+            // 升级差价是按下单那一刻的剩余天数算的。到期日只要变过，这笔钱就不再对应这段权益
+            if (!active || !Constant.VIP_TIER_PRO.equals(currentTier)
+                    || !sameSecond(sub.getVipExpireAt(), expectedExpireAt)) {
+                throw new ApplicationException(Result.fail(ResultCode.FAILED_VIP_ORDER_STATE_CHANGED));
+            }
+            newExpire = sub.getVipExpireAt();
+            // 升级把配额周期整个重置，当作升级的奖励；但周期不得越过会员到期日，
+            // 否则会员结束之后还留着一段按 MAX 起算的计数窗口
+            periodStart = now;
+            periodEnd = earlier(Date.from(ZonedDateTime.now(TAIPEI)
+                    .plusDays(VipPricingCatalog.PERIOD_DAYS).toInstant()), newExpire);
+        } else {
+            // 新购从今天起算，续费从原到期日往后接。
+            // 续费若从今天算，等于把用户没用完的天数吞掉，投诉一告一个准
+            ZonedDateTime base = active && sub.getVipExpireAt() != null && sub.getVipExpireAt().after(now)
+                    ? sub.getVipExpireAt().toInstant().atZone(TAIPEI)
+                    : ZonedDateTime.now(TAIPEI);
+            newExpire = Date.from(base.plusDays(VipPricingCatalog.PERIOD_DAYS).toInstant());
+            Date storedEnd = sub.getQuotaPeriodEnd();
+            if (storedEnd != null && storedEnd.after(now)) {
+                // 本期还没走完就续费：沿用当前周期，否则提前续费就成了免费的额度重置
+                periodStart = sub.getQuotaPeriodStart();
+                periodEnd = storedEnd;
+            } else {
+                periodStart = now;
+                periodEnd = earlier(Date.from(ZonedDateTime.now(TAIPEI)
+                        .plusDays(VipPricingCatalog.PERIOD_DAYS).toInstant()), newExpire);
+            }
+        }
+
+        int affected = userVipSubscriptionMapper.updatePaidSubscription(
+                userId, tier, newExpire, tier, periodStart, periodEnd);
+        if (affected != 1) {
+            throw new ApplicationException(Result.fail(ResultCode.ERROR_SERVICES));
+        }
+        userDerivedCacheInvalidator.invalidateUserCaches(userId);
+
+        VipDeliveryResult result = new VipDeliveryResult();
+        result.vipExpireAt = newExpire;
+        result.periodStart = periodStart;
+        result.periodEnd = periodEnd;
+        return result;
+    }
+
+    private Date earlier(Date left, Date right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        return left.before(right) ? left : right;
+    }
+
+    // 数据库 datetime 只到秒，比对前统一截断，避免毫秒差把正常订单判成状态已变
+    private boolean sameSecond(Date left, Date right) {
+        if (left == null || right == null) {
+            return left == null && right == null;
+        }
+        return left.getTime() / 1000L == right.getTime() / 1000L;
     }
 
     private UserVipSubscription ensureSubscriptionForUpdate(Long userId) {

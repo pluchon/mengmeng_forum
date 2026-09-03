@@ -652,16 +652,24 @@ CREATE TABLE `vip_purchase_record` (
   `vip_tier` tinyint NOT NULL COMMENT '购买档位: 1PRO 2MAX',
   `paid_amount` decimal(10,2) NOT NULL COMMENT '实付金额',
   `payment_order_no` varchar(96) NOT NULL COMMENT '支付订单号',
+  `payment_channel` varchar(32) NOT NULL DEFAULT 'mock' COMMENT '支付渠道: mock/alipay/wechat',
+  `channel_trade_no` varchar(128) DEFAULT NULL COMMENT '渠道流水号，对账用',
+  `price_plan` varchar(24) NOT NULL DEFAULT 'normal' COMMENT '定价体系: first_purchase/normal',
+  `order_kind` varchar(16) NOT NULL DEFAULT 'new' COMMENT '订单类型: new/renew/upgrade',
+  `expected_expire_at` datetime DEFAULT NULL COMMENT '下单时锁定的会员到期日，发货前校验',
   `payment_state` tinyint NOT NULL DEFAULT '0' COMMENT '0待支付 1成功 2关闭',
   `period_start` datetime DEFAULT NULL COMMENT '订阅周期开始',
   `period_end` datetime DEFAULT NULL COMMENT '订阅周期结束',
+  `paid_at` datetime DEFAULT NULL COMMENT '支付成功时间',
+  `closed_at` datetime DEFAULT NULL COMMENT '订单关闭时间',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `delete_state` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_vip_purchase_order_no` (`payment_order_no`),
-  KEY `idx_vip_purchase_user_state` (`user_id`,`payment_state`,`delete_state`,`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员支付成功与首购资格流水';
+  KEY `idx_vip_purchase_user_state` (`user_id`,`payment_state`,`delete_state`,`create_time`),
+  KEY `idx_vip_purchase_pending` (`payment_state`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员订单与首购资格流水';
 /*!40101 SET character_set_client = @saved_cs_client */;
 -- ----------------------------
 -- Demo seeds: checkin / lottery / vip quota
