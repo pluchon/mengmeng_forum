@@ -286,7 +286,6 @@ const {
   commonsItems,
   selectedCode,
   selectedPlan,
-  payChannel,
   agreeProtocol,
   showFirstMonth,
   isUpgrade,

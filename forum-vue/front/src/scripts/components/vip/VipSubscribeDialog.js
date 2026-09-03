@@ -78,7 +78,6 @@ export function useVipSubscribeDialog(props, emit) {
   const loading = ref(false)
   const plans = ref([])
   const selectedCode = ref('pro')
-  const payChannel = ref('alipay')
   const agreeProtocol = ref(true)
   const membership = ref({ vipTier: 0, vipExpireAt: null })
   const purchaseHistoryVisible = ref(false)
@@ -342,7 +341,6 @@ export function useVipSubscribeDialog(props, emit) {
     commonsItems,
     selectedCode,
     selectedPlan,
-    payChannel,
     agreeProtocol,
     showFirstMonth,
     isUpgrade,

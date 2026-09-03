@@ -318,10 +318,6 @@ public class VipCenterServiceImpl implements VipCenterService {
         return value == null ? 0L : value;
     }
 
-    private BigDecimal positive(BigDecimal value) {
-        return value == null || value.signum() < 0 ? BigDecimal.ZERO : value;
-    }
-
     private AiUsageDailyBucketsVO loadUsageSnapshot(Long userId, Date start, Date end) {
         AiUsageDailyBucketsVO snapshot = aiUsageInternalFeignClient.usageSnapshot(
                 userId,
