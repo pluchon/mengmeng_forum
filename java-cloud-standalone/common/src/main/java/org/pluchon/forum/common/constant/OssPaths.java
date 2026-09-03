@@ -24,6 +24,9 @@ public final class OssPaths {
     public static final String AI_GENERATION_SESSION = AI_GENERATION_ROOT + "session/";
     public static final String LEGACY_ROOT = "forum_db_item/";
     public static final String PENDING_SEGMENT = "_pending/";
+    // 判违规下架的对象搬到这里：播放立刻 404，再由生命周期规则按天数真删。
+    // 和 _pending/ 同构，同样必须在顶层——OSS 的前缀是字面匹配，不认中间通配
+    public static final String REMOVED_SEGMENT = "_removed/";
 
     // 待定区放在**顶层**：_pending/{业务目录}/。
     // 这样 OSS 生命周期规则只要一条 `_pending/` 前缀就能覆盖全部业务目录，
@@ -35,6 +38,15 @@ public final class OssPaths {
         }
         String folder = businessPath.endsWith("/") ? businessPath : businessPath + "/";
         return PENDING_SEGMENT + folder;
+    }
+
+    // 违规下架区，和 pendingFolder 同构
+    public static String removedFolder(String businessPath) {
+        if (businessPath == null || businessPath.isBlank()) {
+            return REMOVED_SEGMENT;
+        }
+        String folder = businessPath.endsWith("/") ? businessPath : businessPath + "/";
+        return REMOVED_SEGMENT + folder;
     }
 
     public static String[] allBusinessPaths() {

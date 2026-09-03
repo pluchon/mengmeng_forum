@@ -3,6 +3,7 @@ package org.pluchon.forum.service.impl.moderation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.pluchon.forum.common.mq.ForumProducer;
+import org.pluchon.forum.common.utils.OssRemovedArchiver;
 import org.pluchon.forum.common.utils.TransactionHooks;
 import org.pluchon.forum.entity.db.UserMusic;
 import org.pluchon.forum.mapper.UserMusicMapper;
@@ -61,6 +62,9 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
 
     @Autowired
     private UserMusicMapper userMusicMapper;
+
+    @Autowired
+    private OssRemovedArchiver ossRemovedArchiver;
 
     @Autowired
     private ArticleService articleService;
@@ -210,12 +214,22 @@ public class ContentModerationTaskServiceImpl implements ContentModerationTaskSe
                     || !Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(music.getStatus())) {
                 return;
             }
-            // 违规歌曲回到「未发布」：从曲库消失，作者能看到未通过原因去改。
-            // OSS 不在这里动——收藏过的人靠快照仍能播；要真正断播得另配 _removed/ 生命周期规则
-            userMusicMapper.update(null, new LambdaUpdateWrapper<UserMusic>()
+            // 违规判「未通过」，而不是作者自己下架用的「未发布」——两者不该混在一个状态里
+            int updated = userMusicMapper.update(null, new LambdaUpdateWrapper<UserMusic>()
                     .eq(UserMusic::getId, music.getId())
                     .eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_PUBLISHED)
-                    .set(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_DRAFT));
+                    .set(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_REJECTED));
+            if (updated <= 0) {
+                return;
+            }
+            // 违规内容不能继续留在正式目录：搬进 _removed/ 之后播放立刻 404，
+            // 收藏过的人也放不出来了。这一点和「作者自己删除」刻意相反——
+            // 那种情况下 OSS 一个字节都不动，让收藏的人继续听
+            TransactionHooks.afterCommit(() -> {
+                ossRemovedArchiver.archive(music.getAudioUrl(), Constant.OSS_PATH_MUSIC_INFO);
+                ossRemovedArchiver.archive(music.getCoverUrl(), Constant.OSS_PATH_MUSIC_AVATAR);
+                ossRemovedArchiver.archive(music.getLrcUrl(), Constant.OSS_PATH_MUSIC_LRC);
+            });
             return;
         }
         if (TARGET_REPLY == safeByte(targetType)) {
