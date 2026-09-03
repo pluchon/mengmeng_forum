@@ -21,16 +21,24 @@ public class GameAiGatewayService {
     @Autowired
     private GameAiHubInternalFeignClient gameAiHubInternalFeignClient;
 
+    // 不能用 try-with-resources：entry 会在 catch 之前 exit，异常记不进这个资源，
+    // 异常比例熔断就永远不触发。必须在 exit 之前 traceEntry，exit 放进 finally
     public AiGobangMoveVO chooseGobangMove(AiGobangMoveRequest request) {
-        try (Entry ignored = SphU.entry(RESOURCE_GOBANG)) {
+        Entry entry = null;
+        try {
+            entry = SphU.entry(RESOURCE_GOBANG);
             return gameAiHubInternalFeignClient.chooseGobangMove(request);
         } catch (BlockException exception) {
             log.warn("五子棋远程 AI 已限流或熔断，使用本地引擎");
             return null;
         } catch (RuntimeException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             log.warn("五子棋远程 AI 不可用，使用本地引擎 error={}", exception.getClass().getSimpleName());
             return null;
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
         }
     }
 }

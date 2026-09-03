@@ -240,14 +240,24 @@ public class ContentAiGatewayService {
         invokeVoid(RESOURCE_INDEX, () -> contentAiHubInternalFeignClient.removeArticleRag(articleId));
     }
 
-    // Sentinel 只包裹跨服务边界，业务 Service 不感知规则细节
+    /**
+     * Sentinel 只包裹跨服务边界，业务 Service 不感知规则细节。
+     *
+     * <p>这里**不能**写成 try-with-resources。Java 的关闭顺序是先 close 再进 catch，
+     * 等到 catch 里调 Tracer 时 entry 已经 exit 了，异常记不进这个资源，
+     * 于是异常比例熔断（degrade 规则里 grade=1 那几条）永远不会触发——
+     * 只有按 RT 统计的慢调用熔断还活着，因为 RT 是 exit 时自动记的。
+     * 必须自己持有 entry，在 exit 之前用 traceEntry 记录，exit 放进 finally。
+     */
     private <T> T invoke(String resource, Supplier<T> action) {
-        try (Entry ignored = SphU.entry(resource)) {
+        Entry entry = null;
+        try {
+            entry = SphU.entry(resource);
             return action.get();
         } catch (BlockException exception) {
             throw blockedException(exception);
         } catch (RuntimeException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             if (isDownstreamTimeout(exception)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_TIMEOUT));
             }
@@ -255,16 +265,22 @@ public class ContentAiGatewayService {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_UNAVAILABLE));
             }
             throw translateFeignFailure(exception);
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
         }
     }
 
     private void invokeVoid(String resource, Runnable action) {
-        try (Entry ignored = SphU.entry(resource)) {
+        Entry entry = null;
+        try {
+            entry = SphU.entry(resource);
             action.run();
         } catch (BlockException exception) {
             throw blockedException(exception);
         } catch (RuntimeException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             if (isDownstreamTimeout(exception)) {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_TIMEOUT));
             }
@@ -272,6 +288,10 @@ public class ContentAiGatewayService {
                 throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_UNAVAILABLE));
             }
             throw translateFeignFailure(exception);
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
         }
     }
 

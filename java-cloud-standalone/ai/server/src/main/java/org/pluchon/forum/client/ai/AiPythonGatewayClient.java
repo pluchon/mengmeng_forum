@@ -60,7 +60,11 @@ public class AiPythonGatewayClient {
             body.putIfAbsent("traceId", traceId);
         }
         CallClass callClass = classify(taskType, intent);
-        try (Entry ignored = SphU.entry(callClass.resource)) {
+        // 不能用 try-with-resources：entry 会在 catch 之前 exit，异常记不进这个资源，
+        // 异常比例熔断就永远不触发。必须在 exit 之前 traceEntry，exit 放进 finally
+        Entry entry = null;
+        try {
+            entry = SphU.entry(callClass.resource);
             ResponseEntity<Map> response = callClass.restTemplate(this).postForEntity(
                     gatewayUrl(),
                     new HttpEntity<>(body, headers()),
@@ -75,18 +79,24 @@ public class AiPythonGatewayClient {
                     : ResultCode.FAILED_RATE_LIMITED;
             throw new ApplicationException(Result.fail(code));
         } catch (HttpStatusCodeException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             throw mapPythonHttpError(exception, taskType, intent);
         } catch (ResourceAccessException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_TIMEOUT));
         } catch (ApplicationException exception) {
+            // 上面那个非 2xx / 空 body 的分支抛的也是下游失败，同样要计入熔断统计
+            Tracer.traceEntry(exception, entry);
             throw exception;
         } catch (RuntimeException exception) {
-            Tracer.trace(exception);
+            Tracer.traceEntry(exception, entry);
             log.warn("Python AI 调用失败 type={} intent={} error={}",
                     taskType, intent, exception.getClass().getSimpleName());
             throw new ApplicationException(Result.fail(ResultCode.FAILED_SERVICE_UNAVAILABLE));
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
         }
     }
 
