@@ -32,6 +32,16 @@ AI 增强的社区论坛。四块：`java-cloud-standalone`（Spring Boot 3.5 �
   能让问题当场报错而不是几天后文件被删才发现。
 - 不要用 `url.contains(业务目录)` 判来源：待定 URL 同样能通过。
 
+## Sentinel
+
+- 只包裹消费方 `remote` / `client` 包里的跨服务调用（现在是三处：content / game / ai
+  打向 AI 的边界），业务 Service 不感知规则。阈值全在 Nacos，不要硬编码。
+- **`SphU.entry` 不能写成 try-with-resources**：Java 先 close 再进 catch，
+  等到 catch 里调 Tracer 时 entry 已经 exit，异常记不进这个资源，
+  `grade=1` 的异常比例熔断就永远不触发（`grade=0` 的慢调用不受影响，RT 是 exit 时自动记的）。
+  正确写法：自己持有 entry → catch 里 `Tracer.traceEntry(e, entry)` → `finally` 里 `exit()`。
+- 限流阈值是**每实例**的（`clusterMode: false`）。扩容后实际压力等于阈值 × 实例数。
+
 ## 发布
 
 - 生产密钥在服务器 `/opt/forum-config/prod.env`，发布包不带真实 `.env`。
