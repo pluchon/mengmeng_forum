@@ -46,6 +46,8 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -298,6 +300,7 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         for (UserMusicFavorite row : result.getRecords()) {
             records.add(UserMusicConverter.toTrackVO(row));
         }
+        markAvailability(records);
         return toPageResult(records, result);
     }
 
@@ -418,6 +421,7 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
         for (UserMusicPlayHistory row : rows) {
             records.add(UserMusicConverter.toTrackVO(row));
         }
+        markAvailability(records);
         markFavorited(userId, records);
         return new PageResult<>(records, total, page, size, pages, (long) page < pages);
     }
@@ -491,6 +495,45 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
             userMusicPlayHistoryMapper.update(null, new LambdaUpdateWrapper<UserMusicPlayHistory>()
                     .eq(UserMusicPlayHistory::getId, row.getId())
                     .set(UserMusicPlayHistory::getDeleteState, DELETE_TRUE));
+        }
+    }
+
+    /**
+     * 按 music_key 批量回查原曲状态，标出「已下架 / 已删除」。
+     *
+     * <p>收藏与播放历史存的是快照，原曲被下架或删除之后快照仍然可播——这是有意的设计。
+     * 但界面上要能看出来，所以这里做一次实时回查，只影响展示，不动快照一个字。
+     */
+    private void markAvailability(List<MusicTrackVO> tracks) {
+        if (tracks == null || tracks.isEmpty()) {
+            return;
+        }
+        Set<String> keys = new HashSet<>();
+        for (MusicTrackVO track : tracks) {
+            if (track != null && StringUtils.hasText(track.getMusicKey())) {
+                keys.add(track.getMusicKey());
+            }
+        }
+        if (keys.isEmpty()) {
+            return;
+        }
+        Map<String, UserMusic> byKey = new HashMap<>();
+        for (UserMusic row : userMusicMapper.selectList(new LambdaQueryWrapper<UserMusic>()
+                .in(UserMusic::getMusicKey, keys))) {
+            byKey.put(row.getMusicKey(), row);
+        }
+        for (MusicTrackVO track : tracks) {
+            if (track == null || !StringUtils.hasText(track.getMusicKey())) {
+                continue;
+            }
+            UserMusic row = byKey.get(track.getMusicKey());
+            if (row == null || (row.getDeleteState() != null && row.getDeleteState() == DELETE_TRUE)) {
+                track.setAvailability("deleted");
+            } else if (!Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(row.getStatus())) {
+                track.setAvailability("offline");
+            } else {
+                track.setAvailability("ok");
+            }
         }
     }
 

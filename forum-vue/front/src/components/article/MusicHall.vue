@@ -199,12 +199,16 @@
                   'is-selected': isPickerMode
                     ? draftSelected?.musicKey === track.musicKey
                     : previewTrack?.musicKey === track.musicKey,
+                  'is-unavailable': !!unavailableLabel(track),
                 }"
                 @click="selectTrack(track)"
               >
                 <div class="music-hall__cover music-hall__cover--mine" :style="coverStyle(track)">
                   <img v-if="track.coverUrl" :src="track.coverUrl" alt="">
                   <el-icon v-else><Headset /></el-icon>
+                  <span v-if="unavailableLabel(track)" class="music-hall__offline-ribbon">
+                    {{ unavailableLabel(track) }}
+                  </span>
                 </div>
                 <div class="music-hall__meta">
                   <div class="music-hall__name">{{ track.title }}</div>
@@ -801,12 +805,18 @@
                 :key="`r-${track.musicKey}`"
                 type="button"
                 class="music-hall__recent-item"
-                :class="{ 'is-playing': isRecentPlaying(track) }"
+                :class="{
+                  'is-playing': isRecentPlaying(track),
+                  'is-unavailable': !!unavailableLabel(track),
+                }"
                 @click="selectTrack(track)"
               >
                 <div class="music-hall__cover music-hall__cover--recent" :style="coverStyle(track)">
                   <img v-if="track.coverUrl" :src="track.coverUrl" alt="">
                   <el-icon v-else><Headset /></el-icon>
+                  <span v-if="unavailableLabel(track)" class="music-hall__offline-ribbon">
+                    {{ unavailableLabel(track) }}
+                  </span>
                 </div>
                 <span class="music-hall__recent-meta">
                   <span class="music-hall__recent-name">{{ track.title }}</span>

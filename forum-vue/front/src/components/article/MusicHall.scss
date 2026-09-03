@@ -2491,3 +2491,46 @@
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+/* 原曲已下架/已删除：整卡灰掉但**仍然可播**——快照就是为这个留的 */
+.music-hall__mine-item.is-unavailable .music-hall__cover img,
+.music-hall__recent-item.is-unavailable .music-hall__cover img {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.music-hall__mine-item.is-unavailable .music-hall__name,
+.music-hall__mine-item.is-unavailable .music-hall__sub,
+.music-hall__mine-item.is-unavailable .music-hall__mine-duration,
+.music-hall__recent-item.is-unavailable .music-hall__recent-name,
+.music-hall__recent-item.is-unavailable .music-hall__recent-artist,
+.music-hall__recent-item.is-unavailable .music-hall__recent-duration {
+  color: #a8adb8;
+}
+
+.music-hall__mine-item.is-unavailable .music-hall__mine-play {
+  background: #f0f1f4;
+  color: #a8adb8;
+}
+
+/* 左上角淡红斜标签 */
+.music-hall__cover {
+  position: relative;
+  overflow: hidden;
+}
+
+.music-hall__offline-ribbon {
+  position: absolute;
+  top: 6px;
+  left: -20px;
+  width: 68px;
+  padding: 1px 0;
+  transform: rotate(-38deg);
+  background: rgba(244, 143, 177, 0.92);
+  color: #fff;
+  font-size: 9px;
+  line-height: 12px;
+  text-align: center;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}

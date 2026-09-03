@@ -1622,6 +1622,13 @@ function closeComposeLrc() {
   }
 }
 
+// 原曲已下架/已删除时给卡片的角标文案；快照仍然可播，这里只影响展示
+function unavailableLabel(track) {
+  if (track?.availability === 'deleted') return '已删除'
+  if (track?.availability === 'offline') return '已下架'
+  return ''
+}
+
 const musicActionId = ref(null)
 
 // 下架：回到未发布，改完还能再投审。OSS 不动，收藏过的人靠快照继续听

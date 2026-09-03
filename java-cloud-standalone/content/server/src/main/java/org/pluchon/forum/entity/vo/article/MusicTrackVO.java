@@ -59,6 +59,10 @@ public class MusicTrackVO {
     private Boolean favorited;
 
     @Schema(description = "全站播放次数")
+    // 原曲的实时可用性：ok 正常 / offline 已下架 / deleted 已删除。
+    // 快照里的 audio_url 始终可播，这个字段只决定收藏夹里怎么显示
+    private String availability;
+
     private Long playCount;
 
     @Schema(description = "播放量展示文案")
