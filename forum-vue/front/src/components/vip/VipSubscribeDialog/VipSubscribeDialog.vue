@@ -67,6 +67,14 @@
                 <span class="vip-plan__price-num">¥0</span>
                 <span class="vip-plan__price-cycle">/ 月</span>
               </template>
+              <template v-else-if="plan.buttonState === 'upgrade'">
+                <!-- 升级只补差价，写整月价会让人以为要重新付一整个月 -->
+                <div class="vip-plan__promo">
+                  <s class="vip-plan__origin">¥{{ formatYuan(plan.cash.original) }}</s>
+                  <span class="vip-plan__first">¥{{ formatYuan(plan.upgradePrice) }}</span>
+                  <span class="vip-plan__first-tag">补差价</span>
+                </div>
+              </template>
               <template v-else-if="plan.buttonState === 'subscribe' && plan.firstPurchaseEligible">
                 <div class="vip-plan__promo">
                   <s class="vip-plan__origin">¥{{ formatYuan(plan.cash.original) }}</s>
@@ -93,11 +101,7 @@
               v-if="plan.tier > 0"
               @click.stop="selectPlan(plan)"
             >
-              {{
-                plan.buttonState === 'current' || plan.buttonState === 'owned'
-                  ? (plan.buttonState === 'current' ? '当前方案' : plan.buttonLabel)
-                  : (plan.tier === 0 ? '当前方案' : `选择 ${plan.name}`)
-              }}
+              {{ plan.buttonLabel || `选择 ${plan.name}` }}
             </button>
           </article>
         </div>
@@ -127,7 +131,12 @@
 
         <template v-if="selectedPlan?.tier > 0">
           <div class="vip-island__price">
-            <template v-if="showFirstMonth">
+            <template v-if="isUpgrade">
+              <s class="vip-island__origin">¥{{ formatYuan(selectedPlan.cash.original) }}</s>
+              <span class="vip-island__first">¥{{ formatYuan(displayPrice) }}</span>
+              <span class="vip-island__first-tag">补差价</span>
+            </template>
+            <template v-else-if="showFirstMonth">
               <s class="vip-island__origin">¥{{ formatYuan(selectedPlan.cash.original) }}</s>
               <span class="vip-island__first">¥{{ formatYuan(displayPrice) }}</span>
               <span class="vip-island__first-tag">首月</span>
@@ -137,28 +146,26 @@
               <span class="vip-island__first-tag">/ 月</span>
             </template>
           </div>
-          <p class="vip-island__hint">{{ showFirstMonth ? '新用户专享优惠' : '续费按原价计费' }}</p>
+          <p class="vip-island__hint">{{ priceHint }}</p>
 
-          <div class="vip-island__qr" aria-hidden="true">
-            <div class="vip-island__qr-fake" />
+          <div class="vip-island__qr">
+            <div v-if="currentOrder" class="vip-island__order">
+              <span class="vip-island__order-label">待支付</span>
+              <strong class="vip-island__order-amount">¥{{ formatYuan(currentOrder.amount) }}</strong>
+              <span class="vip-island__order-kind">{{ currentOrder.orderKindLabel }}</span>
+              <span class="vip-island__order-no">{{ maskOrderNo(currentOrder.orderNo) }}</span>
+              <button type="button" class="vip-island__order-cancel" @click="cancelOrder">取消</button>
+            </div>
+            <div v-else class="vip-island__qr-fake" aria-hidden="true" />
           </div>
 
+          <!-- 真实渠道尚未接入，两个入口置灰，避免点了才发现走不通 -->
           <div class="vip-island__channels">
-            <button
-              type="button"
-              class="vip-island__channel"
-              :class="{ 'is-on': payChannel === 'alipay' }"
-              @click="payChannel = 'alipay'"
-            >
+            <button type="button" class="vip-island__channel is-off" disabled>
               <img class="vip-island__pay-icon" :src="alipayIconUrl" alt="" />
               支付宝
             </button>
-            <button
-              type="button"
-              class="vip-island__channel"
-              :class="{ 'is-on': payChannel === 'wechat' }"
-              @click="payChannel = 'wechat'"
-            >
+            <button type="button" class="vip-island__channel is-off" disabled>
               <img class="vip-island__pay-icon" :src="wechatPayIconUrl" alt="" />
               微信
             </button>
@@ -175,6 +182,15 @@
               >《会员服务协议》</a>
             </span>
           </label>
+          <button
+            type="button"
+            class="vip-island__pay"
+            :disabled="!canSubmitOrder || !agreeProtocol || orderSubmitting || orderPaying"
+            @click="handlePayClick"
+          >
+            {{ orderSubmitting || orderPaying ? '处理中…' : payButtonLabel }}
+          </button>
+
           <div class="vip-island__line" />
           <p class="vip-island__tip">购买后若权益没到账，立即联系客服补偿</p>
           <div class="vip-island__contacts">
@@ -281,8 +297,15 @@ const {
   payChannel,
   agreeProtocol,
   showFirstMonth,
+  isUpgrade,
   displayPrice,
   payTitle,
+  priceHint,
+  canSubmitOrder,
+  payButtonLabel,
+  currentOrder,
+  orderSubmitting,
+  orderPaying,
   membershipExpiryText,
   purchaseHistoryVisible,
   purchaseHistoryLoading,
@@ -297,6 +320,8 @@ const {
   paymentStateClass,
   planVisualUrl,
   selectPlan,
+  handlePayClick,
+  cancelOrder,
   openVipAgreement,
   openPurchaseHistory,
   loadPurchaseRecords,

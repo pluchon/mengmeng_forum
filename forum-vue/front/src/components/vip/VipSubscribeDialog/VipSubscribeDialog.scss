@@ -537,6 +537,98 @@
   text-decoration: underline;
 }
 
+// 渠道未接入时置灰，不给"看着能点"的假入口
+.vip-island__channel.is-off {
+  color: #cbbcc3;
+  cursor: not-allowed;
+}
+
+.vip-island__channel.is-off img {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+// 已下单：二维码位置换成这笔单的摘要
+.vip-island__order {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.vip-island__order-label {
+  font-size: 11px;
+  color: #a88896;
+}
+
+.vip-island__order-amount {
+  font-size: 22px;
+  font-weight: 800;
+  color: #df5e89;
+  line-height: 1.2;
+}
+
+.vip-island__order-kind {
+  font-size: 11px;
+  color: #8a6b78;
+}
+
+.vip-island__order-no {
+  font-size: 10px;
+  color: #b3a5ab;
+  word-break: break-all;
+}
+
+.vip-island__order-cancel {
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: #b3a5ab;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.vip-island__order-cancel:hover {
+  color: #d35782;
+}
+
+.vip-island__pay {
+  position: absolute;
+  left: 18px;
+  top: 470px;
+  width: 212px;
+  height: 38px;
+  border: none;
+  border-radius: 19px;
+  background: linear-gradient(135deg, #ff8fb8, #f05c91);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(240, 92, 145, 0.28);
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vip-island__pay:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 18px rgba(240, 92, 145, 0.36);
+}
+
+.vip-island__pay:disabled {
+  background: #e6d8de;
+  color: #fff;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .vip-island__line {
   position: absolute;
   left: 18px;

@@ -1,7 +1,12 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getVipCenter, getVipPurchaseRecords } from '@/api/vip'
+import {
+  createVipOrder,
+  getVipCenter,
+  getVipPurchaseRecords,
+  mockPayVipOrder,
+} from '@/api/vip'
 import { VIP_PLAN_META, formatYuan } from '@/constants/vipPlans'
 import { VIP_DIALOG_ICONS } from '@/constants/vipDialogIcons'
 import { formatForumDateOnlyShanghai, formatForumDateTimeShanghai } from '@/utils/datetime'
@@ -61,6 +66,13 @@ const COMMONS_ITEMS = [
 
 const PURCHASE_PAGE_SIZE = 10
 
+// 真实渠道还没接，下单一律走本地模拟渠道。
+// 接入之后把这里换成用户选中的渠道即可，后端按 channel 找网关，其余一行不用改
+const ACTIVE_PAY_CHANNEL = 'mock'
+
+// 已开通与当前方案两种状态不能下单
+const UNBUYABLE_BUTTON_STATES = ['current', 'owned']
+
 export function useVipSubscribeDialog(props, emit) {
   const router = useRouter()
   const loading = ref(false)
@@ -74,6 +86,9 @@ export function useVipSubscribeDialog(props, emit) {
   const purchaseRecords = ref([])
   const purchaseRecordTotal = ref(0)
   const purchaseRecordPage = ref(1)
+  const currentOrder = ref(null)
+  const orderSubmitting = ref(false)
+  const orderPaying = ref(false)
 
   const visible = computed({
     get: () => props.modelValue,
@@ -108,6 +123,8 @@ export function useVipSubscribeDialog(props, emit) {
         features,
         cash,
         firstPurchaseEligible: Boolean(api.firstPurchaseEligible),
+        upgradePrice: api.upgradePrice == null ? null : Number(api.upgradePrice),
+        upgradeRemainingDays: Number(api.upgradeRemainingDays) || 0,
       }
     })
   })
@@ -122,16 +139,44 @@ export function useVipSubscribeDialog(props, emit) {
     return p.buttonState === 'subscribe' && p.firstPurchaseEligible
   })
 
+  const isUpgrade = computed(() => selectedPlan.value?.buttonState === 'upgrade')
+
   const displayPrice = computed(() => {
     const p = selectedPlan.value
     if (!p || p.tier === 0) return 0
+    // 升级收的是按剩余天数折算的差价，不是整月价，金额由后端算好带下来
+    if (isUpgrade.value) return p.upgradePrice ?? 0
     return showFirstMonth.value ? p.cash.firstMonth : p.cash.original
   })
 
   const payTitle = computed(() => {
     const p = selectedPlan.value
     if (!p || p.tier === 0) return '当前为免费方案'
-    return `升级为 ${p.name}`
+    if (p.buttonState === 'upgrade') return `升级为 ${p.name}`
+    if (p.buttonState === 'renew') return `续费 ${p.name}`
+    if (UNBUYABLE_BUTTON_STATES.includes(p.buttonState)) return `${p.name} 已开通`
+    return `开通 ${p.name}`
+  })
+
+  const priceHint = computed(() => {
+    const p = selectedPlan.value
+    if (!p || p.tier === 0) return ''
+    if (isUpgrade.value) return `剩余 ${p.upgradeRemainingDays} 天的档位差价`
+    if (showFirstMonth.value) return '新用户专享优惠'
+    if (p.buttonState === 'renew') return '续费从原到期日往后接'
+    return '续费按原价计费'
+  })
+
+  const canSubmitOrder = computed(() => {
+    const p = selectedPlan.value
+    if (!p || p.tier === 0) return false
+    return !UNBUYABLE_BUTTON_STATES.includes(p.buttonState)
+  })
+
+  const payButtonLabel = computed(() => {
+    if (currentOrder.value) return '我已完成支付'
+    if (isUpgrade.value) return '立即升级'
+    return selectedPlan.value?.buttonState === 'renew' ? '立即续费' : '立即开通'
   })
   const membershipExpiryText = computed(() => {
     const tier = Number(membership.value.vipTier) || 0
@@ -158,8 +203,11 @@ export function useVipSubscribeDialog(props, emit) {
         const api = (plans.value || []).find((p) => p.code === code) || {}
         return { code, buttonState: api.buttonState || 'subscribe' }
       })
-      const prefer = cards.find((p) => p.code === 'pro' && p.buttonState === 'subscribe')
-        || cards.find((p) => p.code === 'max' && p.buttonState === 'subscribe')
+      // 默认选中一张真能下单的卡。MAX 用户的 PRO 卡是"已拥有更高档位"，
+      // 选中它会让支付岛整块变成不可点，看起来像坏了
+      const buyable = (p) => !UNBUYABLE_BUTTON_STATES.includes(p.buttonState)
+      const prefer = cards.find((p) => p.code === 'pro' && buyable(p))
+        || cards.find((p) => p.code === 'max' && buyable(p))
         || cards.find((p) => p.code === 'pro')
         || cards[0]
       selectedCode.value = prefer?.code || 'pro'
@@ -175,6 +223,66 @@ export function useVipSubscribeDialog(props, emit) {
   function selectPlan(plan) {
     if (!plan || plan.tier === 0) return
     selectedCode.value = plan.code
+    // 换了档位，原来那张单的金额就不对了，丢掉重新下
+    currentOrder.value = null
+  }
+
+  // 下单：只把档位交给后端，金额、订单类型、定价体系全由服务端判定
+  async function submitOrder() {
+    if (!canSubmitOrder.value || orderSubmitting.value) return
+    if (!agreeProtocol.value) {
+      ElMessage.warning('请先阅读并同意《会员服务协议》')
+      return
+    }
+    orderSubmitting.value = true
+    try {
+      const res = await createVipOrder({
+        tier: selectedPlan.value.tier,
+        payChannel: ACTIVE_PAY_CHANNEL,
+      })
+      currentOrder.value = res?.data || null
+    } catch {
+      // 失败提示由 request 拦截器统一弹出，这里只负责不把订单留在半途
+      currentOrder.value = null
+    } finally {
+      orderSubmitting.value = false
+    }
+  }
+
+  // 模拟支付：后端按真实回调的形状自签一份回调再发货，验签与金额比对一个都不跳过
+  async function confirmPayment() {
+    if (!currentOrder.value || orderPaying.value) return
+    orderPaying.value = true
+    try {
+      const res = await mockPayVipOrder({ orderNo: currentOrder.value.orderNo })
+      const paid = res?.data || null
+      if (Number(paid?.paymentState) === 1) {
+        ElMessage.success('开通成功，权益已到账')
+        currentOrder.value = null
+        // 重新拉一次方案，卡片状态立刻跟着变。
+        // 顶栏那颗会员胶囊由 useVipStatusEntry 在弹窗关闭时回刷，这里不重复处理
+        await loadPlans()
+      } else {
+        currentOrder.value = paid
+        ElMessage.warning('支付尚未完成，可在购买记录中查看这笔订单')
+      }
+    } catch {
+      // 同上，拦截器已经提示过
+    } finally {
+      orderPaying.value = false
+    }
+  }
+
+  function cancelOrder() {
+    currentOrder.value = null
+  }
+
+  function handlePayClick() {
+    if (currentOrder.value) {
+      confirmPayment()
+      return
+    }
+    submitOrder()
   }
 
   function close() {
@@ -225,7 +333,10 @@ export function useVipSubscribeDialog(props, emit) {
   watch(
     () => props.modelValue,
     (open) => {
-      if (open) loadPlans()
+      if (open) {
+        currentOrder.value = null
+        loadPlans()
+      }
     },
   )
 
@@ -243,8 +354,15 @@ export function useVipSubscribeDialog(props, emit) {
     payChannel,
     agreeProtocol,
     showFirstMonth,
+    isUpgrade,
     displayPrice,
     payTitle,
+    priceHint,
+    canSubmitOrder,
+    payButtonLabel,
+    currentOrder,
+    orderSubmitting,
+    orderPaying,
     membershipExpiryText,
     purchaseHistoryVisible,
     purchaseHistoryLoading,
@@ -259,6 +377,8 @@ export function useVipSubscribeDialog(props, emit) {
     paymentStateClass,
     planVisualUrl,
     selectPlan,
+    handlePayClick,
+    cancelOrder,
     openVipAgreement,
     openPurchaseHistory,
     loadPurchaseRecords,
