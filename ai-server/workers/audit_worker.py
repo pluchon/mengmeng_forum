@@ -25,6 +25,7 @@ import time
 import redis
 
 from clients.rabbit import audit_result_routing_key, audit_task_queue, open_consumer_channel, publish_json
+from utils.trace import set_trace_id, trace_id_from_headers
 from clients.redis_client import redis_client
 from config import settings
 from graphs.article_audit import run_audit
@@ -134,9 +135,12 @@ def _consume_loop() -> None:
         try:
             conn, ch = open_consumer_channel()
             logger.info("[audit_worker] 已连接, 订阅队列=%s", queue)
-            for method_frame, _props, body in ch.consume(queue, auto_ack=False, inactivity_timeout=None):
+            for method_frame, props, body in ch.consume(queue, auto_ack=False, inactivity_timeout=None):
                 if method_frame is None:
                     continue
+                # 绑定 Java 侧带过来的 traceId，本条消息的所有日志都会带上它；
+                # 没带就现生成一个，绝不沿用上一条的
+                set_trace_id(trace_id_from_headers(getattr(props, "headers", None)))
                 task_id_for_lock = None
                 try:
                     # 先把 taskId 探出来, 后续异常路径要释放锁

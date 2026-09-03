@@ -19,10 +19,11 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from flask import Flask
+from flask import Flask, request
 
 from api import api as api_blueprint
 from config import settings
+from utils.trace import TraceIdFilter, set_trace_id, trace_id_from_headers
 from workers import ai_async_worker, audit_worker
 
 
@@ -35,7 +36,11 @@ def _setup_logging() -> None:
         or "../logs/ai-server/ai-server.log"
     )
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    # 日志带上 traceId，和 Java 侧 logback 的 [%X{traceId}] 对齐，
+    # 一个请求穿过 gateway→java→python 的日志能用同一个 id 串起来
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] [%(trace_id)s] %(name)s: %(message)s"
+    )
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=int(logging_cfg.get("max_bytes") or 20 * 1024 * 1024),
@@ -43,6 +48,7 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
+    file_handler.addFilter(TraceIdFilter())
     logging.basicConfig(
         level=level,
         handlers=[file_handler],
@@ -57,6 +63,12 @@ def create_app() -> Flask:
     img_max = int(settings.image.get("max_bytes", 10 * 1024 * 1024))
     app.config["MAX_CONTENT_LENGTH"] = img_max + 2 * 1024 * 1024
     app.register_blueprint(api_blueprint)
+
+    # 同步链路：Java 侧 Feign / RestTemplate 已经在发 X-Trace-Id，这里接住
+    @app.before_request
+    def _bind_trace_id() -> None:
+        set_trace_id(trace_id_from_headers(request.headers))
+
     return app
 
 

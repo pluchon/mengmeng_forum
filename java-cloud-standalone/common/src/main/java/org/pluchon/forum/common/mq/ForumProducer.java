@@ -2,6 +2,7 @@ package org.pluchon.forum.common.mq;
 
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.constant.Constant;
+import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,11 +62,23 @@ public class ForumProducer {
         send(aiAsyncRabbitTemplate, Constant.ROUTING_KEY_AI_ASYNC_TASK, task);
     }
 
-    // 公共发送，每条消息携带唯一 messageId 便于追踪
+    /**
+     * 公共发送，每条消息携带唯一 messageId 便于追踪。
+     *
+     * <p>同时把当前请求的 traceId 放进消息头。不带的话链路会断在这里：
+     * 帖子审核这类是「发条消息就返回」，后面发生的事全在消费者线程上，
+     * 和触发它的那个请求对不上号——而那恰好是最难查的一段。
+     */
     private void send(RabbitTemplate template, String routingKey, Object message) {
         String messageId = UUID.randomUUID().toString();
         CorrelationData correlationData = new CorrelationData(messageId);
-        template.convertAndSend(Constant.TOPIC_EXCHANGE_1, routingKey, message, correlationData);
+        String traceId = MDC.get(ForumMqTrace.MDC_KEY);
+        template.convertAndSend(Constant.TOPIC_EXCHANGE_1, routingKey, message, outgoing -> {
+            if (traceId != null && !traceId.isBlank()) {
+                outgoing.getMessageProperties().setHeader(ForumMqTrace.TRACE_HEADER, traceId);
+            }
+            return outgoing;
+        }, correlationData);
         log.debug("[MQ 生产者] 投递 | routingKey={} | messageId={}", routingKey, messageId);
     }
 }

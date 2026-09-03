@@ -15,6 +15,8 @@ from pika.adapters.blocking_connection import BlockingConnection
 
 from config import settings
 
+from utils.trace import MQ_TRACE_HEADER, get_trace_id
+
 logger = logging.getLogger(__name__)
 
 _cfg = settings.rabbitmq
@@ -99,6 +101,9 @@ def publish_json(routing_key: str, payload: dict, retries: int = 3) -> bool:
                     properties=pika.BasicProperties(
                         content_type="application/json",
                         delivery_mode=2,  # persistent
+                        # 把 traceId 原样带回 Java：审核结果是回投给 content 域消费的，
+                        # 这里不带的话链路会断在最后一跳，结果日志和触发它的请求对不上
+                        headers={MQ_TRACE_HEADER: get_trace_id()},
                     ),
                     mandatory=True,
                 )

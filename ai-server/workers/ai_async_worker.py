@@ -21,6 +21,7 @@ from clients.rabbit import (
     publish_json,
 )
 from clients.redis_client import redis_client
+from utils.trace import set_trace_id, trace_id_from_headers
 from modules.moderation import ContentModerationModule
 from modules.summary.graph import run_summary_graph
 from modules.creation.music_audit_audio import audit_music_audio
@@ -340,7 +341,10 @@ def _settle_threadsafe(connection, channel, delivery_tag: int, ack: bool, requeu
         logger.warning("[ai_async_worker] 无法投递确认回调，消息将由 broker 重投")
 
 
-def _handle_message(connection, channel, delivery_tag: int, body: bytes) -> None:
+def _handle_message(connection, channel, delivery_tag: int, body: bytes,
+                    trace_id: str | None = None) -> None:
+    # 线程池的工作线程是复用的，每条消息进来先绑定一次，避免沿用上一条的 traceId
+    set_trace_id(trace_id)
     task_id = ""
     try:
         task = json.loads(body.decode("utf-8"))
@@ -387,10 +391,15 @@ def _consume_loop() -> None:
             logger.info("[ai_async_worker] 已连接，订阅队列=%s 并发=%s", queue, pool_size)
             # inactivity_timeout 让循环定期空转，_settle_threadsafe 投进来的
             # 确认回调才有机会在 IO 线程上被执行
-            for method, _properties, body in channel.consume(queue, auto_ack=False, inactivity_timeout=1):
+            for method, properties, body in channel.consume(queue, auto_ack=False, inactivity_timeout=1):
                 if method is None:
                     continue
-                executor.submit(_handle_message, connection, channel, method.delivery_tag, body)
+                # traceId 在这里取、传进线程池，不能在 _handle_message 里取：
+                # contextvar 不会自动跨到 executor 的工作线程
+                trace_id = trace_id_from_headers(getattr(properties, "headers", None))
+                executor.submit(
+                    _handle_message, connection, channel, method.delivery_tag, body, trace_id
+                )
         except Exception:
             logger.exception("AI异步worker连接断开，5秒后重连")
             time.sleep(5)
