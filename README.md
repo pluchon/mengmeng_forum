@@ -135,7 +135,7 @@ flowchart LR
 | content | `forum-content` | `forum_content_db` | 帖子、板块、评论、弹幕、收藏、搜索推荐、音乐厅 | `/article/**` `/board/**` `/favorite/**` `/search/**` `/recommend/**` `/file/**` … |
 | im | `forum-im` | `forum_im_db` | 私信、群聊、通知、未读 | `/message/**` `/group-chat/**` `/notice/**`；WS `/ws/notify` |
 | game | `forum-game` | `forum_game_db` | 大厅、房间、对局、排行、回放 | `/game/**`；WS `/ws/game-center/**` `/ws/games/**` |
-| economy | `forum-economy` | `forum_economy_db` | 积分、签到、星辉商城、抽奖、会员；会员配额为通用额度 + Wan | `/points/**` `/checkin/**` `/vip/**` `/lottery/**` `/starlight/**` |
+| economy | `forum-economy` | `forum_economy_db` | 积分、签到、星辉商城、抽奖、会员订单与支付；会员配额为通用额度 + Wan | `/points/**` `/checkin/**` `/vip/**` `/lottery/**` `/starlight/**` |
 | ai | `forum-ai` | `forum_ai_db` | AI 额度、会话、看板娘业务落库、创作工作区；生图额度只计 Wan | `/ai/**` `/mascot/**` |
 
 跨域只依赖对方的 `xxx-api`，消费方本地声明 Feign；不共享 Entity、Mapper、Service 实现。
@@ -273,6 +273,33 @@ flowchart TB
 
 互动记录与帖子正文分表；展示时再组合。通知走 im 域，可实时推，也可断线后补未读。
 
+### 内容治理与举报
+
+发布前的审核之外，还有一条用户驱动的举报管线，帖子、评论、弹幕、私信、歌曲共用它。
+
+```mermaid
+flowchart LR
+  RPT["举报"] --> C{"累计人数"}
+  C -->|未达阈值| W["waiting 占位"]
+  C -->|达阈值| AI["AI 复审"]
+  AI -->|违规| OFF["下架"]
+  AI -->|正常| KEEP["保留 + 记失实"]
+  W -->|攒够| AI
+```
+
+歌曲要累计到若干个不同用户才触发 AI，成本不会被单个用户刷掉；攒着的举报单挂占位任务号，
+达到阈值时一次性改写成真 taskId，先举报的人照样收到结论。举报人自身也有每日上限与失实停权。
+
+作者自删和判违规删除的处理不一样：
+
+```mermaid
+flowchart TB
+  DEL{"删除来源"} -->|作者自删| KEEP2["保留子回复<br/>父楼显示占位"]
+  DEL -->|判违规| WHOLE["整楼带走"]
+```
+
+自删保留子回复，是因为楼中楼里往往有别人的对话，一起删掉等于替他人做决定。
+
 ### 搜索、热帖与推荐
 
 ```mermaid
@@ -335,6 +362,65 @@ flowchart LR
 权威钱包与流水在 economy；前端只展示余额与结果。  
 会员面板展示通用额度与 Wan 张数；体验卡礼包只发 Qwen / Wan，不再发 GPT 生图额度。
 
+### 会员订单与支付
+
+会员购买走完整的订单流程，而不是「点一下就加权益」。金额一律服务端定价，前端只能提交想买哪一档。
+
+```mermaid
+flowchart LR
+  FE["前端"] --> Q["Quoter<br/>服务端定价"]
+  Q --> ORD[("PENDING")]
+  ORD --> CH["PaymentGateway"]
+  CH -->|callback| V{"验签 + 金额比对"}
+  V -->|通过| D["发货"]
+  V -->|不通过| X["拒绝并关单"]
+  D --> VIP[("VIP 权益")]
+```
+
+状态单向，没有回头路。发货靠条件更新的影响行数决定，渠道重推同一条回调不会发两次货；收款与发货在同一个事务里。
+
+```mermaid
+stateDiagram-v2
+  [*] --> PENDING: create
+  PENDING --> SUCCESS: callback 通过
+  PENDING --> CLOSED: 超时 / 下新单
+  SUCCESS --> [*]
+  CLOSED --> [*]
+```
+
+三种订单的发货规则完全不同：
+
+```mermaid
+flowchart TB
+  T{"当前档位"} -->|无会员| N["new<br/>今天起 30 天"]
+  T -->|同档| R["renew<br/>接原到期日"]
+  T -->|PRO → MAX| U["upgrade<br/>只补差价"]
+  T -->|MAX → PRO| D["拒绝降级"]
+```
+
+`renew` 从原到期日往后接，不是从今天算——从今天算会吞掉用户没用完的天数。
+`upgrade` 到期日不变，只收按剩余天数折算的档位差价，配额周期重置当作升级奖励。
+
+支付渠道是可替换的：`PaymentGateway` 只有 `createOrder` / `verifyCallback` / `refund` 三个方法。
+目前只有本地 `MockPaymentGateway`，但它的**验签是真实的 HMAC-SHA256**——
+如果 mock 直接返回「验签通过」，上层永远走不到拒绝分支，换真实渠道那天才会发现失败路径从没跑过。
+
+### 文件生命周期
+
+OSS 用「目录即状态」管理文件，不做定时扫描比对，因此不会产生孤儿文件。
+
+```mermaid
+flowchart LR
+  UP["上传"] --> P["_pending/"]
+  P -->|业务绑定| OK["正式目录"]
+  P -->|无人绑定| L1["lifecycle 回收"]
+  OK -->|判违规| RM["_removed/"]
+  RM --> L2["lifecycle 回收"]
+```
+
+上传只落 `_pending/`，业务真正引用时才搬进正式目录；没人认领的由 OSS 生命周期规则按天数收走。
+判违规的对象搬进 `_removed/`，播放立刻 404，同时留一个可逆窗口以防误判。
+
 ### 主要表分组
 
 | 库 | 代表表 |
@@ -343,7 +429,7 @@ flowchart LR
 | content | `article`、评论、弹幕、标签、收藏夹、`user_music*`、推荐设置 |
 | im | `message`、群聊、群消息、通知 |
 | game | 游戏定义、对局记录、用户战绩 |
-| economy | 积分钱包、签到、星辉、抽奖、会员订阅与 Wan/通用额度礼包 |
+| economy | 积分钱包、签到、星辉、抽奖、会员订阅、会员订单流水与 Wan/通用额度礼包 |
 | ai | 任务会话、用量、创作工作区、看板娘会话与记忆；周期额度只预占 Qwen 与 Wan |
 
 基线表数量：auth 11 · content 30 · im 14 · game 12 · economy 36 · ai 17。  
@@ -593,6 +679,46 @@ sequenceDiagram
   GM->>GM: 结束写战绩
 ```
 
+## 可观测与容错
+
+### 链路追踪
+
+全链路一个 `X-Trace-Id`，同步和异步都覆盖，日志里直接 grep 就能把一次请求的所有落点串起来。
+
+```mermaid
+flowchart LR
+  GW["Gateway<br/>生成 trace id"] --> SVC["六域<br/>MDC"]
+  SVC -->|Feign header| SVC2["下游域"]
+  SVC -->|MQ header| WK["worker"]
+  SVC -->|header + body| PY["ai-server"]
+  SVC2 --> LOG["日志同一 trace id"]
+  WK --> LOG
+  PY --> LOG
+```
+
+这是关联式追踪，不是 span 式：能回答「这个请求去过哪些服务」，不能直接给出每一跳的耗时瀑布图。
+对这个规模的项目够用，而且零额外容器、零内存开销。将来要接 OpenTelemetry，
+透传点已经全部就位，属于加依赖而不是重做。
+
+### 限流与熔断
+
+只在**已经证明会拖累上游**的跨服务同步调用上加 Sentinel——也就是三个域打向 AI 的边界，
+业务 Service 完全不感知规则。没有全局默认规则，没有 dashboard，没有网关限流。
+
+```mermaid
+flowchart LR
+  SVC["content / game / ai"] --> E["SphU.entry"]
+  E -->|正常| CALL["远程调用"]
+  E -->|限流| RL["明确错误码"]
+  E -->|熔断| DG["明确错误码"]
+  CALL -->|异常| TR["traceEntry<br/>计入统计"]
+```
+
+降级一定返回明确语义（限流 / 不可用 / 超时），绝不吞掉异常伪装成功。
+五子棋是个好例子：远程 AI 熔断后直接退回本地引擎，用户感觉不到。
+
+阈值都放在 Nacos，不硬编码。限流是**每实例**的 QPS，多实例部署时实际压力等于阈值乘以实例数。
+
 ## 基础设施
 
 | 服务 | 版本 | 用途 |
@@ -635,6 +761,38 @@ python main.py
 
 Nacos 控制台：http://127.0.0.1:8080/index.html  
 本地 Java 连 `127.0.0.1:8848`。
+
+### Windows 下的端口保留问题
+
+Docker Desktop 在 Windows 上走 Hyper-V / WinNAT，系统会**动态保留**若干段高位端口。
+本地中间件用的 `33306` / `16530` / `56720` / `54320` 正好落在这个区间，
+一旦撞上，`docker compose up` 会报这样一句，看起来像权限问题，其实是端口被系统占了：
+
+```
+bind: An attempt was made to access a socket in a way forbidden by its access permissions
+```
+
+先确认是不是它：
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+输出里如果包含你要用的端口，有两条路：
+
+```powershell
+# 1) 换端口（推荐）——所有宿主端口都可以用环境变量覆盖
+$env:MYSQL_HOST_PORT = "33307"; .\deploy\scripts\dev-compose.ps1 up -d
+
+# 2) 让 WinNAT 重新分配保留段（需要管理员，会短暂断开容器网络）
+net stop winnat
+net start winnat
+```
+
+可覆盖的变量：`NACOS_HTTP_HOST_PORT` `NACOS_GRPC_HOST_PORT` `NACOS_CONSOLE_HOST_PORT`
+`MYSQL_HOST_PORT` `REDIS_HOST_PORT` `RABBITMQ_AMQP_PORT` `RABBITMQ_MGMT_PORT`
+`POSTGRES_HOST_PORT` `FFMPEG_HOST_PORT`。
+改了宿主端口记得同步改 Java 的数据源地址，那几个也是环境变量。
 
 ## 打包发布
 
