@@ -148,16 +148,17 @@
           </div>
           <p class="vip-island__hint">{{ priceHint }}</p>
 
-          <div class="vip-island__qr">
-            <div v-if="currentOrder" class="vip-island__order">
-              <span class="vip-island__order-label">待支付</span>
-              <strong class="vip-island__order-amount">¥{{ formatYuan(currentOrder.amount) }}</strong>
-              <span class="vip-island__order-kind">{{ currentOrder.orderKindLabel }}</span>
-              <span class="vip-island__order-no">{{ maskOrderNo(currentOrder.orderNo) }}</span>
-              <button type="button" class="vip-island__order-cancel" @click="cancelOrder">取消</button>
-            </div>
-            <div v-else class="vip-island__qr-fake" aria-hidden="true" />
-          </div>
+          <!-- 扫码区就是支付入口：点它等于扫码付款 -->
+          <button
+            type="button"
+            class="vip-island__qr"
+            :class="{ 'is-busy': orderPaying, 'is-locked': !canSubmitOrder || !agreeProtocol }"
+            :disabled="!canSubmitOrder || !agreeProtocol || orderPaying"
+            @click="payByQrCode"
+          >
+            <div class="vip-island__qr-fake" aria-hidden="true" />
+            <span class="vip-island__qr-mask">{{ qrActionText }}</span>
+          </button>
 
           <!-- 真实渠道尚未接入，两个入口置灰，避免点了才发现走不通 -->
           <div class="vip-island__channels">
@@ -182,15 +183,6 @@
               >《会员服务协议》</a>
             </span>
           </label>
-          <button
-            type="button"
-            class="vip-island__pay"
-            :disabled="!canSubmitOrder || !agreeProtocol || orderSubmitting || orderPaying"
-            @click="handlePayClick"
-          >
-            {{ orderSubmitting || orderPaying ? '处理中…' : payButtonLabel }}
-          </button>
-
           <div class="vip-island__line" />
           <p class="vip-island__tip">购买后若权益没到账，立即联系客服补偿</p>
           <div class="vip-island__contacts">
@@ -302,9 +294,8 @@ const {
   payTitle,
   priceHint,
   canSubmitOrder,
-  payButtonLabel,
+  qrActionText,
   currentOrder,
-  orderSubmitting,
   orderPaying,
   membershipExpiryText,
   purchaseHistoryVisible,
@@ -320,8 +311,7 @@ const {
   paymentStateClass,
   planVisualUrl,
   selectPlan,
-  handlePayClick,
-  cancelOrder,
+  payByQrCode,
   openVipAgreement,
   openPurchaseHistory,
   loadPurchaseRecords,

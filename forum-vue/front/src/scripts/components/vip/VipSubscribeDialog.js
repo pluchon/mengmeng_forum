@@ -87,7 +87,6 @@ export function useVipSubscribeDialog(props, emit) {
   const purchaseRecordTotal = ref(0)
   const purchaseRecordPage = ref(1)
   const currentOrder = ref(null)
-  const orderSubmitting = ref(false)
   const orderPaying = ref(false)
 
   const visible = computed({
@@ -173,10 +172,12 @@ export function useVipSubscribeDialog(props, emit) {
     return !UNBUYABLE_BUTTON_STATES.includes(p.buttonState)
   })
 
-  const payButtonLabel = computed(() => {
-    if (currentOrder.value) return '我已完成支付'
-    if (isUpgrade.value) return '立即升级'
-    return selectedPlan.value?.buttonState === 'renew' ? '立即续费' : '立即开通'
+  // 扫码区上的浮层文案。它同时是支付按钮，不再另设一个"立即开通"
+  const qrActionText = computed(() => {
+    if (orderPaying.value) return '支付中…'
+    if (!canSubmitOrder.value) return '当前档位无需支付'
+    if (!agreeProtocol.value) return '请先同意服务协议'
+    return `点击模拟扫码支付 ¥${formatYuan(displayPrice.value)}`
   })
   const membershipExpiryText = computed(() => {
     const tier = Number(membership.value.vipTier) || 0
@@ -227,34 +228,34 @@ export function useVipSubscribeDialog(props, emit) {
     currentOrder.value = null
   }
 
-  // 下单：只把档位交给后端，金额、订单类型、定价体系全由服务端判定
-  async function submitOrder() {
-    if (!canSubmitOrder.value || orderSubmitting.value) return
+  /**
+   * 点二维码 = 扫码付款，一次走完下单与支付。
+   *
+   * 下单只把档位交给后端，金额、订单类型、定价体系全由服务端判定；
+   * 付款走的是真实回调链路（后端按渠道回调的形状自签一份），
+   * 验签、金额比对、幂等一个都不跳过。
+   */
+  async function payByQrCode() {
+    if (!canSubmitOrder.value || orderPaying.value) return
     if (!agreeProtocol.value) {
       ElMessage.warning('请先阅读并同意《会员服务协议》')
       return
     }
-    orderSubmitting.value = true
-    try {
-      const res = await createVipOrder({
-        tier: selectedPlan.value.tier,
-        payChannel: ACTIVE_PAY_CHANNEL,
-      })
-      currentOrder.value = res?.data || null
-    } catch {
-      // 失败提示由 request 拦截器统一弹出，这里只负责不把订单留在半途
-      currentOrder.value = null
-    } finally {
-      orderSubmitting.value = false
-    }
-  }
-
-  // 模拟支付：后端按真实回调的形状自签一份回调再发货，验签与金额比对一个都不跳过
-  async function confirmPayment() {
-    if (!currentOrder.value || orderPaying.value) return
     orderPaying.value = true
     try {
-      const res = await mockPayVipOrder({ orderNo: currentOrder.value.orderNo })
+      // 上一笔没付成功的单还在就接着付，避免每点一次都开一张新单
+      let orderNo = currentOrder.value?.orderNo
+      if (!orderNo) {
+        const created = await createVipOrder({
+          tier: selectedPlan.value.tier,
+          payChannel: ACTIVE_PAY_CHANNEL,
+        })
+        currentOrder.value = created?.data || null
+        orderNo = currentOrder.value?.orderNo
+      }
+      if (!orderNo) return
+
+      const res = await mockPayVipOrder({ orderNo })
       const paid = res?.data || null
       if (Number(paid?.paymentState) === 1) {
         ElMessage.success('开通成功，权益已到账')
@@ -267,22 +268,12 @@ export function useVipSubscribeDialog(props, emit) {
         ElMessage.warning('支付尚未完成，可在购买记录中查看这笔订单')
       }
     } catch {
-      // 同上，拦截器已经提示过
+      // 失败提示由 request 拦截器统一弹出。
+      // 这张单可能已经建出来了，丢掉本地引用让下次重新报价，免得拿着过期金额去付
+      currentOrder.value = null
     } finally {
       orderPaying.value = false
     }
-  }
-
-  function cancelOrder() {
-    currentOrder.value = null
-  }
-
-  function handlePayClick() {
-    if (currentOrder.value) {
-      confirmPayment()
-      return
-    }
-    submitOrder()
   }
 
   function close() {
@@ -359,9 +350,8 @@ export function useVipSubscribeDialog(props, emit) {
     payTitle,
     priceHint,
     canSubmitOrder,
-    payButtonLabel,
+    qrActionText,
     currentOrder,
-    orderSubmitting,
     orderPaying,
     membershipExpiryText,
     purchaseHistoryVisible,
@@ -377,8 +367,7 @@ export function useVipSubscribeDialog(props, emit) {
     paymentStateClass,
     planVisualUrl,
     selectPlan,
-    handlePayClick,
-    cancelOrder,
+    payByQrCode,
     openVipAgreement,
     openPurchaseHistory,
     loadPurchaseRecords,
