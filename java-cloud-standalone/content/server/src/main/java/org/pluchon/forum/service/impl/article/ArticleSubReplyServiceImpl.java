@@ -1,6 +1,7 @@
 package org.pluchon.forum.service.impl.article;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.pluchon.forum.common.enums.ResultCode;
@@ -8,6 +9,8 @@ import org.pluchon.forum.common.exception.ApplicationException;
 import org.pluchon.forum.common.result.Result;
 import org.pluchon.forum.common.utils.PageUtils;
 import org.pluchon.forum.service.impl.remote.ContentUserMuteGuard;
+import org.pluchon.forum.entity.db.ArticleReply;
+import org.pluchon.forum.mapper.ArticleReplyMapper;
 import org.pluchon.forum.entity.db.ArticleSubReply;
 import org.pluchon.forum.entity.db.ArticleSubReplyLike;
 import org.pluchon.forum.api.UserInternalVO;
@@ -43,6 +46,9 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
     private ArticleSubReplyMapper articleSubReplyMapper;
 
     @Autowired
+    private ArticleReplyMapper articleReplyMapper;
+
+    @Autowired
     private ArticleSubReplyLikeMapper articleSubReplyLikeMapper;
 
     @Autowired
@@ -76,6 +82,13 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         }
         // 校验所属帖子存在 > 同时防止越权伪造
         articleService.selectArticleByArticleId(req.getArticleId());
+        // 用户从打开输入框到点发送这段时间里，楼层可能已经被作者自删或判违规删掉了。
+        // 统一按「内容不存在」拒绝：前端会保留已输入的内容，并且不说明是哪种删除——
+        // 别人受了什么处置不该广播给第三方
+        ArticleReply parent = articleReplyMapper.selectById(req.getReplyId());
+        if (parent == null || (parent.getDeleteState() != null && parent.getDeleteState() == 1)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
         ArticleSubReply subReply = new ArticleSubReply();
         subReply.setArticleId(req.getArticleId());
         subReply.setReplyId(req.getReplyId());
@@ -127,6 +140,33 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
                 .eq(ArticleSubReplyLike::getUserId, loginUserId)
                 .in(ArticleSubReplyLike::getSubReplyId, subIds));
         return likes.stream().map(ArticleSubReplyLike::getSubReplyId).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteOwnSubReply(Long subReplyId, Long loginUserId) {
+        if (subReplyId == null || subReplyId <= 0 || loginUserId == null || loginUserId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        ArticleSubReply sub = articleSubReplyMapper.selectById(subReplyId);
+        // 点删除的这一刻目标可能已经被审核或管理员删掉了，统一按「内容不存在」返回
+        if (sub == null || (sub.getDeleteState() != null && sub.getDeleteState() == 1)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        if (!java.util.Objects.equals(sub.getPostUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        int updated = articleSubReplyMapper.update(null, new LambdaUpdateWrapper<ArticleSubReply>()
+                .eq(ArticleSubReply::getId, subReplyId)
+                .ne(ArticleSubReply::getDeleteState, 1)
+                .set(ArticleSubReply::getDeleteState, 1));
+        if (updated <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        // 删掉的这条仍以占位形式留在列表里：楼中楼是连续对话，
+        // 直接抽走会让「回复了它的那条」变得莫名其妙
+        articleQuestionService.handleDeletedSubReply(sub.getArticleId(), subReplyId);
+        articleService.deleteSubReply(sub.getArticleId());
     }
 
     // 单条楼中楼 > 列表项装配，被回复用户已注销时昵称留空

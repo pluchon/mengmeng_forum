@@ -82,7 +82,7 @@ services:
     container_name: forum-redis-dev
     restart: unless-stopped
     ports:
-      - "${REDIS_HOST_PORT:-16379}:6379"
+      - "${REDIS_HOST_PORT:-16530}:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - forum_dev_redis_data:/data

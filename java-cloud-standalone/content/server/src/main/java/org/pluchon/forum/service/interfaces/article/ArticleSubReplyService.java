@@ -12,4 +12,7 @@ public interface ArticleSubReplyService {
     // 根据一级回复ID 楼层ID 分页查询楼中楼列表
     PageResult<ArticleSubReplyListResponse> querySubReplyByReplyId(
             Long replyId, Integer pageNum, Integer pageSize, Long loginUserId);
+
+    // 作者删除自己的楼中楼回复
+    void deleteOwnSubReply(Long subReplyId, Long loginUserId);
 }

@@ -30,6 +30,16 @@ export function submitSubReply(data) {
   return request({ url: '/articleSubReply/subReply', method: 'put', data })
 }
 
+// 删除自己发的一级回复 楼中楼保留
+export function deleteOwnReply(replyId) {
+  return request({ url: '/articleReply/deleteOwnReply', method: 'delete', params: { replyId } })
+}
+
+// 删除自己发的楼中楼回复
+export function deleteOwnSubReply(subReplyId) {
+  return request({ url: '/articleSubReply/deleteOwnSubReply', method: 'delete', params: { subReplyId } })
+}
+
 export function likeReply(replyId) {
   return request({ url: '/replyLike/likeReply', method: 'put', params: { replyId } })
 }

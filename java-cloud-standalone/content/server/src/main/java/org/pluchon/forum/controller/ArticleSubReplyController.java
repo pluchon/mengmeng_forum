@@ -30,6 +30,15 @@ public class ArticleSubReplyController {
         return Result.success("楼中楼回复成功");
     }
 
+    /** 删除自己发的楼中楼回复 */
+    @Operation(summary = "删除自己的楼中楼回复", description = "只能删自己发的")
+    @DeleteMapping("/deleteOwnSubReply")
+    public Result<Void> deleteOwnSubReply(@RequestParam Long subReplyId, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        articleSubReplyService.deleteOwnSubReply(subReplyId, loginUser.getId());
+        return Result.success();
+    }
+
     @Operation(summary = "分页查询楼中楼列表", description = "传入一级回复ID(replyId)，返回该楼层下的所有子回复->分页")
     @GetMapping("/getSubReplyByReplyId")
     public Result<PageResult<ArticleSubReplyListResponse>> getSubReplyByReplyId(Long replyId,

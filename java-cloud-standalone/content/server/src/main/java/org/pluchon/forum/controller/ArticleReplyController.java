@@ -30,6 +30,15 @@ public class ArticleReplyController {
         return Result.success(articleReplyService.replyArticle(replyArticleRequest, loginUser.getId()));
     }
 
+    /** 删除自己发的楼层，楼中楼保留 */
+    @Operation(summary = "删除自己的回复", description = "只能删自己发的，楼中楼保留")
+    @DeleteMapping("/deleteOwnReply")
+    public Result<Void> deleteOwnReply(@RequestParam Long replyId, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = (AuthenticatedUser) httpServletRequest.getAttribute(Constant.USER_SESSION);
+        articleReplyService.deleteOwnReply(replyId, loginUser.getId());
+        return Result.success();
+    }
+
     @Operation(summary = "帖子回复列表(分页)", description = "传入帖子ID和分页参数")
     @GetMapping("/getArticleReplyByArticleIdWithPage")
     public Result<PageResult<ArticleReplyListResponse>> getArticleReplyByArticleIdWithPage(Long articleId,

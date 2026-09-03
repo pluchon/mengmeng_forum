@@ -14,4 +14,7 @@ public interface ArticleReplyService {
     // 帖子楼层列表 分页
     PageResult<ArticleReplyListResponse> queryReplyByArticleIdWithPage(
             Long articleId, Integer pageNum, Integer pageSize, Long loginUserId);
+
+    // 作者删除自己的楼层：只删这一层，楼中楼保留
+    void deleteOwnReply(Long replyId, Long loginUserId);
 }

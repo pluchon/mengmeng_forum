@@ -1,11 +1,12 @@
 import { computed, ref, watch } from 'vue'
-import { CaretBottom, CaretTop, ChatDotRound, Flag } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { CaretBottom, CaretTop, ChatDotRound, Delete, Flag } from '@element-plus/icons-vue'
 import LikeCountIcon from '@/components/common/LikeCountIcon.vue'
 import UserAvatarVip from '@/components/common/UserAvatarVip.vue'
 import AppPagination from '@/components/common/AppPagination.vue'
 import CommentReplyMediaDisplay from '@/components/article/CommentReplyMediaDisplay.vue'
 import CommentExpandableText from '@/components/article/CommentExpandableText.vue'
-import { getSubReplyList, likeSubReply, unlikeSubReply } from '@/api/reply'
+import { getSubReplyList, likeSubReply, unlikeSubReply, deleteOwnSubReply } from '@/api/reply'
 import { unwrapPageRecords } from '@/utils/apiData'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import { useUserStore } from '@/stores/user'
@@ -89,6 +90,38 @@ function isOwnSub(sub) {
   const me = userStore.userInfo?.id
   if (uid == null || me == null) return false
   return Number(uid) === Number(me)
+}
+
+const deletingSubId = ref(null)
+
+async function removeOwnSub(sub) {
+  const subReplyId = sub?.subReply?.id
+  if (!subReplyId || deletingSubId.value) return
+  try {
+    await ElMessageBox.confirm('删除后无法恢复，确定删除这条回复吗？', '删除回复', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '再想想',
+    })
+  } catch {
+    return
+  }
+  deletingSubId.value = subReplyId
+  try {
+    await deleteOwnSubReply(subReplyId)
+    ElMessage.success('回复已删除')
+  } catch {
+    // 可能刚被审核删掉，拦截器已经提示过，这里同样按已删处理
+  } finally {
+    deletingSubId.value = null
+  }
+  // 楼中楼是连续对话，删掉的这条留成占位，直接抽走会让回复它的那条变得莫名其妙
+  const hit = subList.value.find((row) => Number(row?.subReply?.id) === Number(subReplyId))
+  if (hit) {
+    hit.violated = true
+    hit.mediaList = []
+    hit.liked = false
+  }
 }
 
 // 快速翻页会并发出多个请求，返回顺序不定，后到的旧页会覆盖新页。

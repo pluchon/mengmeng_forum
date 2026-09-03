@@ -50,6 +50,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ArticleReplyServiceImpl implements ArticleReplyService {
 
+    // 软删标记
+    private static final byte DELETED = 1;
+
     @Autowired
     private ArticleReplyMapper articleReplyMapper;
 
@@ -138,9 +141,16 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         int validPageNum = PageUtils.getValidPageNum(pageNum);
         int validPageSize = PageUtils.getValidPageSize(pageSize);
         Page<ArticleReply> page = PageUtils.getPage(validPageNum, validPageSize);
+        // 已删除的楼层只在「还有存活的楼中楼」时保留，前端把它渲染成「该评论已删除」占位。
+        // 否则楼主一自删，别人在这层下面的回复就全没了。
+        // 违规删除会连楼中楼一起标删，那时这个条件不成立，整层自然消失——正是想要的效果
         Page<ArticleReply> result = articleReplyMapper.selectPage(page, new LambdaQueryWrapper<ArticleReply>()
                 .eq(ArticleReply::getArticleId, articleId)
-                .ne(ArticleReply::getDeleteState, 1).ne(ArticleReply::getState, 1)
+                .ne(ArticleReply::getState, 1)
+                .and(w -> w.ne(ArticleReply::getDeleteState, DELETED)
+                        .or().inSql(ArticleReply::getId,
+                                "SELECT DISTINCT reply_id FROM article_sub_reply"
+                                        + " WHERE delete_state <> 1 AND state <> 1"))
                 .orderByAsc(ArticleReply::getCreateTime));
         List<ArticleReply> rows = result.getRecords();
         Map<Long, Integer> subCountMap = loadSubReplyCountMap(rows);
@@ -152,6 +162,38 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
                 .map(reply -> buildReplyResponse(reply, subCountMap, likedReplyIds, mediaMap, acceptedReplyIds))
                 .collect(Collectors.toList());
         return new PageResult<>(records, result.getTotal(), validPageNum, validPageSize, result.getPages(), result.hasNext());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteOwnReply(Long replyId, Long loginUserId) {
+        if (replyId == null || replyId <= 0 || loginUserId == null || loginUserId <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+        }
+        ArticleReply reply = articleReplyMapper.selectById(replyId);
+        // 用户点删除的这一刻，目标可能已经被审核或管理员删掉了。
+        // 统一按「内容不存在」返回，不要抛异常，也不要泄露它是被判违规删的
+        if (reply == null || DELETED == safeDeleteState(reply.getDeleteState())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        if (!Objects.equals(reply.getPostUserId(), loginUserId)) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_UNAUTHORIZED));
+        }
+        // 只删自己这一层，**楼中楼一律保留**——别人的发言不该因为楼主想删就跟着消失。
+        // 违规删除走 ContentModerationTaskService.deleteConfirmedViolation，那条路才连坐
+        int updated = articleReplyMapper.update(null, new LambdaUpdateWrapper<ArticleReply>()
+                .eq(ArticleReply::getId, replyId)
+                .ne(ArticleReply::getDeleteState, DELETED)
+                .set(ArticleReply::getDeleteState, DELETED));
+        if (updated <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        articleQuestionService.handleDeletedReply(reply.getArticleId(), replyId);
+        articleService.deleteReply(reply.getArticleId());
+    }
+
+    private static byte safeDeleteState(Byte value) {
+        return value == null ? 0 : value;
     }
 
     private Map<Long, Integer> loadSubReplyCountMap(List<ArticleReply> rows) {
@@ -203,6 +245,14 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
         vo.setLiked(likedReplyIds.contains(reply.getId()));
         vo.setAccepted(acceptedReplyIds != null && acceptedReplyIds.contains(reply.getId()));
         vo.setMediaList(mediaMap.getOrDefault(reply.getId(), List.of()));
+        if (DELETED == safeDeleteState(reply.getDeleteState())) {
+            // 占位楼层只保留「这里曾经有一条评论」这件事本身，
+            // 正文和附件都不能再发给前端——否则删了等于没删，抓包就能看到
+            reply.setContent("");
+            vo.setMediaList(List.of());
+            vo.setLiked(false);
+            vo.setAccepted(false);
+        }
         return vo;
     }
 

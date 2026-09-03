@@ -1220,6 +1220,13 @@
   word-break: break-word;
 }
 
+/* 已删除楼层的占位：只有还有楼中楼时才会出现，和楼中楼的占位保持同一种灰 */
+.comment-deleted-placeholder {
+  font-size: 13px;
+  line-height: 19px;
+  color: #9aa3b2;
+}
+
 .comment-actions {
   display: flex;
   align-items: center;

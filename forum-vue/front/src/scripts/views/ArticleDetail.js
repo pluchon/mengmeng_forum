@@ -1,7 +1,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { downloadImageByUrl, guessImageFileName } from '@/utils/imageDownload'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ChatDotRound,
   Share,
@@ -16,6 +16,7 @@ import {
   ArrowUp,
   Promotion,
   Flag,
+  Delete,
   Download,
   Compass,
   VideoPlay,
@@ -51,7 +52,14 @@ import {
   shouldReturnBackToSearch,
 } from '@/utils/feedNavigation'
 import { ossThumbUrl } from '@/utils/ossImageStyle'
-import { getReplyList, submitReply as apiSubmitReply, submitSubReply, likeReply, unlikeReply } from '@/api/reply'
+import {
+  getReplyList,
+  submitReply as apiSubmitReply,
+  submitSubReply,
+  likeReply,
+  unlikeReply,
+  deleteOwnReply as apiDeleteOwnReply,
+} from '@/api/reply'
 import { likeArticle, unlikeArticle } from '@/api/like'
 import { cancelArticleFavorite, getMyFavoriteFolders, saveArticleFavorite } from '@/api/favorite'
 import SubReplyArea from '@/components/article/SubReplyArea.vue'
@@ -779,6 +787,59 @@ export function useArticleDetail() {
     const me = userStore.userInfo?.id
     if (uid == null || me == null) return false
     return Number(uid) === Number(me)
+  }
+
+  // 已删除的楼层只作为占位存在——后端只有在它还有存活楼中楼时才返回它
+  function isDeletedComment(item) {
+    return Number(item?.articleReply?.deleteState) === 1
+  }
+
+  const deletingReplyId = ref(null)
+
+  async function deleteOwnComment(item) {
+    const replyId = item?.articleReply?.id
+    if (!replyId || deletingReplyId.value) return
+    try {
+      await ElMessageBox.confirm('删除后无法恢复，楼中楼里别人的回复会保留。确定删除吗？', '删除评论', {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '再想想',
+      })
+    } catch {
+      return
+    }
+    deletingReplyId.value = replyId
+    try {
+      await apiDeleteOwnReply(replyId)
+      ElMessage.success('评论已删除')
+      applyLocalReplyRemoval(item)
+    } catch {
+      // 可能刚被审核删掉，拦截器已经弹过「内容不存在或已被删除」；
+      // 不整页重载，否则无限滚动的位置会丢，本地按同样规则收掉即可
+      applyLocalReplyRemoval(item)
+    } finally {
+      deletingReplyId.value = null
+    }
+  }
+
+  // 有楼中楼就地变成占位，没有就整条移除——和后端列表的返回规则保持一致
+  function applyLocalReplyRemoval(item) {
+    const replyId = Number(item?.articleReply?.id)
+    if (!replyId) return
+    if (Number(item?.subReplyCount) > 0) {
+      const hit = replies.value.find((row) => Number(row?.articleReply?.id) === replyId)
+      if (hit?.articleReply) {
+        hit.articleReply.deleteState = 1
+        hit.articleReply.content = ''
+        hit.mediaList = []
+      }
+    } else {
+      replies.value = replies.value.filter((row) => Number(row?.articleReply?.id) !== replyId)
+      replyTotal.value = Math.max(0, (Number(replyTotal.value) || 0) - 1)
+    }
+    if (article.value) {
+      article.value.replyCount = Math.max(0, (Number(article.value.replyCount) || 0) - 1)
+    }
   }
 
   // 楼主自己发的一级回答不可采纳
@@ -2097,6 +2158,7 @@ export function useArticleDetail() {
     ChatDotRound,
     Close,
     CollectionTag,
+    Delete,
     MagicStick,
     Flag,
     Download,
@@ -2282,6 +2344,9 @@ export function useArticleDetail() {
     formatForumDateTimeShanghai,
     formatCommentMeta,
     isOwnComment,
+    isDeletedComment,
+    deletingReplyId,
+    deleteOwnComment,
     isArticleAuthorReply,
     reportArticle,
     reportDanmaku,

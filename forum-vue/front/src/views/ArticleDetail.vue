@@ -523,6 +523,10 @@
                             {{ formatCommentMeta(item.articleReply.createTime, item.articleReply?.ipRegion) }}
                           </span>
                         </div>
+                        <div v-if="isDeletedComment(item)" class="comment-deleted-placeholder">
+                          该评论已删除
+                        </div>
+                        <template v-else>
                         <div class="comment-text">
                           <CommentExpandableText
                             :content="item.articleReply.content"
@@ -542,6 +546,17 @@
                             <button type="button" class="comment-action-btn" @click="startReplyToFloor(item)">
                               <el-icon :size="13"><ChatDotRound /></el-icon>
                               <span>{{ item.subReplyCount || 0 }}</span>
+                            </button>
+                            <button
+                              v-if="isOwnComment(item)"
+                              type="button"
+                              class="comment-action-btn"
+                              aria-label="删除评论"
+                              title="删除"
+                              :disabled="deletingReplyId === item.articleReply.id"
+                              @click="deleteOwnComment(item)"
+                            >
+                              <el-icon :size="13"><Delete /></el-icon>
                             </button>
                             <button
                               v-if="canAcceptAnswer && !isArticleAuthorReply(item) && !isAcceptedReply(item)"
@@ -567,6 +582,7 @@
                             </button>
                           </div>
                         </div>
+                        </template>
                       </div>
                     </div>
                     <SubReplyArea

@@ -60,7 +60,7 @@
             </span>
           </div>
           <div class="sub-item-content">
-            <span v-if="isViolated(sub)" class="sub-violated-placeholder">该回复因违规已屏蔽</span>
+            <span v-if="isViolated(sub)" class="sub-violated-placeholder">该回复已删除</span>
             <CommentExpandableText v-else :content="sub.subReply.content" />
           </div>
           <CommentReplyMediaDisplay
@@ -77,6 +77,17 @@
               <button type="button" class="comment-action-btn" @click="emitReply(sub)">
                 <el-icon :size="12"><ChatDotRound /></el-icon>
                 <span>回复</span>
+              </button>
+              <button
+                v-if="isOwnSub(sub) && !isViolated(sub)"
+                type="button"
+                class="comment-action-btn"
+                aria-label="删除回复"
+                title="删除"
+                :disabled="deletingSubId === sub.subReply.id"
+                @click="removeOwnSub(sub)"
+              >
+                <el-icon :size="12"><Delete /></el-icon>
               </button>
               <button
                 v-if="canAccept && !isAuthorReply(sub) && !sub.accepted"
