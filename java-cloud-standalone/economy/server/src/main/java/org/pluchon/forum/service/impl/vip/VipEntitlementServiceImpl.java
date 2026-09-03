@@ -42,10 +42,19 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UserVipSubscription ensureCurrentBaseQuotaPeriod(Long userId) {
-        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
+        // 先无锁读一次：这个方法挂在 /vip/internal/{id}/tier 后面，
+        // 而 ai 域每一次 AI 请求的鉴权都要调它。绝大多数时候周期还没到期，
+        // 什么都不用写——原来无条件 SELECT ... FOR UPDATE，等于每次 AI 调用
+        // 都在 economy 上开一个事务、锁一行，纯属白锁
+        UserVipSubscription cached = userVipSubscriptionMapper.selectByUserId(userId);
         Date nowDate = new Date();
-        if (sub.getQuotaPeriodStart() != null && sub.getQuotaPeriodEnd() != null
-                && sub.getQuotaPeriodEnd().after(nowDate)) {
+        if (isPeriodValid(cached, nowDate)) {
+            return cached;
+        }
+        // 确实要写了，这时候才加锁，并在锁内重新判一次：
+        // 并发进来的另一个请求可能已经把周期滚好了
+        UserVipSubscription sub = ensureSubscriptionForUpdate(userId);
+        if (isPeriodValid(sub, new Date())) {
             return sub;
         }
         ZonedDateTime now = ZonedDateTime.now(TAIPEI);
@@ -165,6 +174,14 @@ public class VipEntitlementServiceImpl implements VipEntitlementService {
             return left == null && right == null;
         }
         return left.getTime() / 1000L == right.getTime() / 1000L;
+    }
+
+    // 配额周期还在有效期内：不用滚周期，也就不用加锁
+    private boolean isPeriodValid(UserVipSubscription sub, Date now) {
+        return sub != null
+                && sub.getQuotaPeriodStart() != null
+                && sub.getQuotaPeriodEnd() != null
+                && sub.getQuotaPeriodEnd().after(now);
     }
 
     private UserVipSubscription ensureSubscriptionForUpdate(Long userId) {
