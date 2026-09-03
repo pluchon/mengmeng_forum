@@ -278,6 +278,16 @@ export function listMyMusic(params = {}) {
   return request({ url: '/article/music/mine', method: 'get', params })
 }
 
+// 下架自己已发布的歌曲，回到未发布
+export function offlineMyMusic(id) {
+  return request({ url: '/article/music/offline', method: 'post', params: { id } })
+}
+
+// 删除自己的歌曲，收藏过的人仍可继续播放
+export function deleteMyMusic(id) {
+  return request({ url: '/article/music/delete', method: 'delete', params: { id } })
+}
+
 export function listMusicFavorites(params = {}) {
   return request({ url: '/article/music/favorites', method: 'get', params })
 }

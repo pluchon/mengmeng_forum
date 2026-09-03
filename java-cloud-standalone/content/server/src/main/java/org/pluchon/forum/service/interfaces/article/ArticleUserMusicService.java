@@ -39,4 +39,10 @@ public interface ArticleUserMusicService {
     boolean isBindable(String musicKey);
 
     MusicTrackVO retryAudit(Long userId, Long id);
+
+    // 作者把已发布的歌曲下架，回到未发布，可以改完再投一次审
+    void offlineOwnMusic(Long userId, Long id);
+
+    // 作者删除自己的歌曲：软删，不动 OSS——收藏过的人还能继续听
+    void deleteOwnMusic(Long userId, Long id);
 }

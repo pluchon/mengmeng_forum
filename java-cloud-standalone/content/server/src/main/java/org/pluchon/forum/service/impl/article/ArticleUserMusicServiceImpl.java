@@ -243,10 +243,13 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
             if (wanted != null) {
                 qw.eq(UserMusic::getStatus, wanted);
             } else {
+                // 「全部」含已发布：已发布本来就是一种状态，
+                // 而且下架/删除这两个管理动作就挂在已发布的卡片上
                 qw.in(UserMusic::getStatus,
                         Constant.USER_MUSIC_STATUS_DRAFT,
                         Constant.USER_MUSIC_STATUS_REVIEWING,
-                        Constant.USER_MUSIC_STATUS_REJECTED);
+                        Constant.USER_MUSIC_STATUS_REJECTED,
+                        Constant.USER_MUSIC_STATUS_PUBLISHED);
             }
         }
         String kw = trimToEmpty(keyword);
@@ -545,6 +548,52 @@ public class ArticleUserMusicServiceImpl implements ArticleUserMusicService {
             return false;
         }
         return row.getStatus() != null && row.getStatus() == Constant.USER_MUSIC_STATUS_PUBLISHED;
+    }
+
+    // 取出自己名下未删除的歌，取不到一律按「不存在」——不区分是没有还是不属于你
+    private UserMusic requireOwnMusic(Long userId, Long id) {
+        if (userId == null || id == null || id <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "参数无效"));
+        }
+        UserMusic row = userMusicMapper.selectById(id);
+        if (row == null || !userId.equals(row.getUserId())
+                || row.getDeleteState() != null && row.getDeleteState() == DELETE_TRUE) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+        return row;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void offlineOwnMusic(Long userId, Long id) {
+        UserMusic row = requireOwnMusic(userId, id);
+        if (!Byte.valueOf(Constant.USER_MUSIC_STATUS_PUBLISHED).equals(row.getStatus())) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "只有已发布的歌曲才能下架"));
+        }
+        // 回到「未发布」而不是新增一种状态：改完还能再投一次审。
+        // OSS 一个字节都不动——收藏过这首歌的人靠快照继续听
+        int updated = userMusicMapper.update(null, new LambdaUpdateWrapper<UserMusic>()
+                .eq(UserMusic::getId, row.getId())
+                .eq(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_PUBLISHED)
+                .set(UserMusic::getStatus, Constant.USER_MUSIC_STATUS_DRAFT)
+                .set(UserMusic::getUpdateTime, new Date()));
+        if (updated <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteOwnMusic(Long userId, Long id) {
+        UserMusic row = requireOwnMusic(userId, id);
+        int updated = userMusicMapper.update(null, new LambdaUpdateWrapper<UserMusic>()
+                .eq(UserMusic::getId, row.getId())
+                .ne(UserMusic::getDeleteState, DELETE_TRUE)
+                .set(UserMusic::getDeleteState, DELETE_TRUE)
+                .set(UserMusic::getUpdateTime, new Date()));
+        if (updated <= 0) {
+            throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
+        }
     }
 
     @Override

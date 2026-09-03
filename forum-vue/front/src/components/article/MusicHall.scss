@@ -2440,3 +2440,54 @@
   margin-left: 0;
   pointer-events: none;
 }
+
+/* 「我的上传 / 已发布」页签：这里是管理位，只放时长和下架/删除，
+   播放展示交给下面的「我的发布」模块，两边不抢空间 */
+.music-hall__upload-row .music-hall__meta--published {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-hall__upload-row .music-hall__meta--published .music-hall__sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-hall__upload-manage {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.music-hall__manage-duration {
+  font-size: 12px;
+  color: #9aa3b2;
+  font-variant-numeric: tabular-nums;
+}
+
+.music-hall__manage-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: #fff0f7;
+  color: #f07ba8;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.music-hall__manage-btn:hover:not(:disabled) {
+  background: #ffe1ee;
+  color: #d4537e;
+}
+
+.music-hall__manage-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

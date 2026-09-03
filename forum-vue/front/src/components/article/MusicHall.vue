@@ -492,6 +492,38 @@
                     <img v-if="track.coverUrl" :src="track.coverUrl" alt="">
                     <el-icon v-else><Headset /></el-icon>
                   </div>
+                  <template v-if="track.status === 'published'">
+                    <div class="music-hall__meta music-hall__meta--published">
+                      <div class="music-hall__name">{{ track.title }}</div>
+                      <div class="music-hall__sub" :title="artistFullText(track.artist)">
+                        {{ artistText(track.artist) || '未知歌手' }}
+                      </div>
+                    </div>
+                    <div class="music-hall__upload-manage">
+                      <span class="music-hall__manage-duration">{{ track.durationText || '--:--' }}</span>
+                      <button
+                        type="button"
+                        class="music-hall__manage-btn"
+                        aria-label="下架歌曲"
+                        title="下架"
+                        :disabled="musicActionId === track.id"
+                        @click="offlineTrack(track)"
+                      >
+                        <el-icon :size="15"><SoldOut /></el-icon>
+                      </button>
+                      <button
+                        type="button"
+                        class="music-hall__manage-btn"
+                        aria-label="删除歌曲"
+                        title="删除"
+                        :disabled="musicActionId === track.id"
+                        @click="deleteTrack(track)"
+                      >
+                        <el-icon :size="15"><Delete /></el-icon>
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
                   <div class="music-hall__meta">
                     <div class="music-hall__name">{{ track.title }}</div>
                     <div class="music-hall__sub">
@@ -512,6 +544,7 @@
                   <button type="button" class="music-hall__pick" @click="onUploadAction(track)">
                     {{ uploadActionLabel(track) }}
                   </button>
+                  </template>
                 </div>
               </div>
             </div>

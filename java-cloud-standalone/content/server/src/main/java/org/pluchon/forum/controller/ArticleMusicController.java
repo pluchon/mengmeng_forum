@@ -29,6 +29,7 @@ import org.pluchon.forum.service.interfaces.article.ArticleUserMusicService;
 import org.pluchon.forum.service.interfaces.article.MusicMoodTagService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -233,6 +234,22 @@ public class ArticleMusicController {
                                                 HttpServletRequest httpServletRequest) {
         AuthenticatedUser loginUser = requireLogin(httpServletRequest);
         return Result.success(articleUserMusicService.retryAudit(loginUser.getId(), id));
+    }
+
+    /** 作者把自己已发布的歌曲下架，回到未发布 */
+    @PostMapping("/music/offline")
+    public Result<Void> offlineMusic(@RequestParam("id") Long id, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = requireLogin(httpServletRequest);
+        articleUserMusicService.offlineOwnMusic(loginUser.getId(), id);
+        return Result.success();
+    }
+
+    /** 作者删除自己的歌曲，收藏过的人仍可继续播放 */
+    @DeleteMapping("/music/delete")
+    public Result<Void> deleteMusic(@RequestParam("id") Long id, HttpServletRequest httpServletRequest) {
+        AuthenticatedUser loginUser = requireLogin(httpServletRequest);
+        articleUserMusicService.deleteOwnMusic(loginUser.getId(), id);
+        return Result.success();
     }
 
     /** 我的上传/我的发布：scope=upload|publish; status 与 keyword 一并由后端筛 */

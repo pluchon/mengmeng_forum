@@ -1,5 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { confirmDialog } from '@/utils/appDialog'
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,6 +8,7 @@ import {
   Close,
   DArrowLeft,
   DArrowRight,
+  Delete,
   Document,
   EditPen,
   Folder,
@@ -16,12 +18,13 @@ import {
   Promotion,
   Scissor,
   Search,
+  SoldOut,
   Star,
   Upload,
   VideoPause,
   VideoPlay,
 } from '@element-plus/icons-vue'
-import { listMusicCatalog, listMusicMoodTags, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay, listMusicMoodTagOptions, createMusicMoodTag } from '@/api/article'
+import { listMusicCatalog, listMusicMoodTags, listMyMusic, listMusicFavorites, toggleMusicFavorite, uploadArticleMusic, parseArticleMusic, trimArticleMusic, recommendArticleMusic, aiSearchArticleMusic, retryArticleMusicAudit, listMusicRecentPlays, recordMusicRecentPlay, listMusicMoodTagOptions, createMusicMoodTag, offlineMyMusic, deleteMyMusic } from '@/api/article'
 import { extractApiErrorMessage } from '@/api/httpError'
 import { ensureLoggedIn } from '@/utils/loginPrompt'
 import BorderGlow from '@/components/common/BorderGlow.vue'
@@ -139,6 +142,8 @@ const uploadStatusFilters = [
   { id: 'reviewing', label: '审核中' },
   { id: 'rejected', label: '未通过' },
   { id: 'draft', label: '未发布' },
+  // 已发布单独一页：这里是管理位（下架/删除），播放展示在下面的「我的发布」模块
+  { id: 'published', label: '已发布' },
 ]
 const emptySongForm = () => ({
   id: null,
@@ -1614,6 +1619,55 @@ function closeComposeLrc() {
   if (mineTab.value === 'compose' && songForm.value.lrcText) {
     applyLyricText(songForm.value.lrcText)
     syncLocalPreviewFromForm()
+  }
+}
+
+const musicActionId = ref(null)
+
+// 下架：回到未发布，改完还能再投审。OSS 不动，收藏过的人靠快照继续听
+async function offlineTrack(track) {
+  if (!track?.id || musicActionId.value) return
+  try {
+    await confirmDialog('下架后这首歌会回到「未发布」，其他人不能再搜到它。确定下架吗？', '下架歌曲', {
+      confirmButtonText: '下架',
+      cancelButtonText: '再想想',
+    })
+  } catch {
+    return
+  }
+  musicActionId.value = track.id
+  try {
+    await offlineMyMusic(track.id)
+    ElMessage.success('已下架')
+    await loadMineLists()
+  } catch {
+    // 失败原因由拦截器统一提示，这里只需要把列表拉回真实状态
+    await loadMineLists()
+  } finally {
+    musicActionId.value = null
+  }
+}
+
+// 删除：软删，**不动 OSS**——已经收藏这首歌的人还能继续播放
+async function deleteTrack(track) {
+  if (!track?.id || musicActionId.value) return
+  try {
+    await confirmDialog('删除后无法恢复。已经收藏这首歌的人仍然可以继续播放。确定删除吗？', '删除歌曲', {
+      confirmButtonText: '删除',
+      cancelButtonText: '再想想',
+    })
+  } catch {
+    return
+  }
+  musicActionId.value = track.id
+  try {
+    await deleteMyMusic(track.id)
+    ElMessage.success('歌曲已删除')
+    await loadMineLists()
+  } catch {
+    await loadMineLists()
+  } finally {
+    musicActionId.value = null
   }
 }
 
