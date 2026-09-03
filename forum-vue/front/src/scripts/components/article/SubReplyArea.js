@@ -22,6 +22,8 @@ const props = defineProps({
   readOnly: { type: Boolean, default: true },
   refreshToken: { type: Number, default: 0 },
   subReplyCount: { type: Number, default: 0 },
+  // 父楼层已删时，这一楼只能看不能再回复——后端也会拒，别给必然失败的按钮
+  parentDeleted: { type: Boolean, default: false },
   canAccept: { type: Boolean, default: false },
   acceptSaving: { type: Boolean, default: false },
 })
@@ -121,6 +123,7 @@ async function removeOwnSub(sub) {
     hit.violated = true
     hit.mediaList = []
     hit.liked = false
+    if (hit.subReply) hit.subReply.content = ''
   }
 }
 

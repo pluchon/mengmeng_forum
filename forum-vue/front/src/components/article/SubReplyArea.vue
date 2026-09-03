@@ -74,7 +74,12 @@
                 <LikeCountIcon class="comment-like-icon" :filled="sub.liked" />
                 <span :class="{ 'is-liked': sub.liked }">{{ sub.subReply.likeCount || 0 }}</span>
               </button>
-              <button type="button" class="comment-action-btn" @click="emitReply(sub)">
+              <button
+                v-if="!parentDeleted && !isViolated(sub)"
+                type="button"
+                class="comment-action-btn"
+                @click="emitReply(sub)"
+              >
                 <el-icon :size="12"><ChatDotRound /></el-icon>
                 <span>回复</span>
               </button>
@@ -103,7 +108,7 @@
               <span v-if="sub.accepted" class="sub-accepted-tag">已采纳</span>
               <span class="sub-item-actions__time">{{ formatSubTime(sub.subReply?.createTime) }}</span>
               <button
-                v-if="!isOwnSub(sub) && !isAuthorReply(sub)"
+                v-if="!isOwnSub(sub) && !isAuthorReply(sub) && !isViolated(sub)"
                 type="button"
                 class="comment-action-btn comment-action-btn--report"
                 aria-label="举报回复"

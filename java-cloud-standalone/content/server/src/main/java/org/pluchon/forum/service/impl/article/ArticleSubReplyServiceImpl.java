@@ -166,7 +166,13 @@ public class ArticleSubReplyServiceImpl implements ArticleSubReplyService {
         // 删掉的这条仍以占位形式留在列表里：楼中楼是连续对话，
         // 直接抽走会让「回复了它的那条」变得莫名其妙
         articleQuestionService.handleDeletedSubReply(sub.getArticleId(), subReplyId);
-        articleService.deleteSubReply(sub.getArticleId());
+        // 同 deleteOwnReply：帖子不在发布状态时计数更新会抛，但不该因此删不掉自己的回复
+        try {
+            articleService.deleteSubReply(sub.getArticleId());
+        } catch (Exception e) {
+            log.warn("删除楼中楼后更新帖子计数失败 articleId={} subReplyId={}: {}",
+                    sub.getArticleId(), subReplyId, e.getMessage());
+        }
     }
 
     // 单条楼中楼 > 列表项装配，被回复用户已注销时昵称留空

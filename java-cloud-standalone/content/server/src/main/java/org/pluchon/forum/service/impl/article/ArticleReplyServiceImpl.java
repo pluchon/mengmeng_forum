@@ -189,7 +189,16 @@ public class ArticleReplyServiceImpl implements ArticleReplyService {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_NOT_EXISTS));
         }
         articleQuestionService.handleDeletedReply(reply.getArticleId(), replyId);
-        articleService.deleteReply(reply.getArticleId());
+        // 计数只在帖子仍是「已发布」时才更新，帖子被下架/删除/进审核时这里会抛。
+        // 但那不该拖垮用户删自己评论这件事——帖子都不在发布状态了，它的
+        // reply_count 和热度分本来也没意义。deleteReply 没有 @Transactional，
+        // 在这里吃掉异常不会把外层事务标成 rollback-only
+        try {
+            articleService.deleteReply(reply.getArticleId());
+        } catch (Exception e) {
+            log.warn("删除评论后更新帖子计数失败 articleId={} replyId={}: {}",
+                    reply.getArticleId(), replyId, e.getMessage());
+        }
     }
 
     private static byte safeDeleteState(Byte value) {

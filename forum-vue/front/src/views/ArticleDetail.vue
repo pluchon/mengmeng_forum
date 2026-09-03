@@ -588,6 +588,7 @@
                     <SubReplyArea
                       class="comment-sub-replies"
                       :reply-id="item.articleReply.id"
+                      :parent-deleted="isDeletedComment(item)"
                       :article-id="article.id"
                       :author-id="author?.id"
                       :refresh-token="subReplyRefreshTokens[item.articleReply.id] || 0"
