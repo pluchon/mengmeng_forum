@@ -222,3 +222,11 @@ skills/
 
 # 本地参考文档，不入库
 docs/api-model-pricing.md
+
+# --- 本地测试素材与自动化测试依赖（不进仓库） ---
+# 上传测试用的图片/音频，只在本机使用
+/test-file/
+# 自动化测试脚本装的 playwright，与 forum-vue/front 的前端依赖无关
+/package.json
+/pnpm-lock.yaml
+/package-lock.json
