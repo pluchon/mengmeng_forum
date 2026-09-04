@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
     ports:
       - "${REDIS_HOST_PORT:-16530}:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --maxmemory 256mb --maxmemory-policy volatile-lru
     volumes:
       - forum_dev_redis_data:/data
     healthcheck:
