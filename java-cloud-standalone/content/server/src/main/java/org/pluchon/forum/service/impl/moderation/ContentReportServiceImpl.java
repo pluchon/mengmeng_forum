@@ -62,6 +62,10 @@ public class ContentReportServiceImpl implements ContentReportService {
     private static final byte TARGET_MUSIC = 5;
     // 攒举报时的占位任务号，达到阈值后统一改写成真正的 taskId
     private static final String PENDING_TASK_PREFIX = "waiting-";
+
+    // 占位号里保留的哈希位数。task_id 是 varchar(64)，最坏情况
+    // 前缀 8 + 类型 3 + 分隔 2 + bigint 19 = 32，留 24 位仍有余量
+    private static final int PENDING_HASH_LENGTH = 24;
     private static final byte TASK_PENDING = 0;
     private static final byte TASK_COMPLETED = 2;
     private static final byte TASK_FAILED = 3;
@@ -576,8 +580,22 @@ public class ContentReportServiceImpl implements ContentReportService {
         }
     }
 
+    /**
+     * 攒举报期间的占位任务号。
+     *
+     * <p>哈希必须截断：完整的 sha256 是 64 个十六进制字符，拼上前缀、类型和目标 id 至少 76 字符，
+     * 而 {@code content_report.task_id} 是 varchar(64)，写进去必然
+     * {@code Data too long for column 'task_id'}——这条路径因此从上线起就没成功过一次。
+     *
+     * <p>截到 {@value #PENDING_HASH_LENGTH} 位不影响正确性：占位号从来不被解析，
+     * {@link #adoptPendingReports} 是按 targetType + targetId + contentHash 三个独立列找的，
+     * task_id 只需要以 {@value #PENDING_TASK_PREFIX} 开头；task_id 上也只有非唯一索引。
+     * 留这段哈希只是为了让同一目标的占位号稳定、便于排查。
+     */
     private String pendingTaskId(byte targetType, Long targetId, String contentHash) {
-        return PENDING_TASK_PREFIX + targetType + "-" + targetId + "-" + contentHash;
+        String shortHash = contentHash == null ? "" : contentHash.substring(
+                0, Math.min(PENDING_HASH_LENGTH, contentHash.length()));
+        return PENDING_TASK_PREFIX + targetType + "-" + targetId + "-" + shortHash;
     }
 
     /** 同一目标已攒了多少条举报（唯一索引保证一人一条，所以这就是不同用户数） */
