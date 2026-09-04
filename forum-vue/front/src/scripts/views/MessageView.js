@@ -3613,7 +3613,9 @@ const GROUP_NOTIFY_OPTIONS = [
   function isArticleJumpable(msg) {
     const kind = String(parseSystemMessagePayload(msg)?.kind || '')
     if (kind === 'content_report') return true
-    if (kind === 'chat_report' || kind === 'group_notice' || kind === 'tag_approved') return false
+    // music_report 的 relatedId 是歌曲 ID，按帖子跳会落到同号的帖子上
+    if (kind === 'chat_report' || kind === 'music_report'
+      || kind === 'group_notice' || kind === 'tag_approved') return false
     // 历史通知没有 payload，只能看文案：这几类的开头都是固定的
     const content = String(msg?.content || '')
     return !content.includes('您举报的私信消息')

@@ -314,6 +314,7 @@ public class ContentReportServiceImpl implements ContentReportService {
             case TARGET_REPLY -> "评论";
             case TARGET_SUB_REPLY -> "回复";
             case TARGET_DANMAKU -> "弹幕";
+            case TARGET_MUSIC -> "歌曲";
             default -> "内容";
         };
         String displayTitle = StringUtils.hasText(targetTitle) ? targetTitle.trim() : "相关内容";
@@ -366,11 +367,17 @@ public class ContentReportServiceImpl implements ContentReportService {
      *
      * <p>举报结果的类型码（5/6/7）站内两处在用：内容举报和私信举报，
      * 光看类型分不出 relatedId 是帖子还是私信。kind 就是用来区分的。
+     *
+     * <p>歌曲单独给一个 kind：它的 relatedId 是歌曲 ID 而不是帖子 ID
+     * （{@link #resolveArticleId} 对歌曲返回 null，relatedId 退回 targetId），
+     * 前端若按 content_report 处理会跳到同号的帖子上去。
+     * 歌曲举报没有合适的落地页——音乐厅不按 ID 定位，「我的音乐」是作者的页面而不是举报人的，
+     * 所以标成不可跳转，与 chat_report 一致。
      */
     private String buildReportPayload(byte targetType, Long targetId, Long articleId) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("kind", "content_report");
+            payload.put("kind", TARGET_MUSIC == targetType ? "music_report" : "content_report");
             payload.put("targetType", targetType);
             payload.put("targetId", targetId);
             payload.put("articleId", articleId);
