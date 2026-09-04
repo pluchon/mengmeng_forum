@@ -12,6 +12,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 // 外部请求禁止直达各域 /internal/**（服务间调用走发现地址，不经网关）
 @Component
@@ -21,8 +22,11 @@ public class InternalPathBlockGlobalFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // getPath() 返回的是已解码的路径，所以 %69nternal 这类编码变形本来就进不来；
+        // 但大小写变形（/user/INTERNAL/...）过去能穿过这一层。
+        // toLowerCase 必须带 Locale.ROOT：土耳其 locale 下 "I" 会变成 "ı"，反而漏掉
         String path = exchange.getRequest().getURI().getPath();
-        if (path != null && path.contains(INTERNAL_SEGMENT)) {
+        if (path != null && path.toLowerCase(Locale.ROOT).contains(INTERNAL_SEGMENT)) {
             ServerHttpResponse response = exchange.getResponse();
             response.setStatusCode(HttpStatus.FORBIDDEN);
             response.getHeaders().setContentType(MediaType.APPLICATION_JSON);

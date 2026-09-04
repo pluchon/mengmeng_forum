@@ -9,6 +9,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -59,6 +60,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<?>> handleBadRequest(Exception e) {
         log.warn("请求格式错误: type={}", e.getClass().getSimpleName());
         return response(HttpStatus.BAD_REQUEST, Result.fail(ResultCode.FAILED_PARAMS_VALIDATE));
+    }
+
+    /**
+     * 请求方法不对（例如对 POST-only 端点发 GET）。
+     *
+     * <p>不接住的话会落到兜底的 Exception 处理器，变成 500「服务开小差了」——
+     * 客户端用错方法却记成服务端故障，5xx 告警就失去区分度了。
+     * 不新增业务码：要修的是 HTTP 状态码，业务码没人消费。
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<?>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        log.warn("请求方法不支持 (405): method={} supported={}", e.getMethod(), e.getSupportedHttpMethods());
+        return response(HttpStatus.METHOD_NOT_ALLOWED, Result.fail(ResultCode.FAILED));
     }
 
     // 返回统一的资源不存在响应，减少无效 404 堆栈干扰
