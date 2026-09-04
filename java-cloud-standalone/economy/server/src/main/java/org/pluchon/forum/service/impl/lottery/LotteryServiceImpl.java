@@ -383,10 +383,12 @@ public class LotteryServiceImpl implements LotteryService {
     @Transactional(rollbackFor = Exception.class)
     public LotteryDrawResultVO draw(Long userId, LotteryDrawDTO dto) {
         checkLotteryDrawGuard(LotteryDrawContext.requestOnly(userId, dto));
-        if (dto.getRequestId() == null || dto.getRequestId().isBlank()) {
+        String requestId = dto.getRequestId() == null ? "" : dto.getRequestId().trim();
+        // 长度必须卡：request_id 是 varchar(64)，超长会直接撞成
+        // Data too long 的 500，而这个值是客户端传的。星辉兑换那条一直有这道校验，这里漏了
+        if (requestId.isEmpty() || requestId.length() > 64) {
             throw new ApplicationException(Result.fail(ResultCode.FAILED_PARAMS_VALIDATE, "请求无效，请刷新后重试"));
         }
-        String requestId = dto.getRequestId().trim();
         LotteryDrawRequest existingRequest = findDrawRequest(userId, requestId);
         if (existingRequest != null) {
             return rebuildDrawResult(userId, existingRequest);
