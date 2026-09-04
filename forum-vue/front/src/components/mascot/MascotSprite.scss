@@ -71,18 +71,6 @@
   transform: translateX(-50%) rotate(45deg);
 }
 
-html.dark .mascot-sprite__tip {
-  border-color: rgb(126 96 136 / 75%);
-  background: rgb(42 35 48 / 96%);
-  color: #f0dff2;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 24%);
-}
-
-html.dark .mascot-sprite__tip::after {
-  border-color: rgb(126 96 136 / 75%);
-  background: rgb(42 35 48 / 96%);
-}
-
 @keyframes mascot-sprite-tip-in {
   from {
     opacity: 0;
